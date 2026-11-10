@@ -1,226 +1,108 @@
 # GitHub backlog
 
 [GitHub Issues](https://github.com/nickysemenza/cubby/issues) owns unfinished
-work. The [Cubby Project](https://github.com/users/nickysemenza/projects/2) owns horizon, readiness, work type, priority, and delivery status;
-read those fields as well as the issue body before selecting work. Repository
-documentation owns behavior and decisions. An issue is a proposal until the
-implementation and validation establish otherwise; do not maintain a second
-editable backlog in Markdown.
+work. Repository documentation owns behavior and decisions; do not keep a
+second backlog in Markdown. An issue is a proposal until the implementation and
+validation establish otherwise.
 
-## Fields and selection
+## Labels and Status
 
-| Field     | Values and meaning                                   |
-| --------- | ---------------------------------------------------- |
-| Horizon   | Now; Next; Later; unset for work outside the roadmap |
-| Readiness | Ready; Needs schema plan; Needs decision; Waiting    |
-| Work type | Bug; Feature; Maintenance; Investigation             |
-| Priority  | High; Medium; Low                                    |
-| Status    | Inbox; Todo; In progress; Verify; Done               |
+Classify issues with labels. Discover names with
+`gh label list --repo nickysemenza/cubby`.
 
-Readiness names the next blocker, independently of horizon, priority, and delivery status.
-Ready means the outcome is decided and needs no schema planning. An unresolved
-decision or missing evidence takes precedence over an eventual schema change.
-Waiting requires a named trigger in the body. Check native Blocked by relationships
-and parent constraints before starting even a Ready item.
+| Label         | Meaning                                                              |
+| ------------- | -------------------------------------------------------------------- |
+| `area:*`      | Affected domain or platform; add one per area.                       |
+| `bug`         | A defect. Investigating a reported defect is still a bug.            |
+| `operational` | A household data pass rather than a code change.                     |
+| `parked`      | Open but out of triage. A comment names the trigger that revives it. |
 
-Choose Work type by the primary outcome: repair is Bug, added capability is
-Feature, cleanup/performance/infrastructure is Maintenance, and evaluation with
-no committed repair is Investigation. Investigating a reported defect remains
-Bug. High priority means crashes, integrity failures, blocked core workflows,
-or explicitly urgent capability; Medium means useful near-term improvements or
-defects with workarounds; Low means optional polish or longer-term work.
-Reassess when impact changes. Waiting can still be High priority.
+The [Cubby Project](https://github.com/users/nickysemenza/projects/2) tracks
+one field, Status: Inbox, Todo, In progress, Verify, Done. New and reopened
+issues are added automatically; new issues start in Inbox, and closing an issue
+sets Done. Move an accepted issue to Todo and set In progress when
+implementation starts. Use Verify only when an issue needs acceptance after
+deployment.
 
-Use `area:*` labels for domain/platform filtering and `operational` for household
-data passes. Do not duplicate the Project fields as labels or title emojis.
-One independently finishable outcome belongs in one issue. Keep supporting
-constraints and acceptance criteria in its body; use subissues for independently
-deliverable steps and native dependencies for actual prerequisites. Read the
-parent issue when working a subissue. Preserve explicit sequencing and triggers;
-do not infer a dependency just because two issues mention the same domain.
-Use native Relates to for associated work whose containment, dependency, or
-common cause is unproven. Similar symptoms alone do not establish a duplicate
-or blocker.
+Park an issue when it is wanted but nobody will act on it until something
+changes: add `parked` and comment with the trigger (a release, a measurement, a
+member decision). Remove the label when the trigger occurs.
 
-## Triage checklist
-
-Apply this when creating, importing, or reviewing an issue in Intake. Search
-for the same outcome first and update the existing issue when it matches.
-
-1. Read the body, parent, and native blockers. Establish the outcome,
-   acceptance criteria, and any unresolved decision or waiting trigger before
-   choosing metadata. Investigate missing evidence rather than guessing Ready.
-2. Add existing `area:*` labels for each affected domain/platform. Add
-   `operational` for a household data pass. Discover names with `gh label list
-   --repo nickysemenza/cubby`; use `gh issue edit <number> --repo
-   nickysemenza/cubby --add-label <label>` to add them. Preserve relevant
-   existing labels; use Work type and Priority for their structured meanings.
-3. Explicitly add the issue to the Project and set Readiness, Work type, and
-   Priority using the definitions above. Auto-add is asynchronous and does not
-   backfill existing issues. Update native parents/dependencies when the
-   relationship is established, preserving the trigger or decision in the body.
-4. Keep Status Inbox while triage is incomplete; use Todo for accepted backlog
-   work and In progress only when implementation starts. Select Horizon only
-   for a roadmap outcome or explicit deferral, following the roadmap policy
-   below. An unset Horizon is valid and does not mean Later; subissues normally
-   use their parent's roadmap context.
-5. Read back the issue labels and Project fields. Triage is complete when the
-   three required metadata fields are set, Status reflects the work, and the
-   body supports the chosen readiness and relationships. Horizon and dates are
-   optional; selecting metadata does not resolve the issue's blocker.
-
-## Roadmap
-
-Horizon sequences outcomes without promising dates. Now holds 1–3 current
-focus outcomes; Next holds ordered candidates after Now without a numeric limit;
-Later preserves wanted but deferred work. Do not remove wanted Next candidates
-solely to shorten the column. Leave Horizon unset for the rest of the backlog.
-Priority describes impact; a Ready issue can still be Later, and a Now outcome
-can need a decision. Keep its actual Readiness and Status accurate.
-
-Use an existing parent issue for a larger outcome and subissues for its
-independently deliverable steps. Give the parent a clear finish line. Put
-Horizon on the outcome card; subissues do not automatically inherit the field
-and normally stay off the roadmap. Read the parent's Horizon when selecting
-an implementation task. Routine bugs and maintenance can proceed through
-Delivery without becoming separate roadmap outcomes.
-
-Review Now and Next weekly or when an outcome finishes. Finish or deliberately
-remove an outcome before promoting another into a full Now column. Reassess
-Later when its recorded trigger occurs. Use review/demo dates for feedback;
-reserve delivery dates for real timing constraints. Add iterations only when
-repeating timeboxes serve an actual planning cadence, and milestones only for
-a finite release or other shared finish line; a milestone can be undated.
-
-## Project views and automation
-
-Roadmap is the board grouped by Horizon, filtered to open issues with a
-Horizon. Order cards manually within each column; show Status, Readiness,
-Priority, and subissue progress. Now's advisory limit is three outcomes.
-Backlog is the open-work table, grouped by Readiness and sorted by Priority.
-Its Labels slice sidebar filters by existing areas without another Area field;
-Updated helps identify neglected work, but activity does not prove progress.
-Ready is the Todo/Ready board, excluding Horizon Later, with Work type columns
-and Priority swimlanes.
-Delivery uses Status columns and Priority swimlanes. Intake catches open issues
-in Inbox or missing any of the three metadata fields. These are views of the
-same issues, not separate backlogs.
-Intake uses `is:issue is:open (Status:Inbox OR no:Readiness OR no:work-type
-OR no:Priority)`; multiword field keys use hyphens in Project filters.
-Leave Readiness, Work type, and Priority defaults unset so Intake exposes
-missing triage. New items receive Status Inbox through automation.
-
-Unblock shows open Needs decision or Needs schema plan work, excluding Horizon
-Later, highest priority first. Investigate what can be answered from evidence
-before asking the human.
-Operations filters the existing `operational` label. Stale review shows active
-Todo/In progress/Verify issues untouched for 30 days, excluding Horizon Later
-and Readiness Waiting, oldest update first. Review these deliberately; do not close work
-merely for inactivity.
-Delivery's In progress limit is three: an advisory highlight, not a hard limit,
-task reservation, or coordination mechanism.
-
-Private repository saved views Blocked and Completed are pinned in the issue
-sidebar and remain useful after Project archival; Completed excludes duplicate
-and not-planned closures. Keep custom-field planning in the Project. Pin the accepted
-decision or current workaround on long issue threads when useful; durable
-behavior still belongs in its owning repository document. The Open work by
-readiness chart shows current issue counts, not effort or completed deliveries.
-Project Insights excludes archived/deleted items, so charts do not provide a
-complete delivery history with the archive policy below.
-
-Native workflows auto-add new or updated open repository issues, put new items
-in Inbox, set closed items to Done, and return reopened items to Todo. Marking
-Done also closes the issue through the native Auto-close issue workflow. Closed
-issues inactive for two weeks are archived from the Project; archiving preserves
-metadata and does not delete repository issues. Explicitly add existing issues
-when importing: auto-add does not backfill them. Keep PRs linked to their issue
-rather than adding duplicate PR cards.
+One independently finishable outcome belongs in one issue. Its body holds the
+outcome, constraints, acceptance criteria, blockers or waiting trigger, and the
+validation needed. Use subissues for independently deliverable steps and native
+Blocked by relationships for real prerequisites; read the parent when working a
+subissue. Similar symptoms alone do not establish a duplicate or a blocker; use
+native Relates to when containment, dependency or common cause is unproven.
 
 ## Agent workflow with gh
 
-Before implementation, briefly search open GitHub issues using the requested
-outcome, affected feature, component, or error. Read plausible matches and their
-acceptance criteria, including Project fields and native relationships below.
-For a crash, runtime error, runtime regression, or supplied Sentry reference, also check
-the relevant [Sentry issues](../runbooks/sentry-triage.md) and their native GitHub
-links. Keep discovery focused on the task; routine documentation and feature
-work does not require a Sentry search. A related issue does not expand the
-authorized scope, and similar symptoms alone do not prove the same cause.
-
-Authenticate with repository access and the `project` scope. List issues with
-`gh issue list --repo nickysemenza/cubby`; read an issue with `gh issue view`.
-Inspect native relationships before starting:
+Before implementation, search open issues using the requested outcome, affected
+feature, component, or error. Read plausible matches, their acceptance criteria
+and native relationships. For a crash, runtime error, runtime regression, or
+supplied Sentry reference, also check the relevant
+[Sentry issues](../runbooks/sentry-triage.md) and their GitHub links. A related
+issue does not expand the authorized scope.
 
 ```sh
+gh issue list --repo nickysemenza/cubby --search "<terms>"
 gh issue view <number> --repo nickysemenza/cubby \
-  --json number,title,state,stateReason,parent,subIssuesSummary,blockedBy,blocking
+  --json number,title,state,labels,parent,subIssuesSummary,blockedBy,blocking
 ```
 
-Use `gh project item-list 2 --owner nickysemenza --limit 500 --format json` with Project number `2` to read its fields. Project metadata belongs to the Project and
-is not guaranteed to appear in an issue-only API response.
+Create an issue only for work that will not start now; work that begins in the
+current session needs no issue, because its PR body carries the outcome. Record
+a deferred remainder in an issue (new or existing) when the PR lands. Search for
+the same outcome first and update the existing issue when it matches. Read live
+code before copying an old issue's path or architecture.
 
-Create an issue only for work that will not start now. Work that begins
-immediately in the current session needs no issue; its PR body carries the
-outcome. Record any deferred remainder in an issue (or an existing one) when the
-PR lands.
+```sh
+gh issue create --repo nickysemenza/cubby --title "<title>" \
+  --body-file <file> --label area:<area>
+gh issue edit <number> --repo nickysemenza/cubby --add-label parked
+gh project item-edit 2 --owner nickysemenza --url <issue-url> \
+  --field Status --value "In progress"
+```
 
-Before creating work, search open issues for the same outcome. Use a concise
-title, outcome/context links, constraints, acceptance criteria, blockers or
-waiting trigger, and the validation needed. Read live code before copying an
-old issue's path or treating historical backlog context as current architecture.
-Create with `gh issue create --repo nickysemenza/cubby --body-file <file>`;
-attach it with `gh project item-add 2 --owner nickysemenza --url <issue-url>`
-and fill the three metadata fields. New untriaged
-work starts in Inbox; accepted backlog work is Todo. Move to In progress when
-implementation starts. Prefer structured CLI arguments or body files over shell
-interpolation of issue text.
+Pass issue text through body files or structured arguments, not shell
+interpolation. For native relationships use `gh issue create --parent <number>`
+or `--blocked-by <numbers>`, and `gh issue edit <number> --parent <n>` or
+`--add-blocked-by <n>` on existing issues; remove obsolete relationships
+explicitly. Relates to has no CLI flag:
+`gh api -X POST repos/nickysemenza/cubby/issues/<number>/relates_to -F issue_id=<id>`,
+where `<id>` is the target's internal id from
+`gh api repos/nickysemenza/cubby/issues/<n> --jq .id`, not its number.
 
-Use `gh project item-edit 2 --owner nickysemenza --url <issue-url>
---field Readiness --value Ready` to change one field; repeat for other fields.
-For native relationships, use `gh issue create --parent <number>` or
-`--blocked-by <numbers>`. For existing issues use `gh issue edit <number>
---parent <parent-number>` or `--add-blocked-by <blocker-number>`; remove obsolete
-relationships explicitly. A dependency does not automatically change Readiness.
-Relates to currently requires the UI or the [related-issue API](https://docs.github.com/en/rest/issues/issues#add-a-related-issue);
-use `gh api -X POST repos/nickysemenza/cubby/issues/<number>/relates_to -F issue_id=<id>`
-(the path is `relates_to`, not `related`). Its `issue_id` is the target's internal
-numeric `id` from `gh api repos/nickysemenza/cubby/issues/<n> --jq .id`, not its number.
-Keep updates on the existing issue rather than creating a parallel task.
+Attach synthetic screenshots or short reproduction videos with `--attach` on
+`gh issue` or `gh pr` create, edit and comment, referencing a local path from a
+body file. Uploads are limited to 10 MB per file. Follow
+[PR screenshots](validation.md#pr-screenshots); never upload live household
+evidence.
+
+## Closing issues
 
 Before opening the PR, compare the implemented outcome and validation against
-the matched issues' acceptance criteria. Put `Fixes #<number>` in the PR body
-only for issues fully satisfied and accepted on merge to the default branch;
-use `Related to #<number>` for partial or supporting work. Reference issues in
-individual commits when useful; repeating closing keywords in every commit is
-unnecessary. Include focused validation evidence. Only use Verify when
-the issue explicitly needs acceptance after deployment; use a plain issue
-reference in that PR and close the issue after verification instead of promising
-automatic closure. Completing a household operational pass needs verified
-outcomes, not a PR unless code or docs changed.
+the matched issues' acceptance criteria.
 
-Attach useful synthetic screenshots or short reproduction videos with `--attach`
-on `gh issue`/`gh pr` create, edit, or comment commands. Check installed help for
-support; use a body file and a referenced local image path so the CLI rewrites
-it to an uploaded URL. Free uploads are limited to 10 MB per image or video.
-Follow [PR screenshot validation](validation.md#pr-screenshots) for capture and
-public-content constraints; do not upload live household evidence.
+- A PR that completes an issue says `Fixes #<number>` in its body so the merge
+  closes it. Use `Related to #<number>` for partial or supporting work.
+- A change that supersedes or makes an issue obsolete closes it in the same
+  change, as not planned, with a one-line reason or replacement link.
+- Close a genuine duplicate with
+  `gh issue close <number> --duplicate-of <canonical>`, after moving useful
+  evidence to the canonical issue.
+- An issue in Verify gets a plain reference in the PR and closes after the
+  post-deploy check passes.
+- An operational pass closes on verified outcomes; it needs a PR only when code
+  or docs changed.
 
-Close abandoned or superseded work as not planned, with the reason or replacement
-link. For a genuine duplicate, preserve useful evidence on the canonical issue
-and close with `gh issue close <number> --duplicate-of <canonical-number>`;
-do not describe distinct symptoms as duplicates without evidence. Wanted-but-deferred work stays open with Horizon Later and its actual Readiness. Closed is the
-issue's state; Done is a Project status. Do not count not-planned closures as
-delivered work, or duplicates as additional deliveries, merely because their
-Project status is Done. Closing a parent
-does not establish that its open subissues are complete. Git history and closed
-issues preserve completed work; remove completed plans/reports after moving
-durable facts into their owning documentation.
+Closing a parent does not complete its open subissues. Not-planned and duplicate
+closures are not deliveries, even though the Project shows them as Done.
 
 ## Public content
 
-Cubby's repository issues are public even when the Project is private. Use
-synthetic engineering examples and keep raw household evidence, live entity
-identifiers, and diagnostics in their authenticated source systems. Preserve
-functional links. Operational issue updates describe verified outcomes without
-publishing household records.
+Repository issues are public even though the Project is private. Use synthetic
+engineering examples and keep raw household evidence, live entity identifiers,
+and diagnostics in their authenticated source systems. Preserve functional
+links. Operational issue updates describe verified outcomes without publishing
+household records.

@@ -125,7 +125,7 @@ and never blocks apply.
 Only `receive` includes `inventory`: a whole-number quantity, real location,
 and ownership. Omit both ownership fields to use the Run member, or pass
 `ownershipMode: "explicit"` and `ownerPartyId` (null means household stock).
-Never use the retired `person` value. Use the Run's structured default location first, then resolve per-item location
+Ownership has no `person` value. Use the Run's structured default location first, then resolve per-item location
 exceptions from its notes. If owned items lack a location, keep `receive`, omit
 `inventory`, and leave destination selection to the shared run control on web;
 do not repeat the same location question for every item or invent a holding location. Notes that say where items are stored

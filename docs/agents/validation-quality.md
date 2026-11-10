@@ -28,7 +28,6 @@ There is no machine-wide typecheck queue. Preserve incremental
 build-info within a checkout, reuse unchanged results, and coordinate heavy
 checks across sessions because cold typechecks can consume substantial memory.
 The root `package.json` owns each static-check command composition.
-Dependency advisory audits and deduplication are maintenance, not validation gates.
 
 When removing callers or changing exports, include Knip's unused-export check;
 the files/dependencies-only `knip:production` command cannot establish export readiness.
@@ -38,6 +37,9 @@ CI, or package script needs a `!` entry in `knip.json`; a test seam (fixture,
 mock, harness) belongs in the negated `project` patterns. Name reusable test
 fixtures `*.fixtures.ts` or `*.fixtures.tsx` to match the existing exclusion;
 do not add production entry points or per-file ignores for test-only modules.
+Running Knip with `--cache` before `packages/wasm` exists poisons
+`node_modules/.cache/knip` ("Unresolved imports …recipebridge_bg.js" on every
+later run); delete that cache directory.
 Scoped lint tests temporarily write under `apps/web/src/server/.lint-fixture-*`
 so path-sensitive rules execute. Knip excludes only that disposable directory
 pattern because its scan runs concurrently with those tests; lint still checks
@@ -78,8 +80,10 @@ Lint policy the exceptions follow:
   comment on every assertion except `as const`, narrowing to literal types
   (`as "open" | "closed"`), and test files. `as never`, `as unknown as`, and
   other widening casts always need one.
-- `vitest/no-conditional-expect` stays on. Assert the discriminant, then
-  narrow with an early return instead of wrapping expectations in a branch:
+- `vitest/no-conditional-expect` stays on. For conditional expected output,
+  construct the expected data and assert once, keeping asymmetric matchers
+  outside branches. To narrow a result, assert the discriminant, then return
+  early instead of wrapping expectations in a branch:
 
   ```ts
   expect(result.isOk()).toBe(true);
@@ -87,10 +91,8 @@ Lint policy the exceptions follow:
   expect(result.value.unit).toBe("$");
   ```
 
-Generated app output is never committed. The Claude plugin wrappers under
-`plugins/cubby` are the exception: GitHub serves them directly. After changing
-a playbook name or description, run `pnpm --dir apps/web generate:claude-plugin`
-and commit the updated wrappers; the generator's drift test owns this contract.
+Generated app output is never committed, except the Claude plugin wrappers
+(see [MCP](mcp.md)).
 `pnpm install`, `build`, `typecheck` and
 every test entry point run `scripts/ensure.ts generate`, which runs the
 Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
@@ -105,9 +107,4 @@ contracts in `apps/web/tooling/entity-generator.unit.test.ts` as well as the
 consumer regression. Successful generation does not check existing exact-shape
 expectations.
 
-Testing Library role queries match string names exactly by default; `exact` is
-a Playwright locator option.
-
-In browser tests, use `chooseOption` for enum Pickers rendered as button
-comboboxes. `selectComboboxItem` fills a searchable entity Picker input; it
-cannot select an enum button. Match the rendered control before choosing a helper.
+Browser and component-test traps live in [test tiers](validation-tests.md).

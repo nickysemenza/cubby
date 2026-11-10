@@ -1,8 +1,7 @@
 # Inventory Recount, Sweep, and Reconcile
 
-> Status: shipped in the native app. The web UI for scanning, recount, sweep,
-> and the location photo pass was retired; the server contract below is what the
-> app calls.
+> Status: shipped in the native app. Scanning, recount, sweep and the location
+> photo pass are native-only; the server contract below is what the app calls.
 
 ## 1. Purpose
 
@@ -93,19 +92,11 @@ Implementation and focused coverage live in the inventory service/repository
 and `tests/e2e/native-fieldwork-api.spec.ts`; the
 [journey coverage map](agents/core-journey-e2e.md) owns remaining client gaps.
 
-## 4. Retired web surfaces
+## 4. Web scope
 
-The web app no longer scans, recounts, sweeps, or runs the location photo pass,
-and it is no longer installable as a PWA. The old routes return the ordinary
-404:
-
-| Old URL                                        | Now |
-| ---------------------------------------------- | --- |
-| `/scan`                                        | 404 |
-| `/inventory/session` (any `parent`/`worklist`) | 404 |
-| `/locations/photo-pass` (any `parent`)         | 404 |
-
-Printed QR label URLs (`/<shortcode>`) still open the record.
+Scanning, recounts, sweeps and the location photo pass are native-only; the web
+app is not installable as a PWA. Printed QR label URLs (`/<shortcode>`) open the
+record on the web.
 
 Still deliberately deferred: cross-device pass state, a true offline mutation
 queue, and inventory-entry-without-product photo identity (photo capture reuses

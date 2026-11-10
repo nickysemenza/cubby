@@ -6,13 +6,10 @@ connections reads stored Suggestions only and never calls a model. A member's
 decision stays on its Suggestion; there is no separate review ledger. A new
 connection always requires review.
 
-The only relation discovered today is the Email purchase link,
-`connection.email-purchase`. Product/Purchase, Product/Expense, Expense/Project,
-Project/tool, Transaction/Purchase, refund and Inventory/Location discovery were
-removed ([#3899](https://github.com/nickysemenza/cubby/issues/3899)): their model-backed
-passes proposed tens of thousands of connections and applied one. Field
-suggestions (Task subject Product, Product Ingredient or Plant, Device Product)
-come from field suggestions and Sweeps, not from a connection pass.
+The only relation Cubby discovers is the Email purchase link,
+`connection.email-purchase`. Other relationships, such as a Task's subject
+Product or a Product's Ingredient, come from field suggestions and Sweeps, not
+from a connection pass.
 
 ## Discovery
 
@@ -27,6 +24,10 @@ no evaluation.
 - The `connection.discover` mutation (agents: `entity_graph.discover`) runs the
   same discovery for one Email or Purchase and returns its stored proposals.
   Other record kinds return their stored proposals unchanged.
+- An order id naming exactly one eligible Purchase is linked automatically
+  ([Emails sections](../entities.md#one-declaration-several-consumers)); an
+  amount match or an order id shared by several Purchases stays a pending
+  recommendation.
 - Discovery publishes pending `connection.email-purchase` recommendations
   before any authority write, retaining original/event/checksum dependencies
   privately. It creates no retained originals or events and never publishes
@@ -81,18 +82,6 @@ changes are excluded from connection fingerprints.
 Entity-pair Suggestion families (`entityPairSuggestionFamilies` in
 `packages/schemas/src/suggestion.ts`; today only `product_pair`) still reach
 Relations, so a record with a pending pair shows a compact "Possible match" mark
-that links to its Relationships section. Member Wrong/Dismissed feedback and
-suppression still exclude a pair. The AI product-identity evaluator that used to
-produce those pairs was removed; pairs now come from deterministic import-time
+that links to its Relationships section. Member Wrong and Dismissed decisions and
+suppression still exclude a pair. Pairs come from deterministic import-time
 matching and the `product_enrichment` propose action.
-
-Email→Purchase recommendations come from a deterministic drain, with no model,
-Run or AI evaluation: bounded retained-event matching by order identity, or
-sender-proof Vendor plus amount and date when an order ID is missing. Subject
-text alone never matches. An order id naming exactly one eligible Purchase is
-linked automatically instead ([Emails sections](../entities.md#one-declaration-several-consumers));
-an amount match or an order id shared by several Purchases stays a pending
-`connection.email-purchase` recommendation. Acceptance calls
-`decideEmailPurchase` with that exact retained event under
-Purchase→original→Email locks; only the owning member can accept, and agents use
-`purchase_import.mail_resolve`.

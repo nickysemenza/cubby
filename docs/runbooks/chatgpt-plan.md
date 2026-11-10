@@ -4,9 +4,8 @@ Cubby's open-source deployment can connect an eligible ChatGPT account to power
 its Workers OpenAI Responses calls. Settings lists the account's displayable
 model catalog from `GET https://api.openai.com/v1/models`, preserving OpenAI's
 ordering and `visibility: "list"` rule. It has no model selectors: structured
-tasks retain their declared models. Pi coordinators use the
-explicit funding order in [Infrastructure](../infrastructure.md#claude-subscriber-credits):
-Claude subscriber credits, OpenAI API credits, ChatGPT subscription, then paid Unified Billing.
+tasks retain their declared models. The plan is one rung of the funding ladder
+owned by [ADR 0027](../adr/0027-tier-routed-models-on-a-funding-first-ladder.md).
 Other calls retain their existing fail-closed subscription behavior.
 
 ## Connect
@@ -64,9 +63,8 @@ Concurrent refreshes are
 serialized; the replacement access/refresh pair is persisted together before
 use. Granted scopes are stored with the connection: an omitted refresh scope
 retains that grant; an explicit refresh scope without `chatgpt.tokens.use.direct`
-disables plan usage until reconnect. Previously stored connections already
-passed this permission check and retain their original direct grant. No
-PostgreSQL schema change or new environment secret is required.
+disables plan usage until reconnect. A connection stored without a scope
+record retains its original direct grant.
 
 After the first successful connection, Settings shows a dismissible note:
 “Background AI work in Cubby uses your ChatGPT plan. Manage usage in ChatGPT
@@ -138,12 +136,10 @@ hit still went through the gateway and stays `gateway`. Failed attempts record
 a failed row on their selected transport, keeping a billed response's usage
 when only its validation failed.
 
-Rows written before the column existed stay `unknown` unless they carry
-positive evidence: the migration set `cache` for an application-cache hit and
-`gateway` for a non-empty `gatewayLogId`. Zero cost and a caller-cache `hit`
-are not evidence (a prompt-cache read also wrote `hit`), so neither is guessed.
-The column keeps `DEFAULT 'unknown'` for writers deployed before it and queued
-telemetry minted without the field.
+A row without positive transport evidence stays `unknown`. Zero cost and a
+caller-cache `hit` are not evidence (a prompt-cache read also writes `hit`), so
+neither is guessed. The column defaults to `unknown` for queued telemetry minted
+without the field.
 
 The AI usage page uses Cubby's shared RTable for summaries and recent calls.
 Recent calls filter by transport, status, provider, model, feature, and search

@@ -17,7 +17,7 @@ dependency.
 | ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                   |
 | Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Job, Durable Object `PurchaseImportRunAgent`         |
-| PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, two Hyperdrive configurations                                           |
+| PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, three Hyperdrive configurations                                         |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |
 | USDA food data                | Cloudflare Workers + R2            | Worker `cubby`: Durable Object `UsdaReleaseDurableObject`, R2 `cubby-usda-releases`      |
@@ -41,76 +41,13 @@ Account ID: `9f10f078d35d86c78dedece2300a6b88`.
 
 ### Main Worker
 
-[`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts) owns Worker bindings,
-Durable Objects, queues, placement, asset routing, crons and plaintext
+[`apps/web/cloudflare.config.ts`](../apps/web/cloudflare.config.ts) owns Worker
+bindings, Durable Objects, queues, placement, asset routing, crons and plaintext
 variables. Deploy creates/updates those resources. This page records provider
 state and reconstruction constraints that configuration cannot reproduce.
 
 Vectorize's string metadata index is named `entityType`: that provider-side
 name predates `entityKind` and must remain when recreating the index.
-
-### Durable Jobs and Runs
-
-Postgres `Job` owns background execution, including Run pages, shared AI
-evaluations, derived refresh and purchase dispatch. Admission and its Job intent
-commit together. Run checkpoints, paid results, receipts and member decisions
-remain in their domain records. [ADR 0015](adr/0015-unified-durable-work-coordination.md)
-owns the execution contract; mailbox page and retention behavior lives in the
-[purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
-
-`cubby-background` carries only the version-3 permit envelope. Every delivery,
-including an unreadable envelope, is one permit to run one unit (one Job page or
-one drain page) and acknowledges whatever the unit's outcome. Failures before or
-around selection retry delivery up to three times; durable Job and drain policy
-own execution retries. The hourly cron and app-open catch-up repair lost permits.
-Telemetry has its separate queue.
-
-One SQL query chooses the unit: Run-owned work first, then units take turns,
-starting with the least recently served (Job timestamps and drain record rows).
-Priority ranks only within a kind; manual Run execution has raised priority. A
-unit that claimed work sends one successor permit
-([Selection and admission](jobs.md#selection-and-admission)). Claims use `SKIP LOCKED`, renewed leases and generation/token fences;
-effect-only transactions hold shared Job row locks and recheck ownership and
-wall-clock lease expiry before commit. Shared holders permit unrelated effects,
-while renewal and member controls remain excluded until every holder finishes.
-Job settlement, claim and mutation boundaries retain exclusive locks. A
-transaction that will mutate its own Job acquires exclusive ownership before any
-effect guard or domain lock; it must not upgrade shared ownership afterwards.
-Shared admission does not promise FIFO ordering with waiting controls. Each
-bounded page drains its effect transactions before exclusive settlement; the next
-page cannot bypass a waiting control through that settlement/claim boundary.
-Keep effect transactions short; admission and publication reject expired leases.
-Domain evidence and ordering locks remain independent. Successful pages reset
-consecutive failures. Exhausted failures and member
-pauses require explicit action.
-
-Typed `waitReason` and `waitUntil` distinguish provider capacity, AI funding
-windows, device availability and rate limiting from retry backoff. Claim,
-successful ordinary publication and failure clear waits. Single-item Jobs
-retain `subjectKind` / `subjectId` for diagnostics on their owning record.
-`retry_wait` retains the raw scrubbed error and consecutive failure attempt of
-`maxAttempts`. Application page sizes live in `JOB_PAGE_LIMITS`.
-
-The first hourly cron tick after a deployment activates its AI refresh policy. One
-transaction records the observed version and occurrence, checks the gateway DO's running
-version and activates, so a failure leaves it for the next tick. A rollback A → B → A
-receives a new occurrence and restarts automatic
-discovery without replacing policy generations. Member automatic-rule controls
-remain independent. No fetch observation, observation epoch alarm or funding
-resume alarm schedules this work.
-
-Purchase `purchase.dispatch` Jobs complete after the coordinator accepts a
-stable operation identity. The coordinator owns conversation settlement and
-its SDK lifecycle alarms. Acknowledged coordinators are never submitted again
-by retrying a start Job. Funding pauses persist a `run.funding-resume` Job with
-`ai_funding_window` and the window deadline; domain resumption regenerates
-funding-paused purchase dispatches. Explicit budget increases can resume early;
-manual pauses stay stopped.
-
-Job claim/page/publish/defer/fail logs emit one JSON object with `runId`, `jobId`,
-`kind`, `stepKey`, `generation`, `attempt` and `waitReason`. Workers Logs indexes
-[structured JSON objects](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects);
-raw errors retain their credential-scrubbed diagnostic detail.
 
 One-time creation commands that cannot be inferred or safely rerun by deploy:
 
@@ -125,168 +62,41 @@ pnpm --dir apps/web exec cf vectorize metadata-index create \
   --property-name entityType --index-type string
 ```
 
-The Durable Object namespaces, bindings, consumers, crons, and route
-are created or updated by `cf deploy` from the checked-in configuration's Build Output.
+The Durable Object namespaces, bindings, consumers, crons and route are created
+or updated by `cf deploy` from the checked-in configuration's Build Output.
 
-### Purchase agent
+### Background work
 
-The purchase agent coordinates import runs inside Worker `cubby`: an Agents
-SDK `Agent` hosting a pi-durable conversation through `PiHarness`. It uses the
-upstream lifecycle: a failed cached session requires explicit disposal or Durable
-Object recreation before reopening; Cubby does not override the SDK's cache.
-Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
+Postgres `Job` and the drains' own rows own background execution;
+[Durable Jobs](jobs.md) owns the runtime contract and
+[ADR 0015](adr/0015-unified-durable-work-coordination.md) the coordination
+decision. The infrastructure it depends on:
 
-- SQLite Durable Object class `PurchaseImportRunAgent` (binding
-  `PURCHASE_IMPORT_RUN`), one instance named `import-run:<Run.id>` or
-  `photo-inventory:<Run.id>` per run (`importRunAgentIdentity`); pi keeps the
-  transcript, inbox, and tasks in the object's SQLite, and Lifecycle jobs wake
-  it through its alarm after eviction;
-- the `purchase.dispatch` Job handler, admitted in the Run transaction, which
-  fences duplicate and late starts with the Run's dispatch generation and
-  `coordinatorStartedAt`; stable operation IDs survive lost replies. Job owns
-  bounded retries and raw terminal errors; the coordinator owns settlement.
-  Cutover preserves `dispatchAttempts` as `run` AuditLog rows before dropping
-  it (SQL-only: audit reads list auditable kinds),
-  backfills unacknowledged dispatch intent and preserves stopped failures;
-- every model call through AI Gateway `cubby` on the Worker's `AI` binding,
-  by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The gateway
-  shim disables parallel tool calls: pi ends a run on a terminating tool only
-  when it is the round's sole call. A paid- or credit-admission refusal
-  (household AI budget, Run no longer executable) reaches the coordinator as an HTTP 403 carrying its
-  reason, not a network error;
-- each request's context per the purpose's `workItemContext`
-  (`@cubby/schemas/import-run-agent`): Mail import sends only the kickoff, user
-  and system messages, and the latest `claim_next_import_work` onward, because
-  each Email is independent and durable records carry what earlier ones
-  settled. The stored transcript keeps every Email for the Run page. A Mail
-  import claim carries the Email's compact read and first settles
-  rule-decided Emails without a model turn
-  (`server/domains/purchase-import/service/README.md`). Each
-  Anthropic request marks a cache breakpoint at the end of that kept prefix,
-  and each OpenAI request keys `prompt_cache_key` to the Run
-  (`withWorkItemCaching`), so the prefix can be read from cache on each Email.
-  Photo inventory reconstructs bounded context from uncovered photos and its
-  durable boundary proposal. Compact proposal responses include up to eight
-  groups needing repair, with conflict identities and bounded error text; the
-  coordinator repairs them and reads again for further failures.
-  Publishing a page resets model input; accumulated
-  candidate lookups also have a byte budget. The stored transcript remains the
-  evidence history, while proposals and their atomic boundary checkpoint own
-  recovery. Public external-agent full-scan pagination remains available;
-- Mail progress comes from memoized claims, refreshing the existing progress,
-  heartbeat and work samples without a model-directed progress call. Email gaps
-  still use `mail_resolve`; Run-wide provider failures use the explicit stop
-  tool. Photo inventory keeps its model-directed progress tool;
+- `cubby-background` carries only the permit envelope. Every delivery,
+  including an unreadable envelope, is one permit to run one unit and is
+  acknowledged whatever the unit's outcome; failures before or around selection
+  retry delivery up to three times
+  ([selection and admission](jobs.md#selection-and-admission)).
+- Telemetry has its separate `cubby-telemetry` queue.
+- One hourly cron trigger is the timer and backstop for every permit
+  ([deadline scheduling](jobs.md#deadline-scheduling-and-idle-recovery)).
 
-- the agent's `entity_read` schema narrowed to the purpose's `entityRead`
-  view (Mail import: purchase, vendor and product, each with only its curated
-  list filters, and no `groupBy`/`groupLevel`/`nesting`); other kinds are
-  refused for the Run, omitted filters still validate, and members'
-  `tools/list` keeps every kind and input. An agent tool advertises
-  `_runExecution` only when one of its mounted actions reads it (Mail import:
-  `purchase_import`, `finance`, `shipments`). The Mail host stamps the immutable
-  Run and originating generation; the model still names its original Email,
-  checksum and operation ids. Mail publishes full inputs for `mail_resolve`
-  and `shipments.record`, retaining discovery for other compact actions. Shared
-  instructions precede dynamic context; cache keys and retention are unchanged,
-  and no additional cache savings are established. The ChatGPT plan transport places the tool
-  block before the conversation so the plan's prefix cache covers it
-  ([runbook](runbooks/chatgpt-plan.md)).
-
-The Run page observes without resuming work. Opening a harness resumes its
-pending tasks, so `/stream` from an object whose agent is already constructed
-for Run work is the agent's live push stream; every other observation reads the
-retained pi_ SQLite tables (`agent-transcript.ts`, version-fenced). Both
-read adapters accept the known SQLite 1 and 2 layouts: upstream
-[schema 2](https://github.com/earendil-works/pi/commit/f75b3240abc354bd1a666748e9101220554f5be2)
-adds sleeping tasks without changing committed entries, usage documents or
-their revisions. A sleeping task remains unfinished in the observed status.
-The readers reject unknown retained or installed versions, never migrate
-storage, and do not imply that the installed execution SDK can resume a newer
-store. Live and retained observations
-include pi's own `pi.usage` token totals per model (`model-usage.ts`), which
-the Run page compares against the Run's `AiUsage` rows to expose calls the
-usage hook missed, such as compaction summaries; cost stays in `AiUsage`. The
-agent's MCP calls are recorded as `McpToolCall` with `surface: in_app_agent`
-and the Run.
-
-pi-durable owns migrations of its stored tool tasks. Validate preservation of
-live call identities, arguments, and replay checkpoints when upgrading it.
-The host discards a failed in-memory harness after it closes and reopens the
-same SQLite store on next use. An older session's late close cannot discard
-its replacement.
-After a task migration, a rollback must retain an SDK that can read the migrated
-state.
-
-**The trust boundary.** The agent reads untrusted mail and photos, so prompt injection must not reach anything beyond the run it serves.
-It was a separate Worker with no database credential for that reason; it now
-runs in this Worker behind an in-process boundary enforced by construction:
-
-- The agent's code (`apps/web/src/server/domains/purchase-agent/`) receives no `env`.
-  Its host (`server/domains/purchase-import/operations/agent-host.ts`) builds a narrowed
-  environment (`server/domains/purchase-agent/service/environment.ts`): the AI Gateway, the
-  scripted test model in the workerd harness, the purpose's MCP tool
-  definitions, and the services of the one Run the object's name identifies
-  (`importRunIdFromAgentIdentity`), so a coordinator cannot address another
-  Run. The dispatch Job gets a separate environment that resolves any Run's
-  services and coordinator. The Agents SDK base class gets an empty
-  environment.
-- Every Cubby effect is a Run service (`server/domains/purchase-import/operations/agent-services.ts`):
-  bound to one Run when created, it parses its input
-  (`@cubby/schemas/purchase-agent-services`), opens its own database scope,
-  and resolves every target from that Run. No input names a Run, party,
-  account, vendor, SQL, script, or generic mutation target. A new coordinator
-  first calls `authorize`, which requires the member's live Purchase Agent
-  grant and otherwise pauses the Run for authorization.
-- MCP calls run Cubby's MCP handler in process. For each request the host
-  mints a fresh five-minute delegation bearer bound to the Run and the
-  member's live Purchase Agent grant; the MCP handler verifies it, the grant,
-  that the member started the Run and owns it through their LedgerParty (a
-  photo Run may be owned by the other member's party), and narrows
-  every tool to the purpose's manifest actions
-  (`importRunAgentManifest[purpose].mcpActions`). The agent never holds the
-  token, and the host reads the agent's request before opening its database
-  scope.
-- Oxlint rule `cubby/purchase-agent-boundary` (`tools/oxlint/cubby/`) fails
-  any import from that directory outside its runtime packages, pure Cubby
-  contracts (`@cubby/schemas`, `@cubby/shared`, `@cubby/worker-tracing`), its
-  own files, and the bundled skill Markdown, and any reach for an `env` or
-  `exports` property (including `ctx.exports`, the Worker's loopback
-  bindings) or the `process`, `globalThis`, `self`, and `require` globals,
-  under any spelling. A new agent capability is a new Run service, never an
-  import.
-
-What the boundary does and does not cover: the model never runs code — its
-only authority is the tool set, and every tool is a Run service or an MCP
-call checked as above. The boundary keeps Cubby's own agent code on that
-path. It is not a sandbox: the agent shares the Worker's isolate, so its
-dependencies (the Agents SDK, pi) run with the same runtime authority as any
-Worker code, including `process.env` populated by `nodejs_compat`. The
-separate Worker also contained a compromised dependency; adding a
-dependency to the agent therefore deserves the same review as one in the
-web app.
-
-One Worker removes the circular service bindings, the internal agent route
-and its header marker, and the `PurchaseImportService` RPC entrypoint whose
-binding was cast rather than checked; the boundary is now type-checked and
-linted instead of a deployment topology.
+### Worker startup
 
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
-`server/domains/purchase-agent/service/run-agent.ts` on its first event, and the Job handler loads the dispatch host only when
-a purchase dispatch is due
-(`apps/web/tooling/checks/check-server-closure.ts` reports the static entry, browser
-API bootstrap, combined page path, and total output). The API bootstrap includes
-the dispatch adapter's static imports; individual operation loaders remain
-separate. Startup lifecycle/progress/admission modules import the
-database helpers' `core` and `query` modules directly: the barrel also
+`server/domains/purchase-agent/service/run-agent.ts` on its first event, and the
+Job handler loads the dispatch host only when a purchase dispatch is due.
+`apps/web/tooling/checks/check-server-closure.ts` reports the static entry,
+browser API bootstrap, combined page path and total output; the API bootstrap
+includes the dispatch adapter's static imports, while individual operation
+loaders stay separate. Startup lifecycle/progress/admission modules import the
+database helpers' `core` and `query` modules directly, because the barrel also
 initializes relation loaders and CRUD dependencies. Refresh admission keeps its
 slot query and lock in a lightweight module without AI policy, discovery or the
-generated entity catalog. These belong behind their
-consuming handler; the entry closure does not measure the additional imports
-an API operation or page needs. Byte counts are informational, not CI limits:
-a size threshold alone does not establish a startup or request-time regression.
-The build still rejects leaked fixture code and Sentry build-time instrumentation.
+generated entity catalog. Byte counts are informational, not CI limits: a size
+threshold alone does not establish a startup or request-time regression. The
+build still rejects leaked fixture code and Sentry build-time instrumentation.
 
 Module-scope work in the entry closure runs on every isolate start; construct
 expensive objects (an `Intl.Segmenter`, compiled tables) on first use. To
@@ -302,30 +112,33 @@ latency is mostly outside this profile: production traces carry
 `cubby.worker.first_invocation`, and comparing the root span with
 `cf.app.entry` separates platform isolate start from handler time.
 
-Run purposes and MCP authority are declared in
-`packages/schemas/src/import-run-agent.ts`; execution, settlement and transcript
-retirement follow the [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md).
-The shared host records model usage in `AiUsage`; transport attribution follows
-[ChatGPT-plan usage attribution](runbooks/chatgpt-plan.md#usage-attribution).
-Model/tool content stays out of Sentry and Workers traces.
+### Purchase agent
 
-The fixed public OAuth client id is `cubby-purchase-agent`. It uses authorization
-code + PKCE, `offline_access`, no client secret, and the callback
+The purchase agent coordinates import Runs inside Worker `cubby`. Its
+checked-in configuration in `apps/web/cloudflare.config.ts` is the SQLite
+Durable Object class `PurchaseImportRunAgent` (binding `PURCHASE_IMPORT_RUN`,
+one instance per Run) plus the `purchase.dispatch` Job handler. Runtime
+behavior, model context, observation and the agent's **trust boundary** (no
+`env`, Run-bound services, delegated MCP, the `cubby/purchase-agent-boundary`
+lint rule) are in the
+[purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#purchase-agent).
+
+The fixed public OAuth client id is `cubby-purchase-agent`. It uses
+authorization code + PKCE, `offline_access`, no client secret, and the callback
 `https://cubby.nickysemenza.com/api/import/agent/oauth/callback`. The web Worker
 provisions the client idempotently when authorization begins. Better Auth's
-existing `oauth_refresh_token` row is the revocable grant; its value is never
-copied to the agent. The web Worker mints five-minute, run-bound delegation tokens
-for MCP calls and rechecks the live grant and Run ownership (`delegatedRunHolds`)
-on every request.
+`oauth_refresh_token` row is the revocable grant; its value is never copied to
+the agent. The web Worker mints five-minute, Run-bound delegation tokens for MCP
+calls and rechecks the live grant and Run ownership on every request.
 
 Pi-durable conversations live in the coordinator's Durable Object, so moving
 the class between Workers or replacing it does not carry them over: terminate
 the Runs whose coordinator is active (`running` and `paused_*`) before such a
-deploy. Job dispatch intent remains in Postgres; coordinator SQLite receipts
-and conversations must be preserved across the cutover.
+deploy. Job dispatch intent remains in Postgres; coordinator SQLite receipts and
+conversations must be preserved across that change.
 
-After deployment, authorize each member once from Settings and verify the
-client/grant without printing token values:
+Each member authorizes once from Settings. Verify the client/grant without
+printing token values:
 
 ```sql
 SELECT c.client_id, c.token_endpoint_auth_method, c.require_pkce,
@@ -337,48 +150,33 @@ WHERE c.client_id = 'cubby-purchase-agent'
 GROUP BY c.client_id, c.token_endpoint_auth_method, c.require_pkce;
 ```
 
-The scripted workerd harness exercises the built agent without production
-data; profile/provenance contracts belong in
-[test runtime guidance](agents/validation-tests.md#workerd-test-runtime-and-profiles).
-
 ### PostgreSQL and Hyperdrive
 
-The hourly cron and app-open catch-up inspect Postgres Job intent and run the same
-units as background permits. The cron runs units itself before sending permits,
-so it is both the timer and the backstop: a dropped permit or broken queue
-delivery recovers within one hour. Stateful Durable Objects retain only their provider
-admission, cache or coordinator responsibilities. AI refresh policy details
-live in the [refresh runbook](runbooks/ai-refresh.md).
+Neon owns the PostgreSQL database. Production compute is autoscaling 0.25–2 CU
+(`max_connections` 901) and keeps scale-to-zero (300 s idle) by choice: the
+first query after an idle gap waits for compute start (about 0.5 s median,
+0.9 s p90), visible as a long `db.connect.phase.startup` on `db.client.connect`.
+This range belongs to the production endpoint: changing the project's default
+compute range does not resize an existing endpoint.
 
-Neon owns the PostgreSQL database. Production compute is autoscaling
-0.25–2 CU (`max_connections` 901) and keeps scale-to-zero (300 s idle) by choice: the first query after
-an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
-as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
-default compute range does not resize an existing endpoint. The Hyperdrive
-origin connection caps are 40 strong + 12 cached + 40 background (raised from
-30 + 12 + 10 by an operator action alongside the permit runtime).
-All three configurations share origin
-compute; the cached pool needs headroom for short reads while expensive reads
-are running. Pool caps are soft limits, not interactive connection reservations.
-Keep them below database capacity and measure origin waits and query execution
-together before raising them. More connections cannot remove expensive query
-work. Telemetry concurrency remains 1.
-
-The background configuration was created as an authorized operator action;
-the existing strong and cached configurations were left unchanged. Builds and
-deployments do not manage these caps. Neither the existing caps nor the separate
-background configuration establishes the cause of the measured multi-second connect
-startup tail; ordinal-1 connects were slow too. Keep measuring connect startup,
-origin admission and SQL execution separately. This change adds no PostgreSQL
-role or `statement_timeout` and preserves Neon's compute bounds.
+The Hyperdrive origin connection caps are 40 strong + 12 cached + 40
+background. All three configurations share origin compute; the cached pool needs
+headroom for short reads while expensive reads are running. Pool caps are soft
+limits, not interactive connection reservations. Keep them below database
+capacity and measure origin waits and query execution together before raising
+them; more connections cannot remove expensive query work. Builds and
+deployments do not manage these caps, and neither the caps nor the separate
+background configuration explains slow connect startup: measure connect
+startup, origin admission and SQL execution separately. Telemetry concurrency
+remains 1.
 
 Each HTTP invocation lazily opens at most two strong and two cached database
 sockets, so ordinary browser reads can overlap page enrichment. Its pools close
 once the response body finishes (or the handler throws, without delaying the
 error) and every `waitUntil` task it registered has settled (`withRequestDb`);
-an upgraded socket keeps pg's idle timeout. Four
-database sockets leave two of the Worker's six outbound connection slots for
-provider/DO/storage/telemetry calls. One Worker continues to serve all events.
+an upgraded socket keeps pg's idle timeout. Four database sockets leave two of
+the Worker's six outbound connection slots for provider/DO/storage/telemetry
+calls. One Worker serves all events.
 
 #### Background connection budget
 
@@ -401,25 +199,26 @@ leaves 20 sockets for Durable Object requests.
 Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share a
 household-wide cap of `COORDINATOR_TURN_CAP` = 6 concurrent work turns
 (`domains/run/repo/coordinator-turns.ts`): about 12 sockets, leaving room for
-the CalendarFeed object's rebuilds and other Durable Object requests, which
-are bounded only by their own traffic. Before an alarm, a dispatch or a member
+the CalendarFeed object's rebuilds and other Durable Object requests, which are
+bounded only by their own traffic. Before an alarm, a dispatch or a member
 prompt loads the agent, its host takes or renews the Run's turn in one short
-transaction (a `CoordinatorTurn` row under one advisory lock) and keeps it while
-pi has work running; the entry that finds pi idle releases it. A crashed holder's
-turn lapses after its 16-minute lease, longer than an alarm can run. A refused
-coordinator's row (`held = false`) records that it is alive and waiting, so
-stale-Run expiry never ends a Run for waiting its turn. Without a turn, nothing
-loads: an alarm re-arms itself 15 s–5 min later (doubling,
-jittered), a `purchase.dispatch` Job defers with `provider_capacity` (no attempt
-spent) until a released turn brings the oldest one forward, and a prompt answers
-503 with `Retry-After`. A member's stop never waits for a turn. The cap neither
-starts, resumes, retries nor cancels a Run: a running coordinator simply waits
-its turn. Each coordinator still opens a pool per service call within its turn.
+transaction (a `CoordinatorTurn` row under one advisory lock) and keeps it
+while pi has work running; the entry that finds pi idle releases it. A crashed
+holder's turn lapses after its 16-minute lease, longer than an alarm can run. A
+refused coordinator's row (`held = false`) records that it is alive and
+waiting, so stale-Run expiry never ends a Run for waiting its turn. Without a
+turn, nothing loads: an alarm re-arms itself 15 s–5 min later (doubling,
+jittered), a `purchase.dispatch` Job defers with `provider_capacity` (no
+attempt spent) until a released turn brings the oldest one forward, and a
+prompt answers 503 with `Retry-After`. A member's stop never waits for a turn.
+The cap neither starts, resumes, retries nor cancels a Run: a running
+coordinator simply waits its turn. Each coordinator still opens a pool per
+service call within its turn.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
-Those failures are transient (no attempts spent; see [Jobs](jobs.md)), so
-exceeding the budget slows work rather than losing it.
+Those failures are transient (no attempts spent; see [Jobs](jobs.md#retries)),
+so exceeding the budget slows work rather than losing it.
 
 Watch for the margin running out:
 
@@ -442,8 +241,8 @@ waits.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
-away from critical writes or migrations, then verify reconnects and read latency.
-Reverting the range also restarts the endpoint. See
+away from critical writes or migrations, then verify reconnects and read
+latency. Reverting the range also restarts the endpoint. See
 [Neon compute management](https://neon.com/docs/manage/computes) and
 [Hyperdrive pool tuning](https://developers.cloudflare.com/hyperdrive/configuration/tune-connection-pool/).
 
@@ -456,11 +255,12 @@ Runtime database roles use Hyperdrive bindings to the same direct Neon origin:
 | `HYPERDRIVE_BACKGROUND` | `withInvocationDb` queue/cron/DO/coordinator work; caching disabled. |
 
 Hyperdrive configurations and their origin/cache limits are operator-managed.
-Builds and deployments do not create configurations, tune pools, restart them or
-change credentials. The background binding must reference an existing approved
-configuration before release. Local/test profiles substitute the guarded checkout
-URL for all three bindings. The per-invocation code budget reserves connection
-slots for non-database subrequests independently of provider pool settings.
+Builds and deployments do not create configurations, tune pools, restart them
+or change credentials. The background binding must reference an existing
+approved configuration before release. Local/test profiles substitute the
+guarded checkout URL for all three bindings. The per-invocation code budget
+reserves connection slots for non-database subrequests independently of
+provider pool settings.
 
 Local `.env` and CI use `DATABASE_URL`. Deployed Worker code receives the
 database URLs from Hyperdrive and does not need a `DATABASE_URL` secret.
@@ -503,23 +303,23 @@ pnpm --dir apps/web exec cf workers secrets list --worker cubby
 | `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                                                     |
 | `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                                                              |
 | `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; with account-scoped Workers Observability Edit it also reads inline Job logs |
-| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                                                                                                                                                        |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
 client secrets, R2 secret keys, auth secrets, API tokens, and provider keys must
 not be committed.
 
-Photo import alert topics follow the registering build's canonical app identity,
-including the separate Mac development bundle. Live Activity registrations use
-the production Cubby app identity. Enable Push Notifications on each App ID and
-refresh its signing profiles before validating delivery; configuring an APNs
-key alone does not add the signed-client entitlement.
+Photo import alert topics follow the registering build's canonical app
+identity, including the separate Mac development bundle. Live Activity
+registrations use the production Cubby app identity. Enable Push Notifications
+on each App ID and refresh its signing profiles before validating delivery;
+configuring an APNs key alone does not add the signed-client entitlement.
 Delivery results apply only while the token, app identity and APNs environment
 still match the registration that sent them. Correcting any of these resets
-delivery state and prevents a late response from ending the corrected registration.
-Alert delivery keys also include the cumulative planned photo count, so a late
-response from an earlier batch cannot end a later batch in the same phase.
+delivery state and prevents a late response from ending the corrected
+registration. Alert delivery keys also include the cumulative planned photo
+count, so a late response from an earlier batch cannot end a later batch in the
+same phase.
 
 ## Google Cloud and Gmail OAuth
 
@@ -556,12 +356,12 @@ clients. Configure the consent screen and client in the
 [Google Auth Platform console](https://console.cloud.google.com/auth/overview?project=cubby-481519).
 The redirect URI is exact, including scheme and absence of a trailing slash.
 
-For initial validation, an External app may remain in Testing with household
-Google accounts listed as test users. Google expires Testing-mode grants after
-seven days, so unattended hourly Gmail discovery requires publishing the app
-to Production. A private personal-use app may remain unverified and display
-Google's warning; do not expand its audience without revisiting Google's
-restricted-scope verification and data-handling requirements.
+An External app may stay in Testing with household Google accounts listed as
+test users, but Google expires Testing-mode grants after seven days, so
+unattended hourly Gmail discovery requires publishing the app to Production. A
+private personal-use app may remain unverified and display Google's warning; do
+not expand its audience without revisiting Google's restricted-scope
+verification and data-handling requirements.
 
 Better Auth stores the resulting per-member access and refresh tokens encrypted
 in its `account` table. Cubby requests read-only Gmail access and does not store
@@ -569,165 +369,168 @@ Google passwords.
 
 Google sign-in on the web and Apple apps uses this same OAuth client and
 requires the Gmail read-only grant. It only signs in existing Cubby users:
-verified Google email can link to the matching existing household account,
-but Google cannot create a new user. Password login remains available and
-public signup remains closed. Reconnecting Google from Settings renews Gmail
-consent; disconnecting Google removes both Google login and Gmail access.
+verified Google email can link to the matching existing household account, but
+Google cannot create a new user. Password login remains available and public
+signup remains closed. Reconnecting Google from Settings renews Gmail consent;
+disconnecting Google removes both Google login and Gmail access.
 
 The Apple apps use `ASWebAuthenticationSession` with `/auth/native`, backed by
 the server and browser-proxy exports of `@better-auth/electron` (no Electron
-runtime). The `cubby-native` client uses PKCE and the existing
-`cubby://auth/callback` scheme. Its single-use code is exchanged at
-`/api/auth/electron/token`; native clients persist the signed `set-auth-token`
-header, never the raw token in the JSON response. Both password and Google
-login use the same Keychain/session completion. This reuses the production
-Google callback above; it does not require separate iOS or macOS OAuth clients.
-Local and preview environments retain password login.
+runtime). The `cubby-native` client uses PKCE and the `cubby://auth/callback`
+scheme. Its single-use code is exchanged at `/api/auth/electron/token`; native
+clients persist the signed `set-auth-token` header, never the raw token in the
+JSON response. Both password and Google login use the same Keychain/session
+completion. This reuses the production Google callback above; it does not
+require separate iOS or macOS OAuth clients. Local and preview environments
+keep password login.
 
 ## AI providers
 
-All billed application, live-evaluation, and integration-enabled
-development calls use gateway `cubby`. Production uses the Workers AI Gateway
-binding: `AI.run` with an explicit gateway for Workers AI models, and
+All billed application, live-evaluation, and integration-enabled development
+calls use gateway `cubby`. Production uses the Workers AI Gateway binding:
+`AI.run` with an explicit gateway for Workers AI models, and
 `AI.gateway("cubby").run` for managed providers. Named subscriber-credit BYOK
-uses native authenticated passthrough instead; see setup below. Tools outside Workers use
-explicitly authenticated REST requests. Workers AI REST calls use the account
-`/ai/run` endpoint with gateway routing, metadata, caching, and timeout controls
-in `cf-aig-*` headers (not body options), avoiding a nested
-unscoped provider call.
-Every REST request names the gateway explicitly so it cannot create `default`:
-the first authenticated request without a gateway ID recreates `default` even
-after it is deleted
+uses native authenticated passthrough instead; see setup below. Tools outside
+Workers use explicitly authenticated REST requests. Workers AI REST calls use
+the account `/ai/run` endpoint with gateway routing, metadata, caching and
+timeout controls in `cf-aig-*` headers (not body options), avoiding a nested
+unscoped provider call. Every REST request names the gateway explicitly: the
+first authenticated request without a gateway ID recreates `default` even after
+it is deleted
 ([manage gateways](https://developers.cloudflare.com/ai-gateway/configuration/manage-gateway/#default-gateway)).
+The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
+fallback used outside Cloudflare Workers; the deployed Worker also needs it for
+third-party native passthrough, and only Workers AI runs on the binding alone.
 
 Gateway metadata has three stable dimensions: `environment` (`production`,
 `ci`, or `development`), `feature`, and `operation`, with optional `entityKind`.
 The outbound transport filters to that contract. Model/provider, input counts,
-entity and run identifiers, document paths, chunks, revisions, and prompt
-versions remain in application accounting or traces rather than gateway
-metadata. Cloudflare saves only the first five metadata entries per request,
-and a spend rule split by a high-cardinality key gives every value its own
-budget ([custom metadata](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/),
+entity and run identifiers, document paths, chunks, revisions and prompt
+versions stay in application accounting or traces rather than gateway metadata.
+Cloudflare saves only the first five metadata entries per request, and a spend
+rule split by a high-cardinality key gives every value its own budget
+([custom metadata](https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/),
 [spend limits](https://developers.cloudflare.com/ai-gateway/features/spend-limits/)).
-Cookbook metadata used for model pricing is read before outbound
-filtering. The live-evaluation gateway peer
-(`apps/web/tooling/ai/live-gateway.ts`) preserves application feature/operation attribution,
-sets its own environment, and always bypasses gateway caching because the
-documented cache key does not include the gateway or metadata, so shared-gateway
-traffic can return another environment's cached response
+Cookbook metadata used for model pricing is read before outbound filtering. The
+live-evaluation gateway peer (`apps/web/tooling/ai/live-gateway.ts`) preserves
+application feature/operation attribution, sets its own environment, and always
+bypasses gateway caching because the documented cache key does not include the
+gateway or metadata, so shared-gateway traffic can return another environment's
+cached response
 ([caching](https://developers.cloudflare.com/ai-gateway/features/caching/#how-the-cache-key-works)).
 
-All environments use `cubby`; `environment` metadata separates their logs and spend rules.
-The shared gateway also shares Cloudflare's Unified Billing allowance of
-200 requests per 60 seconds. The egress DO admits a rolling 180 starts/minute
-and at most 64 in-flight requests in the `unified` bucket, covering Workers AI
-and paid managed-provider calls. The 20-request margin leaves room for clients
-outside the Worker. 64 is an operating safety bound, over twice the concurrency
-needed at ten-second latency, not a published provider concurrency limit.
+All environments use `cubby`; `environment` metadata separates their logs and
+spend rules. The shared gateway also shares Cloudflare's Unified Billing
+allowance of 200 requests per 60 seconds. The egress DO admits a rolling 180
+starts/minute and at most 64 in-flight requests in the `unified` bucket,
+covering Workers AI and paid managed-provider calls. The 20-request margin
+leaves room for clients outside the Worker. 64 is an operating safety bound,
+over twice the concurrency needed at ten-second latency, not a published
+provider concurrency limit.
 [AI Gateway limits](https://developers.cloudflare.com/ai-gateway/reference/limits/)
-exclude BYOK from that rate limit. [Workers AI limits](https://developers.cloudflare.com/workers-ai/platform/limits/)
+exclude BYOK from that rate limit.
+[Workers AI limits](https://developers.cloudflare.com/workers-ai/platform/limits/)
 publish 300 RPM for ordinary text generation and 2,000 RPM for classification;
 models requiring the Paid plan instead have per-model 20 RPM standard / 50 RPM
 prepaid limits. Clef is not a Paid-plan-only model. These docs publish no fixed
-Workers AI concurrency ceiling. Provider 429s and `Retry-After` remain authoritative.
+Workers AI concurrency ceiling. Provider 429s and `Retry-After` remain
+authoritative.
 
 The `subscriber-credit:anthropic` BYOK bucket has independent permits and
 cooldowns, with no invented universal concurrency cap: Anthropic's
 [limits](https://platform.claude.com/docs/en/api/rate-limits) depend on the
-organization, model, requests and tokens. Its refusal/probe rules below remain.
-The ChatGPT subscription transport bypasses AI Gateway and publishes
+organization, model, requests and tokens. The ChatGPT subscription transport
+bypasses AI Gateway and publishes
 [plan-dependent usage limits](https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan),
 not a fixed RPM/concurrency allowance; it has no local model fan-out cap and is
 not charged to the unified bucket. A full unified bucket never consumes credit
-capacity. Subscriber-credit 429s cool only their bucket; unified 429s retain a
-shared cooldown because their provider limit scope is unknown. A spend limit
-can filter by `environment`, but cannot separate the shared request allowance.
-Gateways are not a security boundary: AI Gateway tokens are
-account-scoped, so any `Run` token reaches every gateway and its stored BYOK keys
+capacity. Subscriber-credit 429s cool only their bucket; unified 429s keep a
+shared cooldown because their provider limit scope is unknown. A spend limit can
+filter by `environment`, but cannot separate the shared request allowance.
+
+Gateways are not a security boundary: AI Gateway tokens are account-scoped, so
+any `Run` token reaches every gateway and its stored BYOK keys
 ([authenticated gateway](https://developers.cloudflare.com/ai-gateway/configuration/authentication/)).
 Dynamic routes accept only the OpenAI chat-completions shape, so Anthropic
 Messages calls cannot use them
 ([dynamic routing](https://developers.cloudflare.com/ai-gateway/features/dynamic-routing/)).
 Provider routing and model identifiers live in
-`packages/shared/src/ai/models.ts`. The declarations supply the model IDs,
-provider names, capabilities, role-specific schemas, and defaults for application
-and tooling callers. Provider credentials or unified-billing
-configuration are Cloudflare AI Gateway state; no provider key belongs in this
-repository. Verify that every model in the checked-in registry is enabled in
-the gateway before relying on a feature that selects it.
+`packages/shared/src/ai/models.ts`, which supplies model IDs, provider names,
+capabilities, role-specific schemas and defaults for application and tooling
+callers. Provider credentials and unified-billing configuration are Cloudflare
+AI Gateway state; no provider key belongs in this repository. Verify that every
+model in the checked-in registry is enabled in the gateway before relying on a
+feature that selects it.
 
 ### Claude subscriber credits
 
-Every tier-routed chat call uses subscriber credits first, then OpenAI API
-credits, then the ChatGPT subscription transport, then paid Unified Billing;
-each source answers with its route's model of the call's tier
-(`CHAT_TIER_MODELS`: fast Haiku/Luna, standard Sonnet/Terra, quality
-Sonnet/Sol). `fundedChatAttempts` owns the ladder;
-[ADR 0027](adr/0027-tier-routed-models-on-a-funding-first-ladder.md) records
-the tiers and when paid fallback is allowed. Fixed-model evaluations do not
-change model.
+**Funding ladder.** Every tier-routed chat call climbs the source-first ladder
+that [ADR 0027](adr/0027-tier-routed-models-on-a-funding-first-ladder.md)
+records and `fundedChatAttempts` implements: Claude subscriber credits, OpenAI
+API credits, the ChatGPT subscription, then paid Unified Billing, each answering
+with its route's model for the call's tier (`CHAT_TIER_MODELS`). A step advances
+only on a funding refusal. Window budgets, the plan budget and their defaults
+live in `apps/web/src/server/ai/budget.ts`; this page owns the provider setup
+and the refusal mechanics below. Run funding pauses and resumption are in
+[Durable Jobs](jobs.md#funding-waits).
 
-Provider credits (Claude and OpenAI API) have no window budget: each runs
-until its provider refuses, and the status reports its standard-cost spend by
-provider under billing reason `subscriber_credit`. Background work (a Run
-whose lineage root was scheduled, discovered or backfilled) draws the ChatGPT
-plan only within its window budget (default $2, `PLAN_BUDGET_LIMIT_USD`, at
-standard cost), because the household shares the plan with its own use. Past
-it, `beforePlanRequest` returns a `cubby_plan_budget_reached` funding refusal
-and the ladder moves on; an unladdered plan call skips the plan for its paid or
-subscription-required path. Every Run then pays within the paid budget, and once that is spent
-`paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`). The funding pause transaction records a `run.funding-resume` Job due just after
-the window end, with `waitReason=ai_funding_window` and `waitUntil`.
-`resumeFundingPausedRuns` redispatches eligible agent imports and resumes paused
-Mail discovery; nightly/app-open recovery calls the same domain path. A member's `run_now_paid` control
+Provider credits (Claude and OpenAI API) have no window budget: each runs until
+its provider refuses, and the status reports its standard-cost spend by provider
+under billing reason `subscriber_credit`. Background work (a Run whose lineage
+root was scheduled, discovered or backfilled) draws the ChatGPT plan only
+within its window budget (`PLAN_BUDGET_LIMIT_USD`, at standard cost), because
+the household shares the plan with its own use. Past it, `beforePlanRequest`
+returns a `cubby_plan_budget_reached` funding refusal and the ladder moves on;
+an unladdered plan call skips the plan for its paid or subscription-required
+path. The plan preflight (`planRunPreflight`) recognizes a chat call by endpoint
+path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`. Paid calls stay
+within the paid budget (`paidRunPreflight`); a member's `run_now_paid` control
 event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
-resumes that Run now and lets it and the imports its discovery starts pay past
-the paid budget by the confirmed `paidOverBudgetUsd` for the granting window.
-The plan preflight (`planRunPreflight`) recognizes a chat call by endpoint
-path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`.
+lets that Run and the imports its discovery starts pay past the paid budget by
+the confirmed `paidOverBudgetUsd` for the granting window.
 
-A provider credit refusal is held, not retried. When a credit response is a
-funding refusal `isInferenceFundingRefusal` recognizes (a Console spend limit,
-a spent balance), the
-`AI_GATEWAY_EGRESS` Durable Object records it with the raw body until the date
-Anthropic names ("You will regain access on …"), else the end of the current
-six-hour window. While it holds, credit admission answers at once with a
-`cubby_credit_refused` 400 carrying that raw reason and makes no upstream call,
-so every ladder moves on to OpenAI API credits; unified (paid) traffic is
-unaffected. One credit request per window passes as a probe: success clears
-the refusal, another refusal records it again. "Retry Claude credit now"
-(Settings → AI funding, MCP `ai_funding.reset_funding_refusal` with `source:
-"credit"`) clears it and resumes funding-paused Runs. `ai_funding_read.status` and the AI funding card report it as
-`credit.state` `refused`, with `until` and `reason`. Refusals that arrive only
-inside a stream are not recorded.
+**Credit refusals are held, not retried.** When a credit response is a funding
+refusal `isInferenceFundingRefusal` recognizes (a Console spend limit, a spent
+balance), the `AI_GATEWAY_EGRESS` Durable Object records it with the raw body
+until the date Anthropic names ("You will regain access on …"), else the end of
+the current six-hour window. While it holds, credit admission answers at once
+with a `cubby_credit_refused` 400 carrying that raw reason and makes no upstream
+call, so every ladder moves on to OpenAI API credits; unified (paid) traffic is
+unaffected. One credit request per window passes as a probe: success clears the
+refusal, another refusal records it again. "Retry Claude credit now" (Settings →
+AI funding, MCP `ai_funding.reset_funding_refusal` with `source: "credit"`)
+clears it and resumes funding-paused Runs. `ai_funding_read.status` and the AI
+funding card report it as `credit.state` `refused`, with `until` and `reason`.
+Refusals that arrive only inside a stream are not recorded.
 
-The paid rung's gateway balance is held the same way. When a paid Unified
-Billing response (400, 402 or 403; Workers AI bills separately and is never
-gated) carries an empty-balance refusal (`isGatewayBalanceEmpty`; a missing BYOK
-credential is one provider's setup failure and is never recorded),
-the egress object records it as `paid:gateway` with the raw body until the
-window end. While it holds, paid admission answers at once with a 402 replaying
-that raw body, so every paid caller pauses for funding exactly as on the
-gateway's own refusal, without an upstream call; a paid success clears it.
-"Retry paid now" (MCP `ai_funding.reset_funding_refusal` with `source:
-"paid"`) and a member's paid grant ("Run now, paid allowed") clear it; a
-budget change does not. It reads as `paid.state` `refused`.
+**The paid gateway balance is held the same way.** When a paid Unified Billing
+response (400, 402 or 403; Workers AI bills separately and is never gated)
+carries an empty-balance refusal (`isGatewayBalanceEmpty`; a missing BYOK
+credential is one provider's setup failure and is never recorded), the egress
+object records it as `paid:gateway` with the raw body until the window end.
+While it holds, paid admission answers at once with a 402 replaying that raw
+body, so every paid caller pauses for funding exactly as on the gateway's own
+refusal, without an upstream call; a paid success clears it. "Retry paid now"
+(MCP `ai_funding.reset_funding_refusal` with `source: "paid"`) and a member's
+paid grant clear it; a budget change does not. It reads as `paid.state`
+`refused`.
 
-Each source in `ai_funding_read.status` carries a server-derived
-`availability` (`usable`, `blocker`, `until`) for background work: a recorded
-refusal or plan connection problem outranks a spent window budget. Settings
-shows it as one Status chip per row (green usable, amber recovers by itself,
-red needs a member), with the raw reason behind that row's Details and its
-recovery action on the same row. A funding pause names its source: a paid
-refusal pauses the Run with `Paid models unavailable: <why> (<raw>); retrying
-at <window end>`, while a spent paid budget keeps `AI budget reached: $X of
-$Y paid…`.
+Each source in `ai_funding_read.status` carries a server-derived `availability`
+(`usable`, `blocker`, `until`) for background work: a recorded refusal or plan
+connection problem outranks a spent window budget. Settings shows it as one
+Status chip per row (green usable, amber recovers by itself, red needs a
+member), with the raw reason behind that row's Details and its recovery action
+on the same row. A funding pause names its source: a paid refusal pauses the
+Run with `Paid models unavailable: <why> (<raw>); retrying at <window end>`,
+while a spent paid budget keeps `AI budget reached: $X of $Y paid…`.
+
+Setup:
 
 1. Link the eligible Claude plan to the intended Anthropic Console organization.
 2. Create a dedicated Cubby workspace with a monthly spend limit no larger than
    the included allowance, then create an API key in that workspace. Keys draw
-   from the organization's shared credit balance; existing purchased credits and
+   from the organization's shared credit balance; purchased credits and
    auto-reload can otherwise keep the key usable after promotional exhaustion.
 3. In Cloudflare **AI → AI Gateway → cubby → Provider Keys**, add the Anthropic
    key with alias **subscriber-credit**. Never put it in repository files, CI,
@@ -740,45 +543,42 @@ $Y paid…`.
 
 Production paid OpenAI/Anthropic chat uses Cloudflare's dedicated
 [`/ai/v1/responses`, `/ai/v1/messages`, or `/ai/v1/chat/completions` REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
-It preserves each provider's wire format and changes only `model` to the explicit
-Cloudflare catalog id declared in `models.ts` (including dotted Anthropic ids).
-Universal `gateway.run()` and native unaliased paid requests both encountered
-BYOK alias resolution failures when non-default keys existed; native passthrough
-was not sufficient to enable paid fallback. The dedicated endpoints
-[consult only default BYOK keys before Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/).
-Keep default keys unset and the funding ladder and paid budget admission unchanged.
+It preserves each provider's wire format and changes only `model` to the
+explicit Cloudflare catalog id declared in `models.ts` (including dotted
+Anthropic ids). The dedicated endpoints
+[consult only default BYOK keys before Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/),
+whereas Universal `gateway.run()` and native unaliased paid requests fail BYOK
+alias resolution when non-default keys exist; keep default keys unset.
 
 Credit uses native provider passthrough with both `cf-aig-byok-alias:
-subscriber-credit` and `cf-aig-no-wholesale: true`. Explicit alias or no-wholesale
-intent is never removed to select paid routing. Other provider protocols retain
-native routing. The shared transport owner serves coordinated Worker egress and
-the Node fallback, preserving controls, metadata, query suffixes and streaming.
-Dedicated REST authenticates with `Authorization: Bearer` and scopes requests
-with `cf-aig-gateway-id`; native passthrough uses `cf-aig-authorization`.
-Both reuse the existing `AI_GATEWAY_API_KEY` Worker secret (a Cloudflare inference
-token with Workers AI Read, not a provider key). Jev BYOK already uses that secret
-on `/ai/run` with no-wholesale; its separate BYOK-only route is unchanged.
-Deploying this repair does not provision or overwrite secrets or grants.
-Missing authentication fails explicitly. Workers AI retains its binding, and the
-live purchase-agent harness retains its Universal shim. This transport repair
-does not resolve the separate audit-recovery funding-ladder work in #2729.
+subscriber-credit` and `cf-aig-no-wholesale: true`. Explicit alias or
+no-wholesale intent is never removed to select paid routing. Other provider
+protocols keep native routing. The shared transport owner serves coordinated
+Worker egress and the Node fallback, preserving controls, metadata, query
+suffixes and streaming. Dedicated REST authenticates with `Authorization:
+Bearer` and scopes requests with `cf-aig-gateway-id`; native passthrough uses
+`cf-aig-authorization`. Both use the `AI_GATEWAY_API_KEY` Worker secret (a
+Cloudflare inference token with Workers AI Read, not a provider key). Jev BYOK
+uses that secret on `/ai/run` with no-wholesale through its own BYOK-only route.
+Deploys do not provision or overwrite secrets or grants, and missing
+authentication fails explicitly. Workers AI keeps its binding, and the live
+purchase-agent harness keeps its Universal shim.
 
-Console spend limits reset on the first of the calendar month, while promotional
-credits refresh on the subscription billing cycle. A workspace cap is therefore
-not an exact promotional-balance detector: an organization with purchased
-credits may spend those before its cap. Console Billing owns the actual balance
-and expiry; do not infer them from Cubby's usage totals. The retired
-`cubby-testing` gateway can be removed after older deployments and local
-processes stop using it; deleting it does not update those callers. Requests
-that omit gateway scoping can recreate Cloudflare's `default` gateway.
+Console spend limits reset on the first of the calendar month, while
+promotional credits refresh on the subscription billing cycle. A workspace cap
+is therefore not an exact promotional-balance detector: an organization with
+purchased credits may spend those before its cap. Console Billing owns the
+actual balance and expiry; do not infer them from Cubby's usage totals.
+Requests that omit gateway scoping can recreate Cloudflare's `default` gateway.
 
 ### OpenAI subscriber API credits
 
 Link the OpenAI subscription credit benefit to the intended API organization,
 then create a dedicated Cubby project key in that organization. Store it in
 **AI → AI Gateway → cubby → Provider Keys → OpenAI**, alias
-**subscriber-credit**. Keep the default OpenAI key unset and retain Unified Billing
-for the explicit paid rung. No OpenAI key belongs in Worker secrets or source.
+**subscriber-credit**. Keep the default OpenAI key unset and keep Unified
+Billing for the explicit paid rung. No OpenAI key belongs in Worker secrets or
+source.
 
 OpenAI credit calls use native Gateway passthrough with the named alias and
 `cf-aig-no-wholesale: true`, bypassing ChatGPT OAuth and paid admission. Only
@@ -789,12 +589,12 @@ OpenAI refusals without a reset date last until the six-hour window ends;
 resetting API credit refusals clears both providers and permits fresh attempts.
 
 Semantic embeddings use the same named OpenAI-credit transport through shared
-egress. They retain their fixed embedding model and do not try ChatGPT or
-managed credentials after a refusal. A failed request leaves semantic evidence
+egress. They keep their fixed embedding model and do not try ChatGPT or managed
+credentials after a refusal. A failed request leaves semantic evidence
 unavailable and durable refresh work owed. Embedding models remain outside the
 frontier-model budget caps; response caching and usage accounting still apply.
-Usage retains the standard API cost comparison and records the existing
-subscriber-credit zero-charge evidence; cache hits keep their cache reason.
+Usage keeps the standard API cost comparison and records the subscriber-credit
+zero-charge evidence; cache hits keep their cache reason.
 
 OpenAI applies free credits before purchased credits, and unused subscription
 credits expire each billing cycle. An API key does not distinguish promotional
@@ -805,231 +605,152 @@ soft usage pacing, not a live promotional-balance meter. See
 
 ### Pricing and transport
 
-AI catalog/pricing implementation is owned by
-`packages/shared/src/ai/pricing.ts`; runtime model defaults by
-`packages/shared/src/ai/models.ts` and feature tiers by
-`apps/web/src/server/ai/policy/features.ts`. Pricing belongs to accounting, outside
-inference. Unavailable prices stay unknown; failed calls without reported usage
-are unpriced, and token evidence is not a second SDK cost estimate.
+AI catalog/pricing is owned by `packages/shared/src/ai/pricing.ts`; runtime
+model defaults by `packages/shared/src/ai/models.ts` and feature tiers by
+`apps/web/src/server/ai/policy/features.ts`. Retier only with live-eval
+evidence or an explicit member choice; small ceiling-scoring evals cannot
+establish parity. Pricing belongs to accounting, outside inference.
+Unavailable prices stay unknown; failed calls without reported usage are
+unpriced, and token evidence is not a second SDK cost estimate.
 
-The shared transport owns request controls, response headers, Universal gateway
-calls, and the choice between test peers, ChatGPT, and billed gateway calls.
-ChatGPT selection fails closed if that transport fails. Chat, decision,
-embedding, cookbook, and native recovery calls retain their protocol-specific
+The shared transport owns request controls, response headers, Universal
+gateway calls, and the choice between test peers, ChatGPT and billed gateway
+calls. ChatGPT selection fails closed if that transport fails. Chat, decision,
+embedding, cookbook and native recovery calls keep their protocol-specific
 payloads and retry policies. Gateway cache verdicts describe upstream billing;
-application `cacheStatus` continues to describe the caller's own cache.
+application `cacheStatus` describes the caller's own cache.
+
+### Decision runner
 
 Decision assignment, caching, request bounds and response envelopes belong to
-the shared decision runner. Independent all-or-fail decisions use
-`runDecisionChoices`; callers retaining partial answers use the generic
-`settleDecisionChoices(items, questionFor)`, whose outcomes carry their original
-typed work item. Its cooperative option owns the Job's yield scope. Both wait for every started request before returning, including
-when a sibling fails. Callers do not maintain parallel question-index arrays.
-Cache hits retain their individual keys, while owned cache misses share requests
-only within the same feature, selected model, usage context, and embedded image
-content. Shared images are sent once per batch; different media and text-only
-questions stay in separate requests. Batches carry at most 64 independently
-scoped questions and stay within the runner's serialized text budget; larger
-sets split without dropping candidates. Waiting on another request's cache lease
-does not hold up owned misses. Each upstream batch records usage once and still
-passes through gateway egress admission. Dependent decision phases wait for their
-required answers before starting another batch.
-Request serialization runs synchronously before entering the async transport,
-whose suspended frame retains only the body and expected question keys rather
-than the combined evidence input. The serialized body remains identical across
-throttled retries; response keys still must match the complete expected set.
-Finite collections that must prepare evidence or perform dependent choices use
-`settleDecisionWorkItems`. It bounds preparation, releases preparation slots
-while questions wait, and submits compatible cache misses in waves. Each
-question retains its originating input-capture context; each work item retains
-its own usage attribution and outcome. Use a shared usage object only when
-the collection has one attribution owner. Mail attachments prepare their email
-evidence once; image provenance freezes its roster and rejects failed decisions
-before publication. USDA and ingredient-merge batches retain per-ingredient
-errors; UPC offer judgments share one request context inside each lookup, while
-the outer UPC loop retains quota and rate-limit stopping behavior.
-Paired field audits record `Suggestion.data.served` explicitly. List filters use
-that flag;
-ordinary field answers are served by default. Paired publications without a
-boolean flag fail. The cutover migration materializes existing serving and
-checkpoint metadata before deleting retired automatic routing pins from Run
-inputs and evaluation snapshots. Immutable model attribution remains intact.
-Product identity grounding batches source-literal questions before eligible
-relation questions; usage is attributed to the literal or relation phase, while
-individual dimension prompts, source literals, and fingerprints stay in receipts.
-Application feature tiers are declared in
-`apps/web/src/server/ai/policy/features.ts`; retier only with live-eval evidence or an
-explicit member choice. Small ceiling-scoring evals cannot establish parity.
-Mail import still needs controlled model comparison
-([backlog](https://github.com/nickysemenza/cubby/issues/2151)).
+the shared decision runner (`server/ai/decision-model.ts`).
+
+- Independent all-or-fail decisions use `runDecisionChoices`; callers keeping
+  partial answers settle choices with outcomes that carry their original typed
+  work item, and the cooperative option owns the Job's yield scope. Both wait
+  for every started request before returning, including when a sibling fails.
+  Callers do not maintain parallel question-index arrays.
+- Finite collections that must prepare evidence or perform dependent choices
+  use `settleDecisionWorkItems`. It bounds preparation, releases preparation
+  slots while questions wait, and submits compatible cache misses in waves. Each
+  question keeps its originating input-capture context; each work item keeps
+  its own usage attribution and outcome. Use a shared usage object only when
+  the collection has one attribution owner.
+- Cache hits keep their individual keys, while owned cache misses share
+  requests only within the same feature, selected model, usage context and
+  embedded image content. Shared images are sent once per batch; different
+  media and text-only questions stay in separate requests. Batches carry at
+  most 64 independently scoped questions and stay within the runner's
+  serialized text budget; larger sets split without dropping candidates.
+  Waiting on another request's cache lease does not hold up owned misses. Each
+  upstream batch records usage once and still passes through gateway egress
+  admission. Dependent decision phases wait for their required answers before
+  starting another batch.
+- Request serialization runs synchronously before entering the async
+  transport, so the suspended frame keeps only the body and expected question
+  keys. The serialized body is identical across throttled retries; response
+  keys must match the complete expected set.
+
+Mail attachments prepare their email evidence once; image provenance freezes
+its roster and rejects failed decisions before publication. USDA and
+ingredient-merge batches keep per-ingredient errors; UPC offer judgments share
+one request context inside each lookup, while the outer UPC loop keeps quota and
+rate-limit stopping behavior. Paired field audits record
+`Suggestion.data.served` explicitly; list filters use that flag, ordinary field
+answers are served by default, and paired publications without a boolean flag
+fail. Immutable model attribution remains intact. Product identity grounding
+batches source-literal questions before eligible relation questions; usage is
+attributed to the literal or relation phase, while individual dimension
+prompts, source literals and fingerprints stay in receipts.
+
+Field decision prompts are measured from a Claude/Codex session over Cubby MCP,
+following `.agents/skills/decision-grading`: reviewed Suggestions
+(`suggestions_read.list` with `status`) are the labels, and
+`ai_read.suggest_fields` with `decisionModel` replays a record through Jev or
+Clef server-side. Only aggregates leave the session.
+
+### Image analysis
 
 Image composition and identity-scope questions share a batch before dependent
-category and catalog work. Image decisions route to vision-capable Clef independently of the text-only Jev
-trial. Photo identification prepares renditions before the shared adapter
-checks embedded media and uses the existing gateway, retry, cache and usage
-paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
+category and catalog work. Image decisions route to vision-capable Clef
+independently of the text-only Jev trial. Photo identification prepares
+renditions before the shared adapter checks embedded media and uses the
+gateway, retry, cache and usage paths. Media limits and payloads belong to
+`server/ai/decision-model.ts` and
 `server/domains/image/service/image-identification.service.ts`.
 
-Image description consumers select confirmed corrections first, then the current
-preferred cloud result, then the newest available source-matching observation.
-A newer Apple observation does not displace a preferred cloud description;
-observations for replaced image content are historical evidence only. Both direct and
-batch confirmation readers require the live Image hash to match the immutable
-Assessment subject/fingerprint and its current projection. Replaced or deleted
-content hides the old confirmation from current descriptions while retaining its
-confirmed value, original prediction and application receipts. Current-content
-display does not itself grant cross-image propagation authority.
-Propagated text additionally requires its automatic effect receipt and typed root
-ownership to match the selected holder. Direct status and batch evidence retain
-that ownership; web photo evidence and native Image detail distinguish it from
-a direct member confirmation and expose the source application receipt behind
-evidence disclosure. Native status reload clears prior current descriptions
-before fetching, so a failed refresh cannot retain an unverified confirmation.
-The composable classification reader shares the content/effect proof and excludes
-model observations that cannot prove the current image hash. Model job results,
-claims and cutout outputs remain independent retained observations.
+Image description consumers select confirmed corrections first, then the
+current preferred cloud result, then the newest available source-matching
+observation. A newer Apple observation does not displace a preferred cloud
+description; observations for replaced image content are historical evidence
+only. Both direct and batch confirmation readers require the live Image hash to
+match the immutable Suggestion subject/fingerprint and its current projection.
+Replaced or deleted content hides the old confirmation from current
+descriptions while keeping its confirmed value, original prediction and
+application receipts. Current-content display does not itself grant
+cross-image propagation authority: propagated text also requires its automatic
+effect receipt and typed root ownership to match the selected holder. Direct
+status and batch evidence keep that ownership; web photo evidence and native
+Image detail distinguish it from a direct member confirmation and expose the
+source application receipt behind evidence disclosure. Native status reload
+clears prior current descriptions before fetching, so a failed refresh cannot
+keep an unverified confirmation. The composable classification reader shares
+the content/effect proof and excludes model observations that cannot prove the
+current image hash. Model job results, claims and cutout outputs remain
+independent retained observations.
 
-Identification retains visual composition separately from identity scope.
-Multiple related views, parts, or life stages may support one catalog identity;
+Identification keeps visual composition separate from identity scope. Multiple
+related views, parts or life stages may support one catalog identity;
 unrelated objects, documents and uncertain scenes abstain from single-identity
 matching. Suggestions remain unconfirmed and never change inventory or identity
-automatically. Prompt/schema revisions fence reuse; historical observations are
-retained rather than rewritten.
+automatically. Prompt/schema revisions fence reuse; historical observations
+are kept rather than rewritten. Clef classifies composition, selects a
+category, shortlists bounded catalog candidates, then compares the source
+rendition with at most three independently attached Product references. A
+source image never matches itself by id or content hash, and a borrowed gallery
+image is not independent evidence. Candidate names are hints; a search over a
+truncated roster reports the truncation and is never presented as exhaustive,
+and option probabilities are not calibrated confidence. Matching the same
+Product does not establish that two photos show the same possession. Member
+corrections take precedence; later machine evidence may flag a confirmed match
+for review but cannot replace it. Reads never start inference, and retained
+results for deleted targets or changed source content are filtered out. AVIF
+sources wait, without consuming attempts, for the normalization job's verified
+JPEG snapshot.
 
-Clef classifies composition, selects a category, shortlists bounded catalog
-candidates, then compares the source rendition with at most three
-independently attached Product references. A source image never matches itself
-by id or content hash, and a borrowed gallery image is not independent
-evidence. Candidate names are hints; a search over a truncated roster reports
-the truncation and is never presented as exhaustive, and option probabilities
-are not calibrated confidence. Matching the same Product does not establish
-that two photos show the same possession. Member corrections take precedence;
-later machine evidence may flag a confirmed match for review but cannot replace
-it. Reads never start inference, and retained results for deleted targets or
-changed source content are filtered out. AVIF sources wait, without consuming
-attempts, for the normalization job's verified JPEG snapshot.
-
-Device work is parked for Apple companions: a companion claims it directly
-when rung or when it connects, and the server drain never claims it. Device
-participation and advertised image capabilities both gate execution. Image
-work is never abandoned; its lanes, leases, renewal, release and retry policy
-are owned by [Durable Jobs](jobs.md#image-processing).
-
-Cloud and native image execution share the lease on their `ImageProcessingJob`
-row. Processing attempts preserve executor attribution and output receipts. The
-background consumer's concurrency is in
-`packages/shared/src/background-queue-consumer.json`; a cloud image page runs
-two rows at once; provider admission separately bounds paid model starts. These limits do not
-reserve interactive Hyperdrive connections. JPEG analysis reads are bounded before buffering: description and
-companion normalization at 4 MiB, identification at 2 MiB. Four overlapping
-descriptions hold at most 16 MiB of retained rendition bytes, with
-additional bounded streaming, inspection and upload copies; this is a payload
-bound, not a measurement of total isolate memory. Originals remain unchanged
-when an oversized rendition fails with its raw size diagnostic.
-Identification requests a server-only edge JPEG bounded to 1024 on both axes;
-UI width rungs bound only the width, and a tall portrait at the 2048 rung
-exceeded the 2 MiB budget on every retry. The source and every candidate
-reference share this rendition. When the edge answers 422 because it cannot
-decode a PNG (its decoder rejects a damaged ancillary chunk around intact
-pixels), the Worker reads the original, at most 16 MiB, and the Rust
-`prepare_analysis_png` streams its rows into the same bounded JPEG. Other
-refused formats keep the raw edge diagnostic.
-
-The background consumer logs `queue_wait_ms` from Cloudflare's transport
-enqueue timestamp at consumer entry, with the queue name. Local delivery
-adapters preserve that metadata; older fixture messages without it report an
-unavailable wait rather than inventing one. Image logs separately retain
-`intent_age_ms` from the job's persisted creation time, which includes shared
-queue, device, normalization and retry/backoff delays. `execution_ms` measures
-destination claim, preparation, provider work and adoption. Retried jobs retain
-their original intent age.
-
-Apple subject lift is independent of cloud cutout eligibility and attachment
-purpose. Supported images reach Apple, which reports a cutout, no foreground
-subject, an already-cut-out input, or an unsupported format. An input counts as
-cut out only when its visible region itself has transparent area; an opaque
-photo padded onto a transparent canvas is still lifted. The cloud
-classification remains descriptive evidence, not a dispatch gate. A processor
-revision change lets previously policy-skipped images be queued again without
-rewriting their retained history.
-Expected `no_subject` and `not_suitable` cutout outcomes settle the current
-source/processor fingerprint instead of repeatedly invoking Vision. Explicit retry
-reopens them; real processing failures and unsupported formats retain their retry
-policy. This does not suppress an image's independent Apple description.
-
-Field decision prompts are measured from a Claude/Codex session over Cubby
-MCP, following `.agents/skills/decision-grading`: reviewed Suggestions
-(`suggestions_read.list` with `status`) are the labels, and
-`ai_read.suggest_fields` with `decisionModel` replays a record through
-Jev or Clef server-side. Only aggregates leave the session.
-
-The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
-fallback used outside Cloudflare Workers. The deployed Worker also needs it for
-third-party native passthrough; only Workers AI runs on the binding alone.
+Execution (device parking, leases, retries, cutouts) is owned by
+[Durable Jobs](jobs.md#image-processing). Payload bounds: JPEG analysis reads
+are bounded before buffering, description and companion normalization at
+4 MiB, identification at 2 MiB. Four overlapping descriptions hold at most
+16 MiB of retained rendition bytes, with additional bounded streaming,
+inspection and upload copies; this is a payload bound, not a measurement of
+total isolate memory. Originals remain unchanged when an oversized rendition
+fails with its raw size diagnostic. Provider admission separately bounds paid
+model starts, and none of these limits reserves interactive Hyperdrive
+connections. Identification requests a server-only edge JPEG bounded to 1024
+on both axes, because UI width rungs bound only the width and a tall portrait
+can exceed the 2 MiB budget. The source and every candidate reference share
+this rendition. When the edge answers 422 because it cannot decode a PNG (its
+decoder rejects a damaged ancillary chunk around intact pixels), the Worker
+reads the original, at most 16 MiB, and the Rust `prepare_analysis_png` streams
+its rows into the same bounded JPEG. Other refused formats keep the raw edge
+diagnostic.
 
 ## Observability
 
 ### Inline Job logs and limits
 
-Run detail shows a Plan table from `RUN_KINDS` in
-`packages/schemas/src/activity-fields.ts`, filtered by the Run's selected
-families. It lists steps in declaration order with purpose, scope, input count,
-state, results, elapsed wall time and the current step ETA. Generic report table
-cells retain their complete plain-text values and may additionally declare
-status-pill, figure or internal-link presentation. Wall time includes queue and
-paused time after the step starts; completed steps use their retained end time.
-
-Financial input links use declared `runStepInput` list predicates backed by
-the same SQL selectors as execution. They re-evaluate current eligibility under
-the stored Run scope and recorded cutoff, not an archived membership snapshot.
-Source-record lists show all live observations for selected charge keys, so
-their row count can exceed the input count. Selection criteria explain later
-account admission and scope exceptions. Assessment stages link to this Run’s
-related decisions, not an exact input population; those stages can inspect
-assessments published by other Runs.
-
-Inputs are counted at step start; unstarted steps never read
-as zero-input work. Stored steps outside the current declaration/selection are
-shown separately as historical execution history, not future planned work.
-Scope summaries describe selected accounts/imports without exposing source IDs.
-A Sweep covers statements and fields; its stored purpose is `sweep` (transfer-pair and connection Sweeps were removed). Field sweeps use the `field_roster` / `field_evaluate` steps. Start them with
-`run.sweep` and a field family containing entity, fields and filters; inspect
-and pause/resume them with regular Run reads and controls. There are no separate
-AI sweep operations or model overrides on a Run. Each evaluation retains its
-own pinned model and evidence.
-
-Observed throughput is available after the first completed interval; it does
-not by itself support a completion estimate.
-Step ETA uses at least three consecutive progress intervals (up to twelve),
-including elapsed queue and handoff time between observations. The displayed
-range spans observed per-item durations with a margin and rounds outwards to
-minutes, hours or days. Confidence is low with fewer than six observations or
-more than threefold variation, otherwise moderate; this is an observed range,
-not a statistical confidence interval. A cheap latest page cannot replace the
-other observed durations. Phase changes and retry resets clear observations;
-old samples without interval history, unknown input totals, stale progress,
-pauses and capacity waits do not produce a current ETA.
-An unfinished phase whose processed count reaches or exceeds its initial total
-also has no remaining-work estimate. Preserve its recorded counts and require
-the phase's completion signal; an exhausted estimate does not prove completion.
-Later steps without
-estimates keep the overall ETA unknown rather than inheriting the current
-step's pace. No blended overall percentage is inferred from different inputs.
-
-Decision facets distinguish Ready to apply from Applied: readiness means the
-current pending recommendation has passed checks and can be reviewed/applied;
-only Applied means the change was recorded. Both counts remain visible at zero.
-Multiple possible matches names competing candidates; other pending evidence
-issues read Needs review. Replaced and No longer current explain why an old
-recommendation cannot be acted on. Evidence starts with a plain-language
-explanation of each blocker; raw blocker keys, reasons and apply refusal detail
-remain available in Raw diagnostics. Presentation never clears a blocker or
-changes a recommendation's applicability.
+Job claim/page/publish/defer/fail logs emit one JSON object with `runId`,
+`jobId`, `kind`, `jobKey`, `stepKey`, `generation`, `attempt` and `waitReason`.
+Workers Logs indexes
+[structured JSON objects](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects);
+raw errors keep their credential-scrubbed diagnostic detail.
 
 A Run's Diagnostics section and an Image's or Location's Jobs slot read one
 Job's raw Worker lines through `job.logs`
-(`server/generic/jobs/service/job-logs.ts`). It calls the Workers
-Observability telemetry query API, `POST /accounts/{account}/workers/observability/telemetry/query`.
+(`server/generic/jobs/service/job-logs.ts`). It calls the Workers Observability
+telemetry query API,
+`POST /accounts/{account}/workers/observability/telemetry/query`.
 
 - **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
   logs), view `events`, at most 500 lines.
@@ -1042,132 +763,106 @@ Observability telemetry query API, `POST /accounts/{account}/workers/observabili
   configured". A token without the permission returns 401/403, which the panel
   shows as the scrubbed raw error. A local run with the key queries the
   account's logs, which hold no local Job lines.
-- **Retention.** A window older than Workers Logs' 7-day retention reads
-  "raw logs expired".
+- **Retention.** A window older than Workers Logs' 7-day retention reads "raw
+  logs expired".
 - **Failures.** A failed query shows its raw response, redacted only by
   `scrubErrorMessage`, with Retry and the dashboard link.
 
-Step pages record their own sample through `measurePage`
-(`server/generic/jobs/page-work.ts`). Executed steps get it as
-`StepPageContext.work`; routine passes are measured by `routineStepHandler`
-(selection, then publication).
-
-- **Phases.** A driver times a phase with `work.time` or adds the timings its
-  repository already measured with `work.add`. Statement generation passes the
-  same selection, preparation, publication and application times it logs.
-- **Concurrency.** Peaks are `min(cap, items)`, the workers
-  `forEachConcurrently` starts.
-- **Queries.** The page runs inside `withDatabaseOperationMetrics`, so
-  `queries` counts the traced pool's statements. Zero counted means the page ran
-  outside the traced pool and stores null ("not measured").
-  `phaseQueries` attributes statements to phases measured with `work.time`;
-  repeated phases accumulate and nested phases overlap, so their counts must not
-  be summed as a page total. Timings supplied through `work.add` have no inferred
-  query count. A phase with no traced statements stores null.
-- **Database waits.** Measured pages retain total wall time plus query, pool
-  acquisition and client-queue durations from the traced pool. Summed durations
-  can overlap across concurrent work; they are not additive phase timings.
-- **Unmeasured drivers.** A page that records no phase stores no sample.
+Run plan, ETA and page-sample contracts are in
+[Durable Jobs](jobs.md#run-progress-and-diagnostics).
 
 ### Error tracking and traces
 
-The web/Workers Sentry DSN is intentionally public and defined exactly once,
-in `packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the
+The web/Workers Sentry DSN is intentionally public and defined exactly once, in
+`packages/worker-tracing/src/sentry-dsn.ts`; the web client and Worker, the
 dev-only Node preload, and every auxiliary Worker import it from there. The
 native app uses a separate `cubby-apple` Sentry project. Authentication and
-ownership for both projects remain provider-side state.
-Hermetic Worker tests set `SENTRY_ENVIRONMENT=test`, which disables error
-delivery through the same policy as the E2E runtime. A missing test identity
-otherwise defaults the Durable Object wrapper to production with an unknown
-release, so those tags alone do not establish production origin.
+ownership for both projects remain provider-side state. Hermetic Worker tests
+set `SENTRY_ENVIRONMENT=test`, which disables error delivery through the same
+policy as the E2E runtime. A missing test identity otherwise defaults the
+Durable Object wrapper to production with an unknown release, so those tags
+alone do not establish production origin.
 
-Cloudflare joins service-binding, JS RPC, and Durable Object subrequests into
-one trace, so the run page's proxy into the purchase agent's Durable Object
-appears in the request's trace in the Cloudflare dashboard. A queue delivery
-starts a new trace in the consumer;
-`run.id` on the consumer's job span is the join key back to the producer's job
-spans. Trace context never propagates to services outside Cloudflare.
+Cloudflare joins service-binding, JS RPC and Durable Object subrequests into one
+trace, so the Run page's proxy into the purchase agent's Durable Object appears
+in the request's trace in the Cloudflare dashboard. A queue delivery starts a
+new trace in the consumer; `run.id` on the consumer's job span is the join key
+back to the producer's job spans. Trace context never propagates to services
+outside Cloudflare.
 
 `withInvocationTrace` loads the native tracing runtime before looking up the
 active invocation span, then annotates that span and creates a timing child.
-Fetch handlers, queue batches, scheduled maintenance,
-Durable Object alarms, purchase-agent dispatch RPCs, and search-index repair
-Jobs use this entry helper, so a fresh isolate needs no preceding fetch.
-Batch spans carry queue name and size; individual messages retain their own run
-context instead of assigning one actor or run to an entire batch. Cron spans
-include the trigger and scheduled time, including maintenance-mode skips.
-Alarm and Job spans identify their workload; purchase-agent alarm/RPC
-spans also identify the Run. Entry annotation never ends the platform-owned
-span. Other code uses `withTrace` for child operations and
-`annotateActiveSpan` for an already initialized active span. Outside the Worker
-build these helpers run work without tracing.
+Fetch handlers, queue batches, scheduled maintenance, Durable Object alarms,
+purchase-agent dispatch RPCs and search-index repair Jobs use this entry
+helper, so a fresh isolate needs no preceding fetch. Batch spans carry queue
+name and size; individual messages keep their own run context instead of
+assigning one actor or run to an entire batch. Cron spans include the trigger
+and scheduled time, including maintenance-mode skips. Alarm and Job spans
+identify their workload; purchase-agent alarm/RPC spans also identify the Run.
+Entry annotation never ends the platform-owned span. Other code uses
+`withTrace` for child operations and `annotateActiveSpan` for an already
+initialized active span. Outside the Worker build these helpers run work
+without tracing.
 
 Database query spans carry `cubby.db.caller`: the nearest enclosing Start
 query/mutation, Job, workflow/routine step, or HTTP route span name. The tracing
 wrappers propagate the name stack through AsyncLocalStorage, including queued
 client work and concurrent siblings; intervening database, list and provider
-spans do not replace the semantic owner. Jobs use the existing execution
-context's kind and selected step (`job.<kind>.<step>`) in preference to the
-span stack, including when no native span is recording. Other traced work falls back to its
+spans do not replace the semantic owner. Jobs use the execution context's kind
+and selected step (`job.<kind>.<step>`) in preference to the span stack,
+including when no native span is recording. Other traced work falls back to its
 nearest non-database span; untraced work omits the attribute. This supplements
 `db.query.text`, binding role and returned-row count for caller-level query
 comparisons without exporting record identifiers or arguments.
 
-Serialization failures also emit `db-transaction` structured logs independently
-of trace sampling. Each aborted attempt records `requestId` when the Start
-request supplied a valid Ray ID, `boundaryId`, `rootBoundaryId`, `rootAttempt`,
-`parentBoundaryId`, `callerOwned`, `caller`, `isolationLevel`, `attempt`, `limit`,
-`startedAt`, `durationMs`, `boundaryDurationMs`, `phase`, `beforeCommitKey`,
-`sqlState`, `retry` and `retryDelayMs`. Recovery records the committed attempt
-before after-commit consumers run; those consumers cannot enter the retry catch.
-Unknown raw caller-owned boundaries omit ancestor identity instead of inventing
-an outer attempt. These logs carry no SQL parameters or submitted evidence.
-The existing Job logs include `jobKey`, generation and Job identity; publish/fail
-logs also retain `publicationStartedAt` and `publicationDurationMs` when a
-publication was attempted. Compare those intervals and the exact refresh key
-with the aborted transaction interval to find candidate competing publications.
-Overlap alone cannot prove which writer replaced the tuple. Job publication
-intervals exclude business writes during handler preparation and source
-invalidation from other callers. The finance intake PostgreSQL regression
-coordinates real Email metadata persistence on a second client and checks
-committed search Job generation and tuple replacement. An unchanged metadata
-replay leaves that tuple untouched; genuine metadata changes still conflict.
-One conflict recovers; three conflicts roll back admission completely and exact
-replay commits once. The [Email metadata contract](entities.md#data-quality)
-retains source invalidation for creation, metadata changes and legacy supersession.
-This synthetic writer proof does not identify a production competing writer.
-Current Job idleness does not establish whether a page published during the
-failed request, and pool slot timeout `58000` remains a separate diagnostic from
-serialization `40001`.
+Serialization failures also emit `db-transaction` structured logs
+independently of trace sampling. Each aborted attempt records `requestId` when
+the Start request supplied a valid Ray ID, `boundaryId`, `rootBoundaryId`,
+`rootAttempt`, `parentBoundaryId`, `callerOwned`, `caller`, `isolationLevel`,
+`attempt`, `limit`, `startedAt`, `durationMs`, `boundaryDurationMs`, `phase`,
+`beforeCommitKey`, `sqlState`, `retry` and `retryDelayMs`. Recovery records the
+committed attempt before after-commit consumers run; those consumers cannot
+enter the retry catch. Unknown raw caller-owned boundaries omit ancestor
+identity instead of inventing an outer attempt. These logs carry no SQL
+parameters or submitted evidence. Job publish/fail logs also keep
+`publicationStartedAt` and `publicationDurationMs` when a publication was
+attempted; compare those intervals and the exact refresh key with the aborted
+transaction interval to find candidate competing publications. Overlap alone
+cannot prove which writer replaced the tuple, and Job publication intervals
+exclude business writes during handler preparation and source invalidation from
+other callers. Current Job idleness does not establish whether a page published
+during the failed request. Pool slot timeout `58000` is a separate diagnostic
+from serialization `40001`.
 
 Authenticated Start, workflow-stream, HTTP and MCP failures follow the
-[raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only credential-shaped
-values are redacted. Request-scoped reporting captures the original exception
-and supplies correlation/Sentry references; a capture ID is an attempt, not
-proof of ingestion, and MCP batch items retain separate references.
-Operation dispatch authenticates before reading input. A session lookup failure
-retains the context stage and a generic unauthenticated message; only input
-parsing and validation failures use the input stage. Authentication failures
-must not be presented as invalid operation input.
+[raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only
+credential-shaped values are redacted. Request-scoped reporting captures the
+original exception and supplies correlation/Sentry references; a capture ID is
+an attempt, not proof of ingestion, and MCP batch items keep separate
+references. Operation dispatch authenticates before reading input. A session
+lookup failure keeps the context stage and a generic unauthenticated message;
+only input parsing and validation failures use the input stage. Authentication
+failures must not be presented as invalid operation input.
 
-Authenticated diagnostics retain complete messages, stacks, SQL and parameters,
+Authenticated diagnostics keep complete messages, stacks, SQL and parameters,
 upstream response bodies, and all distinct causes, with cycle detection rather
 than arbitrary character or cause-count limits. Error classification can still
-bound its search; classification limits must not truncate the displayed evidence.
-Credential scrubbing also decodes JSON property names and embedded JSON strings,
-including escaped quotes, before preserving their diagnostic content.
-The browser distinguishes an HTTP failure from an application error: HTTP
-diagnostics retain status, URL, content type, body (including an explicitly empty
-body), elapsed time, and available request/Ray/Sentry references. An empty
+bound its search; classification limits must not truncate the displayed
+evidence. Credential scrubbing also decodes JSON property names and embedded
+JSON strings, including escaped quotes, before preserving their diagnostic
+content. The browser distinguishes an HTTP failure from an application error:
+HTTP diagnostics keep status, URL, content type, body (including an explicitly
+empty body), elapsed time, and available request/Ray/Sentry references. An empty
 platform response cannot supply the underlying Worker exception; do not invent
 one or replace it with an application `INTERNAL_SERVER_ERROR`. Response bodies
 and stacks render as inert text, and Copy details carries the same complete
-evidence. Terminal query failures retain earlier retry/fallback evidence.
+evidence. Terminal query failures keep earlier retry/fallback evidence.
 
 Web error details include Copy details, the Sentry link, and Open Workers
-Observability with a copyable Ray ID when Cloudflare supplied one. The Cloudflare
-link opens the dashboard, not an individual trace: the custom-span API does not
-expose the active trace ID. These references also survive native API decoding.
+Observability with a copyable Ray ID when Cloudflare supplied one. The
+Cloudflare link opens the dashboard, not an individual trace: the custom-span
+API does not expose the active trace ID. These references also survive native
+API decoding.
 
 Source maps for `apps/web` are generated and uploaded at deploy by
 `sentryTanstackStart` (`vite.config.ts`), under release `cubby@<short sha>` —
@@ -1179,27 +874,28 @@ does not inject the release (`release.inject: false`), and the runtimes read
 the Worker version's secrets (`cf deploy --secrets-file`); the root document
 passes the release to browser Sentry in a `cubby-release` meta tag. Identical
 sources therefore build identical output at any commit, and unchanged client
-assets are not re-uploaded. Unset values read as `unknown`. Client `.map` files are deleted from
-the Build Output assets directory afterward so none are served as Worker static assets. Server
-maps remain in the Build Output Worker bundle for diagnostics. The build removes sourcemap
-entries from the native Build Output manifest so `cf deploy --prebuilt` does
-not upload them again; the combined map exceeds Cloudflare's upload limit. Map sources are
-rewritten to repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so
-a single Sentry GitHub code mapping (repo root -> repo root on `main`) resolves
-stack frames from both the client bundle and the Worker bundle. The upload needs a `SENTRY_AUTH_TOKEN`
-secret, present only in the `deploy.yaml` workflow; PR/preview builds have no
-token, so the plugin injects debug IDs and deletes client maps but skips the
-network upload. `SENTRY_IGNORED_ERRORS` (`apps/web/src/lib/sentry-noise.ts`)
-lists known-noise messages dropped via `ignoreErrors` before Sentry ingests
-them, so they never consume the free-plan error quota.
+assets are not re-uploaded. Unset values read as `unknown`. Client `.map` files
+are deleted from the Build Output assets directory afterward so none are served
+as Worker static assets. Server maps remain in the Build Output Worker bundle
+for diagnostics. The build removes sourcemap entries from the native Build
+Output manifest so `cf deploy --prebuilt` does not upload them again; the
+combined map exceeds Cloudflare's upload limit. Map sources are rewritten to
+repo-relative paths (`apps/web/src/...`, `packages/*/src/...`) so a single
+Sentry GitHub code mapping (repo root -> repo root on `main`) resolves stack
+frames from both the client bundle and the Worker bundle. The upload needs a
+`SENTRY_AUTH_TOKEN` secret, present only in the `deploy.yaml` workflow;
+PR/preview builds have no token, so the plugin injects debug IDs and deletes
+client maps but skips the network upload. `SENTRY_IGNORED_ERRORS`
+(`apps/web/src/lib/sentry-noise.ts`) lists known-noise messages dropped via
+`ignoreErrors` before Sentry ingests them, so they never consume the free-plan
+error quota.
 
-The production Cloudflare configuration owns Workers Observability trace persistence
-and sampling. Cloudflare is the only trace
-destination; no Jaeger, Grafana Tempo, or Sentry trace exporter is configured.
-Sentry continues to capture errors on web, Apple, and auxiliary Workers.
-The web build excludes Sentry tracing and SDK debug statements through the
-upstream bundler options; error capture, raw application diagnostics, and source
-maps remain enabled.
+The production Cloudflare configuration owns Workers Observability trace
+persistence and sampling. Cloudflare is the only trace destination; no Jaeger,
+Grafana Tempo or Sentry trace exporter is configured. Sentry continues to
+capture errors on web, Apple and auxiliary Workers. The web build excludes
+Sentry tracing and SDK debug statements through the upstream bundler options;
+error capture, raw application diagnostics and source maps remain enabled.
 
 Worker logs also reference the account-level `grafana-logs` destination for
 Grafana Cloud Loki. The calendar-test Worker is a local test harness and does
@@ -1220,18 +916,19 @@ not as a repository secret. Required repository or environment secrets are:
 | `CLAUDE_CODE_OAUTH_TOKEN`        | Automated Claude workflows, not application runtime         |
 
 The Cloudflare token should be scoped to the checked-in account and only the
-resource types the deployment workflow manages. Production deploys always
-build before invoking `cf deploy --prebuilt --mode production`.
-The deploy command tags versions with the full commit SHA and supplies the commit
-subject plus Actions run URL as the message. The token remains the Cloudflare
-authenticated actor; version metadata identifies the code and deployment run.
+resource types the deployment workflow manages. Production deploys always build
+before invoking `cf deploy --prebuilt --mode production`. The deploy command
+tags versions with the full commit SHA and supplies the commit subject plus
+Actions run URL as the message. The token remains the Cloudflare authenticated
+actor; version metadata identifies the code and deployment run.
 
 GitHub Actions is the sole production build/deployment owner. The main Worker's
 Cloudflare Git build connection is disconnected: disabling production builds
 alone leaves the independent preview-branch build trigger enabled. Do not
-reconnect it just for attribution. WASM is restored or built through the existing
-Nx target in Actions, which installs `wasm-pack`; Cloudflare-hosted WASM builds
-and preview infrastructure are deferred. Production is the only deployed environment.
+reconnect it just for attribution. WASM is restored or built through the Nx
+target in Actions, which installs `wasm-pack`; there are no Cloudflare-hosted
+WASM builds or preview infrastructure. Production is the only deployed
+environment.
 
 ## Apple platform
 
@@ -1239,8 +936,8 @@ The native targets use Xcode-managed signing and the associated domain
 `cubby.nickysemenza.com`. The web Worker serves the Apple App Site Association
 file. Purchase-import browser control additionally requires the checked-in
 Apple Events entitlement and usage description; macOS grants Automation and
-optional Screen Recording permission per local installation. Hosted release setup follows
-[the Apple release guide](../apps/apple/README.md#testflight-releases).
+optional Screen Recording permission per local installation. Hosted release
+setup follows [the Apple release guide](../apps/apple/README.md#testflight-releases).
 
 ## Reconstruction and drift check
 

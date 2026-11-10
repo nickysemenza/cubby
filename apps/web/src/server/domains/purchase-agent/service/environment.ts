@@ -7,7 +7,7 @@ import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
  * services (`server/domains/purchase-import/operations/agent-services.ts`), which parses its
  * input (`@cubby/schemas/purchase-agent-services`) and resolves authority
  * from that Run. `tools/oxlint/cubby` keeps this directory from importing
- * anything else (docs/infrastructure.md#purchase-agent).
+ * anything else (apps/web/src/server/domains/purchase-import/service/README.md#trust-boundary).
  */
 import type { AgentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import type {

@@ -17,70 +17,39 @@ screenshots out of fixtures and test reports.
 | Retailer order and Product match                                    | `prepare-commit.integration.test.ts` owns exact-ASIN reuse and committed Product binding; `report-slot.unit.test.tsx` drives the actual prepared form with two exact suggestions, trade, explicit second choice and confirmation                                                                                                                                                                                                                                                                                                    | Synthetic Vendor/account and Product identities                           | SQL and renderer owners preserve writes and request assembly. Conflicting-choice HTTP/native-browser composition and merge between preparation and approval are deliberate gaps |
 | Gmail order event                                                   | [`gmail.input-first-import.spec.ts`](../../apps/web/tests/e2e/gmail.input-first-import.spec.ts) connects Google through real OAuth, discovers MIME evidence using exchanged credentials and checks exact retained content with no economic writes. `purchase-import-run.spec.ts` separately owns saved-mail → Run → committed Purchase navigation/read-back; `purchase-emails.spec.ts` owns review and Gmail-original navigation                                                                                                    | Offline Google provider and signed-in member                              | Callback and credential-backed acquisition are real. Triage is injected; live Google/model quality and the joined OAuth-to-prepared-approval composition are separate gaps      |
 | Monarch statement transaction                                       | `finance-evidence-journey.spec.ts` owns statement source navigation; `financial-booking-review.spec.ts` owns booking approval; `import-order-convergence.integration.test.ts` owns statement-first arrival and conserved money. `purchase-split-settlement.spec.ts` retains real split review; `purchase-settlement-candidates.integration.test.ts` owns signed refunds and stale refusal                                                                                                                                           | Synthetic financial account because CSV cannot establish account identity | Browser source/booking/allocation controls remain. Their composition with the same OAuth household and refund-specific HTTP composition are deliberate gaps                     |
-| Native statement review contract                                    | [`source-transaction-record.integration.test.ts`](../../apps/web/src/server/domains/transaction-import/repo/source-transaction-record.integration.test.ts) previews, maps, pages, commits, and replays synthetic CSV through the native HTTP contract                                                                                                                                                                                                                                                                               | Signed-in test member and synthetic rows                                  | The server contract and both Mac file-selection/review arrival orders are covered; iOS simulator file-selection/review/approval passed on clean `877c35e22`                     |
+| Native statement review contract                                    | [`source-transaction-record.integration.test.ts`](../../apps/web/src/server/domains/transaction-import/repo/source-transaction-record.integration.test.ts) previews, maps, pages, commits, and replays synthetic CSV through the native HTTP contract                                                                                                                                                                                                                                                                               | Signed-in test member and synthetic rows                                  | The server contract and both Mac file-selection/review arrival orders are covered; the iOS simulator input journey covers file selection, review and approval                   |
 | Financial evidence and reviewed ledger corrections                  | [`catalog.integration.test.ts`](../../apps/web/src/server/mcp/catalog.integration.test.ts) proves public intake preview/replay purity; [`financial-evidence-correction.integration.test.ts`](../../apps/web/src/server/domains/financial-transaction/repo/financial-evidence-correction.integration.test.ts) exercises normalized source corrections and persisted withdrawal proof; [`finance-evidence-journey.spec.ts`](../../apps/web/tests/e2e/finance-evidence-journey.spec.ts) verifies reviewed ledger corrections over HTTP | Signed-in test member; synthetic owned accounts and bookings              | CSV parsing belongs to the client skill; Cubby retains normalized evidence and protects money, attribution, review and replay                                                   |
 | Explicit receive and later recount                                  | Wardrobe run verifies that order import leaves stock unchanged; [native fieldwork API E2E](../../apps/web/tests/e2e/native-fieldwork-api.spec.ts) commits and rejects a stale native recount over HTTP                                                                                                                                                                                                                                                                                                                              | A location with two stock rows for recount                                | The wardrobe run creates its room and initial inventory through the entity writer; a photo-to-optional-receive UI check remains                                                 |
 
-The Gmail browser check retains only its unique authorization and original
-acquisition boundary. It uses the real Connect control, callback and exchanged
-token against an offline external Google provider, then checks retained MIME
-identity/content and absence of economic writes. It does not establish live
-Google or model quality. Prepared-form choice and confirmation are owned by the
-actual renderer test; exact Product binding, merge preservation and sampled
-source-arrival convergence remain in PostgreSQL. The former combined browser
-sequence, including conflicting-choice HTTP projection and merging identities
-between preparation and approval, is intentionally omitted to reduce CI work.
-The removed capture helper constructed synthetic HTML text rather than driving a
-production authenticated retailer browser.
+The Gmail check covers the real Connect control, OAuth callback and token
+exchange against an offline Google provider, then checks retained MIME content
+with no economic writes; it does not measure live Google or model quality.
 
-The headless photo and wardrobe runs verify that subject-lift jobs wait for an
-Apple device even when the synthetic cloud description marks a label ineligible;
-cloud eligibility does not suppress Apple subject lifting.
-The Node harness supplies the checkout's Git revision for in-process MCP calls,
-matching the release constant injected into the built Worker.
-Wardrobe order preparation names the source's seller explicitly on initial
-import, replay and duplicate capture, creating or reusing the Vendor through
-the import contract.
-Purchase import-history report semantics remain in
-`entity-report/repo/records.integration.test.ts`; the wardrobe settlement browser
-step does not wait for the superseded direct `run.history` request.
-The browser steps open settlement review from More actions, review the Product
-pair in Suggestions, and check the joined Product's ownership/evidence guidance.
-These steps use pinned `playwright-recorder-plus` and save H.264 MP4 recordings named
-`late-charge-review.mp4`, `match-review.mp4` and `joined-product.mp4` in the run's
-artifact directory. The package captures through Playwright's public screencast
-API and ships its own FFmpeg binary; no system FFmpeg or WebM conversion is needed.
-Stop each recorder and await `finalized` before reporting or attaching its MP4.
-As in `photo-group-review.spec.ts`, identity judgment is scripted through
-`publishProductPair`; name-only MCP proposals are informational and do not
-establish merge admission. Exact-identity admission remains in Product match
-integration coverage.
-The final SQL read-back owns the exact settlement allocation count; retired
-workbench-card images and settlement-panel wording are not browser assertions.
-The duplicate-capture trap supplies a conflicting line amount and expects a
-conflict finding while preserving the original Expense and settlement; identical
-lines in a new capture are a no-op, not a conflict.
+The headless photo and wardrobe runs are regression checks for Cubby's non-AI
+contracts, not model scores: retailer reader and photo model seams are
+deterministic and identity judgment is scripted through `publishProductPair`.
+Use a separate live import-run agent trial for extraction quality and wall
+time. The wardrobe run verifies that:
 
-The wardrobe run verifies the joined graph after merge: one live Product, own
-item and label Images, one InventoryEntry, one Purchase, its Expense, a posted
-FinancialTransaction, and one allocation. It creates the Purchase before the
-statement, leaves it unsettled after CSV import, and requires a human to choose
-the charge in the Purchase UI. It also checks that replaying the
-statement does not create another transaction or statement source row. The
-held card-payment row never silently becomes a purchase or refund. The
-retailer fixture exposes semantic order and Product data for a deterministic
-reader; the photo model seam is likewise deterministic. These are regression
-checks for Cubby's non-AI contracts, not scores for model decisions. Run a
-separate live import-run agent trial for capture/extraction quality, streaming, and wall
-time.
+- subject-lift jobs wait for an Apple device even when the cloud description
+  marks a label ineligible;
+- order preparation names the seller explicitly, creating or reusing the
+  Vendor through the import contract on import, replay and duplicate capture;
+- the Purchase stays unsettled after CSV import until a human chooses the
+  charge, statement replay creates no new rows, and a held card-payment row
+  never becomes a purchase or refund;
+- a duplicate capture with a conflicting line amount yields a conflict finding
+  and preserves the original Expense and settlement; identical lines are a no-op;
+- after merge there is one live Product with item and label Images, one
+  InventoryEntry, one Purchase and Expense, a posted FinancialTransaction and
+  one allocation.
 
-The browser and simulator loops run the built Cubby Worker in a local Wrangler
-harness with isolated PostgreSQL and a real local workerd R2 binding per run.
-The local HTTP adapter preserves browser/native upload and public-read contracts
-over that isolated bucket. Only external service
-bindings return offline responses; one local peer handles USDA, UPC, and the
-inactive purchase agent, and acknowledges background queues. Photo journeys
-seed the signed-in actor but create their Products from the uploaded photos.
+Browser steps record MP4s with the pinned `playwright-recorder-plus`; await each
+recorder's `finalized` before attaching it. The loops run the built Worker in a
+local Wrangler harness with isolated PostgreSQL and a local R2 binding per run.
+Only external bindings are offline: one local peer handles USDA, UPC and the
+inactive purchase agent and acknowledges background queues. Photo journeys
+create their Products from the uploaded photos.
 
 ## Other documented core journeys
 
@@ -113,42 +82,31 @@ pnpm test:e2e cookbook-bundle.spec.ts
 pnpm test:e2e label-nutrition-review.spec.ts
 ```
 
-Playwright's standalone command uses the built web app, so build it after web
-source changes. See [validation policy](validation.md) for test tiers and the
-exact-head GitHub merge gate.
+`pnpm test:e2e` builds the web Worker first; see
+[test tiers](validation-tests.md#build-and-serve) and the
+[validation policy](validation.md) for the merge gate.
 
 ## Available native input checks
 
-These commands exercise authored native file-selection and review scenarios.
-The iOS input journey selects a real Files CSV, reviews account/row choices,
-uploads 25 distinct synthetic photos through the authorized Library grid, closes the upload
-sheet while work continues and reopens the import. Stored readback checks
-transaction/account, every original photo digest, capture dates and library
-sightings, current cloud-description jobs, and no automatic Product, Inventory,
-Expense or transaction write. Group review is web's; `photo-group-review.spec.ts`
-covers it. The
-PhotosPicker fallback has separate authored scripts; this journey grants
-Photos access and exercises the Library grid. Files
-navigation handles the captured OS starting states; sheet review uses the
-visible button when a phantom Toolbar's accessibility bounds cover the sheet.
-
-A focused native scenario does not establish every arrival order. Live external
-model/provider quality and physical-device background scheduling remain
-separate. Run on an unlocked host and retain a sealed artifact.
+The iOS input journey selects a real Files CSV, reviews account and row
+choices, uploads 25 synthetic photos through the authorized Library grid,
+closes the upload sheet while work continues and reopens the import. Stored
+read-back checks the transaction and account, every original photo digest,
+capture dates and library sightings, current cloud-description jobs, and no
+automatic Product, Inventory, Expense or transaction write. Group review is
+web's (`photo-group-review.spec.ts`). Run it on an unlocked host and retain the
+sealed artifact; it does not establish every arrival order, live provider
+quality or physical-device background scheduling.
 
 ```sh
 pnpm test:e2e:sim -- --input-journey
 ```
 
-The simulator scenario uses native CSV intake and photo upload controls. The Mac
-arrival-order scenarios that composed retailer browser capture were retired with
-the Mac browser bridge ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md));
-the backend arrival-order matrix still covers that logic, without a Mac UI run.
-See [Mac import checks](../../apps/web/tooling/mac-import-e2e.md) for fixture
-signing, host requirements, and artifact boundaries.
-
-The interactive CSV/photo journey can also run on the dedicated hosted simulator
-job, which retains the checksum-listed evidence in its downloadable run bundle:
+The backend arrival-order matrix covers retailer capture ordering without a Mac
+UI run; [Mac import checks](../../apps/web/tooling/mac-import-e2e.md) cover
+fixture signing, host requirements and artifact boundaries. The same journey
+runs on the hosted simulator job, which keeps checksum-listed evidence in its
+run bundle:
 
 ```sh
 gh workflow run journeys.yaml --ref "$(git branch --show-current)" -f journey=simulator-inputs

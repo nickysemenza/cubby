@@ -41,17 +41,17 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`StepDriversFor<P>`: a `count` step must supply its COUNT); `step-run.ts` freezes
   that population once per step generation and pages it. A step's Retry failed
   pages its re-admitted refs through `pageRetryRefs` in bounded slices without
-  moving the population cursor. Routine passes use
-  `routineStepHandler` (`service/routine-run.ts`) so their Job creates the Run lazily.
-  Counts, tallies, no-result reasons, raw errors and Retry failed render through the
+  moving the population cursor. Scheduled and member-started passes create their
+  Run through `ensureRun` (`server/domains/run/repo/ensure-run.ts`). Counts, tallies, no-result reasons, raw errors and Retry failed render through the
   `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs
   add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
   work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
   child Run, queue chain or ad hoc counter.
 - Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
-  (`server/generic/suggestions/repo/suggestion-families.ts`) and the Suggestions page; apply
-  stays the family's `reviewAssessment` handler. `review-families.ts` declares affected
-  records, actionability and automatic application. Web list badges and detail sections
+  (`suggestionFamilies` in `server/generic/suggestions/repo/suggestion-family-declarations.ts`)
+  and the Suggestions page. Each family's `SuggestionFamilyDeclaration`
+  (`suggestion-family-declaration.ts`) declares affected records, actionability,
+  presentation and its `apply` handler (`review.ts`). Web list badges and detail sections
   reuse `entity/suggestions/queue`; automatic history uses `suggestions.automaticDecisions`.
   Never a family-specific review list or a status-only pending count.
 - Suggestion publication: a family a Sweep step publishes per slot declares a
@@ -102,69 +102,38 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/entity-kernel/repo/repository.ts`). Its `createWriter` and
-  `updateWriter` own ordinary transaction/audit/receipt/reread choreography.
-  Server-only `ENTITY_STORED_WRITES[entity]` prepares complete supported stored
-  operations from source validation and reference targets; these functions do
-  not grant mutation authority or replace domain guards. Unsupported mappings
-  require a domain override. With no repository port, generation constructs
-  the existing scaffold/CRUD/repository binding and refuses unsupported declared
-  operations. Public contracts are generated at `@cubby/schemas/entities/<key>`;
-  `~/entity/generated/entity-schema-bindings.<key>.gen` owns the canonical
-  repository validator and compiled read-schema instances; pass those into
-  repository/scaffold constructors instead of importing the aggregate catalog.
-  `@cubby/schemas/entity-contracts/<key>` owns generated raw schemas and inferred
-  raw types, separately from field envelopes. Runtime repositories import that
-  raw namespace. Source bootstrap may retain a pure alias to named `readSchemas`
-  when importing generated code would create an inference or generation cycle;
-  new entities need no such façade. `createEntityRowFetcher(table)`
-  owns full stored-row reads by ID with the live-row predicate; audited updates
-  use the same selection. Keep custom projections and relation-loaded fetches
-  in their owning repository. `compileDeclaredFilters`
-  (`server/generic/list/repo/declared-filters.ts`) compiles any declared
-  list's filters over a column resolver; a list over a SQL relation declares
-  itself with `defineRelationList` (`@cubby/schemas/relation-list`) and its
-  route search with `relationListSearch`. Work queue rows come from a domain's
-  `WorkSource` (`server/generic/work-queue/repo/work-source.ts`,
-  `selectWorkCandidates`). `declaredFilterPredicates` /
-  The scaffold owns the repository read port, including `getByIds` (see
-  [repository read declarations](../adr/0024-repository-read-declaration.md)).
-  `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
-  explicit repository-only selections through `raw`,
-  passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined
-  `count` instead of calling
-  `executeListQueryWithCount`), `insertAndReturn`,
-  `updateAndReturn`, `withTransaction`, `formatSearchTerm`, `notDeleted`,
-  `hierarchyDescendantsSql` (`server/generic/list/repo/hierarchy.ts`; every
-  recursive descendant expansion over a `model.hierarchy`), `listPrepare`
-  (`field-compiler.ts`; request data a `model.derived` field's SQL reads),
-  `declaredRollup` (`field-compiler.ts`; a `model.derived` `rollup`'s compiled
-  aggregate, for a repository column showing the same value), `related()` /
-  `outer()` (`server/db/helpers/related.ts`; every other correlated count,
-  sum, extreme, existence or to-one lookup, live by default),
-  `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
-  policy-driven removal (`server/generic/removal/repo/`).
-  List filtering, sorting, paging, and count share a plain root-table FROM,
-  including dashboard counts that reuse list predicates. Remove consuming alias
-  overrides together. The [list read contract](../entities.md#list-reads) owns
-  joined row loaders and the closed-physical-read bypass.
-  `load(where, projection)` enriches selected IDs only; never pass list predicates
-  or pagination into a relational query. The scaffold restores selected order.
-  Page and detail reads share one assembly path:
-  `scaffold.read` for pages and `scaffold.get` for detail, with detail-only
-  values as `{ scope: "detail" }` bindings. Callers parse complete rows against
-  the canonical schema rather than assembling another copy; a writer returns
-  `scaffold.getByIds` of the row it wrote. Nested Ingredient Products use the
-  Product scaffold and its unit mappings; costing and nutrition graph readers
-  remain separate from entity records. A caller that needs a filter WHERE
-  outside a page (Problems, bulk task moves) uses `scaffold.prepareWhere`,
-  which prepares the request context first. Gallery writes use
-  `galleryBinding(entity)`; a vendor logo beside another row is
-  `vendorLogoKeySql`. Generated entity lists narrow through
-  `entityMembership(list).has`. Kit component rows
-  reuse `productScaffold.read` and add only their parent identity and quantity.
-  `cubby/no-entity-roster` fences new entity-keyed maps in generic server code;
-  its per-file baseline only shrinks.
+  (`server/entity-kernel/repo/repository.ts`); its `createWriter` and `updateWriter`
+  own transaction, audit, receipt and reread. Server-only `ENTITY_STORED_WRITES[entity]`
+  prepares stored operations from source validation and reference targets; it grants
+  no mutation authority, and unsupported mappings need a domain override. Public
+  contracts: `@cubby/schemas/entities/<key>`; raw schemas and types:
+  `@cubby/schemas/entity-contracts/<key>`; repository validators and compiled read
+  schemas: `~/entity/generated/entity-schema-bindings.<key>.gen` (pass those, not the
+  aggregate catalog). Full stored rows by ID: `createEntityRowFetcher(table)`.
+- Reads: the scaffold owns the repository read port
+  ([ADR 0024](../adr/0024-repository-read-declaration.md)): `scaffold.read` for pages,
+  `scaffold.get` for detail (detail-only values as `{ scope: "detail" }` bindings),
+  `scaffold.getByIds` for the row a writer wrote, and `scaffold.prepareWhere` for a
+  filter WHERE outside a page. `listScaffold` (`server/generic/list/repo/list.ts`) takes
+  `where`, `orderBy`, plain `select`, relation `load` or joined `count` instead of
+  `executeListQueryWithCount`. List filtering, sorting, paging and count share a plain
+  root-table FROM, including dashboard counts that reuse list predicates;
+  `load(where, projection)` enriches selected IDs only, so never pass list predicates or
+  pagination into a relational query. Callers parse complete rows against the canonical
+  schema. The [list read contract](../entities.md#list-reads) owns joined row loaders. Nested
+  Ingredient Products and Kit components reuse `productScaffold.read`.
+- List and query helpers: `compileDeclaredFilters`
+  (`server/generic/list/repo/declared-filters.ts`); `defineRelationList` and
+  `relationListSearch` (`@cubby/schemas/relation-list`); `WorkSource` and
+  `selectWorkCandidates` (`server/generic/work-queue/repo/work-source.ts`);
+  `hierarchyDescendantsSql` (`list/repo/hierarchy.ts`) for every recursive descendant
+  expansion; `listPrepare` and `declaredRollup` (`list/repo/field-compiler.ts`);
+  `related()`/`outer()` (`server/db/helpers/related.ts`) for every other correlated
+  lookup; `insertAndReturn`, `updateAndReturn`, `withTransaction`, `formatSearchTerm`,
+  `notDeleted`, `buildSearchConditions`, the shortcode resolver, `finalizeMerge`,
+  policy-driven removal (`server/generic/removal/repo/`), `galleryBinding(entity)`,
+  `vendorLogoKeySql`, `entityMembership(list).has`. `cubby/no-entity-roster` fences new
+  entity-keyed maps in generic server code; its baseline only shrinks.
 - Search source reads: declare `read.search` (document SQL and embedding
   text) on the owning scaffold. Generic search consumers find the port through
   `kernelScaffold(entity)`, loaded with `await import` because domain
@@ -277,9 +246,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `(runId, operationId)` key, and the browser command id stay unchanged.
 - Cross-Worker RPC: one Zod contract per boundary, `z.infer` on both sides.
 - Purchase-agent typed tools: each tool's parameters are the JSON Schema of
-  its entry in `purchaseAgentToolInputs` (`@cubby/schemas/purchase-agent-services`),
-  a projection of the host service contract with explicit narrowing; never
-  restate a tool input as a hand-written schema.
+  its entry in `photoInventoryToolInputs` (`@cubby/schemas/purchase-agent-services`);
+  never restate a tool input as a hand-written schema.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## AI
@@ -298,12 +266,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   member grading/replay overrides; media always routes to the vision model.
   Provenance callers use `decisionModelFor` with the same arguments, including
   injected ports (which retain the feature model unless explicitly overridden).
-  Retired persisted routing fields are transformed by migration, not retained
-  in runtime schemas or compatibility fallbacks.
 
 - Prompt requests: `AI_FEATURES` typed `feature.request` renderers; pure prompt
   definitions in `server/ai/policy/prompts/`. `decisionCatalogRows` in
-  `decision-catalog.ts` owns decision discovery, over the field rows in
+  `server/ai/decision-catalog.ts` owns decision discovery, over the field rows in
   `server/ai/policy/field-decisions.ts`; `AI_FEATURES` owns chat requests. Purchase-import Markdown remains
   authoritative where the request mounts a shared skill; catalog rendering does
   not create another prose prompt.
@@ -315,7 +281,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   estimates live in `server/ai/pricing.ts`.
 - Gateway controls, URLs, response observers and transport selection:
   `packages/shared/src/ai/gateway-request.ts`; gateway metadata in
-  `ai-gateway-metadata.ts`. Extend these helpers for application and tooling
+  `gateway-metadata.ts`. Extend these helpers for application and tooling
   callers rather than constructing another gateway path.
 - pi-ai provider adapters: `packages/shared/src/ai/pi-providers.ts`.
 - Live evaluation support: `apps/web/tooling/ai/eval-support.ts`.
@@ -390,7 +356,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
-  `useUpdateMutation`, [shared list deletion](../../apps/web/docs/web-ui-reference.md#react-hooks-preventing-infinite-render-loops),
+  `useUpdateMutation`, [shared list deletion](../../apps/web/docs/web-runtime.md#react-hooks-preventing-infinite-render-loops),
   `useAllEntityRecords`, and `useServerTree` for a tree entity's whole server-nested hierarchy.
   Cursor-paged operations use `cursorQueryOptions`
   (`integrations/tanstack-query/cursor-query-options.ts`); numeric

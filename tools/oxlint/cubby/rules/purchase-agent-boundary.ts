@@ -10,10 +10,11 @@ import type { ESTree } from "@oxlint/plugins";
  * a binding, or a secret, and from reaching the Worker's environment, its
  * loopback bindings (`ctx.exports`), or ambient globals (`process`,
  * `globalThis`) under any spelling.
- * docs/infrastructure.md#purchase-agent explains the boundary.
+ * apps/web/src/server/domains/purchase-import/service/README.md#trust-boundary explains the boundary.
  */
 
-const BOUNDARY = "See docs/infrastructure.md#purchase-agent.";
+const BOUNDARY =
+  "See apps/web/src/server/domains/purchase-import/service/README.md#trust-boundary.";
 
 /** Packages the agent may import: its runtime and pure Cubby contracts. */
 const ALLOWED_PACKAGES = [

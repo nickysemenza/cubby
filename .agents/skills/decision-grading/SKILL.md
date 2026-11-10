@@ -62,8 +62,6 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    suggested → correct. Pairs that are often confused, never-used values and
    values whose meaning (`entities://catalog` / the Decisions catalog on
    `/ai`) does not distinguish them are consolidation candidates.
-5. A per-field gap between models smaller than the sample's noise means the
-   models are interchangeable; recommend one global `CLEF_TRAFFIC_SHARE`.
 
 ## Email relevance
 
@@ -121,7 +119,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    production manifest's models (the default). Supply an array
    of `{subject, sender, receivedAt, bodyText, bodyHtml?, headers?, owner?,
    baseline}`; `baseline` follows `mailImportOutcome` in
-   `packages/schemas/src/assessment.ts`. Attribution needs the original's
+   `packages/schemas/src/suggestion.ts`. Attribution needs the original's
    recipient evidence: `headers` is the original's header record (only the
    `mailAttributionHeaders` subset — To, Cc, From, Delivered-To, Reply-To,
    Sender and forwarding headers — is kept), and `owner` is `{name, address}`
@@ -149,7 +147,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    judgments in the session; production MCP cannot grade disposable database
    handles.
 5. After member confirmation, record each served outcome's grade through
-   `suggestions.review_batch` with `assessmentId`, unique `operationId`,
+   `suggestions.review_batch` with `suggestionId`, unique `operationId`,
    `intent: "history"`, `verdict`, and optional `reason`/`correction`. A correction
    carries the complete outcome, including reason or imported lines/total.
    Session model opinions remain independent grades until the member confirms
@@ -160,8 +158,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 Keep the production Mail import coordinator on Luna, escalating to the
 standard tier ([ADR 0027](../../../docs/adr/0027-tier-routed-models-on-a-funding-first-ladder.md)),
 until real held-out replay and member grading justify a change. The synthetic scripted mode checks plumbing
-only; it provides no model-quality evidence. UI grading is tracked separately in
-[#2753](https://github.com/nickysemenza/cubby/issues/2753).
+only; it provides no model-quality evidence.
 
 ## Before/after a change
 

@@ -28,27 +28,25 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   fingerprints). Changing a fingerprinted snapshot's shape makes every queued
   row fail its evidence check at execution, one full page each. In the same
   change, mark those rows `obsolete` in a custom migration so discovery
-  re-admits them under the new shape. After #3000 renamed `manufacturer`, about
-  6,000 product-identity rows drained this way and delayed other evaluations.
+  re-admits them under the new shape; otherwise the stale rows drain one page
+  at a time and delay other evaluations.
 
 ## Production changes
 
-For staged expand/contract commands and exact `--through` boundaries, follow the
-[production migration runbook](../runbooks/production-migrations.md).
+The [production migration runbook](../runbooks/production-migrations.md) owns
+the cutover sequence, locks and post-deploy read-back. Merging to `main` applies
+pending committed migrations, then deploys; a migration ships with the code and
+clients that need it in one PR.
 
 Serialize production schema changes: one owner verifies the migration and no
-application overlaps another session. Inspect constraints/data, run relevant checks,
-and transform existing rows in the same migration that changes their shape;
-clients update with the change ([breaking changes](#breaking-changes)).
-Establish data preservation before pushing, then verify the applied schema.
-Schema reaches every database only through
-committed migrations in `apps/web/drizzle/`: `pnpm db:generate` runs native
-Drizzle generation for `schema.ts`, and `pnpm --filter @cubby/web
-db:migrate --target=production` applies them with
-`PRODUCTION_DIRECT_DATABASE_URL`.
-Run `db:generate` with a TTY and unredirected stdout when Drizzle asks
-create/rename questions; inspect the snapshot graph and generated SQL before treating
-generation as complete.
+application overlaps another session. Inspect constraints and data, and
+transform existing rows in the same migration that changes their shape. Schema
+reaches every database only through committed migrations in
+`apps/web/drizzle/`: `pnpm db:generate` runs native Drizzle generation for
+`schema.ts`, and `pnpm --filter @cubby/web db:migrate --target=production`
+applies them with `PRODUCTION_DIRECT_DATABASE_URL`. Run `db:generate` with a TTY
+and unredirected stdout when Drizzle asks create/rename questions; inspect the
+snapshot graph and generated SQL before treating generation as complete.
 
 For functions, triggers, views, or other derived DDL, update the desired-state
 definition in `src/server/db/derived-ddl.ts` and its helpers, then handwrite only
@@ -64,44 +62,25 @@ Drizzle v1 stores each migration in `<UTC timestamp>_<name>/migration.sql`.
 Keep its `snapshot.json` and all predecessor snapshots: v1 reconstructs the
 generation state from this graph and checks cross-branch conflicts. `db:check`
 reconstructs that state and compares it with the full generated schema and a
-fresh database. The runner validates applied names and SQL hashes, rejects
-unknown or duplicate receipts, and applies every missing migration within the
-requested boundary. Legacy ledgers acquire names without replaying SQL; exact
-retired-ledger adoption still follows the runbook.
+fresh database; CI fails when `schema.ts` has no migration or the migrations
+build a catalog different from `schema.ts` plus the desired-state derived DDL.
+`tooling/db-catalog.ts` reads the same catalog from production. The runner
+validates applied names and SQL hashes, rejects unknown or duplicate receipts,
+and applies every missing migration within the requested boundary.
+
 A stored-shape transform accompanying schema work is a custom migration
 (`drizzle-kit generate --custom`). For an explicitly authorized one-off data-only
 correction, use a transactional update and verify preservation and read-back;
 keep the script outside the repository and add no migration or schema guard
-solely to route it through migrations. CI `db:check` fails when `schema.ts` has no migration or the
-migrations build a catalog different from `schema.ts` plus the desired-state
-derived DDL, including function, trigger and view definitions; `tooling/db-catalog.ts`
-reads the same catalog from production. Before a
-`DROP COLUMN`, remove the `schema.ts` declaration and DEPLOY first — the
+solely to route it through migrations.
+
+Dropping a column removes its `schema.ts` declaration in the same change: the
 relational query builder selects every declared column, so the declaration is
-the read. The reverse also bites: an undeclared legacy table or column keeps
-its foreign keys, so a new write path that hard-deletes the referenced row
-fails until the drop. Either drop the legacy FKs in the expand step or run the
-drop right after the deploy (the ADR 0006 image joins blocked image deletes
-this way).
+the read. An undeclared legacy table or column keeps its foreign keys, so a new
+write path that hard-deletes the referenced row fails until the drop; drop those
+foreign keys in the same migration.
 
-`deploy.yaml` applies pending committed migrations before deploying each `main`
-push. Ordinary migration PRs must be compatible with the currently deployed
-code; add a populated-predecessor preservation regression for CI before merge,
-and the owner reads back production after release. A contract migration (`DROP COLUMN`, or a
-constraint the deployed code would violate) requires an explicit staged boundary
-before merge: follow the production migration runbook to deploy matching code
-before applying the contraction. Keep staged cutover PRs off auto-merge.
-
-An explicitly authorized breaking cutover may consolidate expansion and
-contraction before merge; follow its owning runbook. Prefer quiesced writers;
-when the member explicitly keeps services enabled, lock retired copy/drop
-sources before reading them and hold the locks through commit. Observed idleness
-is not a barrier. Verify SQL preservation before merge, deploy matching code
-immediately, and run historical accepted-reference promotion only after old
-in-flight work finishes. Verify preservation, client delivery, and the catalog
-before normal use.
-
-Traps, all seen for real:
+Traps:
 
 - Local startup, fixtures, integrations, runtime inspection, and simulator
   discovery follow [local development](../local-development.md). `pnpm dev`
@@ -154,40 +133,28 @@ repository's read declaration. A read-schema key that nothing loads fails when
 the read plan is built.
 
 `Database` is a request-scoped handle: routers pass it onward, services
-orchestrate, and repos alone call `getDb`; transactions use `withTransaction`.
-Its callback receives a Drizzle transaction directly. Use
-`withTransactionDatabase` when a called domain module needs a transaction-bound
-`Database`; `getDb` accepts that facade, not a raw Drizzle transaction.
+orchestrate, and repos alone call `getDb`. Transactions use `withTransaction`,
+whose callback receives a Drizzle transaction; use `withTransactionDatabase`
+when a called domain module needs a transaction-bound `Database` (`getDb`
+accepts that facade, not a raw Drizzle transaction). Query-only repos use
+`repositoryQueries` and the repository transaction ports; register new
+query-only modules with the strict-program boundary
+([compiler boundaries](../development.md#typechecking)).
 DB-only snapshot writers may opt into `withSnapshotWrite` or
-`withSnapshotWriteDatabase`. Each attempt revalidates the original submitted
-evidence and creates its own transaction-local state and deferred publication
-buffers. Enroll buffer flushing through that transaction's `runAfterCommit`;
-an outer buffer survives rollback and leaks abandoned-attempt tasks. Only an
-aborted owned boundary retries, with at most three attempts and 200/400 ms
-pauses so retries do not immediately collide with the same background page.
-Caller-owned transactions and committed effect failures never replay. Provider/storage calls and unrestricted callbacks are
-not replay-safe merely because they occur inside a transaction.
-Background Queue invocations, Durable Object work and Workflow steps use
-`withInvocationDb`: the bounded pools lease independent transaction clients and
-close when the awaited scope finishes. Never share one standalone client across
+`withSnapshotWriteDatabase`: each attempt revalidates the submitted evidence,
+and buffer flushing enrolls through that transaction's `runAfterCommit` (an
+outer buffer survives rollback and leaks abandoned-attempt tasks). Only an
+aborted owned boundary retries; caller-owned transactions, committed effects,
+provider/storage calls and unrestricted callbacks never replay.
+Queue invocations, Durable Object work and Workflow steps use
+`withInvocationDb`, which leases independent transaction clients and closes
+them when the awaited scope finishes. Never share one standalone client across
 concurrent transaction branches; serial SQL statements do not isolate commits.
-Late continuations must open their own awaited scope. Cleanup errors are logged
-with their original diagnostics and do not turn committed work into a retry.
-The repository helper is the sanctioned client-resolution boundary. The handle
-itself carries only nominal identity. Runtime registration must survive module
-reloads, and transaction detection uses native `rollback` presence rather than
-constructor identity: `createDatabase` registers a lazy runtime
-callback, and runtime resolution occurs on each use. Query-only repos
-use `repositoryQueries` and the repository transaction ports, which project
-native Drizzle builders without exposing
-the global relational schema; full relational repos retain `getDb`. Both return
-the actual selected client/transaction, preserving transaction identity. When adding
-query-only repository or schema modules, register their strict-program ownership
-and check imports across that boundary; see [compiler boundaries](../development.md#typechecking).
-A service earns existence for
-cross-cutting enrichment/compute/rollups, not pass-throughs. Cubby domain
-compute belongs in recipebridge/WASM; TypeScript assembles inputs and reshapes
-outputs instead of recreating it.
+Late continuations open their own awaited scope.
+
+A service earns existence for cross-cutting enrichment, compute or rollups, not
+pass-throughs. Cubby domain compute belongs in recipebridge/WASM; TypeScript
+assembles inputs and reshapes outputs instead of recreating it.
 
 Expenses are legitimately negative — refunds, sales, and large family
 contributions — so any rollup that filters `total > 0` silently drops
@@ -308,15 +275,13 @@ table declaration. Derived SQL sources must not convert plain-table fallbacks
 into SQL fragments.
 Query shape: narrow to the requested identities before per-row work. A
 MATERIALIZED CTE that builds JSON or runs correlated policy lookups for every
-eligible row, then filters by scope, multiplies cost by the population. In the
-Assessment eligibility rewrite, moving rule checks behind a materialized
-identity barrier cut one scope's rule lookups from about 13,400 to 11. Match a
-primary reference column directly instead of expanding a JSON array. When many
+eligible row, then filters by scope, multiplies cost by the population; put an
+identity barrier first. Match a primary reference column directly instead of
+expanding a JSON array. When many
 list reads need the same derived value, compute it once in a background family
 and read the stored result (as data quality does) rather than recomputing it in
 every list statement. Load related facts once per ID page, never per row. Write
-queries with the Drizzle builder and typed helpers; Kysely matched Drizzle's
-plans without fixing the raw JSON predicates and needed a separate adapter.
+queries with the Drizzle builder and typed helpers.
 Benchmark with the related graphs seeded: empty Email, Purchase or settlement
 tables hide the cost of subqueries that walk them.
 A repeated SELECT/GROUP BY expression must use identical constants: separate
@@ -383,8 +348,7 @@ content still uses synthetic evidence under the root agent rules.
 
 ## MCP and observability traps
 
-Read [MCP operating patterns](mcp.md) for bounded reads, batch writes, file
-uploads, and verification.
+[MCP server rules](mcp.md) own tool exposure, failures and deadlines.
 
 MCP clients reject `structuredContent` on an `isError` result, so a domain
 refusal is returned as data (the `canProceed` shape), never as an error with
@@ -398,10 +362,6 @@ an index is eligible but unexercised, not droppable — audit every call site wi
 `EXPLAIN` first; the genuinely dead ones are `OR`'d against an unindexed column.
 
 ## Generated files
-
-Before adding a module, verify that its path does not already exist. A filename
-collision must preserve the existing module and its callers; use a distinct path
-for the new responsibility.
 
 Generated output carries a generated header and is regenerated automatically
 ([quality](validation-quality.md)). Never hand-edit one — edit its generator or

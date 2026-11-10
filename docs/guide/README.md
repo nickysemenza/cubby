@@ -10,6 +10,8 @@ Documentation.
   expected changes and resumption across queues, records and Runs.
 - [One product, however its evidence arrives](product-identity-journey.md)
   explains how photos, purchases and research converge on one Product.
+- [Entity connections](entity-connections.md) explains how Cubby proposes links
+  between existing records and how a member reviews them.
 - [Burn-down](burn-down.md) explains how a Claude or Codex session completes
   research and reconciliation from the Work queue.
 - [How values are determined](how-values-are-determined.md) lists every field

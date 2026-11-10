@@ -5,13 +5,13 @@ charged costs. These are usage telemetry, not additional Expense ledger rows.
 Subscriber-credit inference records billing reason `subscriber_credit`, zero
 incremental charge and the standard API comparison; its nominal comparison
 tracks credit consumption separately from paid inference.
-Subscription fees remain separate. The household AI budgets
-(`server/ai/budget.ts`) read frontier chat-model rows per fixed six-hour UTC
-window: the ChatGPT plan budget (default $2) sums the standard cost of `plan`
-rows, and the paid budget (default $1) sums every other row’s charged cost,
-falling back to the standard cost. Provider credits have no window budget
-([ADR 0027](../adr/0027-tier-routed-models-on-a-funding-first-ladder.md)):
-the status reports the standard cost of `subscriber_credit` rows per provider,
+Subscription fees remain separate.
+[ADR 0027](../adr/0027-tier-routed-models-on-a-funding-first-ladder.md) owns the
+funding ladder, and `server/ai/budget.ts` owns the budget defaults. The
+household AI budgets read frontier chat-model rows per fixed six-hour UTC window:
+the ChatGPT plan budget sums the standard cost of `plan` rows, and the paid
+budget sums every other row’s charged cost, falling back to the standard cost.
+Provider credits have no window budget: the status reports the standard cost of `subscriber_credit` rows per provider,
 and a credit runs until the provider refuses. Credit rows never count as paid.
 Both limits are editable inline in Settings → AI funding, or through
 `ai_funding.set_budget` with `planLimitUsd` and `paidLimitUsd`. These are soft
@@ -37,8 +37,8 @@ retains the token usage of every call that produced its answer (a batched
 decision question keeps its even share of the shared call); a hit prices that
 avoided usage at the current catalog rate when it is recorded and keeps it in
 `costEvidence.avoidedUsage`, while the hit's own token columns stay zero.
-Entries published before usage retention, and caller caches without token
-evidence, keep the comparison unknown. A device executor establishes
+Entries and caller caches without token evidence keep the comparison
+unknown. A device executor establishes
 zero incremental charge for local image work; lack of usage rows alone does not
 establish that work was free. Image jobs without an executor or usage retain
 incomplete price coverage, including while waiting for Apple. Unknown prices remain unknown.
@@ -53,9 +53,8 @@ which a hit reports and books. Embeddings are cached per distinct text and
 dimension count; only the misses reach the provider, in one request. The runner
 waits for every text to finish and cache its answer before deferring a batch
 with a busy key; a sibling provider failure remains attached as the cause.
-Completed answers never expire: rows written under the retired 30-day expiry
-and bare entries from before usage retention stay readable without relabeling
-their usage. Values larger than one SQLite row are stored across chunk rows,
+Completed answers never expire, and entries without retained usage stay
+readable without relabeling it. Values larger than one SQLite row are stored across chunk rows,
 up to a 16 MB bound below the Durable Object RPC message limit; a larger answer
 fails rather than bypassing the cache. Identical concurrent calls share one
 claim. An explicit regeneration (`force`) bypasses the matching entry and
@@ -84,7 +83,7 @@ both are known, with comparison coverage shown separately; the household usage
 summary also splits them by billing reason (plan, subscriber credit, cache,
 discount). Sources without a complete call roster retain explicit cost
 coverage flags rather than inventing calls. The external cookbook extractor
-currently reports a single cost estimate: fresh reports identify it as a caller
+reports a single cost estimate: fresh reports identify it as a caller
 estimate, retained legacy reports as historical, and their standard comparison
 remains unknown without equivalent pricing evidence. A linked image job is a component of its parent Run's cost;
 displaying both does not create additional spend. Run totals include every

@@ -64,6 +64,54 @@ planned future Expenses because they describe the project’s full intended cost
 the household/as-of ledger excludes those future Expenses. Project reports do
 not apply later transfers: transfers are household-global.
 
+## Transfer pairs
+
+A transfer pair joins the two legs of one money movement across accounts:
+transfer or card-payment statement charges and FinancialTransactions with no
+Ledger Transfer. Candidates have equal amounts, opposite signs, different
+accounts and dates within five days. Evidence shows both legs, their accounts
+and owners, the date gap and every competitor, including weaker descriptor
+matches. Pair identity follows the charge, not its export observation.
+Dismissing a `transfer_pair` Suggestion suppresses that pair key.
+
+### Opposite-leg clean policy
+
+Statement transfer and card-payment creates and `transfer_pair` Suggestions use
+one clean test. Kinds and provider categories retrieve candidates; they do not
+establish that a descriptor describes a movement. A pair is clean only when:
+
+- both legs have exactly one candidate;
+- the date gap is at most three days;
+- both accounts have the same known owner; and
+- both legs carry explicit movement evidence (transfer, card payment,
+  cash-out or funding, or ATM withdrawal).
+
+Generic payment or deposit, ACH, checks and repayments require review unless
+stronger context identifies an account move. Model confidence never supplies
+apply authority, and pairs between different owners always require member
+review and record a Ledger Transfer between those owners. A found statement row
+qualifies as a leg before its FinancialTransaction exists.
+
+Confirmed observations from overlapping exports converge on one
+FinancialTransaction per leg. The same account, amount and nearby dates flag
+possible overlap but do not prove identity: unresolved overlap prevents clean
+acceptance and creating duplicate legs. Review the observations through the
+statement reconciliation path before pairing them.
+
+Applying a pair creates missing statement-backed transactions with their source
+refs and assigned statement accounts, then calls `finance.accept_transfer_pair`
+atomically. Apply rechecks current evidence, eligibility, ownership and
+competing candidates; retries cannot pair a charge twice. Bulk Accept uses the
+same path for clean pairs. In a mixed-family batch, statement and pair
+suggestions already settled by an earlier pair return `settled_by_pair` without
+another apply.
+
+Cash is a valid destination without a statement. An ATM withdrawal with no
+recorded cash leg may propose creating the full-amount leg on the owner's unique
+cash account, but that proposal is review-only: an invented leg is not found
+opposite-leg evidence. The bank amount includes the ATM fee; record that fee
+separately on cash with its supplied amount, and never infer it.
+
 ## Presentation and unknowns
 
 Client labels are derived from party kind. Route-capable entity references elsewhere in the app are links; on this ledger page, Ledger Parties and Ledger Transfers still render as plain text — that is a presentation choice for this module now, not a routing limitation, since both gained their own browser list and detail pages (`/ledger-parties`, `/ledger-transfers`). Recorded Expense attributions win for their role. Without recorded funders,
@@ -151,12 +199,10 @@ roster or member roster supplies choices, not proof. All eligible Vendors, live
 members and the full network enum reach the model. Missing, ambiguous or conflicting
 evidence requires none; funding and purchase frequency do not identify a primary
 cardholder. Network is an editable scalar projection of identity; provider is an
-ordinary entity reference. The preserving cutover copies retired issuer,
-institution and provider text into notes before removing those identity keys;
-missing references are assigned through ordinary reviewed MCP or CLI mutations
-after deployment, using the member-approved provider mapping. The migration never
-guesses or assigns a provider from legacy text. Existing provider references remain
-unchanged. The generic suggestion framework chooses among reference and enum
+ordinary entity reference. Issuer, institution and provider text kept from
+earlier identity keys lives in notes; a missing provider reference is assigned
+through an ordinary reviewed MCP or CLI mutation and is never guessed from that
+text. The generic suggestion framework chooses among reference and enum
 candidates; it does not generate structured facts or dated history rows.
 Authorized-user memberships, funding periods, card-number history and every
 `validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor

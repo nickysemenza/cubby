@@ -1,735 +1,333 @@
 # Test tiers and runtime traps
 
-After a merge adds modules to an existing `import.meta.glob`, a missing loader
-can be a stale Vitest filesystem transform. Run
-`pnpm --dir apps/web exec vitest --clearCache` before diagnosing a loader whose
-source pattern already covers the new file. Do not weaken loader admission.
+[Validation policy](validation.md) owns test selection, retention, failure-first
+evidence and delivery. This page owns how to run tests, the runtime traps that
+make them fail for the wrong reason, and the shared fixtures.
 
-Browser preview discovery stays under `src/`. Workspace package symlinks in
-`node_modules` can lead back to the repository and old agent worktrees; they
-must not become duplicate test entries or import stale component contracts.
+Record per-test retention, deletion and coverage-gap reasons in the commit or
+PR, not in this file. The test files show which owner covers a behavior.
 
-Disclosure previews wait for visible content after opening, not just DOM
-insertion: the body mounts before its entrance opacity transition finishes.
+## Choosing and running tests
 
-[Validation policy](validation.md) owns test selection, failure-first evidence,
-retention, delivery, and delegated check results. This page owns runtime traps.
-Auth configuration tests await each constructed instance's `$context` inside
-the invocation that supplied its bindings. Better Auth construction starts async
-plugin initialization and logging; inspecting only synchronous options can leave
-that work running when Vitest closes its console transport. Keep configuration
-and overlapping-invocation assertions in the existing owner, without suppressing
-console errors or introducing a delay.
+- Run named files from the repository root with `pnpm test:file src/...`
+  (paths relative to `apps/web`), PostgreSQL contracts with
+  `pnpm test:postgres src/...`, and browser specs with `pnpm test:e2e <spec>`.
+  Do not use Vitest's `related` or `run --changed`: selecting and running in
+  one process has caused false `ui` failures.
+- Pass flags without `--` (`pnpm test:postgres src/... -t 'case'`,
+  `pnpm db:generate --name=x`, `pnpm test:e2e <spec>`): an extra `--` reaches
+  Vitest as a literal separator and the filter does not apply.
+- Verify every named path exists before invoking a runner: Vitest can ignore a
+  nonexistent selector when another supplied file matches. For a named case,
+  copy the exact replay selector or confirm the literal title with `rg`; a
+  title inferred from a task description can select nothing.
+- Read failures from `apps/web/.vitest-results.json` before deciding what to
+  change; do not rerun an unchanged tier to rediscover them. Local Vitest runs
+  share that path across projects, so serialize them until the previous report
+  has been read or copied to an ignored artifact.
+- Report only the files and cases the run exercised. Skipped, pending and
+  empty selections are not validation evidence.
+- Do not overlap PostgreSQL and E2E locally: they contend for containers,
+  workerd, browsers and database connections. For changed workspace packages,
+  run the affected package test; a cross-package contract change may need its
+  consumers too.
+- Test subprocesses invoke Node or the installed tool directly and inherit the
+  needed parent environment. Never invoke a package manager from a test: its
+  dependency verification can install or prune modules under concurrent suites.
+- Run the web `typecheck` after the final test fixture or query edit, even when
+  the runtime test passes. `typecheck:app` excludes every test file, including
+  browser previews.
+- Keep database regressions scoped to the failure: one sort/page-boundary case
+  establishes stable order without enumerating every field and direction.
 
-The UI project shares module state between files. Its shared teardown clears
-Sonner notifications as well as React trees: unmounting a Toaster leaves its
-notifications available to the next test.
+## Vitest projects and CI retries
 
-Goal-driven browser journeys wait for the record's editor defaults and requested
-picker options before asking the decision model to act. App hydration alone
-does not establish that an async editor or picker is ready. Keep the stored-data
-read-back after the action; readiness waits do not replace outcome assertions.
-For repeated targetless taps at a navigation boundary, open the known picker or
-dialog with SDK locators and wait for its controls. Exact-value picker selection
-can also use SDK actions when the model repeatedly misjudges an already-correct
-draft. Assert draft state before the existing confirmation and persisted-data
-checks; never catch a model error and treat it as successful completion.
-
-Keep pure logic imported directly by standalone Node subprocesses in alias-free
-`.ts` files. Vitest uses the application's configured aliases; server composition
-keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
-their module type explicitly, matching the consumer. Build-provenance
-fixtures clone their immutable synthetic Git template with Git rather than
-recursively copying `.git` as ordinary fixture files.
-
-The built-Worker photo-agent scenario owns dispatch through the actual agent/MCP,
-persisted proposals and review progress, no Product/Inventory before review,
-explicit concern resolution and one successful approval with exact ownership,
-location and quantity read-back. Do not repeat direct rejection or replay matrices
-inside that expensive harness. `run/proposals.integration.test.ts` owns direct
-writes without review, failed unresolved approval, atomic confirmation and replay
-without changed confirmation/duplicate writes. The agent scenario keeps its real
-successful approval; only duplicate direct repository branches are removed.
-
-Photo-import route binding and source-admission unit cases import
-`photo-import-route-bindings.ts`, which evaluates contracts without loading
-repositories or the entity kernel. Runtime route creation, singular image owners
-and SQL relationship traversal stay in the existing photo-import transaction
-integration suite, which already imports those production bindings.
-
-The required `photo-run-detail.preview.test.tsx` dirty-field workflow also owns
-failed-save recovery: a rejected name stays dirty through refresh, valid notes
-can save without acknowledging that name, approval remains blocked, and retry
-submits the saved revision before approval. It drives the real `CommitInput` and
-photo draft barrier shared by create and existing-Product edits. The selected-field
-E2E retains real identity resolution, the historical stock decision, notes-only
-application preserving the original Product name, and exact unchanged 2 kg stock.
-Batch the existing Product and its stock together; finish at the committed
-read-back. `run/proposals.integration.test.ts`'s explicit-resolution/selected-fields
-case owns unresolved refusal, selective mutation and replay. Incompatible-entry
-recovery, fractional-count error presentation, the sibling reference/receive
-preview, repeated Run totals/phone overflow and the Product-detail cache-freshness
-visit are omitted from this journey. These are deliberate interaction/composition
-gaps, alongside its removed existing-Product failed-name HTTP save/retry sequence;
-the shared native failed-save barrier remains required coverage.
-
-The occupied-location browser journey owns choosing an existing stock entry,
-the Add 1 to 2 decision, and exact 3 each on the same row and Location after
-approval. Save prerequisite groups before entering the page; this case does not
-own live grouping progress. Omit its sibling comparison matrix and separate
-accepted-source Expense association workflow.
-`accepted-source-association.integration.test.ts` owns the photographed Product
-association, retained item cost/quantity, payment/attribution/stock preservation
-and idempotent replay. Its photo-specific inline review/confirm HTTP composition
-is a deliberate gap; the domain write remains tested at the SQL boundary.
-
-The candidate-rejection browser journey keeps Not this one, its committed
-operation, Rejected/no-attach state and stored rejection read-back. The existing
-`run/proposals.integration.test.ts` Wrong-candidate combine/split case owns
-suppression across regrouping and inference failure. Do not repeat regrouping
-and another document load in this browser case. Reloaded rejected-marker
-presentation is the deliberate composition gap.
-
-Photo-group review prerequisites create their Location and Product category in one
-fixture graph. Independent shirt, label and boots uploads run together; keep their
-ordered result tuple and wait for every verified Image before linking the Run's
-ordered roster. This batches setup without changing photo groups or assertions.
-
-The approve/discard photo journey saves its prerequisite proposals before opening
-the Run; it does not wait for an API-seeded empty page to discover them through
-live polling. Keep native label-purpose editing, decoded images,
-blur-and-approve name saving, discard and completion. The existing proposed-Product
-draft-edit case in `run/proposals.integration.test.ts` owns a selected category
-through draft save, approval and exact Product read-back. The browser no longer
-samples category-alias selection or taxonomy request shapes; these are deliberate
-picker-composition and performance-sampling gaps. Read back the corrected Product, exactly two received units and no
-Product for the discarded group. The existing completed-Run case in
-`run/lifecycle.integration.test.ts` also owns restart: a distinct successor keeps
-the predecessor, input and every ordered image/fingerprint, resetting copied work
-to pending while the original committed work remains intact. The generic MCP Run
-lifecycle case retains real restart dispatch. Dedicated photo restart menu/HTTP
-composition and empty-versus-proposed Start grouping button visibility are
-intentional browser coverage gaps; manual grouping admission remains in the
-photo lifecycle SQL owner. No scenario is deleted or split.
-
-Nutrition-label review fixtures already upload servable bytes and persist verified
-hash/dimensions before attaching the label. Inject the external description against
-that verified source; do not repeat `verifyImages` or visit an auth page just to
-obtain its mutation Origin. Keep the source-panel image, Cancel preserving current
-nutrition, native serving edit/Save, exact saved nutrients, image-code provenance
-and inference evidence. `photo-group-review.spec.ts` (own photos, no import run) owns real saved-label gallery
-rendering; a dedicated label-thumbnail reload after nutrition Save is removed.
-`image-verification.service.unit.test.ts` retains missing-object, legacy backfill
-and changed-byte mismatch checks; this nutrition case no longer samples the
-manual `verifyImages` HTTP composition.
-
-The saved-photo evidence browser journey keeps attach/create distinctions, a real
-saved cover that decodes, native label-to-name editing and one phone overflow
-check. `photo-run-detail.preview.test.tsx` owns native review presentation and
-candidate comparisons; the separate saved-evidence failure/recovery and noisy
-care-label browser journeys retain field cross-checks against saved evidence.
-Exact thumbnail widths, 28px ledger rails and pseudo-element alignment are a
-deliberate presentation-verification gap, not repeated backend-connected checks.
-
-Vendor default freshness and successful apply/read-back belong in
-`finance-context.integration.test.ts`, beside the Expense review owner.
-`vendor-suggestion-context.integration.test.ts` owns independent evidence and
-fingerprint changes. Do not duplicate these API-only assertions in a browser
-journey that merely opens a Vendor link: that also races unrelated derived work.
-The emoji browser journey retains suggestion acceptance without an early write,
-compound emoji Save and explicit clear with HTTP read-back. It uses one Product
-Category and no longer visits Spending Category and filtered category pages.
-`category-connections.integration.test.ts` owns inherited mapping identity, the
-reverse category list and effective-category filtering, including blocked-child
-exclusion. The reverse-list disclosure, View all URL composition and final phone
-overflow sample are deliberate gaps; shared list responsive coverage remains.
-This removes the dedicated HTTP Vendor-apply smoke; production serialization
-conflicts remain separately tracked rather than being claimed fixed by this move.
-
-Decision-batching model fixtures assign answers by question ID, independently of
-question insertion order after asynchronous cache preparation. Reverse the returned
-answer order to exercise keyed routing; choosing by enumeration position makes a
-correct asynchronous batch fail nondeterministically.
-
-MCP budget-policy unit coverage waits for the actual in-memory SDK handler to
-start, then advances a fake clock across the read/model thresholds. Do not use
-a short wall-clock sleep between those budgets: a busy CI event loop can turn
-an intended 45ms response into a false 60ms model timeout. Drain late work before
-restoring real time; production deadline values remain unchanged.
-
-Structured Account creation reads back its saved identity and card numbers after
-the real editor closes. Its contract is schema/editor persistence; a searched
-list’s post-create indexing and invalidation are separate outcomes. Do not make
-this editor regression depend on the newly created row entering that list.
-
-Connected-record Plant/Project/Task and both purchase paths use one fixture
-graph with one shared brand. Booking-review prerequisites settle once before
-the real spending journey. Keep its stale-screen rejection/recovery, chosen
-Trade/Cost type, replay/altered-approval guards and exact positive money.
-`financial-booking-review.preview.test.tsx` is explicitly required native coverage
-for the real credit-purpose/Purchase pickers, no commit before review, reimbursement
-preview input and forwarding the exact accepted snapshot to commit. The existing
-`financial-booking-category.integration.test.ts` MCP reimbursement case owns the
-negative Expense, exact net total, Purchase allocation, retained explicit policy
-and effective reviewed-reimbursement policy. The second full browser credit
-journey is removed; dedicated Worker HTTP composition of that credit form and its
-post-credit detail read-back is the explicit gap, while real spending remains E2E.
-
-Reviewed booking corrections belong in the existing PostgreSQL category/refund
-owner: reimbursement reattachment preserves category and net money, transfer
-conversion retires its generated Expense and exposes non-booking coverage, and
-an edited Expense prevents conversion without changing its money or transfer.
-The removed API-only browser case exercised no UI. The financial-booking-review
-browser journey retains stale approval and replay; required native capability and
-PostgreSQL/MCP retain reimbursement interaction and stored outcomes;
-finance-evidence-journey retains source-record navigation and provider immutability.
-Dedicated HTTP routing for the two correction operations is no longer sampled
-by that case; generic operation transport and direct correction outcomes remain.
-
-Signed refund allocation belongs in the existing
-`purchase-settlement-candidates.integration.test.ts` stale-split owner. It rejects
-positive allocations against a refund, applies the exact negative split, refuses
-a stale replacement, and preserves itemized Expense money and Inventory rows.
-`purchase-settlement-allocation.unit.test.ts` owns negative proposal/default and
-sign/conservation rules; `financial-transaction-allocations.integration.test.ts`
-owns stored negative splits and mixed-sign refusal. The real split-settlement
-browser journey retains the shared dialog, explicit review and committed write;
-`match-statement.unit.test.tsx` drives the renderer's server-proposal and
-validated-save seam. A second full refund browser journey repeats that mechanism
-and is removed. Negative-form presentation and refund-specific HTTP composition
-are deliberate gaps. Source-record SQL owns immutable intake/replay, financial
-convergence SQL owns accepted-identity replay/attachment without another Expense,
-and saved-mail import retains real Run and Purchase read-back.
-
-Split-settlement browser coverage keeps the residual proposal's accepted edge,
-no allocation or Expense before approval, real split editing, and exact saved
-42.50/48.50 allocations without booking Expenses. Read stored outcomes after the
-dialog closes instead of opening a second Purchase merely to sample its amount
-row. `purchase-settlement-candidates.integration.test.ts` owns the 208-row ranking
-population, result cap, fully allocated exclusion, and transfer/distant/void/deleted
-exclusions. The batch ranking case retains exact-amount and merchant ordering.
-`allocation-detail-display.integration.test.ts` owns formatted allocation rows;
-`financial-transaction-allocations.integration.test.ts` retains stored signed
-splits and mixed-sign refusal.
-The full capped HTTP response, pending-date fallback button and post-save
-Purchase amount-row invalidation are deliberate composition gaps in the smaller
-split journey. The retained split scenario stays intact.
-
-Run-progress browser coverage loads one target-free Run and retains phase counts,
-paused-rate context, completed work, expandable Workflow handoffs, readable errors
-and phone visibility. The required `run-detail.preview.test.tsx` owns shared step
-counts and uncounted steps; `work-progress.unit.test.ts` owns unknown-population
-and paused-rate ETA rules. Do not repeat full database snapshots merely to inspect
-indeterminate animation CSS or a second progress-count presentation. Indeterminate
-count/ARIA presentation, animation/reduced-motion styling and the pre-sample
-generation fallback display no longer have dedicated native-browser sampling.
-
-Detail renderer and browser tests assert the continuous page: every section is
-accessible without a view switch. Select a section hash to verify scrolling,
-focus and history; empty sections retain headings, index entries and actions.
-When adding editable fields, complete editor-test record baselines, including
-nullable output projections, and run the untouched-submit regression: an absent
-baseline can make an untouched form appear changed. Run the web `typecheck`
-command after the final test fixture or query edit, even when its runtime test
-passes; an earlier check does not cover later test repairs. `typecheck:app`
-excludes all test files, including browser previews, and cannot verify them.
-Primary entity-list search uses the generated `searchQuery` URL key. Use
-`entityListHref` for declared column filters, and verify the visible search
-value when narrowing a fixture cohort. Obsolete `q` or view aliases can be
-discarded by route validation and leave a large unfiltered virtualized list.
-Routes with their own explicit `q` schema, such as combined records, retain it.
-Browser grouping journeys use the visible list Group control.
-Testing Library role queries use exact string names by default; Playwright's
-`exact` option is not a Testing Library option.
-Shopping-list quantity assertions scope to the named Ingredient row’s Need cell; worker-shared
-meal fixtures may legitimately produce the same quantity for other ingredients.
-A row filter’s `has` locator is relative to that row; do not repeat an ancestor
-region in the inner locator.
-Bulk-edit browser checks identify the named Bulk edit dialog. Date popovers also
-use the dialog role and can remain mounted while closing; an unqualified dialog
-locator can match both after Update and fail before the editor closure is checked.
-Keep the real closure and stored-write assertions.
-Connection-path assertions choose a visible matching link rather than the first
-DOM match, because collapsed/responsive branches can retain hidden duplicates.
-The two RTable connection-review journeys retain the Product and inverse
-Purchase list entry points, no early write, real confirmation and decoded
-`assessment.reviewBatch` application success. Verify the selected Expense link
-with unchanged cost, or the confirmed Purchase/Product link without inventing an
-Expense. Batch each prerequisite graph and finish at its committed read-back.
-`connection-review.integration.test.ts`'s Work/retry case owns endpoint retirement
-and the one application receipt; `purchase-products.integration.test.ts` owns
-bidirectional relation reads and deduplication. The removed visits to the other
-endpoint's detail page only sampled an empty Pending suggestions region; that
-cross-page empty-state composition is a deliberate gap. No scenario is deleted
-or split.
-Native-workspace session bootstrap assertions include the response body on a
-status mismatch so a server failure can be attributed without another replay.
-
-Daily aggregation fixtures keep same-day rows on one recent household day;
-minute offsets from wall-clock time can straddle midnight and correctly produce
-multiple day groups. Keep the transport-summary regression pinned to that boundary.
-
-For conditional expected output, construct expected data and assert once; keep
-`expect` calls and asymmetric matchers outside branches.
-
-An isolated E2E login starts without a linked member LedgerParty; the synthetic
-HMR household already has one. Before visiting a member-scoped surface such as
-Mail import, call `ensureMemberParty(page, name)`
-from `tests/e2e/fixtures/core.ts` so its queries can resolve the acting member.
-
-Create searchable picker fixtures through `createEntityFixture` so the entity
-kernel also creates their SearchDocument. A raw row insert can appear in the
-initial picker list and disappear when typed search resolves. For typed search,
-use the picker helper's query/code option to wait for the actual search response
-before selecting the record.
-The quality-exception browser journey batches its fixture graph, then accepts one
-exception, changes the evidence, reloads to establish that the waiver persists and
-clears it through the real UI. Keep required-note admission and saved
-Markdown links. Do not add a second accept/clear/accept cycle: the existing
-`data-quality.integration.test.ts` active-exception case owns clearing and score
-restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,
-blank-note refusal and stale evidence. Dedicated native active-exception clearing
-is no longer sampled; native stale clearing and server active clearing remain.
-Quality explanation journeys reveal the empty Quality column when a new record
-has no publication yet, and use the supported value-and-explanation refresh when
-the lazy explanation observes a newer result.
-
-AI usage recent-call browser coverage retains transport/status filtering before
-the row limit, search/Clear, refreshed provider choices and visible cost evidence.
-Do not repeat Provider/Model/Feature full-history picker permutations there.
-`ai-usage.integration.test.ts` owns exact provider/model/feature filters,
-case-insensitive query matching and filter choices older than every summary
-window; its separate recent-call case owns filtering before a small explicit
-limit. Model/Feature picker-specific HTTP composition is the deliberate gap;
-the Provider refresh interaction and real transport/status journey remain.
-
-Suggestion queue fixtures batch each independent prerequisite graph before
-publishing its proposals: Product/brand/Expense, Project/placement stock, matching
-Products/tag target, and each tag's supporting Products. Preserve entity writer
-defaults, identities, cardinalities and stock quantities. Proposal publication and
-revision reads stay after commit/frontier settlement; do not batch across a real
-review or stale-support edit. Pending read fixtures drain their registered
-publication before asserting visibility; never drain after a stale-support edit
-or member decision just to hide an authority-gate failure.
-
-Published-only tables do not own live generation fallback. Accessible abstention
-and saved-preview action blocking stay in the existing outcome/provider tests;
-the real prune-and-receipt browser journey uses explicit Product record evaluation.
-Price list/Work parity and durable waivers stay in the member journeys; redundant
-catalog-volume and query-plan assertions are not browser or correctness coverage.
-
-The queue/history journey confirms a connection in the global Suggestions table,
-reads back its Expense Product link and unchanged cost, then records incorrect
-feedback in automatic history. Decode the successful `assessment.reviewBatch`
-response, including its applied item, before storage read-back: the member
-Feedback event is persisted before the application transaction and is not a
-commit signal. Global and record review use the same
-`SuggestionActions` renderer. Do not repeat Product-detail and Expense-list visits
-for that write. `suggestion-list.integration.test.ts` owns both-endpoint filtering;
-the current-policy research recommendation in `assessment-product.integration.test.ts`
-owns non-actionable exclusion, and the event-only link case in
-`observations.integration.test.ts` owns unverified legacy history and automatic
-history exclusion from pending suggestions. Project/placement browser coverage
-retains record-level Pending suggestions interaction. Dedicated Product-detail and
-Expense-list pending-popover composition, their SPA navigation sample, and legacy
-audit-row wording are no longer sampled by this journey. Unasserted cover-image
-setup and a second Product fixture are no longer part of that journey.
-
-Dense-header browser coverage resizes one populated detail page across desktop,
-constrained desktop and phone widths, then drives the shared action/editor dialogs
-once on the phone. Do not repeat full navigation or seed an unrelated Product list
-for header coverage; category navigation stays in the emoji/category journey.
-
-Bulk-edit checkbox and nullable-reference journeys reopen their dialog on the
-current populated list after committed read-back, using idempotent row selection.
-They do not reload the document just to start another edit. The task-board
-cold-form journey batches its two fixtures and scopes the list to their shared
-name; keep its CPU-throttled initialization and dirty-field read-backs.
-
-The required `list-capabilities.preview.test.tsx` owns Select all matching through
-the real Task list, bulk dialog and outbound mutation: two loaded rows plus one
-unloaded identity, held next-page reads, retained filter scope and every selected
-ID in the write. `list-ids.integration.test.ts` owns canonical filtered cursor
-pages; the existing Task-guard case in `bulk-update.integration.test.ts` also
-selects matching Tasks, commits both and preserves an outside Task. Small real
-bulk-edit browser journeys retain native editing and database read-back. This
-replaces the 101-row all-matching E2E case; dedicated Worker HTTP composition of
-unloaded selection with its write is the deliberate remaining coverage gap.
-
-Infinite entity lists disable URL pagination synchronization; `pageSize` in a
-list URL does not shrink their loaded page. Real-server unloaded-selection fixtures
-must cross the actual default page boundary and hold the next-page response
-until admission; the required capability owner uses controlled paged responses. Do not shrink that cohort using an ignored URL parameter.
-
-For a same-kind fixture cohort without intermediate reads, use
-`createEntityFixtures`; it writes through the kernel in one transaction and
-settles the frontier after the cohort commits. This keeps background publication
-from repeatedly processing partially created fixture cohorts. Simulator product
-fixtures also settle the derived frontier before search-based native journeys begin.
-After a browser write, call `drainDerivedRefreshFrontier(db)` before a direct
-serializable fixture import such as `recordSourceTransactionRecords`. The
-offline search pump can otherwise update the shared refresh Job under the
-import's snapshot and fail it intermittently.
-For a mixed-entity prerequisite graph, use `createFixtureGraph` with its supplied
-kernel writer. It commits the graph and settles projections once; keep fixtures
-with intermediate browser reads outside that transaction.
-The callback also receives the transaction database for canonical name
-resolution. Shared fixture brands use `resolveProductBrandName` there instead
-of repeatedly creating a Vendor with the same name.
-Recipe costing, meal-food writes and review-proposal publication that consume the committed
-graph run after the transaction, rather than settling each prerequisite.
-Setup that consumes only identities uses `createRepoIdentity` or
-`createProductIdentityFixture`; retain the full-response fixture when its
-returned fields are under test. Validation, audit, financial allocations and
-publication still execute; unused presentation hydration does not.
-E2E `createFixture`, `createEntityFixture` and `createFixtureGraph` return only
-an identity and request only `id` through the kernel mutation reader. Browser
-assertions still load the real detail/list projections. After a browser write,
-use `performOperation` from `tests/e2e/support/dispatch-wire.ts` when direct
-read-back needs the commit: it observes the named operation and decodes success
-for singleton and batched responses. Poll only genuinely eventual work.
-Filter/sort SQL-plan matrices use production progressive core reads when
-available, including their baseline counts and unmatched-identity checks.
-`list-read.integration.test.ts` owns complete-row/enrichment equivalence;
-plan probes do not need unrelated media or quality hydration. The MCP all-kind
-selection matrix keeps each entity’s four reads together and overlaps at most
-two entities against its read-only seeded world, below the file’s pool size.
-Filter-oracle tests that compare only row identities likewise use core reads;
-retain their real PostgreSQL predicates and expected-ID assertions.
-Mutation fanout probes request identity receipts when measuring bounded write
-work; expanded response hydration may legitimately read related records and
-retains its read-contract owners.
-Query-scope probes inspect complete SQL templates before shortening report
-excerpts; telemetry truncation must not hide a forbidden join from the probe.
-Bind values remain outside observation.
-Reconcile derived inputs once after a mutation boundary before reading several
-fingerprints of that same state, rather than repeating a full reconciliation
-for each read.
-Filter journeys verify resulting rows and URL state after reload or history
-navigation. An open editor and an active chip may share the same accessible
-label; that transient duplication is not a failed filter. Keep shared range,
-quality and presentation permutations in their owning regressions rather than
-repeating them in each list journey.
-Purchase–Email browser review keeps the suggested candidate, dismissed state after
-reload, explicit Link, linked Email navigation, Gmail-original URL and member
-relevance. It does not repeat a missing-Google diagnostic preview or reload again
-after that failed read. `full-preview.integration.test.ts` owns the preview's
-classification routing and unchanged Email/evidence storage through the real
-operation/MCP composition with provider/model seams. Dedicated native preview
-button/error recovery sampling is a deliberate diagnostic-UI coverage gap.
-
-The statement Suggestions journey seeds its category, account and pending candidate
-in one graph and begins after decision labels are published. It retains named
-candidate attachment, reviewed Vendor correction, pending spending, explicit clean
-bulk confirmation, supersession money and dismissal. `statement-transaction-kind.unit.test.ts`
-owns the no-label clean-acceptance guard, and `statement-suggestions.integration.test.ts`
-owns applied source `matched` state. `finance-evidence-journey.spec.ts` retains
-real source-list/detail navigation and immutable provider facts. The removed
-unlabeled-state visit and final source-status visit no longer sample those
-specific UI states; no review/write outcome or money assertion is removed.
-
-The Gmail browser journey owns Connect, synthetic consent through the real OAuth
-callback, persisted read-only credentials, Gmail API discovery and exact retained
-MIME identity/content. It asserts that original acquisition writes no Purchase,
-Expense or stock. It no longer creates retailer/statement/Product prerequisites
-or opens a prepared Run. `report-slot.unit.test.tsx` drives the actual prepared
-form with two exact Product suggestions: approval stays disabled until trade and
-an explicit choice, choosing the second candidate sends that Product ID, and
-commit waits for confirmation. This renderer owner uses injected transport;
-it does not prove prepared-choice HTTP composition or native-browser interaction.
-`prepare-commit.integration.test.ts` owns exact-ASIN reuse, committed Product
-binding and replay. `import-order-convergence.integration.test.ts` owns sampled
-arrival orders, conserved money, source links and photo stock; Product merge
-integration owns retained identifiers and shared-location stock. The removed
-joined OAuth → statement → retailer → merge → approval → reconciliation browser
-composition is a deliberate gap, including conflicting-choice server projection
-and a merge between preparation and commit. The deleted retailer capture helper
-only constructed text from synthetic HTML and called a synthetic extraction port;
-it did not exercise an authenticated production browser peer.
-`purchase-import-run.spec.ts` retains real saved-mail import, Run navigation and
-committed Purchase/Email read-back; it does not drive prepared-choice approval.
-`purchase-emails.spec.ts` owns related Email navigation and the Gmail-original URL.
-The processing/accepted-source case in `email-purchase-links.integration.test.ts`
-checks the exact original URL in the real Email report. Dedicated original-link
-composition on the OAuth-ingested Email and Product-list multi-select merge launch
-remain deliberate gaps.
-
-Allocation explanation browser coverage keeps mixed-trade contributor expansion,
-phone bounds and allocated Project evidence on one detail document. The existing
-`field-explanation.integration.test.ts` mixed-adjustment case owns clearing a
-principal trade, recomputing the adjustment to its Purchase fallback and preserving
-stored null. Do not repeat that API-only update with a second browser document;
-this removes dedicated HTTP sampling of that explanation refresh, while the
-native contributor interaction remains. Location explanation fixtures commit
-Product, Location, acquisition and Inventory together. Keep the Product-detail
-location link, partial quantity discrepancy, tracking policy and nested beneficiary
-evidence in one document. `stock-context.unit.test.ts` owns comparable partial-gap
-and tracking-policy derivation; `quantity-ledger.integration.test.ts` owns quantity
-evidence. Omit the preceding list visit and its repeated explanation. Partial-gap
-list-cell/Unknown-marker presentation and that cell's explanation popover are
-deliberate composition gaps; the real detail explanation remains.
-
-Receiving after photo inventory exercises the Purchase's real per-line
-`ReceiveExpenseDialog`: possible photo match, no-write default, required typed
-quantity and exact received amount. Purchase and
-Expense compose the same dialog; do not repeat a full Expense/Purchase route
-pair just to assert its default again. Dedicated Expense action-launch composition
-and collapse/reopen quantity sampling are removed; typed-quantity admission,
-stock persistence and real Purchase composition remain.
-Continue from the initial no-write review into additional-unit entry without
-closing and refetching unchanged context; finish at the exact saved stock.
-`receiving-context.integration.test.ts`'s receiving-defaults case reads before
-and after stock creation and owns current-stock guidance. The dialog still uses
-fresh `receivingContext` on every open. The Nothing new arrived button's close-only
-composition and frontend fresh-stock reopen are deliberate gaps; opening review
-still asserts zero stock writes.
-
-Inheritance browser coverage owns the real reset from a matching explicit Project
-into live Purchase inheritance, with stored-mode readback and visible provenance.
-`purchase-inheritance.integration.test.ts` owns exact Project shares on detail
-and list explanations and absence of a stored override. Do not add tax fixtures,
-extra detail visits or Purchase-cell overflow checks to the reset journey.
-
-`financial-booking-review.spec.ts` owns the native booking form, stale preview,
-fresh approval and replay guards. `import-order-convergence.integration.test.ts`
-owns statement-first source arrival and conserved money. Booking category belongs
-to its aggregate Expense, not a stored Purchase category override. The dedicated
-booking and reconciliation browser forms are not repeated in Gmail's OAuth/MIME
-journey; their composition with that same OAuth household is a deliberate gap.
-Socket
-lifecycle checks use a warm baseline and two read/write rounds with real idle
-expiry, without a request-load population. Coordinator retirement authorization,
-acknowledgement and operation fences run in PostgreSQL with injected coordinators.
-The removed Worker retirement journey also covered the real Durable Object's
-live-Run disposal refusal, SDK destruction and empty-inventory acknowledgement,
-post-retirement HTTP 410, dispatch refusal and transcript removal. Those real-host
-boundaries are deliberate coverage gaps; PostgreSQL authorization tests do not
-replace them.
-Spending-preview equivalence uses a small explicit graph for inherited and
-explicit categories, split Projects, refunds and signed adjustments. Keep
-the resolver/allocation comparison; do not generate household-sized random
-populations or repeat the same merge solely at larger cardinality.
-Give each inherited merge source an independent Purchase without another
-matching Expense override, so broad Purchase scope cannot hide a missing
-Vendor-default, Purchase-default or mapped-category predicate. Assert that each
-isolated Expense actually inherits the changed category before comparing the
-preview; a productless Vendor path needs a food-related spending profile.
-The adjustment-only Purchase also needs a changed default: merely finding a
-`default` allocation row does not prove that preview reclassifies it.
-The jsdom browser harness supplies matching client and offset viewport dimensions
-for real virtualizers; a zero client viewport renders no rows even with cached data.
-A virtualized table's DOM contains only its mounted window. Cursor-pagination
-fixtures that assert every row at once must fit that window; bounded-viewport
-journeys inspect rows across scrolling instead of treating unmounted rows as missing.
-Locate recipe ingredients through the named Ingredients region, not an `aside`
-tag that couples the journey to its layout. Scope ingredient-link assertions to
-the recipe's ingredient list items. Entity
-previews can repeat the same ingredient name elsewhere in a sidebar; a broad
-text assertion can become ambiguous when the preview opens.
-Detail relationship-link assertions likewise select their owning named region;
-connected records and provenance can repeat the same reference label.
-Relation-table assertions target the visible record link by its href within
-the section; shortcode metadata can be mounted but hidden.
-When removing shared UI bindings, render every affected header branch or run
-the app TypeScript check before handoff. Helper-only tests and lint do not
-establish that a list or detail header can render with its actual props.
-Direct component tests of feature-backed pickers call `installFeatures()` from
-`~/features/registry` themselves; the browser harness supplies context, not the
-route's registry installation.
-
-Upload and photo-finalization tests configure `captureBackgroundQueue` when
-running in Node. Image processing always schedules work; do not suppress its
-queue seam with persisted enable/pause settings. Assert durable jobs and their
-captured wakeups, draining only when the scenario needs consumer behavior.
-
-The offline browser pump accelerates full deterministic rebuilds. A journey
-asserting the interval before the next hourly pass overrides `e2eDerivedRefresh`
-with a plain `provide()` fixture; prerequisite helpers still publish explicitly.
-Do not let the accelerated pump repair the missing publication being asserted.
-
-Do not overlap PostgreSQL and E2E locally: they contend for
-containers, workerd, browsers, and database connections. For changed workspace packages, run their affected test rather than every
-package. A cross-package contract change may need its consumers too.
-Verify every named test path exists before invoking a runner: Vitest can ignore
-a nonexistent selector when another supplied file matches. Report only the
-files and cases the run actually exercised.
-Keep database regressions scoped to the failure: one sort/page-boundary case can
-establish stable order without enumerating every field and direction. Do not
-append query matrices to image or ownership cases with a default test deadline.
-For a named-case handoff, copy the exact replay selector or confirm the literal
-test title with `rg` before invoking the runner. A title inferred from the task
-description can select no cases; that setup failure supplies no regression evidence.
+`pnpm test` runs the fast projects (`unit`, `mcp-contract`, `ui`,
+`capability`, `scripts`, `packages`). `integration` and `workers` need
+services; CI's `vitest-ci` target runs every merge-gate project. `preview` is
+opt-in; `live-eval` is never part of the gate.
 
 CI retries a failed Playwright test, or a failed test in a service-backed
-Vitest project (`integration`, `capability`, `preview`,
-`workers`), once; Node unit, UI, tooling and package projects never retry, and
-locally nothing retries.
-A test that passes only on retry is reported as flaky, not failed. The second
-time a test is reported flaky, fix it or delete it, recording the named
-failure and the deleting commit in a GitHub issue so it can be
-restored once fixed. Do not skip it in place. Read the standard runner report
-and confirm that the intended cases executed: skipped, pending, and empty
-selections are not validation evidence. Never raise the retry count.
+Vitest project (`integration`, `capability`, `preview`, `workers`), once.
+Node unit, UI, tooling and package projects never retry, and nothing retries
+locally. A test that passes only on retry is reported flaky. The second time a
+test is reported flaky, fix or delete it; record the named failure and the
+deleting commit in a GitHub issue so it can be restored once fixed. Do not skip
+it in place, and never raise the retry count.
 
-Scope artificial CPU throttling to the interaction whose race it guards;
-restore normal speed for unrelated setup and read-back. A shared detail
-renderer's section matrix renders once per entity and checks all declared
-sections together.
+## Vitest runtime traps
 
-Table record-identity links open an inspector. For full-record assertions,
-follow its Open full details action or navigate directly; clicking the row's
-anchor does not prove a route transition. Keep shared chip-overflow layout
-coverage in required table capabilities; a finance journey verifies the hidden
-category's accessible action and full-record links without repeating hover
-tooltip text.
+- `fsModuleCache` does not key on `import.meta.glob` matches. After a merge or
+  branch switch adds or removes matched files, a missing loader (for example
+  `No operation module loader` from `operation-handlers.server.ts`) can be a
+  stale transform. Run `pnpm --dir apps/web exec vitest --clearCache` before
+  diagnosing it, and never weaken loader admission.
+- Browser preview discovery stays under `src/`. Workspace symlinks in
+  `node_modules` can lead back to the repository or old worktrees and must not
+  become duplicate entries.
+- The `ui` project shares module state between files. Its teardown clears
+  Sonner notifications as well as React trees.
+- Auth configuration tests await each constructed instance's `$context` inside
+  the invocation that supplied its bindings. Better Auth starts async plugin
+  initialization; checking only synchronous options leaves work running when
+  Vitest closes its console. Do not suppress console errors or add delays.
+- Keep pure logic imported by standalone Node subprocesses in alias-free `.ts`
+  files; Vitest applies the app aliases, subprocesses do not. Temporary
+  subprocess workspaces declare their module type. Build-provenance fixtures
+  clone their synthetic Git template with Git rather than copying `.git`.
+- Decision-batching model fixtures answer by question ID, not enumeration
+  position; reverse the returned order to exercise keyed routing.
+- MCP budget-policy tests wait for the in-memory SDK handler to start, then
+  advance a fake clock across thresholds. A wall-clock sleep turns a busy CI
+  event loop into false timeouts. Drain late work before restoring real time.
+- Daily aggregation fixtures keep same-day rows on one recent household day;
+  wall-clock minute offsets can straddle midnight.
+- A virtualized table mounts only its window (the jsdom harness supplies real
+  viewport dimensions); fixtures asserting every row must fit it.
+- Direct component tests of feature-backed pickers call `installFeatures()`
+  from `~/features/registry` themselves.
+- Upload and photo-finalization tests running in Node configure
+  `captureBackgroundQueue`. Image processing always schedules work; assert the
+  durable jobs and captured wakeups, and drain only when the scenario needs the
+  consumer. Do not suppress the queue with persisted settings.
+- When adding editable fields, complete editor-test record baselines including
+  nullable output projections, and run the untouched-submit regression: an
+  absent baseline makes an untouched form look changed. Optional nested form
+  controls stay unmounted until requested, because mounting a numeric
+  controller can turn a null parent into a dirty object.
+- When removing shared UI bindings, render every affected header branch or run
+  the app typecheck; helper tests and lint do not prove the header renders.
+- Detail renderer tests assert the continuous page (every section reachable,
+  empty sections keep headings and actions); a section matrix renders once per
+  entity.
 
-Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
---ensure` after changing the recorded source revision. The prebuilt provenance
-gate can reject a run after workflow or documentation edits too; a
-`source-changed` startup failure executed no scenarios and is not a test result.
+## Required component-browser tests
 
-Secondary record actions live in the contextual header overflow. Every detail-page navigation that is followed by a secondary action uses `gotoDetailActions` with that action as its ready locator, or calls `openDetailActions` before selecting it. Repeat this after returning to the same record; a prior dialog does not leave the next navigation's overflow open. Use the declared section hash when targeting a section, and never use a hidden secondary action as the page hydration marker. Assert secondary-action availability inside the open Entity actions group before dismissing the overflow. Closed overflow owners stay mounted, so explanation checks select the visible popover rather than every popup node.
+The `capability` Vitest project runs the roster in `requiredCapabilityTests`
+(`apps/web/vitest.config.ts`): production renderers in headless Chromium with
+the real Tailwind CSS. It is part of `pnpm test` and the CI Vitest shards,
+which install Chromium first. Other `**/*.preview.test.tsx` files stay opt-in
+through `pnpm --dir apps/web test:preview` and are not merge-gate coverage until
+added to the roster. Select a required owner with
+`pnpm test:file <path> --project capability`; otherwise a workspace link can
+also match the optional `preview` project. CI shards upload browser failure
+attachments (`.vitest/attachments/`) for the merged report.
 
-Target a browser spec as `pnpm test:e2e <spec>` without an extra `--`. E2E
-serves `dist/`, so build it before a standalone run; `verify:local` does. The
-coupled Workers harness rebuilds a stale web Worker itself. A
-standalone Playwright request context inherits project storage state unless it
-sets empty cookies and origins. workerd drops an idle keep-alive socket after 5s
-while Playwright reuses it, so the E2E fixtures retry an idempotent
-`page.request`/`request` call once on `ECONNRESET` ("socket hang up"); a POST
-or PATCH is never replayed.
+Shared list, table, card, detail and photo-review presentation has one owner
+here: populated, empty and loading states, responsive layout, overflow, focus
+and interaction state. Use actual declarations, column modules and renderers
+with schema-valid responses through the existing operation seam. Record
+outbound requests; do not build a second filter engine. A capability matrix
+replaces route × viewport × state copies. Native previews keep real layout,
+media queries, scrolling and observers.
 
-Hydration waiting polls the authenticated shell's attached hydrated marker on
-browser animation frames, avoiding locator retry backoff after the shell is
-already ready. Keep this single DOM condition; do not nest an auto-waiting
-locator assertion inside `toPass`. Session and sign-in diagnostics
-run only after timeout and distinguish an unauthenticated SSR shell from a
-client bundle that never hydrated.
+Keep server inclusion and exclusion, full-filter totals and stored effects at
+the real HTTP or PostgreSQL boundary, and keep a small real-browser composition
+suite for navigation, history, inspectors, grouped loading and retry, asset
+rendering and consequential edits. Component responses cannot establish those.
+Use the `ui` jsdom tier for a failure that does not need native browser
+behavior; do not cover the same capability in both tiers.
 
-Request-correlation browser fixtures use a valid Cloudflare ray (hex with an
-optional data-center suffix): the server rejects arbitrary `cf-ray` strings.
-Browser dispatch can batch concurrent queries. A mock that parses a single
-operation envelope uses `unbatchFor` before its per-operation handler. Keep
-lazy-fetch assertions sensitive to every envelope; after refusing a batch,
-count individual operation attempts separately from transport fallback.
-Browser diagnostics require decoded RPC success, not only HTTP 200. Reuse
-`operationResult` in `apps/web/tests/e2e/support/dispatch-wire.ts`: single
-responses require `ok === true`; streamed NDJSON items require both settlement
-`r.ok === true` and operation `r.value.ok === true`. A successful settlement can contain a failed operation.
-Compare related layout bounds in one browser evaluation so their rectangles
-come from the same render state.
+Disclosure previews wait for visible content after opening: the body mounts
+before its entrance opacity transition finishes.
 
-Playwright E2E and the workerd harness serve the built Worker; Nx's
-`@cubby/web:build-cf` alone decides whether it is current (a content-keyed
-cache hit, or a rebuild). Entry points run it first: `pnpm test:e2e` and the
-other human-facing scripts call it, and the browser targets declare it in
-`dependsOn`. A harness never rebuilds, and there is no per-worktree harness
-lock: a rebuild while another of the checkout's suites runs replaces the
-Worker under it, so finish edits before starting overlapping suites. The only
-machine-wide lock, `/tmp/cubby-native-device.lock`
-(`apps/web/tooling/dev-services/harness-lock.ts`), serializes simulator lanes
-(`sim-e2e.ts`); the Mac import lane keeps its own fixture lease.
+## Playwright E2E
 
-A spec's `test.use` of a
-worker-scoped option (`video`, `trace`, `screenshot`, browser launch options),
-even to its default, moves its tests into extra workers that each boot another
-browser, database, and Worker harness; only `workerdProfile` may split
-workers. Review fixture options directly rather than policing source spelling
-with a test. Each split costs a shard a
-worker restart, so a signed-out spec uses the test-scoped
-`test.use({ signedIn: false })`, and Gmail specs are named `gmail.*.spec.ts`
-so the one-worker `Gmail profile tests` project runs them together at the start
-of a shard. Record video for a
-run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
-cell-edit tests retry opening and filling as one action.
+### Build and serve
 
-Temporary CI startup profiling accompanies existing navigation annotations during
-#3025's shared-cost investigation; `CUBBY_E2E_STARTUP_PROFILE=1` enables it locally.
-It records the shell marker's mutation time, the helper's observed-ready time,
-same-origin static script counts/bytes/latest responses and Chromium thread CPU
-counter deltas. It captures no application URLs, request bodies or record data.
-Task CPU includes script/layout/style work: do not add those categories or
-concurrent resource durations, or interpret across-case sums as lane wall time.
-Missing/reset CPU counters are null; diagnostic errors are annotated rather than
-replacing the correctness result. Keep the actual hydration wait unchanged.
-Use the measurements to choose one shared fix, then remove this temporary probe
-once attribution and that fix's hosted comparison are established.
+- Playwright and the workerd harness serve the built Worker. Nx's
+  `@cubby/web:build-cf` alone decides whether it is current (a content-keyed
+  cache hit or a rebuild). `pnpm test:e2e` and the browser Nx targets run it
+  first; `test:e2e:ci:desktop` does not, so run
+  `pnpm --dir apps/web run build:cf` after source changes before a focused
+  replay with that script. A harness never rebuilds.
+- There is no per-worktree harness lock: a rebuild while another suite in the
+  checkout runs replaces the Worker under it, so finish edits first. The only
+  machine-wide lock (`apps/web/tooling/dev-services/harness-lock.ts`,
+  `/tmp/cubby-native-device`) serializes simulator lanes (`sim-e2e.ts`).
+- A spec's `test.use` of a worker-scoped option (`video`, `trace`,
+  `screenshot`, launch options), even to its default, moves its tests into
+  extra workers that each boot a browser, database and Worker harness. Only
+  `workerdProfile` may split workers; do not add a worker option for one spec.
+  Signed-out specs use the test-scoped `test.use({ signedIn: false })`. Gmail
+  specs are named `gmail.*.spec.ts` so the one-worker `Gmail profile tests`
+  project runs them together.
+- Record video with `CUBBY_E2E_VIDEO=1`. `CUBBY_E2E_STARTUP_PROFILE=1` (always
+  on in CI) annotates navigation with startup timings; these are diagnostics,
+  never correctness results, and task CPU categories must not be summed.
+- A standalone Playwright request context inherits project storage state unless
+  it sets empty cookies and origins.
 
-Responsive table toolbars mount both desktop and phone branches during SSR.
-After navigation, use a retrying `toHaveCount(1)` assertion on the role locator
-and `toBeEnabled()` before a strict search action. Playwright resolves strict
-locators before waiting for hydration-disabled controls to become enabled;
-the assertion preserves uniqueness while the responsive branches settle.
-Do not select `.first()` or add a sleep to bypass duplicate controls.
+### Waiting for readiness
 
-Playwright request interception disables Chromium's HTTP cache. Scope synthetic
-retailer documents to the retailer page, never the shared browser context or
-the Cubby application page. Install transient interception immediately before
-the action that needs it, including opening UI that fetches automatically.
-Remove it once its regression has been observed,
-before later navigations or reloads. When a test holds a response, release its
-gate and await `page.unrouteAll({ behavior: "wait" })` so fulfillment finishes
-before interception is disabled. Table-row fixtures used by selection actions
-must include TanStack's `row.id`, not only `row.original.id`.
-Image prerequisites upload synthetic bytes
-to the isolated worker object store; do not fulfill application image URLs with
-page routes. Assert image decoding as well as visibility. Retired-route HTTP status
-contracts use `request.get`; browser scenarios own visible not-found behavior.
-When a journey already exposes the destination link, follow that link to exercise
-client navigation. When a record name occurs on links to multiple entity kinds,
-combine its accessible name with the canonical href before choosing a link.
-Keep document loads and reloads that own direct-link, SSR, or
-persistence regressions. Seed incidental prerequisites through supported
-fixtures instead of repeating unrelated create and search journeys. Ordinary
-passing runs keep assertions and automatic failure screenshots; explicit
-screenshots belong to visual comparisons or intentional demo/exploration
-output. Use the existing authenticated request context for fixture setup before any
-page load. A synthetic socket-only browser peer can use the same-origin session
-response as its document; its separate capture page still exercises the real
-external DOM. A link transition expected to stay within the app can
-assert that `performance.timeOrigin` is unchanged, so a plain anchor cannot
-silently turn it into another document load. When comparing card geometry across
-enrichment, await the card and ancestor animations after switching list views
-before recording the baseline; a visible loading field can precede the settled
-view gutter. Preserve the exact before/after size assertions. After a column
-customizer action removes its focused row, dialog focus restoration can consume
-the next keyboard activation. An action retry must require the complete order
-to remain unchanged and stop once the exact expected order is visible; never
-repeat a relative move after it has applied or weaken the ordering assertion.
+- Hydration waiting polls the authenticated shell's hydrated marker on
+  animation frames. Keep that single DOM condition; do not nest an auto-waiting
+  locator assertion inside `toPass`.
+- Goal-driven journeys wait for the record's editor defaults and requested
+  picker options before asking the decision model to act. For repeated
+  targetless taps, open the known picker with SDK locators. Readiness waits do
+  not replace stored-data read-back, and never treat a caught model error as
+  success.
+- Secondary record actions live in the header overflow. Navigate with
+  `gotoDetailActions` using the action as its ready locator, or call
+  `openDetailActions` first, including after returning to the same record.
+  Never use a hidden secondary action as the hydration marker. Closed overflow
+  owners stay mounted, so select the visible popover.
+- Responsive table toolbars mount desktop and phone branches during SSR. Use a
+  retrying `toHaveCount(1)` and `toBeEnabled()` before a strict search action;
+  do not use `.first()` or a sleep.
+- Disclosure bodies mount only after opening. Explanation journeys open
+  Technical details before asserting rule identifiers. Lazy quality
+  explanations wait for the row's loaded assessment; a new record with no
+  publication reveals the empty Quality column.
+- Between tooltips, scope to the target's tooltip and `[data-open]`; the
+  previous one stays mounted while closing.
+- Fast header pointer probes wait for the dnd-kit target announcement before
+  release. RTable's placeholder transition can eat clicks, so cell-edit tests
+  retry opening and filling as one action. After a column customizer removes
+  its focused row, a retry must require the full order unchanged and stop once
+  the expected order appears; never repeat a relative move.
+- Native relation journeys wait for the destination detail marker; a
+  successful tap is not navigation. Await card and ancestor animations before
+  recording a geometry baseline. Scope CPU throttling to the guarded race.
+
+### Locators
+
+- Testing Library role queries match string names exactly by default; `exact`
+  is a Playwright option.
+- Use `chooseOption` for enum Pickers rendered as button comboboxes;
+  `selectComboboxItem` fills a searchable entity Picker input.
+- Choose a visible matching link, not the first DOM match: collapsed and
+  responsive branches keep hidden duplicates. When a name appears on links to
+  several entity kinds, combine it with the canonical href.
+- Scope by the owning named region: recipe ingredients through the
+  Ingredients region, relationship links through their section, sidebar
+  assertions by the section's own heading. Relation-table links target the
+  visible record href; shortcode metadata can be mounted but hidden. Assert the
+  container is unique instead of using `first()`.
+- A row filter's `has` locator is relative to that row. Shopping-list quantity
+  assertions scope to the Ingredient row's Need cell.
+- Name the dialog: date popovers also use the dialog role and can stay mounted
+  while closing.
+- Rows with interactive facts expose a title identifier; navigate by it, not
+  the aggregate row, whose center can hit an explanation control. Use
+  `openCellExplanation` when the explanation rail's host column is not known.
+- Table record-identity links open an inspector. Follow Open full details or
+  navigate directly for full-record assertions.
+- Sort with the named Sort by button: a header click can open its menu. Open
+  Filters before clearing predicates. Compare column order by `data-column-id`.
+- Grouping journeys use the visible list Group control.
+- Locate saved collection rows by value; a combined edit can reorder them.
+- Dismiss a modal inspector before using the toolbar beneath it; never bypass
+  focus containment with hidden-role queries or forced clicks. Compare related
+  layout bounds in one browser evaluation.
+
+### Requests and RPC results
+
+- workerd drops an idle keep-alive socket after 5s while Playwright reuses it,
+  so the fixtures retry an idempotent `page.request`/`request` call once on
+  `ECONNRESET`. A POST or PATCH is never replayed.
+- Browser diagnostics require decoded RPC success, not HTTP 200. Reuse
+  `operationResult` in `apps/web/tests/e2e/support/dispatch-wire.ts`: single
+  responses need `ok === true`; streamed NDJSON items need both settlement
+  `r.ok` and operation `r.value.ok`. Decode the write's success (for example an
+  `assessment.reviewBatch` applied item) before storage read-back; events such
+  as member Feedback persist before the application transaction commits.
+- After a browser write, use `performOperation` from the same module when
+  direct read-back needs the commit. Poll only genuinely eventual work.
+- Browser dispatch can batch concurrent queries. A mock that parses one
+  envelope uses `unbatchFor`; count operation attempts separately from
+  transport fallback.
+- Request-correlation fixtures use a valid `cf-ray` (hex, optional colo).
+- Request interception disables Chromium's HTTP cache. Scope synthetic retailer
+  documents to the retailer page, install interception just before the action
+  that needs it and remove it before later navigations. When holding a
+  response, release its gate and await `page.unrouteAll({ behavior: "wait" })`.
+  Table-row fixtures for selection actions include TanStack's `row.id`.
+- Image prerequisites upload synthetic bytes to the worker's object store;
+  never fulfill app image URLs with page routes. Assert decoding as well as
+  visibility. A spec may declare `objectStoragePublicUrl` for an HTTPS source
+  identity; its transport must forward to the stored bytes.
+- Retired-route status contracts use `request.get`; browser scenarios own
+  visible not-found behavior.
+- Follow a destination link the journey already exposes, and assert that
+  `performance.timeOrigin` is unchanged for in-app transitions. Keep document
+  loads only where they own direct-link, SSR or persistence regressions.
+- Status assertions on bootstrap requests include the response body. Explicit
+  screenshots are for visual comparison or demo output only.
+
+### List URLs and filters
+
+- Entity-list search uses the generated `searchQuery` key; build declared
+  column filters with `entityListHref`. Other list URLs use the descriptor's
+  declared `urlKey` (for example `q` on Expense and Purchase search). Obsolete
+  aliases are dropped by route validation and leave an unfiltered list.
+- Assert the active filter control and include unrelated records with a small
+  page size; an ignored filter can pass on a small local corpus. Fuzzy search
+  can include neighbors, so assert intended records, not exact totals.
+- Infinite entity lists ignore `pageSize` in the URL. Unloaded-selection
+  fixtures must cross the real default page boundary and hold the next page.
+- Filter journeys verify rows and URL state after reload or history
+  navigation. An open editor and an active chip can share a label.
+- A create-dialog journey that knows its record name scopes the background
+  list with `searchQuery` while opening `?create=true`.
+- When changing shared list view controls, update interaction tests for every
+  consumer, including USDA lists.
+
+### E2E fixtures and derived work
+
+- An isolated E2E login has no linked member LedgerParty. Call
+  `ensureMemberParty(page, name)` from `tests/e2e/fixtures/core.ts` before a
+  member-scoped surface such as Mail import.
+- E2E `createFixture`, `createEntityFixture` and `createFixtureGraph` return
+  only an identity; assertions still load real projections. Create searchable
+  picker records through `createEntityFixture` so the SearchDocument exists,
+  and wait for the picker's search response before selecting.
+- Use `createEntityFixtures` for a same-kind cohort and `createFixtureGraph`
+  for a mixed prerequisite graph: both commit once and settle projections
+  once. Its callback's transaction database resolves shared brands with
+  `resolveProductBrandName`. Keep fixtures with intermediate browser reads
+  outside the graph, and run work that consumes the committed graph (recipe
+  costing, proposal publication) after it. Independent journeys use separate
+  graphs.
+- After a browser write, call `drainDerivedRefreshFrontier(db)` before a direct
+  serializable import such as `recordSourceTransactionRecords`; the offline
+  search pump can otherwise fail it intermittently.
+- Suggestion fixtures publish proposals after commit and drain their registered
+  publication before asserting visibility. Never drain after a stale-support
+  edit or member decision to hide an authority-gate failure.
+- The offline browser pump accelerates deterministic rebuilds. A journey that
+  asserts the interval before the next pass overrides `e2eDerivedRefresh` with
+  a plain `provide()` fixture so the pump cannot repair what it asserts.
+- Seed incidental prerequisites through fixtures, using the authenticated
+  request context before any page load, instead of repeating unrelated create
+  and search journeys.
+
+### Reports and logs
+
+CI artifacts and trace modes are in [CI](../ci.md#test-lanes). A failed E2E
+test attaches the harness's scrubbed workerd logs (`harness.getLogs()`); the
+local reporter keeps them in `playwright-report`. Each Playwright worker prints
+`<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed or
+`--ui`) test can inspect Durable Object, queue, workflow and R2 state while the
+worker lives. Local native runs keep their `sim-e2e` artifacts.
 
 ### Workerd test runtime and profiles
 
-Vitest projects never start the built Worker: CI builds it only for the
-browser shards. Agent and Worker journeys belong in Playwright (the optional
-purchase-import lane); a PostgreSQL rule behind them belongs in an ordinary
-integration test that injects the binding (`setCfEnv`).
-A runtime borrowing a `withTestDb` database must close in `afterEach` before
-the next reset. Reset diagnostics include backend state, wait type and backend/state ages, without
-SQL text or connection credentials, so recurring foreign-session failures can be
-attributed before weakening the ownership guard. Suite-level reuse leaves unowned Worker database sessions and
-causes reset to fail; `afterAll` cleanup is too late.
-Instrumented repository reads that need a separate pg pool use
-`tooling/postgres-pool.ts`'s `createPostgresPool` and await `pool.end()` in `finally`.
-It registers clients with the reset owner and drains evicted clients' sockets;
-bare pg Pool.end can resolve before those sockets close. Keep the same connection
-limit and query instrumentation when switching a test to this existing owner.
-Purchase-agent scenarios capture source/build provenance at suite boundaries and
-write one checksummed bundle with separate per-case reports. Their Workers still
-close after each case; Mail-only scenarios omit object storage.
+Vitest projects never start the built Worker; CI builds it only for browser
+shards. The `workers` project runs source modules in workerd through the
+Cloudflare pool. Agent and Worker journeys belong in Playwright; a PostgreSQL
+rule behind them belongs in an integration test that injects bindings with
+`setCfEnv`.
 
-Native relation journeys scroll the navigation row back into view after inspecting
-its badges, then wait for the destination detail marker before inspecting
-inverse evidence. A successful tap alone does not establish navigation.
-
-The Plant connection browser owner keeps its multi-hop task/project paths, both purchases,
-Open all plantings and Project/Task composition. The existing connected-record SQL owner checks
-Vendor purchased-Product traversal and duplicate Expense paths. Dedicated Vendor
-Product-section rendering and its path-copy check are a presentation tradeoff;
-do not repeat those visits inside the Plant journey.
-
-Rows with interactive facts expose a separate title identifier; navigation
-tests target that title rather than the aggregate row, whose center can land
-on a field explanation control.
+A runtime borrowing a `withTestDb` database closes in `afterEach`, before the
+next reset; `afterAll` is too late and leaves unowned sessions that fail reset.
+Tests that open independent database runtimes drain their server sessions
+before reset: pool shutdown can finish before PostgreSQL removes the backend,
+so identify them by tag or captured backend IDs and wait. Never terminate
+unowned sessions to hide a cleanup failure. Reads that need a separate pool use
+`createPostgresPool` from `tooling/postgres-pool.ts` and await `pool.end()` in
+`finally`; it drains evicted sockets that a bare `Pool.end` can leave open.
 
 A profile (`WORKERD_PROFILES` in `workerd-harness.ts`) routes each production
 queue consumer to one of:
@@ -738,304 +336,80 @@ queue consumer to one of:
   `max_batch_timeout: 0`.
 - `dropped`: `local-offline-peers` acknowledges and discards each message.
 
-`WORKERD_PROFILES` owns profile names, peers, queue modes and harness-lock
-selection. Choose the declared profile that exercises the real boundary rather
-than adding a spec-specific worker option.
+Choose the declared profile that exercises the real boundary. Durable Objects
+are real in every profile, and the harness seeds the synthetic USDA release.
+Starting a profile throws when its routes and the Worker's queue consumer names
+differ; that check covers consumer names only, not producers or other
+bindings. Scripted model and capture seams verify orchestration, not live
+research quality or Gmail authorization.
 
-Every profile includes `local-offline-peers` as the sink for dropped queues.
-Durable Objects live in the built Worker and are real in every profile; the
-harness seeds the synthetic USDA release into `USDA_RELEASES` before any USDA read. Starting a
-profile throws when its routes and the compiled Worker's queue consumer names
-differ in either direction. That check covers consumer queue names only, not
-producers, Durable Objects, Hyperdrive, or service bindings, so it is not
-exhaustive binding coverage. A separate cold-start probe of every coupled
-consumer is deliberately omitted: required agent scenarios exercise real
-dispatch, and paying another Worker startup to test harness wiring is not
-worth the ordinary correctness gate's cost.
-Required offline/Gmail browser journeys and purchase-agent integration scenarios
-exercise the other profiles. Separate absence-of-consumer probes for those
-harness profiles are deliberately omitted.
+The `Purchase import agent` project (`tests/e2e/purchase-import-run.spec.ts`,
+`workerdProfile: "purchase-agent"`) drives the browser against a scripted model
+and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It runs in CI
+as an optional job (`pnpm --dir apps/web test:e2e:ci:purchase-import`).
 
-A browser spec may declare `objectStoragePublicUrl` for an HTTPS source identity
-while its bucket remains local. Its asset transport must forward requests to the
-actual stored bytes; do not substitute an image or loosen capture URL guards.
-Scripted model/capture seams verify orchestration and source transport, not live
-research quality, remote downloads or Gmail authorization.
-
-The `Purchase import agent` Playwright project
-(`tests/e2e/purchase-import-run.spec.ts`,
-`test.use({ workerdProfile: "purchase-agent" })`)
-runs the browser against the purchase-agent workerd harness with a scripted
-model and gateway; `e2eRuntime.purchaseAgent` loads each test's script. It is
-configured against the purpose's declared model and effort; derive ordinary
-inference expectations from `importRunAgentManifest` so policy changes do not
-leave stale model pins in browser journeys. Explicit escalation scenarios
-still name the expected transition.
-The structured-feature gateway answers both OpenAI Responses and Anthropic
-Messages tool streams: the household funding ladder can start an import audit
-on Claude even when the feature declares an OpenAI model. Mail settlement
-scenarios require the audit response before asserting the terminal Run status.
-Completed Mail report fixtures assign their Emails to the Run; another Run's
-current Email status does not prove this Run's recorded outcome.
-This project is
-excluded from the required desktop shards and runs in CI as an optional job
-(`pnpm --dir apps/web test:e2e:ci:purchase-import`). Hold the model with a
-`{ gate }` step to observe a live Run instead of racing it; a Run the browser
-starts has no id until the click, so scripts use `currentRunId`. Prefer it over
-a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
-for server fences the UI cannot observe.
-Branch on the current public tool-result shape (`purchase_import_read.mail_read` returns
-the retained Email's `content` and `checksum`; `purchase_import.commit` and
-`purchase_import.mail_resolve` settle it). Generate an item title once per fixture and reuse
-it in the retained original and proposal: tests share a worker database, so
-unrelated fixtures must not collide on Product name/manufacturer. Repeated
-orders for the same item reuse the Product reference returned by resolution.
-
-Garden journeys batch their Plant, Location and existing Planting prerequisites.
-The populated Location journey owns its native section create action and both
-Planting rows; shared empty-section/count behavior has no dedicated browser case. Dedicated empty-Location section sampling is
-removed. Journal creation retains immediate display and a fresh Location document
-read-back of the same saved entry; an extra intervening Planting reload adds no
-write coverage. Dedicated Planting-journal reload composition is the deliberate
-gap. Keep status persistence, inferred timeline and real photo-thumbnail coverage.
-
-Independent garden create/edit/journal, meal product/ingredient/manual-food,
-recipe nutrition basis/catalog/scale, and photo evidence/recovery/rejection
-journeys use separate graphs. Product photo creation owns upload coverage;
-label nutrition review starts from an attached verified image. Keep prerequisite
-writes in `createFixtureGraph` when no intermediate read is asserted, so derived
-refresh runs against the committed graph once.
-
-CI's web E2E artifact is Playwright's built-in HTML report and retained traces.
-Each Playwright job uploads them under an artifact name containing the tested
-commit SHA. CI traces only the retry of a failed test (`on-first-retry`);
-local runs keep failure traces (`retain-on-failure`). Open
-`playwright-report/index.html` from the downloaded artifact to inspect the
-run. Local native runs keep the `sim-e2e` artifacts, which record their build,
-process, simulator, watchdog, scenario and replay evidence. These established
-artifacts remain useful diagnostics; a custom run bundle is not required for
-every E2E journey or runtime acquisition.
-
-A failed E2E test attaches the Worker harness's structured workerd logs
-(`harness.getLogs()`, credential-shaped values scrubbed) to the Playwright
-result, where the HTML report can open the attachment. The local reporter also
-keeps its workerd logs in `playwright-report`. Each Playwright worker prints
-`<origin>/cdn-cgi/local/explorer` at startup, so a paused (`PWDEBUG`, headed, or
-`--ui`) test can be inspected for Durable Object, queue, workflow, and R2 state.
-The URL is only valid while that worker is alive.
-
-List URLs in browser fixtures use the filter descriptor's declared `urlKey`
-(for example, `q` for Expense and Purchase search). Assert the active filter
-control and include unrelated records with a small page size when testing a
-filtered record; an ignored filter can pass against a small local corpus and
-hide the target behind pagination in CI. Fuzzy searches can legitimately include
-neighboring records: assert the intended records and their relevance rather
-than treating a fixture prefix as an exact total-result contract.
-
-When changing shared list view controls, update interaction tests for every
-consumer, including USDA lists. Preserve their query and destination regressions
-when replacing the control's selectors.
-
-Lazy quality-explanation journeys wait for the row's loaded assessment before
-opening it; initial trigger visibility can precede deferred enrichment. Compare
-column order by `data-column-id`, since enrichment and responsive labels can
-change header text without moving a column. Complete quality cells expose the
-score and spoken status together; assert the loaded cell value. When moving
-hover or keyboard focus between timestamp cells or chart bars, scope assertions
-to the target value's tooltip and `[data-open]`: the previous tooltip can remain
-open briefly during focus transfer as well as mounted during its closing animation.
-
-Connections workspace coverage explicitly selects its record before resizing to
-phone, then waits for and dismisses the modal Graph inspector before using the
-underlying Paths list toolbar. Selection retains inspector state across the
-breakpoint; an open sheet correctly hides the toolbar from accessibility. Keep
-the real close interaction, linked destinations/Back and native handoff; do not
-use hidden-role queries or forced clicks to bypass modal focus containment.
-
-Scope sidebar assertions by the section's own heading, not arbitrary descendant
-headings: nested panels and relationship graphs can repeat the same heading.
-Assert that the intended container is unique; do not use `first()` to hide a
-second matching record. Replay against the final rebased source when main
-changes the affected layout.
-
-## Required component-browser tests
-
-The `capability` Vitest project runs the explicitly selected shared list/table/explanation
-coverage in `vitest.config.ts`. Production renderers run in headless Chromium
-with the real Tailwind CSS. It is part of `pnpm test` and the Vitest shards;
-those runners install Chromium before running the tests. No additional runner
-is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
-`pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
-until migrated into the required roster. Select a required owner with
-`pnpm test:file <path> --project capability`; otherwise a workspace link can also
-match the optional preview project. Explicit `--project preview` retains the full
-optional preview command. Each Vitest shard uploads its blob and browser
-failure attachments (`.vitest/attachments/`) for the merged CI report.
-
-`spend-chart.preview.test.tsx` owns the real detail chart's roving keyboard focus,
-single tab stop and portal readouts bounded at both viewport edges, with the chart
-inside an overflow-clipped container. PostgreSQL `detail-data.integration.test.ts`
-owns twelve-month zero filling and distinct live Expense sums. The continuous
-Product E2E keeps the evening calendar-day Activity label; it no longer repeats
-chart keyboard/geometry checks through a full server-backed record. Dedicated
-Product hero chart-composition sampling is the deliberate gap in that move.
-
-The compound date editor owner verifies local drafts, atomic replace/clear and
-responsive nested popovers on desktop and phone.
-
-Shared list, table, card, detail and photo-review presentation capabilities have
-one owner here: populated/empty/loading states, responsive layout, overflow, focus and
-interaction state. Use actual declarations, column modules and renderers with
-schema-valid responses through their existing operation seam. Record outbound
-requests; do not implement a second filter engine. A capability matrix replaces
-route × viewport × state copies. Native previews retain native layout, media
-queries, scrolling and observers; only jsdom setup supplies browser emulation.
-
-`enum-field-display.unit.test.tsx` owns declared enum labels and tones;
-`navigation-count-badge.unit.test.ts` and dashboard integration own count semantics.
-The enum/color browser journey's repeated route visits and computed CSS comparisons
-are omitted. Exact active-icon and token colors remain a visual-verification gap.
-
-Keep server inclusion/exclusion, full-filter totals and stored effects at the
-real HTTP or PostgreSQL boundary. Keep a small real browser composition suite
-for navigation/history, actual inspectors, grouped/nested loading and retry,
-asset rendering and consequential edits. Component responses cannot establish
-those contracts. Photo-review candidate strength, failure/retry and approval
-availability use the real review renderer with schema-valid responses; proposal
-mutation/inference rules stay in PostgreSQL coverage, and approval, stock
-receiving, variant merges and Expense linking retain real browser journeys.
-When moving coverage, name the retained owner or the deliberate
-coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
-failure that does not need native browser behavior; avoid duplicating the same
-shared capability in both tiers.
-
-`expense-category-summary.integration.test.ts` owns category summaries beyond
-25 linked lines, full money/read-back, and explicit transaction itemization policy
-reset to the Purchase fallback with stored null and source provenance. The finance
-browser journey keeps two refund lines for readable labels and read-only
-explanations. Its per-entity enum reset is no longer sampled in a second document;
-`inheritance.spec.ts` retains the real generic Use inherited interaction and
-stored-mode readback. Use `openCellExplanation` when the runtime rail’s host
-column has not been established; assessment placement does not identify every
-derived-value explanation control.
-
-The Wardrobe browser journeys retain ownership edits, grouped category navigation,
-subtype inclusion and section exclusion. The mobile sticky-header coordinate
-check is deliberately omitted: creating a scrolling inventory population solely
-to assert header position costs a full browser journey for a presentation detail.
-Shared responsive capabilities do not establish sticky behavior; verify that
-visual detail during relevant layout work instead.
-
-Purchase/Product relationship permutations belong in
-`purchase-products.integration.test.ts`'s live-expense/explicit-evidence union case:
-combined movement roles, deduplication, deleted-row handling, paging and both
-relation directions. The phone relationship journey retains planned/explicit-link
-presentation and Open all navigation, with its Vendor, brand, Product, Purchase
-and future Expense committed as one prerequisite graph. The separate desktop
-read-only role matrix is removed: it repeated those stored semantics and shared
-rendering without a member write. Desktop combined-role and direct inverse-page
-composition are deliberate browser coverage gaps; the phone route and real SQL
-relation consumers remain.
-
-Product ownership overviews keep the three movement states, ownership guidance
-and their supporting sections. Build each acquired/exited state in one fixture
-graph; uncertain ownership keeps its explicit Product link before the future
-Expense. The visible Runs section covers composition without repeating an empty
-report query and matching its copy for every ownership state.
-
-Fast header pointer probes wait for the intended dnd-kit target announcement
-before release; completion of mouse input alone does not establish that React
-has processed drag-over. Keep the actual final header-order assertion.
-
-The column-layout browser journey owns native header pointer/keyboard ordering,
-locked edges, pointer pin transfer, downward customizer drag placement and
-session reset. Repeated per-route audit timestamp formatting and pin/unpin permutations
-are omitted; the date composition journey retains the browser timestamp tooltip.
-The removed pinned-order round trip no longer has a dedicated browser regression.
-
-Purchase Email review retains dismissal across reload, replacement with a link,
-Email original navigation and failed-preview evidence preservation. Vendor Email
-link composition stays in `purchase-import-run.spec.ts`; the review journey
-opens the Email directly from its Purchase row.
-
-The structured identifier browser journey applies Add, explicit primary choice
-and Replace in one draft, checks the exact saved secondary/primary values, then
-removes the saved secondary and checks the survivor. It avoids two intermediate
-save/reopen cycles. Locate saved collection rows by their value: a combined
-Add/Replace can reorder them, so a positional Remove label is not stable identity.
-The existing `collection-patch.integration.test.ts` case
-"adding identifiers preserves existing values and primary, and explicit promotion
-retains both" owns add-only preservation and promotion without deletion;
-`collection-edit.unit.test.ts` owns baseline-preserving Add, atomic identity
-Replace, explicit promotion and removal requests. `structured-value-field.unit.test.tsx`
-owns removal surviving a same-record refresh. The add-only and promotion-only
-browser save states are deliberate gaps.
-
-Work queue routing keeps real Either → member filtering, deduplicated copied
-source codes, cleared selection, scoped source href, routing URL and actual
-Email navigation. It omits the reload, No value → Either permutations and mobile
-resize from this journey. Shared queue SQL owns filtering before counts/paging
-and retained Run authority; unresolved-account No value picker composition,
-member-filter reload persistence and Work queue mobile width are deliberate gaps.
-The separate queue scroll/sort/inspector journey remains. List delete creates
-both Tasks in one committed fixture graph; its held delete, six-times CPU
-throttle, pending disablement, precommit existence, row removal and final 404
-read-back remain unchanged.
+- Derive inference expectations from `importRunAgentManifest`. The gateway
+  answers OpenAI and Anthropic tool streams; Mail settlement scenarios await
+  the audit response before asserting terminal Run status.
+- Hold the model with a `{ gate }` step to observe a live Run; scripts use
+  `currentRunId` for a Run the browser starts. Prefer this project for
+  anything a Run or Purchase page shows.
+- Generate an item title once per fixture and reuse it (tests share a worker
+  database). Completed Mail report fixtures assign their Emails to the Run.
 
 ## Test and dev data factories
 
-One layer builds data for Vitest, E2E, and the dev corpus:
+One layer builds data for Vitest, E2E and the dev corpus:
 `apps/web/tooling/factories/`. `buildEntity(entity, overrides, { faker })`
-returns the entity's parsed create input (the entity list and types come from
-the generated create schemas; `ENTITY_DEFAULTS` is exhaustive, so a new creatable
-entity cannot skip it). `createEntity(context, ...)` writes it through the
-entity kernel. A factory never defaults a relation id; pass it. E2E specs call
-`createEntityFixture(page, entity, overrides)` from `tests/e2e/fixtures/core.ts`
-and keep domain seeders in `tests/e2e/fixtures/*.ts`. `seedBaseWorld` seeds Home
-and the taxonomy roots for every lane.
+returns the parsed create input; `DOMAIN_DEFAULTS` supplies only the fields a
+create needs beyond its schema defaults. `createEntity(context, ...)` writes it
+through the entity kernel. A factory never defaults a relation id. E2E specs
+call `createEntityFixture` and keep domain seeders in `tests/e2e/fixtures/*.ts`.
+`seedBaseWorld` seeds Home and the taxonomy roots for every lane.
 
 Faker fills only fields nothing asserts on, from a per-test seed (E2E title
-path, Vitest test name via `testFaker()`, dev seed 1). A name a locator or
-assertion uses is an override shaped `${label} ${deterministicToken(...)}`
-(`uniqueName` in E2E); shortcodes come from `@cubby/shared` and UPCs are valid
-literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
-`testFaker()` prints it when the test fails. Retailer corpora, statement CSVs,
-costing and nutrition numbers, and scenario states stay literal. `build:cf`
-fails if Faker reaches the Worker bundle.
+path, `testFaker()` in Vitest, seed 1 for dev). A name a locator or assertion
+uses is an override shaped `${label} ${deterministicToken(...)}` (`uniqueName`
+in E2E). Shortcodes come from `@cubby/shared`, UPCs are valid literals, and
+retailer corpora, statement CSVs, costing, nutrition and scenario states stay
+literal. E2E records a `faker-seed` annotation; `testFaker()` prints its seed
+on failure. `build:cf` fails if Faker reaches the Worker bundle.
 
-When a create-dialog journey already knows its synthetic record name, scope the
-background list with `searchQuery` while opening `?create=true`. Rendering the
-unrelated corpus behind the dialog is not part of form, upload or capture
-coverage. Keep filter and full-list composition checks in their owning journeys.
+Repository fixtures:
 
-Keep kernel fixtures declaration-backed. The Drizzle v1 RC spike
-(`git show fa514df72:docs/research/drizzle-v1-spike.md`) confirmed that
-table-derived insert schemas omit virtual inputs and declaration-level defaults;
-`drizzle-seed` generates foreign keys and writes directly to tables. Those are
-storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
+- Construct domain fixtures through the `createRepoEntity` writer roster, or
+  the owning `create…Fixture` and `make…Input` helpers, so required defaults
+  survive. Setup that consumes only IDs uses `createRepoIdentity` or
+  `createProductIdentityFixture`.
+- Do not substitute `insertWithShortcode`: it skips writer defaults and
+  reference resolution. Create a valid record first and update storage only for
+  a historical or invalid state the writer cannot express.
+- Create Runs with `ensureRun` and an actor. For member-scoped purposes, link a
+  member LedgerParty's `userId` first. Seed paused or failed states by updating
+  the created row; build progress with its owning schema. System scheduling
+  tests seed `systemActor().userId`.
+- Evidence-revision and withdrawal fixtures set an explicit initial
+  `observedAt`; a wall-clock default mixed with fixed revision dates eventually
+  inverts the chronology.
+- Equivalence fixtures assert that the changed input actually applies before
+  comparing outputs, so a broad scope cannot hide a missing predicate.
+- Plan and filter-oracle probes use production core reads; query-scope probes
+  inspect complete SQL templates, not truncated telemetry.
+
+Keep kernel fixtures declaration-backed. Table-derived insert schemas omit
+virtual inputs and declaration defaults, and `drizzle-seed` writes directly to
+tables; neither replaces `buildEntity`/`createEntity`.
 
 ### Migration rehearsals
 
 Use `withMigrationDatabase` (`apps/web/tooling/test-database-lease.ts`) for
-migration regressions. It owns an empty IntegreSQL lease, connection setup, and
-cleanup on success or failure; the current-schema Vitest template cannot test a
-predecessor. Use `migrateDatabase` from `tooling/db-migrate.ts` with exact `through` migration folder names
-under `apps/web/drizzle/` to select and apply the boundaries. Keep predecessor-schema fixtures
-and preservation assertions in the test; bootstrap credentials, database names,
-and CREATE/DROP lifecycle belong to the shared lease infrastructure.
+migration regressions. It owns an empty IntegreSQL lease, connection setup and
+cleanup; the current-schema Vitest template cannot test a predecessor. Apply
+boundaries with `migrateDatabase` from `tooling/db-migrate.ts` and exact
+`through` folder names under `apps/web/drizzle/`. Keep predecessor-schema
+fixtures and preservation assertions in the test; credentials, database names
+and CREATE/DROP lifecycle belong to the lease.
 
-Rehearse from the actual deployed prefix through the canonical migration. Delete a migration's rehearsal once production has applied
-it and its schema readback is verified; the invariants it guarded are then
-held by domain write/readback tests (for example, source-claim-family tests own
-invalid alias-family refusal, and fact-evidence-subject tests own canonical
-Product/Purchase proof and idempotent preservation).
-
-Provider discovery scenarios turn Mail import on and assert the exact targeted
-queries paged, interleaved new-mail reads, and that completed coverage chains no
-further pass.
-
-Disclosure bodies mount only after opening. Explanation journeys open Technical details before asserting rule identifiers or descriptions; filter journeys use Clear all and drive inline presence controls directly. Table title subtitles can repeat category links, so scope category assertions to their declared column.
-
-Optional nested form controls stay unmounted until requested: mounting a numeric controller can expand a null parent into an object and mark an untouched bulk field dirty. The bulk-edit checkbox journey retains the regression that unrelated fields must stay out of the write.
-
-List sorting journeys click the named Sort by button; a column header also contains its menu trigger, so a center click can open the menu instead of sorting. Open Filters before clearing its active predicates.
+Rehearse from the deployed prefix through the canonical migration. Delete a
+rehearsal once production has applied its migration and the schema read-back
+is verified; domain write and read-back tests then hold its invariants.

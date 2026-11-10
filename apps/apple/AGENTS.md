@@ -1,7 +1,7 @@
 # apps/apple agent rules
 
 Native app: SwiftUI (deployment floors in `project.yml`) + `CubbyKit` package + `cubby` CLI
-harness. This document is the current native implementation guidance.
+harness.
 
 [ITERATION.md](ITERATION.md) owns focused tests, previews, headless and simulator
 loops. [Validation](../../docs/agents/validation.md) owns check selection and delivery.
@@ -32,12 +32,10 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   CubbyAPI and CubbyAPISupport, so App and CLI callers import only CubbyKit.
   Prefer property inference for anonymous structural values. Generated models
   live in their own SPM target; derived conveniences live in
-  `API/GeneratedTypeExtensions.swift`.
-  An erased response uses one consumer adapter for its required fields, retaining raw JSON
-  and diagnostics. [Generic paths](../../docs/agents/generic-paths.md) owns report composition:
-  adapters validate and format server figures, never derive domain figures or disabled reasons.
-  Pin fields used by a JSON adapter at the server schema boundary so a rename fails validation. A wire type the generator gets wrong is fixed in the generator
-  (`apps/web/generator/http-api/`), not re-typed by hand. The
+  `API/GeneratedTypeExtensions.swift`. A JSON adapter for an erased response validates and
+  formats server figures, never derives domain figures or disabled reasons; pin its fields at
+  the server schema boundary so a rename fails validation. A wire type the generator gets
+  wrong is fixed in the generator (`apps/web/generator/http-api/`), not re-typed by hand. The
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
   types for those schemas (`apps/web/generator/http-api/type-overrides.ts`).
@@ -80,16 +78,11 @@ them `axiom:axiom-*`), plus the relevant platform skill.
 
 ## Hosted workspace boundary
 
-Run evidence and Connections share `HostedWorkspaceView`. Connections owns the
-graph, path inspector, and connection review UI; do not rebuild those in SwiftUI.
-Entity details retain native fields and navigation, with a scoped full-screen
-Connections entry. iPhone/iPad use a full-screen cover; Mac uses a resizable
-workspace window. The global graph route hosts the same React workspace directly.
-Run overview, actions, photo progress, and record routing remain native.
-The browser-session POST is the explicit exception to generated entity routes;
-never send the bearer to WebKit or ambient cookies to bootstrap. Use a fresh
-nonpersistent store, exact-origin main-frame checks, and captured credential
-revisions across every await. See [DESIGN.md](DESIGN.md#hosted-workspaces).
+Connections and Run evidence are one hosted React workspace
+([DESIGN.md](DESIGN.md#hosted-workspaces)); do not rebuild them in SwiftUI. Its
+browser-session POST is the one exception to generated entity routes: never send the
+bearer to WebKit or ambient cookies to bootstrap, and use a fresh nonpersistent store with
+exact-origin main-frame checks.
 
 ## Language and style
 
@@ -118,8 +111,8 @@ revisions across every await. See [DESIGN.md](DESIGN.md#hosted-workspaces).
   parameters, never strings.
 - Every SwiftUI view gets a `#Preview`, fed by `PreviewFixtures` where practical; API-typed
   fixtures are generated (see Generated files).
-- Screen density (inline titles, compact token spacing, count style, toolbar-placed actions, hero sizing): see
-  `apps/apple/DESIGN.md` § Density.
+- Screen density (inline titles, compact token spacing, count style, toolbar-placed actions,
+  hero sizing): [DESIGN.md](DESIGN.md#density-and-feedback).
 - `#Playground` blocks (`import Playgrounds`) only under `#if DEBUG`. They are exploration
   aids for Xcode, not a verification tier.
 
@@ -142,7 +135,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 
 - **Native coverage.** `packages/schemas/src/native-coverage.ts` is the single declaration of
   which manifest renderer, slot, and hero-action ids native draws. Each id is `implemented`,
-  `generic`, `ownedElsewhere`, or `handoff`; `unsupported` no longer exists. A web-only id is a
+  `generic`, `ownedElsewhere`, or `handoff`. A web-only id is a
   reviewed `handoff` with `web: { section?, query?, label }` and a `reason`; the coverage unit test
   pins the roster. Native draws it as one `OpenOnWebButton` row where the surface stood, plus a
   record More item; build every web URL with `WebHandoff`. An `implemented` hero action needs a plan in `nativeHeroActionPlans`
@@ -173,61 +166,43 @@ None is committed; edit the generator or its inputs, never the output. A missing
   `PresenceFilterValue` or the generated wire enum (`RunStatus`) for values.
 - **Client methods.** A `CubbyClient` method that is exactly one call with its JSON body (or a
   GET's generated `Input.Query`) is a `CLIENT_PASSTHROUGH_METHODS` entry in
-  `swift-operations.ts`, not hand-written Swift; anything that maps or branches stays in
+  `apps/web/generator/http-api/native-methods.ts`, not hand-written Swift; anything that maps or branches stays in
   `API/CubbyClient.swift`.
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
   `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`,
   `display-format.json`, `household-day.json`). The Swift tests and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
   implementations.
-- Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
-  `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  nutrition/cost estimates (the compact cell and the long `ValueFormat.estimate` form) run the
-  same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
-  `ValueFormat` in `FFI/ValueFormat.swift`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
-  `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
-  directly; Swift `ValueFormatTests` and web
-  `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Plain dates,
-  grouped counts and empty text also use Rust through `ValueFormat` and the web
-  formatting helpers; plain dates need no timezone conversion. Timestamps stay locale-aware
-  platform code. Never format a catalog value, amount or count
-  with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
-  vector, then Rust.
-- Recipe scaling is single-sourced in Rust too (`recipebridge/src/scaling.rs` plus `scale_amount`):
-  web calls it as WASM, native through `cubby-ffi`'s `scale_*` exports wrapped by CubbyKit
-  `RecipeScaling`/`RecipeCookPlan`. Swift never multiplies an amount or clamps a factor; which
-  units scale (not a pan size or oven temperature) is Rust's call.
+- Value formatting and recipe scaling are single-sourced in Rust
+  (`recipebridge/src/display_format.rs`, `scaling.rs`; see
+  [generic paths](../../docs/agents/generic-paths.md) "Formatting"), called through
+  `cubby-ffi` and wrapped by CubbyKit `ValueFormat`, `RecipeScaling` and `RecipeCookPlan`.
+  Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`). Never
+  `.formatted()` a catalog value, amount or count in a view, never multiply an amount or clamp
+  a factor in Swift, and never re-implement a rule: edit the vector, then Rust. Timestamps
+  stay locale-aware platform code.
 - Never restate a `SharedConstants` value in Swift. The GTIN rule itself is single-sourced in
   `recipebridge::scan_code_gtin14` (ISBN-10/13 or 8/12/13/14 digits; general GTIN check digits
   are not enforced).
 
 ## Verification
 
-- `pnpm apple <cli|mac|ios|sim|gen|test>` from the repo root launches each product (README "Running").
-- `swift build --package-path apps/apple/CubbyKit`
-- `swift test --package-path apps/apple/CubbyKit`
-- `xcodegen generate --spec apps/apple/project.yml` (when `project.yml` changes)
-- App builds prepare the xcframework through the shared preparation entrypoint.
-- `swift format lint --strict --configuration apps/apple/.swift-format --recursive` (see
-  `apps/apple/tooling/apple-check.sh`, the `apple:lint` Nx target) gates
-  formatting; run
-  `swift format --in-place --configuration apps/apple/.swift-format --recursive` to fix.
-  Keep copied Markdown fixtures/resources in the native build inputs; [CI](../../docs/ci.md) owns the
-  hosted Apple lanes and cached-pass replay.
-- **Visual and interaction checks:** the Xcode MCP renders `#Preview`s headlessly and drives a
-  simulator (tap, swipe, type, capture) — setup, loops, and failure fixes in
-  [docs/xcode-mcp.md](docs/xcode-mcp.md). Preferred over launching the app
-  to look at one screen.
+`pnpm apple check [host|app|lint]` runs native formatting, FFI preparation, CubbyKit host
+tests and simulator compilation; [README](README.md#verification) owns the hosted and
+device lanes and [ITERATION.md](ITERATION.md) the focused loops. Fix formatting with
+`swift format --in-place --configuration apps/apple/.swift-format --recursive`. Run
+`xcodegen generate --spec apps/apple/project.yml` when `project.yml` changes. For visual
+checks, render `#Preview`s or drive a simulator through the
+[Xcode MCP](docs/xcode-mcp.md) rather than launching the app to look at one screen.
 
 ### Universal links
 
-The AASA lives at `https://cubby.nickysemenza.com/.well-known/apple-app-site-association`
-(served by apps/web). Apple's CDN caches it (up to ~24h) and the app fetches it at install —
-reinstall the app to refetch after a change. For a dev device, add
-`applinks:cubby.nickysemenza.com?mode=developer` to the entitlement and enable Developer Mode.
-Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemenza.com/LOC-XXXX`.
+The AASA is served by apps/web at `/.well-known/apple-app-site-association`. Apple's CDN
+caches it up to about 24 hours and the app fetches it at install, so reinstall after a
+change. A dev device needs `applinks:cubby.nickysemenza.com?mode=developer` in the
+entitlement and Developer Mode.
 
-### Traps that cost real time (fixed; do not rediscover)
+### Traps that cost real time
 
 - Multiple Buttons within one `List` row use `.buttonStyle(.borderless)` so each receives
   only its own tap. Automatic row button styling can dispatch adjacent actions together;
@@ -255,8 +230,6 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
 - `Cubby.xcodeproj` is generated and gitignored; Git operations do not regenerate it. Run `pnpm apple gen` after
   switching branches before opening Xcode directly, so newly added Swift files appear in the
   project ("Cannot find … in scope").
-- Running `knip --cache` before `packages/wasm` exists poisons `node_modules/.cache/knip`
-  ("Unresolved imports …recipebridge_bg.js" on every later pre-commit); `rm -rf` that cache.
 - Symptom: a re-presented `.sheet(item:)` shows the previous item's state even though the item's
   `id` changed. Rule: state lifetime follows the data's identity — own the model in the presenter
   (build it alongside the item) or resync with `.task(id:)`; never seed `@State`/`@StateObject`

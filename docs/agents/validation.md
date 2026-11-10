@@ -62,11 +62,11 @@ internal structure.
 Choose the cheapest boundary that can expose the failure. Classify individual
 cases in mixed service-backed suites: SQL elsewhere in a file does not make
 every assertion an integration check. Before moving a case, read its destination
-owner and preserve the existing cases. Headless HTTP/native
-service checks establish stored values, totals, provenance, ownership and error
-contracts; a small browser journey establishes navigation, editing and
-supported visible outcomes. Deterministic read-back establishes whether the
-action worked. Required native-browser previews own shared presentation and interaction
+owner and preserve the existing cases. Headless HTTP/native service checks
+establish stored values, totals, provenance, ownership and error contracts; a
+small browser journey establishes navigation, editing and supported visible
+outcomes. Deterministic read-back establishes whether the action worked.
+Required native-browser previews own shared presentation and interaction
 capabilities once, using production renderers and injected read responses. Keep
 route composition, navigation and persisted outcomes in real E2E/HTTP journeys;
 previews cannot prove server filtering or writes. See the
@@ -95,14 +95,23 @@ refinement without becoming permanent coverage.
 Do not assert SQL statement or query counts, timing budgets, or ratchets in
 tests: they fail on unrelated additive changes and protect cost, not data.
 Find N+1 work with [performance review](#performance-review) measurements.
-A test reported flaky twice is fixed or deleted in the next PR; `test.fixme`,
-`skip` and quarantine count as deletion and are removed.
+Keep load generation and throughput sampling out of correctness regressions:
+use the smallest fixture graph that crosses the relevant page or batch boundary,
+force external admission refusals at the provider seam, and assert committed
+outcomes and forbidden work directly. A test reported flaky twice is fixed or
+deleted in the next PR; `test.fixme`, `skip` and quarantine count as deletion
+and are removed ([CI retry mechanics](validation-tests.md#vitest-projects-and-ci-retries)).
 
 Delete a test when it duplicates a retained journey, freezes internal
-structure (declarations, mocks, call order, copy, file layout), reproduces an
-old bug outside the dangerous rules, guards performance, or spends material CI
-time on a rare cold-start, legacy-recovery or harness permutation. Catalog-wide
-"every entity" checks keep one representative per distinct runtime path.
+structure (declarations, constants, mocks, call order, copy, file layout),
+repeats cases of one shared primitive, reproduces an old bug outside the
+dangerous rules, guards performance, or spends material CI time on a rare
+cold-start, legacy-recovery or harness permutation; such permutations need no
+equivalent replacement. Catalog-wide "every entity" checks keep one
+representative per distinct runtime path. For every deletion, record the
+stronger retained regression, lack of runtime behavior, or deliberate rare-case
+tradeoff in the deleting commit, and preserve consequential ordinary-workflow
+regressions.
 
 When a test earns retention, extend the existing owning workflow first. Prefer
 one E2E scenario at the real user/system boundary when it covers the failure;
@@ -112,24 +121,16 @@ pending-state, presentation, and behavior-preserving refactors normally reuse
 existing checks; exercising a framework primitive through mocked transport does
 not by itself justify another test or required browser capability.
 
-For new tests, library rendering smoke checks, prop forwarding, SVG node counts,
-exact style attributes, and one-off migration parity checks are disposable
-verification. Use temporary browser probes, screenshots, or scripts for these
-and remove them before committing. Do not turn implementation-time checks into
-permanent tests merely because they passed or caught an issue during development.
-Retained assertions exercise meaningful user or system outcomes through the
-smallest existing test setup that can expose the failure.
+Library rendering smoke checks, prop forwarding, SVG node counts, exact style
+attributes, and one-off migration parity checks are disposable verification:
+use temporary probes, screenshots, or scripts and remove them before
+committing, even when they caught an issue during development.
 
-Keep an isolated test only when its named failure cannot reasonably be observed
-by the retained flow or an existing compiler/generator guard. Remove tests of
-declarations, constants, source spelling and mocks, repeated cases of the same
-shared primitive, and copy-only assertions. Do not render empty pages across
-the entity catalog to compare section headings with the same declarations or
-to repeat a shared column-composition check. Required populated capability
-tests own shared rendering regressions; retain focused purpose-specific cases
-and real route composition journeys. A test must not eagerly import every
-feature to warm a catalog matrix; let only its rendered lazy fills load. An accessible action name used to
-drive a real interaction still has value; incidental wording is not an outcome.
+An accessible action name used to drive a real interaction still has value;
+incidental wording is not an outcome. Do not render empty pages across the
+entity catalog to compare section headings with the same declarations, and do
+not eagerly import every feature to warm a catalog matrix.
+
 Never assert the size, non-emptiness, or exact membership of a growing declared
 set (the entity catalog, manifest, registries, generated output) or count a
 test's own iterations: assert the per-member property instead. Do not compare
@@ -137,142 +138,78 @@ two outputs of the same generator. Hold a hand-written registry to declarations
 with types, not a key-set test: `satisfies Record<GeneratedUnion, …>` in
 TypeScript, an exhaustive `switch` over a generated per-status enum in Swift
 (`native-coverage.ts` emits `Implemented…ID`). Pinning a documented deliberate
-exception stays. Removing a registry test also removes exports that existed only to expose its internals to that test.
-Prioritize ordinary household workflows. Expensive cold-start, legacy-recovery,
-and test-harness failure permutations may be deleted without equivalent
-replacement when their rare failure is not worth the CI and maintenance cost.
-For every deletion, record the stronger retained regression, lack of runtime
-behavior, or deliberate rare-case coverage tradeoff in the deleting commit.
-Preserve consequential ordinary-workflow regressions before removal.
-
-Reuse a healthy HMR session for iteration and Nx-cached Worker builds.
-Finish source edits and formatting before starting a web build, and keep the
-checkout unchanged through its E2E run. Nx's `build-cf` key is the build's
-content (including tooling and tests under `src`, excluding `apps/web/tests`),
-not the commit; queue the build after implementation lanes settle.
-A skipped `build-cf` task does not establish fresh output. Verify the changed
-bundle and Worker config before serving it; if Nx skips the build, run
-`pnpm --dir apps/web run build:cf` directly. A focused Playwright rerun can then
-use `test:e2e:ci:desktop` against that verified immutable output.
-For test-speed investigations, extract the existing GitHub reports, traces and
-job logs before considering a local run. Label cache replays and timings from
-other revisions; missing timing artifacts do not justify rerunning a whole tier.
-Optimize both the PR's slowest lane and total work contending across local
-sessions. Consolidate duplicated coverage while retaining its named regressions
-on PRs; moving checks to nightly is not a speed improvement.
-Keep load generation and throughput sampling out of ordinary correctness
-regressions. Use the smallest fixture graph that crosses the relevant page or
-batch boundary; force external admission refusals at the provider seam instead
-of generating enough records to saturate it. Assert committed outcomes and the
-forbidden work directly, rather than pinning throughput, exact catalog
-membership, or incidental response sizes. Large populations belong only in an
-explicit performance measurement that needs that scale.
-Report setup separately from scenario time. A failed build/startup check
-is not a scenario result. Before declaring shared schema inputs ready, run the
-read-only `loadEntityDeclarationBundle` strict probe from an ESM entrypoint
-(`.mts` with `tsx --tsconfig apps/web/tsconfig.json`); do not use `tsx -e`,
-whose CommonJS import path can instantiate duplicate schema modules. Do not
-infer readiness from field spelling. Root owns generation and migration readiness during parallel work. In one
-checkout, finish checks that publish generated/declaration inputs before a
-runtime collects modules from those inputs. Measure CI's natural job timings before changing
-shards; keep test-lane cache keys broad.
-Playwright worker options split browser/database/storage/Worker harnesses. Keep
-spec-specific seeding in an intentional project or lane; do not add a worker
-option for one spec. `workerdProfile` owns intentional peer/queue differences.
+exception stays. Removing a registry test also removes exports that existed
+only to expose its internals.
 
 ## During implementation
 
 Rebase onto freshly fetched `origin/main` before running any typecheck,
 generator, or test, and again before pushing: results from a stale base miss
-migrations, generated artifacts, and ratchets (schema budgets)
-that main has since changed, so they are not evidence for the merge.
-Vitest's `fsModuleCache` (`node_modules/.vitest-cache`) does not key on
-`import.meta.glob` matches: after switching to a branch that adds or removes
-matched files, delete it, or `operation-handlers.server.ts` reports
-`No operation module loader` for a file that exists.
+migrations, generated artifacts, and ratchets (schema budgets) that main has
+since changed, so they are not evidence for the merge.
 
-Evidence-revision and withdrawal fixtures must set an explicit initial
-`observedAt` before their later observations. Mixing a wall-clock default with
-fixed revision dates eventually inverts the chronology and tests stale-evidence
-guards instead of the intended correction.
+While iterating, run the named affected files or one affected E2E scenario;
+[test tiers](validation-tests.md#choosing-and-running-tests) own the commands,
+the Vitest report path and selector traps. For persistent HMR, fixture packs, or
+runtime discovery, load [local development](../local-development.md).
+Disposable E2E lanes own their test databases. The existing CI Playwright
+reports and traces and local native `sim-e2e` artifacts are sufficient; no
+custom bundle is required per journey.
 
-Construct synthetic domain fixtures through the supported `createRepoEntity`
-writer roster. For other entities, use the owning `create…Fixture` and
-`make…Input` helpers so required defaults survive. When setup consumes only
-Product IDs, use `createProductIdentityFixture`: it retains creation effects
-without hydrating unused detail responses for every seed row.
-Do not substitute `insertWithShortcode` for those fixture writers: it omits
-required schema/writer defaults and reference resolution, such as Purchase Vendor.
-Create a valid record first, then update storage only when the tested historical
-or invalid state cannot be expressed through its supported writer.
-Create Runs with `ensureRun` and an actor. For member-scoped import purposes, create a member LedgerParty
-and link its storage-only `userId` first; `ensureRun` derives scope and actor
-metadata from that link. `ensureRun` creates running/completed Runs, so seed paused or
-failed fixture states by updating the created row. Build fixture progress with
-its owning progress schema so required counters and defaults remain valid in
-the full test program. Tests of system scheduling
-must seed `systemActor().userId`.
+### Builds and shared checkouts
 
-Test subprocesses invoke Node/the installed tool directly and inherit the
-necessary parent environment. Never invoke a package manager from a test: its
-dependency verification can install or prune modules under concurrent suites.
+- Reuse a healthy HMR session for iteration and Nx-cached Worker builds.
+- Finish source edits, commits and staged formatting hooks before starting a web
+  build, and keep the checkout unchanged through its E2E run. Nx's `build-cf`
+  key is the build's content (excluding `apps/web/tests`), not the commit, so a
+  commit with unchanged inputs reuses it.
+- A skipped `build-cf` task does not establish fresh output. Verify the changed
+  bundle and Worker config before serving it; if Nx skips the build, run
+  `pnpm --dir apps/web run build:cf` directly. A focused Playwright rerun can
+  then use `test:e2e:ci:desktop` against that output.
+- Wait for a build's terminal success before starting a dependent Worker or
+  browser check. A yielded session is still running, and a completed client
+  bundle does not establish a finished Worker build.
+- Finish cold artifact preparation before launching its consumers: concurrent
+  wasm-pack invocations race installation of the shared wasm-bindgen CLI.
+- The root agent owns generation and migration readiness during parallel work.
+  In one checkout, finish checks that publish generated or declaration inputs
+  before a runtime collects modules from them. Before declaring shared schema
+  inputs ready, run the read-only `loadEntityDeclarationBundle` strict probe
+  from an ESM entrypoint (`.mts` with `tsx --tsconfig apps/web/tsconfig.json`);
+  `tsx -e` can instantiate duplicate schema modules. Do not infer readiness
+  from field spelling.
 
-Scripted block edits identify the owning function or declaration with bounded,
-unique line-anchored markers or AST nodes and assert a single match inside that region; a first whole-file match
-does not establish scope. Inspect the affected diff and parse the edited source
-before reporting it ready.
+### Test-speed investigations
 
-Tests that open independent database runtimes must drain their server sessions
-before fixture reset. Client pool shutdown can finish before PostgreSQL removes
-its backend; identify those connections by tag or captured backend IDs and wait
-for their sessions to disappear.
-Never terminate unowned sessions to hide a cleanup failure.
-
-For persistent HMR, fixture packs, or runtime discovery, load
-[local development](../local-development.md). Disposable E2E lanes own their
-test databases. Keep the existing CI Playwright HTML reports and traces, and
-local native `sim-e2e` artifacts; no custom bundle is required for every E2E
-journey or runtime acquisition.
-
-Run one affected E2E scenario when it exposes the behavior. While iterating on
-web code, choose the named affected files with `pnpm test:file src/...`.
-Automatic changed-test selection is retired. Do not use Vitest's own `related`
-or `run --changed`: selecting and running in one process has caused false
-`ui` failures. Run named-file commands from the repository root; paths are
-relative to `apps/web`. For PostgreSQL
-contracts use `pnpm test:postgres src/...`. Read failed tests from
-`apps/web/.vitest-results.json` before deciding what to change; do not rerun an
-unchanged tier to rediscover its failures.
-Local Vitest runs share that report path, including runs from different
-projects. Serialize them until the preceding run's failures have been read or
-its report copied to an ignored artifact; concurrent runs can overwrite the
-evidence needed to diagnose a failure.
-Forward named-case flags directly, for example `pnpm test:postgres src/...
--t 'case name'`; adding `--` here reaches Vitest as a literal separator and
-does not apply the intended filter. Likewise, use `pnpm db:generate
---name=description` without an extra separator.
+Extract the existing GitHub reports, traces and job logs before considering a
+local run, and use Nx task durations, dev-supervisor phase timings and named
+GitHub steps before adding telemetry. Label cache replays and timings from
+other revisions; missing timing artifacts do not justify rerunning a whole tier.
+Report setup separately from scenario time; a failed build or startup check is
+not a scenario result. Optimize both the PR's slowest lane and total work
+contending across local sessions; moving checks to nightly is not a speed
+improvement. Measure CI's natural job timings before changing shards, and keep
+test-lane cache keys broad.
 
 ## Before opening a PR
 
 Open a reviewable PR after the implementation, owning docs, and focused local
-checks are ready. CI and independent review can run together; a pending CI run
-is compatible with a ready-for-review PR. Merge still requires the final
-content's `CI passed`. Publication itself adds no checks.
+checks are ready; a pending CI run is compatible with a ready-for-review PR.
+Merge still requires the final content's `CI passed`. Publication itself adds
+no checks.
 
 Choose local evidence by the changed behavior:
 
 - Web/server behavior: the affected regression or real user journey. Run one
   app typecheck when TypeScript behavior or signatures change; include the
-  test program when tests/tooling change (see [quality](validation-quality.md)). New repository-owned
-  modules and table/computed-SQL helpers must join the ownership roster in
-  `apps/web/tooling/typecheck-repositories.ts`; composition imports use its alias
-  boundary. Run the full web `typecheck` command, including its boundary guard,
-  for these additions: an app-only compile does not check resolved ownership.
-  That one run comes before commit or push, never after each edit. The shared
-  compiler launcher uses one checker to reduce each worktree's memory;
-  cold checks still hold substantially more than unchanged incremental runs.
-  Iterate on lint and focused tests, and never
-  start a second typecheck in a worktree while one runs.
+  test program when tests/tooling change (see [quality](validation-quality.md)).
+  New repository-owned modules and table/computed-SQL helpers must join the
+  ownership roster in `apps/web/tooling/typecheck-repositories.ts`; composition
+  imports use its alias boundary. Run the full web `typecheck`, including its
+  boundary guard, for these additions: an app-only compile does not check
+  resolved ownership. Run that once before commit or push, never after each
+  edit, and never start a second typecheck in a worktree while one runs.
 - Generated native labels, fixtures, constants, or incidental Swift changes:
   verify generation and relevant focused contracts. CI owns native compilation;
   these edits alone do not require local host tests, app builds or simulators.
@@ -286,47 +223,26 @@ Choose local evidence by the changed behavior:
   check. TestFlight builds are not an ordinary pre-PR requirement.
 
 `pnpm apple check host`, `app`, or `lint` selects one native check;
-`pnpm apple check` runs all three when full native diagnosis is needed. Each
-selected native build/test runs after artifact preparation, sequentially.
-For hand-written Swift edits, run `pnpm apple check lint` before opening a PR;
-the staged Oxfmt hook does not format Swift, and successful compilation does
-not verify Swift formatting.
-The server client-version gate test is relevant when changing compatibility
-behavior, not merely because generated Swift changed.
+`pnpm apple check` runs all three sequentially after artifact preparation. For
+hand-written Swift edits, run `pnpm apple check lint` before opening a PR: the
+staged Oxfmt hook does not format Swift, and compilation does not verify Swift
+formatting. The server client-version gate test is relevant when changing
+compatibility behavior, not merely because generated Swift changed.
 
-CI selects broad tiers from their declared inputs; avoid repeating the full
-PostgreSQL, fast, lint, Knip, or build suites locally as a gate. While
-iterating, lint the edited paths with `pnpm exec oxlint <paths>` rather than
-`pnpm lint`; the commit hook owns staged lint/format. Run the full configured
-Knip check for changed entry points/dependencies or removed consumers; a
-dependency-only check misses orphaned files and exports. Run generator validation for changed declarations and
-`actionlint` for CI workflow changes. CI starts every Linux lane and replays
-unchanged tasks from the Nx cache; that is not an instruction to run those
-lanes locally.
+CI selects broad tiers from their declared inputs and replays unchanged tasks
+from the Nx cache; do not repeat the full PostgreSQL, fast, lint, Knip, or build
+suites locally as a gate. While iterating, lint the edited paths with
+`pnpm exec oxlint <paths>` rather than `pnpm lint`; the commit hook owns staged
+lint/format. Run the full configured Knip check for changed entry points or
+dependencies and removed consumers; a dependency-only check misses orphaned
+files and exports. Run generator validation for changed declarations and
+`actionlint` for CI workflow changes.
 
-One root agent owns any broad validation that the change needs. A subagent runs
-only focused tests and returns its result, command, duration, relevant output,
-and limits. Reuse valid results at handoff; choose checks for the changed behavior
-rather than running a blanket `pnpm check` or affected suite. Keep expensive
-local gates sequential, including across active sessions on a constrained host.
-A shared-checkout test-slot handoff includes queued invocations: after declaring
-all idle, an old queued grant cannot authorize another launch. Request a fresh
-slot first. Copy that invocation's `apps/web/.vitest-results.json` beside its
-ignored artifact log before releasing the slot, so later runs cannot overwrite
-the failure evidence being reviewed.
-
-Finish cold artifact preparation before launching checks that consume it:
-concurrent wasm-pack invocations can race installation of the shared wasm-bindgen CLI.
-Reuse valid input-hash results at handoff. Finish edits and commits, including staged formatting hooks, before starting
-immutable-build verification. The web build is keyed on content alone: a commit
-with unchanged build inputs reuses it. Wait for commit hooks
-to finish, then build and run dependent prebuilt checks without Git mutations in
-parallel; use healthy HMR for suitable iteration.
-Nx reports task durations/cache hits, the dev supervisor records startup phase
-timings, and GitHub records named check steps; use those before adding telemetry.
-Wait for a build runner's terminal success before starting a dependent prebuilt
-Worker or browser check. A yielded session is still running; a completed client
-bundle alone does not establish a finished Worker build.
+One root agent owns any broad validation the change needs. A subagent runs only
+focused tests and returns the result, command, duration, relevant output and
+limits. Reuse valid results at handoff; choose checks for the changed behavior
+rather than a blanket `pnpm check` or affected suite. Keep expensive local gates
+sequential, including across active sessions on a constrained host.
 
 ## PR screenshots
 
@@ -337,43 +253,40 @@ against production: the repository is public and attached images are too. Save
 `page.screenshot({ path })` files from a throwaway Playwright spec or the
 affected scenario, and delete the throwaway spec before committing. Reference
 each image in the body by its local path and pass the same path to
-`gh pr create --attach` or `gh pr edit --attach` (verify support in the installed `gh pr create --help` / `gh pr edit --help`); the CLI uploads it and rewrites the reference. A before image (from
-`main` or a run before the first edit) helps when the change is a comparison.
-Do not open the images to check them: attaching a saved file costs no context.
+`gh pr create --attach` or `gh pr edit --attach`; the CLI uploads it and
+rewrites the reference. A before image (from `main` or a run before the first
+edit) helps when the change is a comparison. Do not open the images to check
+them: attaching a saved file costs no context.
 
 ## Native PR stacks
 
-Publish dependent PRs as a native GitHub stack. After opening each layer against
-its predecessor, register the PRs in bottom-to-top order:
-
-```sh
-gh stack link --base main <bottom-pr-url> <next-pr-url>
-```
-
-Append later layers with `gh stack link <stack-number> <new-pr-url>`. Verify the
-native stack and its member order on GitHub; chained base branches and T3's
-derived chain do not complete registration. Link each member PR to T3 using its
-actual pull-request URL. A native stack number identifies the stack resource;
-member PR numbers identify the pull requests.
+Publish dependent PRs as a native GitHub stack
+([GitHub stacked pull requests](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)).
 Independent changes stay in separate PRs.
 
-Native stacks apply the trunk's branch protection and Actions branch filters to
-every member ([GitHub rules](https://docs.github.com/en/pull-requests/reference/stacked-pull-requests)).
-After changing a lower layer, rebase its dependents and verify their final heads.
-After resolving source conflicts, run `pnpm exec nx run cubby-checks:format`
-before publishing: `git rebase --continue` does not run the staged formatting
-hook. Fix formatting through a normal commit so that hook owns the edits.
-The merge gate below applies to every included PR. Merge the ready group with
-`gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic stack
-merge instead of issuing individual-PR merge requests. Stack registration does
-not replace final-head CI or independent review. Read membership and final-head checks
-from GitHub directly. Before reporting a stack ready,
-fetch the trunk and verify it is an ancestor of the bottom branch, then verify
-each lower head is an ancestor of the layer above it. Rebase the full stack when
-the trunk has advanced and push bottom to top. Register layers before their
-final push so normal PR workflows run in stack context; a successful standalone
-`workflow_dispatch` run alone does not establish the required checks or readiness
-shown on each PR.
+1. Open each layer against its predecessor, then register the PRs bottom to top
+   before their final push, so normal PR workflows run in stack context:
+
+   ```sh
+   gh stack link --base main <bottom-pr-url> <next-pr-url>
+   gh stack link <stack-number> <new-pr-url>   # append a later layer
+   ```
+
+2. Verify the native stack and member order on GitHub; chained base branches
+   and T3's derived chain do not complete registration. Link each member to T3
+   by its pull-request URL (the stack number identifies the stack, not a PR).
+3. After changing a lower layer, rebase its dependents bottom to top. After
+   resolving conflicts, run `pnpm exec nx run cubby-checks:format` before
+   publishing (`git rebase --continue` skips the staged hook) and commit the fix
+   normally.
+4. Before reporting the stack ready, fetch the trunk and verify it is an
+   ancestor of the bottom branch and each lower head is an ancestor of the
+   layer above; rebase the full stack when the trunk has advanced. Read
+   membership and final-head checks from GitHub. A standalone
+   `workflow_dispatch` run does not establish a PR's required checks.
+5. The merge gate below applies to every member. Merge the ready group with
+   `gh stack merge <stack-number> --squash --yes`, preserving GitHub's atomic
+   stack merge, rather than merging PRs individually.
 
 ## Commit, push, and merge
 
@@ -389,86 +302,73 @@ When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
 commit, push, or rebase continuation in the same call.
 
-Commits run only staged-file Oxlint/Oxfmt.
-The pre-commit entrypoint invokes installed lint-staged directly; `pnpm
-check:staged` runs the same entrypoint. Partial staging is preserved. Target
-1–2 seconds for ordinary commits; large staged changes can take longer. Hooks
-run no package managers, dependency installation, generation, WASM, builds,
-typechecks, tests, or network work. Oxfmt runs only through the staged commit
-hook, including delegated lanes; a narrow file scope is not an exception.
-`pnpm agent:setup` points Git's shared `core.hooksPath` at the relative
-`.husky`, so every linked worktree runs the hooks from its own checkout. A missing lint-staged installation fails immediately with the local
-install command. Exported source archives without `.git` skip hook setup.
-Confirm staged-check output; a successful commit alone is not validation evidence.
-Fix reported lint issues explicitly and stage the intended corrections. Use the
-commit hook normally; bypass it only when the user explicitly requests that.
+Commits run only staged-file Oxlint/Oxfmt through installed lint-staged;
+`pnpm check:staged` runs the same entrypoint and preserves partial staging.
+Target 1–2 seconds for ordinary commits. Hooks run no package managers,
+dependency installation, generation, WASM, builds, typechecks, tests, or network
+work. Oxfmt runs only through the staged hook, including in delegated lanes.
+`pnpm install` (and so `pnpm agent:setup`) sets Git's shared `core.hooksPath` to
+the relative `.husky` through the `prepare` script, so every linked worktree
+runs hooks from its own checkout; exported archives without `.git` skip it. A
+missing lint-staged installation fails immediately with the install command.
+Confirm staged-check output; a successful commit alone is not validation
+evidence. Fix reported lint issues explicitly and stage the corrections. Bypass
+the hook only when the user explicitly requests it.
 
-Authors and reviewers enforce synthetic-only outward content under `AGENTS.md`.
-There is no custom commit-message or PR-text identifier scanner.
+Authors and reviewers enforce synthetic-only outward content under `AGENTS.md`;
+there is no commit-message or PR-text identifier scanner.
 
 Checkout and merge hooks run no builds: build, test and dev entry points ensure
-the artifacts they consume. After a branch switch, use `pnpm apple gen` before
-opening the generated Xcode project directly.
-
-Pushes run no validation and do not require a clean working tree or a refreshed
-base ref. Committing, pushing, or handing off work does not trigger additional
-local checks. Report local results and anything unrun without implying that a
-successful push proves correctness.
+the artifacts they consume. Pushes run no validation and do not require a clean
+working tree or a refreshed base ref. Committing, pushing, or handing off work
+does not trigger additional local checks. Report local results and anything
+unrun without implying that a successful push proves correctness.
 
 `CI passed` must pass for the final PR head's content before merge. CI starts
 every Linux lane and path-filters only Rust and Apple
-([ADR 0020](../adr/0020-cache-routed-ci.md)). A passing result in the
-shared Nx remote cache for the same input hash satisfies a started lane's
-check only when the execution environment also matches; CI replays it in seconds
+([ADR 0020](../adr/0020-cache-routed-ci.md)). A passing result in the shared Nx
+remote cache for the same input hash satisfies a started lane's check only when
+the execution environment also matches; CI replays it in seconds
 ([ADR 0009](../adr/0009-content-hash-merge-gate.md),
-[CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new
-file belongs in its Nx target's inputs. Native result and artifact reuse follows
-[the CI cache policy](../ci.md#cache-keys-and-the-remote-cache);
-local Mac web tests do not replace Linux validation. A green earlier
-commit with different content is not evidence. `main` runs CI after deployment
-starts, so post-merge CI does not replace this gate. A PR that adds a
-migration follows the [production change rules](domain-rules.md#production-changes),
-including compatibility with the code running while the release applies it.
-
-Before any merge to `main`, check the production `PRODUCTION_MIGRATION_THROUGH`
-boundary, including for changes without a migration: every deployment can run
-the migration wrapper. Leave an active staged boundary under its named
-operator's control and coordinate the deployment with that cutover. A queued
-deployment's creation time does not establish when its migration job executes.
+[CI](../ci.md#cache-keys-and-the-remote-cache)). A check that reads a new file
+belongs in its Nx target's inputs. Local Mac web tests do not replace Linux
+validation, and a green earlier commit with different content is not evidence.
+`main` runs CI after deployment starts, so post-merge CI does not replace this
+gate. A PR that adds a migration follows the
+[production change rules](domain-rules.md#production-changes), including
+compatibility with the code running while the release applies it.
 
 ## Performance review
 
-AI review owns performance judgment. Performance measurements feed that review;
-they do not introduce universal timing, query-count, or plan-shape CI gates.
-Retain correctness regressions and the final-content CI merge gate above.
+AI review owns performance judgment. Measurements feed that review; they do not
+introduce universal timing, query-count, or plan-shape CI gates. Retain
+correctness regressions and the final-content CI merge gate above.
 
-Performance changes provide a standard, non-blocking before/after evidence
-report using the [existing read harness](../entities.md#list-reads):
-requested fields and dependencies versus loaded work, SQL calls and
-plan work at representative synthetic scale, response bytes, decoded operation
-failures, and time until useful data is available. Label the revision,
-environment, workload, cache state, and unavailable measurements. The harness
-separates declaration-only requested shape from observed work; unsupported shape
-metadata and unprovided bounded operator context stay null. Never use an input
-fingerprint as anonymization or copy arbitrary input keys into evidence, including
-private samples. Captured SQL can contain data-dependent dictionaries and resolved ID sets.
-Recompile or resolve those bindings against the comparison database and pass the
-same current bindings to both variants; scalar parameter types do not prove
-that values are dataset-independent. A query timing
-does not establish page latency, and HTTP success does not establish RPC success.
-Deployed Workers advance `performance.now()` and `Date.now()` only after I/O.
-These clocks do not measure CPU or include synchronous work after the last I/O.
-Subtracting a `Server-Timing` handler duration from browser TTFB does not attribute the
-remainder to platform or network work. Use CPU profiles for that distinction
-([Workers timers](https://developers.cloudflare.com/workers/runtime-apis/performance/)).
-Local built-Worker controls separate runtime installation from the first application
-read. `unstable_startWorker.ready` confirms Wrangler's proxy, not the user
-runtime's completed reload. Await its `reloadComplete` event before timing
-application initialization and report installation separately. Match executable
-layout, source-map availability and inspector setup across arms; a CPU profile
-started after inspector setup does not measure complete Worker startup.
-Attribute repeated plan work by its relation or alias and owning SQL producer;
-a shared CTE name alone does not establish an identical computation.
+Performance changes provide a non-blocking before/after evidence report using
+the [existing read harness](../entities.md#list-reads): requested fields and
+dependencies versus loaded work, SQL calls and plan work at representative
+synthetic scale, response bytes, decoded operation failures, and time until
+useful data is available. Label the revision, environment, workload, cache
+state, and unavailable measurements. Unsupported shape metadata and unprovided
+operator context stay null.
+
+- Never use an input fingerprint as anonymization or copy arbitrary input keys
+  into evidence, including private samples.
+- Captured SQL can contain data-dependent dictionaries and resolved ID sets.
+  Rebind them against the comparison database and pass the same bindings to
+  both variants.
+- A query timing does not establish page latency, and HTTP success does not
+  establish RPC success.
+- Deployed Workers advance `performance.now()` and `Date.now()` only after I/O,
+  so they do not measure synchronous CPU; subtracting a `Server-Timing` duration
+  from browser TTFB does not attribute the rest. Use CPU profiles
+  ([Workers timers](https://developers.cloudflare.com/workers/runtime-apis/performance/)).
+- For local built-Worker startup, await `unstable_startWorker`'s
+  `reloadComplete` event (`ready` only confirms Wrangler's proxy), report
+  installation separately from the first application read, and match executable
+  layout, source maps and inspector setup across arms.
+- Attribute repeated plan work by relation or alias and owning SQL producer; a
+  shared CTE name does not establish an identical computation.
 
 Review the shared cause before approving a local optimization: read projections,
 dependency reuse, per-row SQL work, polling and concurrency ownership, browser
@@ -476,32 +376,21 @@ import dependencies, and predicate/index alignment. Extend existing projection,
 report-dependency, transport, and measurement tools. Keep workload-specific
 query decisions with their owning domain; share evidence collection and parsing.
 
-The explicit statement-label experiment runs real preparation, publication and
-receipt settlement through synthetic PostgreSQL fixtures and deterministic
-Decision ports. Run it with
+The statement-label benchmark runs real preparation, publication and receipt
+settlement against synthetic PostgreSQL fixtures and deterministic Decision
+ports:
 `pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-benchmark.config.ts`.
-It requires the existing local PostgreSQL service on port 55432 and generated
-declarations/WASM. It creates fresh, uniquely named databases and retains them;
-it does not reset existing databases, start services, or call providers. Results
-and optional CPU profiles go under ignored `artifacts/statement-label-benchmark/`.
-`CUBBY_BENCH_SIZES` selects page sizes (default `8,32,64,128`),
-`CUBBY_BENCH_CANDIDATES` selects same-amount candidates per charge (0–128),
-and `CUBBY_BENCH_BYTES` selects synthetic description padding (0–16000 bytes).
-Use `CUBBY_BENCH_KIND=purchase CUBBY_BENCH_ADVICE=decision-port` for real
-merchant/category preparation with a synthetic 16-category roster; default
-injected advice isolates statement preparation. `CUBBY_BENCH_PROFILE=1` enables
-Node CPU sampling. Setup, initial page and checkpoint replay are separate.
-Heap samples are Node phase-boundary observations, not Worker heap measurements
-or exact allocation peaks. Query-active intervals include client/network work;
-they do not measure PostgreSQL server CPU. Provider funding, cache and Job-claim
-admission, queue gaps and production throughput need their owning runtime checks.
-
-The existing statement service regressions can also run with fresh retained
-synthetic databases through
-`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-regressions.config.ts -t 'bounds saturated|checkpoint-only|context-overflow|does not persist empty'`.
-This entrypoint substitutes only the test-database fixture, rejects fetch traffic,
-and does not reset databases or start services. The ordinary integration suite
-owns these same regression cases; use its normal harness for general coverage.
+It needs the local PostgreSQL service on port 55432 and generated
+declarations/WASM, creates and retains fresh uniquely named databases, and
+never resets databases, starts services or calls providers. Results go under
+ignored `artifacts/statement-label-benchmark/`. Tune it with `CUBBY_BENCH_SIZES`,
+`CUBBY_BENCH_CANDIDATES`, `CUBBY_BENCH_BYTES`, `CUBBY_BENCH_KIND=purchase` with
+`CUBBY_BENCH_ADVICE=decision-port`, and `CUBBY_BENCH_PROFILE=1` (see
+`statement-label.benchmark.ts`). Heap samples are Node phase observations, not
+Worker heap; query-active intervals are not PostgreSQL server CPU. The same
+directory's `statement-label-regressions.config.ts` runs existing statement
+service regressions against fresh retained databases; the ordinary integration
+suite owns those cases.
 
 ## Explicit local diagnostics
 
@@ -509,7 +398,6 @@ owns these same regression cases; use its normal harness for general coverage.
 `pnpm verify:local` is the clean-tree full diagnostic, and
 `pnpm verify:local:full` forces uncached verification. Use broad checks for
 relevant diagnosis, an explicitly requested audit, or full local verification.
-Coverage remains manually dispatchable in GitHub Actions.
 
 ## Load when needed
 

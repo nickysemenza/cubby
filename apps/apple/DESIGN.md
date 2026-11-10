@@ -92,8 +92,8 @@ Connections uses one shared React workspace for the map, four-link exploration,
 path inspector, and suggestion review. The native Graph route renders it directly.
 A record's Connections entry opens it scoped by `source` and `id`: a full-screen
 cover on iPhone/iPad, or a resizable 1400×900 window with a full-screen command on
-Mac. The native graph canvas, depth picker, recommendation sheets, and inline
-relationship alternatives are removed. Native record fields and record navigation
+Mac. There is no native graph canvas, depth picker, recommendation sheet or
+inline relationship alternative. Native record fields and record navigation
 remain native; the title, Done action, authenticated session, and dismissal are
 owned by Swift. Secondary Mac windows gate hosted content on the signed-in phase.
 Only `/connections` retains this mode; navigation search and record selection

@@ -142,13 +142,13 @@ flowchart TB
 
 ### Things and places
 
-| Entity                     | What it is                                                                                                                                                | Relates to                                                                                                                                                                                                                                                                 | Typical use                                                        |
-| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| **Product** `PRD-`         | Any one thing we can buy or own (a SKU), or a name-only `misc:` placeholder. Two copies share a Product; a different size or color is a different Product | N:1 Vendor (Brand), ProductCategory, Ingredient; 1:N unit mappings (`1 cup = 120 g`, `1 bag = $4`); 1:N Inventory, Expense; kit parts. Referenced by Wish, `projectTool`, Task subject, Plant (seed packet), Location (a bought planter), Device, Cookbook (physical copy) | The shared core: stock, spend, recipes, nutrition, tools, wardrobe |
-| **ProductCategory** `CAT-` | What kind of thing a Product is (Food › Baking, Books, Tools › Consumables), up to 3 levels deep                                                          | Tree; 1:N Product; N:1 SpendingCategory mapping                                                                                                                                                                                                                            | Browsing, analytics, spending and stock-tracking defaults          |
-| **Location** `LOC-`        | A place in the house or garden: Home → room → shelf → bin, bed, planter                                                                                   | Self tree (one Home root, an "Unknown" holding spot); 1:N Inventory, Planting, GardenEntry                                                                                                                                                                                 | QR labels, arranging, "where is it?"                               |
-| **Inventory** `INV-`       | How much of one Product is at one Location                                                                                                                | N:1 Product, N:1 Location (unique pair); optional owner LedgerParty                                                                                                                                                                                                        | Stock estimate, valued on read through unit mappings               |
-| **Image** `IMG-`           | A stored photo or document                                                                                                                                | N:M to almost every entity via attachments; sightings per member device                                                                                                                                                                                                    | Product photos, receipts, invoices, garden photos                  |
+| Entity                     | What it is                                                                                                                                                | Relates to                                                                                                                                                                                                                                                           | Typical use                                                        |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Product** `PRD-`         | Any one thing we can buy or own (a SKU), or a name-only `misc:` placeholder. Two copies share a Product; a different size or color is a different Product | N:1 Vendor (Brand), ProductCategory, Ingredient; 1:N unit mappings (`1 cup = 120 g`, `1 bag = $4`); 1:N Inventory, Expense; kit parts. Referenced by `projectTool`, Task subject, Plant (seed packet), Location (a bought planter), Device, Cookbook (physical copy) | The shared core: stock, spend, recipes, nutrition, tools, wardrobe |
+| **ProductCategory** `CAT-` | What kind of thing a Product is (Food › Baking, Books, Tools › Consumables), up to 3 levels deep                                                          | Tree; 1:N Product; N:1 SpendingCategory mapping                                                                                                                                                                                                                      | Browsing, analytics, spending and stock-tracking defaults          |
+| **Location** `LOC-`        | A place in the house or garden: Home → room → shelf → bin, bed, planter                                                                                   | Self tree (one Home root, an "Unknown" holding spot); 1:N Inventory, Planting, GardenEntry                                                                                                                                                                           | QR labels, arranging, "where is it?"                               |
+| **Inventory** `INV-`       | How much of one Product is at one Location                                                                                                                | N:1 Product, N:1 Location (unique pair); optional owner LedgerParty                                                                                                                                                                                                  | Stock estimate, valued on read through unit mappings               |
+| **Image** `IMG-`           | A stored photo or document                                                                                                                                | N:M to almost every entity via attachments; sightings per member device                                                                                                                                                                                              | Product photos, receipts, invoices, garden photos                  |
 
 ### Food
 
@@ -190,22 +190,23 @@ flowchart TB
 
 ### Financial evidence
 
-| Entity                             | What it is                                                         | Relates to                                                                                             | Typical use                                                                   |
-| ---------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| **SourceTransactionRecord** `STR-` | One retained provider observation or revision, never spending      | TransactionImport membership; resolved FinancialAccount; settlement references to FinancialTransaction | Generic evidence browsing and reviewed reconciliation judgments               |
-| **TransactionImport** `TIM-`       | One immutable source file or MCP snapshot, resumable across chunks | N:M SourceTransactionRecord                                                                            | Inspect retained counts, scope, and completion separately from reconciliation |
+| Entity                             | What it is                                                                              | Relates to                                                                                             | Typical use                                                                   |
+| ---------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **SourceTransactionRecord** `STR-` | One retained provider observation or revision, never spending                           | TransactionImport membership; resolved FinancialAccount; settlement references to FinancialTransaction | Generic evidence browsing and reviewed reconciliation judgments               |
+| **TransactionImport** `TIM-`       | One immutable source file or MCP snapshot, resumable across chunks                      | N:M SourceTransactionRecord                                                                            | Inspect retained counts, scope, and completion separately from reconciliation |
+| **SourceOccurrence** `SOC-`        | One bank event: its current judgment, selected record, account and accepted transaction | 1:N SourceTransactionRecord; N:1 FinancialTransaction                                                  | Identity review before money is accepted                                      |
 
 Provider facts remain immutable; the [evidence lifecycle](docs/import-evidence-convergence.md#financial-evidence-entities)
 owns supported edits and deletion guards.
 
 ### People and system
 
-| Entity                    | What it is                                                                       | Relates to                                                                   | Typical use                                           |
-| ------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
-| **LedgerParty** `LPY-`    | A household member, guest or the household itself                                | Expense attribution, meal portions, owns Inventory, Device, FinancialAccount | Who paid, who ate, who owns it                        |
-| **LedgerTransfer** `LTR-` | Value moving between parties, such as a reimbursement                            | From and to LedgerParty                                                      | Contribution positions (advisory only, never "debts") |
-| **Device** `DEV-`         | One install of the native app                                                    | N:1 LedgerParty; N:1 hardware Product                                        | Photo-library sightings                               |
-| **Run** `RUN-`            | A system-written background job: vendor sync, photo batch, mail search, AI calls | N:1 Vendor; predecessor Run; 1:N Purchase                                    | Import provenance and review                          |
+| Entity                    | What it is                                                                             | Relates to                                                                   | Typical use                                           |
+| ------------------------- | -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| **LedgerParty** `LPY-`    | A household member, guest or the household itself                                      | Expense attribution, meal portions, owns Inventory, Device, FinancialAccount | Who paid, who ate, who owns it                        |
+| **LedgerTransfer** `LTR-` | Value moving between parties, such as a reimbursement                                  | From and to LedgerParty                                                      | Contribution positions (advisory only, never "debts") |
+| **Device** `DEV-`         | One install of the native app                                                          | N:1 LedgerParty; N:1 hardware Product                                        | Photo-library sightings                               |
+| **Run** `RUN-`            | A reviewable session of coordinated work: vendor sync, photo batch, Mail import, Sweep | N:1 Vendor; predecessor Run; 1:N Purchase                                    | Import provenance and review                          |
 
 Field-level vocabulary is in [docs/guide/terminology.md](docs/guide/terminology.md). The
 full compiled relationship graph, including delete and merge behavior, is at
@@ -269,15 +270,15 @@ flowchart LR
   Web(["Web app"]) --> SSR["Pages +<br/>server functions"]
   Apple(["iOS / macOS app,<br/>cubby CLI"]) --> HTTP["/api/operations/{operationId}<br/>POST + JSON"]
   Cal(["Calendar apps"]) --> Feeds["webcal feeds"]
-  Gmail(["Gmail"]) -- "discovery" --> BG["Cron, queues,<br/>Workflows"]
+  Gmail(["Gmail"]) -- "discovery" --> BG["Cron and<br/>queues"]
 
   MCP & SSR & HTTP & Feeds & BG --> Ops["Contracts +<br/>operations"]
   BG -- "Mail import Runs" --> Pi["Pi: Mail import +<br/>photo Runs"]
   Pi -. "same public MCP tools" .-> MCP
 
   Ops --> Kernel["Entity kernel"] --> Repo["Repositories"] --> PG[("PostgreSQL<br/>Neon / Hyperdrive")]
-  Ops --> DOs["Durable Objects: images,<br/>USDA, ChatGPT plan, feeds"] --> R2[("R2 + Vectorize")]
-  Pi & Ops --> Models(["Models: ChatGPT plan,<br/>AI Gateway, Workers AI"])
+  Ops --> DOs["Durable Objects: images, USDA,<br/>AI funding and cache, feeds"] --> R2[("R2 + Vectorize")]
+  Pi & Ops --> Models(["Models: Claude and OpenAI credit,<br/>ChatGPT plan, AI Gateway, Workers AI"])
 
   classDef client fill:#eef6ff,stroke:#5b8def
   classDef entry fill:#f4f0ff,stroke:#8a6bd9
@@ -324,49 +325,8 @@ Further docs:
 
 ## Import and Burn-down flows
 
-The flows below include the shipped
-[Email entity](docs/adr/0011-email-as-a-first-class-entity.md) and
-[import convergence](docs/adr/0012-import-convergence-through-burn-down.md). Sources can arrive in any order: later evidence supports the same
-Purchase and exact Product variant. Wardrobe is a saved view of the viewer's
-apparel Inventory (`@me` owner, `apparel` category family). Books (`books` family)
-and Records (`music` family) are Inventory shelf views with `@me` + `@household`
-owners; Books groups by genre and Records sorts by Product. Claude/Codex
-sessions also research wardrobe details through MCP.
-
-```mermaid
-flowchart TB
-  Gmail["Gmail discovery<br/>Known Vendors + new mail"] --> Classify["Rules → Jev / Clef"]
-  Classify --> Email["Email: metadata + Relevance<br/>Optional retained content"]
-  Email --> Accuracy["Independent accuracy review<br/>Classification and import costs"]
-  Email --> Manual["Member chooses one Email<br/>Run import + cost estimate"]
-  Manual --> Pi["Pi Mail import<br/>Public MCP tools"]
-  Email -. "Mail import switch on<br/>free AI capacity, else waits" .-> Pi
-
-  Retailer["Retailer history / export"] --> Client["Claude / Codex client<br/>Browser, connectors and MCP"]
-  Receipt["Receipt photo / document"] --> Client
-  Pi --> Import["Prepare import / reconciliation<br/>Match, attach, correct or replace"]
-  Client --> Import
-  Import --> Purchase["Purchase + Expenses<br/>Source identity and accepted observations"]
-  Purchase --> Product["Product<br/>One exact variant"]
-  Email -. "derived accepted links" .-> Purchase
-  Statement["Statement / card charge"] -- "settlement evidence" --> Purchase
-
-  Photos["Product / wardrobe photos<br/>Item views and labels"] --> Groups["Photo import Run<br/>Group items and match Products"]
-  Groups --> Approval["Member reviews groups<br/>Identity, owner, location and copies"]
-  Approval -- "create or reuse" --> Product
-  Approval -- "attach" --> Images["Item / label Images"]
-  Approval -- "receive when ownership<br/>and location are settled" --> Inventory["Inventory<br/>Owned copies and location"]
-  Product --> TagReview["Follow-up MCP enrichment<br/>Transcribe tags and research notes"]
-
-  Purchase -- "exposes declared gaps / conflicts" --> Queue["Derived Research / reconciliation views"]
-  Product -- "exposes declared identity gaps" --> Queue
-  Queue --> Burn["Claude / Codex Burn-down<br/>Read sources, compare and ask member"]
-  Wardrobe["Member selects wardrobe / Products"] --> Burn
-  Burn -- "prepare resolution" --> Import
-  Burn -- "source-backed field / collection patches" --> Product
-  Burn -- "verify stored facts or record<br/>searched, not available" --> Result["Resolved checks or explicit remaining gaps"]
-```
-
-All spending is `SUM(Expense.cost)`. A statement never adds spend, a photo never
-invents purchase facts, and purchase import or enrichment never changes stock.
-Inventory changes only through a deliberate receiving or recount action.
+Sources arrive in any order, and later evidence supports the same Purchase and
+exact Product variant. [Evidence arrives in any order](docs/guide/import-journey.md)
+walks through mail, retailer history, receipts, statements and photos, and the
+[Burn-down guide](docs/guide/burn-down.md) covers research and reconciliation
+from the Work queue.

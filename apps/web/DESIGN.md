@@ -16,7 +16,7 @@ Cubby is a very dense, light desktop utility, because vertical space is the scar
 - Lists open records in a side inspector; the full record page leads with key numbers, what needs attention, and a merged activity timeline.
 - Restrained color, Inter with Geist Mono figures, and flat 1px separators instead of floating cards.
 
-The canonical token source is `packages/design-tokens/tokens.json` owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme and carries the web workspace palette (white surface, #262626 ink, #737373 secondary ink, #E5E5E5 hairline, #EDEDED current row, #0077E6 link), which overrides the shared light colors on web only. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
+The canonical token source, `packages/design-tokens/tokens.json`, owns the palette, spacing, fonts, and separate web geometry. Generation writes `packages/design-tokens/brand.css`; `src/styles.css` binds the web theme and carries the web workspace palette (white surface, #262626 ink, #737373 secondary ink, #E5E5E5 hairline, #EDEDED current row, #0077E6 link), which overrides the shared light colors on web only. Change those sources rather than generated outputs. Native geometry and appearance remain independent.
 
 ## Colors
 
@@ -70,8 +70,7 @@ full detail pages reserve a compact status line for muted “Updating…” afte
 300ms of continuous activity; clearing it does not move the content. Failures
 retain the loaded values, raw diagnostics and Retry. The shell retains its
 reserved Syncing slot for household-wide activity. These browser read states
-never imply that a computed value has been rebuilt; derived freshness marks
-remain independent.
+never imply that a computed value has been rebuilt.
 
 Loading placeholders use Skullet through the shared Skeleton primitive, with a
 single light, static theme. Use its explicit boxes:
@@ -85,31 +84,12 @@ moving content. Initial render, hydration and remount establish a quiet baseline
 unchanged reads, formatting-only changes and status/timestamp updates never flash.
 Identity includes the record, field and semantic filter or projection scope.
 An optimistic value followed by its identical server result highlights once.
-Selection, focus and validation remain visible. Blue Updating dots and failure
-indicators retain their independent meaning; work finishing with the same value
-clears its dot without a value highlight. There is no new motion setting.
+Selection, focus and validation remain visible. There is no separate motion
+setting.
 
-Mail coverage begins with flat mailbox-discovery and sender-resolution RTables,
-followed by a disclosed unresolved-seller Email table and the Vendor × mailbox
-RTable. Poll freshness, targeted historical search scope, classification and
-import are distinct; local counts never imply Gmail-wide coverage. Source
-addresses belong to Vendors through verified mappings. The Vendor table retains canonical
-Vendor and Vendor Account links, explicit coverage states and separate local
-Email and Purchase counts. Selecting a row opens the shared table inspector
-for controlled import and date bounds; Settings retains mailbox switches.
-Discovery completion and downstream import outcomes remain distinct.
+Mail coverage is a column of flat RTables: mailbox discovery, sender resolution, a disclosed unresolved-seller Email table, then Vendor × mailbox coverage. Poll freshness, historical search scope, classification and import stay distinct, and discovery completion never implies import outcomes; local counts never imply Gmail-wide coverage. Source addresses belong to Vendors through verified mappings. The Needs attribution and Shared senders views use exact-address attribution, never a shared domain as proof of sharing. Vendor coverage separates Domains from Sender addresses and keeps canonical Vendor and Vendor Account links, explicit coverage states and separate Email and Purchase counts. Sender and Vendor tables share search, status views, column controls, row selection and the shared row inspector, which holds controlled import, date bounds and complete selectable addresses, queries, counts and Run links; Settings keeps mailbox switches. Address controls show the saved Vendor, learned or member origin, disputed or shared state and original evidence; member exclusions survive learning. Address buttons stay inside their cell. Mobile rows keep poll, catch-up and search summaries.
 
 The month calendar prints each day's number first, then bar lanes, then chips and "+N more". Two or more bars crossing at least five days of a row fold into one "N ongoing" lane across their combined extent; its popover lists them and the remaining bars close up beneath it.
-
-Mobile discovery rows retain poll/catch-up and historical search summaries;
-sender-resolution rows retain search state. The Needs attribution and Shared senders views use exact-address attribution state, never a shared domain as proof of sharing. Verified addresses appear on Vendors. Both sender and Vendor tables have standard row-selection checkboxes. Sender resolution uses the same search,
-status views, column controls and row inspector as Vendor coverage, with compact
-default columns. Vendor coverage separates Domains from Sender addresses.
-Address controls expose the saved Vendor, learned/member origin, disputed/shared
-state and original Email/Purchase evidence; member exclusions survive learning.
-Address buttons stay within their table cell; the scalar accessor and inspector retain the complete value for copying.
-The inspector exposes complete, selectable sender addresses,
-queries, counts and Run links. Discovery retains its Details disclosure.
 
 Record-summary previews always offer their collection count/link when populated,
 even for one or two records. A matching web relation table is the destination:
@@ -125,7 +105,7 @@ Resting page and detail sections are open and flat, separated by 1px hairlines a
 
 ## Shapes
 
-Web controls use 6px radii (26px buttons and inputs on desktop, 32px and 30px on the base scale, 22px navigation items), chips 4px (18px tall on desktop, 20px on the base scale), floating panels 8px. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Record pills are outlined with a hairline on a transparent surface, fill only on hover and use the 4px chip radius. Images use a faint neutral outline. `cubby/no-large-radius` rejects `rounded-xl`, `rounded-2xl`, `rounded-3xl` and their directional variants; use `rounded-md` or `rounded-lg`. `cubby/no-hand-rolled-panel` requires `Panel` for any rounded, bordered box; its `.oxlintrc.json` exemptions cover shadcn copies, `Pill`, pickers, overlays, ReUI, the date-picker input, text and code blocks, `EmptyState`, and the two Home files awaiting the Home rewrite.
+Web controls use 6px radii (26px buttons and inputs on desktop, 32px and 30px on the base scale, 22px navigation items), chips 4px (18px tall on desktop, 20px on the base scale), floating panels 8px. These web tokens are independent of native geometry. Inputs use a white surface and hairline border; nested surfaces keep concentric corners. Record pills are outlined with a hairline on a transparent surface, fill only on hover and use the 4px chip radius. Images use a faint neutral outline. `cubby/no-large-radius` rejects `rounded-xl`, `rounded-2xl`, `rounded-3xl` and their directional variants; use `rounded-md` or `rounded-lg`. `cubby/no-hand-rolled-panel` requires `Panel` for any rounded, bordered box; its `.oxlintrc.json` exemptions cover shadcn copies, `Pill`, pickers, overlays, ReUI, the date-picker input, text and code blocks, `EmptyState`, and two Home files.
 
 ## Components
 
@@ -202,9 +182,9 @@ styling. Share lower-level behavior and tokens where the contracts agree:
   range geometry, event placement and drag/drop. They are separate workflows.
 - `Picker` owns values; Command and DropdownMenu own navigation/actions.
   Switch owns a boolean and Tabs own content panels. The
-  [value-control contract](docs/web-ui.md) owns mode selection and binding.
+  [value-control contract](docs/web-ui.md#value-pickers) owns mode selection and binding.
 - Interactive lists, static tables, matrices, record evidence and detail facts
-  retain their distinct structures; [table contracts](docs/web-ui-reference.md#tables)
+  retain their distinct structures; [table contracts](docs/web-ui.md#tables)
   own the choice of shared renderer.
 - `Overlay` owns ordinary dialogs and workspace panels: placement, independent
   body scrolling, explicit primary/native-form actions, summary and raw diagnostics.
@@ -279,16 +259,11 @@ These are Cubby's own components, designed and built here rather than adopted fr
 - **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench`.
   Thematic column groups are metadata, not a header band. Columns exposes whole-group visibility and
   movement; leaf sorting, filtering and sizing stay on individual headers.
-  Its synthetic showcase compares plain and visual cells alongside editing,
-  range copy/paste, and grouping. `CellBar` and `CellSparkline`
-  (`ui/data-table/visuals/cell-visual.tsx`) supplement
-  readable values with explicit fixed scales; missing samples break the trend.
-  Stock targets and price histories are illustrative, page-local evidence.
-  The showcase's presentation toggle stays page-local; saved-view presentation
-  preferences are not connected.
-  Production Project lists declare an own-task completion bar, with "No tasks"
+  `CellMagnitudeBar` and `CellBar` (`ui/data-table/visuals/cell-visual.tsx`)
+  supplement readable values with explicit scales.
+  Project lists declare an own-task completion bar, with "No tasks"
   for an empty denominator. Deadline cell treatment follows
-  [the shared date rules](docs/web-ui.md).
+  [the shared date rules](docs/web-ui.md#dates-and-times).
   Run lists show recorded current-phase work, purpose-specific items per minute
   when supported, and the latest progress/heartbeat time. Unknown totals omit
   the bar; paused and stale samples do not advertise a live rate.
@@ -367,7 +342,7 @@ remain visible. Expanding context retains the complete linked evidence and facts
 
 Every applicable quality check has one visible result beside its declared field or owning section, including satisfied checks. No check takes a page-level heading on a record page: the display-image check lives in Images, scores print without decimals, and Needs you counts only real attention rows, never loading rows or diagnostic status lines. Absence reads as one muted "Not recorded" with Add on hover; named domain states stay. Satisfied labels describe the recorded fact positively; missing data, defects, accepted exceptions, and neutral coverage retain distinct meanings. A compact quality summary links to the owning result. Explanations expand beneath their row; weights, caps, and score arithmetic remain on demand. Contributions describe checks, not invented per-field point deltas. Ordinary supported field values edit directly while full Edit remains available for coordinated changes, including declared editor exceptions. Inherited values display their effective value and retain an explicit way to return to inheritance. A conditionally hidden section cannot own an invisible quality result or a dead summary link; those checks need a visible fallback.
 
-Full record details are one continuous, mounted page. Declared sections retain their Overview, Work and Evidence grouping; Relations and Activity follow, and formerly separate supporting views join Evidence. A wide work surface has a sticky, independently scrollable table of contents with every group and its indented subsections expanded. Below 800px of available record width, a compact “Jump to” menu exposes the same hierarchy. Links scroll and focus their stable section targets; scrolling updates the current entry without adding history. Explicit jumps retain URL fragments and browser Back/Forward. Section bodies start open; existing pagination and Show more controls remain. Relations and sections with a known count of zero fold into one "Nothing recorded: …" line whose names unfold them; unknown and failed reads stay expanded and are never reported empty. The outline lists populated sections. List sections (relations, Connected records, photos, documents, sources) show their row count, 0 included, beside the heading and in the contents; other sections show no number, and an empty one is announced as Empty to assistive tech only. Contents entries are single-line and truncate, counts sit in a right-aligned tabular column, group labels use quiet sentence case, and one current-entry pill travels behind foreground text in 180ms. Every generic entity detail includes one grouped Connected records section under Relations — every declared local relationship and inverse, including same-type links, joins curated multi-step routes in one group per target entity kind; each populated group shows its first three distinct records and a link to the complete view, while empty groups fold into one "No connections" line. Rows align a Via column with a short relationship explanation that expands to linked witnessed records and every distinct path. Tables, summaries and header context share the same path presentation. Equal labels for distinct records include their shortcodes — then Relationships, which on a detail page is the graph explorer alone: the record's own relations, similar products and physical connections already appear elsewhere, so it never lists them again. Loading and failed reads never count as empty. Drafts stay mounted. Navigation starts immediately; section jumps never smooth-scroll. Apple uses native Contents navigation; Run evidence and Connections use isolated hosted sheets. Related-record links return to native routes. The authentication and bridge contract lives in `apps/apple/DESIGN.md#hosted-workspaces`.
+Full record details are one continuous, mounted page. Declared sections retain their Overview, Work and Evidence grouping; Relations and Activity follow, and supporting views join Evidence. A wide work surface has a sticky, independently scrollable table of contents with every group and its indented subsections expanded. Below 800px of available record width, a compact “Jump to” menu exposes the same hierarchy. Links scroll and focus their stable section targets; scrolling updates the current entry without adding history. Explicit jumps retain URL fragments and browser Back/Forward. Section bodies start open; existing pagination and Show more controls remain. Relations and sections with a known count of zero fold into one "Nothing recorded: …" line whose names unfold them; unknown and failed reads stay expanded and are never reported empty. The outline lists populated sections. List sections (relations, Connected records, photos, documents, sources) show their row count, 0 included, beside the heading and in the contents; other sections show no number, and an empty one is announced as Empty to assistive tech only. Contents entries are single-line and truncate, counts sit in a right-aligned tabular column, group labels use quiet sentence case, and one current-entry pill travels behind foreground text in 180ms. Every generic entity detail includes one grouped Connected records section under Relations — every declared local relationship and inverse, including same-type links, joins curated multi-step routes in one group per target entity kind; each populated group shows its first three distinct records and a link to the complete view, while empty groups fold into one "No connections" line. Rows align a Via column with a short relationship explanation that expands to linked witnessed records and every distinct path. Tables, summaries and header context share the same path presentation. Equal labels for distinct records include their shortcodes — then Relationships, which on a detail page is the graph explorer alone: the record's own relations, similar products and physical connections already appear elsewhere, so it never lists them again. Loading and failed reads never count as empty. Drafts stay mounted. Navigation starts immediately; section jumps never smooth-scroll. Apple uses native Contents navigation; Run evidence and Connections use isolated hosted sheets. Related-record links return to native routes. The authentication and bridge contract lives in `apps/apple/DESIGN.md#hosted-workspaces`.
 
 The generic record editor lays fields out like the Ledger facts it edits: a quiet label column beside each control, stacked below a 26rem form width (the phone sheet). Identity fields lead; the declaration's edit sections order the rest. A field shows an AI suggestion only when it can act on it; the form's one status line and its breakdown report agreements, declines, and below-bar picks. A direct reference does not repeat "Linked to" under its picker. A date clears with its own ×; a separate clear button appears only for a named state such as "Date unknown". An update dialog's subtitle names the record being edited. A form taller than the dialog scrolls between a fixed header and footer.
 
@@ -380,98 +355,18 @@ units, and a qualified rate/ETA. Unknown totals use a moving ink segment;
 reduced motion keeps that segment visible and stationary. Progress owns its
 activity animation separately from intentionally static loading skeletons.
 
-A step-ledger Run's detail (`features/run/run-detail.tsx`) never blends steps
-into one percentage. `RunStepStrip` draws one 6px segment per step, filled by
-that step's own frozen count. Done segments are ink at 55%, running ones info,
-and tally steps a sliding info segment. Steps sit on the RecordList timeline:
+A step-ledger Run's detail (`features/run/run-detail.tsx`) never blends steps into one percentage. `RunStepStrip` draws one 6px segment per step, filled by that step's own frozen count: done segments ink at 55%, running ones info, tally steps a sliding info segment. Steps sit on the RecordList timeline. Running is a pulsing ink dot and waiting the same dot held still (`RecordDot state="waiting"`). Each card states its purpose and input mode (Counted input, Provider estimate, Tally). Only count mode draws a bar, percentage, rate and ETA with the "Frozen at step start" boundary; waiting steps keep a lighter bar and say "Rate paused"; an unstarted step reads "Not started" and "Counts its inputs when it starts". The moving step adds one "Speed set by …" line, the last page's time per phase (or "not measured"), value-first tallies (`KeyNumbers layout="tallies"`), wait reasons as a tone pill over the raw detail, and the "Where the items went" funnel.
 
-- **Marks.** Running is a pulsing ink dot; waiting is the same dot held still
-  (`RecordDot state="waiting"`).
-- **Card content.** Each card states its purpose and an input-mode tag
-  (Counted input, Provider estimate, Tally).
-- **Count mode only.** Only count mode draws a bar, percentage, rate and ETA,
-  plus the "Frozen at step start" boundary. Waiting steps keep a lighter bar
-  (`Progress paused`) and say "Rate paused".
-- **Not started.** A step that hasn't started reads "Not started" and "Counts
-  its inputs when it starts".
-- **Moving step.** The moving step adds:
-  - one "Speed set by …" line from the limits catalog;
-  - the last page's time per phase with its queries (or "not measured");
-  - value-first tallies (`KeyNumbers layout="tallies"`);
-  - wait reasons as a tone pill over the raw stored detail;
-  - the reason funnel ("Where the items went").
+Run detail leads with purpose and meaningful results, then specialized review tools in Work; the full record-facts roster belongs in Evidence. Photo groups keep their comparison editors and purchase findings their domain commands. Input targets render in an embedded `RTable` (Record, Status, Outcome / reason, Source) with search, status filters and the shared inspector; name links open source records and row clicks inspect evidence. Suggestion rows reuse the shared review actions and evidence. Needs attention is the initial view only for supported decisions; otherwise Results, where processing, skipped and blocked items stay discoverable. Refresh values in place, keep admitted row order and inspected items, hold arrivals behind Show new items, and keep resolved attention rows until the member refreshes. Photo batch approval uses ready items in the filtered view unless an explicit selection takes precedence, and shows that scope and its effects first.
 
-Run detail leads with purpose and meaningful results, followed by specialized
-review tools in Work. The full record-facts roster belongs in Evidence. Photo groups retain their image comparison/editors; purchase
-findings and prepared orders retain domain commands. Input targets render through
-an embedded `RTable`, with Record, Status, Outcome / reason and Source columns,
-search/status filters and the shared inspector. Name links open source records;
-row clicks inspect evidence. Assessment ledgers reuse the shared suggestion
-review actions and evidence, with server-authorized fingerprints.
+Run figures and funnel rows drill into the decision ledger: the step's declared results family through a family presenter, with facets, search, J/K/Enter, `/` and Esc, stacked rows on phone and evidence in a `SidePanel`. Steps, Decisions and Diagnostics keep their declared anchors. Execution evidence follows Work; steps, progress reports, diagnostics, transcripts and usage start folded on web, and a direct jump opens its section. The thin live phase summary stays mounted to synchronize Run status. Completed Runs keep results and supported corrections or retries; completion is never a success claim for every item.
 
-Needs attention is the initial view only for supported decisions; otherwise show
-Results. Processing, skipped and blocked items remain discoverable in Results.
-Refresh existing values in place, preserve admitted row order and inspected
-items, and hold arrivals behind Show new items. Resolved attention rows remain
-until the member refreshes the view. Photo batch approval uses ready items in the
-filtered view unless explicit selection takes precedence; show that scope and
-its concrete effects before application.
+The Work queue is a workbench table across record types with a Summary / Pivot / Records picker shared by the embedded Needs you queue and the full page, where layout is URL state. Summary ranks reasons by full-population work-item count with share of the filtered total, wrapping labels and heat-ramp count cells; Pivot is `EntityPivot` over Reason × Type; both drill into Records without dropping scope. One record may have several work items and an item several reasons, so reason counts overlap while totals and Type margins count each item once. Incomplete-coverage notices stay above every layout.
 
-Run figures and funnel rows drill into the decision ledger. The ledger is the
-step's declared results family, read through a family presenter. It has facets,
-search, J/K/Enter, `/` and Esc, and stacked rows on phone. Evidence opens in a
-`SidePanel`. Steps, Decisions and Diagnostics retain their declared anchors.
-Execution evidence follows Work; steps, detailed progress reports, diagnostics,
-transcripts and usage start folded on web, and a direct section jump opens its
-body. The thin live phase summary remains mounted to synchronize Run status. Ordinary
-record sections remain open and review drafts stay mounted. Completed Runs keep
-results and supported corrections/retries; completion is never a success claim
-for every item.
-
-The dedicated Work queue is a workbench table across record types. Its
-default Summary layout ranks reasons by full-population work-item count and
-shows share of the filtered total. Pivot uses the shared `EntityPivot` renderer
-for Reason × Type; Records retains the workbench table and group actions.
-The compact Summary / Pivot / Records picker is shared by the embedded Needs
-you queue and the full page, where layout is URL state. Summary counts and
-pivot cells drill into Records without dropping scope or other filters. One
-record may have several work items; an item may have several reasons. Reason
-counts can overlap while totals and Type margins count each work item once.
-Incomplete-coverage notices stay above all three layouts. The Summary's reason
-labels wrap, numbers align right, and the count cells use the shared heat ramp.
-Its workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
-with each view's server total in mono; a tab presets the View filter, beside
-the Type, Waiting for, Kind, Source, Reason and Vendor any-of filters. Each
-offers is and is not through the shared filter editor, including Filter… in
-the column header menu. Type includes Problem for rows without a record type.
-Reason choices use stable branch or Problem keys and the cell's declared
-labels; a gap row belongs to each failing check, labelled by its message.
-Excluding a check removes rows carrying it while keeping unrelated work and
-the remaining rows' complete explanations. Finding summaries stay in Record
-and their Reason is Finding. Filters,
-sort and Group by (Type, Waiting for or Next action, sectioned by the server
-ahead of the sort) are URL state, and the shared infinite pager loads more
-work on scroll. Columns are the record's image, Type, Record (the record's
-link), the shared Quality count (unsortable: it is stated after the page is
-read), the Vendor chip, sign-toned Amount, Reason, Waiting for (member
-avatar chips or the Either and Unresolved pills), and the rule's details with
-one Review or Open; Next action, Kind, Date and Source are Columns-menu
-toggles, because a rule's next action repeats down thousands of rows and
-belongs to Details and the inspector. A gap row's reason is its gap messages
-as sentences. Waiting for uses the current household member roster, Either
-for shared work and an explicit Unresolved state with its explanation.
-Clicking a row inspects its record (J/K step, Enter opens the full page);
-Suggestion, Run and Problems rows open through their own link. Checkboxes
-select record-backed work independently of the inspector, and a floating
-dark selection bar offers only the queue's bulk actions: Copy codes (source
-shortcodes, deduplicating records with multiple work reasons) and Select all
-N matching. Aggregate Problems rows have no shortcode and are not selectable. A record's own rows appear on its detail
-page and inspector as a compact Work queue ledger — gap chips or reason,
-muted next action, trailing Waiting for pill — absent when the record has no
-work. Reason is enriched after paging and remains unsortable; projected
-fields sort before paging. Run titles link to the passive Problems overview
-until Run detail reads stop recovering execution. Problems and Research saved
-views link into this projection without creating assignments.
+- **Band and filters.** Line tabs (All, Review, Research, Waiting, Automatic) show each view's server total in mono and preset the View filter, beside any-of Type, Waiting for, Kind, Source, Reason and Vendor filters with is / is not, including Filter… in header menus. Type includes Problem; Reason choices use stable branch or Problem keys with declared labels. A gap row belongs to each failing check, labelled by its message, and excluding a check keeps unrelated work and complete explanations. Finding summaries stay in Record with Reason Finding.
+- **Columns.** Image, Type, Record link, Quality count (unsortable), Vendor chip, sign-toned Amount, Reason, Waiting for (member avatars, Either or Unresolved with its explanation) and Details with one Review or Open. Next action, Kind, Date and Source are Columns-menu toggles. Filters, sort and Group by (Type, Waiting for, Next action, sectioned by the server) are URL state; the infinite pager loads on scroll. Reason is enriched after paging and stays unsortable.
+- **Rows.** A click inspects the record (J/K, Enter opens it); Suggestion, Run and Problems rows open their own link, and Run titles link to the Problems overview. Checkboxes select record-backed work independently of the inspector; the floating selection bar offers only Copy codes (deduplicated source shortcodes) and Select all N matching. Aggregate Problems rows are not selectable.
+- **On records.** A record's own rows appear on its detail page and inspector as a compact Work queue ledger (gap chips or reason, muted next action, Waiting for pill), absent when there is no work. Problems and Research saved views link into this projection without creating assignments.
 
 The Suggestions workspace has Pending, Automatic decisions and Automatic rules
 line tabs. Pending counts only actionable proposals; automatic history is an
@@ -526,7 +421,7 @@ Proposed text and expanded applied activity share the inline word diff: green
 insertions, red struck-through deletions, and explicit before/after text for
 assistive technology. Full review diffs wrap; compact incidental diffs truncate.
 
-RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows are 24px with 24px headers (`ROW_DENSITY`), and every cell holds one line; the base scale keeps 32px. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Columns have no vertical rules; only horizontal row hairlines and the pinned-column boundary divide the grid. Counts, quantities and money in cells read in Geist Mono at `text-xs` so a column aligns by digit; dates use tabular figures. An empty cell is blank; an editable one shows a faint Add… on row hover or focus, while N/A, loading, failed and unknown stay visible, and an unknown owner is a dashed avatar beside Unknown. Boolean No is blank and Yes a 12px check. A column bar is a 3px bar at the cell's foot. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the row height and the image column reserves exactly that frame. The identity column pins beside selection and image, capped at 240px and yielding on narrow panes; the pinned boundary appears only while scrolled. Every table of records leads with its image column: the record's own image, else one borrowed through its declared relationships, else its entity icon; a row about another record (a Suggestion, a recipe line, a link candidate) shows that record's. RTable throws in development when a table has neither an image-role column nor a stated `withoutImages` reason, which only rows that are not records give (usage tallies, aggregates, nutrients, unmatched statement lines). EntityRefLink defaults to one neutral record pill: 18px high on desktop (22px on the base scale) with a 14px (18px) canonical image or record mark. Inside RTable, a normal enum value reads as a 6px dot and text, and only warning and destructive tones keep a filled pill; labels are never clipped. Sentence columns declare `prose` and fit their text up to 480px. The table name column opts into `bare`, which renders only linked text; other record-reference cells use the default pill. Image resolution is batched by the owning collection and follows declared transitive relationships. Every entity uses the same presentation; entity declarations supply identity facts rather than custom pill layouts. Option pills hold enum values only; a person or a record is never an option pill. The structural selection column is fixed at the row height; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells, and a selected inspected row shows both. A cell range takes an 8% link-blue surface inside one hairline perimeter, and the anchor cell an inset focus outline. Group bands differ from the row hover surface. Resizing shows a live 1px link guide; unpinned overflow fades at the scrolling edge, and the sticky header gains a hairline once rows pass beneath it. Overdue dates read in destructive ink with a 2px start edge rather than a filled cell. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](docs/web-ui-reference.md#column-widths)). Header labels use their short form on one line, fitting their column up to 160px and truncating past it with the full label in the title; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; the spill belongs to its source cell, so the pointer can travel across it to the copied explanation control, and presses on it reach the source cell. A popup opened from a cell's rail keeps that cell and row active until it closes, so crossing other cells on the way to it does not close it; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Record pills truncate in dense cells and wrap in prose; contextual facts remain outside the pill. Quality scores drop "/100". Quality scores stay visible even at 100; complete records use muted numerals and retain their spoken status. Every RTable identity/name cell shows one line of name text, with no caption, subtitle, account pill, or other content underneath. Secondary facts belong in their own columns or review evidence; custom renderers follow the same rule. The native `list.titleSubtitle` setting has no effect on web tables. Shelf cards retain their declared subtitles. Record pills and enum pills have separate semantic owners; filter record choices reuse the noninteractive record-pill presentation. Dates and timestamps use one `DateDisplay`: full date/year and timestamp clock time followed by muted relative text outside tables; in tables, the day and compact distance share one line ("Oct 13 · 3 min ago"; months use "3 mo ago", and another year leads, "’25 · 1y ago"), and chip lists hold one line and count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target: one truncated name line, one subtitle line, and one contained trailing value; further trailing values lead the subtitle.
+RTable owns interactive record work: virtualization, pinned and resizable columns, in-session layouts, filters, selection, clipboard, grouping, inline editing, and aggregate footers. Desktop data rows are 24px with 24px headers (`ROW_DENSITY`), and every cell holds one line; the base scale keeps 32px. Every cell value gets the same 4px start padding; decorated cells render through `CellFrame`. A column is as narrow as its values: info, relation and resolution controls appear only on the hovered or focused row, over the cell's free edge, and reserve no width; a derived value reads muted, and suggestion marks stay visible. Columns have no vertical rules; only horizontal row hairlines and the pinned-column boundary divide the grid. Counts, quantities and money in cells read in Geist Mono at `text-xs` so a column aligns by digit; dates use tabular figures. An empty cell is blank; an editable one shows a faint Add… on row hover or focus, while N/A, loading, failed and unknown stay visible, and an unknown owner is a dashed avatar beside Unknown. Boolean No is blank and Yes a 12px check. A column bar is a 3px bar at the cell's foot. Quality scores remain numerically sortable but their pills start at the same padding as other categorical values. Table thumbnail frames match the row height and the image column reserves exactly that frame. The identity column pins beside selection and image, capped at 240px and yielding on narrow panes; the pinned boundary appears only while scrolled. Every table of records leads with its image column: the record's own image, else one borrowed through its declared relationships, else its entity icon; a row about another record (a Suggestion, a recipe line, a link candidate) shows that record's. RTable throws in development when a table has neither an image-role column nor a stated `withoutImages` reason, which only rows that are not records give (usage tallies, aggregates, nutrients, unmatched statement lines). EntityRefLink defaults to one neutral record pill: 18px high on desktop (22px on the base scale) with a 14px (18px) canonical image or record mark. Inside RTable, a normal enum value reads as a 6px dot and text, and only warning and destructive tones keep a filled pill; labels are never clipped. Sentence columns declare `prose` and fit their text up to 480px. The table name column opts into `bare`, which renders only linked text; other record-reference cells use the default pill. Image resolution is batched by the owning collection and follows declared transitive relationships. Every entity uses the same presentation; entity declarations supply identity facts rather than custom pill layouts. Option pills hold enum values only; a person or a record is never an option pill. The structural selection column is fixed at the row height; info controls use a 16px desktop footprint with a 10px glyph and preserve the coarse-pointer touch floor. Hover, inspected-current, and batch-selected states stay distinct, including pinned cells, and a selected inspected row shows both. A cell range takes an 8% link-blue surface inside one hairline perimeter, and the anchor cell an inset focus outline. Group bands differ from the row hover surface. Resizing shows a live 1px link guide; unpinned overflow fades at the scrolling edge, and the sticky header gains a hairline once rows pass beneath it. Overdue dates read in destructive ink with a 2px start edge rather than a filled cell. The totals strip meets the table directly; a portaled empty toolbar must not leave a separator or spacer behind. The shared table fits columns to rendered headers, aggregate footers, and a bounded sample of current values, within their declared limits. Fits remain stable while inspecting or editing, manual resizing wins, and no column grows past its kind's cap to fit one long value, and spare width goes only to the record's identity, up to 240px ([column widths](docs/web-ui.md#column-widths)). Header labels use their short form on one line, fitting their column up to 160px and truncating past it with the full label in the title; a count of one entity's records is headed by that entity's icon and "#", and a column of links to one entity carries that entity's icon in its header rather than on every row. A header's sort arrow takes width only while the column is sorted, and its source icon appears on hover or focus. A clipped single-line value spills over its neighbours at the same row height on hover or focus; the spill belongs to its source cell, so the pointer can travel across it to the copied explanation control, and presses on it reach the source cell. A popup opened from a cell's rail keeps that cell and row active until it closes, so crossing other cells on the way to it does not close it; codes (barcodes, order ids) keep their first and last four characters, and other long labels keep their tail. Record pills truncate in dense cells and wrap in prose; contextual facts remain outside the pill. Quality scores drop "/100". Quality scores stay visible even at 100; complete records use muted numerals and retain their spoken status. Every RTable identity/name cell shows one line of name text, with no caption, subtitle, account pill, or other content underneath. Secondary facts belong in their own columns or review evidence; custom renderers follow the same rule. The native `list.titleSubtitle` setting has no effect on web tables. Shelf cards retain their declared subtitles. Record pills and enum pills have separate semantic owners; filter record choices reuse the noninteractive record-pill presentation. Dates and timestamps use one `DateDisplay`: full date/year and timestamp clock time followed by muted relative text outside tables; in tables, the day and compact distance share one line ("Oct 13 · 3 min ago"; months use "3 mo ago", and another year leads, "’25 · 1y ago"), and chip lists hold one line and count the rest as "+N"; secondary context is type hierarchy, never parentheses. A table view never becomes a stack of decorative cards on desktop. Phone rows use a semantic projection with a 44px minimum target: one truncated name line, one subtitle line, and one contained trailing value; further trailing values lead the subtitle.
 
 The shared Columns control is a searchable, compact checklist with quiet group
 headings and row hairlines. Checked means shown; hidden rows keep readable muted
@@ -598,7 +493,7 @@ Share the visual grammar, never the domain arithmetic. Statistical charts (ranke
 - **Money reads to the cent.** Totals, summary strips, tooltips, matrix cells and screen-reader summaries format with cents so they reconcile against statements. Only axis ticks and labels painted inside a bar or arc may round to whole dollars.
 - **Specialized renderers stay specialized** when the semantics differ: dependency graphs (directed edges, worker layout, transitive reduction, cycle checks), Gantt (date geometry, drag, dependencies), calendar heatmaps, nutrition bars (uncertain ranges), the recipe cost treemap, the unit-mapping graph, the ingredient network, the entity reference graph (a schema overview, not record traversal), location hierarchy views, product-category donut (count and drill-navigation), task status board, and operational layouts (calendar grid, task board, project tree). They may reuse `visualization.tsx` presentation and shared pivot helpers, not force-fit into the chart kit.
 - **Graph workspace.** `/connections`, `/graph`, and detail-page relationship maps share `relationships/graph-explorer.tsx` (React Flow, incremental worker placement, viewport culling, retained camera). Compact 224px map nodes carry a 40px cover, identity, and two curated facts; selection opens the full eight-fact inspector. The inspector and minimap start closed. Many-record relationships are counted branch buttons, and only direct singleton relationships open automatically. Descendants and siblings stay hidden until their branch is expanded; Show wider network explicitly reveals the loaded branches, including siblings. Loading a record never grants visible expansion intent. The entity's preview roster owns the facts; canonical selected-field list readers supply prices, recorded spend, quantities, and progress in batches by entity kind. Never invent a card-specific money calculation. The focus sits at the center, relationship branches radiate around it, and descendants fan outward in their parent's direction. Existing positions and camera stay put during expansion. Fit focus frames the first ring at a minimum 85% zoom; manual zoom stops at 85%, and Collapse all returns to relationship summaries. Maps start at one link; deeper traversal and distant path search remain explicit. Fit map, a collapsible inspector, and a linked paths list support different densities. Direction arrows and relationship labels retain canonical edge ownership even when a path traverses backward. Selection inspects loaded facts; branch expansion is explicit; pages reveal 12 records at a time; one map holds at most 500 records and 1,000 connections. The depth picker supports one through four links without increasing those budgets. Destination-path search keeps its server bounds. `/connections` without a record offers a starting-record picker; existing view-specific URLs retain their connected-records table and offer the map. Recipe and work dependency views keep their own layout and adapters above the generic relationship read.
-- **Connection context.** Detail headers and the connections workspace surface up to four populated curated connected views, with linked targets and expandable witnessed paths. A shared vendor or location is not purchase intent. Product purchase-project context follows the product's own Expenses to their assigned Projects; a mixed order must not assign a sibling line's Project to this Product. Multiple targets remain visible with the total count. Suggestions stay in their explicit review surface in the inspector and never become recorded graph edges before acceptance. Swift uses this same workspace directly on the global graph route and in a scoped full-screen presentation from record details; the old Swift graph and connection-review UI are removed.
+- **Connection context.** Detail headers and the connections workspace surface up to four populated curated connected views, with linked targets and expandable witnessed paths. A shared vendor or location is not purchase intent. Product purchase-project context follows the product's own Expenses to their assigned Projects; a mixed order must not assign a sibling line's Project to this Product. Multiple targets remain visible with the total count. Suggestions stay in their explicit review surface in the inspector and never become recorded graph edges before acceptance. Swift uses this same workspace directly on the global graph route and in a scoped full-screen presentation from record details.
 - **Visualization presentation** uses `ui/visualizations/visualization.tsx`: explicit loading, empty, error and ready states. Initial errors show raw diagnostics and Retry. A ready state may carry an inline refresh error; the renderer stays mounted through failure and retry so camera, focus and selection survive. `visualizationState` reads only the current query's data/error; neither it nor the frame caches data. Query keys own entity/record/filter/date/order/page scope, and owners must not use previous-scope placeholder data. The component that owns the query (including expense analytics, entity timelines and location trees) supplies lifecycle state and Retry; a ready-only outer frame cannot substitute for query error handling. Hydration-gated owners keep loading visible until hydration completes. Optional portfolio Analytics retains its enabled query and lazy renderer gate.
 - **Every chart** offers an accessible text alternative or summary, distinct loading, error, and empty states, and lazy-loads its renderer.
 - **Hierarchy and network charts** use Nivo through the browser-only renderer boundary; application code does not import D3 directly. Network layout settles before rendering, with animation disabled. Trees use a scrollable viewport and linked labels. Expandable text lists expose ingredient pairs and their recipes, recipe row costs (with unpriced rows excluded from tile areas), and directed/self-referencing schema relationships. Unit graphs distinguish built-in conversion bridges with dashed links.
@@ -661,24 +556,14 @@ applied", and pending approval counts the items actually approving.
 
 ### Derived values
 
-`ui/derived` and `entity/fields/explanation` own the ADR 0021 envelope presentation. Own values carry no mark.
-Inherited values have a muted leading ↳ in a 12px slot. An automatically set value
-is a neutral chip with a small ochre sparkle; “Set automatically” is its tooltip
-and accessible name. Refresh marks remain
-visible independently of hover: queued, waiting and stale-unscheduled values
-have a static info-tone dot with their distinct status label. A related refresh
-pending has that same static dot and never reads as queued for this value. Only
-an observed executing ticket with an unexpired Job lease pulses; reduced motion keeps it
-static. A local timer expires that observation without fetching and labels its
-status as potentially out of date. Failed values expose the raw
-diagnostic on hover and keyboard focus. Missing values retain Not assessed or
-the field's normal dash. Marks preserve the table row height.
-An owed refresh's explanation shows its recorded trigger as a labelled fact;
-older work without that metadata says Not recorded. Activity's existing
-per-value disclosure lists the same trigger descriptions and their counts,
-including the unknown bucket. Trigger text carries no record names or values.
-A related refresh says it may not affect this value and its trigger reads Not
-attributed to this value; it never names a precise record cause.
+`ui/derived` holds the entity-independent value marks and stacks;
+`entity/fields/explanation` holds the Why this value popover, which reuses entity
+links, evidence and existing mutation actions. Own values carry no mark.
+Inherited values have a muted leading ↳ in a 12px slot. An automatically set
+value is a neutral chip with a small ochre sparkle; “Set automatically” is its
+tooltip and accessible name. A value that has not been calculated reads Not
+calculated yet behind a quiet icon, or the field's normal dash. Marks preserve
+the table row height.
 
 Why this value is one viewport-bounded popover: a vertical chain in declared
 precedence order, with a filled deciding level and muted skipped levels. Set,
@@ -694,34 +579,21 @@ and allocated results retain their Mixed or Allocated label. An allocated
 result without a scalar value reads Allocated rather than Not set; its shares
 remain the source of project amounts. Quality checks and their exception controls share this
 explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
-The footer compares stored and live values and shows the last computation,
-observed execution start and known retry deadline: Next retry while it is ahead,
-Retry was due once it has passed, and no claim when it is unknown. Unknown invalidation causes or finish times
-remain unknown. Progress here is the phase and observed start time; no value has
-a percentage, remaining count, ETA or queue position.
-`ui/derived` holds the entity-independent marks and stacks; the explanation
-popover that reuses entity links, evidence and existing mutation actions lives
-in `entity/fields/explanation`.
+Unknown computation times and causes remain unknown; no value shows a
+percentage, remaining count, ETA or queue position.
 
 Display image sources are read-only strips in precedence order, with a linked
 source header and the chosen cover outlined. Header and table thumbnails open
 the chain; the Images section also renders it. Both read the record-level
-`fieldExplanation.imageChain` query and preserve its precedence order. Editing
-remains #3310.
-Remaining counts do not establish completed outcomes, a workload total or an ETA.
-Current publications are shown by source and age window, without interpreting
-their age distribution as an execution-event rate.
-The Assessment producer and its internal-source observations are a separate
-publication cutover; the additive DTO alone does not enable them.
+`fieldExplanation.imageChain` query and preserve its precedence order.
 
 Progress uses the shadcn `ui/primitives/progress.tsx` copy, extended with Cubby's
 normalization and paused and indeterminate states, with
 `ProgressLabel`, `ProgressValue`, and a 6px token-colored track. Labels and
 values stack on phone widths so long Job kinds retain their own line. Run detail and
 Run Work cells show the current phase's known processed/total counts;
-unknown totals remain text. The derived backlog uses counts and observed states;
-it has no completion bar based on queue depletion. The collapsed rail retains
-its status dot. Client synchronization remains separate from execution progress.
+unknown totals remain text. Client synchronization remains separate from
+execution progress.
 
 ### Activity and evaluation progress
 
@@ -732,74 +604,16 @@ Cancelled evaluations stay in the population denominator and appear in the
 facts and record-kind table. Activity and Evaluation reads age on the shared
 display clock independently of refetching: after three polling intervals,
 cached observations show their measurement age and suppress live indicators,
-pace and ETA. Derived backlog has no payload timestamp, so its successful read
-time supplies the age. The minute display clock also refreshes on focus and wake.
+pace and ETA. The minute display clock also refreshes on focus and wake.
 
-Project attention uses one quiet shared completeness notice in its dashboard, Problems and Work surfaces, with singular-aware project counts and known-findings wording. Saved-view count pills contain numbers only; incomplete membership is explained in the tab title and shared list status strip. Missing Project task rollups display Updating… until publication.
+Project attention uses one quiet shared completeness notice in its dashboard, Problems and Work surfaces, with singular-aware project counts and known-findings wording. Saved-view count pills contain numbers only; incomplete membership is explained in the tab title and the list footer.
 
-### Work diagnosis and definitions
+### Work page
 
-Work is one screen at the compatible `/activity` URL: an always-present health
-line, a Stuck section only when something is stuck, and one Needs you queue,
-then footer links to Suggestions, Missing facts, All work and History. No tabs,
-no stat tiles and no intro. It answers two questions, whether background work is
-healthy and what needs a member, and carries no scheduler or queue vocabulary:
-no wakes, leases, tickets, deadlines, pace or refresh counts. Telemetry belongs
-to `/jobs`, the Run and Job pages (direct link and command menu) and MCP.
-
-The health line states one of Healthy, Catching up, Stuck or Unknown in a
-sentence of secondary ink. It never shows a count of internal work, a percentage
-or an ETA. A failed read says the page cannot tell, with raw diagnostics and Try
-again, and never claims all clear. Stuck rows are flat with hairlines: a static
-`warning-ink` glyph, an outcome title, one sentence on consequence or remedy, at
-most one action, and a closed Technical details disclosure holding the raw failure
-with Copy. Eight rows show initially; Show more reveals every remaining category
-in place, and Show fewer restores the compact view. A retry reads every 10
-seconds for two minutes, then the page goes quiet.
-
-Needs you is the embedded `WorkQueue` grouped by Reason, over `NEEDS_YOU_FILTERS`
-(mine plus shared, optional proposals excluded): one population with the sidebar
-and Home's preview. With nothing to show the page reads `Nothing needs you.` at
-its largest size. While inputs are incomplete it keeps the queue's known-work
-notice instead, because an unknown source cannot be claimed empty. Work, the full
-queue and Home share that notice: one quiet line naming how many checks are
-updating, with each check's declared label and extent behind its disclosure.
-Source and Problem keys never reach the member.
-The household reads a published queue. When its latest republish failed, or
-its rows are more than ten minutes old, Home, Work and the full queue add one
-quiet line under that notice: “Needs you last updated <relative time>”, “; the
-latest update failed” when it did, then a closed Technical details disclosure
-holding the raw error with Copy, and Retry. Each separator wraps with the item
-after it. The rows stay; the line never replaces them with an error.
-
-The sidebar's Work row shows the needs-you count and, only when something is
-stuck or that published count is behind (the line above), a static warning
-glyph; the collapsed rail shows one dot with the same label. Citron is never a warning. Healthy work shows nothing at any backlog size,
-and a failed read stays silent because the page itself reports it. The read never
-polls. History is a thin `/history` route of Run history and recorded Changes.
-
-Run types is the permanent “What does each Run do?” reference. Definitions
-lead with targets, exclusions, possible effects, dependencies, cost and recovery.
-Ordered steps reuse declaration labels and purpose text from live execution;
-static definitions forecast possible work; actual Run/Job evidence remains
-canonical. Counted inputs freeze at step start, estimates retain their qualifier,
-and tallies have no implied total.
-Execution drivers and ownership details stay behind a technical disclosure.
-Job definitions share the canonical kind-policy declaration, and Job/Run headers
-link to their definitions. Historical types remain distinct.
-
-Settings → Maintenance holds the daily pass and repair tools behind a closed
-disclosure, so opening Settings reads no maintenance status. It explains the
-standard daily 7 a.m. household pass before its Run now action; internal daily
-queue upkeep has its own Job definition. Backlog
-and image classification counts sit behind disclosure. Image classification
-rows can overlap and uncertain cutout eligibility is not a review queue.
-Recipe re-parsing and alias pruning require an explicit successful preview
-before Apply; each bounded Current/Proposed sample states its coverage and that
-the server rechecks current eligibility rather than locking the preview population.
-
-Expanded repair comparisons span the available width below
-the description and action controls; comparison content never competes with
-the description for a narrow right-hand column.
-
-Idle operational views do not poll the database.
+The Work page is one flat screen with no tabs, stat tiles or intro; its behavior
+is in [web UI contracts](docs/web-ui.md#work-page). The health line is one
+sentence in secondary ink. Stuck rows are flat with hairlines and a static
+`warning-ink` glyph. An empty queue reads `Nothing needs you.` at the page's
+largest size. Citron is never a warning: the sidebar Work row and collapsed rail
+use a static warning glyph or dot only for stuck or stale work, and healthy work
+shows nothing.

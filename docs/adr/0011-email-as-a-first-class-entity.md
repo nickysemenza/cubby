@@ -285,118 +285,37 @@ proposed each link (`proposedBy`); that column describes the existing decision
 rows and adds no relationship. A member's Link marks the Email related as a
 member resolution, since a reviewed Purchase link is relevance evidence.
 
-Addendum (exact order links, 2026-11): the member accepted nearly every
-exact order-number suggestion by hand, so an undecided current order event
-whose order id names exactly one eligible Purchase now links automatically as
-an `automatic` decision proposed by `heuristic`. It rests on the extracted
-order event, which is evidence; association alone still claims no package
-evidence (#3013), and the link records none. Member decisions win: an event with
-any active decision is never touched, and the automatic history's correction
-records the member's dismissal. Ambiguous order ids and amount matches remain
-suggestions. The link leaves relevance classification alone.
+Addendum (exact order links): the member accepted nearly every exact
+order-number suggestion by hand, so an undecided current order event whose
+order id names exactly one eligible Purchase links automatically as an
+`automatic` decision proposed by `heuristic`. It rests on the extracted order
+event, which is evidence; association alone still claims no package evidence,
+and the link records none. Member decisions win: an event with any active
+decision is never touched, and the automatic history's correction records the
+member's dismissal. Ambiguous order ids and amount matches remain suggestions.
+The link leaves relevance classification alone.
 
-### Unsettled Emails and coordinator failure recovery
+The [Mail import service guide](../../apps/web/src/server/domains/purchase-import/service/README.md)
+owns the `unsettled` Email lifecycle, attempt bounds and coordinator failure
+recovery.
 
-There is no `blocked` Email status. A related Email an import attempt left
-without accepted or linked evidence is `unsettled` and keeps its holder Run
-(`Email.runId`), outcomes and evidence. An attempt is a `claim_next_work` or
-`target_outcome` receipt in this or an earlier self-failed or reviewed Run;
-roster admission alone is not one. A Run that fails or stops for review
-returns the Emails no coordinator reached to discovery as `pending` with no
-holder, and keeps the attempted ones `unsettled`. A member's cancel keeps every
-researching Email with the Run as `unsettled`: discovery must not readmit what
-the member stopped, and the Run's retry or restart still transfers them.
-Evidence recovery does not readmit a member-cancelled holder's Emails for
-evidence that predates the cancel (an existing sender mapping); only the
-member's retry or restart, changed retained bytes, or accepted order evidence
-newer than the cancel does. A Run admitted for a recheck revision keeps all its
-unfinished Emails `unsettled` when it fails, since they were unsettled before
-it. A
-related or uncertain Email retained without import content is `pending` with no
-holder; automatic admission requires retained content, so it waits for a member.
+### Original and logical input capture
 
-Every admission of an Email into a Mail import Run (fresh, transient retry,
-transfer or supporting original) counts against the evidence revision that
-admitted it (`Email.importAttempts`): the checksum, plus the admitting Run's
-`evidenceRevision` for a sender, accepted-order or retained-source recheck.
-At most three Runs attempt one revision, however the earlier ones ended,
-including failures before any claim; an Email out of plain attempts stays
-`unsettled` with its last Run instead of returning to discovery, and a
-transient retry carries only Emails with an attempt left at that Run's
-revision. A new revision starts its own count. Member-selected and
-member-controlled imports are not bounded.
+Gmail ingest and explicit relevance-correction publications retain a versioned
+`gmail-original-v1` manifest separately from the normalized message checksum.
+It binds the owner, mailbox and provider message identity and captures ordered
+MIME structure, all text alternatives, headers (including Content-ID),
+attachment descriptors and available byte digests. Missing bytes, malformed
+encodings, size conflicts or capture limits produce explicit incomplete evidence
+with no content digest. Capture uses already acquired bytes and makes no
+additional provider or storage requests. Equal content digests do not make two
+Emails equivalent.
 
-An `unsettled` Email is readmitted from any ended holder (completed, reviewed,
-failed or retired) only when a new evidence revision appears: a newly verified
-sender mapping, new accepted Purchase evidence for an order it prints, or new
-retained bytes. Each revision is fingerprinted into the admitting Run's frozen
-input (`evidenceRevision`, which a release clearing the replay key never
-touches) and checked against every frozen roster including disposed Runs, so
-one revision pays for at most one attempt; nothing readmits
-an unchanged Email on a clock. A retired holder has nothing to transfer, so the
-Email is admitted afresh; any other holder records a source-transfer receipt.
-
-A failed coordinator settlement is classified beside its Pi reason from the
-last model or tool error the submission recorded (`agentFailureCode`):
-funding stops pause the Run without spending an attempt; transient faults
-(retryable provider or gateway status, deadlines, egress, overload, harness
-`stale`/`reset`, database connection faults) fail as `agent_transient` and retry
-automatically as one successor Run that takes only the Run's still-held
-unsettled Emails with an attempt left, on the escalation coordinator model;
-everything else is deterministic (`agent_failed`) and never retries. An explicit
-401/403 is deterministic whatever transient wording it carries. A
-deterministic failure, or a transient one out of attempts, leaves exactly one
-Run finding naming the class and the raw error. Only a recent transient failure
-holds back automatic admission (one hour). No Run completes or is retired while
-its roster still holds a `researching` Email.
-
-Before handing a claimed lifecycle notice to the coordinator, the claim links it
-model-free when exact evidence names exactly one Purchase on the Email owner's
-account: a Shipment this Email already sourced, a tracking key equal to exactly
-one Shipment, or the sender-proven Vendor's normalized order key. Any
-disagreement goes to the coordinator, including an order-key match on another
-member's account. Order and tracking keys are stored
-separately on the Email (`orderKeys`, `trackingKeys`, bound to
-`mailKeysChecksum`) and recomputed lazily when missing or stale. Because a link
-alone does not extract package evidence, a tracking or order-key link records
-the Email's one recognised package as shipment evidence. A shipping or delivery
-notice without recognised tracking, with more than one package, with an
-unknown carrier, with more labels followed by a reference than recognised
-keys, or with any package reference after a tracking, package, parcel or
-shipment label (scanned across line breaks, separators normalized) or in a
-tracking link that is not a recognised key still goes to the coordinator.
-
-### Complete original capture
-
-New Gmail ingest and explicit relevance-correction publications retain a versioned `gmail-original-v1`
-manifest separately from the existing normalized message checksum. It binds the
-owner, mailbox and provider message identity and captures ordered MIME structure,
-all text alternatives, headers (including Content-ID), attachment descriptors and
-actual available byte digests. Missing bytes, malformed encodings, size conflicts
-or bounded capture limits produce explicit incomplete evidence with no content
-digest. Capture uses already acquired bytes and makes no additional provider or
-storage requests.
-
-The manifest does not establish cross-Email equivalence or correction authority.
-Equal content digests do not erase independently bound provider identities. Email
-correction propagation remains held pending current-effect ownership, complete
-intent fencing and DB-only publication contracts. A later capture creates a new
-observation when its proof differs; it never retrofits an immutable historical
-Assessment or certifies previously discarded content.
-
-### Logical classification input capture
-
-New ingest classification publications also retain `gmail-logical-inputs-v1`:
-ordered shared AI input metadata and fingerprints captured before cache or
-transport execution, including relevance detail retries. This records declared
-logical requests, independently of original capture and actual answering-model
-provenance. It does not attest complete provider wire inputs or grant correction
-authority. Provider identifiers present in the actual input remain significant.
-Rule-only and custom classifiers that emit no inputs retain no logical proof.
-
-Observation reuse compares both evidence components, including their absence.
-Changed or newly missing proof creates a new observation without modifying the
-previous Assessment. No historical capture is inferred or backfilled.
+Ingest classification publications also retain `gmail-logical-inputs-v1`: the
+ordered AI input metadata and fingerprints captured before cache or transport
+execution. Rule-only classifiers that emit no inputs retain no logical proof.
+Observation reuse compares both evidence components, including their absence;
+changed or missing proof creates a new observation. Nothing is backfilled.
 
 ### Decisions and reviews have Email owners
 
@@ -418,147 +337,5 @@ keeps its Feedback id as its EmailReview id, so one review has one identity.
 `application` records whether routing used them. Their `publication` holds the
 original and logical input proof. A mail import's frozen result sits on the
 Email's `target_outcome` RunOperation as `mailOutcome`, and its grades are
-EmailReview rows. Every carried row kept its old Assessment or Feedback id, and
-a stored `assessment.review` handle resolves to its current owner.
-
-### Retained review frontier
-
-A new shared member Email relevance/link review (including an Email/Purchase
-connection review) retains a system-history frontier receipt in the same
-transaction as its command review. It records sorted retained protecting event
-handles across checksums and superseded subjects. Direct resolutions and actual
-link decisions protect intent; application receipts and model observations do
-not become new member commands. Connection endpoints require retained proof.
-Unresolved subject identity records an explicit hold without losing the review.
-
-Exact command replay preserves its original frontier. A historical command with
-no frontier never gains a reconstructed baseline. Preparation failure preserves
-the committed command and frontier; transaction failure rolls back both.
-These receipts establish the command/frontier association only. They contain no
-selected-effect proof, do not establish complete cross-domain serialization and
-are not reusable correction authority. Email propagation stays held until the
-outer gate, current-effect ownership and full eligibility contracts are enforced.
-
-### Relevance correction preparation and publication
-
-Explicit relevance correction requires a root database for preparation. Provider
-retrieval, complete-original capture and object uploads run before the application
-transaction. Each upload has a durable reservation, locked while staging bytes.
-Preparation binds the connected auth-account row identity, then rechecks owner,
-that same account incarnation and reviewed checksum after retrieval before staging.
-Disconnect/reconnect to a different account row refuses the preparation even when
-member/provider/mailbox fields match; token refresh on the same row is allowed. Publication repeats those checks under the existing parent locks,
-then adopts staged references using DB-only writers in the caller's transaction.
-Cleaned reservations cannot be published or recreate their objects. The same
-source/routing snapshot fence used by Gmail evidence publication is rechecked
-after retrieval and under publication locks. A newer same-original routing
-publication makes older preparation stale even when the reviewed checksum and
-account identity still match. This does not establish a complete member-intent
-frontier: review-only intent changes and routing ABA protection still require
-the separate ownership contract.
-
-Shared review preserves validation → durable member command review → canonical
-replay → preparation → transactional replay/publication. A preparation failure
-retains the review and raw retrieval diagnostics without an application receipt or
-routing change. A successful application replays without consulting Gmail; a
-concurrent successful receipt can also settle an invocation whose preparation
-failed, provided cleanup succeeded. Cleanup failures cannot be hidden by a
-concurrent receipt. Publication and cleanup failures remain errors and do not imply rollback.
-Routing, observation and command application receipt remain atomic. Unused or failed
-staging is discarded only through exact reservation/reference ownership checks;
-failed deletion retains the reservation for the existing cleaner. Cleanup attempts
-keys sequentially, including on a root bound to one physical connection, and
-collects failures without stopping the remaining attempts. Prepared handles expose
-only immutable Email identity; verified content, actor/source bindings and staged
-references remain module-private and cannot be replaced by caller or model data.
-
-This boundary supplies no automatic propagation authority, effect selector or
-cross-Email identity rule. Those domain contracts remain required before Email
-correction repair becomes supported.
-
-### Email evidence outer write scope
-
-`withEmailEvidenceWrite` owns a DB-only serializable root transaction and takes
-one physical `AssessmentCorrectionLock` write before domain work. Callers must
-replace the actual outer transaction entry, before Job, Run, Purchase, source
-claim, Original, Email or projection locks. Calling it inside an existing
-transaction is refused; nested writers carry the supplied capability instead.
-The scope retries aborted snapshots through the existing database helper, never
-committed writes whose after-commit notification failed.
-
-The private registered capability is valid only for that live transaction and
-its active savepoints, including before-commit publication. Construction,
-property copying, unrelated transactions, expired savepoints and later reuse of
-the same physical connection confer no scope. A second root opened while the
-scope is active is refused; provider and storage IO remain outside the boundary.
-The scope serializes writes only and supplies no member or source-proof authority.
-
-Gmail evidence publication adopts this scope before evaluation/Job, owner, Run
-and Email locks. Ordinary ingestion, explicit reclassification, refresh, removed
-source receipts and extraction-preview publication share this entry. Nested
-callers must supply the existing live capability; unscoped transaction facades
-are refused instead of taking a late gate. The publication callback receives the
-same capability for nested domain writers. Concurrent Gmail publications now
-serialize at this one household gate and use the owned snapshot retry contract.
-Provider and storage preparation stays outside it; after-commit failures never
-replay committed writes. Publication observation metadata belongs to each attempt:
-the callback reports it through the scoped publication context instead of
-mutating the retained input. Aborted attempts cannot supply later handling or
-evaluation receipts with an abandoned observation handle.
-
-This is partial outer-entry coverage. Member intent/application, link/import,
-Run controls, Original maintenance, accepted-evidence finance/shipment integration,
-current-effect selection and distinct-Email equivalence remain prerequisites. Email correction
-adapters remain held; adding this scope does not authorize financial commands,
-historical enrollment or production application.
-
-### Gmail ingest attachment preparation
-
-Gmail ingest acquires and uploads missing attachment payloads before its source
-publication transaction. Every PUT holds the exact durable upload reservation;
-publication adopts prepared checksums/keys through DB-only writers and preserves
-current or promoted bytes. Missing payloads retain metadata-only checksum behavior
-and cannot become complete original-capture proof. Source eligibility is rechecked
-after preparation by the existing publication owner.
-
-Every prepared key is subsequently discarded through reservation/reference checks,
-including declined publication, rollback and unused preparation. Adopted keys are
-preserved. Cleanup is sequential for single-connection roots, attempts all keys,
-and retains original publication and cleanup errors. A committed notification
-failure is not rollback and does not authorize deleting referenced objects.
-The former upload-inside-publication writer is removed. This preparation boundary
-precedes Email outer-scope adoption; it does not enable correction propagation.
-
-### Shared Email review scope
-
-Shared relevance/link and Email/Purchase connection reviews enter the Email
-scope separately for command/frontier capture, DB-only application and projection
-history. The gate precedes command insertion, application advisory/parent locks
-and history projection locks. Command Feedback still commits before provider
-preparation, so failed retrieval cannot erase member intent. Preparation and
-cleanup stay outside the write scope; an application outcome is rebuilt for each
-transaction attempt rather than retaining abandoned result fields.
-
-DB-only nested reviews must supply an existing live capability. Unscoped
-transaction facades are refused before retaining a command. Other review families
-keep their existing transaction owners. Batch review continues item-by-item.
-This does not establish complete protecting-event coverage or enforce a prepared
-frontier against later intent; current-effect ownership and the remaining domain
-entry points are still required before Email propagation can be enabled.
-
-### Prepared relevance publication scope
-
-Prepared relevance publication requires a live Email evidence capability before
-its owner/account/Run/Email lock sequence; a transaction alone is insufficient.
-Direct member correction acquires the root scope after provider/storage
-preparation and passes the capability to publication. Shared review forwards its
-already acquired application capability. Neither path acquires a late gate in
-nested writers, performs provider work inside retryable publication, nor derives
-source-proof authority from the capability.
-
-Existing private preparation, account/routing freshness, canonical shared replay
-and reservation cleanup contracts remain in force. A capability from another or
-expired transaction refuses before evidence changes. Direct correction remains a
-protected local action, not a reusable shared root. Its durable initiating intent,
-complete protecting-event frontier and selected-effect ownership are still open
-prerequisites; this scope adoption does not enable Email propagation.
+EmailReview rows. Rows carried from the retired Assessment ledgers kept their
+ids, and a stored `assessment.review` handle resolves to its current owner.

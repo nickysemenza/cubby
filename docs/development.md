@@ -360,9 +360,6 @@ native PostgreSQL installation remain owned by their existing runners.
   [.worktreeinclude](../.worktreeinclude). Every `pnpm install` re-verifies
   `node_modules` (`optimisticRepeatInstall: false`), so rerunning it relinks a
   missing dependency instead of reporting "Already up to date".
-- Amp orbs run [.agents/setup](../.agents/setup): Rust, wasm-pack and
-  `pnpm agent:setup` on the image's Node, with Docker reachable without sudo.
-  Start PostgreSQL/IntegreSQL with `docker compose -p cubby up -d --wait`.
 - Rust builds share `~/.cache/cubby/cargo-target`.
   [scripts/ensure.ts](../scripts/ensure.ts) keys the WASM artifact on
   Cargo's resolved graph and file contents, so it never drifts silently.
@@ -680,7 +677,7 @@ The MCP adapter remains at `/api/mcp` as an OAuth 2.1 resource server. Its
 generated tools come from capability operations and their descriptions; the
 `describe` action publishes selected action schemas. View and internal
 operations stay off MCP. The hand-authored entity and entity-read tools retain
-their kernel schemas. MCP operating patterns are in [MCP](agents/mcp.md).
+their kernel schemas. The MCP server is described in [MCP](agents/mcp.md).
 
 The doorbell at `/api/doorbell` has two topics: `household.changed` and
 `imageProcessing.work`. A ring only signals that state may have changed;

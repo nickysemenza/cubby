@@ -122,3 +122,47 @@ hour. Assignments and financial command validation still use current evidence.
 Keeping every member feature, the native app and the mail agent limits the
 reduction. The estimate is about 90 tables and 10 to 17 percent less production
 code, plus large cuts to tests and docs. Going further means cutting product.
+
+## Kept on purpose
+
+These were reviewed for removal and kept. Do not propose cutting them again
+without new evidence; low recent write counts do not show that reference data
+is unused.
+
+- **Cookbook**: most Recipes cite a cookbook as their source, and the import
+  pipeline that fills them stays.
+- **CalendarFeed Durable Object**: CalDAV and feed polling read its SQLite
+  mirror, so calendar sync runs without waking Neon.
+- **Derived snapshots and the hourly pass**: they keep list reads cheap; the pass
+  runs as queue-permit pages.
+- **Sweeps**: the member-started way to evaluate fields and statement charges.
+- **Garden**: seasonal, so it is idle for months at a time.
+- **Ledger transfers**: household contribution positions depend on them.
+- **The financial evidence stack**: it holds statement history from before the
+  Monarch sync.
+- **Embeddings and Vectorize**: semantic search and the related-records rail use
+  them.
+- **The AI response cache**: replays avoid paying again for an identical call,
+  including across Job retries.
+- **Funding objects** (`AiGatewayEgress`, `ChatGptPlan`): they admit calls and
+  hold provider refusals for the funding ladder in
+  [ADR 0027](0027-tier-routed-models-on-a-funding-first-ladder.md).
+- **The Hyperdrive stale-read cache** (`HYPERDRIVE_CACHED` with `last_write`):
+  close to half of cacheable reads hit it in production.
+- **The database freshness socket** (`DatabaseFreshness`): it pushes
+  `household.changed` so open pages update without polling.
+- **The `product_pair` and `transfer_pair` Suggestion families**: statement review
+  and import-time Product matching still use them; their AI producers are gone.
+  Re-measure their use before proposing a further cut.
+
+Rejected directions:
+
+- **Splitting the Worker**: there is one application (decision 9), and a split
+  does not lift the per-invocation memory and CPU limits that constrain work.
+- **A Neon read replica**: Neon stays the single source of truth (decision 1);
+  slow reads are fixed by rewriting the query first.
+- **Containers or other non-Workers compute**: ruled out by decision 2.
+- **Cloudflare Workflows**: the Queue and hourly cron already wake and back stop
+  background work (decision 2).
+- **Stateless CalDAV over Postgres**: every calendar poll would wake Neon, which
+  the CalendarFeed Durable Object avoids.

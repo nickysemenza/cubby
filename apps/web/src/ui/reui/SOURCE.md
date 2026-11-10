@@ -9,7 +9,7 @@ variant from:
 
 Copied registry items:
 
-- `event-calendar` → `components/reui/event-calendar/` (also carries its own license notice)
+- `event-calendar` → `event-calendar/` (also carries its own license notice)
 - `badge` → `badge.tsx` and `alert` → `alert.tsx`, from the `@reui` base-mira
   registry as of 2026-11-05; refresh with `shadcn add @reui/badge @reui/alert --overwrite`
   and re-apply Cubby's tones and `pillVariants` composition
@@ -28,9 +28,8 @@ Other evaluated items remain Cubby-owned:
 - Scrollspy: writes location.hash outside the router.
 
 Cubby-specific adaptations add strict TypeScript compatibility, event-class
-hooks, and first-party adapters for Cubby entities. The former copied filters and file
-upload hook were replaced with Cubby-owned modules and are no longer covered
-by this provenance notice.
+hooks, and first-party adapters for Cubby entities. Filters and the file upload
+hook are Cubby-owned modules outside this provenance notice.
 
 Copyright (c) 2026 KeenThemes
 

@@ -1,38 +1,29 @@
 # AI prompt refresh
 
 The [entity contract](../entities.md) owns refresh eligibility, history and
-acceptance semantics. Refresh is always enabled; the existing
-the hourly cron activates the current compiled feature policy through a Job. Gateway coordination
-applies to production paid inference independently.
+acceptance semantics. Refresh is always enabled: the hourly cron activates the
+current compiled feature policy through a Job. Gateway coordination applies to
+production paid inference independently.
 
-## Rollout
+## Activation and verification
 
-1. One migration owner applies the additive AiEvaluation/provenance/receipt
-   expansion using the [production migration procedure](production-migrations.md)
-   before merge, then verifies retained household data and `db:check
-   --against-production`. Legacy nullable provenance stays unknown; no historical
-   row or applied value is backfilled with a guessed version.
-2. Use `cubby` for live tools, integration development and production; verify
-   provider routes/managed credentials before rollout. Environment metadata
-   retains attribution; subscription calls retain their existing transport. Cloudflare's
-   [200 requests/60 seconds/gateway limit](https://developers.cloudflare.com/ai-gateway/reference/limits/)
-   concerns Unified Billing managed credentials, not BYOK. The production
-   coordinator conservatively admits 180 starts/60 seconds and four streams;
-   refresh's two-target cap reserves room for interactive traffic.
-3. Verify local/development work with synthetic repository examples before
-   household activation: run `pnpm --dir apps/web eval:mail-prompts` through the
-   shared Gateway, plus the durable refresh regressions for affected features,
-   legacy work, repeated activation, no-proposal completion and member decisions
-   during inference. No live source belongs in repository fixtures, reports or
-   PR text.
-4. The hourly cron activates once under the current deployment version and a
-   transactionally recorded occurrence. The gateway DO supplies its running
-   version; a stale publisher cannot replace a later occurrence. A rollback
-   A → B → A gets a new occurrence. Policy fingerprints preserve existing feature
-   generations when unchanged; changed policy creates a new discovery owner.
-   Admission and discovery launch are durable Job intent, independent of member
-   automatic-rule switches. No request nudge, observation alarm, activation
-   endpoint or post-deploy action is required.
+- Use `cubby` for live tools, integration development and production. Environment
+  metadata retains attribution; subscription calls retain their existing
+  transport. Cloudflare's
+  [200 requests/60 seconds/gateway limit](https://developers.cloudflare.com/ai-gateway/reference/limits/)
+  concerns Unified Billing managed credentials, not BYOK. The production
+  coordinator conservatively admits 180 starts/60 seconds; refresh's two-target
+  cap reserves room for interactive traffic.
+- Verify prompt changes with synthetic repository examples before they reach
+  household data: run `pnpm --dir apps/web eval:mail-prompts` through the shared
+  Gateway, plus the durable refresh regressions for affected features. No live
+  source belongs in repository fixtures, reports or PR text.
+- The hourly cron activates once per deployment version under a transactionally
+  recorded occurrence. The gateway DO supplies its running version; a stale
+  publisher cannot replace a later occurrence, and a rollback A → B → A gets a
+  new occurrence. Policy fingerprints preserve existing feature generations when
+  unchanged. No request nudge, observation alarm, activation endpoint or
+  post-deploy action is required.
 
 ## Database pool diagnosis
 
@@ -54,8 +45,7 @@ failed counts. AiUsage/EmailClassificationObservation and Suggestion receipts
 retain inference and actual business-write provenance.
 
 There is no discovery pass for AI refresh. Field evaluations come from
-saved-record questions and Sweeps; connection, product-identity and Email refresh
-discovery were removed ([#3899](https://github.com/nickysemenza/cubby/issues/3899)).
+saved-record questions and Sweeps.
 Ordinary refresh execution has two active Run slots across the household,
 including funding/auth pauses. A short scheduling transaction uses a nonblocking
 advisory lock to serialize slot checks, new Run creation and failed-Run
@@ -88,11 +78,8 @@ reviewable. A high-confidence same-charge label makes a single exact-amount
 attach bulk-acceptable, and every create waits for its kind and counterparty
 labels (one vote beside the category rule and merchant history); a label
 itself applies nothing.
-Sweep Jobs use a 30-minute useful-progress recovery window. New committed partial
-answers or settled population inputs renew it; cache/capacity waits, unchanged
-answers and lease heartbeats do not. Ordinary Jobs retain their consecutive
-attempt limit. A stopped Sweep needs explicit same-Run retry after inspecting
-retained state; deployment does not retry it. Job logs include phase durations
+A stopped Sweep needs explicit same-Run retry after inspecting retained state;
+deployment does not retry it. Job logs include phase durations
 for statement decisions and spending, the current phase on lease renewal, and
 refused versus failed renewal diagnostics. These logs establish execution timing,
 not database wait attribution or proof of useful progress.
@@ -102,21 +89,13 @@ app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The activation Job uses the current compiled manifest under its deployment
 occurrence fence; a request from an old Worker cannot reinstall its policy. Saved field results resume
 without another inference. Missing evidence, Mail import switched off and
-genuine ambiguity wait for a relevant fingerprint change. Rediscovery reopens a
-blocked or obsolete target at most three times: a replacement row
-(`<workKey>:reopen:<n>`) joins a running Run, while the settled row keeps its
-Run, receipt and error and links the replacement through `retryEvaluationId`.
-Switching Mail import on therefore resumes the blocked Email evaluations (an
-evaluation state, distinct from the `unsettled` Email status). Admission waits defer without consuming inference retries.
-Cancelled Runs remain stopped, including their blocked/obsolete evaluations:
-rediscovery cannot replay the same fingerprint in a successor Run. A changed
-fingerprint is new work; an explicit member Run retry is still supported.
-Exhausted failures require Run retry; replacement
-evaluations retain the earlier failed rows and link their receipts.
+genuine ambiguity wait for a relevant fingerprint change. Admission waits defer
+without consuming inference retries. Cancelled Runs remain stopped, including
+their blocked and obsolete evaluations. A changed fingerprint is new work; an
+explicit member Run retry is still supported. Exhausted failures require Run
+retry.
 
-Already applied values and immutable history survive rollback. Do not delete
-the additive ledger/receipt columns during rollback.
-Startup activation is retained in a Job and guarded by the observed deployment
+Already applied values and immutable history survive rollback. Startup activation is retained in a Job and guarded by the observed deployment
 occurrence. Preserve provider admission and coordinator namespaces and their
 stored receipts. Background source changes record Job intent and converge
 through the same drain; no deployment-observation alarm repairs that work.
@@ -139,15 +118,13 @@ instance records a failed Run for recovery. Nightly and app-open recovery also
 reconcile instances quiet for 30 minutes. Imported or historical Email sources
 retain the existing classification-refresh deferral and report a blocked outcome.
 
-## Recover an existing Run pileup
+## Recover a Run pileup
 
-Deploy the scheduling fix before clearing an accumulated backlog. The new slot
-limit prevents additional ordinary owners; it does not merge or cancel existing
-Runs, move evaluations, or rewrite retained receipts. Existing active owners
-above the limit can finish; failed owners wait for capacity.
-Previously failed owners are recovered before new discovery as slots become
-available. A retained legacy failed backlog can therefore delay new work until
-it drains or the member approves including it in the stop set.
+The slot limit prevents additional ordinary owners; it does not merge or cancel
+existing Runs, move evaluations or rewrite retained receipts. Failed owners are
+recovered before new work as slots become available, so a retained failed
+backlog can delay new work until it drains or the member approves including it
+in the stop set.
 
 A data correction requires the member's explicit approval and a transactional
 script outside the repository. First inspect aggregate Run purpose/status,
@@ -170,9 +147,8 @@ candidates eligible. Recheck the exact selected statuses/attempts and pending
 counts before committing, then read back cancellation invariants.
 
 After the database commit, terminate the exact selected Workflow instances,
-including still-live previously cancelled instances, as Run control does. This
-retires pinned older code instead of relying on it to adopt the new launch
-fence. Guarded instances also stop at their next cancellation check; in-flight
+including still-live previously cancelled instances, as Run control does.
+Guarded instances also stop at their next cancellation check; in-flight
 publication remains fenced. Include termination in the explicit approval and
 verify instance states without deleting Workflow history or evaluation ledgers. After cancellation,
 new fingerprints can join the bounded owners. Retrying the same cancelled

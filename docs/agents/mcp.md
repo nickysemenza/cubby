@@ -1,38 +1,22 @@
-# MCP operating patterns
+# MCP server
 
-The [README entity map](../../README.md#entities) says which entity holds what
-and how they relate; check it before choosing a tool.
-
-Read summaries and counts first. Narrow list reads with filters, page only as
-needed, and use `ids` filters for known records. A Vendor's imported order ids for a
-date range come from `entity_read.list` on purchases with `vendorId`, `dateFrom`
-and `dateTo` filters, selecting `orderId`; its `latestPurchaseDate` and a
-Cookbook's `recipeCount` are in the record's `fields` envelope. Read tool input schemas first;
-consult the catalog only when they do not answer a required field or action.
-
-Use `entity.commands` for independent creates or updates after their dependencies
-are resolved. Its results are ordered and independent: inspect every result,
-keep successful writes, and retry only corrected failed indices. Verification
-is likewise batched by known ids or shared filters.
-
-For files, `image.create_file_upload({items})` accepts up to 50 existing upload
-inputs and returns results in item order. Upload local bytes to each returned
-presigned URL, then call `image.attach_file({items})` with each target `entityId`
-and exactly one `url` or the uploadId from that successful indexed result. Do
-not send bytes or base64 through MCP. For a Product gallery write, read the
-target immediately before the write and provide its `expectedImageCount` and a
-deterministic idempotency key. Multiple attachments to one Product are
-dependent count changes; prefer independent target batches and retry only
-failed items after a fresh read.
+This doc owns the MCP server: tool shape, Run-delegated writes, failures,
+deadlines, exposure and playbooks. Client usage tips (shortcodes, `entity_read`
+and `entity`, batching, image uploads) ship in the server's own instructions
+(`apps/web/src/server/mcp/server.ts`) and the household playbooks; change them
+there. The [README entity map](../../README.md#entities) says which entity holds
+what.
 
 A generated tool takes `{action, input}`. When that operation also accepts an
 `action`, MCP publishes it as `operationAction` inside `input` and maps it back
-before validation; for example, `activity.resolve_run_finding` requires
-`input.operationAction: "apply" | "dismiss"`. Batched items retain their own
+before validation (`activity.resolve_run_finding` takes
+`input.operationAction: "apply" | "dismiss"`). Batched items retain their own
 nested `action` field. HTTP and native operation inputs keep their original
-shape. The `entity` and `entity_read` kernel tools keep their current
-`{action, ...fields}` form; their full schemas are available from
-`entities://catalog`.
+shape. The `entity` and `entity_read` kernel tools keep `{action, ...fields}`;
+`entities://catalog` publishes their precise schemas. Generated tools publish a
+compact schema per action; `describe` with `input.actions` returns the selected
+actions' full input/output JSON Schema, and the server validates each request
+against the action's full Zod schema.
 
 ## Runs and Burn-down
 
@@ -86,11 +70,8 @@ Run-delegated tokens: a member OAuth session, including an automated routine
 holding a member token, can call every `member_decision` write.
 
 Burn-down works the Research queue (`research-queue` saved views) with the
-caller's own browser. Retain research in ordinary editable `notes` inside
-entity mutation `data`: preserve existing text, useful URLs or record shortcodes,
-excerpts, dates and selected-variant context. There is no separate citation input
-on entity writes or image attachment, and notes do not certify current values.
-Read and resolve retained
+caller's own browser; research is retained in ordinary `notes` inside entity
+mutation `data`, with no separate citation input. Read and resolve retained
 Email with `purchase_import_read.mail_read` and `purchase_import.mail_resolve`; recover a missing original
 with `purchase_import.mail_search`. The retained read's `acceptedSourceOrders` provides owned
 source-order handles, exact source identities and deleted-target status for
@@ -109,7 +90,7 @@ and photo `id` values are canonical shortcodes. The one
 `run.reject_candidate` `operationId` is a caller-generated retry key, not
 an entity reference. Its owning `rejectCandidate` declaration in
 `apps/web/src/contracts/photo-import.contract.ts` describes that protocol;
-`rejectPhotoProductCandidate` scopes it to each photo's Assessment review.
+`rejectPhotoProductCandidate` scopes it to each photo's Suggestion review.
 Reuse the key only for the identical rejection, not a different decision.
 
 `run_read.run_context` serves the bounded per-photo text assembled by
@@ -218,18 +199,10 @@ only entity-kernel actions, optional per-operation MCP shaping, and tool
 descriptions. Destructive,
 open-world and model-backed behavior hints live on the contract member.
 
-Generated tools use progressive disclosure: their published schema names the
-available action and accepts a compact `input` object. Call `describe` with
-`input.actions` to retrieve selected actions' full input/output JSON Schema and
-description. The server validates each request against the action's full Zod
-schema. The entity-kernel tools keep their detailed schemas because
-`entities://catalog` already publishes the precise action schemas.
-
 A write's review handle (suggestion id, fingerprint, event id, finding id) must
 be produced by a capability read; when the producer cannot be exposed, defer
 the write too. A person's review or approval remains a member decision and must
-be gated by the `member_decision` capability. Update any active backlog item
-when its remaining work changes.
+be gated by the `member_decision` capability.
 
 ## Playbooks
 
@@ -239,7 +212,9 @@ the read-only `playbook` tool (`list`, `get`, `read`) and one
 `skill://<name>/<path>` resource per file. The generator bundles each skill's
 Markdown plus every repository Markdown file it links to, rewrites served
 links to repository paths and other links to public GitHub URLs, and fails on
-a link that does not resolve. Engineering skills stay repository-only.
+a link that does not resolve. Engineering skills stay repository-only. Every
+linked document ships whole in the Worker, so a household skill links a large
+doc only for a section it needs, and states a short contract inline instead.
 
 The repository is also a Claude plugin marketplace
 (`.claude-plugin/marketplace.json` → `plugins/cubby`). Its skills are pointer

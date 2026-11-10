@@ -18,5 +18,5 @@ for waiting work. Link Sentry issues when relevant.
 
 Describe what establishes completion and the focused validation needed.
 
-<!-- Add this issue to the Cubby Project and set Readiness, Work type, and Priority.
+<!-- Label it, and close it from the PR that completes it (`Fixes #N`).
 Workflow: https://github.com/nickysemenza/cubby/blob/main/docs/agents/issues.md -->
