@@ -26,7 +26,6 @@ import {
   buildWeekLedger,
   getDayKey,
   getRangeKey,
-  occupiesFullWeek,
   toZoned,
   zonedStartOfDay,
 } from "./event-calendar-lib";
@@ -35,6 +34,7 @@ import type {
   EventCalendarDragState,
   EventCalendarSegment,
 } from "./event-calendar-types";
+import { EventCalendarMoreIndicator } from "./event-calendar-month-view";
 import { cn } from "cn";
 
 const LANE_HEIGHT = "1.75rem";
@@ -115,21 +115,13 @@ function EventCalendarWeekView() {
       colSpan: colEnd - colStart + 1,
       lane: laneCount,
     } satisfies EventCalendarSegment;
-    return {
-      segment,
-      compact: occupiesFullWeek(segment),
-      valid: drag.valid,
-    };
+    return { segment, valid: drag.valid };
   }, [drag, laneCount, settings.timeZone, visibleRange.start]);
-  const timelineGhost = spanGhost && !spanGhost.compact ? spanGhost : null;
-  const compactGhost = spanGhost?.compact ? spanGhost : null;
+  const timelineGhost = spanGhost;
   const displayLaneCount = laneCount + (timelineGhost ? 1 : 0);
   const spansRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    restoreEventCalendarChipFocus(spansRef.current, [
-      ...ledger.compactSpans,
-      ...ledger.spans,
-    ]);
+    restoreEventCalendarChipFocus(spansRef.current, ledger.spans);
   });
 
   return (
@@ -145,39 +137,22 @@ function EventCalendarWeekView() {
       )}`}
       className="min-w-0"
     >
-      {(ledger.compactSpans.length > 0 ||
+      {(ledger.ongoing.length > 0 ||
         ledger.spans.length > 0 ||
         spanGhost) && (
         <div
           ref={spansRef}
           data-slot="event-calendar-week-spans"
-          className="border-b bg-muted/20 px-1 py-1"
+          className="border-b px-1 py-1"
         >
-          {(ledger.compactSpans.length > 0 || compactGhost) && (
-            <div
-              data-slot="event-calendar-week-compact-spans"
-              className="grid gap-0.5"
-              style={{
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(28rem, 1fr))",
-              }}
-            >
-              {ledger.compactSpans.map((segment) => (
-                <div key={segment.occurrence.key} className="h-7 min-w-0">
-                  <WeekSpanEvent segment={segment} />
-                </div>
-              ))}
-              {compactGhost && (
-                <EventCalendarEvent
-                  preview
-                  segment={compactGhost.segment}
-                  className={cn(
-                    "h-7 min-w-0",
-                    EVENT_CALENDAR_GHOST.move,
-                    !compactGhost.valid && EVENT_CALENDAR_GHOST.invalid,
-                  )}
-                />
-              )}
+          {ledger.ongoing.length > 0 && (
+            <div data-slot="event-calendar-week-ongoing" className="h-7 min-w-0">
+              <EventCalendarMoreIndicator
+                day={visibleRange.start}
+                count={ledger.ongoing.length}
+                segments={ledger.ongoing}
+                label={`${ledger.ongoing.length} ongoing`}
+              />
             </div>
           )}
           {(ledger.spans.length > 0 || timelineGhost) && (
@@ -185,7 +160,7 @@ function EventCalendarWeekView() {
               data-slot="event-calendar-week-timeline-spans"
               className={cn(
                 "relative grid grid-cols-7 gap-y-0.5",
-                (ledger.compactSpans.length > 0 || compactGhost) && "mt-0.5",
+                ledger.ongoing.length > 0 && "mt-0.5",
               )}
               style={{
                 gridTemplateRows: `repeat(${displayLaneCount}, ${LANE_HEIGHT})`,
@@ -303,7 +278,7 @@ function WeekDayColumn({
         locale: settings.locale,
       })}
       className={cn(
-        "group/week-day min-h-72 min-w-0 px-1 py-2",
+        "group/week-day min-h-72 min-w-0 px-1 py-1",
         !isLast && "border-e",
         isToday && "bg-primary/3",
       )}

@@ -1,10 +1,11 @@
-import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
+import type { CalendarItem } from "@cubby/schemas/calendar";
 import { addDays, format, parseISO } from "date-fns";
-import { Fragment } from "react";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Panel } from "~/ui/layout";
+
+import { CalendarDayList } from "./calendar-day-list";
 
 /**
  * The phone form of the planning calendar.
@@ -132,11 +133,7 @@ export function CalendarAgenda({
                   Nothing planned.
                 </div>
               ) : (
-                group.items.map((item) => (
-                  <Fragment key={calendarItemKey(item)}>
-                    {renderItem(item)}
-                  </Fragment>
-                ))
+                <CalendarDayList items={group.items} renderItem={renderItem} />
               )}
             </div>
           </section>

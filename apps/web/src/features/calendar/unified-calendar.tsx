@@ -69,10 +69,12 @@ import { Description } from "~/ui/text/description";
 
 import { CalendarAgenda } from "./calendar-agenda";
 import type { CalendarCreateDialog as CalendarCreateDialogComponent } from "./calendar-create-dialog";
+import { CalendarDayList, isOngoingItem } from "./calendar-day-list";
 import type { CalendarFilters } from "./calendar-filters";
 import { KIND_ICONS } from "./calendar-icons";
 import { CalendarItemInspector } from "./calendar-item-inspector";
 import {
+  calendarDayLineClassName,
   CalendarItemPresentation,
   CalendarMultiSourceContext,
   calendarItemTriggerClassName,
@@ -89,6 +91,7 @@ import {
 } from "./calendar-period";
 import { CalendarSchedule } from "./calendar-schedule";
 import { EMPTY_DAY_SUMMARY, WeekSummaryGrid } from "./calendar-week-summary";
+import { useViewportFill } from "./use-viewport-fill";
 
 const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
@@ -578,6 +581,20 @@ export function UnifiedCalendar({
     [items, summaries],
   );
   const showWeekRail = periodSpend.actual !== 0 || periodSpend.planned !== 0;
+  const [monthFrame, monthSize] = useViewportFill<HTMLDivElement>();
+  const weekFit = useMemo(
+    () =>
+      period === "month"
+        ? fitMonthWeeks(
+            visibleRange.start,
+            visibleRange.end,
+            items,
+            summaries,
+            monthSize.height,
+          )
+        : undefined,
+    [period, visibleRange, items, summaries, monthSize.height],
+  );
   // Returning false keeps the engine's own "+N more" popover closed: the day
   // sheet is the one overflow surface on this page.
   const openDay = (moreDay: Date) => {
@@ -769,15 +786,18 @@ export function UnifiedCalendar({
                   }
                 />
               ) : period === "month" ? (
-                <MonthEventCalendar<CalendarItem>
-                  {...calendarInteractionProps}
-                  renderEvent={CalendarMonthChip}
-                  renderDayMeta={renderDayMeta}
-                  renderWeekRail={showWeekRail ? renderWeekRail : undefined}
-                  className="hidden overflow-hidden border md:block [&_[data-slot=event-calendar-event]]:gap-1 [&_[data-slot=event-calendar-event]]:px-1 [&_[data-slot=event-calendar-event]]:py-0.5 [&_[data-slot=event-calendar-event]]:leading-4 [&_[data-slot=event-calendar-month-bar-overlay]]:pt-1 [&_[data-slot=event-calendar-month-cell-content]]:min-h-0 [&_[data-slot=event-calendar-month-cell-content]]:pt-1 [&_[data-slot=event-calendar-month-day-number]]:size-4 [&_[data-slot=event-calendar-month-day-number]]:text-2xs [&_[role=columnheader]]:py-1 [&_[role=columnheader]]:text-2xs"
-                  style={MONTH_DENSITY}
-                  onMoreClick={openDay}
-                />
+                <div ref={monthFrame} className="hidden md:block">
+                  <MonthEventCalendar<CalendarItem>
+                    {...calendarInteractionProps}
+                    renderEvent={CalendarMonthChip}
+                    renderDayMeta={renderDayMeta}
+                    renderWeekRail={showWeekRail ? renderWeekRail : undefined}
+                    weekFit={weekFit}
+                    className="overflow-hidden border [&_[data-slot=event-calendar-event]]:gap-1 [&_[data-slot=event-calendar-event]]:px-1 [&_[data-slot=event-calendar-event]]:py-0.5 [&_[data-slot=event-calendar-event]]:leading-4 [&_[data-slot=event-calendar-month-bar-overlay]]:pt-1 [&_[data-slot=event-calendar-month-cell-content]]:min-h-0 [&_[data-slot=event-calendar-month-cell-content]]:pt-1 [&_[data-slot=event-calendar-month-day-number]]:size-4 [&_[data-slot=event-calendar-month-day-number]]:text-2xs [&_[role=columnheader]]:py-1 [&_[role=columnheader]]:text-2xs"
+                    style={MONTH_DENSITY}
+                    onMoreClick={openDay}
+                  />
+                </div>
               ) : period === "fortnight" ? (
                 <FortnightEventCalendar<CalendarItem>
                   {...calendarInteractionProps}
@@ -819,13 +839,13 @@ export function UnifiedCalendar({
               <PopoverTrigger
                 handle={editorHandle}
                 payload={item}
-                className={calendarItemTriggerClassName(item)}
+                className={calendarDayLineClassName(item)}
                 onClick={() => {
                   // Close the day sheet after the editor popover has anchored to this trigger.
                   requestAnimationFrame(() => setSelectedDay(undefined));
                 }}
               >
-                <CalendarItemPresentation item={item} variant="rich" />
+                <CalendarItemPresentation item={item} variant="month" />
               </PopoverTrigger>
             )}
           />
@@ -846,6 +866,91 @@ export function UnifiedCalendar({
       </CalendarMultiSourceContext.Provider>
     </EntityDisplayImagesProvider>
   );
+}
+
+// Month geometry in px, matching MONTH_DENSITY and the month view's cell: a
+// 24px day row plus 4px inset, 22px lanes, and a 16px "+N more" line.
+const MONTH_CELL_BASE = 28;
+const MONTH_LANE = 22;
+const MONTH_MORE = 16;
+const MONTH_HEADER = 26;
+const MONTH_BUSY_MIN = 96;
+const MONTH_EMPTY_MIN = 48;
+
+/**
+ * Week row heights that end the month at the window's bottom edge. Each week
+ * asks for the lanes its busiest day needs (long spans share one fold lane);
+ * when the window is short, the tallest asks are trimmed to a common level,
+ * and spare height goes to the weeks with events.
+ */
+function fitMonthWeeks(
+  start: Date,
+  end: Date,
+  items: readonly CalendarItem[],
+  summaries: Record<string, CalendarDaySummary>,
+  available: number,
+) {
+  const byKey = new Map(items.map((item) => [calendarItemKey(item), item]));
+  const weeks: { lanes: number; empty: boolean }[] = [];
+  for (let cursor = start; cursor < end; cursor = addDays(cursor, 7)) {
+    const long = new Set<string>();
+    let busiest = 0;
+    let empty = true;
+    for (let offset = 0; offset < 7; offset++) {
+      const ids =
+        summaries[formatPlainDate(addDays(cursor, offset))]?.itemIds ?? [];
+      if (ids.length) empty = false;
+      let short = 0;
+      for (const id of ids) {
+        const item = byKey.get(id);
+        if (item && isOngoingItem(item)) long.add(id);
+        else short++;
+      }
+      busiest = Math.max(busiest, short);
+    }
+    weeks.push({
+      lanes: busiest + (long.size >= 2 ? 1 : long.size),
+      empty,
+    });
+  }
+  const minimum = (week: (typeof weeks)[number]) =>
+    week.empty ? MONTH_EMPTY_MIN : MONTH_BUSY_MIN;
+  const ask = (week: (typeof weeks)[number]) =>
+    Math.max(minimum(week), MONTH_CELL_BASE + week.lanes * MONTH_LANE);
+  const body = available - MONTH_HEADER;
+  const heightsAt = (level: number) =>
+    weeks.map((week) => Math.max(minimum(week), Math.min(ask(week), level)));
+  const sum = (values: number[]) => values.reduce((a, b) => a + b, 0);
+  let heights = weeks.map(ask);
+  if (sum(heights) > body) {
+    let low = 0;
+    let high = Math.max(...heights);
+    while (high - low > 1) {
+      const level = (low + high) / 2;
+      if (sum(heightsAt(level)) > body) high = level;
+      else low = level;
+    }
+    heights = heightsAt(low);
+  } else {
+    const busy = weeks.filter((week) => !week.empty).length;
+    const spare = busy ? (body - sum(heights)) / busy : 0;
+    heights = heights.map((height, index) =>
+      weeks[index]!.empty ? height : height + spare,
+    );
+  }
+  return weeks.map((week, index) => {
+    const height = Math.floor(heights[index]!);
+    const fits = MONTH_CELL_BASE + week.lanes * MONTH_LANE <= height;
+    return {
+      height,
+      cap: fits
+        ? Math.max(1, week.lanes)
+        : Math.max(
+            1,
+            Math.floor((height - MONTH_CELL_BASE - MONTH_MORE) / MONTH_LANE),
+          ),
+    };
+  });
 }
 
 const sumSpend = (
@@ -1020,6 +1125,19 @@ function CalendarDaySheet({
               summary.actualSpend
                 ? `${formatCurrency(summary.actualSpend)} recorded`
                 : null,
+              summary.plannedSpend
+                ? `${formatCurrency(summary.plannedSpend)} planned`
+                : null,
+              summary.taskCount
+                ? `${summary.taskCount} ${summary.taskCount === 1 ? "task" : "tasks"}`
+                : null,
+              summary.mealTotals.nutrition.kcal.status === "unavailable"
+                ? null
+                : formatEstimate(
+                    summary.mealTotals.nutrition.kcal,
+                    "kcal",
+                    "kcal",
+                  ),
             ]
               .filter(Boolean)
               .join(" · ")
@@ -1027,26 +1145,6 @@ function CalendarDaySheet({
       className="sm:max-w-md"
     >
       <Stack gap="md">
-        <div className="grid grid-cols-2 gap-2 border-y py-2 text-xs">
-          <SummaryValue
-            label="Actual spend"
-            value={formatCurrency(summary.actualSpend)}
-          />
-          <SummaryValue
-            label="Planned spend"
-            value={formatCurrency(summary.plannedSpend)}
-          />
-          <SummaryValue label="Tasks" value={String(summary.taskCount)} />
-          <SummaryValue
-            label="Calories"
-            value={formatEstimate(
-              summary.mealTotals.nutrition.kcal,
-              "kcal",
-              "kcal",
-            )}
-          />
-        </div>
-
         <Stack gap="xs">
           <span className="text-xs font-medium text-slate">Add</span>
           <Row wrap gap="xs">
@@ -1069,11 +1167,7 @@ function CalendarDaySheet({
           </Row>
         </Stack>
 
-        <Stack gap="xs">
-          {items.map((item) => (
-            <div key={calendarItemKey(item)}>{renderItem(item)}</div>
-          ))}
-        </Stack>
+        <CalendarDayList items={items} renderItem={renderItem} />
       </Stack>
     </Overlay>
   );
@@ -1093,14 +1187,5 @@ function CalendarRangeError({
       onRetry={onRetry}
       className="border border-destructive/40 bg-destructive/5 px-2 py-2 md:px-3 md:py-1.5"
     />
-  );
-}
-
-function SummaryValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-xs font-medium text-slate">{label}</div>
-      <div className="font-semibold tabular-nums">{value}</div>
-    </div>
   );
 }

@@ -1241,10 +1241,10 @@ Table grouping stays in URL state and is unavailable with a reason in calendar m
 calendar offers Week, Fortnight, Month, 3 months, 6 months, Year and Schedule in one picker; long
 periods use calendar quarters, half-years and years, and previous/next step by the period. The day
 grid fits the viewport below the shell. Align weekdays defaults on and persists locally (rows of
-multiples of seven columns; free wrapping otherwise); weekend shading and month boundaries stay
-visible. Padding cells never extend the 366-day range query. Event bars reuse lane packing; hidden
-events keep per-day overflow counts. Selecting a date opens an anchored day popover; selecting an
-event there opens the record inspector. Overview modes do not support dragging; phones keep the
+multiples of seven columns; free wrapping otherwise); month boundaries stay visible. Padding cells
+never extend the 366-day range query. Event bars reuse lane packing, with long bars folded into one
+"N ongoing" lane as in the month grid; hidden events keep per-day overflow counts. Selecting a date
+opens an anchored day popover; selecting an event there opens the record inspector. Overview modes do not support dragging; phones keep the
 short-period agenda. Schedule keeps Task and Planting lanes and undated scheduling rows; other source
 filters stay in URL state, disabled with a reason, until returning to the grid. Queries show a
 hydration-stable loading state after scope changes (never an empty or previous-scope calendar);

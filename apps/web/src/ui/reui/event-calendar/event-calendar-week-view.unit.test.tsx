@@ -74,7 +74,7 @@ describe("WeekEventCalendar", () => {
     expect(onEventClick.mock.calls[0]?.[1].day.getDate()).toBe(5);
   });
 
-  it("puts all full-week spans in the wrapping shelf and keeps partial spans aligned", () => {
+  it("folds long spans into one ongoing lane and keeps partial spans aligned", () => {
     const { container } = render(
       <WeekEventCalendar
         events={[
@@ -90,11 +90,12 @@ describe("WeekEventCalendar", () => {
     );
 
     const shelf = container.querySelector(
-      '[data-slot="event-calendar-week-compact-spans"]',
+      '[data-slot="event-calendar-week-ongoing"]',
     );
     const timeline = container.querySelector(
       '[data-slot="event-calendar-week-timeline-spans"]',
     );
+    expect(shelf).toHaveTextContent("2 ongoing");
     expect(shelf).toHaveTextContent("ongoing-one");
     expect(shelf).toHaveTextContent("ongoing-two");
     expect(shelf).not.toHaveTextContent("partial");

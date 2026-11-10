@@ -100,8 +100,6 @@
         "screencapture"
       ],
       "ignoreDependencies": [
-        "@fontsource-variable/inter",
-        "@fontsource-variable/jetbrains-mono",
         "@testing-library/.+",
         "@vitest/.+",
         "@tailwindcss/vite",

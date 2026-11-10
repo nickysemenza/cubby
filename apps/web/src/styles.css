@@ -6,8 +6,6 @@
    categories and type stacks) are generated from the shared design tokens.
    Imported first; everything below only references these vars. */
 @import "@cubby/design-tokens/brand.css";
-@import "@fontsource-variable/inter";
-@import "@fontsource-variable/geist-mono";
 /*
   ---break---
 */
@@ -94,9 +92,8 @@
   }
   body {
     /* font-sans must be explicit: Tailwind v4 preflight doesn't wire --font-sans
-       to the document, so without this the app silently runs on system fonts. */
+       to the document. */
     @apply bg-background font-sans text-sm text-foreground antialiased;
-    font-feature-settings: "cv11", "ss01";
     /* iOS PWA target: suppress the default gray tap-highlight box; shared
        active states provide press feedback. */
     -webkit-tap-highlight-color: transparent;

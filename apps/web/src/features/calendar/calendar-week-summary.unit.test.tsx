@@ -29,7 +29,7 @@ const summary: CalendarDaySummary = {
 };
 
 describe("WeekSummaryGrid", () => {
-  it("renders seven aligned server summaries, including explicit zero days", () => {
+  it("renders seven aligned server summaries and leaves empty days quiet", () => {
     const days = Array.from(
       { length: 7 },
       (_, offset) => `2026-08-${String(16 + offset).padStart(2, "0")}`,
@@ -52,15 +52,12 @@ describe("WeekSummaryGrid", () => {
       name: "Open Sunday, August 16",
     });
     expect(todayHeader).toHaveAttribute("data-today", "true");
-    expect(within(todayHeader).getByText("3")).toBeInTheDocument();
-    expect(
-      within(todayHeader).getByText("1,875 known · partial"),
-    ).toBeInTheDocument();
+    expect(todayHeader).toHaveTextContent(
+      "3 tasks · 1,875 kcal known · partial",
+    );
     expect(within(todayHeader).getByText("$1,299.00")).toBeInTheDocument();
     expect(within(todayHeader).getByText("$4,200.00")).toBeInTheDocument();
-    expect(within(sundayHeader).getByText("0")).toBeInTheDocument();
-    expect(within(sundayHeader).getByText("—")).toBeInTheDocument();
-    expect(within(sundayHeader).getAllByText("$0.00")).toHaveLength(2);
+    expect(sundayHeader).toHaveTextContent(/^Sun 16$/);
   });
 
   it("opens the canonical day represented by a header", () => {
