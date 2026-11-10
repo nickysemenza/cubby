@@ -246,6 +246,15 @@ export class PurchaseImportRunAgent
     return raw ? runIdentity.parse(JSON.parse(raw)) : undefined;
   }
 
+  /**
+   * Whether pi has work running. pi keeps working in memory after the entry
+   * point that started it returns, so the host keeps its coordinator turn
+   * until this is false. Call only once the agent has started (pi is open).
+   */
+  async working(): Promise<boolean> {
+    return (await this.harness.pi()).wake().active;
+  }
+
   /** External retirement waits for the terminating tool; cold disposal must not reopen pi. */
   async abortForRetirement(): Promise<void> {
     if (this.identity()) await this.harness.abort();

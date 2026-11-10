@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { coordinatorTurn, run as runTable } from "~/server/db/schema";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type {
   RunServices,
@@ -20,6 +20,11 @@ import {
   expireStaleRuns,
   reconcileSettledRun,
 } from "~/server/domains/purchase-import/operations/run-review";
+import {
+  COORDINATOR_TURN_CAP,
+  holdCoordinatorTurn,
+  releaseCoordinatorTurn,
+} from "~/server/domains/run/repo/coordinator-turns";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { importReportBlocks } from "~/server/domains/run/repo/report-run";
@@ -34,11 +39,13 @@ import {
 import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import {
   runFinding,
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
+import { purchaseDispatchHandler } from "~/server/workflows/jobs";
 
 import { startControlledMailImport } from "../operations/gmail/controlled-import";
 import { waitForActiveMailboxImports } from "./controlled-mail-import";
@@ -157,6 +164,105 @@ describe("purchase import run admission", () => {
       }),
     ).toBe(false);
   });
+  it("caps concurrent coordinator turns and defers a dispatch until one frees", async () => {
+    const others = Array.from({ length: COORDINATOR_TURN_CAP + 3 }, () =>
+      runEntityId.parse(crypto.randomUUID()),
+    );
+    const tokens = new Map(others.map((runId) => [runId, crypto.randomUUID()]));
+    // N + k coordinators asking at once: exactly N hold a turn.
+    const holds = await Promise.all(
+      others.map((runId) =>
+        holdCoordinatorTurn(ctx.db, { runId, token: tokens.get(runId)! }),
+      ),
+    );
+    const holders = others.filter((_, index) => holds[index]?.held);
+    expect(holders).toHaveLength(COORDINATOR_TURN_CAP);
+    const waiting = others.find((runId) => !holders.includes(runId))!;
+    expect(holds.find((hold) => !hold.held)).toEqual({
+      held: false,
+      holders: COORDINATOR_TURN_CAP,
+    });
+    // A holder renews its own turn without taking another.
+    const [holder, lapsed] = holders;
+    expect(
+      await holdCoordinatorTurn(ctx.db, {
+        runId: holder!,
+        token: tokens.get(holder!)!,
+      }),
+    ).toEqual({ held: true });
+    // A crashed holder's lapsed turn is reclaimed by the next coordinator.
+    await getDb(ctx.db)
+      .update(coordinatorTurn)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(coordinatorTurn.runId, lapsed!));
+    expect(
+      await holdCoordinatorTurn(ctx.db, {
+        runId: waiting,
+        token: tokens.get(waiting)!,
+      }),
+    ).toEqual({ held: true });
+
+    // A dispatch while every turn is held waits without spending an attempt.
+    const subject = await startAgentRun(await createMember());
+    const [intent] = await readJobs(ctx.db, { runId: subject.id });
+    if (!intent) throw new Error("Expected transactional dispatch intent");
+    const token = crypto.randomUUID();
+    const dispatch = vi.fn<PurchaseImportRunAgentRpc["dispatch"]>(async () => {
+      const turn = await holdCoordinatorTurn(ctx.db, {
+        runId: subject.id,
+        token,
+      });
+      return turn.held
+        ? { accepted: true }
+        : { accepted: false, waiting: { holders: turn.holders } };
+    });
+    const services = fromPartial<RunServices>({
+      coordinatorRetired: () => coordinatorRetired(ctx.db, subject.id),
+      canDispatchCoordinator: (eventId: string) =>
+        canDispatchRunCoordinator(ctx.db, { runId: subject.id, eventId }),
+      acknowledgeCoordinator: (eventId: string) =>
+        acknowledgeRunCoordinator(ctx.db, { runId: subject.id, eventId }),
+      loadScope: async () => {
+        const { public: scope } = await loadRunScope(ctx.db, subject.id);
+        return {
+          purpose: agentImportRunPurpose.parse(scope.purpose),
+          agentId: scope.agentId,
+          generation: scope.dispatchEventId,
+        };
+      },
+      updateAgentProgress: (
+        progress: Parameters<RunServices["updateAgentProgress"]>[0],
+      ) => updateAgentProgress(ctx.db, { ...progress, runId: subject.id }),
+    });
+    const handlers = {
+      "purchase.dispatch": purchaseDispatchHandler(async () => ({
+        run: () => services,
+        coordinator: () => fromPartial<PurchaseImportRunAgentRpc>({ dispatch }),
+      })),
+    };
+    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("deferred");
+    const [deferred] = await readJobs(ctx.db, { runId: subject.id });
+    expect(deferred).toMatchObject({
+      state: "queued",
+      attempts: 0,
+      waitReason: "provider_capacity",
+    });
+    expect(deferred!.availableAt.getTime()).toBeGreaterThan(Date.now());
+
+    // A released turn brings the oldest waiting dispatch forward.
+    expect(
+      await releaseCoordinatorTurn(ctx.db, {
+        runId: holder!,
+        token: tokens.get(holder!)!,
+      }),
+    ).toBe(true);
+    const [woken] = await readJobs(ctx.db, { runId: subject.id });
+    expect(woken).toMatchObject({ state: "queued", waitReason: null });
+    expect(woken!.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("succeeded");
+    expect(dispatch).toHaveBeenCalledTimes(2);
+  });
+
   it("retains queued automatic imports while a controlled Vendor waits for active work, until manual resume", async () => {
     const party = await createMember();
     const queued = await startAgentRun(party);
@@ -1001,6 +1107,7 @@ describe("purchase import run admission", () => {
     const party = await createMember();
     const stale = await startAgentRun(party);
     const live = await startAgentRun(party);
+    const waiting = await startAgentRun(party);
     const { run: runTable } = await import("~/server/db/schema");
     const { inArray } = await import("drizzle-orm");
     const { getDb } = await import("~/server/db/helpers");
@@ -1009,7 +1116,15 @@ describe("purchase import run admission", () => {
     await getDb(ctx.db)
       .update(runTable)
       .set({ updatedAt: threeHoursAgo })
-      .where(inArray(runTable.id, [stale.id, live.id]));
+      .where(inArray(runTable.id, [stale.id, live.id, waiting.id]));
+    // A coordinator refused a household turn is alive however long it waits.
+    expect(
+      await holdCoordinatorTurn(ctx.db, {
+        runId: waiting.id,
+        token: crypto.randomUUID(),
+        cap: 0,
+      }),
+    ).toEqual({ held: false, holders: 0 });
     await updateAgentProgress(ctx.db, {
       runId: live.id,
       eventId: "live:progress",
@@ -1029,11 +1144,12 @@ describe("purchase import run admission", () => {
     const rows = await getDb(ctx.db)
       .select({ id: runTable.id, status: runTable.status })
       .from(runTable)
-      .where(inArray(runTable.id, [stale.id, live.id]));
+      .where(inArray(runTable.id, [stale.id, live.id, waiting.id]));
     expect(Object.fromEntries(rows.map((row) => [row.id, row.status]))).toEqual(
       {
         [stale.id]: "needs_review",
         [live.id]: "running",
+        [waiting.id]: "running",
       },
     );
   });

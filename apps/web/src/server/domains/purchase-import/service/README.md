@@ -117,6 +117,9 @@ pending: nothing here starts Product research.
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   The host runs every alarm, dispatch and prompt inside a household
+   coordinator turn (`coordinator-turn.ts`); without a free turn it loads
+   nothing and waits ([budget](../../../../../../../docs/infrastructure.md#background-connection-budget)).
    Memoized claims publish host-owned progress, heartbeat and work samples.
    Progress publication is best-effort: a telemetry failure never turns a
    successful durable claim into a tool error. RunOperation activity also

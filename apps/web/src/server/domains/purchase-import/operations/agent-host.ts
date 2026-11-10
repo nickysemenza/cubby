@@ -33,18 +33,27 @@ import {
   isMaintenanceMode,
   maintenanceResponse,
 } from "~/server/http/maintenance";
-import { withInvocationTrace } from "~/server/observability/tracing";
+import {
+  annotateActiveSpan,
+  withInvocationTrace,
+} from "~/server/observability/tracing";
 import { workerSentryOptions } from "~/server/observability/worker-sentry";
 import { testDurationOverrideMs } from "~/server/testing/test-duration-override";
 
 import {
   authorizeLegacyRetirement,
+  coordinatorTurnPorts,
   purchaseAgentMcpTools,
   runServicesFor,
 } from "./agent-services";
+import {
+  CoordinatorTurn,
+  type CoordinatorTurnResult,
+} from "./coordinator-turn";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
 const retirementLog = createLogger("purchase-agent.retirement");
+const turnLog = createLogger("purchase-agent.turn");
 
 /**
  * One coordinator's whole environment, built from this Worker's bindings. Its
@@ -140,6 +149,7 @@ class PurchaseImportRunAgentHost
   /** Until when the last database fence read said this Run is live. */
   private liveUntil = 0;
   private readonly admitted = new Set<Promise<unknown>>();
+  private turn: CoordinatorTurn | undefined;
 
   /** Run `work` unless retirement began, tracked so `retire` can drain it. */
   private admit<T>(work: () => Promise<T>, refused: T): Promise<T> {
@@ -189,6 +199,41 @@ class PurchaseImportRunAgentHost
 
   private services() {
     return runServicesFor(this.env, this.ctx, this.runId());
+  }
+
+  /**
+   * The household coordinator-turn cap (`./coordinator-turn.ts`): every entry
+   * that loads the agent runs inside a turn. The turn stays held while pi
+   * still works after the entry returns.
+   */
+  private turns(): CoordinatorTurn {
+    this.turn ??= new CoordinatorTurn({
+      ...coordinatorTurnPorts(this.env, this.ctx, this.runId()),
+      idle: async () => {
+        const agent = await this.agent?.catch(() => undefined);
+        return !agent || !(await agent.working());
+      },
+    });
+    return this.turn;
+  }
+
+  /** Record a refused turn on the invocation span, its Sentry scope and the log. */
+  private turnWaited(
+    refused: Extract<CoordinatorTurnResult<unknown>, { ran: false }>,
+    entry: "alarm" | "dispatch" | "fetch",
+  ) {
+    annotateActiveSpan({
+      "cubby.coordinator.turn": "waiting",
+      "cubby.coordinator.turn.holders": refused.holders,
+      "cubby.coordinator.turn.retry_ms": refused.retryAfterMs,
+    });
+    Sentry.getCurrentScope().setTag("cubby.coordinator.turn", "waiting");
+    turnLog.info("coordinator turn wait", {
+      runId: this.runId(),
+      entry,
+      holders: refused.holders,
+      retryAfterMs: refused.retryAfterMs,
+    });
   }
 
   private loaded(): Promise<RunAgent> {
@@ -244,7 +289,26 @@ class PurchaseImportRunAgentHost
     }
     return this.admit(async () => {
       if (await this.fenced()) return retired();
-      return (await this.loaded()).fetch(request);
+      // A member's stop never waits for a turn.
+      if (request.method === "POST" && pathname === "/abort")
+        return (await this.loaded()).fetch(request);
+      const turn = await this.turns().turn(async () =>
+        (await this.loaded()).fetch(request),
+      );
+      if (turn.ran) return turn.value;
+      this.turnWaited(turn, "fetch");
+      return Response.json(
+        {
+          error:
+            "The coordinator is waiting for a free turn; try again shortly.",
+        },
+        {
+          status: 503,
+          headers: {
+            "retry-after": String(Math.ceil(turn.retryAfterMs / 1000)),
+          },
+        },
+      );
     }, retired());
   }
 
@@ -335,7 +399,17 @@ class PurchaseImportRunAgentHost
       () =>
         this.admit(async () => {
           if (await this.fenced()) return;
-          await (await this.loaded()).alarm();
+          const turn = await this.turns().turn(async () =>
+            (await this.loaded()).alarm(),
+          );
+          if (turn.ran) return;
+          this.turnWaited(turn, "alarm");
+          // No agent code ran, so its due Lifecycle jobs stay due; the next
+          // alarm runs them once a turn is free.
+          const at = Date.now() + turn.retryAfterMs;
+          const current = await this.ctx.storage.getAlarm();
+          if (current === null || current > at)
+            await this.ctx.storage.setAlarm(at);
         }, undefined),
       {
         "cubby.workload": "alarm",
@@ -345,20 +419,26 @@ class PurchaseImportRunAgentHost
     );
   }
 
-  async dispatch(input: DispatchInput): Promise<{ accepted: boolean }> {
+  async dispatch(
+    input: DispatchInput,
+  ): ReturnType<PurchaseImportRunAgentRpc["dispatch"]> {
     assertNotInMaintenance(this.env);
+    const refused: Awaited<ReturnType<PurchaseImportRunAgentRpc["dispatch"]>> =
+      { accepted: false };
     return withInvocationTrace(
       "purchase-agent.dispatch",
       () =>
-        this.admit(
-          async () => {
-            if (await this.fenced()) return { accepted: false };
+        this.admit(async () => {
+          if (await this.fenced()) return refused;
+          const turn = await this.turns().turn(async () => {
             const agent = await this.loaded();
             await agent.__unsafe_ensureInitialized();
             return agent.dispatch(input);
-          },
-          { accepted: false },
-        ),
+          });
+          if (turn.ran) return turn.value;
+          this.turnWaited(turn, "dispatch");
+          return { accepted: false, waiting: { holders: turn.holders } };
+        }, refused),
       {
         "cubby.workload": "rpc",
         "cubby.run.id":

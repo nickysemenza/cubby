@@ -51,7 +51,13 @@ export type DispatchInput = {
 
 /** The coordinator Durable Object's RPC surface. */
 export interface PurchaseImportRunAgentRpc {
-  dispatch(input: DispatchInput): Promise<{ accepted: boolean }>;
+  /**
+   * `waiting` when no coordinator turn was free: nothing ran, and the
+   * dispatch should wait for one (`domains/run/repo/coordinator-turns.ts`).
+   */
+  dispatch(
+    input: DispatchInput,
+  ): Promise<{ accepted: boolean; waiting?: { holders: number } }>;
   /** Destroy a settled Run's transcript; never enters a model turn. */
   retire(): Promise<{ disposed: boolean }>;
 }
