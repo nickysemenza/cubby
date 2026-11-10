@@ -27,6 +27,7 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
+  aiEvaluationAttemptHeld,
   aiEvaluationDue,
   aiEvaluationNext,
   aiEvaluationPageHeld,
@@ -207,7 +208,23 @@ async function prepareItems(
             entries.set(target.item.ref, { kind: "skip" });
             return;
           }
-          await execution.execute(db, claimed, context);
+          await execution.execute(db, claimed, {
+            ...context,
+            // Every effect of this item commits only while its own row is held.
+            // The cause interrupts the item's workflow; the item itself skips.
+            fence: async (tx) => {
+              if (
+                !(await aiEvaluationAttemptHeld(
+                  tx,
+                  claimed.id,
+                  context.attemptToken,
+                ))
+              )
+                throw new AiEvaluationAttemptObsoleteError({
+                  cause: new JobSupersededError(),
+                });
+            },
+          });
           const [settled] = await readAiEvaluations(db, [claimed.id]);
           // A re-marked item keeps its newer ticket, so this never clears it.
           if (settled && PENDING_AI_STATES.includes(settled.state))
@@ -450,6 +467,8 @@ export async function runAiEvaluationPage(
     signal: new AbortController().signal,
     // Each row's lease is checked under its own lock when published, so there is
     // no commit-time fence here: a chunk's last publish clears the leases it read.
+    // An item's effects replace `fence` with a check of its own row; the page-wide
+    // read stays outside SERIALIZABLE transactions.
     fenced: (work, options) =>
       (options?.isolationLevel === "serializable"
         ? repositorySnapshotWriteDatabase

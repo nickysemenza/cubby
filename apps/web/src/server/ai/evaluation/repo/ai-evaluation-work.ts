@@ -124,6 +124,30 @@ export async function markAiEvaluationWork(
     );
 }
 
+/**
+ * Owe again what a page parked for `runId` as owner or live requester. A Run
+ * that is running and still waiting calls this, so its parked evaluation is due
+ * whichever way the Run came back.
+ */
+export async function reviveRunAiEvaluationWork(db: Database, runId: string) {
+  const parked = await getDb(db)
+    .select({ id: aiEvaluation.id })
+    .from(aiEvaluation)
+    .where(
+      and(
+        inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
+        isNull(aiEvaluation.runAt),
+        sql`(${aiEvaluation.runId} = ${runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" q
+          WHERE q."evaluationId" = ${aiEvaluation.id} AND q."runId" = ${runId}::uuid AND q."cancelledAt" IS NULL))`,
+      ),
+    );
+  await markAiEvaluationWork(
+    db,
+    parked.map((row) => row.id),
+    { revive: true },
+  );
+}
+
 /** Hold not-yet-claimed evaluations until `until`; an attempt already holding one keeps it. */
 export async function postponeAiEvaluationWork(
   db: Database,
@@ -209,7 +233,33 @@ export async function deferAiEvaluationFeature(
     );
 }
 
-/** Whether this page can still write to at least one row under a live lease. */
+/**
+ * Whether the attempt `token` still holds evaluation `id`. It reads one row by
+ * primary key, so a SERIALIZABLE publication takes no relation-wide read on
+ * `AiEvaluation` and never depends on another evaluation's lease.
+ */
+export async function aiEvaluationAttemptHeld(
+  db: Database,
+  id: string,
+  token: string,
+) {
+  const [row] = await getDb(db)
+    .select({ id: aiEvaluation.id })
+    .from(aiEvaluation)
+    .where(
+      and(
+        eq(aiEvaluation.id, id),
+        aiEvaluationAttemptLive(aiEvaluation.id, token),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+/**
+ * Whether this page can still write to at least one row under a live lease.
+ * `leaseToken` has no index, so this scans: call it outside SERIALIZABLE transactions.
+ */
 export async function aiEvaluationPageHeld(db: Database, token: string) {
   const [row] = await getDb(db)
     .select({ id: aiEvaluation.id })
