@@ -1,7 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { hasKnownEstimate } from "@cubby/schemas/nutrition";
 import { cn } from "cn";
 import { createContext, useContext } from "react";
 
@@ -107,9 +106,10 @@ function calendarItemCost(item: CalendarItem) {
 
 function MealCalories({ item }: { item: CalendarItem }) {
   if (item.kind !== "meal") return null;
-  // Like the meal's cost, an unknown kcal figure is left to the inspector.
+  // Like the meal's cost, an unavailable kcal figure is left to the
+  // inspector; a pending one still says so.
   const kcal = item.mealTotals.nutrition.kcal;
-  if (!hasKnownEstimate(kcal)) return null;
+  if (kcal.status === "unavailable") return null;
   return (
     <span title={estimateStatusText(kcal) ?? undefined}>
       {formatEstimate(kcal, "kcal", "kcal")}
@@ -257,10 +257,10 @@ function CalendarItemRich({
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const { metadata } = presentation;
-  // A meal's cost shows only when known; the dash for an unknown cost is the
-  // inspector's to explain.
+  // A meal's cost shows unless unavailable; the dash for an unavailable cost
+  // is the inspector's to explain.
   const mealCost =
-    item.kind === "meal" && hasKnownEstimate(item.mealTotals.cost)
+    item.kind === "meal" && item.mealTotals.cost.status !== "unavailable"
       ? calendarItemCost(item)
       : null;
   return (

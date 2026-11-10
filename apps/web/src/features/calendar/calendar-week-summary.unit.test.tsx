@@ -57,7 +57,7 @@ describe("WeekSummaryGrid", () => {
     );
     expect(within(todayHeader).getByText("$1,299.00")).toBeInTheDocument();
     expect(within(todayHeader).getByText("$4,200.00")).toBeInTheDocument();
-    expect(sundayHeader).toHaveTextContent(/^Sun 16$/);
+    expect(sundayHeader.textContent).toBe("Sun 16");
   });
 
   it("opens the canonical day represented by a header", () => {
