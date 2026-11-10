@@ -125,27 +125,27 @@ export async function admissionRead<T>(
 
 /**
  * Bring this Run's `purchase.dispatch` forward once the gate reserved it a
- * turn; it deferred when none was free. Host-only: the agent never calls it.
+ * turn; it deferred when none was free. Whether a waiting Job was found.
+ * Host-only: the agent never calls it.
  */
 export function wakeWaitingDispatch(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
-) {
+): Promise<boolean> {
   const runId = runEntityId.parse(rawRunId);
   return withHostDatabase(env, ctx, async (db) => {
     const [{ bringRunWaitingJobForward }, { wakeJobs }] = await Promise.all([
       import("~/server/generic/jobs/repo/operator"),
       import("~/server/workflows/background-tasks/publish"),
     ]);
-    if (
-      await bringRunWaitingJobForward(db, {
-        runId,
-        kind: "purchase.dispatch",
-        waitReason: "provider_capacity",
-      })
-    )
-      await wakeJobs({ source: "coordinator-turn.reserved" });
+    const woken = await bringRunWaitingJobForward(db, {
+      runId,
+      kind: "purchase.dispatch",
+      waitReason: "provider_capacity",
+    });
+    if (woken) await wakeJobs({ source: "coordinator-turn.reserved" });
+    return woken;
   });
 }
 

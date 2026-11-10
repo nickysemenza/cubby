@@ -124,6 +124,11 @@ const RETIREMENT_FENCE = "cubby_retirement_fence";
 const PENDING_DISPATCH = "cubby_pending_dispatch";
 /** How long a woken dispatch keeps the turn it was reserved before it arrives. */
 const DISPATCH_HANDOFF_MS = 2 * 60_000;
+/**
+ * The refusal reaches the Job before its deferral commits; a wake that finds
+ * no deferred Job looks once more after this.
+ */
+const DISPATCH_RECHECK_MS = 5_000;
 
 type RunAgent =
   import("~/server/domains/purchase-agent/service/run-agent").PurchaseImportRunAgent;
@@ -453,9 +458,18 @@ class PurchaseImportRunAgentHost
             // bring its Job forward and keep the turn until it arrives.
             if (await this.ctx.storage.get<boolean>(PENDING_DISPATCH)) {
               await this.ctx.storage.delete(PENDING_DISPATCH);
+              const wake = () =>
+                wakeWaitingDispatch(this.env, this.ctx, this.runId());
+              const woken =
+                (await wake()) ||
+                (await new Promise((resolve) =>
+                  setTimeout(resolve, DISPATCH_RECHECK_MS),
+                ).then(wake));
+              // Nothing to wake (the Job settled or its deferral never
+              // committed): release the turn instead of holding it idle.
+              if (!woken) return;
               this.dispatchExpectedUntil = Date.now() + DISPATCH_HANDOFF_MS;
               await this.alarmAt(this.dispatchExpectedUntil);
-              await wakeWaitingDispatch(this.env, this.ctx, this.runId());
               return;
             }
             await (await this.loaded()).alarm();
@@ -498,7 +512,9 @@ class PurchaseImportRunAgentHost
         this.admit(async () => {
           if (await this.fenced()) return refused;
           const turn = await this.turns().turn(async () => {
+            // Admitted by itself: no reserved turn needs to wake this Job.
             this.dispatchExpectedUntil = 0;
+            await this.ctx.storage.delete(PENDING_DISPATCH);
             const agent = await this.loaded();
             await agent.__unsafe_ensureInitialized();
             return agent.dispatch(input);
