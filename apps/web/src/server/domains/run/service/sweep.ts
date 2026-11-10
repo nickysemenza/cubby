@@ -146,7 +146,7 @@ const budgetPause = (error: unknown): StepPage | null =>
     ? {
         kind: "paused",
         reason: error.message,
-        until: new Date(error.resumeAt),
+        until: error.until,
         waitReason: "ai_funding_window",
       }
     : null;

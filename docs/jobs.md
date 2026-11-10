@@ -402,10 +402,12 @@ cancel.
 
 `run.funding-resume` is keyed by funding window, not Run: one Job per window,
 whose handler resumes every funding-paused Run. A funding-paused import stays
-`paused_auth` rather than stopping for review. The Workflow boundary translates
-wrapped AI budget stops into `ai_funding_window` Job deferrals at the window end
-plus 60 seconds; provider funding/configuration stops defer until the provider
-retry time. Neither consumes an attempt or discards frozen input, page evidence
+`paused_auth` rather than stopping for review. Every funding wait — an AI
+budget stop, a provider funding stop, a paid refusal — is an
+`ai_funding_window` deferral to the window end plus 60 seconds
+(`fundingResumeAt`); a provider configuration stop defers 15 minutes as
+`provider_capacity`. The Workflow boundary finds either anywhere in a wrapped
+cause chain. Neither consumes an attempt or discards frozen input, page evidence
 or the Job cursor. Generic early retries leave a funding-paused Run waiting
 while its funding-resume Job is pending.
 
@@ -422,7 +424,14 @@ public checkpoint and grants no overage. A fresh funding stop clears it,
 keeping the funding owner's frozen deadline for the next wait. Wait
 publication locks the Run before the Job, so a concurrent release cannot be
 overwritten by the older timer. A raise that precedes the funding stop itself
-does not release that later stop. Member pauses remain stopped. Automatic
+does not release that later stop. Member pauses remain stopped.
+
+The funding wake (`resumeFundingPausedRuns` with every window) also ends the
+other funding waits: it releases funding-paused discovery, then makes due the
+AI evaluations, embeddings and image jobs waiting on `ai_funding_window`, then
+brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
+report them as `waiting`: funding-paused Runs, waiting work items, and when
+they retry on their own. Automatic
 mailbox admission joins the retained Run. Run control refusals are
 `RUN_CONTROL_REFUSED` (409), never 500.
 
@@ -1071,10 +1080,11 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   unit's stream already shows stopped or failed work.
 - A drain unit without a stream is owed and not progressing: its drain's `due`
   rows report work with a `since` 30 minutes old and its record row has no
-  successful page in those 30 minutes. A unit whose `since` is the read time
-  (`reconcile`, `field-automation:policy`, Email purchase discovery) cannot
-  show how long it has waited, so only its failing and deferring pages raise
-  it.
+  successful page in those 30 minutes. `since` is when the work fell owed:
+  for `reconcile`, when the earliest stranded execution or failed start
+  dispatch stopped; for `field-automation:policy`, the policy cursor's last
+  write; for Email purchase discovery, its cursor's next hour or last page. A
+  pass that has never run has no cursor and reports the read time.
 - An AI feature has `result_ready` evaluations that are owed, that no page
   holds, and that have gone unpublished for 30 minutes: due since then, or
   waiting out a failed publication's backoff on a failing streak that old.

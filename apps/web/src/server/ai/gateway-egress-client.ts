@@ -1,6 +1,9 @@
+import { jobWaitReason } from "@cubby/schemas/job";
 import {
-  isInferenceFundingRefusal,
-  isPaidFundingUnavailable,
+  classifyFundingRefusal,
+  paidFundingRefusal,
+} from "@cubby/shared/ai/funding-refusal";
+import {
   type GatewayControls,
   type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
@@ -9,7 +12,9 @@ import { sleep } from "@cubby/shared/retry";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
+import { fundingResumeAt } from "./budget-window";
 import { deferCooperativeAiWork } from "./cooperative-work";
 import type { AiGatewayEgressRpc } from "./gateway-egress-contract";
 
@@ -28,16 +33,27 @@ export const gatewayAdmissionWait = (error: UnparsedError) =>
 export const isGatewayAdmissionWait = (error: UnparsedError) =>
   gatewayAdmissionWait(error) !== undefined;
 
-/** The provider needs funding or configuration; probe later without exhausting targets. */
-export class GatewayProviderStopError extends Error {
-  readonly retryAt = Date.now() + 15 * 60_000;
-
+/**
+ * The provider needs funding or configuration; wait without exhausting
+ * targets. A funding stop is a funding wait (`fundingResumeAt`): while the
+ * egress Durable Object holds the refusal an earlier probe is refused locally
+ * anyway. A configuration stop probes again in 15 minutes.
+ */
+export class GatewayProviderStopError extends JobDeferredError {
   constructor(
     readonly kind: "funding" | "configuration",
     readonly status: number,
     body: string,
   ) {
-    super(`Decision request failed (${status}): ${body}`);
+    super(
+      `Decision request failed (${status}): ${body}`,
+      kind === "funding"
+        ? fundingResumeAt()
+        : new Date(Date.now() + 15 * 60_000),
+      kind === "funding"
+        ? jobWaitReason.enum.ai_funding_window
+        : jobWaitReason.enum.provider_capacity,
+    );
   }
 }
 
@@ -45,9 +61,9 @@ export class GatewayProviderStopError extends Error {
 export function gatewayProviderStop(status: number, body: string) {
   if (
     status === 402 ||
-    isPaidFundingUnavailable(body) ||
-    isInferenceFundingRefusal(status, body, "openai_credit") ||
-    isInferenceFundingRefusal(status, body, "subscriber_credit")
+    paidFundingRefusal(body) ||
+    classifyFundingRefusal({ status, text: body, funding: "openai_credit" }) ||
+    classifyFundingRefusal({ status, text: body, funding: "subscriber_credit" })
   )
     return new GatewayProviderStopError("funding", status, body);
   if (status === 401 || status === 403)

@@ -19,12 +19,10 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 
 import { z } from "zod";
 
+import { classifyFundingRefusal } from "./funding-refusal";
 import {
   gatewayBaseURL,
   gatewayResponseInfo,
-  isInferenceFundingRefusal,
-  isInferenceStreamFundingRefusal,
-  isLocalFundingRefusal,
   type InferenceFunding,
 } from "./gateway-request";
 import {
@@ -403,12 +401,13 @@ export function fundedCubbyPiProviders(
               const response = await fetch(input, init);
               if (!response.ok) {
                 const body = await response.clone().text();
-                refused = isInferenceFundingRefusal(
-                  response.status,
-                  body,
-                  attempt.funding,
-                );
-                local = refused && isLocalFundingRefusal(body);
+                const refusal = classifyFundingRefusal({
+                  status: response.status,
+                  text: body,
+                  funding: attempt.funding,
+                });
+                refused = refusal !== null;
+                local = refusal?.local ?? false;
               }
               if (
                 response.ok &&
@@ -444,10 +443,10 @@ export function fundedCubbyPiProviders(
           // pi exposes a late SSE quota refusal on its terminal error message.
           const quota =
             refused ||
-            isInferenceStreamFundingRefusal(
-              result.errorMessage ?? "",
-              attempt.funding,
-            );
+            classifyFundingRefusal({
+              text: result.errorMessage ?? "",
+              funding: attempt.funding,
+            }) !== null;
           if (
             attempt.funding === "subscriber_credit" ||
             attempt.funding === "openai_credit"

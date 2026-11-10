@@ -267,7 +267,43 @@ function reclassificationProgress(
   });
 }
 
-/** A member-raised budget may wake queued work earlier; exhausted or controlled Jobs stay stopped. */
+/**
+ * Every owner of a funding wait, woken by a member's funding change (a reset
+ * or a raised budget). Each still checks current funding before it spends and
+ * may wait again. A window boundary needs none of these: each wait already
+ * resumes then (`fundingResumeAt`).
+ */
+const FUNDING_WAITS: readonly ((db: Database, now: Date) => Promise<number>)[] =
+  [
+    async (db, now) =>
+      (
+        await import("~/server/domains/run/repo/execution-context")
+      ).releaseFundingPausedDiscovery(db, now),
+    async (db) =>
+      (
+        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
+      ).wakeFundingWaitingEvaluations(db),
+    async (db) =>
+      (
+        await import("~/server/generic/embedding/repo/embedding-work")
+      ).wakeFundingWaitingEmbeddings(db),
+    async (db) =>
+      (
+        await import("~/server/domains/image-processing/repo/image-processing-history")
+      ).wakeFundingWaitingImageJobs(db),
+    async (db, now) =>
+      (
+        await (
+          await import("~/server/generic/jobs/repo/operator")
+        ).bringQueuedJobsForward(db, now)
+      ).length,
+  ];
+
+/**
+ * Resume funding-paused import Runs from earlier windows. `anyWindow`: a
+ * member changed funding, so this window's pauses and every other funding
+ * wait end now too. Exhausted or controlled Jobs stay stopped.
+ */
 export async function resumeFundingPausedRuns(
   db: Database,
   {
@@ -275,35 +311,16 @@ export async function resumeFundingPausedRuns(
     anyWindow = false,
   }: { now?: Date; anyWindow?: boolean } = {},
 ) {
-  const imports = await (
+  let woken = await (
     await import("~/server/domains/run/repo/run-control")
   ).redispatchBudgetPausedImports(
     db,
     now,
     anyWindow ? now : aiBudgetWindow(now).start,
   );
-  const discoveries = anyWindow
-    ? await (
-        await import("~/server/domains/run/repo/execution-context")
-      ).releaseFundingPausedDiscovery(db, now)
-    : 0;
-  const evaluations = anyWindow
-    ? await (
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
-      ).wakeFundingWaitingEvaluations(db)
-    : 0;
-  const embeddings = anyWindow
-    ? await (
-        await import("~/server/generic/embedding/repo/embedding-work")
-      ).wakeFundingWaitingEmbeddings(db)
-    : 0;
-  const moved = anyWindow
-    ? await (
-        await import("~/server/generic/jobs/repo/operator")
-      ).bringQueuedJobsForward(db, now)
-    : [];
+  if (anyWindow) for (const wake of FUNDING_WAITS) woken += await wake(db, now);
   await (
     await import("~/server/workflows/background-tasks/publish")
   ).wakeJobs({ source: "funding-window" });
-  return imports + discoveries + evaluations + embeddings + moved.length;
+  return woken;
 }

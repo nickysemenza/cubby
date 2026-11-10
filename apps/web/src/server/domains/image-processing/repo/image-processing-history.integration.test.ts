@@ -587,7 +587,8 @@ describe("image execution history conservation", () => {
       0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x00, 0x03, 0x00, 0x02, 0x03,
       0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
     ]);
-    const resumeAt = new Date(Date.now() + 6 * 60 * 60_000).toISOString();
+    const windowEnd = new Date(Date.now() + 6 * 60 * 60_000);
+    const resumeAt = new Date(windowEnd.getTime() + 60_000).toISOString();
     const read = vi
       .spyOn(storage, "getS3Object")
       .mockImplementation(
@@ -599,7 +600,7 @@ describe("image execution history conservation", () => {
       .mockRejectedValue(
         new AiBudgetExhaustedError(
           fromPartial<ConstructorParameters<typeof AiBudgetExhaustedError>[0]>({
-            windowEnd: resumeAt,
+            windowEnd: windowEnd.toISOString(),
           }),
           "Synthetic AI budget reached",
         ),

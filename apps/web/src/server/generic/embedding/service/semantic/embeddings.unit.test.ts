@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
+import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -14,15 +15,6 @@ function embedding(dimensions = 1536): number[] {
   return Array.from({ length: dimensions }, (_, index) => index / dimensions);
 }
 
-/**
- * The real adapter and the real gateway shim, faked only at the socket.
- *
- * Stubbing `embed()` or the adapter would leave the two things that actually
- * regress — one request for the whole array, and the gateway metadata that
- * bills and attributes it — unobserved. `~/env` snapshots `process.env` at
- * module load, so the REST branch needs a fresh module graph after stubbing;
- * that graph also has no Worker binding, which is the dev server's shape.
- */
 /** The OpenAI embeddings response shape the adapter's SDK decodes. */
 interface OpenAiEmbeddingsResponse {
   object: "list";
@@ -31,10 +23,19 @@ interface OpenAiEmbeddingsResponse {
   usage: { prompt_tokens: number; total_tokens: number };
 }
 
+/**
+ * The real adapter and the real gateway shim, faked only at the socket.
+ *
+ * Stubbing `embed()` or the adapter would leave the two things that actually
+ * regress — one request for the whole array, and the gateway metadata that
+ * bills and attributes it — unobserved.
+ */
 async function embedTextsOverFakeGateway(response: OpenAiEmbeddingsResponse) {
-  vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
   vi.stubEnv("CI", "");
   vi.resetModules();
+  (await import("~/server/cf-env")).setCfEnv(
+    fromPartial<Env>(gatewayEgressEnv("test-gateway-key")),
+  );
   const sent: Array<{ url: string; init: RequestInit | undefined }> = [];
   vi.stubGlobal("fetch", (url: string | URL, init?: RequestInit) => {
     sent.push({ url: String(url), init });
@@ -75,6 +76,31 @@ describe("embedTexts over the AI Gateway", () => {
         operation: "refresh",
       }),
     ).rejects.toThrow(/model: text-embedding-3-small.*operation: refresh/u);
+  });
+
+  it("pays Unified Billing when OpenAI credit refuses", async () => {
+    const { embedTexts } = await embedTextsOverFakeGateway(
+      openAiEmbeddingsResponse(1),
+    );
+    const sent: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      sent.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+      return sent.length === 1
+        ? Response.json(
+            { error: { code: "insufficient_quota", message: "synthetic" } },
+            { status: 429 },
+          )
+        : Response.json({ result: openAiEmbeddingsResponse(1) });
+    });
+
+    expect(await embedTexts(["eggs"])).toHaveLength(1);
+    expect(sent[1]).toMatchObject({
+      url: expect.stringMatching(/\/run$/u),
+      body: {
+        model: "openai/text-embedding-3-small",
+        input: { input: ["eggs"], dimensions: 1536 },
+      },
+    });
   });
   it("sends one request carrying every text, the dimensions, and the call's metadata", async () => {
     const { embedTexts, sent } = await embedTextsOverFakeGateway(

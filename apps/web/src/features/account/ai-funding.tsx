@@ -11,6 +11,7 @@ import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import pluralize from "pluralize";
 import { Fragment, useState, type ReactNode } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
@@ -42,6 +43,15 @@ import { EnumPill } from "~/ui/text/enum-pill";
 import { StatusText } from "~/ui/text/status-text";
 
 const clock = (iso: string) => formatInstant(iso, "clock");
+
+/** "2 Runs and 14 work items waiting for funding" */
+const waitingText = ({ runs, work }: AiFundingStatus["waiting"]) =>
+  [
+    runs ? pluralize("Run", runs, true) : null,
+    work ? pluralize("work item", work, true) : null,
+  ]
+    .filter(Boolean)
+    .join(" and ") + " waiting for funding";
 const when = (iso: string) => formatInstant(iso, "monthDayTime");
 
 type SourceId = "credit" | "openaiCredit" | "plan" | "paid";
@@ -251,6 +261,9 @@ export function AiFundingSettings() {
             />
             <p className="text-xs text-muted-foreground">
               Budgets reset {clock(budget.windowEnd)}.
+              {budget.waiting.resumeAt
+                ? ` ${waitingText(budget.waiting)} retry ${clock(budget.waiting.resumeAt)}.`
+                : null}
             </p>
           </Stack>
         ) : null}

@@ -136,12 +136,6 @@ export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
   return resumed.length;
 }
 
-const RESUME_MARGIN_MS = 60_000;
-
-/** The Workflow and window-resume owner must release funding waits together. */
-export const fundingResumeAt = (windowEnd: string): Date =>
-  new Date(Date.parse(windowEnd) + RESUME_MARGIN_MS);
-
 /**
  * A budget or funding stop pauses its Run and schedules the resume just past
  * the window boundary, so the Run waits instead of failing.
@@ -161,7 +155,7 @@ export async function pauseForFunding(
     );
     // A fenced caller that lost the race owes no resume.
     if (generation !== undefined && !paused) return;
-    const until = fundingResumeAt(error.status.windowEnd);
+    const { until } = error;
     // One resume per funding window: its handler resumes every paused Run.
     const key = `funding-resume:${error.status.windowEnd}`;
     await enqueueJob(tx, {

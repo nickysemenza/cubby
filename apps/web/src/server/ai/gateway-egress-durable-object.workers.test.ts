@@ -1,7 +1,7 @@
 import {
-  isInferenceFundingRefusal,
-  isPaidFundingUnavailable,
-} from "@cubby/shared/ai/gateway-request";
+  classifyFundingRefusal,
+  paidFundingRefusal,
+} from "@cubby/shared/ai/funding-refusal";
 import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 
@@ -74,9 +74,13 @@ describe("Claude credit refusal", () => {
         expect(body).toContain("cubby_credit_refused");
         expect(body).toContain("2099-11-01T00:00:00.000Z");
         expect(body).toContain("You have reached your specified API usage");
-        expect(isInferenceFundingRefusal(400, body, "subscriber_credit")).toBe(
-          true,
-        );
+        expect(
+          classifyFundingRefusal({
+            status: 400,
+            text: body,
+            funding: "subscriber_credit",
+          }),
+        ).toMatchObject({ kind: "credit_exhausted", local: true });
 
         const paid = await instance.fetch(egressRequest({}));
         expect(await paid.text()).toBe("synthetic unified response");
@@ -86,6 +90,51 @@ describe("Claude credit refusal", () => {
             "cf-aig-byok-alias",
           ),
         ).toBe(false);
+      } finally {
+        upstream.mockRestore();
+      }
+    });
+  });
+
+  // A probe can answer 200 and still end its stream in a credit refusal.
+  it("settles a streamed probe's hold when its stream ends", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (instance) => {
+      Object.defineProperty(instance, "env", {
+        value: { AI_GATEWAY_API_KEY: "synthetic-gateway-token" },
+      });
+      const stream = (last: string) =>
+        new Response(
+          `event: message_start\ndata: {"type":"message_start"}\n\n${last}`,
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      const refusedFrame = `event: error\ndata: ${LOW_BALANCE}\n\n`;
+      const upstream = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(stream(refusedFrame))
+        .mockResolvedValueOnce(
+          stream('event: message_stop\ndata: {"type":"message_stop"}\n\n'),
+        );
+      try {
+        const probe = async () => {
+          // Recorded last window, so this window's request probes it.
+          await instance.noteCreditResponse(
+            400,
+            CONSOLE_LIMIT,
+            Date.now() - SIX_HOURS,
+          );
+          const response = await instance.fetch(creditRequest());
+          expect(response.status).toBe(200);
+          await response.text();
+        };
+        await probe();
+        expect(await instance.creditRefusal()).toEqual({
+          until: aiBudgetWindow().end.getTime(),
+          reason: LOW_BALANCE,
+        });
+        await probe();
+        expect(await instance.creditRefusal()).toBeNull();
+        expect(upstream).toHaveBeenCalledTimes(2);
       } finally {
         upstream.mockRestore();
       }
@@ -208,7 +257,9 @@ describe("paid gateway refusal", () => {
         const refused = await instance.fetch(egressRequest({}));
         expect(upstream).toHaveBeenCalledTimes(1);
         expect(refused.status).toBe(402);
-        expect(isPaidFundingUnavailable(await refused.text())).toBe(true);
+        expect(paidFundingRefusal(await refused.text())).toMatchObject({
+          kind: "gateway_balance_empty",
+        });
 
         // Credit is a separate source and still reaches the provider.
         const credit = await instance.fetch(creditRequest());

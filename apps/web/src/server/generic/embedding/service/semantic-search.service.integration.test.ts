@@ -6,7 +6,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { type getAiGateway, setCfEnv } from "~/server/cf-env";
+import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityEmbedding } from "~/server/db/schema";
@@ -32,6 +32,7 @@ import {
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { getActiveSuggestionSuppressionKeys } from "~/server/generic/suggestions/repo/suggestion-state";
+import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,
@@ -51,7 +52,6 @@ import {
 } from "../repo/embedding-drain.fixtures";
 
 /** Stand in for `env.AI.gateway("cubby")` (see `ai-gateway.unit.test.ts`). */
-type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
 
 /** A vector store fake that records writes without needing a cf-env binding. */
 const fakeVectorStore = (): VectorStorePort & {
@@ -494,12 +494,9 @@ describe("semantic search background tasks", () => {
     );
     setCfEnv(
       fromPartial<Env>({
-        // The backlog count gates on semanticEmbeddingsConfigured(),
-        // which needs both a reachable gateway (the AI binding stands in for
-        // AI_GATEWAY_API_KEY, unset under vitest) and a configured vector store.
-        AI: {
-          gateway: () => fromPartial<AiGatewayBinding>({ run: () => {} }),
-        },
+        // The backlog count gates on semanticEmbeddingsConfigured(), which
+        // needs both the egress binding and a configured vector store.
+        ...gatewayEgressEnv(),
         VECTORIZE: createInMemoryVectorizeIndex(),
       }),
     );

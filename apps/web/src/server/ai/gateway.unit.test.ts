@@ -3,6 +3,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { getAiGateway } from "~/server/cf-env";
+import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 
 let gatewayFetch: typeof import("./gateway").gatewayFetch;
 let setCfEnv: typeof import("~/server/cf-env").setCfEnv;
@@ -15,9 +16,6 @@ beforeEach(async () => {
   // Shared unit workers may have loaded the environment before these stubs.
   vi.resetModules();
   vi.stubEnv("CI", "");
-  vi.stubEnv("AI_GATEWAY_API_KEY", "synthetic-gateway-token");
-  // Setup may have loaded the environment before this file supplied its token.
-  vi.resetModules();
   ({ setCfEnv } = await import("~/server/cf-env"));
   ({ gatewayFetch } = await import("./gateway"));
 });
@@ -29,20 +27,10 @@ afterEach(() => {
   vi.resetModules();
 });
 
-/**
- * `~/env` snapshots `process.env` at module load, so the REST branch needs a
- * fresh module graph after stubbing. The reimported `ai-gateway` also gets a
- * fresh `cf-env` with no binding — exactly the dev Node server's shape.
- */
-async function devGatewayFetch(token: string) {
-  vi.stubEnv("AI_GATEWAY_API_KEY", token);
-  vi.resetModules();
-  return (await import("./gateway")).gatewayFetch;
-}
-
-/** The physical provider request is the external seam in either runtime. */
+/** The physical provider request is the external seam. */
 function physicalRequests(response: Response) {
   const calls: Request[] = [];
+  setCfEnv(fromPartial<Env>(gatewayEgressEnv()));
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(new Request(input, init));
     return Promise.resolve(response);
@@ -172,92 +160,6 @@ describe("gatewayFetch provider transport", () => {
       }),
     ]);
   });
-
-  it("requires native authentication even when a Universal binding is present", async () => {
-    const send = await devGatewayFetch("");
-    const current = await import("~/server/cf-env");
-    const universal = vi.fn();
-    current.setCfEnv(
-      fromPartial<Env>({
-        AI: {
-          gateway: () => fromPartial<AiGatewayBinding>({ run: universal }),
-        },
-      }),
-    );
-
-    await expect(
-      send("compat", { metadata })(
-        `${gatewayBaseURL("compat")}/chat/completions`,
-        { method: "POST", body: "{}" },
-      ),
-    ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
-    expect(universal).not.toHaveBeenCalled();
-  });
-});
-
-describe("gatewayFetch on the dev REST fallback", () => {
-  it("builds the provider route and signs it with the gateway token", async () => {
-    const devFetch = await devGatewayFetch("dev-token");
-    const sent: { url: string; init: RequestInit | undefined }[] = [];
-    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
-      sent.push({ url: String(url), init });
-      return Promise.resolve(new Response("{}"));
-    });
-
-    await devFetch("compat", {
-      metadata,
-      skipCache: true,
-      requestTimeoutMs: 30_000,
-    })(`${gatewayBaseURL("compat")}/chat/completions`, {
-      method: "POST",
-      headers: { authorization: "Bearer placeholder" },
-      body: "{}",
-    });
-
-    const [call] = sent;
-    expect(call?.url).toBe(
-      "https://gateway.ai.cloudflare.com/v1/9f10f078d35d86c78dedece2300a6b88/cubby/compat/chat/completions",
-    );
-    const headers = new Headers(call?.init?.headers);
-    expect(headers.get("authorization")).toBeNull();
-    expect(headers.get("cf-aig-authorization")).toBe("Bearer dev-token");
-    expect(headers.get("cf-aig-skip-cache")).toBe("true");
-    expect(headers.get("cf-aig-request-timeout")).toBe("30000");
-    expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
-      outbound,
-    );
-  });
-
-  it("sets cf-aig-cache-ttl from cacheTtlSeconds", async () => {
-    const devFetch = await devGatewayFetch("dev-token");
-    const sent: { init: RequestInit | undefined }[] = [];
-    vi.stubGlobal("fetch", (_url: string, init?: RequestInit) => {
-      sent.push({ init });
-      return Promise.resolve(new Response("{}"));
-    });
-
-    await devFetch("compat", { metadata, cacheTtlSeconds: 604_800 })(
-      `${gatewayBaseURL("compat")}/chat/completions`,
-      { method: "POST", body: "{}" },
-    );
-
-    const headers = new Headers(sent[0]?.init?.headers);
-    expect(headers.get("cf-aig-cache-ttl")).toBe("604800");
-    expect(headers.has("cf-aig-skip-cache")).toBe(false);
-  });
-
-  it("reports the missing local credential instead of calling unauthenticated", async () => {
-    const devFetch = await devGatewayFetch("");
-    await expect(
-      devFetch("anthropic", { metadata })(
-        `${gatewayBaseURL("anthropic")}/v1/messages`,
-        {
-          method: "POST",
-          body: JSON.stringify({ model: "claude-sonnet-5-5" }),
-        },
-      ),
-    ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
-  });
 });
 
 describe("gatewayFetch transport selection", () => {
@@ -307,6 +209,7 @@ describe("gatewayFetch transport selection", () => {
     });
     setCfEnv(
       fromPartial<Env>({
+        ...gatewayEgressEnv(),
         CHATGPT_PLAN: {
           getByName: () => ({
             status: async () => ({ connected }),
@@ -369,6 +272,10 @@ describe("gatewayFetch metadata contract", () => {
     vi.resetModules();
     const calls = physicalRequests(new Response("{}"));
     const { gatewayFetch: send } = await import("./gateway");
+    // The reimported module graph has its own runtime environment.
+    (await import("~/server/cf-env")).setCfEnv(
+      fromPartial<Env>(gatewayEgressEnv()),
+    );
     await send("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
       {
@@ -443,96 +350,6 @@ describe("gatewayFetch metadata contract", () => {
 // `AI.run` with `gateway.id` posts to the binding's `/ai-gateway/run`
 // (workerd `ai-api.ts`), and REST names the gateway in `cf-aig-gateway-id`
 // (https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
-describe("gatewayFetch Workers AI", () => {
-  const decisionInput = { choices: ["red", "blue"], prompt: "synthetic" };
-
-  it("runs the model natively on the binding, scoped to the cubby gateway", async () => {
-    const universal = vi.fn();
-    const runs: unknown[][] = [];
-    const answer = new Response('{"result":{}}');
-    setCfEnv(
-      fromPartial<Env>({
-        AI: {
-          gateway: () => fromPartial<AiGatewayBinding>({ run: universal }),
-          run: (...args: unknown[]) => {
-            runs.push(args);
-            return Promise.resolve(answer);
-          },
-        },
-      }),
-    );
-    const controller = new AbortController();
-
-    const response = await gatewayFetch("workers-ai", {
-      metadata,
-      cacheTtlSeconds: 604_800,
-      requestTimeoutMs: 30_000,
-    })(`${gatewayBaseURL("workers-ai")}/run/@cf/cloudflare/clef`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(decisionInput),
-      signal: controller.signal,
-    });
-
-    expect(response).toBe(answer);
-    expect(universal).not.toHaveBeenCalled();
-    expect(runs).toEqual([
-      [
-        "@cf/cloudflare/clef",
-        decisionInput,
-        {
-          gateway: {
-            id: "cubby",
-            metadata: outbound,
-            skipCache: undefined,
-            cacheTtl: 604_800,
-            requestTimeoutMs: 30_000,
-          },
-          returnRawResponse: true,
-          signal: controller.signal,
-        },
-      ],
-    ]);
-  });
-
-  it("sends REST gateway routing and controls as headers", async () => {
-    const devFetch = await devGatewayFetch("dev-token");
-    const sent: { url: string; init: RequestInit | undefined }[] = [];
-    vi.stubGlobal("fetch", (url: string, init?: RequestInit) => {
-      sent.push({ url: String(url), init });
-      return Promise.resolve(new Response("{}"));
-    });
-
-    await devFetch("workers-ai", {
-      metadata,
-      skipCache: true,
-      cacheTtlSeconds: 600,
-      requestTimeoutMs: 30000,
-    })(`${gatewayBaseURL("workers-ai")}/run/@cf/cloudflare/clef`, {
-      method: "POST",
-      body: JSON.stringify(decisionInput),
-    });
-
-    const [call] = sent;
-    expect(call?.url).toBe(
-      "https://api.cloudflare.com/client/v4/accounts/9f10f078d35d86c78dedece2300a6b88/ai/run",
-    );
-    const headers = new Headers(call?.init?.headers);
-    expect(headers.get("authorization")).toBe("Bearer dev-token");
-    expect(headers.get("cf-aig-gateway-id")).toBe("cubby");
-    expect(JSON.parse(headers.get("cf-aig-metadata") ?? "{}")).toEqual(
-      outbound,
-    );
-    expect(headers.get("cf-aig-skip-cache")).toBe("true");
-    expect(headers.get("cf-aig-cache-ttl")).toBe("600");
-    expect(headers.get("cf-aig-request-timeout")).toBe("30000");
-    expect(JSON.parse(String(call?.init?.body))).toEqual({
-      model: "@cf/cloudflare/clef",
-      input: decisionInput,
-    });
-  });
-});
-
 // Accounting reads the gateway's log id and cache verdict from every response
 // a transport received, without taking the body the provider SDK parses.
 describe("gatewayFetch response observation", () => {

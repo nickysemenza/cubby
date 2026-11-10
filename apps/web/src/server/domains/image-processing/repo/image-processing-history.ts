@@ -1,6 +1,6 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
-import type { JobWaitReason } from "@cubby/schemas/job";
+import { jobWaitReason, type JobWaitReason } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -312,4 +312,23 @@ export async function deferImageProcessingJob(
     });
     return true;
   });
+}
+
+/**
+ * A funding change ends image funding waits now; a source still without
+ * funding defers the attempt again before spending.
+ */
+export async function wakeFundingWaitingImageJobs(db: Database) {
+  const woken = await getDb(db)
+    .update(imageProcessingJob)
+    .set({ runAt: sql`now()` })
+    .where(
+      and(
+        eq(imageProcessingJob.state, "pending"),
+        eq(imageProcessingJob.waitReason, jobWaitReason.enum.ai_funding_window),
+        sql`${imageProcessingJob.runAt} > now()`,
+      ),
+    )
+    .returning({ id: imageProcessingJob.id });
+  return woken.length;
 }

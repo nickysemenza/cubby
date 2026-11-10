@@ -1,11 +1,14 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { FundingRefusalSource } from "@cubby/schemas/mail-import-settings";
+import {
+  classifyFundingRefusal,
+  type FundingRefusal,
+  paidFundingRefusal,
+} from "@cubby/shared/ai/funding-refusal";
 import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
-  isGatewayBalanceEmpty,
   creditFundingFor,
-  isInferenceFundingRefusal,
   isSubscriberCreditRequest,
   paidRefusedResponse,
   runProviderGateway,
@@ -56,28 +59,54 @@ const isCreditBucket = (bucket: string) =>
   bucket === CREDIT_BUCKET || bucket === OPENAI_CREDIT_BUCKET;
 // Paid gateway refusals arrive as small JSON errors on these statuses.
 const PAID_REFUSAL_STATUSES = [400, 402, 403];
+// Enough of a stream's end to hold its terminal error frame.
+const STREAM_TAIL_CHARS = 16_384;
 
 const windowStart = (now: number) =>
   aiBudgetWindow(new Date(now)).start.getTime();
 
 /**
- * When a credit refusal lifts: the date Anthropic names ("You will regain
- * access on 2026-11-01 at 00:00 UTC"), else the end of the current credit
- * window.
+ * When a credit refusal lifts: the date the provider names, else the end of
+ * the current credit window.
  */
-function creditRefusalUntil(reason: string, now: number) {
-  const named =
-    /regain access on (\d{4}-\d{2}-\d{2})(?: at (\d{1,2}):(\d{2}))?/u.exec(
-      reason,
-    );
-  const at = named
-    ? Date.parse(
-        `${named[1]}T${(named[2] ?? "0").padStart(2, "0")}:${named[3] ?? "00"}:00Z`,
-      )
-    : NaN;
-  return Number.isFinite(at) && at > now
-    ? at
-    : aiBudgetWindow(new Date(now)).end.getTime();
+const refusalUntil = (refusal: FundingRefusal, now: number) =>
+  refusal.until ?? aiBudgetWindow(new Date(now)).end.getTime();
+
+/**
+ * The terminal error frame of a streamed answer, if it ended in one: a
+ * provider funding refusal can arrive after 2xx headers. Only an `error` or
+ * `response.failed` frame classifies, so model output never does.
+ */
+function terminalStreamError(tail: string): string | null {
+  let last: string | null = null;
+  for (const frame of tail.split(/\r?\n\r?\n/u)) {
+    const lines = frame.split(/\r?\n/u);
+    const event = lines
+      .find((line) => line.startsWith("event:"))
+      ?.slice(6)
+      .trim();
+    const data = lines
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .join("\n");
+    if (!data) continue;
+    let type: unknown;
+    try {
+      const parsed: unknown = JSON.parse(data);
+      type =
+        parsed && typeof parsed === "object" && "type" in parsed
+          ? parsed.type
+          : undefined;
+    } catch {
+      // SILENT: a partial leading frame of the tail is not a terminal error.
+      continue;
+    }
+    last =
+      event === "error" || type === "error" || type === "response.failed"
+        ? data
+        : null;
+  }
+  return last;
 }
 
 /** One identity per gateway; subscription requests never enter this object. */
@@ -171,17 +200,30 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     epoch: number | undefined = undefined,
     provider = "anthropic",
   ) {
-    const bucket = `subscriber-credit:${provider}`;
+    this.noteCredit(status, body, now, epoch, provider);
+  }
+
+  /** `status` undefined: `body` is a stream's terminal error frame. */
+  private noteCredit(
+    status: number | undefined,
+    body: string,
+    now: number,
+    epoch: number | undefined,
+    provider: string,
+  ) {
     this.noteFundingResponse(
-      bucket,
+      `subscriber-credit:${provider}`,
       status,
       body,
       now,
       epoch,
-      isInferenceFundingRefusal(
-        status,
-        body,
-        creditFundingFor(provider) ?? "subscriber_credit",
+      classifyFundingRefusal(
+        {
+          status,
+          text: body,
+          funding: creditFundingFor(provider) ?? "subscriber_credit",
+        },
+        now,
       ),
     );
   }
@@ -198,40 +240,42 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     now = Date.now(),
     epoch: number | undefined = undefined,
   ) {
+    const refusal = paidFundingRefusal(body, now);
     this.noteFundingResponse(
       PAID_BUCKET,
       status,
       body,
       now,
       epoch,
-      isGatewayBalanceEmpty(body),
+      refusal?.kind === "gateway_balance_empty" ? refusal : null,
     );
   }
 
   private noteFundingResponse(
     bucket: string,
-    status: number,
+    status: number | undefined,
     body: string,
     now: number,
     epoch: number | undefined,
-    refused: boolean,
+    refusal: FundingRefusal | null,
   ) {
     const currentEpoch = this.creditEpoch(bucket);
     if (epoch !== undefined && epoch !== currentEpoch) return;
-    if (status >= 200 && status < 300) return this.clearCreditRefusal(bucket);
-    if (!refused) return;
+    if (status !== undefined && status >= 200 && status < 300)
+      return this.clearCreditRefusal(bucket);
+    if (!refusal) return;
     // Raw diagnostics stay whole (AGENTS.md); only credentials are redacted.
     const reason = scrubCredentialValues(body);
     this.bumpCreditEpoch(bucket);
-    const refusal = {
-      untilMs: creditRefusalUntil(reason, now),
+    const held = {
+      untilMs: refusalUntil(refusal, now),
       reason,
       probeWindow: windowStart(now),
     };
     this.db
       .insert(creditRefusals)
-      .values({ bucket, ...refusal })
-      .onConflictDoUpdate({ target: creditRefusals.bucket, set: refusal })
+      .values({ bucket, ...held })
+      .onConflictDoUpdate({ target: creditRefusals.bucket, set: held })
       .run();
   }
 
@@ -485,9 +529,16 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
             });
       if (!(response instanceof Response))
         throw new Error("AI Gateway returned no raw Response");
-      if (credit && response.ok)
+      // A stream can still end in a funding refusal after 2xx headers, so its
+      // hold settles when it ends; any other 2xx is a complete answer.
+      const streamed =
+        response.ok &&
+        (credit || paid) &&
+        !!response.body &&
+        !!response.headers.get("content-type")?.includes("text/event-stream");
+      if (credit && response.ok && !streamed)
         await this.noteCreditResponse(200, "", Date.now(), epoch, provider);
-      if (paid && response.ok)
+      if (paid && response.ok && !streamed)
         await this.notePaidResponse(200, "", Date.now(), epoch);
       if (
         (credit && [400, 402, 429].includes(response.status)) ||
@@ -518,14 +569,59 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       }
       const upstreamReader = response.body.getReader();
       reader = upstreamReader;
+      const decoder = new TextDecoder();
+      let tail = "";
+      // Only a stream that ends settles its hold; an abort or read failure
+      // leaves it as it was.
+      const settleStream = () => {
+        if (!streamed) return;
+        tail += decoder.decode();
+        const error = terminalStreamError(tail);
+        const now = Date.now();
+        try {
+          if (credit)
+            this.noteCredit(
+              error === null ? 200 : undefined,
+              error ?? "",
+              now,
+              epoch,
+              provider,
+            );
+          else {
+            const refusal =
+              error === null ? null : paidFundingRefusal(error, now);
+            this.noteFundingResponse(
+              PAID_BUCKET,
+              error === null ? 200 : undefined,
+              error ?? "",
+              now,
+              epoch,
+              refusal?.kind === "gateway_balance_empty" ? refusal : null,
+            );
+          }
+        } catch (error) {
+          // SILENT: the answer already reached the caller; a hold left as it was
+          // is probed again next window.
+          reportServerError(error, {
+            operation: "gateway_egress.settle_stream",
+          });
+        }
+      };
       const body = new ReadableStream<Uint8Array>({
         async pull(stream) {
           try {
             const next = await upstreamReader.read();
             if (next.done) {
+              settleStream();
               await finish(response.status, null);
               stream.close();
-            } else stream.enqueue(next.value);
+            } else {
+              if (streamed)
+                tail = (
+                  tail + decoder.decode(next.value, { stream: true })
+                ).slice(-STREAM_TAIL_CHARS);
+              stream.enqueue(next.value);
+            }
           } catch (error) {
             await finish(response.status, null);
             stream.error(error);

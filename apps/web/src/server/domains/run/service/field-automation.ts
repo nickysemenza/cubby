@@ -202,7 +202,7 @@ export const fieldAutomationDrain: BackgroundDrain = {
     FROM "AuditLog" WHERE "automationPending"
     HAVING count(*) > 0
     UNION ALL
-    SELECT ${POLICY_UNIT}::text, false, now()::timestamp
+    SELECT ${POLICY_UNIT}::text, false, "updatedAt"::timestamp
     FROM "AppSettings"
     WHERE id = ${AI_DISCOVERY_SETTINGS_ID}::uuid
       AND NOT COALESCE((metadata->>${"fieldDone"})::boolean, false)

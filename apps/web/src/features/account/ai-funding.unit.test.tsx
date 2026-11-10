@@ -26,6 +26,7 @@ const CONSOLE_LIMIT =
 const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
   windowStart: "2026-10-01T00:00:00.000Z",
   windowEnd: "2026-10-01T06:00:00.000Z",
+  waiting: { resumeAt: null, runs: 0, work: 0 },
   credit: { spentUsd: 2.5, ...AVAILABLE },
   openaiCredit: { spentUsd: 0.25, ...AVAILABLE },
   paid: { limitUsd: 1, spentUsd: 0.4, ...AVAILABLE },

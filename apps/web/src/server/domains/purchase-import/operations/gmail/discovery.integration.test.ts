@@ -750,7 +750,6 @@ describe("scheduled Gmail discovery", () => {
         paid: { limitUsd: 1, spentUsd: 1 },
       },
       "HTTP 400: Synthetic missing default BYOK credential",
-      new Date(Date.now() + 900_000).toISOString(),
     );
     let stop: Error | undefined = budget;
     let releaseAtPublication = false;
@@ -993,7 +992,7 @@ describe("scheduled Gmail discovery", () => {
       expect((await readJobs(ctx.db, { key }))[0]).toMatchObject({
         attempts: 0,
         cursor: checkpoint,
-        availableAt: new Date(provider.retryAt),
+        availableAt: provider.until,
         waitReason: "provider_capacity",
       });
       expect(await readRun(state.params.runId)).toMatchObject({
