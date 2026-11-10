@@ -106,7 +106,14 @@ export async function saveSweepSuggestions(
           and(
             runId
               ? eq(suggestionTable.runId, runId)
-              : isNull(suggestionTable.runId),
+              : // An automatic slot already holds the prior answer; only a
+                // replay of this evaluation is already saved.
+                and(
+                  isNull(suggestionTable.runId),
+                  input.evaluationId
+                    ? eq(suggestionTable.evaluationId, input.evaluationId)
+                    : undefined,
+                ),
             eq(suggestionTable.recordId, typedRecordId),
             eq(suggestionTable.field, input.field),
             eq(suggestionTable.active, true),

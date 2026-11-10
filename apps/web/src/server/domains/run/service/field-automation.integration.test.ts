@@ -1,21 +1,26 @@
 import { systemActor } from "@cubby/schemas/context";
 import { eq, sql } from "drizzle-orm";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { suggestionTable } from "~/server/db/schema";
+import { product as productTable, suggestionTable } from "~/server/db/schema";
+import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
 import {
   categoryPorts,
+  decisionAt,
   kernelCtx,
   productFixture,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -116,6 +121,58 @@ describe("field automation drain", () => {
     );
     // The member-started Sweep's own evaluation carries no cause.
     expect(causes.rows.map((row) => row.cause)).toContain("new_record");
+  });
+
+  // Failure mode: a model update re-asks an open guess, answers above the bar,
+  // and leaves the field empty because the old guess still holds the slot.
+  it("fills an empty field when a model update re-asks an open guess", async () => {
+    const item = await productFixture(ctx, "Synthetic re-asked guess");
+    const recordId = await resolveOrThrow(ctx.db, "product", item.id);
+    const guess = await seedFieldSuggestion(ctx.db, {
+      runId: null,
+      entity: "product",
+      recordId,
+      field: "categoryId",
+      currentValue: null,
+      suggestedValue: taxonomyShortcode("tools"),
+      confidence: 0.6,
+      runnerUpValue: null,
+      runnerUpConfidence: null,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+    });
+    await activateAiRefresh(ctx.db, "synthetic-model-update", {
+      enabled: true,
+      startDiscovery: true,
+    });
+    while (
+      (await fieldAutomationDrain.page(ctx.db, "field-automation:policy"))
+        .claimed > 0
+    );
+    const evaluations = aiEvaluationDrain(
+      // Only the model is scripted: the scheduled input fingerprint must match.
+      runAiEvaluationExecution({
+        suggestPorts: { decisionPort: decisionAt(0.97) },
+        context: kernelCtx(ctx),
+      }),
+    );
+    for (let page = 0; page < 5; page += 1)
+      if (
+        (await evaluations.page(ctx.db, "ai-evaluation:field-suggestion"))
+          .claimed === 0
+      )
+        break;
+    const [product] = await getDb(ctx.db)
+      .select({ categoryId: productTable.categoryId })
+      .from(productTable)
+      .where(eq(productTable.id, recordId));
+    expect(product?.categoryId).not.toBeNull();
+    const [old] = await getDb(ctx.db)
+      .select({ status: suggestionTable.status })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, guess.id));
+    expect(old?.status).toBe("superseded");
   });
 
   it("treats an import's replacement as evidence, not a member's grade", async () => {
