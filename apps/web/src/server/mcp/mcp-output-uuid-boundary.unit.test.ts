@@ -119,6 +119,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "suggestions_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "suggestions_read.items[].evidence.id",
   "suggestions_read.items[].evidence.review.suggestionId",
+  // Changes by Cubby rows repeat the field review row Keep and Wrong, clear it act on.
+  "suggestions_read.items[].field.suggestionId",
+  "suggestions_read.items[].field.acceptanceReceipt.auditIds[]",
+  "suggestions_read.items[].field.id",
   // A draft preview echoes the same Suggestion child-row handle for explicit review.
   "finance_read.suggestionId",
   "suggestions.suggestionId",
