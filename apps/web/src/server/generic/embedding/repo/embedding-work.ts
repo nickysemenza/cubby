@@ -15,6 +15,7 @@ import {
   asc,
   eq,
   inArray,
+  isNotNull,
   isNull,
   lte,
   or,
@@ -224,6 +225,18 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
         })
         .where(or(...items.map(current)));
     },
+    // A funding wait keeps the item's attempts and starts no failure streak;
+    // its error stays visible until the wait lifts or funding is reset.
+    wait: async (tx, items, error, until) => {
+      if (!items.length) return;
+      await getDb(tx)
+        .update(searchDocument)
+        .set({
+          embeddingError: error.slice(0, 2000),
+          embeddingDueAt: until,
+        })
+        .where(or(...items.map(current)));
+    },
     release: async (db) => {
       if (!claimed.size) return;
       await getDb(db)
@@ -331,6 +344,25 @@ export const embeddingRefreshDue = (unit: string) =>
     FROM ${searchDocument}
     WHERE ${searchDocument.embeddingDueAt} <= now() AND ${leaseFree()} AND ${searchDocument.deletedAt} IS NULL
     HAVING count(*) > 0`;
+/**
+ * A funding change ends embedding funding waits now: a waiting item holds an
+ * error with no failure streak, which only `wait` leaves behind.
+ */
+export async function wakeFundingWaitingEmbeddings(db: Database) {
+  const woken = await getDb(db)
+    .update(searchDocument)
+    .set({ embeddingDueAt: sql`now()` })
+    .where(
+      and(
+        sql`${searchDocument.embeddingDueAt} > now()`,
+        isNull(searchDocument.embeddingFailingSince),
+        isNotNull(searchDocument.embeddingError),
+        isNull(searchDocument.deletedAt),
+      ),
+    )
+    .returning({ id: searchDocument.id });
+  return woken.length;
+}
 export const embeddingRefreshNext = () =>
   sql`SELECT min(greatest(${searchDocument.embeddingDueAt}, ${searchDocument.embeddingLeaseUntil}))
     FROM ${searchDocument}

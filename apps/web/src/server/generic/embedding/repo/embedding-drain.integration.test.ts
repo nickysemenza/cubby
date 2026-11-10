@@ -5,13 +5,14 @@ import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { entityEmbedding } from "~/server/db/retained-tables";
+import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
   advanceEmbeddingFixture,
   embeddingWorkFor,
   markEmbeddingFixture,
 } from "~/server/generic/embedding/repo/embedding-drain.fixtures";
+import { wakeFundingWaitingEmbeddings } from "~/server/generic/embedding/repo/embedding-work";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import {
@@ -19,7 +20,10 @@ import {
   type SemanticEmbeddingConfig,
 } from "~/server/generic/embedding/service/semantic/config";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
+import {
+  JobDeferredError,
+  JobRetryableError,
+} from "~/server/generic/jobs/errors";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
@@ -384,6 +388,59 @@ describe("embedding refresh and cleanup drains", () => {
       ),
     ).toHaveLength(39);
   }, 60_000);
+
+  // Failure mode: an exhausted OpenAI credit balance fails embeddings, spends
+  // their attempts, and a funding reset leaves them waiting out their backoff.
+  it("waits for funding on a credit refusal and resumes on a funding reset", async () => {
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic unfunded embedding" }),
+      ctx.actor,
+    );
+    await markRefresh(ctx.db, [
+      { entityKind: "product", entityId: subject.entityId },
+    ]);
+    const remote = fakeStore();
+    const until = new Date(Date.now() + 60 * 60_000);
+    const refused: EmbeddingRefreshPort = {
+      ...embeddingPort(remote.store),
+      async embed() {
+        throw new JobDeferredError(
+          "Synthetic OpenAI credit refusal",
+          until,
+          "ai_funding_window",
+        );
+      },
+    };
+    await getDb(ctx.db)
+      .update(searchDocument)
+      .set({ embeddingDueAt: new Date(0) })
+      .where(isNotNull(searchDocument.embeddingDueAt));
+    const page = await embeddingRefreshDrain(refused).page(
+      ctx.db,
+      "embedding.refresh",
+    );
+    expect(page.outcome).toBe("deferred");
+    const [waiting] = await getDb(ctx.db)
+      .select({
+        attempts: searchDocument.embeddingAttempts,
+        failingSince: searchDocument.embeddingFailingSince,
+        dueAt: searchDocument.embeddingDueAt,
+        error: searchDocument.embeddingError,
+      })
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, subject.entityId));
+    expect(waiting).toMatchObject({ attempts: 0, failingSince: null });
+    expect(waiting?.dueAt?.getTime()).toBe(until.getTime());
+    expect(waiting?.error).toContain("Synthetic OpenAI credit refusal");
+
+    expect(await wakeFundingWaitingEmbeddings(ctx.db)).toBe(1);
+    const [woken] = await getDb(ctx.db)
+      .select({ dueAt: searchDocument.embeddingDueAt })
+      .from(searchDocument)
+      .where(eq(searchDocument.entityId, subject.entityId));
+    expect(woken?.dueAt?.getTime()).toBeLessThanOrEqual(Date.now());
+  });
 
   it("keeps delayed cleanup bound to its retired vector after a replacement upload", async () => {
     const subject = await createProductFixture(

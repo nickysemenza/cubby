@@ -1,9 +1,13 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
+import {
+  gatewayBaseURL,
+  isOpenAiCreditRefusal,
+} from "@cubby/shared/ai/gateway-request";
 import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
+import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   markPreparationIncomplete,
   preparingWithoutProviders,
@@ -19,6 +23,7 @@ import {
   runEmbeddingFeature,
 } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getSemanticEmbeddingConfig } from "./config";
@@ -147,9 +152,16 @@ export async function embedTexts(
             },
           );
           if (!response.ok) {
-            throw new Error(
-              `Embeddings request failed (HTTP ${response.status} ${response.statusText}): ${await response.text()}`,
-            );
+            const body = await response.text();
+            const failure = `Embeddings request failed (HTTP ${response.status} ${response.statusText}): ${body}`;
+            // No OpenAI credit: wait for the funding window (or a reset) instead of failing.
+            if (isOpenAiCreditRefusal(body))
+              throw new JobDeferredError(
+                failure,
+                aiBudgetWindow().end,
+                "ai_funding_window",
+              );
+            throw new Error(failure);
           }
           const body = embeddingsResponseSchema.parse(await response.json());
           return {

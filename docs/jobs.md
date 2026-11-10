@@ -338,7 +338,12 @@ and record the streak's start on the owning row (`AiEvaluation.failingSince`,
 any item still failing 24 hours after its streak began is settled as failed. A
 page that fails whole (outside any one item) settles each item it still holds
 as failed, so persistent page failures reach the same bounds. Funding and
-provider waits stop the page without touching its items.
+provider waits stop the page without spending an attempt: a store with `wait`
+(embedding refresh) holds each claimed item until the wait ends and records
+the page as deferred, and any other store leaves its items owed as they were.
+An embedding request refused for OpenAI credit waits until the funding window
+ends; a funding change (`ai_funding.reset_funding_refusal` or a budget change)
+makes those items due at once.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
 attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable

@@ -305,6 +305,15 @@ export function rowDrain<P>(
         // provider error outside any item) settles its still-held items as
         // failed, so persistent page failures reach the same bounds. Pauses,
         // waits and lost leases stop the page without touching its items.
+        const failure = classifyJobFailure(error);
+        if (failure.kind === "deferred" && store.wait) {
+          // A funding or provider wait is the page's outcome, not a failure:
+          // every claimed item waits for it without spending an attempt.
+          await context.fenced((tx) =>
+            store.wait!(tx, items, message(error), failure.until),
+          );
+          return { claimed: items.length, outcome: "deferred" };
+        }
         if (!stopsDrainPage(error))
           await context
             .fenced((tx) =>
