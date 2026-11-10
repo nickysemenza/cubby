@@ -3,6 +3,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
 import { cn } from "cn";
+import { createContext, useContext } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
@@ -15,22 +16,29 @@ import { FieldRecordValue } from "~/ui/derived/record-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { Badge } from "~/ui/reui/badge";
 
-import { calendarItemPresentation } from "./calendar-kind-registry";
+import {
+  calendarItemPresentation,
+  spendingContextText,
+} from "./calendar-kind-registry";
 import { itemSpanLabel } from "./calendar-span";
 
 type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 
 function CalendarBeneficiaries({
   item,
-  announceNames = false,
   compact = false,
+  showInherited = false,
 }: {
   item: CalendarItem;
-  announceNames?: boolean;
   compact?: boolean;
+  showInherited?: boolean;
 }) {
   if (item.kind !== "expense" && item.kind !== "purchase") return null;
-  const parties = item.spendingContext?.parties ?? [];
+  // Chips name only recorded beneficiaries; inherited defaults and their
+  // markers stay in the inspector.
+  const parties = (item.spendingContext?.parties ?? []).filter(
+    (party) => showInherited || !party.inherited,
+  );
   const sources = item.spendingContext?.beneficiarySources ?? [];
   const envelopes = sources.map(
     (source) => source.fields.effectiveBeneficiaries,
@@ -42,7 +50,7 @@ function CalendarBeneficiaries({
         envelope.result.kind === "cached" &&
         envelope.result.freshness === "stale",
     );
-  if (!parties.length && !sources.length) return null;
+  if (!parties.length && !status) return null;
   return (
     <span
       className={cn(
@@ -73,7 +81,7 @@ function CalendarBeneficiaries({
             displayImage={null}
             size={compact ? "compact" : "inline"}
           />
-          {announceNames && <span className="sr-only">{party.name}</span>}
+          <span className="sr-only">{party.name}</span>
           {party.inherited && <InheritedMarker />}
         </span>
       ))}
@@ -137,6 +145,35 @@ function CalendarItemPresentation({
   );
 }
 
+/** Whether the calendar shows more than one source, so chips carry their source dot. */
+const CalendarMultiSourceContext = createContext(false);
+
+function CalendarItemAmount({
+  item,
+  className,
+}: {
+  item: CalendarItem;
+  className?: string;
+}) {
+  if (
+    (item.kind !== "expense" && item.kind !== "purchase") ||
+    item.cost == null
+  )
+    return null;
+  const refund = item.kind === "purchase" && item.occurrence === "refund";
+  return (
+    <span
+      className={cn(
+        "shrink-0 font-mono tabular-nums",
+        refund && "text-positive",
+        className,
+      )}
+    >
+      {formatCurrency(item.cost)}
+    </span>
+  );
+}
+
 function CalendarItemCompact({
   item,
   image,
@@ -145,97 +182,64 @@ function CalendarItemCompact({
   image: ImageUrlSummary | null;
 }) {
   const today = useHouseholdToday();
+  const multiSource = useContext(CalendarMultiSourceContext);
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const span = itemSpanLabel(item, today);
-  const context = [
-    {
-      kind: "project",
-      label:
-        item.kind === "task"
-          ? item.assignedProjectName
-          : item.kind === "expense" || item.kind === "purchase"
-            ? item.spendingContext?.projectNames.join(", ")
-            : null,
-    },
-    {
-      kind: "party",
-      label:
-        item.kind === "expense" || item.kind === "purchase"
-          ? item.spendingContext?.parties
-              .map((party) => party.name)
-              .join(", ") ||
-            (item.spendingContext?.beneficiarySources.length
-              ? "Beneficiaries"
-              : null)
-          : null,
-    },
-  ].filter(({ label }) => Boolean(label));
+  const context =
+    item.kind === "expense" || item.kind === "purchase"
+      ? spendingContextText(item)
+      : item.kind === "task"
+        ? item.assignedProjectName
+        : null;
   return (
     <>
+      {multiSource && (
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full bg-(--ec-event-color)"
+        />
+      )}
       {image ? (
         <EntityCover images={[image]} entity={item.kind} size={14} alt="" />
       ) : (
-        <Icon className="size-3 shrink-0" aria-hidden />
+        <Icon className="size-3.5 shrink-0" aria-hidden />
       )}
-      <span className="min-w-0 flex-1 truncate" title={item.title}>
+      <span className="min-w-0 truncate" title={item.title}>
         {item.title}
       </span>
-      {context.length > 0 && (
+      {/* Shrinks eight times faster than the title and leaves narrow columns. */}
+      {context && (
         <span
-          className={cn(
-            "flex min-w-0 items-center gap-1 overflow-hidden text-muted-foreground",
-            context.length > 1
-              ? "flex-[2]"
-              : context[0]?.kind === "party"
-                ? "shrink-0"
-                : "flex-1",
-          )}
+          className="min-w-0 shrink-[8] truncate text-muted-foreground @max-[10rem]:hidden"
+          title={context}
         >
-          {context.map(({ kind, label }) => (
-            <span
-              key={kind}
-              className={cn(
-                kind === "party" ? "flex shrink-0" : "min-w-0 flex-1 truncate",
-              )}
-              title={label ?? undefined}
-            >
-              {kind === "party" ? (
-                <CalendarBeneficiaries item={item} announceNames compact />
-              ) : (
-                label
-              )}
-            </span>
-          ))}
+          {context}
         </span>
       )}
-      {presentation.compactBadge && (
-        <Badge
-          variant={presentation.compactBadge.variant}
-          className="h-3.5 max-w-24 px-1 text-3xs"
-          title={presentation.compactBadge.label}
-        >
-          {presentation.compactBadge.label}
-        </Badge>
-      )}
-      {item.kind === "project" && fieldValueOf(item.source.fields.kind) && (
-        <span className="shrink-0 text-muted-foreground">
-          <FieldRecordValue record={item.source} field="kind">
-            {capitalize(fieldValueOf(item.source.fields.kind) ?? "")}
-          </FieldRecordValue>
-        </span>
-      )}
-      {span && (
-        <span className="shrink-0 text-muted-foreground tabular-nums">
-          {span}
-        </span>
-      )}
-      {(item.kind === "expense" || item.kind === "purchase") &&
-        item.cost != null && (
-          <span className="shrink-0 tabular-nums">
-            {formatCurrency(item.cost)}
+      <span className="ml-auto flex shrink-0 items-center gap-1">
+        <CalendarBeneficiaries item={item} compact />
+        {presentation.compactBadge && (
+          <Badge
+            variant={presentation.compactBadge.variant}
+            className="h-3.5 max-w-24 px-1 text-3xs"
+            title={presentation.compactBadge.label}
+          >
+            {presentation.compactBadge.label}
+          </Badge>
+        )}
+        {item.kind === "project" && fieldValueOf(item.source.fields.kind) && (
+          <span className="text-muted-foreground">
+            <FieldRecordValue record={item.source} field="kind">
+              {capitalize(fieldValueOf(item.source.fields.kind) ?? "")}
+            </FieldRecordValue>
           </span>
         )}
+        {span && (
+          <span className="text-muted-foreground tabular-nums">{span}</span>
+        )}
+        <CalendarItemAmount item={item} />
+      </span>
     </>
   );
 }
@@ -286,7 +290,8 @@ function CalendarItemRich({
           {/* A fortnight column is ~150px: money on the title line truncates
               the name it is meant to price. Compact sends it down to the data
               line, where the mono numbers already live. */}
-          {!compact && costLabel && (
+          {!compact && <CalendarItemAmount item={item} />}
+          {!compact && item.kind === "meal" && costLabel && (
             <span className="shrink-0 font-mono tabular-nums">{costLabel}</span>
           )}
         </div>
@@ -324,4 +329,10 @@ const calendarItemTriggerClassName = (item: CalendarItem) =>
     item.kind === "expense" && item.future && "text-warning-ink",
   );
 
-export { CalendarItemPresentation, calendarItemTriggerClassName, itemMetadata };
+export {
+  CalendarItemAmount,
+  CalendarItemPresentation,
+  CalendarMultiSourceContext,
+  calendarItemTriggerClassName,
+  itemMetadata,
+};

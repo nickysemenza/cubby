@@ -35,7 +35,7 @@ import { useEntityPreview } from "~/entity/hooks/use-entity-preview";
 import { calendar } from "~/integrations/tanstack-query/generated/domains/calendar.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { HOUSEHOLD_TIMEZONE, householdLocalDate } from "~/lib/household-date";
-import { formatCurrency } from "~/lib/number-format";
+import { formatCompactCurrency, formatCurrency } from "~/lib/number-format";
 import { formatEstimate } from "~/lib/nutrition-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { useHouseholdToday } from "~/lib/use-household-today";
@@ -53,6 +53,7 @@ import { Button } from "~/ui/primitives/button";
 import { createPopoverHandle, PopoverTrigger } from "~/ui/primitives/popover";
 import { Spinner } from "~/ui/primitives/spinner";
 import { Switch } from "~/ui/primitives/switch";
+import { KeyNumbers } from "~/ui/records/key-numbers";
 import {
   type EventCalendarRenderEventProps,
   type EventCalendarRenderEventRoot,
@@ -73,6 +74,7 @@ import { KIND_ICONS } from "./calendar-icons";
 import { CalendarItemInspector } from "./calendar-item-inspector";
 import {
   CalendarItemPresentation,
+  CalendarMultiSourceContext,
   calendarItemTriggerClassName,
 } from "./calendar-item-row";
 import { calendarItemPresentation } from "./calendar-kind-registry";
@@ -126,7 +128,9 @@ const PERIOD_OPTIONS = [
 // geometry; compact styling must not scale the painted chips independently.
 const MONTH_DENSITY = {
   "--ec-month-row-min-h": "6rem",
+  "--ec-month-empty-row-min-h": "3rem",
   "--ec-month-bar-h": "1.375rem",
+  "--ec-week-rail-w": "8.5rem",
 } as CSSProperties;
 /**
  * Fortnight keeps a taller unit for two-line metadata. A crossing bar is one
@@ -536,6 +540,44 @@ export function UnifiedCalendar({
   const selectedSummary = selectedDay
     ? (data?.days[selectedDay] ?? EMPTY_DAY_SUMMARY)
     : EMPTY_DAY_SUMMARY;
+  const summaries = data?.days ?? NO_DAY_SUMMARIES;
+  const multiSource = useMemo(
+    () =>
+      new Set(
+        items.map((item) => (item.kind === "purchase" ? "expense" : item.kind)),
+      ).size > 1,
+    [items],
+  );
+  const periodSpend = useMemo(() => {
+    const days: string[] = [];
+    for (
+      let cursor = activePeriod.start;
+      cursor < activePeriod.end;
+      cursor = addDays(cursor, 1)
+    )
+      days.push(formatPlainDate(cursor));
+    return sumSpend(days, summaries);
+  }, [activePeriod, summaries]);
+  const renderDayMeta = useCallback(
+    (day: Date) => {
+      const summary = summaries[formatPlainDate(day)];
+      return summary?.actualSpend || summary?.plannedSpend ? (
+        <DaySpend summary={summary} />
+      ) : null;
+    },
+    [summaries],
+  );
+  const renderWeekRail = useCallback(
+    (week: Date[]) => (
+      <WeekSpendRail
+        days={week.map((day) => formatPlainDate(day))}
+        items={items}
+        summaries={summaries}
+      />
+    ),
+    [items, summaries],
+  );
+  const showWeekRail = periodSpend.actual !== 0 || periodSpend.planned !== 0;
   // Returning false keeps the engine's own "+N more" popover closed: the day
   // sheet is the one overflow surface on this page.
   const openDay = (moreDay: Date) => {
@@ -569,204 +611,367 @@ export function UnifiedCalendar({
 
   return (
     <EntityDisplayImagesProvider refs={imageRefs} seeded={seededImages}>
-      <Stack gap="sm">
-        <Row align="center" wrap gap="xs">
-          <PrevNextButtons
-            previous={{
-              label: `Previous ${period}`,
-              onClick: () => shiftAnchor(-1),
-            }}
-            next={{ label: `Next ${period}`, onClick: () => shiftAnchor(1) }}
-          >
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="text-xs"
-              onClick={() => onDateChange(undefined)}
-            >
-              Today
-            </Button>
-          </PrevNextButtons>
-          <h2 className="font-heading text-sm font-semibold">{periodTitle}</h2>
-          <Row align="center" gap="xs" className="ml-auto">
-            <PeriodActions render={periodActions} range={activePeriod} />
-            {longPeriod && (
-              <label
-                htmlFor={alignmentId}
-                className="hidden items-center gap-2 text-xs md:flex"
-              >
-                <Switch
-                  id={alignmentId}
-                  checked={alignWeekdays}
-                  onCheckedChange={setAlignWeekdays}
-                />
-                Align weekdays
-              </label>
-            )}
-            <Picker
-              mode="choose"
-              label="Calendar period"
-              options={
-                lockedKinds
-                  ? GRID_PERIOD_OPTIONS
-                  : isMobile
-                    ? PERIOD_OPTIONS.filter(
-                        (option) => !isLongCalendarPeriod(option.value),
-                      )
-                    : PERIOD_OPTIONS
-              }
-              value={period}
-              onValueChange={(v) => {
-                const next = PERIOD_OPTIONS.find(
-                  (option) => option.value === v,
-                );
-                if (next) onPeriodChange(next.value);
+      <CalendarMultiSourceContext.Provider value={multiSource}>
+        <Stack gap="sm">
+          <Row align="center" wrap gap="xs">
+            <PrevNextButtons
+              previous={{
+                label: `Previous ${period}`,
+                onClick: () => shiftAnchor(-1),
               }}
-            />
+              next={{ label: `Next ${period}`, onClick: () => shiftAnchor(1) }}
+            >
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="text-xs"
+                onClick={() => onDateChange(undefined)}
+              >
+                Today
+              </Button>
+            </PrevNextButtons>
+            <h2 className="font-heading text-sm font-semibold">
+              {periodTitle}
+            </h2>
+            {period !== "schedule" && data && showWeekRail && (
+              <KeyNumbers
+                layout="inline"
+                label="Spend this period"
+                items={[
+                  {
+                    label: "recorded",
+                    value: formatCurrency(periodSpend.actual),
+                    money: true,
+                  },
+                  ...(periodSpend.planned
+                    ? [
+                        {
+                          label: "planned",
+                          value: formatCurrency(periodSpend.planned),
+                          money: true,
+                          tone: "warning" as const,
+                        },
+                      ]
+                    : []),
+                ]}
+              />
+            )}
+            <Row align="center" gap="xs" className="ml-auto">
+              <PeriodActions render={periodActions} range={activePeriod} />
+              {longPeriod && (
+                <label
+                  htmlFor={alignmentId}
+                  className="hidden items-center gap-2 text-xs md:flex"
+                >
+                  <Switch
+                    id={alignmentId}
+                    checked={alignWeekdays}
+                    onCheckedChange={setAlignWeekdays}
+                  />
+                  Align weekdays
+                </label>
+              )}
+              <Picker
+                mode="choose"
+                label="Calendar period"
+                options={
+                  lockedKinds
+                    ? GRID_PERIOD_OPTIONS
+                    : isMobile
+                      ? PERIOD_OPTIONS.filter(
+                          (option) => !isLongCalendarPeriod(option.value),
+                        )
+                      : PERIOD_OPTIONS
+                }
+                value={period}
+                onValueChange={(v) => {
+                  const next = PERIOD_OPTIONS.find(
+                    (option) => option.value === v,
+                  );
+                  if (next) onPeriodChange(next.value);
+                }}
+              />
+            </Row>
           </Row>
-        </Row>
 
-        {period === "schedule" ? (
-          <CalendarScheduleRead input={scheduleRange} />
-        ) : isLoading ? (
-          <CalendarLoading label="Loading calendar…" />
-        ) : isError ? (
-          <CalendarRangeError error={error} onRetry={() => void refetch()} />
-        ) : null}
+          {period === "schedule" ? (
+            <CalendarScheduleRead input={scheduleRange} />
+          ) : isLoading ? (
+            <CalendarLoading label="Loading calendar…" />
+          ) : isError ? (
+            <CalendarRangeError error={error} onRetry={() => void refetch()} />
+          ) : null}
 
-        {period !== "schedule" && !isLoading && data && items.length === 0 && (
-          <output className="text-sm text-muted-foreground">
-            No events in this period.
-          </output>
-        )}
+          {period !== "schedule" &&
+            !isLoading &&
+            data &&
+            items.length === 0 && (
+              <output className="text-sm text-muted-foreground">
+                No events in this period.
+              </output>
+            )}
 
-        {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
+          {/* Both trees render; the BREAKPOINT decides, not JS. `useIsMobile`
             reports false on the server, so a JS-only switch would paint the
             seven-column grid on a phone until hydration — the same trap
             `RTable` documents at length. */}
-        {period !== "schedule" && !isLoading && data && (
-          <>
-            <div className="md:hidden">
-              <CalendarAgenda
-                items={items}
-                includesDay={itemIncludesDay}
-                range={activePeriod}
-                today={today}
-                showAllDays={period !== "month"}
-                onDayClick={setSelectedDay}
-                renderItem={renderAgendaItem}
-                emptyMessage={
-                  <Description>
-                    Nothing planned this {period}.{" "}
-                    <button
-                      type="button"
-                      className="inline-flex min-h-11 items-center underline hover:text-primary md:min-h-0"
-                      onClick={() =>
-                        setCreateKind(
-                          defaultCreateKind(
-                            (lockedKinds ?? filters?.kinds)?.[0],
-                          ),
-                        )
-                      }
-                    >
-                      Add something
-                    </button>
-                    .
-                  </Description>
-                }
-              />
-            </div>
-
-            {longPeriod ? (
-              <CalendarOverview
-                start={activePeriod.start}
-                end={activePeriod.end}
-                events={sourceEvents}
-                summaries={data.days}
-                today={today}
-                aligned={alignWeekdays}
-                selectedDay={selectedDay}
-                onDayChange={setSelectedDay}
-                onInspect={(item) =>
-                  inspectRow({
-                    original: { id: item.id, entityKind: item.kind },
-                  })
-                }
-              />
-            ) : period === "month" ? (
-              <MonthEventCalendar<CalendarItem>
-                {...calendarInteractionProps}
-                renderEvent={CalendarMonthChip}
-                className="hidden min-h-[620px] overflow-hidden border md:block [&_[data-slot=event-calendar-event]]:gap-1 [&_[data-slot=event-calendar-event]]:px-1 [&_[data-slot=event-calendar-event]]:py-0.5 [&_[data-slot=event-calendar-event]]:leading-4 [&_[data-slot=event-calendar-month-bar-overlay]]:pt-1 [&_[data-slot=event-calendar-month-cell-content]]:min-h-0 [&_[data-slot=event-calendar-month-cell-content]]:pt-1 [&_[data-slot=event-calendar-month-day-number]]:size-4 [&_[data-slot=event-calendar-month-day-number]]:text-2xs [&_[role=columnheader]]:py-1 [&_[role=columnheader]]:text-2xs"
-                style={MONTH_DENSITY}
-                onMoreClick={openDay}
-              />
-            ) : period === "fortnight" ? (
-              <FortnightEventCalendar<CalendarItem>
-                {...calendarInteractionProps}
-                renderEvent={CalendarFortnightChip}
-                className="hidden overflow-hidden border md:block"
-                style={FORTNIGHT_DENSITY}
-                onMoreClick={openDay}
-              />
-            ) : (
-              <div className="hidden overflow-hidden border md:block">
-                <WeekSummaryGrid
-                  days={periodDays}
-                  summaries={data?.days ?? NO_DAY_SUMMARIES}
+          {period !== "schedule" && !isLoading && data && (
+            <>
+              <div className="md:hidden">
+                <CalendarAgenda
+                  items={items}
+                  includesDay={itemIncludesDay}
+                  range={activePeriod}
                   today={today}
+                  showAllDays={period !== "month"}
                   onDayClick={setSelectedDay}
-                />
-                <WeekEventCalendar<CalendarItem>
-                  {...calendarInteractionProps}
-                  renderEvent={CalendarWeekCard}
-                  className="border-0 border-t"
+                  renderDayMeta={(agendaDay) => (
+                    <DaySpend summary={summaries[agendaDay]} />
+                  )}
+                  renderItem={renderAgendaItem}
+                  emptyMessage={
+                    <Description>
+                      Nothing planned this {period}.{" "}
+                      <button
+                        type="button"
+                        className="inline-flex min-h-11 items-center underline hover:text-primary md:min-h-0"
+                        onClick={() =>
+                          setCreateKind(
+                            defaultCreateKind(
+                              (lockedKinds ?? filters?.kinds)?.[0],
+                            ),
+                          )
+                        }
+                      >
+                        Add something
+                      </button>
+                      .
+                    </Description>
+                  }
                 />
               </div>
-            )}
-          </>
-        )}
-      </Stack>
 
-      {period !== "schedule" && !longPeriod && !isLoading && data && (
-        <CalendarDaySheet
-          day={selectedDay}
-          items={selectedItems}
-          summary={selectedSummary}
-          onOpenChange={(open) => {
-            if (!open) setSelectedDay(undefined);
-          }}
-          onCreate={setCreateKind}
-          renderItem={(item) => (
-            <PopoverTrigger
-              handle={editorHandle}
-              payload={item}
-              className={calendarItemTriggerClassName(item)}
-              onClick={() => {
-                // Close the day sheet after the editor popover has anchored to this trigger.
-                requestAnimationFrame(() => setSelectedDay(undefined));
-              }}
-            >
-              <CalendarItemPresentation item={item} variant="rich" />
-            </PopoverTrigger>
+              {longPeriod ? (
+                <CalendarOverview
+                  start={activePeriod.start}
+                  end={activePeriod.end}
+                  events={sourceEvents}
+                  summaries={data.days}
+                  today={today}
+                  aligned={alignWeekdays}
+                  selectedDay={selectedDay}
+                  onDayChange={setSelectedDay}
+                  onInspect={(item) =>
+                    inspectRow({
+                      original: { id: item.id, entityKind: item.kind },
+                    })
+                  }
+                />
+              ) : period === "month" ? (
+                <MonthEventCalendar<CalendarItem>
+                  {...calendarInteractionProps}
+                  renderEvent={CalendarMonthChip}
+                  renderDayMeta={renderDayMeta}
+                  renderWeekRail={showWeekRail ? renderWeekRail : undefined}
+                  className="hidden overflow-hidden border md:block [&_[data-slot=event-calendar-event]]:gap-1 [&_[data-slot=event-calendar-event]]:px-1 [&_[data-slot=event-calendar-event]]:py-0.5 [&_[data-slot=event-calendar-event]]:leading-4 [&_[data-slot=event-calendar-month-bar-overlay]]:pt-1 [&_[data-slot=event-calendar-month-cell-content]]:min-h-0 [&_[data-slot=event-calendar-month-cell-content]]:pt-1 [&_[data-slot=event-calendar-month-day-number]]:size-4 [&_[data-slot=event-calendar-month-day-number]]:text-2xs [&_[role=columnheader]]:py-1 [&_[role=columnheader]]:text-2xs"
+                  style={MONTH_DENSITY}
+                  onMoreClick={openDay}
+                />
+              ) : period === "fortnight" ? (
+                <FortnightEventCalendar<CalendarItem>
+                  {...calendarInteractionProps}
+                  renderEvent={CalendarFortnightChip}
+                  renderDayMeta={renderDayMeta}
+                  className="hidden overflow-hidden border md:block"
+                  style={FORTNIGHT_DENSITY}
+                  onMoreClick={openDay}
+                />
+              ) : (
+                <div className="hidden overflow-hidden border md:block">
+                  <WeekSummaryGrid
+                    days={periodDays}
+                    summaries={data?.days ?? NO_DAY_SUMMARIES}
+                    today={today}
+                    onDayClick={setSelectedDay}
+                  />
+                  <WeekEventCalendar<CalendarItem>
+                    {...calendarInteractionProps}
+                    renderEvent={CalendarWeekCard}
+                    className="border-0 border-t"
+                  />
+                </div>
+              )}
+            </>
           )}
-        />
-      )}
+        </Stack>
 
-      <CalendarItemInspector handle={editorHandle} />
-      <PreviewSheet />
-
-      {createKind ? (
-        <Suspense fallback={null}>
-          <LazyCalendarCreateDialog
-            kind={createKind}
-            date={selectedDay}
-            onOpenChange={onCreateOpenChange}
+        {period !== "schedule" && !longPeriod && !isLoading && data && (
+          <CalendarDaySheet
+            day={selectedDay}
+            items={selectedItems}
+            summary={selectedSummary}
+            onOpenChange={(open) => {
+              if (!open) setSelectedDay(undefined);
+            }}
+            onCreate={setCreateKind}
+            renderItem={(item) => (
+              <PopoverTrigger
+                handle={editorHandle}
+                payload={item}
+                className={calendarItemTriggerClassName(item)}
+                onClick={() => {
+                  // Close the day sheet after the editor popover has anchored to this trigger.
+                  requestAnimationFrame(() => setSelectedDay(undefined));
+                }}
+              >
+                <CalendarItemPresentation item={item} variant="rich" />
+              </PopoverTrigger>
+            )}
           />
-        </Suspense>
-      ) : null}
+        )}
+
+        <CalendarItemInspector handle={editorHandle} />
+        <PreviewSheet />
+
+        {createKind ? (
+          <Suspense fallback={null}>
+            <LazyCalendarCreateDialog
+              kind={createKind}
+              date={selectedDay}
+              onOpenChange={onCreateOpenChange}
+            />
+          </Suspense>
+        ) : null}
+      </CalendarMultiSourceContext.Provider>
     </EntityDisplayImagesProvider>
+  );
+}
+
+const sumSpend = (
+  days: readonly string[],
+  summaries: Record<string, CalendarDaySummary>,
+) =>
+  days.reduce(
+    (total, day) => ({
+      actual: total.actual + (summaries[day]?.actualSpend ?? 0),
+      planned: total.planned + (summaries[day]?.plannedSpend ?? 0),
+    }),
+    { actual: 0, planned: 0 },
+  );
+
+/** The day's recorded spend, then planned spend in warning ink; nothing when both are zero. */
+function DaySpend({ summary }: { summary?: CalendarDaySummary }) {
+  if (!summary || (!summary.actualSpend && !summary.plannedSpend)) return null;
+  return (
+    <span className="flex items-center gap-1 font-mono text-2xs text-muted-foreground tabular-nums">
+      {summary.actualSpend !== 0 && (
+        <span>
+          <span className="sr-only">Recorded spend </span>
+          {formatCurrency(summary.actualSpend)}
+        </span>
+      )}
+      {summary.plannedSpend !== 0 && (
+        <span className="text-warning-ink">
+          <span className="sr-only">Planned spend </span>
+          {formatCurrency(summary.plannedSpend)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+const WEEK_RAIL_CATEGORIES = 3;
+const WEEK_RAIL_PROJECTS = 2;
+
+/**
+ * Week total from the server's day summaries, then the week's largest
+ * spending categories and the Projects its spending names. Category amounts
+ * are effective allocations; Projects carry no amount because an event's lines
+ * can split across them.
+ */
+function WeekSpendRail({
+  days,
+  items,
+  summaries,
+}: {
+  days: readonly string[];
+  items: readonly CalendarItem[];
+  summaries: Record<string, CalendarDaySummary>;
+}) {
+  const total = sumSpend(days, summaries);
+  const { categories, projects } = useMemo(() => {
+    const inWeek = new Set(days);
+    const byCategory = new Map<
+      string,
+      { name: string; emoji: string | null; amount: number }
+    >();
+    const byProject = new Map<string, number>();
+    for (const item of items) {
+      if (
+        (item.kind !== "expense" && item.kind !== "purchase") ||
+        !inWeek.has(item.startDate)
+      )
+        continue;
+      for (const share of item.spendingContext?.spendingCategories ?? []) {
+        const current = byCategory.get(share.id);
+        byCategory.set(share.id, {
+          name: share.name,
+          emoji: share.emoji,
+          amount: (current?.amount ?? 0) + (share.amount ?? 0),
+        });
+      }
+      for (const name of item.spendingContext?.projectNames ?? [])
+        byProject.set(name, (byProject.get(name) ?? 0) + 1);
+    }
+    return {
+      categories: [...byCategory.values()]
+        .filter((category) => category.amount > 0)
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, WEEK_RAIL_CATEGORIES),
+      projects: [...byProject.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, WEEK_RAIL_PROJECTS)
+        .map(([name]) => name),
+    };
+  }, [days, items]);
+  if (!total.actual && !total.planned) return null;
+  const ProjectIcon = KIND_ICONS.project;
+  return (
+    <div className="flex min-w-0 flex-col gap-1 text-2xs text-muted-foreground">
+      <span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+        <span className="sr-only">Week recorded spend </span>
+        {formatCurrency(total.actual)}
+      </span>
+      {total.planned !== 0 && (
+        <span className="font-mono text-warning-ink tabular-nums">
+          {formatCurrency(total.planned)} planned
+        </span>
+      )}
+      {(categories.length > 0 || projects.length > 0) && (
+        <ul className="flex min-w-0 flex-col gap-0.5" aria-label="Top spending">
+          {categories.map((category) => (
+            <li key={category.name} className="flex min-w-0 items-center gap-1">
+              {category.emoji && <span aria-hidden>{category.emoji}</span>}
+              <span className="min-w-0 flex-1 truncate" title={category.name}>
+                {category.name}
+              </span>
+              <span className="shrink-0 font-mono tabular-nums">
+                {formatCompactCurrency(category.amount)}
+              </span>
+            </li>
+          ))}
+          {projects.map((name) => (
+            <li key={name} className="flex min-w-0 items-center gap-1">
+              <ProjectIcon className="size-3 shrink-0" aria-hidden />
+              <span className="min-w-0 truncate" title={name}>
+                {name}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -810,7 +1015,14 @@ function CalendarDaySheet({
       description={
         items.length === 0
           ? "Nothing planned yet."
-          : `${items.length} calendar ${items.length === 1 ? "item" : "items"}`
+          : [
+              `${items.length} calendar ${items.length === 1 ? "item" : "items"}`,
+              summary.actualSpend
+                ? `${formatCurrency(summary.actualSpend)} recorded`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")
       }
       className="sm:max-w-md"
     >

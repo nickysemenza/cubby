@@ -97,6 +97,11 @@ function EventCalendarEvent<TData = unknown>({
     segment,
     !interactive || !dragOn || event.readOnly || event.draggable === false,
   );
+  // Day-granular occurrences: anything past one day (plus a DST hour) is a bar.
+  const spansDays =
+    segment.continuesBefore ||
+    segment.continuesAfter ||
+    occurrence.end.getTime() - occurrence.start.getTime() > 25 * 3_600_000;
   const moveDisabled =
     !interactive || !dragOn || event.readOnly || event.draggable === false;
   const defaultContent = (
@@ -201,8 +206,11 @@ function EventCalendarEvent<TData = unknown>({
       "outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1",
       preview && "pointer-events-none",
       "@container gap-1.5 rounded-sm px-1.5 py-1 leading-normal",
-      "bg-(--ec-event-color)/15 hover:bg-(--ec-event-color)/25",
-      "inset-ring inset-ring-(--ec-event-color)/15",
+      // Single-day chips read as ledger rows; only a bar crossing days keeps a
+      // tint so its extent stays visible.
+      spansDays
+        ? "bg-(--ec-event-color)/12 inset-ring inset-ring-(--ec-event-color)/15 hover:bg-(--ec-event-color)/20"
+        : "hover:bg-muted",
       "transition-[background-color,box-shadow] duration-150",
       "data-dragging:opacity-40",
       "data-selected:inset-ring-(--ec-event-color)/40 data-selected:bg-(--ec-event-color)/30",

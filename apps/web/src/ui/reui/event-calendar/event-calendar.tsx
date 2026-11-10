@@ -10,6 +10,7 @@ import {
   useCallback,
   useContext,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -254,12 +255,30 @@ interface EventCalendarRootProps<TData = unknown>
 type MonthEventCalendarProps<TData = unknown> = Omit<
   EventCalendarRootProps<TData>,
   "children" | "period" | "slot"
->;
+> &
+  EventCalendarMonthSlots;
 
 type WeekEventCalendarProps<TData = unknown> = Omit<
   MonthEventCalendarProps<TData>,
   "onMoreClick"
 >;
+
+/** Month-grid extras a consumer draws beside the calendar's own content. */
+interface EventCalendarMonthSlots {
+  /** Right side of each day's number row, hidden while the add button shows. */
+  renderDayMeta?: (day: Date) => ReactNode;
+  /** A trailing column per week row; `week` is the row's visible days. */
+  renderWeekRail?: (week: Date[]) => ReactNode;
+  weekRailLabel?: string;
+}
+
+const EventCalendarMonthSlotsContext = createContext<EventCalendarMonthSlots>(
+  {},
+);
+
+function useEventCalendarMonthSlots() {
+  return useContext(EventCalendarMonthSlotsContext);
+}
 
 const EventCalendarRenderContext = createContext<
   ((props: EventCalendarRenderEventProps<any>) => ReactNode) | null
@@ -338,7 +357,7 @@ function EventCalendarRoot<TData = unknown>({
                   ref: root,
                   className: cn(
                     "min-w-0 overflow-hidden border text-xs",
-                    period === "month" && "flex min-h-[620px] flex-col",
+                    period === "month" && "flex flex-col",
                     // Same column layout, no 620px floor: two tall rows set
                     // their own height through --ec-month-row-min-h.
                     period === "fortnight" && "flex flex-col",
@@ -356,27 +375,45 @@ function EventCalendarRoot<TData = unknown>({
   );
 }
 
-function MonthEventCalendar<TData = unknown>(
-  props: MonthEventCalendarProps<TData>,
-) {
+function MonthEventCalendar<TData = unknown>({
+  renderDayMeta,
+  renderWeekRail,
+  weekRailLabel,
+  ...props
+}: MonthEventCalendarProps<TData>) {
+  const slots = useMemo(
+    () => ({ renderDayMeta, renderWeekRail, weekRailLabel }),
+    [renderDayMeta, renderWeekRail, weekRailLabel],
+  );
   return (
     <EventCalendarRoot {...props} period="month" slot="month-event-calendar">
-      <EventCalendarMonthView />
+      <EventCalendarMonthSlotsContext.Provider value={slots}>
+        <EventCalendarMonthView />
+      </EventCalendarMonthSlotsContext.Provider>
     </EventCalendarRoot>
   );
 }
 
 /** The month grid over a 14-day, week-aligned range: two rows of seven. */
-function FortnightEventCalendar<TData = unknown>(
-  props: MonthEventCalendarProps<TData>,
-) {
+function FortnightEventCalendar<TData = unknown>({
+  renderDayMeta,
+  renderWeekRail,
+  weekRailLabel,
+  ...props
+}: MonthEventCalendarProps<TData>) {
+  const slots = useMemo(
+    () => ({ renderDayMeta, renderWeekRail, weekRailLabel }),
+    [renderDayMeta, renderWeekRail, weekRailLabel],
+  );
   return (
     <EventCalendarRoot
       {...props}
       period="fortnight"
       slot="fortnight-event-calendar"
     >
-      <EventCalendarMonthView />
+      <EventCalendarMonthSlotsContext.Provider value={slots}>
+        <EventCalendarMonthView />
+      </EventCalendarMonthSlotsContext.Provider>
     </EventCalendarRoot>
   );
 }
@@ -401,6 +438,7 @@ export {
   MonthEventCalendar,
   useEventCalendar,
   useEventCalendarDay,
+  useEventCalendarMonthSlots,
   useEventCalendarRenderEvent,
   useEventCalendarRenderEventRoot,
   useEventCalendarSelector,
