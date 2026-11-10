@@ -81,6 +81,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
@@ -626,6 +627,7 @@ async function applyPublishedStatementLabels(
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
+        buildCrudServices,
         Boolean(importId),
         scope,
       );

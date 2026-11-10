@@ -35,6 +35,7 @@ import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { controlRun } from "~/server/domains/run/repo/run-control";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { buildCrudServices } from "~/server/http/request-context";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createImageFixture,
@@ -237,6 +238,7 @@ describe("photo run lifecycle", () => {
     });
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [
@@ -386,6 +388,7 @@ describe("photo run lifecycle", () => {
     });
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [
@@ -440,11 +443,17 @@ describe("photo run lifecycle", () => {
     };
     const oldGeneration = run.dispatchEventId!;
     await expect(
-      proposePhotoGroups(ctx.db, stale, "coordinator", oldGeneration),
+      proposePhotoGroups(
+        ctx.db,
+        buildCrudServices,
+        stale,
+        "coordinator",
+        oldGeneration,
+      ),
     ).rejects.toThrow(/generation is no longer active/);
     // Unsigned coordinator calls are refused outright.
     await expect(
-      proposePhotoGroups(ctx.db, stale, "coordinator"),
+      proposePhotoGroups(ctx.db, buildCrudServices, stale, "coordinator"),
     ).rejects.toThrow(/generation is no longer active/);
 
     // The next generation is dispatched and acknowledged; the superseded
@@ -455,9 +464,21 @@ describe("photo run lifecycle", () => {
       .set({ dispatchEventId: newGeneration, coordinatorStartedAt: new Date() })
       .where(eq(runTable.id, run.id));
     await expect(
-      proposePhotoGroups(ctx.db, stale, "coordinator", oldGeneration),
+      proposePhotoGroups(
+        ctx.db,
+        buildCrudServices,
+        stale,
+        "coordinator",
+        oldGeneration,
+      ),
     ).rejects.toThrow(/generation is no longer active/);
-    await proposePhotoGroups(ctx.db, stale, "coordinator", newGeneration);
+    await proposePhotoGroups(
+      ctx.db,
+      buildCrudServices,
+      stale,
+      "coordinator",
+      newGeneration,
+    );
     const [fresh] = await getDb(ctx.db)
       .select({ origin: photoGroupProposal.origin })
       .from(photoGroupProposal)
@@ -469,7 +490,7 @@ describe("photo run lifecycle", () => {
       );
     expect(fresh?.origin).toBe("coordinator");
 
-    await proposePhotoGroups(ctx.db, stale, "member");
+    await proposePhotoGroups(ctx.db, buildCrudServices, stale, "member");
     const [late] = await getDb(ctx.db)
       .select({ origin: photoGroupProposal.origin })
       .from(photoGroupProposal)
@@ -646,6 +667,7 @@ describe("photo run lifecycle", () => {
     });
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [

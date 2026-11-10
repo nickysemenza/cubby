@@ -212,11 +212,9 @@ export const importRunAgentManifest = {
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 
-/** The model a run row records as its coordinator. */
+/** The model an agent-coordinated run row records as its coordinator. */
 export function coordinatorModelFor(
-  purpose: string,
+  purpose: AgentImportRunPurpose,
 ): ImportRunAgentConfig["model"] {
-  const parsed = agentImportRunPurpose.safeParse(purpose);
-  return importRunAgentManifest[parsed.success ? parsed.data : "mail_import"]
-    .model;
+  return importRunAgentManifest[purpose].model;
 }

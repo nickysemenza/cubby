@@ -34,6 +34,7 @@ import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
+import { buildCrudServices } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {
@@ -143,6 +144,7 @@ describe("statement spending review and re-import", () => {
     importId?: string,
   ) => {
     await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: null,
       scope: { importId },
@@ -156,7 +158,11 @@ describe("statement spending review and re-import", () => {
     await drainStoredDerived(ctx.db);
   };
   const pendingPreview = async () => {
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     const states = await getDb(ctx.db).query.suggestionTable.findMany();
     const [suggestion] = await readStatementSuggestions(
       ctx.db,
@@ -688,6 +694,7 @@ describe("statement spending review and re-import", () => {
       ctx.actor,
     );
     await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: null,
       scope: { importId: recorded.batchId! },
@@ -771,7 +778,11 @@ describe("statement spending review and re-import", () => {
     ).toEqual([]);
     // Shared settlement refs establish cross-provider membership; the stale
     // create suggestion is replaced by pending booking work for that charge.
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     const refreshedStates = await getDb(
       ctx.db,
     ).query.suggestionTable.findMany();
@@ -993,7 +1004,11 @@ describe("statement spending review and re-import", () => {
       }),
       ctx.actor,
     );
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     await drainStoredDerived(ctx.db);
     expect(
       (
@@ -1038,6 +1053,7 @@ describe("statement spending review and re-import", () => {
       >[1]["after"] = null;
       do {
         const page = await generateStatementSuggestionPage(ctx.db, {
+          servicesFor: buildCrudServices,
           after,
           runId: null,
           scope: { importId: saved.batchId! },

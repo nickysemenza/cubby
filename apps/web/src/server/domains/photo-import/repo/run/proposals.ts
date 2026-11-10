@@ -110,10 +110,10 @@ import {
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
+import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 import { assertPhotoGroupReviewIntent, commitPhotoGroup } from "./writer";
@@ -1050,6 +1050,7 @@ async function upsertProposal(
 
 async function recordPhotoBrandRejection(
   txDb: Database,
+  servicesFor: KernelServicesFor,
   run: LoadedRun,
   entry: ResolvedGroup,
   previous: ProposalRow | undefined,
@@ -1086,7 +1087,7 @@ async function recordPhotoBrandRejection(
       entry.brandId = null;
     }
     if (rejectedVendors.size) {
-      const crud = buildCrudServices(txDb);
+      const crud = servicesFor(txDb);
       for (const suggestion of previous?.review?.fieldSuggestions ?? []) {
         if (
           suggestion.field !== "brandId" ||
@@ -1245,6 +1246,7 @@ async function publishPhotoGroupingBoundary(
  */
 export async function proposePhotoGroups(
   db: Database,
+  servicesFor: KernelServicesFor,
   rawInput: z.input<typeof proposePhotoGroupsInput>,
   /** Recorded as each written row's last writer; null = not known. */
   origin: PhotoGroupProposalOrigin | null = null,
@@ -1470,6 +1472,7 @@ export async function proposePhotoGroups(
     for (const entry of resolved) {
       await recordPhotoBrandRejection(
         txDb,
+        servicesFor,
         run,
         entry,
         existingByKey.get(entry.group.groupKey),
@@ -1551,6 +1554,7 @@ export async function resolvePhotoGroupConcern(
 /** A reviewer changes only the destination Product; the photo roster and other evidence stay put. */
 export async function chooseExistingProductForPhotoGroup(
   db: Database,
+  servicesFor: KernelServicesFor,
   input: { runId: string; groupKey: string; productId: string },
 ) {
   const review = await listPhotoGroupProposals(db, input.runId);
@@ -1584,6 +1588,7 @@ export async function chooseExistingProductForPhotoGroup(
     : undefined;
   return proposePhotoGroups(
     db,
+    servicesFor,
     {
       runId: input.runId,
       groups: [
@@ -1617,6 +1622,7 @@ export async function chooseExistingProductForPhotoGroup(
 /** Keep the reviewed photo grouping intact while correcting a new Product's identity. */
 export async function updatePhotoGroupProductDraft(
   db: Database,
+  servicesFor: KernelServicesFor,
   input: {
     runId: string;
     groupKey: string;
@@ -1645,6 +1651,7 @@ export async function updatePhotoGroupProductDraft(
     : undefined;
   return proposePhotoGroups(
     db,
+    servicesFor,
     {
       runId: input.runId,
       groups: [
@@ -1899,6 +1906,7 @@ async function reconcileCommittedProposal(
 
 async function approveRow(
   db: Database,
+  servicesFor: KernelServicesFor,
   run: LoadedRun,
   row: ProposalRow,
   imagesById: Map<ImageId, RunImage>,
@@ -1972,6 +1980,7 @@ async function approveRow(
     const input = await commitInputFor(db, run, row, roster);
     const result = await commitPhotoGroup(
       db,
+      servicesFor,
       input,
       actor,
       {
@@ -2054,6 +2063,7 @@ async function approveRow(
  */
 export async function approvePhotoGroupProposals(
   db: Database,
+  servicesFor: KernelServicesFor,
   input: {
     runId: string;
     groupKeys?: string[] | undefined;
@@ -2098,7 +2108,7 @@ export async function approvePhotoGroupProposals(
     const row = byKey.get(key);
     results.push(
       row
-        ? await approveRow(db, run, row, images.byId, actor)
+        ? await approveRow(db, servicesFor, run, row, images.byId, actor)
         : {
             groupKey: key,
             outcome: "failed",
@@ -2116,6 +2126,7 @@ export async function approvePhotoGroupProposals(
  */
 export async function discardPhotoGroupProposal(
   db: Database,
+  servicesFor: KernelServicesFor,
   input: { runId: string; groupKey: string },
   actor: ActorContext,
 ): Promise<PhotoGroupProposalList> {
@@ -2133,6 +2144,7 @@ export async function discardPhotoGroupProposal(
   if (roster.images.length || roster.skip.length) {
     await commitPhotoGroup(
       db,
+      servicesFor,
       {
         runId: run.shortcode,
         groupKey: row.groupKey,

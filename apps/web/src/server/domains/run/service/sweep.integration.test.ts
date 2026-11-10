@@ -35,6 +35,7 @@ import {
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { systemPrincipal } from "~/server/http/authenticate";
+import { buildCrudServices } from "~/server/http/request-context";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 
 import { ensureRun } from "../repo/ensure-run";
@@ -740,6 +741,7 @@ describe("Sweeps", () => {
       "synthetic-later-label-arrival",
     );
     await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: labelRun,
       scope: { importId: later.batchId! },

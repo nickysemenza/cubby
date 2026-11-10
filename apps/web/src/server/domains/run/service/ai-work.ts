@@ -5,7 +5,11 @@ import {
   mailReclassificationCheckpoint,
 } from "@cubby/schemas/email-actions";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { OWNED_AI_WORK_PURPOSES } from "@cubby/schemas/run-fields";
+import {
+  OWNED_AI_WORK_PURPOSES,
+  RUN_KINDS,
+  type RunKindDeclaration,
+} from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
@@ -46,6 +50,12 @@ import {
   type SuggestionSweepPorts,
 } from "./suggestion-sweep";
 
+/** How this Run's declared kind reads AI-work progress; undefined outside `ai_work`. */
+const aiWorkProgressOf = (owner: Pick<RunRow, "purpose">) => {
+  const kind: RunKindDeclaration = RUN_KINDS[owner.purpose];
+  return kind.aiWorkProgress;
+};
+
 /** Kinds whose evaluations name the Run as owner rather than requesting shared work. */
 const ownsAiWork = (owner: Pick<RunRow, "purpose">) =>
   OWNED_AI_WORK_PURPOSES.some((purpose) => purpose === owner.purpose);
@@ -62,7 +72,7 @@ export async function advanceAiWorkRun(
 ) {
   const owner = await claimWorkflowRun(db, params);
   if (!owner) return null;
-  if (owner.purpose === "ai_refresh") {
+  if (aiWorkProgressOf(owner) === "refresh") {
     const summary = await readAiRefreshWorkSummary(
       db,
       owner.id,
@@ -96,7 +106,7 @@ export async function advanceAiWorkRun(
     return summary.pending.length;
   }
   const work = await readAiWork(db, owner, params.attempt);
-  if (owner.purpose === "mail_reclassify" && !work.total)
+  if (aiWorkProgressOf(owner) === "reclassification" && !work.total)
     throw new Error(
       "Manual Reclassify has no durable roster; retain its evidence for historical recovery.",
     );
@@ -127,7 +137,7 @@ export async function advanceAiWorkRun(
 
 /** What a Run's evaluations add up to, read in SQL unless its checkpoint needs each one. */
 async function readAiWork(db: Database, owner: RunRow, attempt: number) {
-  if (owner.purpose === "mail_reclassify") {
+  if (aiWorkProgressOf(owner) === "reclassification") {
     // A reclassify checkpoint records a result per Email, so it reads its roster.
     const items = await aiWorkItems(db, owner);
     const pending = items.filter((item) =>

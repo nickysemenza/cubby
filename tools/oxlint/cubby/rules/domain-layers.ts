@@ -12,7 +12,9 @@ import type { ESTree } from "@oxlint/plugins";
  * are imported as platform infrastructure. Roles
  * import only the same or a lower role (`operations` → `service` → `repo` →
  * `db`), in any domain; `ai/repo/` and `ai/<x>/repo/` rank as `repo`. `repo`
- * never imports `ai/` except those and `ai/policy/`, and `ai/policy/` value-imports
+ * never imports `ai/` except those and `ai/policy/`, and never value-imports
+ * `http/`: a repo that runs kernel commands takes a db-bound services factory
+ * from its caller. `ai/policy/` value-imports
  * only itself and packages, so a repo never reaches model code. A `service`
  * value-imports nothing from `db/` but `db/freshness/` and never imports a
  * schema or `db/helpers`; other platform code and `generic/*` never import a
@@ -43,6 +45,7 @@ const isRole = (value: string | undefined): value is Role =>
   value === "repo" || value === "service" || value === "operations";
 
 const AI_REPO_PATH = /^apps\/web\/src\/server\/ai\/(?:[^/]+\/)?repo(?:[./]|$)/u;
+const HTTP_PATH = /^apps\/web\/src\/server\/http(?:[./]|$)/u;
 const AI_POLICY_PATH = /^apps\/web\/src\/server\/ai\/policy(?:[./]|$)/u;
 
 function roleOf(path: string): { area: string; role: Role } | undefined {
@@ -86,6 +89,7 @@ export function targetPath(
 type LayerMessage =
   | "upward"
   | "repoAi"
+  | "repoHttp"
   | "policyImpure"
   | "serviceDb"
   | "platformUpward"
@@ -112,6 +116,7 @@ export function violation(
     if (fromRole?.role === "service" && isDb(to) && !isDbFreshness(to))
       return "serviceDb";
     if (fromRole?.role === "repo" && isAi(to)) return "repoAi";
+    if (fromRole?.role === "repo" && HTTP_PATH.test(to)) return "repoHttp";
     if (fromRole && toRole && RANK[toRole.role] > RANK[fromRole.role])
       return "upward";
     if (!fromRole && isDomainUpper(to)) return "platformUpward";
@@ -143,6 +148,8 @@ export const domainLayersRule = defineRule({
         'A {{from}} module may not import "{{source}}" ({{to}}): roles import only the same or a lower layer (operations → service → repo → db). See docs/adr/0019-domain-first-server-layout.md.',
       repoAi:
         'A repo module may not import "{{source}}": model calls belong in a service. See docs/adr/0019-domain-first-server-layout.md.',
+      repoHttp:
+        'A repo module may not import "{{source}}": the request layer composes repos. Take a db-bound services factory (`KernelServicesFor`) from the caller instead. See docs/adr/0019-domain-first-server-layout.md.',
       policyImpure:
         'ai/policy/ may not import "{{source}}": AI policy declarations value-import only ai/policy/ and packages, so repos can read them without model code. See docs/adr/0019-domain-first-server-layout.md.',
       serviceDb:

@@ -10,8 +10,12 @@ import { z } from "zod";
 
 import {
   allowsPreviewSuggestionTarget,
+  draftContextKeys,
+  draftRequiresTrade,
   type DraftSuggestionResolvers,
   draftSuggestionResolvers,
+  hasDraftPolicy,
+  inheritanceDraftSchema,
   normalizeSuggestionDraft,
   resolveSuggestionDraft,
 } from "~/server/ai/field-suggest/draft-policy";
@@ -123,11 +127,11 @@ async function applyPreviewSuggestions(args: {
           : suggest.basis;
       }),
   );
-  // Preview also carries task assignee intent; other entities retain their
-  // existing dependency set rather than adding saved finance context here.
-  if (args.entity === "expense" || args.entity === "task") {
-    const extra = args.entity === "task" ? ["assigneeId", "assigneeMode"] : [];
-    for (const key of fieldSuggestionContextKeys(args.entity, extra)) {
+  // Draft-policy entities also carry their saved inheritance context; others
+  // retain their existing dependency set rather than adding finance context here.
+  const extra = draftContextKeys(args.entity);
+  if (extra) {
+    for (const key of fieldSuggestionContextKeys(args.entity, [...extra])) {
       dependencyKeys.add(key);
     }
   }
@@ -205,34 +209,6 @@ async function applyPreviewSuggestions(args: {
   return { suggestions, warnings };
 }
 
-const inheritanceDraftSchema = z.looseObject({
-  name: z.string().nullable().optional(),
-  lineKind: z.string().optional(),
-  projectId: z.string().nullable().optional(),
-  projectMode: z.string().optional(),
-  subjectProductId: z.string().nullable().optional(),
-  subjectProductMode: z.string().optional(),
-  assigneeId: z.string().nullable().optional(),
-  assigneeMode: z.enum(["inherit", "explicit"]).optional(),
-  parentTaskId: z.string().nullable().optional(),
-  productId: z.string().nullable().optional(),
-  purchaseId: z.string().nullable().optional(),
-  trade: z.string().nullable().optional(),
-});
-
-function previewRequiresTrade(
-  entity: EntityPreviewInput["entity"],
-  proposed: z.output<typeof previewObjectSchema>,
-) {
-  if (entity === "task") return true;
-  if (entity !== "expense") return false;
-  return (
-    proposed.lineKind === undefined ||
-    proposed.lineKind === "principal" ||
-    proposed.lineKind === "auto"
-  );
-}
-
 async function resolveDraftInheritance(
   context: EntityKernelContext,
   entity: EntityPreviewInput["entity"],
@@ -258,7 +234,7 @@ export async function previewEntity(
   const seeds = input.context.seeds;
   const explicit = input.data;
   const merged = { ...seeds, ...explicit };
-  if (input.entity === "expense") {
+  if (hasDraftPolicy(input.entity)) {
     Object.assign(
       merged,
       normalizeSuggestionDraft(
@@ -328,7 +304,7 @@ export async function previewEntity(
       ports,
     );
     if (
-      previewRequiresTrade(input.entity, proposed) &&
+      draftRequiresTrade(input.entity, proposed) &&
       finalResolutions.trade?.value === null
     ) {
       errors.push({

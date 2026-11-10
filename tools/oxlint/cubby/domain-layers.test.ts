@@ -75,6 +75,22 @@ test("repo stays off ai/ and services stay off the schema and helpers", () => {
   );
   assert.equal(
     violation(
+      `${S}/domains/image/repo/image.ts`,
+      `${S}/http/request-context`,
+      false,
+    ),
+    "repoHttp",
+  );
+  assert.equal(
+    violation(
+      `${S}/domains/image/repo/image.ts`,
+      `${S}/http/request-context`,
+      true,
+    ),
+    undefined,
+  );
+  assert.equal(
+    violation(
       `${S}/domains/image/service/image-storage.service.ts`,
       `${S}/db/schema`,
       true,

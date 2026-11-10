@@ -611,7 +611,9 @@ export async function controlRun(
         trigger: "manual",
         notes: locked.notes,
         input: locked.input,
-        coordinatorModel: coordinatorModelFor(locked.purpose),
+        coordinatorModel: coordinatorModelFor(
+          agentImportRunPurpose.parse(locked.purpose),
+        ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,
         dispatchEventId,
@@ -673,7 +675,9 @@ export async function controlRun(
           endedAt: null,
           dispatchEventId,
           dispatchError: null,
-          coordinatorModel: coordinatorModelFor(locked.purpose),
+          coordinatorModel: coordinatorModelFor(
+            agentImportRunPurpose.parse(locked.purpose),
+          ),
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
@@ -749,7 +753,9 @@ export async function controlRun(
         trigger: locked.trigger,
         input: successorInput,
         dispatchEventId,
-        coordinatorModel: coordinatorModelFor(locked.purpose),
+        coordinatorModel: coordinatorModelFor(
+          agentImportRunPurpose.parse(locked.purpose),
+        ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,
         decisionRevision: locked.decisionRevision + 1,

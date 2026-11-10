@@ -59,10 +59,10 @@ import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { loadRunScopeByShortcode } from "~/server/domains/run/repo/run-control";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
+import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { buildCrudServices } from "~/server/http/request-context";
 import { nameOrAliasSql } from "~/server/lib/name-alias-match";
 
 /**
@@ -335,6 +335,7 @@ async function resolvePhotoBrand(
 /** Resolve the group's target Product — an existing one by id, or a brand-new one. */
 async function resolveProduct(
   txDb: Database,
+  servicesFor: KernelServicesFor,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
 ): Promise<{
@@ -353,7 +354,7 @@ async function resolveProduct(
         input.review,
         input.images.map((image) => image.id),
       );
-      const crud = buildCrudServices(txDb);
+      const crud = servicesFor(txDb);
       const brandId = await resolvePhotoBrand(
         txDb,
         input.review.productChanges,
@@ -405,7 +406,7 @@ async function resolveProduct(
     }
     return { id: input.product.existingId };
   }
-  const crud = buildCrudServices(txDb);
+  const crud = servicesFor(txDb);
   const created = await createProductWithSideEffects(
     {
       db: txDb,
@@ -663,6 +664,7 @@ async function completeRunIfDone(
 
 async function doCommit(
   txDb: Database,
+  servicesFor: KernelServicesFor,
   scope: RunScope,
   input: CommitPhotoGroupInput,
   actor: ActorContext,
@@ -755,7 +757,7 @@ async function doCommit(
   let inventoryShortcodeStr: string | undefined;
   let fieldSuggestions: CommitPhotoGroupOutput["fieldSuggestions"];
   if (groupTouchesProduct(input)) {
-    const resolved = await resolveProduct(txDb, input, actor);
+    const resolved = await resolveProduct(txDb, servicesFor, input, actor);
     productShortcodeStr = resolved.id;
     fieldSuggestions = resolved.fieldSuggestions;
     const productId = await resolveOrThrow(
@@ -809,6 +811,7 @@ const groupTouchesProduct = (input: CommitPhotoGroupInput): boolean =>
 
 export async function commitPhotoGroup(
   db: Database,
+  servicesFor: KernelServicesFor,
   rawInput: z.input<typeof commitPhotoGroupInput>,
   actor: ActorContext,
   proposalRevision?: Pick<
@@ -867,6 +870,7 @@ export async function commitPhotoGroup(
       withTransactionDatabase(db, async (transactionDb) => {
         const result = await doCommit(
           transactionDb,
+          servicesFor,
           scope,
           input,
           actorInRun(actor, runEntityId.parse(scope.public.runId)),

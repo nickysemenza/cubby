@@ -23,6 +23,7 @@ import {
 } from "~/server/entity-kernel";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { buildCrudServices } from "~/server/http/request-context";
 import {
   createImageFixture,
   createLocationFixture,
@@ -122,6 +123,7 @@ describe("commitPhotoGroup", () => {
     await seedTargets(secondRun.id, images);
     const outcome = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: firstRun.shortcode,
         groupKey: "synthetic-shared-file",
@@ -160,6 +162,7 @@ describe("commitPhotoGroup", () => {
 
     const result = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-1",
@@ -246,6 +249,7 @@ describe("commitPhotoGroup", () => {
     );
     await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "synthetic-tag-transcription",
@@ -325,6 +329,7 @@ describe("commitPhotoGroup", () => {
     );
     await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "synthetic-identity-label",
@@ -366,6 +371,7 @@ describe("commitPhotoGroup", () => {
 
     const result = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-existing",
@@ -402,7 +408,12 @@ describe("commitPhotoGroup", () => {
       product: { kind: "create" as const, create: { name: "Replay Sweater" } },
     };
 
-    const first = await commitPhotoGroup(ctx.db, commitArgs, ctx.actor);
+    const first = await commitPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      commitArgs,
+      ctx.actor,
+    );
     expect(first.outcome).toBe("committed");
 
     // Simulate the crash window documented in `executeLeasedOperation`: the
@@ -419,7 +430,12 @@ describe("commitPhotoGroup", () => {
         ),
       );
 
-    const replay = await commitPhotoGroup(ctx.db, commitArgs, ctx.actor);
+    const replay = await commitPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      commitArgs,
+      ctx.actor,
+    );
     expect(replay.outcome).toBe("replayed");
     expect(replay.productId).toBe(first.productId);
 
@@ -458,6 +474,7 @@ describe("commitPhotoGroup", () => {
 
       await commitPhotoGroup(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groupKey: "group-drift",
@@ -485,6 +502,7 @@ describe("commitPhotoGroup", () => {
       await expect(
         commitPhotoGroup(
           ctx.db,
+          buildCrudServices,
           {
             runId: run.shortcode,
             groupKey: "group-drift",
@@ -519,6 +537,7 @@ describe("commitPhotoGroup", () => {
 
     const result = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-collision",
@@ -559,6 +578,7 @@ describe("commitPhotoGroup", () => {
 
     const result = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-skip",
@@ -603,6 +623,7 @@ describe("commitPhotoGroup", () => {
 
     const first = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-a",
@@ -620,6 +641,7 @@ describe("commitPhotoGroup", () => {
 
     const second = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKey: "group-b",
@@ -652,6 +674,7 @@ describe("commitPhotoGroup", () => {
     await expect(
       commitPhotoGroup(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groupKey: "group-no-owner",
@@ -724,8 +747,18 @@ describe("commitPhotoGroup", () => {
         existingEntryId: entry!.shortcode,
       },
     };
-    const first = await commitPhotoGroup(ctx.db, input, ctx.actor);
-    const replay = await commitPhotoGroup(ctx.db, input, ctx.actor);
+    const first = await commitPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      input,
+      ctx.actor,
+    );
+    const replay = await commitPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      input,
+      ctx.actor,
+    );
     expect(first.inventoryId).toBe(entry!.shortcode);
     expect(replay.inventoryId).toBe(first.inventoryId);
     const [after] = await getDb(ctx.db)

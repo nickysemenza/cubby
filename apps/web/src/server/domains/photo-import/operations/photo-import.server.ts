@@ -63,6 +63,7 @@ import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-im
 import { readRun } from "~/server/domains/run/repo/run";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { buildCrudServices } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 /** Serialize every selected own-photo Image once per operation response. */
@@ -217,7 +218,11 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const saved = await chooseExistingProductForPhotoGroup(context.db, input);
+      const saved = await chooseExistingProductForPhotoGroup(
+        context.db,
+        buildCrudServices,
+        input,
+      );
       return { ...saved, results: [] };
     },
     resolveConcern: async (context, input) => {
@@ -242,7 +247,11 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
         input.runId,
       );
-      const saved = await updatePhotoGroupProductDraft(context.db, input);
+      const saved = await updatePhotoGroupProductDraft(
+        context.db,
+        buildCrudServices,
+        input,
+      );
       return { ...saved, results: [] };
     },
     approveGroups: async (context, input) => {
@@ -253,6 +262,7 @@ export const photoImportHandlers = implementOperationDomain(
       );
       const approved = await approvePhotoGroupProposals(
         context.db,
+        buildCrudServices,
         {
           runId: input.runId,
           groupKeys: input.groupKeys,
@@ -270,6 +280,7 @@ export const photoImportHandlers = implementOperationDomain(
       );
       const discarded = await discardPhotoGroupProposal(
         context.db,
+        buildCrudServices,
         { runId: input.runId, groupKey: input.groupKey },
         context.actorContext,
       );
@@ -283,6 +294,7 @@ export const photoImportHandlers = implementOperationDomain(
       );
       const saved = await proposePhotoGroups(
         context.db,
+        buildCrudServices,
         input,
         "member",
         undefined,
@@ -465,6 +477,7 @@ export const photoImportHandlers = implementOperationDomain(
     proposeGroups: (context, input) =>
       proposePhotoGroups(
         context.db,
+        buildCrudServices,
         input,
         context.actorContext.channel === "mcp" &&
           input._runExecution?.generation
@@ -476,7 +489,12 @@ export const photoImportHandlers = implementOperationDomain(
         context.actorContext,
       ),
     commitGroup: (context, input) =>
-      commitPhotoGroup(context.db, input, context.actorContext),
+      commitPhotoGroup(
+        context.db,
+        buildCrudServices,
+        input,
+        context.actorContext,
+      ),
   },
 );
 

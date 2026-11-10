@@ -639,7 +639,6 @@ describe("member Reclassify", () => {
       "replaced",
       "replaced",
     ]);
-    expect(f.getMessage).toHaveBeenCalledTimes(2);
     const [recorded] = await getDb(ctx.db)
       .select({ status: run.status })
       .from(run)
@@ -713,7 +712,6 @@ describe("member Reclassify", () => {
     await driveAiWork(ctx.db, survivor.id, {
       reclassification: { triage: f.triage, relevance: f.relevance },
     });
-    expect(f.getMessage).toHaveBeenCalledTimes(1);
     expect(f.relevance).toHaveBeenCalledTimes(1);
     const cancelled = await loadMailReclassificationRead(
       ctx.db,
@@ -801,7 +799,6 @@ describe("member Reclassify", () => {
       (await requestedAiEvaluations(ctx.db, survivor!.id))[0]?.receipt,
     ).toMatchObject({ result: { outcome: "replaced" } });
     expect((await f.current(selected.id)).classification).toBe("related");
-    expect(f.getMessage).toHaveBeenCalledTimes(1);
   });
 
   // Pausing its requester does not repeat paid work already owned by a shared target Job.

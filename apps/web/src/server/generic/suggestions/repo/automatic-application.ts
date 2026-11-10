@@ -16,7 +16,10 @@ import {
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import type {
+  EntityKernelContext,
+  KernelServicesFor,
+} from "~/server/entity-kernel/adapter";
 import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
   AUTOMATIC_RULES,
@@ -104,14 +107,17 @@ export async function applyAutomaticRules(
   db: Database,
   suggestionIds: readonly string[],
   options: {
-    /** Kernel services for field writes; the actor is always the system's. */
-    context?: EntityKernelContext;
+    /**
+     * Kernel services for field writes, or a factory that builds them for
+     * `db`; the actor is always the system's.
+     */
+    context: EntityKernelContext | KernelServicesFor;
     onFailure?: (suggestionId: string, message: string) => void;
     /** An import authorizes automatic clean spending plans. */
     importClean?: boolean;
     /** Selection constraints survive regeneration and are rechecked by write admission. */
     statementScope?: StatementSuggestionScope;
-  } = {},
+  },
 ): Promise<AutomaticRuleOutcome> {
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!suggestionIds.length) return outcome;
@@ -127,7 +133,13 @@ export async function applyAutomaticRules(
   `,
     "objects",
   );
-  let base = options.context;
+  const supplied = options.context;
+  // Built on first application so a pass with nothing to apply builds nothing.
+  const buildBase = (): EntityKernelContext =>
+    typeof supplied === "function"
+      ? { ...supplied(db), db, actorContext: systemActor() }
+      : supplied;
+  let base: EntityKernelContext | undefined;
   for (const row of rows) {
     if (!row.active || row.status !== "pending") continue;
     const stamp = ruleStamps.safeParse(row.data).data;
@@ -159,13 +171,7 @@ export async function applyAutomaticRules(
           rejectedCandidateIds: [],
         };
       }
-      base ??= {
-        ...(await import("~/server/http/request-context")).buildCrudServices(
-          db,
-        ),
-        db,
-        actorContext: systemActor(),
-      };
+      base ??= buildBase();
       const context: EntityKernelContext = {
         ...base,
         db,
@@ -237,6 +243,7 @@ export async function applyAutomaticRules(
 export async function applyAutomaticRulesForCharge(
   db: Database,
   charge: { source: string; chargeKey: string },
+  servicesFor: KernelServicesFor,
   importClean = false,
   statementScope?: StatementSuggestionScope,
 ) {
@@ -253,6 +260,6 @@ export async function applyAutomaticRulesForCharge(
   return applyAutomaticRules(
     db,
     rows.map((row) => row.id),
-    { importClean, statementScope },
+    { context: servicesFor, importClean, statementScope },
   );
 }

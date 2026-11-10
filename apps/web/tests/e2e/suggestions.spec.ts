@@ -1,6 +1,7 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
+import { buildCrudServices } from "~/server/http/request-context";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
@@ -50,6 +51,7 @@ async function generateStatementSuggestions(db: Db, importId: string) {
     null;
   for (;;) {
     const page = await generateStatementSuggestionPage(db, {
+      servicesFor: buildCrudServices,
       after,
       runId: null,
       scope: { importId },

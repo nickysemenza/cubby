@@ -48,6 +48,7 @@ import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/suggestions/repo/suggestion-review";
+import { buildCrudServices } from "~/server/http/request-context";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -160,7 +161,11 @@ async function unmatchedCharge(ctx: Ctx) {
     }),
     ctx.actor,
   );
-  await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+  await generateStatementSuggestionPage(ctx.db, {
+    servicesFor: buildCrudServices,
+    after: null,
+    runId: null,
+  });
   return { account, recorded };
 }
 
@@ -269,11 +274,16 @@ describe("clean import booking controls", () => {
       intent: "history",
     });
     const history = await feedbackFor(ctx, suggestion.id);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     await label(ctx);
     expect(
       (
         await applyAutomaticRules(ctx.db, [suggestion.id], {
+          context: buildCrudServices,
           importClean: true,
         })
       ).applied,

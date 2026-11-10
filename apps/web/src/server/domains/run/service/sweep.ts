@@ -183,6 +183,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
       : JOB_PAGE_LIMITS.statementGenerationPerPage;
     const retried = await pageRetryRefs(context, limit, async (refs) => {
       const outcome = await retryStatementGenerationRefs(db, {
+        servicesFor: buildCrudServices,
         runId: run.id,
         scope,
         refs,
@@ -212,6 +213,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     // Optional model preparation belongs to statement_label; it must never hold
     // an already published generation page behind an unrelated provider/SQL wait.
     const page = await generateStatementSuggestionPage(db, {
+      servicesFor: buildCrudServices,
       limit,
       after: cursor.after,
       runId: run.id,
@@ -311,6 +313,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
       if (ref) {
         // One charge stays retained across model waits; never reset the population cursor.
         const refreshed = await retryStatementGenerationRefs(db, {
+          servicesFor: buildCrudServices,
           runId: run.id,
           scope,
           refs: [ref],

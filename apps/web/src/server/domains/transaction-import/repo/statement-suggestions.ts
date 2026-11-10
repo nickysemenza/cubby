@@ -108,6 +108,7 @@ import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
 } from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
+import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
@@ -2819,6 +2820,8 @@ async function admitRetriedCharge(
 export async function retryStatementGenerationRefs(
   db: Database,
   input: {
+    /** Builds kernel services for the automatic rules each regenerated charge applies. */
+    servicesFor: KernelServicesFor;
     runId: RunId | null;
     scope?: StatementSuggestionScope;
     refs: readonly string[];
@@ -2886,6 +2889,7 @@ export async function retryStatementGenerationRefs(
       // A retained work reference remains one progress unit even when its old hint
       // resolves to several independent proven source occurrences.
       const page = await generateStatementSuggestionPage(db, {
+        servicesFor: input.servicesFor,
         runId: input.runId,
         scope: input.scope,
         after: null,
@@ -2993,6 +2997,8 @@ async function publishStatementGenerationPage(
 export async function generateStatementSuggestionPage(
   db: Database,
   input: {
+    /** Builds kernel services for the automatic rules each generated charge applies. */
+    servicesFor: KernelServicesFor;
     after: ChargeRef | null;
     runId: RunId | null;
     limit?: number;
@@ -3070,7 +3076,13 @@ export async function generateStatementSuggestionPage(
           chargeIndex,
           charges: proposalCharges.length,
         });
-        await applyAutomaticRulesForCharge(db, charge, true, input.scope);
+        await applyAutomaticRulesForCharge(
+          db,
+          charge,
+          input.servicesFor,
+          true,
+          input.scope,
+        );
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));
