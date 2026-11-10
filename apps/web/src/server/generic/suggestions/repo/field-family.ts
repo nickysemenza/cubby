@@ -23,10 +23,9 @@ import {
   fieldKind,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
-  fieldReferenceMatch,
   fieldRecords,
+  referenceFields,
   declareAffectedRecords,
-  primaryRecordMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   fieldSuggestionKeys,
@@ -185,7 +184,18 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   ...declareAffectedRecords({
     roles: ["subject", "current", "proposed"],
     forward: fieldRecords,
-    reverse: (scope) => [primaryRecordMatch(scope), fieldReferenceMatch(scope)],
+    references: [
+      { kind: "primary" },
+      ...referenceFields.flatMap(({ entity, field, target }) =>
+        (["suggestedValue", "currentValue"] as const).map((column) => ({
+          kind: "elements" as const,
+          at: { column },
+          entity: target,
+          scalar: true,
+          guard: { entity, field },
+        })),
+      ),
+    ],
   }),
   actionable: sql`true`,
   summarize: (value: unknown) =>

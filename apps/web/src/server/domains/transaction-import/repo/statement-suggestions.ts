@@ -150,11 +150,11 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   statementRecords,
-  statementReferenceMatch,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import { statementGraph } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -2254,7 +2254,45 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       "settlement",
     ],
     forward: statementRecords,
-    reverse: statementReferenceMatch,
+    references: [
+      {
+        kind: "value",
+        at: { column: "data", path: ["accountId"] },
+        entity: "financialAccount",
+      },
+      ...[
+        ["supersede", "pendingTransactionId"],
+        ["void", "transactionId"],
+        ["matchedTransactionId"],
+      ].map((path) => ({
+        kind: "value" as const,
+        at: { column: "judgment" as const, path },
+        entity: "financialTransaction",
+      })),
+      {
+        kind: "value",
+        at: { column: "judgment", path: ["spending", "vendorId"] },
+        entity: "vendor",
+      },
+      {
+        kind: "value",
+        at: { column: "judgment", path: ["spending", "spendingCategoryId"] },
+        entity: "spendingCategory",
+      },
+      {
+        kind: "elements",
+        at: { column: "judgment", path: ["spending", "candidates"] },
+        entity: "purchase",
+        idPath: ["purchaseId"],
+      },
+      {
+        kind: "elements",
+        at: { column: "judgment", path: ["candidates"] },
+        entity: "financialTransaction",
+        idPath: ["transactionId"],
+      },
+    ],
+    graph: (db, scope, admission) => statementGraph(db, scope, admission),
   }),
   actionable: sql`true`,
   summarize: (value: unknown) => {

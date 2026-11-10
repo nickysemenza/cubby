@@ -102,7 +102,6 @@ import {
 import { type SuggestionFamily } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   entities,
-  relatedRecordMatch,
   leg,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
@@ -1308,24 +1307,23 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   ...declareAffectedRecords({
     roles: ["outflow", "inflow", "account", "transaction", "owner"],
     forward: () => sql`${leg("outflow")} || ${leg("inflow")}`,
-    reverse: (scope) =>
-      (["outflow", "inflow"] as const).flatMap((end) => [
-        relatedRecordMatch(
-          scope,
-          entities.financialAccount,
-          sql<string>`s.judgment->${end}->>'accountId'`,
-        ),
-        relatedRecordMatch(
-          scope,
-          entities.financialTransaction,
-          sql<string>`s.judgment->${end}->>'transactionId'`,
-        ),
-        relatedRecordMatch(
-          scope,
-          entities.ledgerParty,
-          sql<string>`s.judgment->${end}->'owner'->>'id'`,
-        ),
-      ]),
+    references: (["outflow", "inflow"] as const).flatMap((end) => [
+      {
+        kind: "value" as const,
+        at: { column: "judgment" as const, path: [end, "accountId"] },
+        entity: entities.financialAccount,
+      },
+      {
+        kind: "value" as const,
+        at: { column: "judgment" as const, path: [end, "transactionId"] },
+        entity: entities.financialTransaction,
+      },
+      {
+        kind: "value" as const,
+        at: { column: "judgment" as const, path: [end, "owner", "id"] },
+        entity: entities.ledgerParty,
+      },
+    ]),
   }),
   actionable: sql`true`,
   lockForApply: async (db, prediction) => {

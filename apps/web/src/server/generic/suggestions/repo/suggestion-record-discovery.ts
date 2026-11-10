@@ -10,10 +10,11 @@ import {
   type MailDecisionFamily,
 } from "@cubby/schemas/suggestion";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { and, eq, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
+import { isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import type { Database } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { requested } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
@@ -36,45 +37,7 @@ export const one = sql`jsonb_build_array(${primary})`;
 
 export const reviewQueryBuilder = new QueryBuilder();
 
-/** Match stored UUID/shortcode references without constructing display JSON. */
-export function relatedRecordMatch(
-  scope: SuggestionRecordScope,
-  entity: string | SQL,
-  id: SQL<string>,
-): SQL | undefined {
-  if (typeof entity === "string") {
-    if (scope.entity && scope.entity !== entity) return undefined;
-    const records = scope.records?.filter((record) => record.entity === entity);
-    if (records?.length === 0) return undefined;
-    return records
-      ? inArray(
-          id,
-          records.flatMap((record) => [record.id, record.code]),
-        )
-      : isNotNull(id);
-  }
-  // One ID predicate per kind keeps both composite-index keys in the scan.
-  // Pairwise ORs can leave batch IDs as filters over every wide evidence row.
-  const idsByEntity = new Map<string, string[]>();
-  for (const record of scope.records ?? []) {
-    const ids = idsByEntity.get(record.entity) ?? [];
-    ids.push(record.id, record.code);
-    idsByEntity.set(record.entity, ids);
-  }
-  return and(
-    isNotNull(id),
-    scope.entity ? eq(entity, scope.entity) : undefined,
-    scope.records
-      ? or(
-          ...Array.from(idsByEntity, ([kind, ids]) =>
-            and(eq(entity, kind), inArray(id, ids)),
-          ),
-        )
-      : undefined,
-  );
-}
-
-const referenceFields = Object.entries(entityFieldModels).flatMap(
+export const referenceFields = Object.entries(entityFieldModels).flatMap(
   ([entity, model]) =>
     model.fields.flatMap((field) => {
       const target = referenceEntity.safeParse(field.reference?.entity);
@@ -86,27 +49,6 @@ const referenceFields = Object.entries(entityFieldModels).flatMap(
 const fieldValues = (value: SQL) =>
   sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
 const referenceValues = sql`${fieldValues(sql`s."suggestedValue"`)} || ${fieldValues(sql`s."currentValue"`)}`;
-
-export function fieldReferenceMatch(scope: SuggestionRecordScope) {
-  return or(
-    ...referenceFields.flatMap(({ entity, field, target }) => {
-      const match = relatedRecordMatch(
-        scope,
-        target,
-        sql<string>`COALESCE(v->>'id', v #>> '{}')`,
-      );
-      return match
-        ? [
-            and(
-              eq(reviewSuggestion.entity, entity),
-              eq(reviewSuggestion.field, field),
-              sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${referenceValues}) v WHERE ${match})`,
-            )!,
-          ]
-        : [];
-    }),
-  );
-}
 
 const fieldReferencesFor = (requested?: readonly string[]) => {
   const references = referenceFields
@@ -157,7 +99,7 @@ const statementAcceptedSettlementFrom = sql`FROM "SourceTransactionRecord" ancho
 
 const statementAcceptedSettlementScope = sql`anchor.id=s."recordId" AND ${statementSettlementEligibility}`;
 
-const settlementPaths = [
+export const settlementPaths = [
   [statementSettlementFrom, statementSettlementScope],
   [statementAcceptedSettlementFrom, statementAcceptedSettlementScope],
 ] as const;
@@ -245,12 +187,6 @@ export function statementRecords(requested?: readonly string[]) {
   return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
 }
 
-/** Reference expansion and settlement joins stay owned by the Statement reader. */
-function recordRefsMatch(scope: SuggestionRecordScope, refs: SQL) {
-  return sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r
-    WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
-}
-
 export function statementSettlementMatch(scope: SuggestionRecordScope) {
   const settled = statementSettlementRefs.flatMap(({ entity, id }) => {
     if (scope.entity && scope.entity !== entity) return [];
@@ -264,7 +200,7 @@ export function statementSettlementMatch(scope: SuggestionRecordScope) {
 }
 
 /** Reverse collection reach starts with physical membership, never every suggestion's observation projection. */
-function statementSourceMatch(scope: SuggestionRecordScope) {
+export function statementSourceMatch(scope: SuggestionRecordScope) {
   const branches = [
     entities.sourceTransactionRecord,
     entities.sourceOccurrence,
@@ -292,38 +228,6 @@ function statementSourceMatch(scope: SuggestionRecordScope) {
   return branches;
 }
 
-export function statementReferenceMatch(
-  scope: SuggestionRecordScope,
-  withSettlements = true,
-) {
-  const sourceEntities: readonly string[] = [
-    entities.sourceTransactionRecord,
-    entities.sourceOccurrence,
-    entities.transactionImport,
-  ];
-  const requested = scope.entity
-    ? [scope.entity]
-    : scope.records?.map((r) => r.entity);
-  const direct = statementRecordParts(
-    (requested ?? shortcodeEntities).filter(
-      (entity) => !sourceEntities.includes(entity),
-    ),
-    false,
-  );
-  const settled = withSettlements ? statementSettlementMatch(scope) : undefined;
-  return [
-    ...statementSourceMatch(scope),
-    direct.length
-      ? recordRefsMatch(scope, sql.join(direct, sql` || `))
-      : undefined,
-    ...settlementPaths.map(([from, where]) =>
-      settled
-        ? sql`EXISTS (SELECT 1 ${from} WHERE ${where} AND ${settled})`
-        : undefined,
-    ),
-  ];
-}
-
 /**
  * Families reviewed as Suggestions. Problems findings, grading rosters and mail
  * decisions have their own owners.
@@ -339,25 +243,50 @@ export const isReviewFamily = (
   Object.hasOwn(suggestionReviewFamilies, family) &&
   !mailDecisionFamily.safeParse(family).success;
 
-/** Family declarations own affected roles and both directions of record discovery. */
+export type JsonPath = {
+  column:
+    | "data"
+    | "evidence"
+    | "judgment"
+    | "subject"
+    | "suggestedValue"
+    | "currentValue";
+  path?: readonly string[];
+};
+export type ReferenceGuard = {
+  entity?: string;
+  field?: string;
+  scope?: string;
+  negate?: boolean;
+};
+export type Reference =
+  | { kind: "primary"; guard?: ReferenceGuard }
+  | {
+      kind: "value";
+      at: JsonPath;
+      entity: string | JsonPath;
+      guard?: ReferenceGuard;
+    }
+  | {
+      kind: "elements";
+      at: JsonPath;
+      entity: string | JsonPath;
+      idPath?: readonly string[];
+      scalar?: boolean;
+      guard?: ReferenceGuard;
+    }
+  | { kind: "contains"; at: JsonPath; guard?: ReferenceGuard };
+
+/** Families declare stored reference paths and forward presentation separately. */
 export function declareAffectedRecords(spec: {
   roles: readonly string[];
   forward: (requested?: readonly string[]) => SQL;
-  reverse: (scope: SuggestionRecordScope) => readonly (SQL | undefined)[];
+  references: readonly Reference[];
+  graph?: (
+    db: Database,
+    scope: SuggestionRecordScope,
+    admission: (alias?: string) => SQL | undefined,
+  ) => { matches: readonly (SQL | undefined)[]; query?: SQL };
 }) {
-  return {
-    affectedRecords: spec,
-  };
-}
-
-export function primaryRecordMatch(scope: SuggestionRecordScope) {
-  return and(
-    scope.entity ? eq(reviewSuggestion.entity, scope.entity) : undefined,
-    scope.records
-      ? requested(scope.records).match({
-          entity: sql`${reviewSuggestion.entity}`,
-          id: sql`${reviewSuggestion.recordId}`,
-        })
-      : sql`true`,
-  );
+  return { affectedRecords: spec };
 }

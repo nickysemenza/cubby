@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
+import { requested, textArrayParam } from "~/server/db/helpers/requested";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { type SuggestionRecordSelection } from "~/server/generic/suggestions/repo/pending-admission";
@@ -22,7 +23,10 @@ import {
   statementSettlementRelation,
   statementSettlementEligibility,
   isReviewFamily,
-  statementReferenceMatch,
+  statementSourceMatch,
+  settlementPaths,
+  type JsonPath,
+  type Reference,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { automaticSuggestionEligibility } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 
@@ -84,7 +88,11 @@ function suggestionStateAdmission(
 }
 
 /** Settlement-only scopes can discover immutable identities from the graph first. */
-function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
+function settlementSuggestionQuery(
+  db: Database,
+  scope: SuggestionRecordScope,
+  admission: (alias?: string) => SQL | undefined,
+) {
   if (!scope.records?.length) return undefined;
   const match = statementSettlementMatch(scope);
   if (!match) return undefined;
@@ -117,12 +125,7 @@ function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
     .where(
       and(
         eq(indexed.family, suggestionFamily.enum.statement_transaction),
-        suggestionStateAdmission(db, scope.eligibility, {
-          family: outer(indexed.family),
-          status: outer(indexed.status),
-          active: outer(indexed.active),
-          runId: outer(indexed.runId),
-        }),
+        admission("settlement_indexed"),
         isNotNull(source),
         isNotNull(externalId),
         eq(sql`md5(${source})`, sql`md5(${keySource})`),
@@ -160,9 +163,125 @@ function settlementSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
     JOIN "SourceTransactionRecord" anchor ON anchor."occurrenceId"=owner.id
     JOIN "Suggestion" s ON s."recordId"=anchor.id
     WHERE s.family=${suggestionFamily.enum.statement_transaction}
-      AND ${suggestionStateAdmission(db, scope.eligibility)}`;
+      AND ${admission()}`;
   // Both arms start at the requested settlement graph and keep their own lookup indexes.
   return sql`${retained} UNION ALL ${accepted}`;
+}
+
+/** The statement settlement graph is the only non-path discovery arm. */
+export function statementGraph(
+  db: Database,
+  scope: SuggestionRecordScope,
+  admission: (alias?: string) => SQL | undefined,
+) {
+  const query = settlementSuggestionQuery(db, scope, admission);
+  const matches: (SQL | undefined)[] = [...statementSourceMatch(scope)];
+  if (!query) {
+    const settled = statementSettlementMatch(scope);
+    if (settled)
+      matches.push(
+        ...settlementPaths.map(
+          ([from, where]) =>
+            sql`EXISTS (SELECT 1 ${from} WHERE ${where} AND ${settled})`,
+        ),
+      );
+  }
+  return { matches, query };
+}
+
+const json = (at: JsonPath, text = false) => {
+  const column = sql` s.${sql.identifier(at.column)}`;
+  if (!at.path?.length) return text ? sql<string>`${column} #>> '{}'` : column;
+  const path = sql`ARRAY[${sql.join(
+    at.path.map((part) => sql`${part}`),
+    sql`, `,
+  )}]::text[]`;
+  return text ? sql<string>`${column} #>> ${path}` : sql`${column} #> ${path}`;
+};
+
+function referenceMatches(
+  ref: Reference,
+  scope: SuggestionRecordScope,
+): SQL | undefined {
+  const set = scope.records ? requested(scope.records) : undefined;
+  const guard = ref.guard;
+  const guardSql = and(
+    guard?.entity ? eq(reviewSuggestion.entity, guard.entity) : undefined,
+    guard?.field ? eq(reviewSuggestion.field, guard.field) : undefined,
+    guard?.scope
+      ? guard.negate
+        ? sql`(s.subject->>'scope' LIKE ${`${guard.scope}.%`}) IS NOT TRUE`
+        : sql`s.subject->>'scope' LIKE ${`${guard.scope}.%`}`
+      : undefined,
+  );
+  const match = (entity: string | SQL, token: SQL<string>) => {
+    if (
+      typeof entity === "string" &&
+      ((scope.entity && scope.entity !== entity) ||
+        (set && !set.entities.has(entity)))
+    )
+      return undefined;
+    return and(
+      scope.entity && typeof entity !== "string"
+        ? eq(entity, scope.entity)
+        : undefined,
+      set ? set.match({ entity, token }) : isNotNull(token),
+    );
+  };
+  if (ref.kind === "primary")
+    return and(
+      guardSql,
+      scope.entity ? eq(reviewSuggestion.entity, scope.entity) : undefined,
+      set
+        ? set.match({
+            entity: sql`${reviewSuggestion.entity}`,
+            id: sql`${reviewSuggestion.recordId}`,
+          })
+        : sql`true`,
+    );
+  if (ref.kind === "contains") {
+    const array = json(ref.at);
+    if (!set)
+      return and(
+        guardSql,
+        sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${array}, '[]'::jsonb)) r WHERE ${match(sql`r->>'entity'`, sql<string>`r->>'id'`)})`,
+      );
+    const needles = (scope.records ?? []).flatMap((record) =>
+      [record.id, record.code, ...set.keysOf(record)].map((id) =>
+        JSON.stringify([{ entity: record.entity, id }]),
+      ),
+    );
+    if (!needles.length) return undefined;
+    const indexed = alias(suggestionTable, "retained_indexed");
+    const indexedPath = sql`${indexed.evidence}->'records'`;
+    const probe = reviewQueryBuilder
+      .select({ id: indexed.id })
+      .from(indexed)
+      .where(sql`${indexedPath} @> n.value::jsonb`);
+    const ids = sql`SELECT hit.id FROM unnest(${textArrayParam(needles)}) n(value) JOIN LATERAL (${probe.getSQL()} OFFSET 0) hit ON true WHERE ${set.match({ entity: sql`n.value::jsonb->0->>'entity'`, token: sql<string>`n.value::jsonb->0->>'id'` })}`;
+    return and(guardSql, sql`${reviewSuggestion.id} IN (${ids})`);
+  }
+  const entity =
+    typeof ref.entity === "string" ? ref.entity : json(ref.entity, true);
+  if (ref.kind === "value")
+    return and(guardSql, match(entity, json(ref.at, true)));
+  const value = json(ref.at);
+  const elements = ref.scalar
+    ? sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`
+    : sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE '[]'::jsonb END`;
+  const token = ref.scalar
+    ? sql<string>`COALESCE(v->>'id', v #>> '{}')`
+    : sql<string>`v #>> ARRAY[${sql.join(
+        (ref.idPath ?? []).map((part) => sql`${part}`),
+        sql`, `,
+      )}]::text[]`;
+  const condition = match(entity, token);
+  return condition
+    ? and(
+        guardSql,
+        sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${elements}) v WHERE ${condition})`,
+      )
+    : undefined;
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
@@ -177,16 +296,25 @@ function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
         : Object.keys(reviewFamilyDeclarations)
             .map((family) => suggestionFamily.parse(family))
             .filter(isReviewFamily);
-  const stateAdmission = suggestionStateAdmission(db, scope.eligibility);
+  const admission = (name?: string) => {
+    if (!name) return suggestionStateAdmission(db, scope.eligibility);
+    const columns = alias(suggestionTable, name);
+    return suggestionStateAdmission(db, scope.eligibility, {
+      family: outer(columns.family),
+      status: outer(columns.status),
+      active: outer(columns.active),
+      runId: outer(columns.runId),
+    });
+  };
+  const stateAdmission = admission();
   const branches = families.flatMap((family) => {
-    const settlement =
-      family === suggestionFamily.enum.statement_transaction
-        ? settlementSuggestionQuery(db, scope)
-        : undefined;
-    // Candidate/direct reach remains independent when settlement discovery starts at requested FTXs.
-    const matches = settlement
-      ? statementReferenceMatch(scope, false)
-      : reviewFamilyDeclarations[family].affectedRecords.reverse(scope);
+    const declaration = reviewFamilyDeclarations[family].affectedRecords;
+    const graph = declaration.graph?.(db, scope, admission);
+    const settlement = graph?.query;
+    const matches = [
+      ...declaration.references.map((ref) => referenceMatches(ref, scope)),
+      ...(graph?.matches ?? []),
+    ];
     const direct = matches.flatMap((match) =>
       match
         ? [
