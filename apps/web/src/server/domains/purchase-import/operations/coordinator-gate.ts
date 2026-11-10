@@ -19,7 +19,7 @@ import type {
 } from "./coordinator-gate-rpc";
 
 /** Concurrent coordinator turns (2 sockets each; see the budget). */
-export const COORDINATOR_TURN_CAP = 6;
+const COORDINATOR_TURN_CAP = 6;
 /** Renewed on every coordinator entry and while pi works. */
 export const COORDINATOR_TURN_LEASE_MS = 10 * 60_000;
 /** A lapsed holder's slot is not re-granted until this much later. */
