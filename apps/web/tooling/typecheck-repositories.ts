@@ -120,6 +120,7 @@ export const repositoryOwners = [
   "src/server/db/generated/entity-table-definitions.gen.ts",
   "src/server/db/retained-tables.ts",
   "src/server/db/helpers/query.ts",
+  "src/server/db/helpers/requested.ts",
   "src/server/db/sql-enum.ts",
   "src/server/db/helpers/crud.ts",
   "src/server/db/helpers/transform.ts",
