@@ -10,9 +10,9 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
-export type TargetKind = "purchase" | "financialTransaction";
-export type TargetEligibility = "explicit" | "eligible" | "context";
-export type TargetContextReason =
+type TargetKind = "purchase" | "financialTransaction";
+type TargetEligibility = "explicit" | "eligible" | "context";
+type TargetContextReason =
   | "settled"
   | "claimed"
   | "sign"
@@ -34,7 +34,7 @@ export type ClassifiedTarget = {
   reason: TargetContextReason | null;
   remainingMinor: number | null;
 };
-export type TargetFact = {
+type TargetFact = {
   id: string;
   void: boolean;
   transfer: boolean;
@@ -44,7 +44,7 @@ export type TargetFact = {
   owned: boolean;
 };
 
-export function classifyTarget(
+function classifyTarget(
   req: TargetRequest,
   fact: TargetFact,
 ): ClassifiedTarget {

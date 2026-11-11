@@ -9,8 +9,6 @@ import { productShortcode, purchaseShortcode } from "./identifiers";
 import { relatednessOutSchema } from "./relatedness";
 import { productVariantComparison } from "./product-variant-comparison";
 
-export const recommendationOkSchema = z.object({ ok: z.literal(true) });
-
 /** @public Names a generated native model. */
 export const recommendationWorkbenchOut = relatednessOutSchema;
 

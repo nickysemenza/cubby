@@ -33,7 +33,7 @@ const imagePayloadFields = new Set([
 ]);
 
 /** Closest declared keys, ordered by edit distance and then name. */
-export function closestKeys(key: string, keys: readonly string[]): string[] {
+function closestKeys(key: string, keys: readonly string[]): string[] {
   const distance = (candidate: string) => {
     let row = Array.from({ length: candidate.length + 1 }, (_, index) => index);
     for (let i = 0; i < key.length; i++) {

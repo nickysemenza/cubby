@@ -31,7 +31,7 @@ import { TraceNames, withTrace } from "~/server/observability/tracing";
 import { getSemanticEmbeddingConfig } from "./config";
 import { productionVectorStore, type VectorStorePort } from "./vector-store";
 
-export class AiUpstreamError extends Error {
+class AiUpstreamError extends Error {
   readonly detail: string;
   constructor(
     readonly status: number,
