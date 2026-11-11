@@ -10,7 +10,10 @@ import {
   financialTransactionSourceRef,
   financialTransactionProviderStatus,
 } from "@cubby/schemas/financial-transaction-fields";
-import { type RunId } from "@cubby/schemas/identifiers";
+import {
+  type RunId,
+  type SourceTransactionRecordId,
+} from "@cubby/schemas/identifiers";
 import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
@@ -68,7 +71,9 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
+  sourceObservationFacts,
   sourceObservations,
+  sourceObservationsForPage,
   sourceObservationIdentities,
   statementChargeSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -320,6 +325,16 @@ async function loadObservations(
   charges: readonly ChargeRef[],
 ): Promise<Observation[]> {
   if (!charges.length) return [];
+  // Review state expands historical ownership only for these roots; the
+  // global projection would rebuild it for every observation on each call.
+  const ids = (
+    await unwrapDb(db).execute<{ id: SourceTransactionRecordId }>(
+      sql`SELECT r.id FROM ${sourceObservationFacts} r
+      WHERE ${notDeleted("r")} AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})`,
+      "objects",
+    )
+  ).map((row) => row.id);
+  if (!ids.length) return [];
   const rows = await unwrapDb(db).execute<
     Record<string, string | number | Date | null>
   >(
@@ -329,7 +344,7 @@ async function loadObservations(
       r."statementDate", r."providerAmount", r.amount, r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus",
       r."providerNotes", r."withdrawnAt", r."accountId", r."createdAt", si.fingerprint AS "importFingerprint"
-    FROM ${sourceObservations} r
+    FROM ${sourceObservationsForPage(ids)} r
     JOIN "TransactionImport" si ON si.id = r."batchId"
     WHERE ${notDeleted("r")}
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
@@ -466,7 +481,7 @@ async function siblingsFor(
     ),
     o AS MATERIALIZED (
       SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN ${sourceObservations} o ON o.source = p.source
+      FROM p JOIN ${sourceObservationFacts} o ON o.source = p.source
         AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
         AND o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
@@ -490,7 +505,7 @@ async function siblingsFor(
     WHERE NOT EXISTS (
       SELECT 1 FROM members mo
       JOIN members mp ON mp."importId" = mo."importId"
-      JOIN ${sourceObservations} own ON own.id = mp."statementRowId"
+      JOIN ${sourceObservationFacts} own ON own.id = mp."statementRowId"
       WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
         AND ${notDeleted("own")}
         AND ((o."providerTransactionId" IS NOT NULL AND own."providerTransactionId" IS NOT NULL)
@@ -572,7 +587,7 @@ async function copyMembersFor(
     ),
     o AS MATERIALIZED (
       SELECT DISTINCT p.key, o.source, ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN ${sourceObservations} o ON o."providerAmount" = p.amount
+      FROM p JOIN ${sourceObservationFacts} o ON o."providerAmount" = p.amount
         AND o."statementDate" BETWEEN p.day - ${2 * SIBLING_WINDOW_DAYS}::int AND p.day + ${2 * SIBLING_WINDOW_DAYS}::int
         AND ${notDeleted("o")} AND o."withdrawnAt" IS NULL
         AND NOT (o.source = p.source AND ${chargeKeyOf("o")} = p."chargeKey")
@@ -1830,7 +1845,7 @@ async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   if (!rowIds.length) return [];
   const rows = await unwrapDb(db).execute<ChargeRef>(
     sql`
-    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservations} r
+    SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservationFacts} r
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
@@ -1856,8 +1871,8 @@ async function laterCoveringImport(
   const rows = await unwrapDb(db).execute<{ id: string }>(
     sql`
     SELECT DISTINCT si.id FROM "TransactionImport" si
-    JOIN ${sourceObservations} head ON head."withdrawalImportId" = si.id
-    JOIN ${sourceObservations} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
+    JOIN ${sourceObservationFacts} head ON head."withdrawalImportId" = si.id
+    JOIN ${sourceObservationFacts} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
     WHERE ${notDeleted("si")} AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
       AND ${notDeleted("head")} AND ${notDeleted("held")}
@@ -1882,14 +1897,14 @@ async function postedTwinExists(
     statementDate: unknown;
   }>(
     sql`
-    SELECT r.amount, r."statementDate" FROM ${sourceObservations} r
+    SELECT r.amount, r."statementDate" FROM ${sourceObservationFacts} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
         AND ${date}::date + ${PENDING_POST_WINDOW_DAYS}::int
       AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
-        SELECT held."accountDescriptor" FROM ${sourceObservations} held
+        SELECT held."accountDescriptor" FROM ${sourceObservationFacts} held
         WHERE held.id IN (${sql.join(
           hold.pendingRowIds.map((id) => sql`${id}::uuid`),
           sql`, `,
@@ -3222,7 +3237,7 @@ async function admitRetriedCharge(
   if (scope.importId || scope.since) {
     const rows = await getDb(db).execute(
       sql`
-      SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
+      SELECT 1 FROM ${sourceObservationFacts} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
         ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
@@ -3503,38 +3518,49 @@ export async function generateStatementSuggestionPage(
   if (input.scope?.importId) {
     const { applyAutomaticRulesForCharge } =
       await import("~/server/generic/suggestions/repo/automatic-application");
+    // This page's publication is current until one of its charges applies a
+    // rule; only charges after such a money write regenerate first.
+    let wrote = false;
     for (const [chargeIndex, charge] of proposalCharges.entries()) {
       const ref = `charge:${chargeId(charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;
       try {
-        log.info("Statement generation phase", {
-          phase: "regeneration",
-          chargeIndex,
-          charges: proposalCharges.length,
-        });
-        await regenerateCharges(db, [charge], input.scope);
+        if (wrote) {
+          log.info("Statement generation phase", {
+            phase: "regeneration",
+            chargeIndex,
+            charges: proposalCharges.length,
+          });
+          await regenerateCharges(db, [charge], input.scope);
+        }
         log.info("Statement generation phase", {
           phase: "application",
           chargeIndex,
           charges: proposalCharges.length,
         });
-        await applyAutomaticRulesForCharge(
+        const outcome = await applyAutomaticRulesForCharge(
           db,
           charge,
           input.servicesFor,
           true,
           input.scope,
         );
+        if (outcome.applied.length) wrote = true;
         // Booking a primary republished its copies as attaches; settle the
         // ones this import covers in the same pass.
         for (const copy of await bookedCopies(db, charge))
-          await applyAutomaticRulesForCharge(
-            db,
-            copy,
-            input.servicesFor,
-            true,
-            input.scope,
-          );
+          if (
+            (
+              await applyAutomaticRulesForCharge(
+                db,
+                copy,
+                input.servicesFor,
+                true,
+                input.scope,
+              )
+            ).applied.length
+          )
+            wrote = true;
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));

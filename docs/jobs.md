@@ -269,7 +269,7 @@ item locks, matching source producers.
 
 `JOB_PAGE_LIMITS` (`packages/shared/src/job-page-limits.ts`) owns application
 page sizes. Statement generation and labeling scoped to an import process at
-most four charges per page (`statementApplicationsPerPage`), because each
+most 16 charges per page (`statementApplicationsPerPage`), because each
 admits serial financial applications; unscoped generation selects at most 32
 (`statementGenerationPerPage`); explicit label limits remain available.
 Retained generation failures use the same limits. Both paths preserve the
@@ -279,8 +279,9 @@ publishes its checkpoint.
 Cooperative label application checks a 20-second deadline between charges
 while no financial rule has applied in that round. It settles at least one
 charge, then leaves the untouched suffix's receipts and inclusive cursor for
-the next page. Each charge still regenerates current evidence before serial
-automatic-rule application, and interrupted pages replay their existing
+the next page. After a rule applies, each later charge on the page regenerates
+current evidence before serial automatic-rule application, and interrupted
+pages replay their existing
 publications and effects through the same guards. Automatic-rule refusals
 return and log scrubbed causal diagnostics (including nested database messages
 and SQLSTATE codes) and leave the suggestion pending.

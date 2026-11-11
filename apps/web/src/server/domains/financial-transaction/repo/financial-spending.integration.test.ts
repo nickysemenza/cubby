@@ -1437,6 +1437,61 @@ describe("shared spending booking", () => {
       }),
     ).toMatchObject({ status });
   });
+  // A receipt without payment evidence settles only when the match is unique
+  // on both the Purchase and the charge side.
+  it.each([
+    ["a unique exact receipt", "ready", { receipts: 1, charges: 0 }],
+    ["two exact receipts", "review_required", { receipts: 2, charges: 0 }],
+    ["a competing charge", "review_required", { receipts: 1, charges: 1 }],
+  ] as const)("%s previews %s", async (_case, status, setup) => {
+    const { account, transaction, vendor, advice } = await fixture();
+    const receipts = [];
+    for (let index = 0; index < setup.receipts; index++) {
+      const receipt = await createRepoIdentity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        date: "2026-05-03",
+        statedTotal: 42.5,
+      });
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: receipt.output.id,
+        name: "Synthetic emailed receipt",
+        cost: 42.5,
+        trade: "other",
+      });
+      receipts.push(receipt.output.id);
+    }
+    if (setup.charges)
+      await createRepoIdentity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        transactionDate: "2026-05-02",
+        postedDate: "2026-05-02",
+        merchant: "Synthetic Orchard",
+        sourceRefs: [
+          { source: "synthetic-bank", externalId: "synthetic-competing" },
+        ],
+      });
+    const plan = await previewFinancialSpending(ctx.db, {
+      transactionId: transaction.output.id,
+      advice,
+    });
+    expect(plan).toMatchObject({ status });
+    if (plan.status !== "ready") return;
+    expect(plan).toMatchObject({
+      effect: "link_existing",
+      purchaseId: receipts[0],
+    });
+    await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ amount: financialTransactionAllocation.amountMinor })
+          .from(financialTransactionAllocation)
+      ).map((row) => Number(row.amount)),
+    ).toEqual([4250]);
+  });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {
     const { account, advice } = await fixture();

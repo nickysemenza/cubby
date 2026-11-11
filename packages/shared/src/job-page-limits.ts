@@ -6,5 +6,5 @@ export const JOB_PAGE_LIMITS = {
   statementGenerationPerPage: 32,
   // Each application refreshes ledger evidence; bound repeated reads between
   // durable checkpoints for import-scoped generation and labeling.
-  statementApplicationsPerPage: 4,
+  statementApplicationsPerPage: 16,
 } as const;
