@@ -54,7 +54,7 @@ decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_budget`, `ai_funding.reset_funding_refusal`,
 `activity.resolve_run_finding`, `run.approve_groups`,
-`product_enrichment.merge_product_match`, suggestion review: `suggestions.review`,
+suggestion review (product merges included): `suggestions.review`,
 `suggestions.review_batch`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
 on the member's explicit instruction. An exact-checksum member-selected Email

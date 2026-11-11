@@ -704,7 +704,6 @@ describe("MCP catalog schemas", () => {
       "run.reject_candidate.operationId",
       "image.confirm_description.operationId",
       "image.confirm_description.expectedEffectId",
-      "product_enrichment.merge_product_match.suggestionId",
       "purchase_import.commit.prepareOperationId",
       "purchase_import.commit.resolutions[].stableOrderId",
       "purchase_import.commit.resolutions[].stableLineId",

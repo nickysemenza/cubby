@@ -164,9 +164,9 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
       throw new Error("Product merging requires an accepted pair");
     if (input.application?.kind !== "product_merge")
       throw new Error("Product merging requires a survivor");
-    const { mergeProductMatch } =
-      await import("~/server/domains/product/repo/match/product-match-review");
-    await mergeProductMatch(
+    const { mergeReviewedProductPair } =
+      await import("~/server/generic/suggestions/repo/suggestion-product");
+    await mergeReviewedProductPair(
       { ...context, db },
       {
         keepId: input.application.keepId,

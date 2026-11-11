@@ -4,7 +4,6 @@ import {
   type ProductShortcode,
 } from "@cubby/schemas/identifiers";
 import type {
-  mergeProductMatchInput,
   ProductMatchCandidate,
   ProductMatchQueueOut,
   proposeProductMatchInput,
@@ -26,13 +25,11 @@ import {
   readStoredProductPair,
   storedVariantComparison,
 } from "~/server/domains/product/repo/match/product-pair-signals";
-import { type EntityKernelContext } from "~/server/entity-kernel";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
 const BOTH_STOCKED_WARNING =
   "Both Products have stock. Identity merging combines quantities; any duplicate receiving requires a separate reviewed inventory correction.";
 
@@ -197,11 +194,4 @@ export async function proposeProductMatch(
     sourceUrls: row.sourceUrls,
     created: row.created,
   };
-}
-
-export async function mergeProductMatch(
-  context: EntityKernelContext,
-  input: z.output<typeof mergeProductMatchInput>,
-) {
-  return mergeReviewedProductPair(context, input);
 }

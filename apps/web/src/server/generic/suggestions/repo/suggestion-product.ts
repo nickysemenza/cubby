@@ -1,5 +1,4 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { mergeProductMatchInput } from "@cubby/schemas/recommendations";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -10,10 +9,7 @@ import {
   prepareProductIdentityPair,
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { loadProductImageOrderFacts } from "~/server/domains/product/repo/match/product-match";
-import {
-  currentProductPairPolicy,
-  reviewedProductPairFingerprint,
-} from "~/server/domains/product/repo/match/product-match-candidate";
+import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { matchSurvivorImageOrder } from "~/server/domains/product/repo/match/product-match-ranking";
 import { historicalConflictInputsChanged } from "~/server/domains/product/repo/product-variant-evidence";
 import {
@@ -23,18 +19,21 @@ import {
 } from "~/server/entity-kernel";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  assertApplicationReceipt,
-  recordFeedback,
-} from "~/server/generic/suggestions/repo/suggestion";
-import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionStateColumns } from "~/server/generic/suggestions/repo/suggestion-state";
 
+/**
+ * The product_pair family's apply: lock both Products, recheck current identity
+ * evidence and merge. The review engine owns Feedback and the receipt.
+ */
 export async function mergeReviewedProductPair(
   context: EntityKernelContext,
-  input: z.output<typeof mergeProductMatchInput>,
+  input: {
+    suggestionId: string;
+    keepId: string;
+    mergeId: string;
+    expectedFingerprint: string;
+  },
 ) {
-  const operationId = `merge:${input.keepId}:${input.mergeId}:${input.expectedFingerprint}`;
   const [prediction] = await getDb(context.db)
     .select({
       id: suggestionTable.id,
@@ -46,37 +45,6 @@ export async function mergeReviewedProductPair(
     .limit(1);
   if (!prediction || prediction.family !== "product_pair")
     throw new Error("Product pair Suggestion not found");
-  const command = await recordFeedback(context.db, {
-    suggestionId: input.suggestionId,
-    operationId,
-    verdict: "correct",
-    intent: "apply",
-    authority: "member",
-    actorUserId: context.actorContext.userId,
-  });
-  const previousReceipt = async (db: EntityKernelContext["db"]) => {
-    const [owner] = await getDb(db)
-      .select({ decisions: suggestionTable.decisions })
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, input.suggestionId));
-    const receipt = decisionForOperation(
-      input.suggestionId,
-      owner?.decisions ?? [],
-      `application:${operationId}`,
-    );
-    if (!receipt) return false;
-    assertApplicationReceipt(receipt, command, "product_merge");
-    z.object({
-      kind: z.literal("product_merge"),
-      auditIds: z.array(z.uuid()),
-      appliedAt: z.iso.datetime(),
-      keepId: z.uuid(),
-      mergeId: z.uuid(),
-      expectedFingerprint: z.literal(input.expectedFingerprint),
-    }).parse(receipt.receipt);
-    return true;
-  };
-  if (await previousReceipt(context.db)) return { ok: true as const };
   const [keepId, mergeId] = await Promise.all([
     resolveOrThrow(context.db, "product", input.keepId),
     resolveOrThrow(context.db, "product", input.mergeId),
@@ -94,7 +62,6 @@ export async function mergeReviewedProductPair(
       .where(eq(suggestionTable.id, prediction.id))
       .for("update")
       .limit(1);
-    if (await previousReceipt(transactionDb)) return { ok: true as const };
     if (!currentProductPairPolicy(prediction.producer))
       throw new Error(
         "Product identity policy is obsolete; request a fresh suggestion",
@@ -140,16 +107,12 @@ export async function mergeReviewedProductPair(
       mergeId,
     ]);
     if (!fingerprint) throw new Error("Product identity evidence changed");
-    if (
-      (await reviewedProductPairFingerprint(transactionDb, state)) !==
-        input.expectedFingerprint ||
-      fingerprint !== input.expectedFingerprint
-    )
+    if (fingerprint !== input.expectedFingerprint)
       throw new Error(
         "Product pair evidence changed; request a fresh comparison",
       );
     const txContext = { ...context, db: transactionDb };
-    const applied = await withAuditReceipts(async () => {
+    await withAuditReceipts(async () => {
       await executeEntityAs(txContext, "merge", {
         entity: "product",
         data: { keepId: input.keepId, mergeIds: [input.mergeId] },
@@ -168,23 +131,6 @@ export async function mergeReviewedProductPair(
           },
         });
       }
-    });
-    await recordFeedback(transactionDb, {
-      suggestionId: prediction.id,
-      operationId: `application:${operationId}`,
-      verdict: "correct",
-      intent: "apply",
-      authority: "member",
-      actorUserId: context.actorContext.userId,
-      receipt: {
-        kind: "product_merge",
-        auditIds: applied.auditIds,
-        appliedAt: new Date().toISOString(),
-        keepId,
-        mergeId,
-        expectedFingerprint: input.expectedFingerprint,
-      },
-      metadata: { kind: "product_merge", commandFeedbackId: command.id },
     });
     return { ok: true as const };
   });
