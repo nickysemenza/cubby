@@ -253,12 +253,18 @@ export async function recordMailAttempt(
   });
 }
 
-/** Fenced ordinary work carries the exact proposal needed for receipt recovery. */
+/**
+ * The exact proposal a claim returns for receipt recovery: a fenced owner's, or
+ * the claiming Run's own. Its own pending attempt blocks every changed
+ * extraction, and the coordinator's trimmed context no longer holds the
+ * arguments, so withholding it re-claimed one Email in a loop (2026-11-11).
+ */
 export async function readMailAttemptRecovery(
   db: Database,
   input: {
     ledgerPartyId: LedgerPartyId;
     orderMailId: string;
+    runId: RunId;
     source: z.infer<typeof mailAttemptInput.shape.source>;
   },
 ): Promise<{
@@ -273,7 +279,11 @@ export async function readMailAttemptRecovery(
       and(
         eq(run.ledgerPartyId, input.ledgerPartyId),
         eq(run.purpose, "mail_import"),
-        or(isNotNull(run.retiredAt), inArray(run.status, fencedOwnerStatuses)),
+        or(
+          eq(run.id, input.runId),
+          isNotNull(run.retiredAt),
+          inArray(run.status, fencedOwnerStatuses),
+        ),
         sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: input.orderMailId, checksum: input.source.checksum }])}::jsonb`,
         eq(runOperation.kind, "mail_extraction_attempt"),
         sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,

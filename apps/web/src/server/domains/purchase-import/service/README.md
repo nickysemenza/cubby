@@ -301,8 +301,10 @@ display-name and Purchase-date edits do not reset it. Writer classification
 uses trusted MCP error metadata, never Email text. Held-source refusals are
 exempt. Ordinary-path calls on incomplete compact evidence are blocked before
 either malformed-call accounting or writer admission, preserving the
-exception-flow budget. Exhaustion uses `attempt_limit` and records an
-unresolved gap through the delegated mail-resolve writer, with a stable
+exception-flow budget. A source that consumes more than 16 model requests in one
+Run settles the same way, whatever its attempt count. Exhaustion uses
+`attempt_limit` and records an unresolved gap through the delegated
+mail-resolve writer, with a stable
 operation ID and the issuing generation fence. Unresolved judgments keep a typed
 gap category alongside the explanation; uncategorized ones read as unknown.
 
@@ -315,9 +317,11 @@ verdict, deadlines and explicitly uncertain operation outcomes keep their
 reservation until exact writer recovery. After a predecessor is terminal or
 retired, only identical extraction facts can replay under the successor's
 locked, unchanged Email. Ordinary attempts retain their validated proposal
-before execution; a claim returns an unreconciled terminal proposal as
-`recovery` for exact tool replay, so retiring the coordinator cannot lose the
-input needed to recover. Canonical source writers preserve earlier effects; the
+before execution; a claim returns an unreconciled proposal from a terminal
+owner or from the claiming Run itself as `recovery` for exact tool replay, so
+neither retirement nor the coordinator's trimmed context can lose the input
+needed to recover. Attempt identity ignores the free-text review `detail`, so a
+reworded replay is still identical. Canonical source writers preserve earlier effects; the
 successor keeps its own pending receipt, and replay identities count once
 across Runs. Changed input stays blocked until that recovery has a known
 outcome. Generation response hooks only account for submissions; they never

@@ -129,6 +129,12 @@ const assistantPartial = z.custom<AssistantMessage>(
 // the intent, and nothing in this module reads `this.env`.
 const NO_BINDINGS = Object.freeze({}) as Cloudflare.Env;
 
+/**
+ * Model requests one Mail source may consume in a Run before it settles
+ * unresolved. Escalated receipts take about 15; a re-claim loop took hundreds.
+ */
+const MAX_REQUESTS_PER_MAIL_SOURCE = 16;
+
 /** Mutable per-run facts kept in this object's SQLite, beside pi's tables. */
 const STATE_KEYS = {
   identity: "identity",
@@ -689,6 +695,32 @@ export class PurchaseImportRunAgent
                   settlementRefusal = settlement.diagnostic;
                 this.writeState("mail-attempt-limit-pending", "");
               }
+              let requestLimitSettled = false;
+              const current = attempts?.source();
+              if (current) {
+                // Attempt budgets only count writer submissions; a model that
+                // keeps re-claiming or retrying blocked calls never spends one.
+                const key = `mail-source-requests:${current.mailboxId}:${current.messageId}:${current.checksum}`;
+                const recorded = this.readState(key);
+                const requests =
+                  recorded === "settled" ? 0 : Number(recorded ?? 0) + 1;
+                if (recorded !== "settled")
+                  this.writeState(key, String(requests));
+                if (requests > MAX_REQUESTS_PER_MAIL_SOURCE) {
+                  const settlement = await settleMailAttemptLimit({
+                    services: () => this.services(),
+                    runId,
+                    source: current,
+                    generation,
+                  });
+                  if (settlement.kind === "refused")
+                    settlementRefusal = settlement.diagnostic;
+                  else {
+                    this.writeState(key, "settled");
+                    requestLimitSettled = true;
+                  }
+                }
+              }
               this.requestStartedAt = Date.now();
               this.requestTransport = "unknown";
               this.requestGateway = undefined;
@@ -704,6 +736,18 @@ export class PurchaseImportRunAgent
                       role: "user" as const,
                       timestamp: Date.now(),
                       content: `Automatic exhaustion settlement was refused: ${settlementRefusal}. Re-claim the current evidence and resolve the supported gap through mail_resolve; do not retry extraction for this unchanged source.`,
+                    },
+                  ],
+                };
+              if (requestLimitSettled)
+                return {
+                  messages: [
+                    ...messages,
+                    {
+                      role: "user" as const,
+                      timestamp: Date.now(),
+                      content:
+                        "This Email reached its per-Email request limit and was settled unresolved for review. Claim the next Email; do not work on this source again.",
                     },
                   ],
                 };
@@ -1097,6 +1141,17 @@ function validExtraction(
     : preparationFacts.safeParse(call.arguments.input).success;
 }
 
+// A free-text explanation does not change what a write publishes. Hashing it
+// made every reworded replay a changed extraction, which a pending attempt
+// blocks forever (2026-11-11).
+type ExtractionOutcome = z.output<
+  typeof preparePurchaseImportInput.shape.orders.element.shape.extraction
+>;
+const extractionFacts = (extraction: ExtractionOutcome) =>
+  Object.fromEntries(
+    Object.entries(extraction).filter(([key]) => key !== "detail"),
+  );
+
 async function extractionIdentity(
   call: Pick<
     import("@earendil-works/pi-ai").ToolCall,
@@ -1104,7 +1159,13 @@ async function extractionIdentity(
   >,
 ) {
   const parsed = extractedOrderInput.safeParse(call.arguments);
-  if (parsed.success) return sha256Hex(JSON.stringify(parsed.data));
+  if (parsed.success)
+    return sha256Hex(
+      JSON.stringify({
+        ...parsed.data,
+        extraction: extractionFacts(parsed.data.extraction),
+      }),
+    );
   const prepared = preparationFacts.safeParse(call.arguments.input);
   if (prepared.success)
     return sha256Hex(
@@ -1116,7 +1177,7 @@ async function extractionIdentity(
           vendor: order.vendor,
           targetPurchaseId: order.targetPurchaseId,
           distinctFromPurchases: order.distinctFromPurchases,
-          extraction: order.extraction,
+          extraction: extractionFacts(order.extraction),
         })),
       ),
     );
