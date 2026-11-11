@@ -1003,7 +1003,8 @@ export const preparePurchaseImportOut = z.object({
         z.object({
           stableLineId: stableImportItemId,
           title: z.string(),
-          amount: money,
+          /** Null for an unpriced itemization line, whose money the printed total carries. */
+          amount: money.nullable(),
           identifiers: z.record(z.string(), z.string()),
           candidates: z.array(preparedProductCandidate).max(20),
           requiresProductResolution: z.boolean(),
