@@ -447,11 +447,11 @@ export type AiRunUsage = z.infer<typeof aiRunUsageOut>;
 export const aiUsageSummaryInput = z.object({
   days: z.number().int().min(1).max(90).default(7),
   /**
-   * `feature` groups by day, feature, provider, model, operation and
-   * transport; `job` also splits by `jobKind`/`jobId`, which multiplies rows
-   * by the number of jobs and is too large for long windows.
+   * `by_feature` groups by day, feature, provider, model, operation and
+   * transport; `by_job` also splits by `jobKind`/`jobId`, which multiplies
+   * rows by the number of jobs and is too large for long windows.
    */
-  groupBy: z.enum(["feature", "job"]).default("feature"),
+  groupBy: z.enum(["by_feature", "by_job"]).default("by_feature"),
 });
 
 const aiUsageSummaryRowSchema = z.object({

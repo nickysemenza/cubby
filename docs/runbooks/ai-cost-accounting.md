@@ -98,7 +98,7 @@ zero charge but does not invent a standard-cost comparison. Reads never call a
 model or count budget reservations as spend.
 
 Household usage summaries group by day, feature, provider, model, operation
-and transport; `groupBy: "job"` also splits by job and is for short windows.
+and transport; `groupBy: "by_job"` also splits by job and is for short windows.
 Each summary row splits its standard cost into input, cache write, cache read
 and output by multiplying the row's tokens (or a cache replay's avoided tokens)
 by the rates in that row's own pricing snapshot. A row without a snapshot is

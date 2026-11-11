@@ -185,13 +185,13 @@ function standardCostSplitSql() {
 export async function summarizeAiUsage(
   db: Database,
   days: number,
-  groupBy: "feature" | "job" = "feature",
+  groupBy: "by_feature" | "by_job" = "by_feature",
 ) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const usageDayGroup = householdDaySql(aiUsage.createdAt);
   const usageDay = sql<string>`to_char(${usageDayGroup}, 'YYYY-MM-DD')`;
   // One row per job multiplies a long window's rows by its job count.
-  const byJob = groupBy === "job";
+  const byJob = groupBy === "by_job";
 
   const rows = await getDb(db)
     .select({
