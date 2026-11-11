@@ -922,6 +922,17 @@ export const runChildren = [
         where: "{runAt} IS NOT NULL",
       },
       { name: "AiEvaluation_updatedAt_idx", on: ["updatedAt"] },
+      // Live-page probes: few rows hold a lease, but the heap is wide.
+      {
+        name: "AiEvaluation_live_lease_idx",
+        on: ["leaseUntil", "feature"],
+        where: "{leaseUntil} IS NOT NULL",
+      },
+      {
+        name: "AiEvaluation_lease_token_idx",
+        on: ["leaseToken"],
+        where: "{leaseToken} IS NOT NULL",
+      },
       {
         name: "AiEvaluation_run_state_idx",
         on: ["runId", "state"],
