@@ -139,6 +139,8 @@ export async function publishGmailEvidence<T>(
           databaseForTransaction(tx),
           evaluation.id,
           evaluation.token,
+          // Publication below locks this Run FOR UPDATE.
+          "no key update",
         )
       : null;
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);

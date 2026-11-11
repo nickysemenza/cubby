@@ -55,6 +55,7 @@ import {
   type DecisionChoiceResult,
   type DecisionPort,
 } from "~/server/ai/decision-model";
+import { preparingAiInputs } from "~/server/ai/evaluation-inputs";
 import {
   normalizeSuggestionDraft,
   resolveFieldSuggestionDraft,
@@ -526,6 +527,10 @@ async function resolveEnumOverflow(
     { subject, candidates: values, usage, decisionModel },
   );
   if (!outcome.evaluated) return skipped("no_candidates");
+  // The overflow prompt may answer none; an exhaustive enum still requires a
+  // value from a live call, as the decision-model path does.
+  if (outcome.selected === null && !spec.allowNone && !preparingAiInputs())
+    throw new Error("Overflow classification returned no value.");
   const alternatives = mapAlternatives(
     outcome.alternatives,
     (value) => value,

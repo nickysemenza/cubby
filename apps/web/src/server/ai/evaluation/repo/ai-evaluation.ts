@@ -122,6 +122,9 @@ export async function guardAiEvaluation(
   tx: Database,
   id: string,
   token: string,
+  // A caller that later locks the Run itself must hold it exclusively here:
+  // two shared holders that both upgrade deadlock.
+  runLock: "share" | "no key update" = "share",
 ) {
   await (
     await import("~/server/workflows/runs/execution")
@@ -155,7 +158,7 @@ export async function guardAiEvaluation(
           : liveAiRequestRunIds(read.runId, id),
     )
     .orderBy(run.id)
-    .for("share");
+    .for(runLock);
   const [row] = await getDb(tx)
     .select()
     .from(aiEvaluation)
