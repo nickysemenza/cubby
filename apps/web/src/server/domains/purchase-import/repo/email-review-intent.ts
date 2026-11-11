@@ -15,6 +15,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { email, emailReview } from "~/server/db/retained-tables";
 import {
@@ -64,10 +65,7 @@ export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
   const kind = sql`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`;
   return sql`EXISTS (SELECT 1 FROM ${emailReview}
     WHERE ${subject} AND ((${emailReview.authority} = ${"member"}
-      AND (${kind} IS NULL OR ${kind} NOT IN (${sql.join(
-        correctionAuthorityReceiptKinds.options.map((value) => sql`${value}`),
-        sql`, `,
-      )})))
+      AND (${kind} IS NULL OR NOT (${kind} = ANY(${textArrayParam(correctionAuthorityReceiptKinds.options)}))))
       OR ${kind} IN (${"email_resolution"}, ${"email_link"})))`;
 }
 

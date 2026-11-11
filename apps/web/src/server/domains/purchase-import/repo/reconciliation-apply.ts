@@ -32,7 +32,6 @@ export type ReconciliationExpenseContext = {
   reused: Set<typeof expense.$inferSelect.id>;
   resolvedBindings: { lineIndex: number; productId: ProductId | null }[];
   lineExpenses: Map<number, typeof expense.$inferSelect.id>;
-  productsByExternalIdentity: Map<string, string>;
 };
 export function newReconciliationExpenseContext(): ReconciliationExpenseContext {
   return {
@@ -40,7 +39,6 @@ export function newReconciliationExpenseContext(): ReconciliationExpenseContext 
     reused: new Set(),
     resolvedBindings: [],
     lineExpenses: new Map(),
-    productsByExternalIdentity: new Map(),
   };
 }
 

@@ -118,7 +118,11 @@ import {
   readEmailMailKeys,
   readMailRuleCandidates,
 } from "./mail-rule-evidence";
-import { normalizeOrderKey, vendorOrderIdsSql } from "./order-identity";
+import {
+  normalizedOrderIdSql,
+  normalizeOrderKey,
+  vendorOrderIdsSql,
+} from "./order-identity";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",

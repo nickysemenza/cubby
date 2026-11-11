@@ -72,7 +72,7 @@ import {
   originalExpenseQuantity,
   reappliesAcceptedObservation,
 } from "./reconciliation-plan";
-import { resolveReconciliationProduct } from "./reconciliation-product";
+import { prepareReconciliationProducts } from "./reconciliation-product";
 import {
   loadSourceReconciliationState,
   lockFindingSettlement,
@@ -715,13 +715,14 @@ export async function commitSourceOrderReconciliation(
     intent,
   );
   const applied = newReconciliationExpenseContext();
+  const products = await prepareReconciliationProducts(
+    tx,
+    state,
+    plan.lines,
+    applied,
+  );
   for (const entry of plan.lines) {
-    const productId = await resolveReconciliationProduct(
-      tx,
-      state,
-      entry,
-      applied,
-    );
+    const productId = await products.resolve(entry);
     const linePlan = planReconciliationLine(
       state,
       plan,
@@ -741,6 +742,7 @@ export async function commitSourceOrderReconciliation(
         entry.line.title,
       );
   }
+  await products.flush();
   const removed = planReconciliationRemovals(plan, applied.reused);
   await applyReconciliationRemovals(tx, removed);
   if (removed.length)

@@ -26,6 +26,7 @@ import {
   importSourceProduct,
 } from "~/server/db/generated/entity-table-definitions.gen";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { related } from "~/server/db/helpers/related";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -151,10 +152,7 @@ export const purchaseHasPrimaryDocumentSql = (
   SELECT 1 FROM "EntityAttachment" ep_document
   JOIN "Image" ep_image ON ep_image.id = ep_document."imageId" AND ${notDeleted("ep_image")}
   WHERE ep_document."entityId" = ${column(alias, "id")} AND ${notDeleted("ep_document")}
-    AND ep_document."documentKind" IN (${sql.join(
-      primaryPurchaseDocumentKinds.map((kind) => sql`${kind}`),
-      sql`, `,
-    )})
+    AND ep_document."documentKind" = ANY(${columnArrayParam(primaryPurchaseDocumentKinds)})
 )`;
 
 /** Booked as an `allocation` slice of an un-itemized total (an instalment, a

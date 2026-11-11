@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -302,7 +303,9 @@ describe("one order from two source documents", () => {
     const order = (key: string, orderId: string, target?: string) => ({
       stableOrderId: key,
       vendorId: vendor.shortcode,
-      targetPurchaseId: target,
+      ...(target
+        ? { targetPurchaseId: parseShortcodeFor("purchase", target) }
+        : {}),
       source: {
         kind: "receipt_photo" as const,
         externalKey: `synthetic:${key}`,
