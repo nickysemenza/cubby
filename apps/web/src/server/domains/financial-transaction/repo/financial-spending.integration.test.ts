@@ -1896,6 +1896,14 @@ describe("shared spending booking", () => {
         { source: "synthetic-bank", externalId: "duplicate-looking-charge" },
       ],
     });
+    // Full capacity is not a different event: a settlement that is not another
+    // proven occurrence of this charge's source may be this same charge.
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: next.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status: "review_required" });
     const plan = await previewFinancialSpending(ctx.db, {
       transactionId: next.output.id,
       advice,

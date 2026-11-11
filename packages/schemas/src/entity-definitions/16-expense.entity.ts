@@ -1991,7 +1991,7 @@ Rules:
             byValue: { allocation: "not_allowed" },
             otherwise: "unknown",
             refusal:
-              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item.",
+              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item. Link the Product to the Purchase's products instead.",
           },
         ],
       },

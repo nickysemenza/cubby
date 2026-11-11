@@ -34,6 +34,7 @@ import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   type ChargeProposal,
+  pendingChargesNear,
   regenerateCharges,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
@@ -239,27 +240,41 @@ export async function applyStatementTransactionSuggestion(
         );
     } else await commitFinancialSpending(db, spending, actor);
   }
-  // A sibling's or copy's evidence included this charge being unmatched;
-  // refresh it now rather than leaving it stale until a whole-ledger pass.
-  if (judgment.siblings.length || judgment.copies.length)
-    await runAfterCommit(db, async (committed) => {
-      try {
-        await regenerateCharges(committed, [
-          ...judgment.siblings.map((sibling) =>
-            typeof sibling === "string"
-              ? { source: charge.source, chargeKey: sibling }
-              : sibling,
-          ),
-          ...judgment.copies,
-        ]);
-      } catch (error) {
-        // SILENT: advisory refresh only; the apply committed and the sibling's
-        // own accept rechecks evidence, so the next Refresh repairs it.
-        log.error("Sibling suggestion refresh failed", {
-          error: scrubErrorMessage(String(error)),
-        });
-      }
-    });
+  // This write changes the candidates, claims, holds and copies of pending
+  // charges near it on the account; refresh them now rather than leaving them
+  // to refuse at apply until a whole-ledger pass.
+  const target = judgment.candidates.find(
+    (candidate) => candidate.transactionId === targetId,
+  );
+  const dates = [
+    judgment.statementDate,
+    ...[target?.transactionDate, target?.postedDate].filter(
+      (date): date is string => Boolean(date),
+    ),
+  ];
+  await runAfterCommit(db, async (committed) => {
+    try {
+      const neighbours = await pendingChargesNear(
+        committed,
+        judgment.accountId,
+        dates,
+      );
+      await regenerateCharges(
+        committed,
+        [...neighbours, ...judgment.copies].filter(
+          (other) =>
+            other.source !== charge.source ||
+            other.chargeKey !== charge.chargeKey,
+        ),
+      );
+    } catch (error) {
+      // SILENT: advisory refresh only; the apply committed and each
+      // neighbour's own accept rechecks evidence, so the next Refresh repairs it.
+      log.error("Neighbour suggestion refresh failed", {
+        error: scrubErrorMessage(String(error)),
+      });
+    }
+  });
 }
 
 type Effects = {

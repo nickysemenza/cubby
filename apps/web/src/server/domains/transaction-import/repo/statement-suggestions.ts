@@ -1577,11 +1577,13 @@ export async function buildChargeProposals(
       ...(siblings.get(chargeId(charge)) ?? []),
       ...copy.siblings,
     ]);
+    // A claimed candidate already carries another charge; attaching by default
+    // would merge two charges, so it stays a candidate the create must reject.
     const recommended = matchedCode
       ? "book"
       : hold
         ? "supersede"
-        : candidates.length
+        : candidates.some((candidate) => !candidate.claimed)
           ? "attach"
           : "create";
     const judgment: StatementTransactionJudgment = {
@@ -1963,6 +1965,72 @@ async function publishableCharges(
   );
   const skipped = new Set(held.map(chargeId));
   return charges.filter((charge) => !skipped.has(chargeId(charge)));
+}
+
+/** The database clock that bounds which publications a rebuild may retire. */
+async function rebuildStartedAt(db: Database) {
+  const [row] = await unwrapDb(db).execute<{ at: string }>(
+    sql`SELECT clock_timestamp()::text AS at`,
+    "objects",
+  );
+  return row!.at;
+}
+
+/**
+ * A charge rebuilt to no proposal (now a waiting copy, withdrawn, unresolved
+ * or indistinguishable) keeps no pending advice beside its primary. Only rows
+ * published before the rebuild started retire; a concurrent publication wins.
+ */
+async function retireUnproposedCharges(
+  db: Database,
+  requested: readonly ChargeRef[],
+  proposed: readonly ChargeRef[],
+  startedAt: string,
+  accountIds: readonly string[] | undefined,
+) {
+  const kept = new Set(proposed.map(chargeId));
+  const unproposed = requested.filter((charge) => !kept.has(chargeId(charge)));
+  if (!unproposed.length) return;
+  await transitionSuggestionStates(
+    db,
+    sql`${pendingStatementState}
+      AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
+      AND ${suggestionTable.createdAt} < ${startedAt}::timestamptz
+      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(unproposed)})
+      ${
+        accountIds?.length
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
+              accountIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : sql``
+      }`,
+    { active: false, status: "superseded" },
+  );
+}
+
+/**
+ * Pending charges on an account whose candidates, holds or copies a write to
+ * that account near these dates can change: nearby candidates match within
+ * three days, copies within six and holds within the posting window.
+ */
+export async function pendingChargesNear(
+  db: Database,
+  accountId: string,
+  dates: readonly string[],
+): Promise<ChargeRef[]> {
+  const sorted = [...dates].sort();
+  if (!sorted.length) return [];
+  const rows = await unwrapDb(db).execute<ChargeRef>(
+    sql`SELECT DISTINCT ${suggestionField("source", STATE)} AS source, ${suggestionField("chargeKey", STATE)} AS "chargeKey"
+      FROM "Suggestion" WHERE ${pendingStatementState}
+        AND ${suggestionField("accountId", STATE)} = ${accountId}
+        AND (${suggestionField("statementDate", STATE)})::date
+          BETWEEN ${sorted[0]}::date - ${PENDING_POST_WINDOW_DAYS}::int
+          AND ${sorted.at(-1)}::date + ${PENDING_POST_WINDOW_DAYS}::int`,
+    "objects",
+  );
+  return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
 }
 
 /** Complete a previously committed publication's missed retirement check, even without a new proposal. */
@@ -3206,16 +3274,23 @@ export async function regenerateCharges(
           ).rows.map(chargeId),
         )
       : null;
-  for (const proposal of await buildChargeProposals(
+  const startedAt = await rebuildStartedAt(db);
+  const publishable = await publishableCharges(
     db,
-    await publishableCharges(
-      db,
-      admitted
-        ? charges.filter((charge) => admitted.has(chargeId(charge)))
-        : charges,
-      scope?.accountIds,
-    ),
-  )) {
+    admitted
+      ? charges.filter((charge) => admitted.has(chargeId(charge)))
+      : charges,
+    scope?.accountIds,
+  );
+  const proposals = await buildChargeProposals(db, publishable);
+  await retireUnproposedCharges(
+    db,
+    publishable,
+    proposals.map((proposal) => proposal.charge),
+    startedAt,
+    scope?.accountIds,
+  );
+  for (const proposal of proposals) {
     if (
       scope?.accountIds?.length &&
       !scope.accountIds.includes(proposal.judgment.accountId)
@@ -3384,10 +3459,18 @@ async function publishStatementGenerationPage(
     phase: "preparation",
     charges: charges.length,
   });
-  const built = await prepareStatementGenerationPage(
+  const startedAt = await rebuildStartedAt(db);
+  const publishable = await publishableCharges(db, charges, accountIds);
+  const built = await prepareStatementGenerationPage(db, publishable, failed);
+  const failedRefs = new Set(failed.map((failure) => failure.ref));
+  await retireUnproposedCharges(
     db,
-    await publishableCharges(db, charges, accountIds),
-    failed,
+    publishable.filter(
+      (charge) => !failedRefs.has(`charge:${chargeId(charge)}`),
+    ),
+    built.map((proposal) => proposal.charge),
+    startedAt,
+    accountIds,
   );
   const preparedAt = performance.now();
   const proposals = accountIds?.length

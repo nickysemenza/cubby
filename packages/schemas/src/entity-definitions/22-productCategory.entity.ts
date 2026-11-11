@@ -703,10 +703,11 @@ Rules:
     intents: {
       fields: {
         capture: ["emoji", "name", "parentId"],
+        // The spending-classification workspace owns spendingCategoryMode
+        // and spendingCategoryId: a change on a category with spending must
+        // be previewed and applied there.
         full: [
           "emoji",
-          "spendingCategoryMode",
-          "spendingCategoryId",
           "name",
           "aliases",
           "description",

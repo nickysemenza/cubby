@@ -72,7 +72,16 @@ export async function prepareStatementSpending(
       },
       judgment.recommended === "attach"
         ? { settlementRef: judgment.create.sourceRef }
-        : undefined,
+        : judgment.recommended === "supersede" && !judgment.matchedTransactionId
+          ? {
+              settlementRef: judgment.create.sourceRef,
+              fields: {
+                amount: judgment.create.amount,
+                status: "posted",
+                postedDate: judgment.statementDate,
+              },
+            }
+          : undefined,
       page,
     );
   return previewFinancialSpending(
@@ -96,8 +105,13 @@ export async function prepareStatementSpending(
   );
 }
 
+// A supersede settles the hold's own Transaction, so it previews that
+// booking rather than new spending.
 const spendingTarget = (judgment: StatementTransactionJudgment) =>
   judgment.matchedTransactionId ??
+  (judgment.recommended === "supersede"
+    ? judgment.supersede?.pendingTransactionId
+    : null) ??
   (judgment.recommended === "attach" &&
   (judgment.candidates.length === 1 || judgment.pairedTransactionId)
     ? judgment.candidates[0]!.transactionId

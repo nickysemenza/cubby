@@ -51,8 +51,9 @@ gh issue view <number> --repo nickysemenza/cubby \
 ```
 
 Create an issue only for work that will not start now; work that begins in the
-current session needs no issue, because its PR body carries the outcome. Record
-a deferred remainder in an issue (new or existing) when the PR lands. Search for
+current session, or a remainder the member is doing next, needs no issue,
+because its PR body or done report carries the outcome. Record any other
+deferred remainder in an issue (new or existing) when the PR lands. Search for
 the same outcome first and update the existing issue when it matches. Read live
 code before copying an old issue's path or architecture.
 
