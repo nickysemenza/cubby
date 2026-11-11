@@ -489,9 +489,7 @@ describe("shared Gateway admission", () => {
           "Bearer synthetic-gateway-key",
         );
         expect(calls[0]?.headers.has("cf-aig-authorization")).toBe(false);
-        expect(calls[0]?.headers.get("cf-aig-gateway-id")).toBe(
-          "cubby-testing",
-        );
+        expect(calls[0]?.headers.get("cf-aig-gateway-id")).toBe("cubby");
         expect(await calls[0]?.json()).toEqual({
           model: "anthropic/claude-sonnet-5.5",
           messages: [],

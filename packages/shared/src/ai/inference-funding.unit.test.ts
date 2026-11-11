@@ -123,7 +123,7 @@ describe("inference funding", () => {
         funding === "paid" ? "Bearer example-token" : null,
       );
       expect(sent?.headers.get("cf-aig-gateway-id")).toBe(
-        funding === "paid" ? "cubby-testing" : null,
+        funding === "paid" ? "cubby" : null,
       );
       expect(query.model).toBe(
         provider === "openai" ? "gpt-6.1-sol" : "claude-sonnet-5-5",

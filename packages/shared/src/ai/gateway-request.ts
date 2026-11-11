@@ -1,10 +1,7 @@
 import { createParser, type EventSourceMessage } from "eventsource-parser";
 import { z } from "zod";
 
-import {
-  CUBBY_PAID_AI_GATEWAY_ID,
-  type AiGatewayMetadata,
-} from "./gateway-metadata";
+import type { AiGatewayMetadata } from "./gateway-metadata";
 import {
   getChatModelConfig,
   getEmbeddingModelConfig,
@@ -1239,8 +1236,7 @@ export async function runProviderGateway(args: {
   if (paid) {
     headers.delete("cf-aig-authorization");
     headers.set("authorization", `Bearer ${args.token}`);
-    // Paid Unified Billing uses the keyless gateway; see CUBBY_PAID_AI_GATEWAY_ID.
-    headers.set("cf-aig-gateway-id", CUBBY_PAID_AI_GATEWAY_ID);
+    headers.set("cf-aig-gateway-id", args.gatewayId);
   } else {
     headers.set("cf-aig-authorization", `Bearer ${args.token}`);
   }
