@@ -586,6 +586,9 @@ export async function suggestionCountsByFamily(
   const familyColumn = relationColumn("family");
   const strengthCount = (strength: SuggestionStrength) =>
     sql<number>`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`;
+  const fieldFamily = families.find(
+    (family) => suggestionFamilies[family].fieldHistory,
+  );
   const [pendingRows, fieldRows] = [
     await getDb(db)
       .select({
@@ -599,7 +602,7 @@ export async function suggestionCountsByFamily(
       .from(relation)
       .where(and(...predicates(filters)))
       .groupBy(familyColumn),
-    families.includes("field")
+    fieldFamily
       ? await getDb(db)
           .select({
             entity: sql<string>`${relationColumn("entity")}`,
@@ -608,10 +611,7 @@ export async function suggestionCountsByFamily(
           })
           .from(relation)
           .where(
-            and(
-              ...predicates(filters),
-              sql`${familyColumn} = ${suggestionListFamily.enum.field}`,
-            ),
+            and(...predicates(filters), sql`${familyColumn} = ${fieldFamily}`),
           )
           .groupBy(relationColumn("entity"), relationColumn("field"))
       : [],
@@ -630,13 +630,12 @@ export async function suggestionCountsByFamily(
         ...outcomes,
         fields: outcomes.fields.map((field) => ({
           ...field,
-          pending:
-            family === "field"
-              ? (fieldRows.find(
-                  (row) =>
-                    row.entity === field.entity && row.field === field.field,
-                )?.pending ?? 0)
-              : 0,
+          pending: suggestionFamilies[family].fieldHistory
+            ? (fieldRows.find(
+                (row) =>
+                  row.entity === field.entity && row.field === field.field,
+              )?.pending ?? 0)
+            : 0,
         })),
       };
     }),
@@ -691,13 +690,9 @@ export async function acceptCleanSuggestions(
   const results: z.infer<typeof acceptCleanSuggestionsOut> = [];
   const settledPairs = new Set<string>();
   for (const row of rows) {
+    // SAFETY: the row discriminant selects the matching family's callback.
     const pairKey =
-      row.family === "transfer_pair"
-        ? row.evidence.key
-        : row.family === "statement_transaction" &&
-            row.evidence.transferPair?.clean
-          ? row.evidence.transferPair.key
-          : null;
+      suggestionFamilies[row.family].pairKey?.(row as never) ?? null;
     if (pairKey && settledPairs.has(pairKey)) {
       results.push({
         suggestionId: row.suggestionId,

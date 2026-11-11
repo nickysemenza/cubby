@@ -125,6 +125,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import { validateStatementCorrection } from "~/server/generic/suggestions/repo/family-correction";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
   publishSuggestion as publishStoredSuggestion,
@@ -2319,6 +2320,31 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     }
   > = {
   family: suggestionFamily.enum.statement_transaction,
+  applicationKind: "statement_transaction",
+  applicationError:
+    "Statement application requires a Transaction suggestion Suggestion",
+  financial: true,
+  suppressionKey: (subject) => ({
+    scope: "statement_transaction",
+    candidateKey: `${subject.source}:${subject.chargeKey}`,
+    error: "Suppression differs from the statement charge",
+  }),
+  pairKey: (row) =>
+    row.evidence.transferPair?.clean ? row.evidence.transferPair.key : null,
+  validateCorrection: validateStatementCorrection,
+  automatic: {
+    requiresStamp: true,
+    match: (row) => {
+      const judgment = statementTransactionJudgment.safeParse(row.judgment);
+      return judgment.success ? matchStatementRules(judgment.data) : [];
+    },
+    application: (row) => ({
+      kind: "statement_transaction",
+      action: statementTransactionJudgment.parse(row.judgment).recommended,
+      fields: [],
+      rejectedCandidateIds: [],
+    }),
+  },
   slot: ({ proposal: { charge } }) => ({
     lock: `statement-suggestion:${chargeId(charge)}`,
     fields: { source: charge.source, chargeKey: charge.chargeKey },

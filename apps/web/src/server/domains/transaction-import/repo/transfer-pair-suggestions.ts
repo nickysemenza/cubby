@@ -1112,6 +1112,16 @@ export async function lockTransferPairLegs(db: Database, pairKey: string) {
 export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair"> &
   SuggestionFamily<Pair> = {
   family: suggestionFamily.enum.transfer_pair,
+  applicationKind: "transfer_pair",
+  applicationError:
+    "Transfer-pair application requires a transfer-pair Suggestion.",
+  financial: true,
+  suppressionKey: (subject) => ({
+    scope: "transfer_pair",
+    candidateKey: subject.pairKey,
+    error: "Suppression differs from the transfer pair",
+  }),
+  pairKey: (row) => row.evidence.key,
   slot: ({ judgment }) => ({
     lock: advisoryLockKey("transfer-pair", judgment.key),
     fields: { pairKey: judgment.key },

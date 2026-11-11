@@ -78,6 +78,7 @@ export type SuggestionFamily<
   Loaded = undefined,
 > = {
   family: StoredSuggestionFamily;
+  financial?: boolean;
   slot(candidate: Candidate): SuggestionSlot;
   fingerprint(candidate: Candidate): string | Promise<string>;
   /** The rule evidence alone: a rule producer leaves equal evidence unchanged. */
@@ -285,9 +286,7 @@ async function publishLocked<
   }[] = [];
   for (const [index, candidate] of candidates.entries()) {
     const rows = history[index]!;
-    const financial =
-      family.family === "statement_transaction" ||
-      family.family === "transfer_pair";
+    const financial = family.financial;
     const fingerprint = financial ? await family.fingerprint(candidate) : null;
     const evidenceFingerprint = financial
       ? await family.evidenceFingerprint(candidate)

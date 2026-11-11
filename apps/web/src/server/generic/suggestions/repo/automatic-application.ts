@@ -1,9 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { type AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { systemActor } from "@cubby/schemas/context";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
@@ -23,14 +21,12 @@ import type {
 import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
   AUTOMATIC_RULES,
-  type AutomaticRuleMatch,
-  matchFieldRules,
-  matchStatementRules,
   ruleBase,
 } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
-import { canAutomaticallyFillField } from "~/server/generic/suggestions/repo/suggestion-review";
+import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
 const log = createLogger("automatic-rules");
 
@@ -43,8 +39,6 @@ export function assertAutomaticRuleOn(key: AutomaticRuleKey, stamp: string) {
   if (stamp !== ruleBase(key))
     throw new Error("Automatic policy changed; refresh the suggestion");
 }
-
-const shortcodeEntity = z.enum(shortcodeEntities);
 
 type Candidate = {
   id: string;
@@ -63,26 +57,6 @@ type Candidate = {
   runId: string | null;
   judgment: unknown;
 };
-
-function currentMatches(row: Candidate): AutomaticRuleMatch[] {
-  if (row.family === "field") {
-    const entity = shortcodeEntity.safeParse(row.entity);
-    return entity.success
-      ? matchFieldRules({
-          entity: entity.data,
-          field: row.field,
-          kind: row.kind,
-          confidence: row.confidence,
-          model: row.model,
-        })
-      : [];
-  }
-  if (row.family === "statement_transaction") {
-    const judgment = statementTransactionJudgment.safeParse(row.judgment);
-    return judgment.success ? matchStatementRules(judgment.data) : [];
-  }
-  return [];
-}
 
 export type AutomaticRuleOutcome = {
   applied: string[];
@@ -137,13 +111,17 @@ export async function applyAutomaticRules(
   let base: EntityKernelContext | undefined;
   for (const row of rows) {
     if (!row.active || row.status !== "pending") continue;
+    const family = suggestionFamily.safeParse(row.family);
+    if (!family.success || !isReviewFamily(family.data)) continue;
+    const policy = suggestionFamilies[family.data].automatic;
+    if (!policy) continue;
     const stamp = ruleStamps.safeParse(row.data).data;
-    if (row.family !== "field" && !stamp?.matchedRules.length) continue;
-    const current = currentMatches(row);
+    if (policy.requiresStamp && !stamp?.matchedRules.length) continue;
+    const current = policy.match(row);
     const matches = current
       .filter(
         (match) =>
-          (row.family === "field" ||
+          (!policy.requiresStamp ||
             stamp?.matchedRules.includes(match.stamp)) &&
           (AUTOMATIC_RULES[match.key].execution !== "import_clean" ||
             options.importClean === true),
@@ -156,16 +134,7 @@ export async function applyAutomaticRules(
     const [match] = matches;
     if (!match) continue;
     try {
-      let application;
-      if (!application && row.family === "statement_transaction") {
-        const judgment = statementTransactionJudgment.parse(row.judgment);
-        application = {
-          kind: "statement_transaction" as const,
-          action: judgment.recommended,
-          fields: [],
-          rejectedCandidateIds: [],
-        };
-      }
+      const application = policy.application?.(row);
       base ??= buildBase();
       const context: EntityKernelContext = {
         ...base,
@@ -175,15 +144,12 @@ export async function applyAutomaticRules(
           runId: row.runId ? runEntityId.parse(row.runId) : null,
           // Only Cubby's own field values are revisable; statement booking is
           // import evidence and stays protected.
-          ...(row.family === "field" && { authority: "automatic" as const }),
+          ...(policy.authority && { authority: policy.authority }),
         },
       };
       // Ineligible or stale field work stays reviewable/refreshable without
       // reporting an expected policy hold as an application error every pass.
-      if (
-        row.family === "field" &&
-        !(await canAutomaticallyFillField(db, context, row.id))
-      )
+      if (policy.canApply && !(await policy.canApply(db, context, row.id)))
         continue;
       await reviewSuggestion(
         db,

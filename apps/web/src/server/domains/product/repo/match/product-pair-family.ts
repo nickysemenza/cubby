@@ -70,6 +70,14 @@ async function storedKeys(
 
 export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   family: "product_pair",
+  applicationKind: "product_merge",
+  applicationError:
+    "Product merge application requires a Product pair Suggestion",
+  suppressionKey: (subject) => ({
+    scope: "product_pair",
+    candidateKey: `${subject.recordId}|${subject.otherId}`,
+    error: "Suppression differs from the canonical Product pair",
+  }),
   keys: storedKeys,
   rows: async (db, keys) => {
     if (!keys.length) return new Map();
