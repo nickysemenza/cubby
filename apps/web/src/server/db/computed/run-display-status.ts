@@ -7,7 +7,7 @@
  * rather than review or authorization. A mail discovery pass the funding
  * window already released reads `paused` until it resumes.
  *
- * The successor probe reads `Run_predecessor_idx`.
+ * The successor probe reads `Run_predecessorRunId_idx`.
  */
 import {
   runDisplayStatus,
