@@ -24,8 +24,8 @@ import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transactio
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
   sourceObservationFacts,
+  sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -270,8 +270,9 @@ export async function updateSourceObservationJudgments(
   }
   const before = await db
     .select(sourceObservationColumns)
-    .from(sourceObservationFrom)
-    .where(inArray(sourceTransactionRecord.id, [...ids]));
+    .from(
+      sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
+    );
   const { notes: _notes, supersededByRowId: _successor, ...financial } = patch;
   const changedOwners: typeof owners = [];
   for (const owner of owners.filter((owner) =>
@@ -346,8 +347,9 @@ export async function updateSourceObservationJudgments(
   );
   const after = await db
     .select(sourceObservationColumns)
-    .from(sourceObservationFrom)
-    .where(inArray(sourceTransactionRecord.id, [...ids]));
+    .from(
+      sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
+    );
   const changed = after.filter((row) =>
     evidenceChanges(
       before.find((previous) => previous.id === row.id),

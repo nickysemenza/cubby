@@ -21,7 +21,7 @@ import {
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
+  sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
@@ -632,8 +632,9 @@ export async function applySourceIntake(
             [],
             await query
               .select(sourceObservationColumns)
-              .from(sourceObservationFrom)
-              .where(inArray(sourceTransactionRecord.id, newIds)),
+              .from(
+                sql`${sourceObservationsForPage(newIds)} "SourceTransactionRecord"`,
+              ),
           );
         break;
       }
