@@ -111,15 +111,31 @@ export const sourceReadyOccurrenceIds = sql`-- includes-deleted: reserved owners
   WHERE ready."reviewState"=${sourceOccurrenceReviewState.enum.ready}
     AND ready.id NOT IN (SELECT id FROM ${sourceOccurrencesWithUnresolvedHistory} unresolved)`;
 
+const occurrenceStateColumns = (
+  unresolved: SQL,
+) => sql`o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${unresolved} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
+    o.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AS ignored, (o."supersededByOccurrenceId" IS NOT NULL OR o."replacementObservationId" IS NOT NULL) AS superseded,
+    ft.shortcode`;
+
 /** One row per explicit owner; there is no alias lookup or observation-state fold. */
 export const sourceOccurrenceStates = sql`(
-  SELECT o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND unresolved.id IS NOT NULL THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
-    o.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AS ignored, (o."supersededByOccurrenceId" IS NOT NULL OR o."replacementObservationId" IS NOT NULL) AS superseded,
-    ft.shortcode
+  SELECT ${occurrenceStateColumns(sql`unresolved.id IS NOT NULL`)}
   FROM "SourceOccurrence" o
   LEFT JOIN ${sourceOccurrencesWithUnresolvedHistory} unresolved ON unresolved.id=o.id
   LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
   WHERE ${notDeleted("o")}
+)`;
+
+/**
+ * The same states for occurrences admitted by `filter` on alias `o`. The
+ * ownership fence is the point check, so a page never folds every occurrence's
+ * history.
+ */
+export const sourceOccurrenceStatesWhere = (filter: SQL) => sql`(
+  SELECT ${occurrenceStateColumns(sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`))}
+  FROM "SourceOccurrence" o
+  LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
+  WHERE ${notDeleted("o")} AND (${filter})
 )`;
 
 const projected = <Value>(key: string) =>

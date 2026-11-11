@@ -1512,6 +1512,76 @@ async function existingSpendingOutcome(
   return null;
 }
 
+// A receipt without payment evidence is this charge's Purchase only when the
+// match is unique on both sides: one same-Vendor unpaid receipt within three
+// days whose open capacity is exactly the charge, and no other unbooked charge
+// for that amount near the receipt. Older partly paid spending still blocks.
+// Retained payment evidence belongs to the retained matcher, which may have
+// rejected this charge (another card, for example); it never falls back here.
+async function exactReceiptTarget(
+  db: Database,
+  evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
+) {
+  const { facts, liveCandidates, candidateEvidence, vendor } = evidence;
+  const { row, source } = facts;
+  const date = source.transactionDate ?? source.postedDate;
+  if (
+    !vendor ||
+    !date ||
+    source.kind !== "purchase" ||
+    source.amount <= 0 ||
+    liveCandidates.some((candidate) => candidate.reviewOnly)
+  )
+    return undefined;
+  const amount = cents(source.amount);
+  const matches = liveCandidates.filter((candidate) => {
+    const graph = candidateEvidence.find(
+      (entry) => entry.id === candidate.id,
+    )?.graph;
+    return (
+      candidate.date !== null &&
+      calendarGap(candidate.date, date) <= 3 &&
+      graph?.target?.vendorId === vendor.id &&
+      graph.settlements.length === 0 &&
+      availableCents(graph, source.amount, row?.id) === amount
+    );
+  });
+  if (matches.length !== 1) return undefined;
+  const [match] = matches;
+  const charges = source.sourceRefs.map((ref) => ref.externalId);
+  const competing = await getDb(db).execute<{ competing: number }>(sql`
+    SELECT 1 AS competing FROM "FinancialTransaction" f
+    WHERE ${notDeleted("f")} AND f.id IS DISTINCT FROM ${row?.id ?? null}::uuid
+      AND f."amountMinor" = ${amount}
+      AND f.status <> ${financialTransactionStatus.enum.void}
+      AND abs(coalesce(f."transactionDate", f."postedDate") - ${match!.date}::date) <= 3
+      AND NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a
+        WHERE a."transactionId" = f.id AND ${notDeleted("a")})
+    UNION ALL
+    SELECT 1 FROM "SourceOccurrence" o
+    JOIN "SourceTransactionRecord" r ON r.id = o."currentObservationId"
+    WHERE ${notDeleted("o")} AND o."withdrawnAt" IS NULL
+      AND o."acceptedTransactionId" IS NULL
+      AND o.source IN (${sql.join(
+        [...new Set(source.sourceRefs.map((ref) => ref.source)), ""].map(
+          (name) => sql`${name}`,
+        ),
+        sql`, `,
+      )})
+      AND o.shortcode NOT IN (${sql.join(
+        [...charges, ""].map((charge) => sql`${charge}`),
+        sql`, `,
+      )})
+      AND r."amountMinor" = ${amount}
+      AND abs(r."statementDate" - ${match!.date}::date) <= 3
+    UNION ALL
+    SELECT 1 FROM "PurchasePaymentEvidence" retained
+    WHERE retained."purchaseId" = ${match!.id}::uuid
+    LIMIT 1
+  `);
+  return competing.rows.length ? undefined : match;
+}
+
 export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
@@ -1627,6 +1697,11 @@ export async function previewFinancialSpending(
     request.purchaseId !== null
   )
     return review("Identify the original Purchase before booking this refund.");
+  const exact =
+    !chosen && !strongTargets.length && request.purchaseId !== null
+      ? await exactReceiptTarget(db, evidence)
+      : undefined;
+  if (exact) return prepareReadySpending(db, evidence, exact, true);
   if (
     !chosen &&
     liveCandidates.length &&

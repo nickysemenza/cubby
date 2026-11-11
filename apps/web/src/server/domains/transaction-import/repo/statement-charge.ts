@@ -13,8 +13,8 @@ import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   sourceReadyOccurrenceIds,
   sourceObservationFacts,
-  sourceObservations,
   sourceOccurrenceStates,
+  sourceOccurrenceStatesWhere,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 /** Accepted ownership is the occurrence FK; external strings never resolve an owner. */
@@ -32,14 +32,17 @@ export const LIVE_REFS = sql`(
 export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 
 /** Scoped direct state, with one row per owner and no observation-state aggregation. */
-export const chargeStateOf = (scope: SQL) => sql`(
-  SELECT state.* FROM ${sourceOccurrenceStates} state
-  WHERE EXISTS (SELECT 1 FROM ${sourceObservations} r
-    WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
-      AND ${notDeleted("r")} AND (${scope}))
-)`;
+export const chargeStateOf = (scope: SQL) =>
+  sourceOccurrenceStatesWhere(sql`EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+    WHERE r.source = o.source AND r."chargeKey" = o.shortcode
+      AND ${notDeleted("r")} AND (${scope}))`);
 
-export const CHARGE_STATE = chargeStateOf(sql`true`);
+export const CHARGE_STATE = sql`(
+  SELECT state.* FROM ${sourceOccurrenceStates} state
+  WHERE EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+    WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
+      AND ${notDeleted("r")})
+)`;
 
 export const OCCURRENCE_IDENTITY_REVIEW =
   "This observation has no ready, proven source occurrence. Automatic financial actions remain blocked; retain its evidence and money unchanged.";
