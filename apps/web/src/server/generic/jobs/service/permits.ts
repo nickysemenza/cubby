@@ -93,7 +93,17 @@ export type PermitRuntime = {
 export const dueDrains = (drains: readonly BackgroundDrain[]): DrainDue[] =>
   drains.flatMap((drain) => {
     const due = drain.due();
-    return due ? [{ name: drain.name, due, label: drain.label }] : [];
+    return due
+      ? [
+          {
+            name: drain.name,
+            due,
+            label: drain.label,
+            stream: drain.stream,
+            covers: drain.covers,
+          },
+        ]
+      : [];
   });
 
 const nextFragments = (drains: readonly BackgroundDrain[]): SQL[] =>

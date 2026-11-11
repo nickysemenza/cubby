@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { AI_DISCOVERY_SETTINGS_ID } from "~/server/ai/repo/ai-refresh";
+import type { Database } from "~/server/db";
 import {
   DERIVED_REBUILD_KEY,
   derivedRebuild,
@@ -14,11 +15,35 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
-import { readBackgroundWorkStatus, readWorkActivity } from "./observation";
+import {
+  readBackgroundWorkStatus as readStatus,
+  readWorkActivity as readActivity,
+  type DrainDue,
+} from "./observation";
 import { enqueueJob } from "./producer";
 
 const minutesAgo = (minutes: number, now: Date) =>
   new Date(now.getTime() - minutes * 60_000);
+
+const declarations = async (extra: readonly DrainDue[] = []) => [
+  ...(await import("~/server/workflows/jobs"))
+    .productionDrainDues()
+    .map((drain) => ({
+      ...drain,
+      due: sql`SELECT NULL::text AS unit, NULL::timestamp AS since WHERE false`,
+    })),
+  ...extra,
+];
+const readBackgroundWorkStatus = async (
+  db: Database,
+  now = new Date(),
+  extra: readonly DrainDue[] = [],
+) => readStatus(db, now, await declarations(extra));
+const readWorkActivity = async (
+  db: Database,
+  now = new Date(),
+  extra: readonly DrainDue[] = [],
+) => readActivity(db, now, await declarations(extra));
 
 describe("background work status", () => {
   const ctx = withTestDb();

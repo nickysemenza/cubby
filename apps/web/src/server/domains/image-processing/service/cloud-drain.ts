@@ -70,6 +70,10 @@ async function runRows(
  */
 export const cloudImageDrain: BackgroundDrain = {
   name: "image.cloud",
+  stream: {
+    forUnit: (unit) => (unit === "image.cloud" ? unit : undefined),
+    forKind: (kind) => (kind === "image.cloud" ? kind : undefined),
+  },
   due: () => cloudImageDue("image.cloud"),
   next: cloudImageNext,
   async page(db, _unit, armRecovery) {

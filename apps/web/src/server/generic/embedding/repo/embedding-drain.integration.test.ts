@@ -3,6 +3,7 @@ import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { fundingWaiters } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
@@ -12,7 +13,6 @@ import {
   embeddingWorkFor,
   markEmbeddingFixture,
 } from "~/server/generic/embedding/repo/embedding-drain.fixtures";
-import { wakeFundingWaitingEmbeddings } from "~/server/generic/embedding/repo/embedding-work";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import {
@@ -440,7 +440,11 @@ describe("embedding refresh and cleanup drains", () => {
     expect(waiting?.dueAt?.getTime()).toBe(until.getTime());
     expect(waiting?.error).toContain("Synthetic OpenAI credit refusal");
 
-    expect(await wakeFundingWaitingEmbeddings(ctx.db)).toBe(1);
+    const waiter = fundingWaiters.find((entry) => entry.name === "embeddings")!;
+    const now = new Date();
+    expect(await waiter.count(ctx.db, now)).toBe(1);
+    expect(await waiter.wake(ctx.db, now, true)).toBe(1);
+    expect(await waiter.count(ctx.db, now)).toBe(0);
     const [woken] = await getDb(ctx.db)
       .select({ dueAt: searchDocument.embeddingDueAt })
       .from(searchDocument)

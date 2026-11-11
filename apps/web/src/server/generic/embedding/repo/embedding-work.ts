@@ -12,6 +12,7 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import {
   and,
+  count,
   asc,
   eq,
   inArray,
@@ -363,18 +364,27 @@ export const embeddingRefreshDue = (unit: string) =>
  * A funding change ends embedding funding waits now: a waiting item holds an
  * error with no failure streak, which only `wait` leaves behind.
  */
+const fundingWaitingEmbeddings = () =>
+  and(
+    sql`${searchDocument.embeddingDueAt} > now()`,
+    isNull(searchDocument.embeddingFailingSince),
+    isNotNull(searchDocument.embeddingError),
+    isNull(searchDocument.deletedAt),
+  );
+
+export async function countFundingWaitingEmbeddings(db: Database) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(searchDocument)
+    .where(fundingWaitingEmbeddings());
+  return row?.n ?? 0;
+}
+
 export async function wakeFundingWaitingEmbeddings(db: Database) {
   const woken = await getDb(db)
     .update(searchDocument)
     .set({ embeddingDueAt: sql`now()` })
-    .where(
-      and(
-        sql`${searchDocument.embeddingDueAt} > now()`,
-        isNull(searchDocument.embeddingFailingSince),
-        isNotNull(searchDocument.embeddingError),
-        isNull(searchDocument.deletedAt),
-      ),
-    )
+    .where(fundingWaitingEmbeddings())
     .returning({ id: searchDocument.id });
   return woken.length;
 }

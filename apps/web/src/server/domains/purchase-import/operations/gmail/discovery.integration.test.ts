@@ -790,7 +790,7 @@ describe("scheduled Gmail discovery", () => {
         if (releaseAtPublication) {
           releaseAtPublication = false;
           await (
-            await import("~/server/domains/run/service/ai-work")
+            await import("~/server/ai/funding-wait")
           ).resumeFundingPausedRuns(ctx.db, { anyWindow: true });
         }
         return prepared;
@@ -926,7 +926,7 @@ describe("scheduled Gmail discovery", () => {
       });
       // Raising the budget releases discovery without granting per-Run overage.
       const { resumeFundingPausedRuns } =
-        await import("~/server/domains/run/service/ai-work");
+        await import("~/server/ai/funding-wait");
       await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
       expect(await readRun(waitingRun)).toEqual(cancelled);
       const released = await readRun(state.params.runId);

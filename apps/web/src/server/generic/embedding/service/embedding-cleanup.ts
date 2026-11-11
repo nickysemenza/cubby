@@ -113,6 +113,10 @@ export function embeddingCleanupDrain(
   const name = "embedding.cleanup";
   return {
     name,
+    stream: {
+      forUnit: (unit) => (unit === name ? name : undefined),
+      forKind: (kind) => (kind === name ? name : undefined),
+    },
     due: () => (store.configured() ? embeddingCleanupDue(name) : null),
     next: () => (store.configured() ? embeddingCleanupNext() : null),
     page: (db) => page(db),

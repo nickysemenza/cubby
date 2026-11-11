@@ -18,6 +18,7 @@ import {
 import {
   and,
   asc,
+  count,
   eq,
   gt,
   inArray,
@@ -207,17 +208,26 @@ export async function releaseAiEvaluationPage(db: Database, token: string) {
  * A funding change ends evaluations' funding waits now; a source still
  * without capacity defers them again before spending.
  */
+const fundingWaitingEvaluations = () =>
+  and(
+    pendingAndOwed(),
+    eq(aiEvaluation.waitCause, jobWaitReason.enum.ai_funding_window),
+    sql`${aiEvaluation.runAt} > now()`,
+  );
+
+export async function countFundingWaitingEvaluations(db: Database) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(aiEvaluation)
+    .where(fundingWaitingEvaluations());
+  return row?.n ?? 0;
+}
+
 export async function wakeFundingWaitingEvaluations(db: Database) {
   const woken = await getDb(db)
     .update(aiEvaluation)
     .set({ runAt: sql`now()`, waitCause: null })
-    .where(
-      and(
-        pendingAndOwed(),
-        eq(aiEvaluation.waitCause, jobWaitReason.enum.ai_funding_window),
-        sql`${aiEvaluation.runAt} > now()`,
-      ),
-    )
+    .where(fundingWaitingEvaluations())
     .returning({ id: aiEvaluation.id });
   return woken.length;
 }

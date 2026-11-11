@@ -459,8 +459,10 @@ The funding wake (`resumeFundingPausedRuns` with every window) also ends the
 other funding waits: it releases funding-paused discovery, then makes due the
 AI evaluations, embeddings and image jobs waiting on `ai_funding_window`, then
 brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
-report them as `waiting`: funding-paused Runs, waiting work items, and when
-they retry on their own. Automatic
+report them as `waiting`: the import and discovery Runs eligible for release,
+the evaluation, embedding and image waits, all queued Jobs the wake brings
+forward, and when funding waits retry on their own. Released discovery is not
+counted or released again until a new funding stop clears its release marker. Automatic
 mailbox admission joins the retained Run. Run control refusals are
 `RUN_CONTROL_REFUSED` (409), never 500.
 

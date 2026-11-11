@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { fundingWaiters } from "~/server/ai/funding-wait";
 import { getDb } from "~/server/db/helpers";
 import {
   imageProcessingAttempt,
@@ -125,6 +126,25 @@ describe("device work waits parked and records no attempt", () => {
         imageJobWaitingOn(await jobOf(jobId), now).reason,
       );
     }
+  });
+
+  it("counts and wakes image jobs waiting for funding", async () => {
+    const jobId = await subjectLiftJob();
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        runAt: new Date(Date.now() + 60_000),
+        waitReason: "ai_funding_window",
+      })
+      .where(eq(imageProcessingJob.id, jobId));
+    const waiter = fundingWaiters.find((entry) => entry.name === "images")!;
+    const now = new Date();
+    expect(await waiter.count(ctx.db, now)).toBe(1);
+    expect(await waiter.wake(ctx.db, now, true)).toBe(1);
+    expect(await waiter.count(ctx.db, now)).toBe(0);
+    expect((await jobOf(jobId)).runAt.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
   });
 
   it("creates exactly one attempt when a device takes the lease", async () => {

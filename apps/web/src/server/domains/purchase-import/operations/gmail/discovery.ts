@@ -23,6 +23,7 @@ import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
+import { grantPaid } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -52,7 +53,6 @@ import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-im
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import {
   currentJobExecution,
@@ -192,10 +192,12 @@ async function createDiscoveryPasses(
     await lockMailDiscoveryAdmission(tx, identity);
     const launch = async (runId: RunId) => {
       if (input.paidGrant) {
-        await recordPaidGrant(tx, input.paidGrant.actor, {
+        await grantPaid(
+          tx,
+          input.paidGrant.actor,
           runId,
-          paidOverBudgetUsd: input.paidGrant.paidOverBudgetUsd,
-        });
+          input.paidGrant.paidOverBudgetUsd,
+        );
         await launchWorkflowRun(tx, { runId, purpose: "mail_discovery" });
       } else
         await launchWorkflowRun(tx, {
@@ -438,16 +440,14 @@ export async function startMailDiscovery(
     paidGrant?: DiscoveryPaidGrant;
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
-  // The member chose to pay now: probe the gateway instead of replaying its
-  // recorded refusal.
-  if (options.paidGrant)
-    await (await import("~/server/ai/funding")).resetFundingRefusal("paid");
-  const grantPaid = async (runId: RunId) => {
-    if (!options.paidGrant) return;
-    await recordPaidGrant(db, options.paidGrant.actor, {
-      runId,
-      paidOverBudgetUsd: options.paidGrant.paidOverBudgetUsd,
-    });
+  const grantDiscovery = async (runId: RunId) => {
+    if (options.paidGrant)
+      await grantPaid(
+        db,
+        options.paidGrant.actor,
+        runId,
+        options.paidGrant.paidOverBudgetUsd,
+      );
   };
   let started = 0;
   let running = 0;
@@ -477,7 +477,7 @@ export async function startMailDiscovery(
         running += 1;
         continue;
       }
-      await grantPaid(waiting.id);
+      await grantDiscovery(waiting.id);
       await launchWorkflowRun(db, {
         runId: waiting.id,
         purpose: "mail_discovery",
@@ -502,7 +502,7 @@ export async function startMailDiscovery(
     });
     if (runIds.length === 0) {
       const active = await fundingPausedDiscovery(db, target, "running");
-      if (active) await grantPaid(active.id);
+      if (active) await grantDiscovery(active.id);
       running += 1;
       continue;
     }
