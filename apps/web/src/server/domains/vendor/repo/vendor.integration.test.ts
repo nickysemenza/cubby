@@ -7,6 +7,7 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -355,11 +356,15 @@ describe("vendor repository — spend rollup", () => {
       firstPurchaseDate: null,
       missingItemizationCount: 0,
     });
-    const listed = await vendorScaffold.read(ctx.db, {
-      filters: {},
-      sorts: [],
-      pagination: page,
-    });
+    const listed = await expectStatementBudget(
+      () =>
+        vendorScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: page,
+        }),
+      { statements: 16, parameters: 27 },
+    );
     expect(
       listed.data.find((row) => row.id === sellerRef)?.brandedProductCount,
     ).toBe(0);
