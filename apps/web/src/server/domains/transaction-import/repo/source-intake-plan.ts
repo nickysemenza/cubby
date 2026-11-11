@@ -11,38 +11,173 @@ import {
 import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 
-import type {
-  SourceIntakeLoaded,
-  SourceIntakePrepared,
-} from "./source-intake-stages";
+/**
+ * Source intake is two steps: `planSourceIntake` turns the locked rows and the
+ * request into this closed list of writes, and `applySourceIntake` executes it
+ * and reads nothing else. Rows the database has not minted yet are named by
+ * reference and resolved while the writes run.
+ */
 type Owner = typeof sourceOccurrence.$inferSelect;
 type Observation = typeof sourceTransactionRecord.$inferSelect;
+type Batch = typeof transactionImport.$inferSelect;
 type Member = {
   membership: typeof transactionImportRecord.$inferSelect;
   observation: Observation;
   legacyAlias: string | null;
 };
-const reexportedPosition = (
-  identity: SourceIntakePrepared[number]["identity"],
-  owner: Owner,
-) => identity?.kind === "positioned" && identity.scope !== owner.identityScope;
+type Row = RecordSourceTransactionRecordsInput["rows"][number];
 
-export function planSourceIntake({
-  prepared,
-  members,
-  byKey,
-  retained,
-  existingBatch,
-  observedAt,
-}: {
-  prepared: SourceIntakePrepared;
+export type Identity = {
+  kind: "provider" | "positioned";
+  scope: string;
+  providerId: string | null;
+  position: number | null;
+};
+
+export type PreparedRow = {
+  row: Row;
+  identity: Identity | null;
+  key: string;
+  factFingerprint: string;
+  requestFingerprint: string;
+  externalId: string;
+  legacyExternalId: string;
+};
+
+export type SourceIntakeLoaded = {
+  source: string;
+  existingBatch: Batch | undefined;
+  observedAt: Date;
   members: Member[];
   byKey: Map<string, Owner>;
+  locked: Owner[];
   retained: Observation[];
-  existingBatch: typeof transactionImport.$inferSelect | undefined;
+};
+
+/** A stored occurrence, or one this plan mints, named by its identity key. */
+export type OwnerRef =
+  | { id: Owner["id"]; shortcode: string }
+  | { minted: string };
+/** A stored observation, or one this plan mints for an owner and fact set. */
+export type ObservationRef =
+  | { id: Observation["id"] }
+  | { minted: { owner: OwnerRef; factFingerprint: string } };
+
+type BatchValues = Omit<
+  RecordSourceTransactionRecordsInput["import"],
+  "observedAt" | "coverage"
+> & {
   observedAt: Date;
-}) {
-  const chosen = prepared.map((incoming) => {
+  coverage: RecordSourceTransactionRecordsInput["import"]["coverage"] | null;
+};
+type OccurrenceValues = Omit<
+  typeof sourceOccurrence.$inferInsert,
+  "shortcode" | "physicalImportId"
+>;
+type ObservationValues = Omit<
+  typeof sourceTransactionRecord.$inferInsert,
+  "shortcode" | "batchId" | "occurrenceId"
+>;
+
+export type MintedOccurrence = {
+  key: string;
+  /** A positioned occurrence is physically owned by the batch that carries it. */
+  positionedInBatch: boolean;
+  values: OccurrenceValues;
+};
+export type MintedObservation = {
+  owner: OwnerRef;
+  factFingerprint: string;
+  values: ObservationValues;
+  aliases: {
+    externalId: string;
+    legacyExternalId: string;
+    scopeEvidence: { identityKind: Identity["kind"]; scope: string };
+  };
+};
+export type HeadChange = {
+  owner: OwnerRef;
+  head: ObservationRef | null;
+  reviewState: Owner["reviewState"];
+  lastObservedAt: Date;
+  version: number;
+};
+export type PlannedMembership = {
+  observation: ObservationRef;
+  rowPosition: number | null;
+  requestFingerprint: string;
+};
+
+export type SourceIntakeWrite =
+  | { kind: "ensure_source"; source: string }
+  | { kind: "insert_batch"; values: BatchValues }
+  | { kind: "insert_occurrences"; rows: MintedOccurrence[] }
+  | { kind: "insert_observations"; rows: MintedObservation[] }
+  | { kind: "update_heads"; changes: HeadChange[] }
+  | { kind: "upsert_memberships"; rows: PlannedMembership[] }
+  | { kind: "audit_occurrences"; before: Owner[] }
+  | { kind: "audit_new_observations" }
+  | { kind: "complete_batch" }
+  | { kind: "withdraw_occurrence"; owner: Owner; at: Date }
+  | { kind: "record_change" }
+  | {
+      kind: "audit_batch";
+      before: Batch | undefined;
+      /** Observations that already belonged to the batch before this request. */
+      priorMemberIds: Observation["id"][];
+    }
+  /** A violated precondition the request reaches only after the writes before it. */
+  | { kind: "refuse"; message: string };
+
+export type SourceIntakeReceipt = {
+  batchId: Batch["id"] | null;
+  batchCreated: boolean;
+  dryRun: boolean;
+  inserted: number;
+  unchanged: number;
+  alreadyInThisBatch: number;
+  alreadyInAnotherBatch: number;
+  rowCountStored: number;
+  completed: boolean;
+  revised: number;
+  refreshed: number;
+  withdrawn: number;
+  occurrenceCodes: string[];
+  signWarning: string | null;
+};
+
+export type SourceIntakePlan = {
+  writes: SourceIntakeWrite[];
+  /** What a dry run reports; apply starts from it. */
+  receipt: SourceIntakeReceipt;
+  /** What a run that reaches the end of `writes` adds to the receipt. */
+  outcome: {
+    batchCreated: boolean;
+    rowCountStored: number;
+    completed: boolean;
+    withdrawn: number;
+    chosenOwners: OwnerRef[];
+    withdrawalCodes: string[];
+  };
+};
+
+type ChosenRow = {
+  incoming: PreparedRow;
+  owner: Owner | undefined;
+  observation: Observation | undefined;
+  member: Member | undefined;
+};
+
+const reexportedPosition = (
+  identity: PreparedRow["identity"],
+  owner: Pick<Owner, "identityScope">,
+) => identity?.kind === "positioned" && identity.scope !== owner.identityScope;
+
+function chooseRows(
+  prepared: PreparedRow[],
+  { members, byKey, retained, existingBatch }: SourceIntakeLoaded,
+): ChosenRow[] {
+  const chosen = prepared.map((incoming): ChosenRow => {
     // A parser-supplied ordinal cannot retroactively attest an old collection.
     // Refuse even an ignored twin before a new occurrence could authorize money.
     if (
@@ -163,50 +298,72 @@ export function planSourceIntake({
     constraintViolation(
       "A completed collection cannot admit additional observations.",
     );
-  const novel = chosen.filter((row) => !row.observation);
-  const revised = chosen.filter(
-    (row) =>
-      row.owner &&
-      row.owner.currentObservationId &&
-      row.observation?.id !== row.owner.currentObservationId,
-  );
-  const refreshed = chosen.filter(
-    (row) =>
-      row.owner &&
-      row.observation?.id === row.owner.currentObservationId &&
-      row.owner.lastObservedAt < observedAt,
-  );
-  return { chosen, novel, revised, refreshed };
+  return chosen;
 }
 
-type Chosen = ReturnType<typeof planSourceIntake>["chosen"];
-export function planSourceHeads({
-  chosen,
-  byKey,
-  createdObservations,
-  retained,
-  observedAt,
-}: {
-  chosen: Chosen;
-  byKey: Map<string, Owner>;
-  createdObservations: Observation[];
-  retained: Observation[];
-  observedAt: Date;
-}) {
+const ownerRefOf = (row: ChosenRow): OwnerRef | null =>
+  row.owner
+    ? { id: row.owner.id, shortcode: row.owner.shortcode }
+    : row.incoming.identity
+      ? { minted: row.incoming.key }
+      : null;
+
+const ownerRefKey = (ref: OwnerRef | null) =>
+  ref === null ? null : "minted" in ref ? `minted:${ref.minted}` : ref.id;
+
+const requiredOwner = (row: ChosenRow): OwnerRef =>
+  ownerRefOf(row) ??
+  constraintViolation("A new observation requires proven source identity.");
+
+const observationRefOf = (row: ChosenRow): ObservationRef =>
+  row.observation
+    ? { id: row.observation.id }
+    : {
+        minted: {
+          owner: requiredOwner(row),
+          factFingerprint: row.incoming.factFingerprint,
+        },
+      };
+
+const observationRefKey = (ref: ObservationRef) =>
+  "id" in ref
+    ? ref.id
+    : `minted:${ownerRefKey(ref.minted.owner)}|${ref.minted.factFingerprint}`;
+
+/** The columns head selection reads; a minted occurrence starts at the column defaults. */
+type HeadState = Pick<
+  Owner,
+  | "identityScope"
+  | "currentObservationId"
+  | "reviewState"
+  | "withdrawnAt"
+  | "lastObservedAt"
+  | "version"
+> & { id: string };
+
+function planHeads(
+  chosen: ChosenRow[],
+  retained: Observation[],
+  observedAt: Date,
+): HeadChange[] {
   // oxlint-disable-next-line complexity -- Head selection combines evidence, ordering, withdrawal and conflict fences.
-  const headChanges = chosen.flatMap((row) => {
-    const owner = byKey.get(row.incoming.key);
-    if (!owner || row.member) return [];
-    const observation =
-      row.observation ??
-      createdObservations.find(
-        (saved) =>
-          saved.occurrenceId === owner.id &&
-          saved.factFingerprint === row.incoming.factFingerprint,
-      )!;
+  return chosen.flatMap((row) => {
+    const ownerRef = ownerRefOf(row);
+    if (!ownerRef || row.member) return [];
+    const owner: HeadState = row.owner ?? {
+      id: ownerRefKey(ownerRef)!,
+      identityScope: row.incoming.identity!.scope,
+      currentObservationId: null,
+      reviewState: "ready",
+      withdrawnAt: null,
+      lastObservedAt: observedAt,
+      version: 1,
+    };
+    const observation = observationRefOf(row);
+    const observationId = "id" in observation ? observation.id : undefined;
     const differentFacts =
       owner.currentObservationId !== null &&
-      owner.currentObservationId !== observation.id &&
+      owner.currentObservationId !== observationId &&
       retained.find((saved) => saved.id === owner.currentObservationId)
         ?.factFingerprint !== row.incoming.factFingerprint;
     const current = retained.find(
@@ -246,19 +403,21 @@ export function planSourceHeads({
         current.providerAccountId === account);
     const orderedRevision =
       differentFacts && annotationsOnly && observedAt > owner.lastObservedAt;
-    const currentObservationId = !row.owner
-      ? observation.id
+    const head: ObservationRef | null = !row.owner
+      ? observation
       : orderedRevision ||
           (reexportedPosition(row.incoming.identity, owner) &&
             !differentFacts &&
             observedAt > owner.lastObservedAt)
-        ? observation.id
+        ? observation
         : differentFacts &&
             !annotationsOnly &&
             owner.withdrawnAt === null &&
             owner.reviewState === "ready"
           ? null
-          : owner.currentObservationId;
+          : owner.currentObservationId === null
+            ? null
+            : { id: owner.currentObservationId };
     const reviewState =
       owner.reviewState !== "ready" &&
       owner.reviewState !== "revision_order_unknown"
@@ -272,9 +431,10 @@ export function planSourceHeads({
                 owner.reviewState === "ready"
               ? "revision_order_unknown"
               : owner.reviewState;
+    const headId = head === null ? null : "id" in head ? head.id : undefined;
     const semantic =
       row.owner !== undefined &&
-      (currentObservationId !== owner.currentObservationId ||
+      (headId !== owner.currentObservationId ||
         reviewState !== owner.reviewState);
     const lastObservedAt =
       owner.lastObservedAt < observedAt ? observedAt : owner.lastObservedAt;
@@ -286,26 +446,97 @@ export function planSourceHeads({
       return [];
     return [
       {
-        id: owner.id,
-        currentObservationId,
+        owner: ownerRef,
+        head,
         reviewState,
         lastObservedAt,
         version: owner.version + (semantic ? 1 : 0),
       },
     ];
   });
-  return headChanges;
 }
 
-export function planIntakeReceipt(
+function statementSignWarning(
+  rows: ReadonlyArray<{ providerAmount: number }>,
+): string | null {
+  const positive = rows.filter((row) => row.providerAmount > 0).length;
+  return rows.length >= 20 && positive / rows.length > 0.9
+    ? `${positive} of ${rows.length} rows have a positive providerAmount. Charges must be submitted negative; check the export sign convention. Legitimate if this collection is income or refunds.`
+    : null;
+}
+
+function planWithdrawals(
   input: RecordSourceTransactionRecordsInput,
+  { source, locked, retained, observedAt }: SourceIntakeLoaded,
+  chosen: ChosenRow[],
+  completed: boolean,
+  rowCountStored: number,
+): { refusal: string } | { owners: Owner[] } {
+  if (!input.confirmedWithdrawals.length) return { owners: [] };
+  const coverage = input.import.coverage;
+  if (
+    !completed ||
+    !coverage ||
+    coverage.visibility !== "all" ||
+    input.import.rowCountDeclared !== rowCountStored
+  )
+    return {
+      refusal:
+        "Withdrawals require a completed, exhaustive rechecked account window.",
+    };
+  const withdrawals = locked.filter(
+    (owner) =>
+      owner.source === source &&
+      owner.identityKind === "provider" &&
+      input.confirmedWithdrawals.includes(owner.providerIdentity!),
+  );
+  if (withdrawals.length !== input.confirmedWithdrawals.length)
+    return {
+      refusal:
+        "Every confirmed withdrawal must identify a retained occurrence in the proven account scope.",
+    };
+  for (const owner of withdrawals) {
+    const head = retained.find((row) => row.id === owner.currentObservationId);
+    // A provider id is unique without its account; a missing account is not another account.
+    if (
+      !head ||
+      (head.providerAccountId !== null &&
+        head.providerAccountId !== coverage.account) ||
+      head.statementDate < coverage.from ||
+      head.statementDate > coverage.to ||
+      owner.lastObservedAt > observedAt ||
+      chosen.some((row) => row.owner?.id === owner.id)
+    )
+      return {
+        refusal:
+          "The confirmed removal is observed, newer, unresolved, or outside the collection scope.",
+      };
+  }
+  return { owners: withdrawals.filter((owner) => owner.withdrawnAt === null) };
+}
+
+/** Intake changes evidence/head state only. Unknown revision order never changes accepted money. */
+export function planSourceIntake(
+  input: RecordSourceTransactionRecordsInput,
+  prepared: PreparedRow[],
   loaded: SourceIntakeLoaded,
-  plan: ReturnType<typeof planSourceIntake>,
-) {
-  const { existingBatch, members } = loaded;
-  const { chosen, novel, revised, refreshed } = plan;
-  const occurrenceCodes: string[] = [];
-  const base = {
+): SourceIntakePlan {
+  const { source, existingBatch, observedAt, members, byKey, locked } = loaded;
+  const chosen = chooseRows(prepared, loaded);
+  const novel = chosen.filter((row) => !row.observation);
+  const revised = chosen.filter(
+    (row) =>
+      row.owner &&
+      row.owner.currentObservationId &&
+      row.observation?.id !== row.owner.currentObservationId,
+  );
+  const refreshed = chosen.filter(
+    (row) =>
+      row.owner &&
+      row.observation?.id === row.owner.currentObservationId &&
+      row.owner.lastObservedAt < observedAt,
+  );
+  const receipt: SourceIntakeReceipt = {
     batchId: existingBatch?.id ?? null,
     batchCreated: false,
     dryRun: input.dryRun,
@@ -321,67 +552,177 @@ export function planIntakeReceipt(
     revised: revised.length,
     refreshed: refreshed.length,
     withdrawn: 0,
-    correctionReviews: [],
-    occurrenceCodes,
+    occurrenceCodes: [],
     signWarning: statementSignWarning(input.rows),
   };
-  return base;
-}
 
-function statementSignWarning(
-  rows: ReadonlyArray<{ providerAmount: number }>,
-): string | null {
-  const positive = rows.filter((row) => row.providerAmount > 0).length;
-  return rows.length >= 20 && positive / rows.length > 0.9
-    ? `${positive} of ${rows.length} rows have a positive providerAmount. Charges must be submitted negative; check the export sign convention. Legitimate if this collection is income or refunds.`
-    : null;
-}
-
-export function planWithdrawals(
-  input: RecordSourceTransactionRecordsInput,
-  loaded: SourceIntakeLoaded,
-  plan: ReturnType<typeof planSourceIntake>,
-  completed: boolean,
-  rowCountStored: number,
-) {
-  if (!input.confirmedWithdrawals.length) return [];
-  const { source, locked, retained, observedAt } = loaded;
-  const { chosen } = plan;
-  const coverage = input.import.coverage;
-  if (
-    !completed ||
-    !coverage ||
-    coverage.visibility !== "all" ||
-    input.import.rowCountDeclared !== rowCountStored
-  )
-    return constraintViolation(
-      "Withdrawals require a completed, exhaustive rechecked account window.",
-    );
-  const withdrawals = locked.filter(
-    (owner) =>
-      owner.source === source &&
-      owner.identityKind === "provider" &&
-      input.confirmedWithdrawals.includes(owner.providerIdentity!),
+  /** The occurrence a prepared row lands on, whether stored or minted by this plan. */
+  const preparedOwnerKey = (candidate: PreparedRow) =>
+    byKey.get(candidate.key)?.id ??
+    (candidate.identity ? `minted:${candidate.key}` : null);
+  const writes: SourceIntakeWrite[] = [{ kind: "ensure_source", source }];
+  if (!existingBatch)
+    writes.push({
+      kind: "insert_batch",
+      values: {
+        ...input.import,
+        observedAt,
+        coverage: input.import.coverage ?? null,
+      },
+    });
+  const fresh = chosen.filter(
+    (row) => !row.owner && row.incoming.identity !== null,
   );
-  if (withdrawals.length !== input.confirmedWithdrawals.length)
-    constraintViolation(
-      "Every confirmed withdrawal must identify a retained occurrence in the proven account scope.",
-    );
-  for (const owner of withdrawals) {
-    const head = retained.find((row) => row.id === owner.currentObservationId);
-    // A provider id is unique without its account; a missing account is not another account.
-    if (
-      !head ||
-      (head.providerAccountId !== null &&
-        head.providerAccountId !== coverage.account) ||
-      head.statementDate < coverage.from ||
-      head.statementDate > coverage.to ||
-      owner.lastObservedAt > observedAt ||
-      chosen.some((row) => row.owner?.id === owner.id)
+  if (fresh.length)
+    writes.push({
+      kind: "insert_occurrences",
+      rows: fresh.map(({ incoming }) => {
+        const identity = incoming.identity!;
+        return {
+          key: incoming.key,
+          positionedInBatch: identity.kind === "positioned",
+          values: {
+            source,
+            identityKind: identity.kind,
+            identityScope: identity.scope,
+            providerIdentity: identity.providerId,
+            physicalPosition: identity.position,
+            identityProof:
+              identity.kind === "provider"
+                ? {
+                    kind: "raw_provider_ids",
+                    source,
+                    account: incoming.row.providerAccountId ?? null,
+                    provider: identity.providerId!,
+                  }
+                : {
+                    kind: "original_collection_position",
+                    source,
+                    fingerprint: input.import.fingerprint,
+                    position: identity.position!,
+                  },
+            reviewState: "ready",
+            version: 1,
+            lastObservedAt: observedAt,
+          },
+        };
+      }),
+    });
+  if (novel.length)
+    writes.push({
+      kind: "insert_observations",
+      rows: novel.map((row) => {
+        const { incoming } = row;
+        const owner = requiredOwner(row);
+        // Every observation of one occurrence and fact set shares the first prepared row's aliases.
+        const aliasSource =
+          prepared.find(
+            (candidate) =>
+              preparedOwnerKey(candidate) === ownerRefKey(owner) &&
+              candidate.factFingerprint === incoming.factFingerprint,
+          ) ?? incoming;
+        const identity =
+          aliasSource.identity ??
+          constraintViolation(
+            "A new observation requires proven source identity.",
+          );
+        return {
+          owner,
+          factFingerprint: incoming.factFingerprint,
+          values: {
+            ...incoming.row,
+            source,
+            factFingerprint: incoming.factFingerprint,
+            providerTransactionId: incoming.row.providerTransactionId ?? null,
+            providerAccountId: incoming.row.providerAccountId ?? null,
+            providerData: incoming.row.providerData ?? null,
+            amount: moneyToMinor(-incoming.row.providerAmount),
+            providerAmount: moneyToMinor(incoming.row.providerAmount),
+          },
+          aliases: {
+            externalId: aliasSource.externalId,
+            legacyExternalId: aliasSource.legacyExternalId,
+            scopeEvidence: {
+              identityKind: identity.kind,
+              scope: identity.scope,
+            },
+          },
+        };
+      }),
+    });
+  const headChanges = planHeads(chosen, loaded.retained, observedAt);
+  if (headChanges.length)
+    writes.push({ kind: "update_heads", changes: headChanges });
+  const memberships = chosen.map((row): PlannedMembership => ({
+    observation: observationRefOf(row),
+    rowPosition: row.incoming.row.rowPosition ?? null,
+    requestFingerprint: row.incoming.requestFingerprint,
+  }));
+  if (memberships.length)
+    writes.push({ kind: "upsert_memberships", rows: memberships });
+  writes.push({ kind: "audit_occurrences", before: locked });
+  if (novel.length) writes.push({ kind: "audit_new_observations" });
+
+  const priorMemberIds = members.map(
+    (member) => member.membership.statementRowId,
+  );
+  const rowCountStored = new Set([
+    ...priorMemberIds,
+    ...memberships.map((membership) =>
+      observationRefKey(membership.observation),
+    ),
+  ]).size;
+  const chosenOwners = chosen.flatMap((row) => {
+    const owner = ownerRefOf(row);
+    return owner ? [owner] : [];
+  });
+  const withdrawalCodes = locked
+    .filter((owner) =>
+      input.confirmedWithdrawals.includes(owner.providerIdentity ?? ""),
     )
-      constraintViolation(
-        "The confirmed removal is observed, newer, unresolved, or outside the collection scope.",
-      );
+    .map((owner) => owner.shortcode);
+  const outcome = {
+    batchCreated: !existingBatch,
+    rowCountStored,
+    completed:
+      existingBatch?.completedAt !== null && existingBatch !== undefined,
+    withdrawn: 0,
+    chosenOwners,
+    withdrawalCodes,
+  };
+  const plan = { writes, receipt, outcome };
+  if (input.complete && !outcome.completed) {
+    if (
+      !input.import.coverage ||
+      input.import.rowCountDeclared === null ||
+      input.import.rowCountDeclared !== rowCountStored
+    ) {
+      writes.push({
+        kind: "refuse",
+        message:
+          "Completion requires explicit coverage and every declared occurrence, including zero values.",
+      });
+      return plan;
+    }
+    writes.push({ kind: "complete_batch" });
+    outcome.completed = true;
   }
-  return withdrawals.filter((owner) => owner.withdrawnAt === null);
+  const withdrawals = planWithdrawals(
+    input,
+    loaded,
+    chosen,
+    outcome.completed,
+    rowCountStored,
+  );
+  if ("refusal" in withdrawals) {
+    writes.push({ kind: "refuse", message: withdrawals.refusal });
+    return plan;
+  }
+  for (const owner of withdrawals.owners)
+    writes.push({ kind: "withdraw_occurrence", owner, at: observedAt });
+  outcome.withdrawn = withdrawals.owners.length;
+  if (novel.length || headChanges.length || outcome.withdrawn)
+    writes.push({ kind: "record_change" });
+  writes.push({ kind: "audit_batch", before: existingBatch, priorMemberIds });
+  return plan;
 }

@@ -4,7 +4,7 @@ import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-
 import type { Database } from "~/server/db";
 import { withSnapshotWrite } from "~/server/db/helpers";
 
-import { planSourceIntake, planIntakeReceipt } from "./source-intake-plan";
+import { planSourceIntake } from "./source-intake-plan";
 import {
   prepareRows,
   lockAndLoadSourceIntake,
@@ -21,18 +21,9 @@ export async function recordSourceTransactionRecords(
     db,
     async (tx) => {
       const loaded = await lockAndLoadSourceIntake(tx, input, prepared);
-      const plan = planSourceIntake({ prepared, ...loaded });
-      const receipt = planIntakeReceipt(input, loaded, plan);
-      if (input.dryRun) return receipt;
-      return applySourceIntake(
-        tx,
-        input,
-        actor,
-        prepared,
-        loaded,
-        plan,
-        receipt,
-      );
+      const plan = planSourceIntake(input, prepared, loaded);
+      if (input.dryRun) return plan.receipt;
+      return applySourceIntake(tx, actor, plan);
     },
     { isolationLevel: "serializable" },
   );
