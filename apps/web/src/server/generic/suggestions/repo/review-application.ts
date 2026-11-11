@@ -1,4 +1,3 @@
-import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import {
   suggestionProjectionTargets,
   suggestionReviewOut,
@@ -17,7 +16,6 @@ import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   recordFeedback,
   type FeedbackEvent,
@@ -28,7 +26,6 @@ import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggest
 import type { ReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   suggestionStateColumns,
-  suggestionRecordId,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 
@@ -127,31 +124,12 @@ export function executeReviewApplication(
             { status: "applied" },
           );
       }
-      let fieldApplicationReceipt: z.infer<
-        typeof suggestionAcceptanceReceipt
-      > | null = null;
-      if (
-        prediction.family === "field" &&
-        authority === "member" &&
-        input.correction.present
-      ) {
-        const [field] = await getDb(transactionDb)
-          .select(suggestionStateColumns)
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, prediction.id))
-          .limit(1);
-        if (!field)
-          throw new Error("Corrected field application has no saved lineage");
-        fieldApplicationReceipt = {
-          ...suggestionAcceptanceReceipt.parse(field.acceptanceReceipt),
-          appliedInputFingerprint: await fieldInputFingerprint(
-            transactionDb,
-            field.entity,
-            suggestionRecordId(field),
-            field.field,
-          ),
-        };
-      }
+      const fieldApplicationReceipt = await family.afterApply?.(
+        transactionDb,
+        prediction,
+        input,
+        authority,
+      );
       await recordFeedback(transactionDb, {
         suggestionId: prediction.id,
         operationId: `command-application:${input.operationId}`,

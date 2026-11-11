@@ -39,6 +39,11 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
   scopes: typeof recommendationScopes;
 } = {
   family: "recommendation",
+  suppressionKey: (subject) => ({
+    scope: subject.scope,
+    candidateKey: subject.candidateKey,
+    error: "Suppression differs from the declared recommendation scope",
+  }),
   facts: (query, needs) => {
     if (query.filters.status !== "pending") return null;
     const has = (...names: string[]) => names.some((name) => needs.has(name));

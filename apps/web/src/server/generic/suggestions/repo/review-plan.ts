@@ -1,5 +1,4 @@
 import { AUTOMATIC_RULE_FAMILIES } from "@cubby/schemas/automatic-rule";
-import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { suggestionReviewOut } from "@cubby/schemas/suggestion";
 import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { isEqual } from "es-toolkit";
@@ -12,7 +11,10 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion";
 import type { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import type { ReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import {
+  isReviewFamily,
+  type ReviewFamily,
+} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import type { AutomaticReview, Review } from "./review";
@@ -48,44 +50,29 @@ export function assertReviewAction(
     throw new Error(`Unsupported ${name} review action ${verdict}`);
 }
 
-const APPLICATION_FAMILIES = {
-  saved_field: {
-    family: "field",
-    message: "Saved-field receipts require a field Suggestion",
-  },
-  product_merge: {
-    family: "product_pair",
-    message: "Product merge application requires a Product pair Suggestion",
-  },
-  statement_transaction: {
-    family: "statement_transaction",
-    message:
-      "Statement application requires a Transaction suggestion Suggestion",
-  },
-  transfer_pair: {
-    family: "transfer_pair",
-    message: "Transfer-pair application requires a transfer-pair Suggestion.",
-  },
-} satisfies Record<
-  NonNullable<Review["application"]>["kind"],
-  { family: SuggestionFamily; message: string }
->;
-
 export function assertApplicationFamily(
   family: SuggestionFamily,
   application: Review["application"],
 ) {
   if (!application) return;
-  const expected = APPLICATION_FAMILIES[application.kind];
-  if (expected.family !== family) throw new Error(expected.message);
+  const expected = Object.values(suggestionFamilies).find(
+    (declaration) => declaration.applicationKind === application.kind,
+  );
+  if (!expected) throw new Error(`Unsupported application ${application.kind}`);
+  if (
+    !isReviewFamily(family) ||
+    suggestionFamilies[family].applicationKind !== application.kind
+  )
+    throw new Error(expected.applicationError);
 }
 
 export function planReviewInput(input: Review, prediction: Prediction): Review {
-  if (
-    input.suppression &&
-    (prediction.subject.kind === "statement_transaction" ||
-      prediction.subject.kind === "transfer_pair")
-  )
+  if (!isReviewFamily(prediction.family))
+    throw new Error(
+      `${prediction.family} Suggestions are not reviewed as Suggestions`,
+    );
+  const family = suggestionFamilies[prediction.family];
+  if (input.suppression && family.financial)
     input = {
       ...input,
       suppression: {
@@ -101,38 +88,17 @@ export function planReviewInput(input: Review, prediction: Prediction): Review {
       throw new Error(
         "Suppression requires history-only Dismissal or Wrong Feedback",
       );
-    if (prediction.subject.kind === "recommendation") {
-      if (
-        input.suppression.scope !== prediction.subject.scope ||
-        input.suppression.candidateKey !== prediction.subject.candidateKey
-      )
-        throw new Error(
-          "Suppression differs from the declared recommendation scope",
-        );
-    } else if (prediction.subject.kind === "statement_transaction") {
-      if (
-        input.suppression.scope !== "statement_transaction" ||
-        input.suppression.candidateKey !==
-          `${prediction.subject.source}:${prediction.subject.chargeKey}`
-      )
-        throw new Error("Suppression differs from the statement charge");
-    } else if (prediction.subject.kind === "transfer_pair") {
-      if (
-        input.suppression.scope !== "transfer_pair" ||
-        input.suppression.candidateKey !== prediction.subject.pairKey
-      )
-        throw new Error("Suppression differs from the transfer pair");
-    } else if (prediction.subject.kind === "product_pair") {
-      if (
-        input.suppression.scope !== "product_pair" ||
-        input.suppression.candidateKey !==
-          `${prediction.subject.recordId}|${prediction.subject.otherId}`
-      )
-        throw new Error("Suppression differs from the canonical Product pair");
-    } else
+    // SAFETY: review validates the subject against the selected family before planning.
+    const key = family.suppressionKey?.(prediction.subject as never);
+    if (!key)
       throw new Error(
         "This Suggestion does not declare a presentation suppression scope",
       );
+    if (
+      input.suppression.scope !== key.scope ||
+      input.suppression.candidateKey !== key.candidateKey
+    )
+      throw new Error(key.error);
   }
   if (
     input.intent === "apply" &&
@@ -142,22 +108,10 @@ export function planReviewInput(input: Review, prediction: Prediction): Review {
     throw new Error(
       "Applying Feedback requires acceptance or an explicit correction",
     );
-  if (input.intent === "draft" && prediction.family !== "field")
+  if (input.intent === "draft" && !family.supportsDraft)
     throw new Error("Only field Suggestions support draft acceptance");
   assertApplicationFamily(prediction.family, input.application);
-  if (input.correction.present) {
-    // A different choice is a Wrong verdict whose correction is that choice.
-    if (
-      prediction.family === "statement_transaction" &&
-      !isEqual(
-        statementTransactionApplication.parse(input.correction.value),
-        input.application,
-      )
-    )
-      throw new Error(
-        "A corrected Transaction suggestion must apply the corrected action",
-      );
-  }
+  family.validateCorrection?.(input);
   return input;
 }
 
@@ -193,7 +147,9 @@ export function planApplicableState(
     );
   if (
     state.status === "applied" ||
-    (family === "field" && state.status !== "pending")
+    (isReviewFamily(family) &&
+      suggestionFamilies[family].fieldHistory &&
+      state.status !== "pending")
   )
     throw new Error(
       "Suggestion already resolved by another command; request a fresh suggestion",
@@ -224,7 +180,8 @@ export function planReviewHistory(
   }
   if (
     state &&
-    (state.active || family === "field") &&
+    (state.active ||
+      (isReviewFamily(family) && suggestionFamilies[family].fieldHistory)) &&
     !["applied", "superseded"].includes(state.status) &&
     input.verdict !== "uncertain"
   ) {
@@ -236,7 +193,9 @@ export function planReviewHistory(
           ? ("rejected" as const)
           : ("resolved" as const),
       reviewKey:
-        family === "field" && input.verdict === "wrong"
+        isReviewFamily(family) &&
+        suggestionFamilies[family].fieldHistory &&
+        input.verdict === "wrong"
           ? z.object({ reviewKey: z.string().nullable() }).safeParse(state.data)
               .data?.reviewKey
           : null,
