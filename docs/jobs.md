@@ -215,6 +215,18 @@ across drains but never has to match its drain's name:
    absolutely, so Jobs that defer and fall due again cannot starve a lower
    priority. A flood of one kind therefore never starves another.
 
+One Sweep page runs per import source at a time. A `run.execute` Job whose
+Sweep's statement family is scoped to an `importId` is not due while another
+`run.execute` Job holds a live lease on a Sweep scoped to an import of the same
+`TransactionImport.source`: `dueUnits` leaves it out before ranking, so it
+takes no candidate slot, and `claimJob` refuses it by the same predicate. The
+source is read from each Sweep Run's input at selection (no stored key, table
+or lock); a lapsed lease holds nothing. The held Sweep stays queued and takes
+its turn when the lease ends. Sweeps without an `importId` (routine, account or
+date scoped) have no source and neither wait nor hold. Two claims in the same
+instant can still both pass; the statement apply locks and serialization retry
+then serialize them as before.
+
 A permit tries up to eight candidates in that order and runs the first it can
 claim (`SKIP LOCKED`; a sibling's held row is skipped, not awaited). A unit
 that claimed work sends exactly one successor permit for the earliest owed work
