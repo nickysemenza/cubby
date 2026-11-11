@@ -69,7 +69,7 @@ describe("gatewayFetch provider transport", () => {
     expect(sent?.headers.get("authorization")).toBe(
       "Bearer synthetic-gateway-token",
     );
-    expect(sent?.headers.get("cf-aig-gateway-id")).toBe("cubby-testing");
+    expect(sent?.headers.get("cf-aig-gateway-id")).toBe("cubby");
     expect(sent?.headers.get("cf-aig-skip-cache")).toBe("true");
     expect(JSON.parse(sent?.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
       outbound,
