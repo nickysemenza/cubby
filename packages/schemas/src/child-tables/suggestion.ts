@@ -139,11 +139,6 @@ export const suggestionChildren = [
         name: "Suggestion_family_active_idx",
         on: ["family", "active", "status"],
       },
-      {
-        name: "Suggestion_statement_source_charge_idx",
-        on: [{ sql: "({data}->>'source')" }, { sql: "({data}->>'chargeKey')" }],
-        where: "{family} = 'statement_transaction'",
-      },
       { name: "Suggestion_run_status_idx", on: ["runId", "status"] },
       {
         name: "Suggestion_active_suppression_idx",
