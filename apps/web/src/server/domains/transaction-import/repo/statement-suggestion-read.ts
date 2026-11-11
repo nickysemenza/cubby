@@ -431,29 +431,32 @@ export function isClean(
       judgment.create !== null &&
       kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
     );
+  // Context candidates (settled elsewhere, wrong sign or amount) never block.
+  const live = judgment.candidates.filter(
+    (candidate) => candidate.eligibility !== "context",
+  );
   if (judgment.recommended === "create")
     return (
-      judgment.candidates.length === 0 &&
+      live.length === 0 &&
       judgment.create !== null &&
       kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
     );
   // Another source's copy of this bank event already booked it: attaching
-  // needs no model label, only an exact, unclaimed paired Transaction first.
+  // needs no model label, only the exact paired Transaction first.
   if (judgment.recommended === "attach" && judgment.pairedTransactionId) {
     const [paired] = judgment.candidates;
     return (
       paired?.transactionId === judgment.pairedTransactionId &&
       cents(paired.amount) === cents(statementAmount) &&
-      !paired.claimed
+      paired.eligibility === "explicit"
     );
   }
-  if (judgment.candidates.length !== 1) return false;
-  const [only] = judgment.candidates;
+  if (live.length !== 1) return false;
+  const [only] = live;
   if (cents(only!.amount) !== cents(statementAmount)) return false;
   if (judgment.recommended === "supersede") return true;
   return (
     judgment.recommended === "attach" &&
-    !only!.claimed &&
     only!.label?.same === "same" &&
     only!.label.confidence === "high"
   );

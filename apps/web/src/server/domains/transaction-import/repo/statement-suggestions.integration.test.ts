@@ -1394,7 +1394,7 @@ describe("statement Transaction suggestions", () => {
       clean: false,
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
       // The hold's own pending refs never read as another charge's claim.
-      candidates: [expect.objectContaining({ claimed: false })],
+      candidates: [expect.objectContaining({ eligibility: "explicit" })],
     });
     await accept(ctx, posted!);
     const states = Object.fromEntries(
@@ -3494,7 +3494,8 @@ describe("statement Transaction suggestions", () => {
   // Failure mode: once one of two same-amount charges is attached, the other
   // has no unmatched sibling left, so a model "same" alone would bulk-attach a
   // second real charge onto the transaction that already settles the first.
-  it("never cleans an attach to a transaction another charge already settles", async () => {
+  // The settled transaction stays listed as context and the charge creates.
+  it("recommends create beside a transaction another charge already settles", async () => {
     await card(ctx);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
     await record(
@@ -3516,13 +3517,12 @@ describe("statement Transaction suggestions", () => {
     const [second] = await readPendingStatements(ctx);
     expect(second).toMatchObject({
       rawDescription: "EXAMPLE CAFE 0002",
-      recommended: "attach",
+      recommended: "create",
       siblings: 0,
-      clean: false,
       candidates: [
         expect.objectContaining({
-          claimed: true,
-          label: expect.objectContaining({ same: "same", confidence: "high" }),
+          eligibility: "context",
+          contextReason: "claimed",
         }),
       ],
     });
@@ -3637,7 +3637,7 @@ describe("statement Transaction suggestions", () => {
       expect(second).toMatchObject({
         recommended: "attach",
         clean: true,
-        candidates: [expect.objectContaining({ claimed: false })],
+        candidates: [expect.objectContaining({ eligibility: "eligible" })],
       });
     },
   );

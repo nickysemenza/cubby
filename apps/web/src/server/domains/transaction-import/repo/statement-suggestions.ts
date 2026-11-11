@@ -14,7 +14,6 @@ import { type RunId } from "@cubby/schemas/identifiers";
 import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
-import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import {
   type StatementCounterparty,
   type StatementKindVotes,
@@ -60,7 +59,6 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
-import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialTransactionImport,
@@ -78,7 +76,7 @@ import {
   chargeStateOf,
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
-  recommendedWithLabels,
+  statementRecommendation,
   pendingSuggestion,
   sourceSuggestionAutomaticEligible,
   suggestionField,
@@ -120,6 +118,10 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import {
+  eligibleTargets,
+  type ClassifiedTarget,
+} from "~/server/generic/suggestions/repo/eligible-targets";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
   publishSuggestion as publishStoredSuggestion,
@@ -761,6 +763,20 @@ const uniqueCharges = (charges: readonly ChargeRef[]) =>
       all.findIndex((other) => chargeId(other) === chargeId(charge)) === index,
   );
 
+const EXPLICIT = { eligibility: "explicit", contextReason: null } as const;
+
+function candidateEligibility(
+  classified: readonly ClassifiedTarget[] | undefined,
+  transactionId: string,
+): Pick<StatementTransactionCandidate, "eligibility" | "contextReason"> {
+  const target = classified?.find(
+    (candidate) => candidate.id === transactionId,
+  );
+  return target
+    ? { eligibility: target.eligibility, contextReason: target.reason }
+    : { eligibility: "eligible", contextReason: null };
+}
+
 type CopyOutcome = {
   /** A copy whose event has no booked Transaction yet publishes nothing. */
   waiting: boolean;
@@ -794,15 +810,7 @@ function pairCopies(
     return { ...none, waiting: true };
   if (pairing.kind === "ambiguous")
     return { ...none, siblings: pairing.others };
-  if (pairing.kind === "primary") {
-    if (!state.hold)
-      candidates.splice(
-        0,
-        candidates.length,
-        ...candidates.filter((candidate) => !candidate.claimed),
-      );
-    return { ...none, copies: pairing.copies };
-  }
+  if (pairing.kind === "primary") return { ...none, copies: pairing.copies };
   const pairedIndex = candidates.findIndex(
     (candidate) => candidate.transactionId === pairing.transactionId,
   );
@@ -814,58 +822,10 @@ function pairCopies(
         .filter((member) => member.charge.source !== charge.source)
         .map((member) => member.charge),
     };
-  candidates.unshift(...candidates.splice(pairedIndex, 1));
+  const [paired] = candidates.splice(pairedIndex, 1);
+  // Its primary from another source owns it at equal cents: evidence names it.
+  candidates.unshift({ ...paired!, ...EXPLICIT });
   return { ...none, pairedTransactionId: pairing.transactionId };
-}
-
-/**
- * Candidates per charge that already hold a settlement ref of another live
- * charge from the same source. Siblings only count unmatched charges, so once
- * one of two same-amount charges is attached, this is what still tells the
- * other one apart from a re-export of the same money.
- */
-async function claimedCandidates(
-  db: Database,
-  pairs: readonly { charge: ChargeRef; transactionId: string }[],
-): Promise<Map<string, Set<string>>> {
-  const result = new Map<string, Set<string>>();
-  if (!pairs.length) return result;
-  const values = sql.join(
-    pairs.map(
-      ({ charge, transactionId }) =>
-        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${transactionId}::uuid)`,
-    ),
-    sql`, `,
-  );
-  const rows = await unwrapDb(db).execute<{
-    key: string;
-    transactionId: string;
-  }>(
-    sql`
-    WITH p AS MATERIALIZED (
-      SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", "transactionId")
-    ),
-    owners AS MATERIALIZED (
-      SELECT p.key, p."transactionId" FROM p
-      JOIN "SourceOccurrence" owner ON owner."acceptedTransactionId" = p."transactionId"
-        AND owner.source = p.source AND owner.shortcode <> p."chargeKey"
-        AND owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND owner."supersededByOccurrenceId" IS NULL
-      UNION
-      SELECT p.key, p."transactionId" FROM p
-      JOIN "FinancialEvidenceAlias" unresolved ON unresolved."historicalTransactionId" = p."transactionId"
-        AND unresolved.source = p.source
-      LEFT JOIN "SourceOccurrence" retained ON retained.id=unresolved."occurrenceId"
-      WHERE retained.id IS NULL OR retained."acceptedTransactionId" IS DISTINCT FROM unresolved."historicalTransactionId"
-    ) SELECT DISTINCT key, "transactionId" FROM owners
-  `,
-    "objects",
-  );
-  for (const row of rows) {
-    const set = result.get(row.key) ?? new Set<string>();
-    set.add(String(row.transactionId));
-    result.set(row.key, set);
-  }
-  return result;
 }
 
 type MerchantHistory = {
@@ -1369,20 +1329,34 @@ export async function buildChargeProposals(
     ),
     ledgerPartyId: account.ledgerPartyId,
   }));
-  const [pendingTransactions, siblings, claimed, history, copies] =
+  const [pendingTransactions, siblings, eligibility, history, copies] =
     await Promise.all([
       statementPendingTransactions(db, accountIds),
       siblingsFor(db, grouped),
-      claimedCandidates(
+      eligibleTargets(
         db,
-        grouped.flatMap(({ charge }) =>
-          (
-            previewByKey.get(chargeId(charge))?.existingTransactions ?? []
-          ).flatMap((existing) => {
-            const transactionId = ids.get(existing.id);
-            return transactionId ? [{ charge, transactionId }] : [];
-          }),
-        ),
+        grouped.flatMap(({ charge }) => {
+          const row = previewByKey.get(chargeId(charge));
+          if (!row) return [];
+          const existing = row.existingTransactions.flatMap((candidate) => {
+            const transactionId = ids.get(candidate.id);
+            return transactionId
+              ? [{ transactionId, provider: candidate.provider === true }]
+              : [];
+          });
+          return [
+            {
+              key: chargeId(charge),
+              kind: "financialTransaction" as const,
+              ids: existing.map((candidate) => candidate.transactionId),
+              explicitIds: existing
+                .filter((candidate) => candidate.provider)
+                .map((candidate) => candidate.transactionId),
+              amountMinor: cents(row.proposed.amount),
+              owner: { source: charge.source, chargeKey: charge.chargeKey },
+            },
+          ];
+        }),
       ),
       merchantHistory(
         db,
@@ -1464,8 +1438,10 @@ export async function buildChargeProposals(
                   date: canonical.statementDate,
                 }),
                 label: null,
-                claimed:
-                  claimed.get(chargeId(charge))?.has(transactionId) ?? false,
+                ...candidateEligibility(
+                  eligibility.get(chargeId(charge)),
+                  transactionId,
+                ),
               },
             ]
           : [];
@@ -1489,7 +1465,7 @@ export async function buildChargeProposals(
     for (const hold of holds) {
       const listed = candidates.find((c) => c.transactionId === hold.id);
       // The hold carries its own pending rows' refs; that is what supersede settles.
-      if (listed) listed.claimed = false;
+      if (listed) Object.assign(listed, EXPLICIT);
       else
         candidates.push({
           transactionId: hold.id,
@@ -1512,7 +1488,7 @@ export async function buildChargeProposals(
             },
           ),
           label: null,
-          claimed: false,
+          ...EXPLICIT,
         });
     }
     candidates.sort(
@@ -1562,15 +1538,8 @@ export async function buildChargeProposals(
       ...(siblings.get(chargeId(charge)) ?? []),
       ...copy.siblings,
     ]);
-    const recommended = matchedCode
-      ? "book"
-      : hold
-        ? "supersede"
-        : candidates.length
-          ? "attach"
-          : "create";
     const judgment: StatementTransactionJudgment = {
-      recommended,
+      recommended: "create",
       reviewReason,
       accountId,
       statementDate: canonical.statementDate,
@@ -1609,6 +1578,7 @@ export async function buildChargeProposals(
       clean: false,
       ...(matchedCode && { matchedTransactionId: ids.get(matchedCode) }),
     };
+    judgment.recommended = statementRecommendation(judgment);
     pending.push({ charge, canonical, rows, judgment });
   }
   await prepareStatementSpendingPage(
@@ -1697,7 +1667,7 @@ export async function labelledProposal(
 ): Promise<ChargeProposal> {
   const judgment = {
     ...labelled,
-    recommended: recommendedWithLabels(labelled),
+    recommended: statementRecommendation(labelled),
   };
   suggestionJudgments.statement_transaction.parse(judgment);
   return {
@@ -1906,7 +1876,16 @@ async function postedTwinExists(
   );
 }
 
-type PublishOutcome = "published" | "unchanged" | "suppressed" | "settled";
+type PublishOutcome =
+  | "published"
+  | "unchanged"
+  | "suppressed"
+  | "settled"
+  | "held";
+
+const isIdentityHold = (judgment: StatementTransactionJudgment) =>
+  judgment.reviewReason === PROVIDER_IDENTITY_REVIEW ||
+  judgment.reviewReason === OCCURRENCE_IDENTITY_REVIEW;
 
 const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   !judgment.reviewReason &&
@@ -2229,7 +2208,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   SuggestionFamily<
     StatementCandidate,
     ChargePublicationHistory,
-    "settled",
+    "settled" | "held",
     {
       states: Map<string, ChargeState> | null;
       history: Map<string, ChargePublicationHistory[]>;
@@ -2272,6 +2251,9 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     !isSettledBooking(proposal.judgment),
   async precheck(tx, { proposal, labelPublication }, rows, _producer, context) {
     const { charge, judgment } = proposal;
+    // Source identity review owns an unproven occurrence; a Suggestion that can
+    // only be dismissed would duplicate that queue.
+    if (isIdentityHold(judgment)) return { kind: "retire", reason: "held" };
     if (
       rows.some(
         (row) => row.active && row.status === suggestionStatus.enum.pending,
@@ -2375,7 +2357,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       entry.label = previous.candidates.find(
         (saved) => saved.transactionId === entry.transactionId,
       )!.label;
-    judgment.recommended = recommendedWithLabels(judgment);
+    judgment.recommended = statementRecommendation(judgment);
     judgment.spending = await prepareStatementSpending(
       tx,
       judgment,
@@ -2693,7 +2675,7 @@ function statementOutcome(
   published: SuggestionOutcome<
     StatementCandidate,
     ChargePublicationHistory,
-    "settled"
+    "settled" | "held"
   >,
   requested: SuggestionProducer,
 ): StatementPublishResult {

@@ -3537,8 +3537,10 @@ same record and field. Historical hashes, model versions, provenance and actor i
 reconstructed.
 
 `suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` and
-`suggestions.review_batch`) settle immutable review independently of apply intent; each batch item
-has its own outcome. A decision records correct, wrong, uncertain and presentation-only dismissal
+`suggestions.review_batch`) record immutable review; each batch item has its own outcome. Draft and
+history verdicts settle on their own; an applying review commits with its application, so a stale
+or refused application records nothing and the same operation id may retry with a corrected review.
+A decision records correct, wrong, uncertain and presentation-only dismissal
 separately, with an explicit correction-presence discriminator so a corrected JSON null survives.
 Draft acceptance records history; saved application commits a separate immutable command-bound
 receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each

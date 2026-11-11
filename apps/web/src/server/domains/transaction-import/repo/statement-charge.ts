@@ -45,27 +45,40 @@ export const OCCURRENCE_IDENTITY_REVIEW =
   "This observation has no ready, proven source occurrence. Automatic financial actions remain blocked; retain its evidence and money unchanged.";
 
 /**
- * Attach is withheld when every candidate is a different amount and the model
- * is confident each is a different charge. Labels only withhold the
- * recommendation; the candidates stay listed and attachable.
+ * Book a matched charge, supersede a hold, attach only to a candidate that can
+ * take this charge, otherwise create. A context candidate (settled elsewhere,
+ * wrong sign or amount) never earns attach, and neither does one the model is
+ * confident is a different charge at a different amount. Candidates stay
+ * listed and attachable either way.
  */
-export function recommendedWithLabels(
-  judgment: StatementTransactionJudgment,
+export function statementRecommendation(
+  judgment: Pick<
+    StatementTransactionJudgment,
+    "candidates" | "matchedTransactionId"
+  > & {
+    supersede: unknown;
+    create: Pick<
+      NonNullable<StatementTransactionJudgment["create"]>,
+      "amount"
+    > | null;
+    recommended?: StatementTransactionJudgment["recommended"];
+  },
 ): StatementTransactionJudgment["recommended"] {
-  const create = judgment.create;
-  if (
-    judgment.recommended === "attach" &&
-    create &&
-    judgment.candidates.length > 0 &&
-    judgment.candidates.every(
-      (candidate) =>
-        cents(candidate.amount) !== cents(create.amount) &&
+  if (judgment.recommended === "void") return "void";
+  if (judgment.matchedTransactionId) return "book";
+  if (judgment.supersede) return "supersede";
+  const amount = judgment.create ? cents(judgment.create.amount) : null;
+  return judgment.candidates.some(
+    (candidate) =>
+      candidate.eligibility !== "context" &&
+      !(
+        cents(candidate.amount) !== amount &&
         candidate.label?.same === "different" &&
-        candidate.label.confidence === "high",
-    )
+        candidate.label.confidence === "high"
+      ),
   )
-    return "create";
-  return judgment.recommended;
+    ? "attach"
+    : "create";
 }
 
 /** Membership and equal bank facts cannot establish an independent occurrence. */

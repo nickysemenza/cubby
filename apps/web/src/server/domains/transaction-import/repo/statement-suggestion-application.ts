@@ -13,12 +13,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { suggestionTable } from "~/server/db/schema";
+import { financialTransaction, suggestionTable } from "~/server/db/schema";
 import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { recommendedWithLabels } from "~/server/domains/transaction-import/repo/statement-charge";
+import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementCandidateSubject,
   statementLabelSubject,
@@ -115,55 +115,85 @@ function withPublishedLabels(
         transfer: judgment.transfer,
       }),
     );
-  judgment.recommended = recommendedWithLabels(judgment);
+  judgment.recommended = statementRecommendation(judgment);
   return judgment;
 }
 
 /**
- * What the member reviewed: the action, the money and dates it writes and the
- * transactions it may touch. Account history, sibling and snapshot drift is
- * not here: selection is recomputed at apply, and the booking outcome is
- * compared separately.
+ * What applying `application` writes: the money and dates of a create, or the
+ * one Transaction an attach, supersede, void or book touches. Other candidates,
+ * siblings, copies and the recommendation are not here, so a booking elsewhere
+ * on the account cannot invalidate a review whose write is unchanged.
  */
-function decisiveJudgment(judgment: StatementTransactionJudgment) {
-  const create = judgment.create;
-  return {
-    recommended: judgment.recommended,
+function statementApplicationTerms(
+  judgment: StatementTransactionJudgment,
+  action: StatementTransactionApplication["action"],
+  /** The attach target's id; null attaches to the only candidate. */
+  targetId: string | null,
+) {
+  const base = {
     accountId: judgment.accountId,
     statementDate: judgment.statementDate,
     providerStatus: judgment.providerStatus,
-    "create.kind": create?.kind ?? null,
-    "create.amount": create?.amount ?? null,
-    "create.status": create?.status ?? null,
-    "create.transactionDate": create?.transactionDate ?? null,
-    "create.postedDate": create?.postedDate ?? null,
-    "create.merchant": create?.merchant ?? null,
-    "create.rawDescription": create?.rawDescription ?? null,
-    "create.sourceCategory": create?.sourceCategory ?? null,
-    "create.notes": create?.notes ?? null,
-    "create.sourceRef": create?.sourceRef ?? null,
-    candidates: judgment.candidates
-      .map(({ transactionId, amount, diff, claimed }) => ({
-        transactionId,
-        amount,
-        diff,
-        claimed,
-      }))
-      .sort((left, right) =>
-        left.transactionId.localeCompare(right.transactionId),
-      ),
-    supersede: judgment.supersede,
-    // Any covering import proves the vanish; only the voided hold was reviewed.
-    void: judgment.void?.transactionId ?? null,
-    matchedTransactionId: judgment.matchedTransactionId ?? null,
-    // A copy booked since review turns a create into an attach to its Transaction.
-    pairedTransactionId: judgment.pairedTransactionId,
-    copies: judgment.copies.map((copy) => `${copy.source}:${copy.chargeKey}`),
-    transfer: judgment.transfer,
-    transferPair: judgment.transferPair
-      ? { key: judgment.transferPair.key, clean: judgment.transferPair.clean }
-      : null,
   };
+  switch (action) {
+    case "create": {
+      const create = judgment.create;
+      return {
+        ...base,
+        "create.kind": create?.kind ?? null,
+        "create.amount": create?.amount ?? null,
+        "create.status": create?.status ?? null,
+        "create.transactionDate": create?.transactionDate ?? null,
+        "create.postedDate": create?.postedDate ?? null,
+        "create.merchant": create?.merchant ?? null,
+        "create.rawDescription": create?.rawDescription ?? null,
+        "create.sourceCategory": create?.sourceCategory ?? null,
+        "create.notes": create?.notes ?? null,
+        "create.sourceRef": create?.sourceRef ?? null,
+        // A copy booked since review turns a create into an attach to its Transaction.
+        pairedTransactionId: judgment.pairedTransactionId,
+        transfer: judgment.transfer,
+        transferPair: judgment.transferPair
+          ? {
+              key: judgment.transferPair.key,
+              clean: judgment.transferPair.clean,
+            }
+          : null,
+      };
+    }
+    case "attach": {
+      const target = targetId
+        ? judgment.candidates.find(
+            (candidate) => candidate.transactionId === targetId,
+          )
+        : judgment.candidates.filter(
+              (candidate) => candidate.eligibility !== "context",
+            ).length === 1
+          ? judgment.candidates.find(
+              (candidate) => candidate.eligibility !== "context",
+            )
+          : undefined;
+      return {
+        ...base,
+        "attach.transactionId": target?.transactionId ?? null,
+        "attach.amount": target?.amount ?? null,
+        "attach.diff": target?.diff ?? null,
+        "attach.eligibility": target?.eligibility ?? null,
+        pairedTransactionId: judgment.pairedTransactionId,
+      };
+    }
+    case "supersede":
+      return { ...base, supersede: judgment.supersede };
+    case "void":
+      // Any covering import proves the vanish; only the voided hold was reviewed.
+      return { ...base, void: judgment.void?.transactionId ?? null };
+    case "book":
+      return {
+        ...base,
+        matchedTransactionId: judgment.matchedTransactionId ?? null,
+      };
+  }
 }
 
 const reviewedBooking = (plan: FinancialSpendingPlan | null | undefined) =>
@@ -212,9 +242,18 @@ export async function currentStatementApplication(
   if (rebuilt.judgment.reviewReason)
     throw refuseStatementApplication(rebuilt.judgment.reviewReason);
   const judgment = withPublishedLabels(rebuilt.judgment, published);
+  const targetId = application.transactionId
+    ? ((
+        await getDb(db)
+          .select({ id: financialTransaction.id })
+          .from(financialTransaction)
+          .where(eq(financialTransaction.shortcode, application.transactionId))
+          .limit(1)
+      )[0]?.id ?? null)
+    : null;
   const changed = changedFields(
-    decisiveJudgment(published),
-    decisiveJudgment(judgment),
+    statementApplicationTerms(published, application.action, targetId),
+    statementApplicationTerms(judgment, application.action, targetId),
   );
   // The reviewed ready booking applies as shown unless the member chose
   // another action, kind or booking, which is replanned at apply.
@@ -309,7 +348,9 @@ export async function statementApplicationSelection(
         );
       const rejected = new Set(application.rejectedCandidateIds);
       const live = judgment.candidates.filter(
-        (candidate) => !rejected.has(codeOf(candidate.transactionId)),
+        (candidate) =>
+          candidate.eligibility !== "context" &&
+          !rejected.has(codeOf(candidate.transactionId)),
       );
       if (live.length)
         throw refuseStatementApplication(
@@ -318,19 +359,26 @@ export async function statementApplicationSelection(
       break;
     }
     case "attach": {
-      if (!application.transactionId && judgment.candidates.length > 1)
+      const attachable = judgment.candidates.filter(
+        (candidate) => candidate.eligibility !== "context",
+      );
+      if (!application.transactionId && attachable.length > 1)
         throw refuseStatementApplication(
-          `Name the transaction to attach to: ${judgment.candidates.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
+          `Name the transaction to attach to: ${attachable.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
         );
       const target = application.transactionId
         ? judgment.candidates.find(
             (candidate) =>
               codeOf(candidate.transactionId) === application.transactionId,
           )
-        : judgment.candidates[0];
+        : attachable[0];
       if (!target || !judgment.create)
         throw refuseStatementApplication(
           "The chosen transaction is no longer a candidate for this charge. Review again.",
+        );
+      if (target.eligibility === "context")
+        throw refuseStatementApplication(
+          `${codeOf(target.transactionId)} cannot take this charge (${target.contextReason ?? "context"}); attach another transaction or create one.`,
         );
       for (const field of new Set(application.fields))
         if (!target.diff.includes(field))

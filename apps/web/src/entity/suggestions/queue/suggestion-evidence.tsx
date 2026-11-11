@@ -829,9 +829,9 @@ function StatementEvidence({ row }: { row: SourceTransactionRecord }) {
                         ; advisory
                       </span>
                     ) : null}
-                    {candidate.claimed ? (
-                      <span className="text-warning-ink">
-                        Already settles another charge from this source
+                    {candidate.eligibility === "context" ? (
+                      <span className="text-muted-foreground">
+                        {contextLabel[candidate.contextReason ?? "kind"]}
                       </span>
                     ) : null}
                   </div>
@@ -1276,6 +1276,16 @@ function TransferPairEvidence({
 }
 
 /** A row's own evidence, opened beneath it. */
+
+/** Why a listed candidate cannot take this charge; it never blocks a create. */
+const contextLabel = {
+  settled: "Context: already fully settled",
+  claimed: "Context: settles another charge from this source",
+  sign: "Context: opposite direction",
+  amount: "Context: another source's charge at a different amount",
+  kind: "Context: not an ordinary transaction",
+  void: "Context: voided",
+} as const;
 export function SuggestionEvidence({ row }: { row: SuggestionListRow }) {
   return (
     <div className="px-3 py-2.5 pl-12">
