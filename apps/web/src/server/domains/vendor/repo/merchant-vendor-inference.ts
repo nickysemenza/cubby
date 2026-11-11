@@ -15,7 +15,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { textArrayParam } from "~/server/db/helpers/requested";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { possibleVendorLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -118,7 +118,7 @@ export async function vendorStatementLabels(
   }>(sql`
     SELECT "vendorId", array_agg(DISTINCT "merchantKey" ORDER BY "merchantKey") AS labels
     FROM (${merchantVendorCandidatesSql()}) history
-    WHERE "vendorId" = ANY(${uuidArrayParam(ids)})
+    WHERE "vendorId" = ANY(${textArrayParam(ids)})
     GROUP BY "vendorId"
   `);
   return new Map(
