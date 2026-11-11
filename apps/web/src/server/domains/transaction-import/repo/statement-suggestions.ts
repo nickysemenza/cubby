@@ -45,6 +45,7 @@ import { sql, and, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
@@ -3167,6 +3168,37 @@ async function prepareStatementGenerationPage(
       return proposal ? [proposal] : [];
     });
   }
+}
+
+/**
+ * Refresh named charges once the writing transaction commits. Calls in one
+ * transaction or MCP batch coalesce per source, so a batch regenerates each
+ * charge once after its last write.
+ */
+export async function regenerateChargesAfterCommit(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  for (const [source, items] of Map.groupBy(charges, (charge) => charge.source))
+    await runAfterCommit(db, {
+      key: `statement-charges:${source}`,
+      items,
+      flush: async (committed, queued: readonly ChargeRef[]) => {
+        try {
+          await regenerateCharges(committed, [
+            ...new Map(
+              queued.map((charge) => [chargeId(charge), charge]),
+            ).values(),
+          ]);
+        } catch (error) {
+          // SILENT: advisory refresh only; the write committed and each
+          // charge's own accept rechecks evidence, so the next Sweep repairs it.
+          log.error("Charge suggestion refresh failed", {
+            error: scrubErrorMessage(String(error)),
+          });
+        }
+      },
+    });
 }
 
 /** Recompute and publish named charges, e.g. the siblings of an applied one. */

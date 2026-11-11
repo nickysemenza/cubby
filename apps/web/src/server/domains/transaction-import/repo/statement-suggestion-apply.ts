@@ -10,12 +10,10 @@ import {
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
-import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
@@ -34,7 +32,7 @@ import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   type ChargeProposal,
-  regenerateCharges,
+  regenerateChargesAfterCommit,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -50,8 +48,6 @@ import {
   statementApplicationSelection,
   statementTransactionPatch,
 } from "./statement-suggestion-application";
-
-const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
@@ -241,25 +237,14 @@ export async function applyStatementTransactionSuggestion(
   }
   // A sibling's or copy's evidence included this charge being unmatched;
   // refresh it now rather than leaving it stale until a whole-ledger pass.
-  if (judgment.siblings.length || judgment.copies.length)
-    await runAfterCommit(db, async (committed) => {
-      try {
-        await regenerateCharges(committed, [
-          ...judgment.siblings.map((sibling) =>
-            typeof sibling === "string"
-              ? { source: charge.source, chargeKey: sibling }
-              : sibling,
-          ),
-          ...judgment.copies,
-        ]);
-      } catch (error) {
-        // SILENT: advisory refresh only; the apply committed and the sibling's
-        // own accept rechecks evidence, so the next Refresh repairs it.
-        log.error("Sibling suggestion refresh failed", {
-          error: scrubErrorMessage(String(error)),
-        });
-      }
-    });
+  await regenerateChargesAfterCommit(db, [
+    ...judgment.siblings.map((sibling) =>
+      typeof sibling === "string"
+        ? { source: charge.source, chargeKey: sibling }
+        : sibling,
+    ),
+    ...judgment.copies,
+  ]);
 }
 
 type Effects = {
