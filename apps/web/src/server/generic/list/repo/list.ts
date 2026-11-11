@@ -753,6 +753,10 @@ export function listScaffold<
     parent: AnyColumn,
     filtered: SQL | undefined,
   ): SQL => {
+    // TODO: page `list.tree.batch` members; until then the scope is refused
+    // rather than read as roots.
+    if (nesting.scope === "batch")
+      throw new Error(`${entity} cannot page a list batch yet`);
     if (nesting.scope === "children") {
       const requested = shortcodeSetCondition(sql`${table.shortcode}`, [
         nesting.parentId,

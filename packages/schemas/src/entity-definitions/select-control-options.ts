@@ -120,6 +120,8 @@ type Presentation = {
   quiet?: true;
   /** A terminal value: a passed deadline on a closed record is not overdue. */
   closed?: true;
+  /** The state phase; unset derives it from `closed` (`optionPhase`). */
+  phase?: import("./definition").EntityPhase;
 };
 /**
  * Marks `value` as the roster's quiet option. Controls carry it; filter presets share the

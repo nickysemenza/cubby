@@ -19,6 +19,7 @@ import {
   nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
+  SHARED_LIST_RENDERERS,
   type NativeCoverageEntry,
   type NativeCoverageKind,
 } from "./native-coverage";
@@ -39,7 +40,10 @@ const fieldRenderers = (pick: (field: Field) => string | null | undefined) =>
 /** The ids the manifest declares today, per kind, spelled as the Swift enums spell them. */
 const vocabulary = {
   control: fieldRenderers((field) => field.control?.renderer),
-  list: fieldRenderers((field) => field.display.renderer?.list),
+  list: used([
+    ...fieldRenderers((field) => field.display.renderer?.list),
+    ...SHARED_LIST_RENDERERS,
+  ]),
   detail: fieldRenderers((field) => field.display.renderer?.detail),
   heroAction: used(
     entityKeys.flatMap((key) => entitySummary[key].detail.hero.actions),

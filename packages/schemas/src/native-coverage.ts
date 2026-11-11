@@ -127,6 +127,13 @@ const STRUCTURED_VALUE_RENDERERS = [
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
 
+/**
+ * Entity-independent list cells any declaration may name: the `presentation.state` badge and
+ * the `presentation.progress` meter. They stay classified when no declaration names them;
+ * native draws their fields through the generic row from the declared labels.
+ */
+export const SHARED_LIST_RENDERERS = ["state", "progress"] as const;
+
 /** Whether a structured editor needs an input schema, including fields native hands off to web. */
 export const drawsFromValueSchema = (
   entity: string,
@@ -295,6 +302,7 @@ export const nativeCoverage = {
       "run-activity",
       "run-waiting-on",
     ]),
+    ...generic(SHARED_LIST_RENDERERS),
     // The Image row IS the picture: native draws it as the row thumbnail.
   },
   detail: {
