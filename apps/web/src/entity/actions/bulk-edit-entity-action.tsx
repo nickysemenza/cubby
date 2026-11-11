@@ -32,6 +32,7 @@ import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-s
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
+import type { entityBulkUpdateResultSchema } from "~/server/entity-kernel/contracts";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { AliasesField } from "~/ui/forms/aliases-field";
@@ -345,13 +346,15 @@ export function BulkEditDialogBody({
   onSubmit,
   isPending,
   searchProviderFor,
+  skipped = [],
 }: {
   entity: Entity;
   items: readonly BulkEditRow[];
   fieldKeys?: readonly string[];
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: Readonly<BulkEditDraft>) => Promise<void>;
+  onSubmit: (data: Readonly<BulkEditDraft>) => Promise<void | boolean>;
   isPending: boolean;
+  skipped?: z.infer<typeof entityBulkUpdateResultSchema>["skipped"];
   /** Test seam: a fake reference-field search provider, in place of the real
    * `requireReferenceEntitySearch` lookup — see {@link SearchProviderFor}. */
   searchProviderFor?: SearchProviderFor;
@@ -543,8 +546,8 @@ export function BulkEditDialogBody({
         .json()
         .parse(value === "" && field?.reference ? null : (value ?? null));
     }
-    await onSubmit(data);
-    if (singleItem) {
+    const accepted = await onSubmit(data);
+    if (singleItem && accepted !== false) {
       try {
         await receiptHandler.current?.(singleItem.id);
       } catch (error) {
@@ -593,6 +596,21 @@ export function BulkEditDialogBody({
         unchangedLabel="already set to this"
         onSubmit={handleSubmit}
         isPending={isPending}
+        error={
+          skipped.length > 0 && (
+            <div aria-live="polite">
+              <p>Some records were skipped:</p>
+              <ul>
+                {skipped.map((row) => (
+                  <li key={row.id}>
+                    {items.find((item) => item.id === row.id)?.name ?? row.id} (
+                    {row.id}): {row.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        }
         submissionDisabled={dirtyKeys.length === 0}
       >
         {suggestionStaticBasis ? (
@@ -651,6 +669,9 @@ export function useBulkEditEntityAction(
 ): EntityActionHandles {
   const queryClient = useQueryClient();
   const [items, setItems] = useState<BulkEditRow[]>([]);
+  const [skipped, setSkipped] = useState<
+    z.infer<typeof entityBulkUpdateResultSchema>["skipped"]
+  >([]);
   const mutation = useActionMutation({
     mutationFn: bulkUpdateMutationOptionsFactory(entity),
     success: (data) =>
@@ -659,6 +680,7 @@ export function useBulkEditEntityAction(
   const stage = useCallback(
     async (rows: readonly EntityActionRow[]) => {
       await ensureEntityMetadata(queryClient, entity);
+      setSkipped([]);
       setItems(rows.map(asBulkEditRow));
     },
     [entity, queryClient],
@@ -666,11 +688,17 @@ export function useBulkEditEntityAction(
 
   const submit = useCallback(
     async (data: Readonly<BulkEditDraft>) => {
-      await mutation.mutateAsync({
+      const result = await mutation.mutateAsync({
         ids: items.map((item) => item.id),
         data: { ...data },
       });
-      setItems([]);
+      setSkipped(result.receipt.skipped);
+      setItems(
+        items.filter((item) =>
+          result.receipt.skipped.some((row) => row.id === item.id),
+        ),
+      );
+      return result.receipt.skipped.length === 0;
     },
     // oxlint-disable-next-line react/exhaustive-deps -- mutation wrappers change identity every render; their operation contracts are stable.
     [items],
@@ -700,6 +728,7 @@ export function useBulkEditEntityAction(
         }}
         onSubmit={submit}
         isPending={mutation.isPending}
+        skipped={skipped}
       />
     ),
   };

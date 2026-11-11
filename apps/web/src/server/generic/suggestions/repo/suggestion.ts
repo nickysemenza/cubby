@@ -1,10 +1,7 @@
 import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import {
   suggestionChildHandle,
-  suggestionPublication,
-  mailDecisionFamily,
-  suggestionJudgments,
-  suggestionProjectionTargets,
+  type suggestionPublication,
   feedbackAuthority,
   feedbackEvent,
   suggestionDecision,
@@ -13,7 +10,7 @@ import {
   CORRECTION_OUTCOME_RECEIPT_KIND,
   correctionAuthorityReceiptKinds,
 } from "@cubby/schemas/suggestion-correction";
-import { eq, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -24,7 +21,6 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { suggestionTable } from "~/server/db/retained-tables";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
-import { recordChange } from "~/server/generic/changes/repo/change";
 
 import {
   decisionForOperation,
@@ -78,126 +74,13 @@ export const automaticApplicationRule = (suggestionId: SQL) => sql<
 export const matchedRulesOf = (data: SQL) =>
   sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
-/** Publishes immutable evidence atomically, returning one row per input in order. */
-export async function publishSuggestions(
-  db: Database,
-  entries: readonly {
-    input: z.input<typeof suggestionPublication>;
-    projection?: Partial<typeof suggestionTable.$inferInsert>;
-  }[],
-) {
-  // Validate every publication and creation snapshot before any writes.
-  const prepared = entries.map(({ input: raw, projection = {} }) => {
-    const input = suggestionPublication.parse(raw);
-    suggestionJudgments[input.family].parse(input.judgment);
-    const suggestedValue =
-      projection.suggestedValue === undefined
-        ? input.judgment
-        : projection.suggestedValue;
-    if (mailDecisionFamily.safeParse(input.family).success)
-      throw new Error("Mail decisions live with their domain owners");
-    const { entity, recordId } = input.subject;
-    const state = {
-      // An answer for an unsaved record has no target to validate yet.
-      ...(recordId === null
-        ? { entity, recordId }
-        : suggestionProjectionTargets[input.family].parse({
-            entity,
-            recordId,
-            ...projection,
-          })),
-      field: input.subject.kind === "field" ? input.subject.field : "",
-      fingerprint: input.fingerprint,
-      ...projection,
-      suggestedValue,
-    };
-    return { input, state };
-  });
-  if (!prepared.length) return [];
-  const publications = new Map<string, (typeof prepared)[number]>();
-  for (const entry of prepared) {
-    const previous = publications.get(entry.input.publicationKey);
-    if (previous && !isEqual(previous.input, entry.input))
-      throw new Error(
-        "Suggestion publication retry changed immutable evidence",
-      );
-    // Sequential replays keep the first creation projection for this key.
-    if (!previous) publications.set(entry.input.publicationKey, entry);
-  }
-  return withTransactionDatabase(db, async (transactionDb) => {
-    const client = getDb(transactionDb);
-    const inserted = await client
-      .insert(suggestionTable)
-      .values(
-        [...publications.values()].map(({ input, state }) => ({
-          ...input,
-          ...state,
-          family: input.family,
-          judgment:
-            input.judgment === null ? sql`'null'::jsonb` : input.judgment,
-          // A JSON null suggestion stays a JSON value, not SQL NULL.
-          suggestedValue:
-            state.suggestedValue === null
-              ? sql`'null'::jsonb`
-              : state.suggestedValue,
-        })),
-      )
-      .onConflictDoNothing({ target: suggestionTable.publicationKey })
-      .returning();
-    const rowsByKey = new Map(inserted.map((row) => [row.publicationKey, row]));
-    const conflicts = [...publications.keys()].filter(
-      (key) => !rowsByKey.has(key),
-    );
-    if (conflicts.length) {
-      const existing = await client
-        .select()
-        .from(suggestionTable)
-        .where(inArray(suggestionTable.publicationKey, conflicts));
-      for (const row of existing) rowsByKey.set(row.publicationKey, row);
-    }
-    const rows = prepared.map(({ input }) => {
-      const row = rowsByKey.get(input.publicationKey);
-      if (!row) throw new Error("Suggestion publication returned no row");
-      // State may later take its own fingerprint; a retry compares what it proposed.
-      if (
-        !isEqual(
-          { ...input, fingerprint: null },
-          { ...suggestionPublication.parse(row), fingerprint: null },
-        )
-      )
-        throw new Error(
-          "Suggestion publication retry changed immutable evidence",
-        );
-      return row;
-    });
-    if (inserted.length)
-      await recordChange(transactionDb, {
-        kind: "projection",
-        categories: [
-          ...new Set([
-            "ai",
-            "suggestions",
-            "problems",
-            ...inserted.map((row) => row.entity),
-          ]),
-        ],
-      });
-    return rows;
-  });
-}
+/** Immutable evidence and the creation projection of one Suggestion. */
+export type SuggestionPublication = {
+  input: z.input<typeof suggestionPublication>;
+  projection?: Partial<typeof suggestionTable.$inferInsert>;
+};
 
-/** A publication key names exact immutable evidence, never a mutable slot. */
-export async function publishSuggestion(
-  db: Database,
-  raw: z.input<typeof suggestionPublication>,
-  projection: Partial<typeof suggestionTable.$inferInsert> = {},
-) {
-  const [row] = await publishSuggestions(db, [{ input: raw, projection }]);
-  if (!row) throw new Error("Suggestion publication returned no row");
-  return row;
-}
-
-/** Builds field evidence; publishSuggestions owns immutable publication and replay. */
+/** Builds field evidence; suggestion-publication owns immutable publication and replay. */
 export function fieldSuggestionPublication(
   projection: Omit<
     typeof suggestionTable.$inferInsert,
@@ -206,7 +89,7 @@ export function fieldSuggestionPublication(
     field: string;
     recordId: string;
   },
-): Parameters<typeof publishSuggestions>[1][number] {
+): SuggestionPublication {
   const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
   const model = projection.model ?? "unknown";
   return {
@@ -297,7 +180,9 @@ export async function recordFeedbackWithInsertion(
         ...stored
       } = existing;
       if (!isEqual(event, stored))
-        throw new Error("Immutable Feedback retry changed its event");
+        throw new Error(
+          `Operation ${input.operationId} was already used for a different review; send a new operationId`,
+        );
       return { event: existing, inserted: false };
     }
     const row: StoredDecision = suggestionDecision

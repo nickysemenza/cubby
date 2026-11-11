@@ -56,6 +56,25 @@ interface McpBatchSpec<Output> {
   readonly uniqueIds?: true;
 }
 
+/**
+ * How a paged read's output holds its page (`server/mcp/tools/list-page.ts`).
+ * Paging itself is read from the member's input fields.
+ */
+export interface McpPageSpec {
+  /** The output array one page fills. Default `items`. */
+  readonly items?: string;
+  /**
+   * The rows depend on each other (graph nodes and the edges between them):
+   * an oversized page is read again at half the size instead of cut.
+   */
+  readonly refetch?: true;
+  /**
+   * The rows' child collections are their content (transcript message parts),
+   * so `resultDetail` defaults to full instead of compact.
+   */
+  readonly fullRows?: true;
+}
+
 /** A kernel verb's input: the command object an agent sends. */
 type KernelInput = { readonly [field: string]: JSONType };
 
@@ -88,12 +107,6 @@ export interface McpActionSpec<
   readonly destructive?: true;
   readonly openWorld?: true;
   /**
-   * Refuse unknown input keys instead of stripping them, naming the valid
-   * ones — for filter inputs where a misspelled key would silently widen the
-   * result (the member's own callers keep the lenient schema).
-   */
-  readonly strict?: true;
-  /**
    * A read that may wait on a model (the decision model or another AI call). Its MCP deadline
    * outlasts the model's retry budget instead of using the plain read budget.
    * Writes already have the longer write budget.
@@ -104,6 +117,7 @@ export interface McpActionSpec<
   /** A dedicated render tool's MCP Apps resource; never attach to data tools. */
   readonly uiResourceUri?: string;
   readonly batch?: McpBatchSpec<Projected>;
+  readonly page?: McpPageSpec;
   /**
    * The entity a call acted on, for `McpToolCall.entityKind` (a batch passes
    * its first item). Absent, an input `entity` field is used.
@@ -116,7 +130,7 @@ export type McpActionOverride<Op extends OperationMember = OperationMember> =
   Partial<
     Pick<
       McpActionSpec<Op, ErasedMcpType>,
-      "project" | "output" | "strict" | "batch" | "telemetryEntity"
+      "project" | "output" | "batch" | "page" | "telemetryEntity"
     >
   >;
 

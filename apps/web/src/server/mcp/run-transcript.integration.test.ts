@@ -3,6 +3,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -114,18 +115,23 @@ describe("member Run transcript through MCP", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
-    const read = (runId: string, cursor?: number) =>
+    const read = (runId: string, cursor?: string) =>
       callMcpTool(
         createMcpServer(),
         "run_read",
-        { action: "transcript", runId, limit: 1, cursor },
+        {
+          action: "transcript",
+          runId,
+          pageSize: 1,
+          cursor,
+        },
         mcpContext,
       );
     const first = await read(owned.shortcode);
     expect(first.isError).not.toBe(true);
     expect(first.structuredContent).toMatchObject({
       status: "idle",
-      nextCursor: 1,
+      nextCursor: expect.any(String),
       messages: [
         {
           id: "message-1",
@@ -143,7 +149,11 @@ describe("member Run transcript through MCP", () => {
       ],
       settlements: [{ outcome: "done" }],
     });
-    const second = await read(owned.shortcode, 1);
+    const second = await read(
+      owned.shortcode,
+      z.object({ nextCursor: z.string() }).parse(first.structuredContent)
+        .nextCursor,
+    );
     expect(second.isError).not.toBe(true);
     expect(second.structuredContent).toMatchObject({
       messages: [{ id: "message-2" }],

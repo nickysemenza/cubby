@@ -53,18 +53,14 @@ export async function suggestIngredientMerge(
   ai: IngredientMergeAiPort = productionIngredientMergeAiPort,
   shortlistPort?: MergeShortlistPort,
 ): Promise<IngredientMergeSuggestion> {
-  const shortlist = await buildMergeShortlist(
-    db,
-    source,
-    owner,
-    20,
-    shortlistPort,
-  );
+  const { candidates: shortlist, semanticUnavailable } =
+    await buildMergeShortlist(db, source, owner, 20, shortlistPort);
   if (shortlist.length === 0) {
     return {
       target: null,
       confidence: "low",
       reasoning: "No duplicate found.",
+      ...(semanticUnavailable ? { semanticUnavailable } : {}),
     };
   }
 
@@ -88,6 +84,7 @@ export async function suggestIngredientMerge(
       target: null,
       confidence,
       reasoning: reasoning || "No duplicate found.",
+      ...(semanticUnavailable ? { semanticUnavailable } : {}),
     };
   }
   return {
@@ -98,6 +95,7 @@ export async function suggestIngredientMerge(
     },
     confidence,
     reasoning,
+    ...(semanticUnavailable ? { semanticUnavailable } : {}),
   };
 }
 

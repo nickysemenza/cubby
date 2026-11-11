@@ -13,8 +13,9 @@ and stir-fry cannot be one ingredient list.
 
 Start with summary/count reads, then page through a narrowed result, then fetch
 the full record only when it is selected. `activity_read.report` defaults to counts;
-to inspect a class, call it with explicit `type`, `pageIndex`, and `pageSize`
-(for example `{ type: "…", pageIndex: 0, pageSize: 25 }`).
+to inspect a class, call it with an explicit `type` and `pageSize` (for example
+`{ type: "…", pageSize: 25 }`), passing `nextCursor` back as `cursor` for the
+next page.
 `nutrition_read.costing_explanation` defaults to
 `detail: "lines"`; request `detail: "full"` only when nutrient totals or drift
 are needed.

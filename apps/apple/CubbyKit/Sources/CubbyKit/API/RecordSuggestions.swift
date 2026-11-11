@@ -8,7 +8,8 @@ public struct PendingFieldSuggestion: Sendable, Hashable, Identifiable {
     public let suggestionID: String
     public let field: String
     public let suggestedValue: JSONValue
-    public let fingerprint: String?
+    /// The listed version a review names as `expectedFingerprint`.
+    public let fingerprint: String
     /// Bulk-acceptable as is (`clean`); only clean rows join Accept all.
     public let clean: Bool
     public let canAccept: Bool
@@ -16,7 +17,7 @@ public struct PendingFieldSuggestion: Sendable, Hashable, Identifiable {
 
     public init(
         id: String, suggestionID: String, field: String, suggestedValue: JSONValue,
-        fingerprint: String? = nil, clean: Bool = false, canAccept: Bool = true, canDismiss: Bool = true
+        fingerprint: String, clean: Bool = false, canAccept: Bool = true, canDismiss: Bool = true
     ) {
         self.id = id
         self.suggestionID = suggestionID
@@ -44,7 +45,7 @@ public struct PendingFieldSuggestion: Sendable, Hashable, Identifiable {
             operationId: UUID().uuidString, verdict: accept ? .correct : .wrong,
             correction: .value1(SuggestionCorrectionFalse(present: .falseValue)), reason: .value(nil),
             evidence: .value(nil), intent: accept ? .apply : .history, suggestionId: suggestionID,
-            expectedFingerprint: fingerprint.map { .value($0) } ?? .absent)
+            expectedFingerprint: fingerprint)
     }
 }
 

@@ -71,6 +71,7 @@ import {
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -497,8 +498,9 @@ const assertAffectedProductsRemainAdmissible = async (
       parseEntityId("productCategory", item.categoryId),
     );
     if (resolved !== item.categoryId) {
-      throw new Error(
-        "This category change would invalidate an assigned Product",
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "This category change would invalidate an assigned Product. Move those Products to another category first.",
       );
     }
   }
@@ -564,13 +566,21 @@ export const createProductCategory = defineMutationWriter({
   },
 });
 
+type ProductCategoryWriterData = ProductCategoryUpdateData &
+  Partial<
+    Pick<
+      ProductCategoryCreateInput,
+      "parentId" | "spendingCategoryMode" | "spendingCategoryId"
+    >
+  >;
+
 export const updateProductCategory = defineMutationWriter({
   entity: "productCategory",
   read: async (
     receipt: MutationReceipt<"productCategory">,
     db: Database,
     _shortcode: ProductCategoryShortcode,
-    _data: ProductCategoryUpdateData,
+    _data: ProductCategoryWriterData,
     _actor: ActorContext,
   ) => ({
     output: await crud.getByID(db, receipt.entityId),
@@ -580,7 +590,7 @@ export const updateProductCategory = defineMutationWriter({
     readOutput,
     db: Database,
     shortcode: ProductCategoryShortcode,
-    data: ProductCategoryUpdateData,
+    data: ProductCategoryWriterData,
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "productCategory", shortcode);
@@ -632,7 +642,8 @@ export const updateProductCategory = defineMutationWriter({
           WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`,
           "objects",
         );
-        if (affected.length) assertReviewedSpendingClassification(tx);
+        if (affected.length)
+          assertReviewedSpendingClassification(tx, "productCategory");
       }
       if (
         (spendingCategoryMode === "mapped") !==

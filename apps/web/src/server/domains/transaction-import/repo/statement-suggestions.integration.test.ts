@@ -56,11 +56,11 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/suggestions/repo/suggestion-list";
+import * as publicationRepo from "~/server/generic/suggestions/repo/suggestion-publication";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -344,7 +344,7 @@ const accept = async (
       ? { present: true, value: application }
       : { present: false },
     intent: "apply",
-    expectedFingerprint: suggestion.fingerprint,
+    expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
     application,
   });
 };
@@ -717,7 +717,7 @@ describe("statement Transaction suggestions", () => {
       const checkpoint =
         statementSuggestionsRepo.recordStatementLabelCheckpoint;
       const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
-      const publishSuggestions = suggestionRepo.publishSuggestions;
+      const publishSuggestions = publicationRepo.publishReplacements;
       const checkpointSpy = vi
         .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
         .mockImplementation(async (...args) => {
@@ -731,7 +731,7 @@ describe("statement Transaction suggestions", () => {
           return publish(...args);
         });
       const batchSpy = vi
-        .spyOn(suggestionRepo, "publishSuggestions")
+        .spyOn(publicationRepo, "publishReplacements")
         .mockImplementation(async (...args) => {
           if (phase === "publication fallback" && !moved) {
             await move();
@@ -1465,7 +1465,7 @@ describe("statement Transaction suggestions", () => {
       spending: expect.objectContaining({ status: "already_booked" }),
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
       // The hold's own pending refs never read as another charge's claim.
-      candidates: [expect.objectContaining({ claimed: false })],
+      candidates: [expect.objectContaining({ eligibility: "explicit" })],
     });
     await accept(ctx, posted!);
     const states = Object.fromEntries(
@@ -2873,7 +2873,7 @@ describe("statement Transaction suggestions", () => {
           return work(committed);
         }),
       );
-    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
+    const publication = vi.spyOn(publicationRepo, "publishReplacements");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -2951,7 +2951,7 @@ describe("statement Transaction suggestions", () => {
           throw new Error("Synthetic unavailable retirement connection");
         }),
       );
-    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
+    const publication = vi.spyOn(publicationRepo, "publishReplacements");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -3026,9 +3026,9 @@ describe("statement Transaction suggestions", () => {
         10,
       );
       const entries = await completeLabelPublications(ctx);
-      const publish = suggestionRepo.publishSuggestions;
+      const publish = publicationRepo.publishReplacements;
       const publication = vi
-        .spyOn(suggestionRepo, "publishSuggestions")
+        .spyOn(publicationRepo, "publishReplacements")
         .mockImplementation(async (...args) => {
           const result = await publish(...args);
           const owner = currentJobExecution();
@@ -3427,12 +3427,10 @@ describe("statement Transaction suggestions", () => {
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
       /changed since review|stale/,
     );
-    // Republication, not a scanner, replaces the stale advice.
+    // Republication, not a scanner, replaces the stale advice; the refused
+    // review recorded nothing, so the replaced row is pruned.
     expect(await generate(ctx)).toBe(1);
-    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
-      status: "superseded",
-      active: false,
-    });
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toBeUndefined();
     expect((await readPendingStatements(ctx))[0]).toMatchObject({
       recommended: "book",
       clean: false,
@@ -3515,7 +3513,9 @@ describe("statement Transaction suggestions", () => {
           }),
         ]),
       });
-      expect(refreshed!.candidates.every((c) => c.claimed)).toBe(true);
+      expect(
+        refreshed!.candidates.every((c) => c.contextReason === "claimed"),
+      ).toBe(true);
       await accept(
         ctx,
         refreshed!,
@@ -3589,6 +3589,9 @@ describe("statement Transaction suggestions", () => {
     );
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toHaveLength(2);
+    // Each event's primary must not retire the other's advice on a rerun.
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toHaveLength(2);
     for (const _ of [0, 1]) {
       const [next] = (await readPendingStatements(ctx)).filter(
         (row) => row.recommended === "create",
@@ -3638,11 +3641,10 @@ describe("statement Transaction suggestions", () => {
       rawDescription: "EXAMPLE CAFE 0002",
       recommended: "create",
       siblings: 0,
-      clean: false,
       candidates: [
         expect.objectContaining({
-          claimed: true,
-          label: expect.objectContaining({ same: "same", confidence: "high" }),
+          eligibility: "context",
+          contextReason: "claimed",
         }),
       ],
     });
@@ -3757,7 +3759,7 @@ describe("statement Transaction suggestions", () => {
       expect(second).toMatchObject({
         recommended: "attach",
         clean: true,
-        candidates: [expect.objectContaining({ claimed: false })],
+        candidates: [expect.objectContaining({ eligibility: "eligible" })],
       });
     },
   );

@@ -141,6 +141,7 @@ export function useFieldGuess(
   );
   const winnerId = rows[0]?.id;
   const suggestionId = guess?.suggestionId;
+  const fingerprint = guess?.fingerprint;
   const { mutateAsync } = review;
   const accept = useCallback(async () => {
     if (!suggestionId) throw new Error("Cubby's guess is no longer available");
@@ -149,9 +150,10 @@ export function useFieldGuess(
       operationId: crypto.randomUUID(),
       verdict: "correct",
       intent: "apply",
+      expectedFingerprint: fingerprint,
       correction: { present: false },
     });
-  }, [suggestionId, mutateAsync]);
+  }, [suggestionId, fingerprint, mutateAsync]);
   const isGuess = useCallback(
     (value: string | null | undefined) =>
       winnerId !== undefined && value === winnerId,

@@ -18,6 +18,7 @@ import {
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
 
 const retainedChoice = z.object({
   originalId: z.uuid(),
@@ -27,6 +28,7 @@ const retainedChoice = z.object({
 const endpointPair = z.object({
   emailCode: z.string(),
   purchaseCode: z.string(),
+  emailOwnerId: z.uuid().nullable(),
 });
 
 export async function retrieveEmailConnectionCandidates(
@@ -38,7 +40,7 @@ export async function retrieveEmailConnectionCandidates(
   const id = await resolveOrThrow(db, source.entityKind, source.entityId);
   const rows = await getDb(db).execute(
     sql`
-    SELECT DISTINCT "Email"."shortcode" AS "emailCode", p."shortcode" AS "purchaseCode"
+    SELECT DISTINCT "Email"."shortcode" AS "emailCode", p."shortcode" AS "purchaseCode", "Email"."ledgerPartyId" AS "emailOwnerId"
     FROM "Email"
     CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
     INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId" AND ${notDeleted("p")}
@@ -48,8 +50,29 @@ export async function retrieveEmailConnectionCandidates(
   `,
     "objects",
   );
+  const pairs = z.array(endpointPair).parse(rows);
+  const refs = await Promise.all(
+    pairs.map((pair) => resolveOrThrow(db, "purchase", pair.purchaseCode)),
+  );
+  const targets = await eligibleTargets(
+    db,
+    pairs.map((pair, index) => ({
+      key: String(index),
+      kind: "emailPurchase" as const,
+      ids: [refs[index]!],
+      explicitIds: [],
+      amountMinor: 0,
+      emailOwnerId: pair.emailOwnerId ?? undefined,
+    })),
+  );
   const candidates: ConnectionCandidate[] = [];
-  for (const pair of z.array(endpointPair).parse(rows)) {
+  for (const [index, pair] of pairs.entries()) {
+    if (
+      !targets
+        .get(String(index))
+        ?.some((target) => target.eligibility !== "context")
+    )
+      continue;
     const candidate: ConnectionCandidate = {
       relation: "email-purchase",
       source: { entityKind: "email", entityId: pair.emailCode },

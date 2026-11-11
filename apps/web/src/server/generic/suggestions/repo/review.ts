@@ -20,6 +20,7 @@ import type { StatementSuggestionScope } from "~/server/domains/transaction-impo
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { recordFeedbackWithInsertion } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import type { ApplicationTerms } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
@@ -61,14 +62,25 @@ export type Handler = {
       "subject" | "judgment"
     >,
   ) => Promise<void>;
-  /** The fingerprint a review must match; defaults to the stored one. */
-  currentFingerprint?: (
+  /**
+   * The fingerprint a list publishes for this row when it is computed live
+   * rather than stored; the review must name it. Defaults to the stored one.
+   */
+  applicationKey?: (
     db: Database,
     state: SuggestionStateRow,
   ) => Promise<string | null>;
+  /**
+   * What applying writes, as published and as it is now, by part name; a
+   * refusal names each part that differs.
+   */
+  applicationTerms?: (
+    db: Database,
+    state: SuggestionStateRow,
+  ) => Promise<ApplicationTerms>;
   apply: (
     db: Database,
-    context: EntityKernelContext & { reviewFeedbackId: string },
+    context: EntityKernelContext,
     state: SuggestionStateRow,
     input: Review,
     automatic: AutomaticReview | null,
@@ -76,9 +88,9 @@ export type Handler = {
 };
 
 /**
- * History settles first. A stale or refused application cannot erase the
- * review. An automatic application is the exception: nobody reviewed it, so
- * a refusal leaves no Feedback at all.
+ * Draft and history verdicts settle on their own. An applying review commits
+ * with its application, so a stale or refused application records nothing and
+ * the same operation may retry with a corrected review.
  */
 export async function reviewSuggestion(
   db: Database,
@@ -201,21 +213,6 @@ async function settleReview(
         ...(automatic && { rule: automatic.rule }),
       },
     });
-  const publication = await withEmailReviewBoundary(
-    db,
-    prediction,
-    writeReview,
-    emailScope,
-  );
-  const event = publication.event;
-  if (input.intent === "draft") {
-    return {
-      suggestionId: prediction.id,
-      feedbackId: event.id,
-      status: "draft",
-      applied: false,
-    };
-  }
   if (input.intent === "apply") {
     return executeReviewApplication(
       db,
@@ -226,8 +223,22 @@ async function settleReview(
       prediction,
       name,
       family,
-      event,
+      writeReview,
     );
+  }
+  const { event } = await withEmailReviewBoundary(
+    db,
+    prediction,
+    writeReview,
+    emailScope,
+  );
+  if (input.intent === "draft") {
+    return {
+      suggestionId: prediction.id,
+      feedbackId: event.id,
+      status: "draft",
+      applied: false,
+    };
   }
   return settleReviewHistory(db, input, emailScope, prediction, event);
 }

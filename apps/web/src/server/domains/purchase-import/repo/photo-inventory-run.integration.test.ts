@@ -194,11 +194,17 @@ describe("photo import finalize", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
-    const page = async (cursor: number) => {
+    const page = async (cursor?: string) => {
       const response = await callMcpTool(
         server,
         "run_read",
-        { action: "run_context", runId: run.publicId, limit: 2, cursor },
+        {
+          action: "run_context",
+          runId: run.publicId,
+          pageSize: 2,
+          resultDetail: "full",
+          cursor,
+        },
         kernelRequestContext(entityKernel),
         { entityKernel },
       );
@@ -206,14 +212,14 @@ describe("photo import finalize", () => {
       return z
         .object({
           totalImages: z.number(),
-          nextCursor: z.number().nullable(),
+          nextCursor: z.string().nullable(),
           images: z.array(z.looseObject({ position: z.number().nullable() })),
         })
         .parse(response.structuredContent);
     };
 
-    const first = await page(0);
-    expect(first).toMatchObject({ totalImages: 3, nextCursor: 2 });
+    const first = await page();
+    expect(first).toMatchObject({ totalImages: 3 });
     expect(first.images.map((image) => image.position)).toEqual([0, 1]);
     expect(Object.keys(first.images[0] ?? {}).sort()).toEqual([
       "capturedAt",
@@ -225,7 +231,7 @@ describe("photo import finalize", () => {
       "recognizedText",
       "targetState",
     ]);
-    const last = await page(2);
+    const last = await page(first.nextCursor ?? undefined);
     expect(last).toMatchObject({ totalImages: 3, nextCursor: null });
     expect(last.images.map((image) => image.position)).toEqual([2]);
   });

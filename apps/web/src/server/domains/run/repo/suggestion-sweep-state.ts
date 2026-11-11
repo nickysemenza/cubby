@@ -4,7 +4,7 @@ import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNotNull, or, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
@@ -26,11 +26,17 @@ import {
 } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   fieldSuggestionPublication,
-  publishSuggestions,
+  type SuggestionPublication,
 } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  publishSuggestionSet,
+  type SuggestionFamily,
+  type SuggestionRow,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   suggestionStateColumns,
   transitionSuggestionStates,
+  type SuggestionStateRow,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -65,6 +71,142 @@ export const sweepSuggestionSchema = z.object({
   model: z.string(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
+
+type SweepPolicy = {
+  predecessors: readonly SuggestionStateRow[];
+  predecessorIds: readonly string[] | undefined;
+  evaluationId: string | null;
+  provenance: import("@cubby/schemas/ai-evaluation").AiProvenance | undefined;
+  unordered: boolean;
+};
+
+type SweepCandidate = {
+  entry: SweepSuggestion;
+  policy: SweepPolicy;
+  target: { entity: string; recordId: string; field: string };
+  publication: SuggestionPublication;
+};
+
+/** Pending predecessors give way with the receipt of what replaced them. */
+async function supersedePredecessors(
+  tx: Database,
+  policy: SweepPolicy,
+  reason: "replacement" | "no_proposal",
+) {
+  for (const previous of policy.predecessors) {
+    if (
+      previous.status !== "pending" ||
+      (policy.predecessorIds && !policy.predecessorIds.includes(previous.id))
+    )
+      continue;
+    await transitionSuggestionStates(
+      tx,
+      and(
+        eq(suggestionTable.id, previous.id),
+        eq(suggestionTable.status, "pending"),
+      ),
+      {
+        status: "superseded",
+        supersessionReceipt: {
+          reason,
+          evaluationId: policy.evaluationId,
+          at: new Date().toISOString(),
+        },
+      },
+    );
+  }
+}
+
+const proposalKey = (unordered: boolean, value: SuggestionValue) =>
+  canonicalJson(
+    unordered && Array.isArray(value)
+      ? [...value].sort((left, right) =>
+          canonicalJson(left).localeCompare(canonicalJson(right)),
+        )
+      : value,
+  );
+
+/**
+ * Sweep field proposals: one slot per record field. A proposal a member
+ * rejected, by value, served evidence or review key, never publishes. Earlier
+ * rows stay active and in place, since decisions and queued evaluations name
+ * them; a replacement supersedes only pending predecessors, with its receipt.
+ */
+const fieldSweepSuggestions: SuggestionFamily<
+  SweepCandidate,
+  SuggestionRow,
+  "rejected",
+  {
+    id: string;
+    active: boolean;
+    suggestedValue: unknown;
+    provenance: unknown;
+    suppression: SuggestionStateRow["suppression"];
+    data: unknown;
+  }[]
+> = {
+  family: "field",
+  slot: ({ target }) => ({
+    lock: `field:${target.entity}:${target.recordId}:${target.field}`,
+    fields: target,
+  }),
+  fingerprint: ({ publication }) => publication.input.fingerprint ?? "",
+  evidenceFingerprint: ({ publication }) => publication.input.fingerprint ?? "",
+  suppresses: () => false,
+  obsolete: () => true,
+  onUnchanged: "none",
+  replaced: "keep",
+  // A sweep publishes one record field at a time.
+  load: async (tx, [candidate]) =>
+    !candidate
+      ? []
+      : getDb(tx)
+          .select({
+            id: suggestionTable.id,
+            active: suggestionTable.active,
+            suggestedValue: suggestionTable.suggestedValue,
+            provenance: suggestionTable.provenance,
+            suppression: suggestionTable.suppression,
+            data: suggestionTable.data,
+          })
+          .from(suggestionTable)
+          .where(
+            and(
+              eq(suggestionTable.family, "field"),
+              eq(suggestionTable.status, "rejected"),
+              eq(suggestionTable.entity, candidate.target.entity),
+              eq(suggestionTable.recordId, candidate.target.recordId),
+              eq(suggestionTable.field, candidate.target.field),
+            ),
+          ),
+  precheck: async (_tx, { entry, policy }, _rows, _producer, { loaded }) => {
+    const key = proposalKey(policy.unordered, entry.suggestedValue);
+    const sameValue = (row: (typeof loaded)[number]) =>
+      proposalKey(policy.unordered, jsonValue(row.suggestedValue)) === key;
+    const rejected = loaded.some(
+      (row) =>
+        (entry.reviewKey &&
+          z.object({ reviewKey: z.string().nullable() }).safeParse(row.data)
+            .data?.reviewKey === entry.reviewKey) ||
+        (row.active &&
+          sameValue(row) &&
+          (row.suppression?.scope === "field_value" ||
+            (policy.provenance &&
+              row.provenance &&
+              canonicalJson(z.json().parse(row.provenance)) ===
+                canonicalJson(
+                  z.json().parse({ ...policy.provenance, model: entry.model }),
+                )))),
+    );
+    return rejected ? { kind: "resolved", reason: "rejected" } : undefined;
+  },
+  prepare: async (tx, candidate, _rows, producer) => {
+    await supersedePredecessors(tx, candidate.policy, "replacement");
+    return { candidate, producer };
+  },
+  publication: ({ publication }) => publication,
+  labelBacklog: sql`false`,
+};
 
 export async function saveSweepSuggestions(
   db: Database,
@@ -246,83 +388,25 @@ export async function saveSweepSuggestions(
         throw new JobEvidenceObsoleteError(
           "Suggestion target changed during inference",
         );
-      const rejected = predecessors.filter(
-        (row) =>
-          row.status === "rejected" && row.suppression?.scope === "field_value",
-      );
-      const reviewedWrong = await getDb(tx)
-        .select({ data: suggestionTable.data })
-        .from(suggestionTable)
-        .where(
-          and(
-            eq(suggestionTable.family, "field"),
-            eq(suggestionTable.entity, input.entity),
-            eq(suggestionTable.recordId, typedRecordId),
-            eq(suggestionTable.field, input.field),
-            eq(suggestionTable.status, "rejected"),
-          ),
-        );
-      const unordered = input.unordered;
-      const proposalKey = (value: SuggestionValue) =>
-        canonicalJson(
-          unordered && Array.isArray(value)
-            ? [...value].sort((left, right) =>
-                canonicalJson(left).localeCompare(canonicalJson(right)),
-              )
-            : value,
-        );
-      const admissible = entries.filter(
-        (entry) =>
-          !reviewedWrong.some(
-            (row) =>
-              entry.reviewKey &&
-              z.object({ reviewKey: z.string().nullable() }).safeParse(row.data)
-                .data?.reviewKey === entry.reviewKey,
-          ) &&
-          !rejected.some(
-            (row) =>
-              proposalKey(jsonValue(row.suggestedValue)) ===
-              proposalKey(entry.suggestedValue),
-          ) &&
-          !predecessors.some(
-            (row) =>
-              row.status === "rejected" &&
-              input.provenance &&
-              row.provenance &&
-              proposalKey(jsonValue(row.suggestedValue)) ===
-                proposalKey(entry.suggestedValue) &&
-              canonicalJson(z.json().parse(row.provenance)) ===
-                canonicalJson(
-                  z.json().parse({ ...input.provenance, model: entry.model }),
-                ),
-          ),
-      );
-      for (const previous of predecessors) {
-        if (
-          previous.status !== "pending" ||
-          (input.predecessorIds && !input.predecessorIds.includes(previous.id))
-        )
-          continue;
-        await transitionSuggestionStates(
-          tx,
-          and(
-            eq(suggestionTable.id, previous.id),
-            eq(suggestionTable.status, "pending"),
-          ),
-          {
-            status: "superseded",
-            supersessionReceipt: {
-              reason: admissible.length ? "replacement" : "no_proposal",
-              evaluationId: input.evaluationId ?? null,
-              at: new Date().toISOString(),
-            },
+      const policy: SweepPolicy = {
+        predecessors,
+        predecessorIds: input.predecessorIds,
+        evaluationId: input.evaluationId ?? null,
+        provenance: input.provenance,
+        unordered: input.unordered,
+      };
+      const outcomes = await publishSuggestionSet(
+        tx,
+        fieldSweepSuggestions,
+        entries.map((entry) => ({
+          entry,
+          policy,
+          target: {
+            entity: input.entity,
+            recordId: typedRecordId,
+            field: input.field,
           },
-        );
-      }
-      const created: string[] = [];
-      for (const entry of admissible) {
-        const [row] = await publishSuggestions(tx, [
-          fieldSuggestionPublication({
+          publication: fieldSuggestionPublication({
             runId,
             entity: input.entity,
             recordId: typedRecordId,
@@ -346,10 +430,20 @@ export async function saveSweepSuggestions(
             },
             status: "pending",
           }),
-        ]);
-        if (!row) throw new Error("Field publication returned no row");
-        created.push(row.id);
-      }
+        })),
+        {
+          kind: "model",
+          model: null,
+          revision: null,
+          runId,
+          evaluationId: input.evaluationId ?? null,
+        },
+      );
+      const created = outcomes.flatMap((outcome) =>
+        outcome.outcome === "published" ? [outcome.suggestionId] : [],
+      );
+      if (!created.length)
+        await supersedePredecessors(tx, policy, "no_proposal");
       // Proposals publish pending; a confident assignment then applies only
       // through its Automatic rule, as automatic Feedback naming the rule.
       const { applied } = await applyAutomaticRules(tx, created, {

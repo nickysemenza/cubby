@@ -270,6 +270,12 @@ export function translateDatabaseError(
     }
     case "23514": {
       // check_violation
+      if (pg.constraint && /_classification_.*_check$/.test(pg.constraint))
+        return createAppError(
+          "CLASSIFICATION_POLICY_REFUSED",
+          `This ${entity} fails a classification policy (${pg.constraint}).`,
+          error,
+        );
       if (pg.constraint === "EntityLink_no_self_check") {
         return createAppError(
           "SELF_DEPENDENCY",

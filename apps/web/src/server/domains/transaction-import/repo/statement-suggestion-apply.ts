@@ -36,7 +36,7 @@ import { updateSourceTransactionRecords } from "~/server/domains/transaction-imp
 import {
   type ChargeProposal,
   pendingChargesNear,
-  regenerateCharges,
+  regenerateChargesAfterCommit,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -257,7 +257,7 @@ export async function applyStatementTransactionSuggestion(
         judgment.accountId,
         dates,
       );
-      await regenerateCharges(
+      await regenerateChargesAfterCommit(
         committed,
         [...neighbours, ...judgment.copies].filter(
           (other) =>

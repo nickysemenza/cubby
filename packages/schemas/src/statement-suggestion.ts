@@ -107,8 +107,16 @@ const statementTransactionCandidate = z.object({
   rawDescription: z.string().nullable(),
   diff: z.array(statementTransactionField),
   label: statementCandidateLabel.nullable(),
-  /** The transaction already settles another charge from this source. */
-  claimed: z.boolean().default(false),
+  /**
+   * `context` candidates (settled by another charge, wrong sign or amount)
+   * stay listed but never block a create or earn an attach recommendation;
+   * `explicit` ones are named by evidence (provider match, hold, paired copy).
+   */
+  eligibility: z.enum(["explicit", "eligible", "context"]).default("eligible"),
+  contextReason: z
+    .enum(["settled", "claimed", "sign", "amount", "kind", "void"])
+    .nullable()
+    .default(null),
 });
 
 export type StatementTransactionCandidate = z.infer<

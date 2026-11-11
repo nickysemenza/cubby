@@ -125,11 +125,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "suggestions_read.items[].field.id",
   // A draft preview echoes the same Suggestion child-row handle for explicit review.
   "finance_read.suggestionId",
-  "suggestions.suggestionId",
-  "suggestions.items[].suggestionId",
-  // Historical enrollment advances over opaque Feedback rows, not entities.
-  "suggestions.feedbackId",
-  "suggestions.items[].feedbackId",
+  // Each review result names its Suggestion and the opaque Feedback row it
+  // recorded; neither is an entity.
+  "suggestions.results[].item.suggestionId",
+  "suggestions.results[].item.feedbackId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

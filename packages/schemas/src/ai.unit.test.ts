@@ -2,10 +2,13 @@ import {
   aiLocationIdInput,
   approveDetectedInventoryItemInput,
   detectedInventoryAiResultSchema,
+  detectedInventorySchema,
+  ingredientMergeSuggestionBatchOut,
   fieldSuggestionOutcomeSchema,
   MAX_DETECTED_INVENTORY_ITEMS,
 } from "./ai";
 import { describe, expect, it } from "vitest";
+import { productWorkflowSchemas } from "./product-workflow";
 
 describe("AI location inputs", () => {
   it("accepts location shortcodes and rejects UUIDs", () => {
@@ -46,6 +49,42 @@ describe("AI location inputs", () => {
         summary: "Too many items.",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("optional AI diagnostics on the wire", () => {
+  it("retains the same unavailable object in feature results", () => {
+    const unavailable = {
+      status: "unavailable",
+      reason: "rate_limited",
+      detail: "Synthetic upstream response",
+    } as const;
+    expect(
+      fieldSuggestionOutcomeSchema.parse({
+        kind: "skipped",
+        reason: "no_candidates",
+        semanticUnavailable: unavailable,
+      }).semanticUnavailable,
+    ).toEqual(unavailable);
+    expect(
+      detectedInventorySchema.shape.semanticUnavailable.parse(unavailable),
+    ).toEqual(unavailable);
+    expect(
+      productWorkflowSchemas.search.output.shape.semanticUnavailable.parse(
+        unavailable,
+      ),
+    ).toEqual(unavailable);
+    expect(
+      ingredientMergeSuggestionBatchOut.parse([
+        {
+          source: { id: "ING-2345", name: "Synthetic" },
+          target: null,
+          confidence: "low",
+          reasoning: "No duplicate found.",
+          semanticUnavailable: unavailable,
+        },
+      ])[0]?.semanticUnavailable,
+    ).toEqual(unavailable);
   });
 });
 

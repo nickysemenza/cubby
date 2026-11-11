@@ -1,3 +1,7 @@
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { searchableEntitySchema } from "@cubby/schemas/search";
@@ -42,6 +46,22 @@ import {
   type entityQueryResultSchema,
 } from "./contracts";
 import { resolveNames } from "./resolve";
+
+function refuseCreateOnlyFields(command: EntityCommand): void {
+  if (command.action !== "update") return;
+  const model: EntityFieldModel | undefined = entityFieldModels[command.entity];
+  if (!model || !command.data || typeof command.data !== "object") return;
+  for (const key of Object.keys(command.data)) {
+    if (model.create.includes(key) && !model.update.includes(key)) {
+      const field = model.fields.find((candidate) => candidate.key === key);
+      if (field)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${field.label} cannot change with entity.update. ${field.description ?? ""}`.trim(),
+        );
+    }
+  }
+}
 
 const executeSearch = async (
   ctx: EntityKernelContext,
@@ -279,6 +299,7 @@ export async function executeEntity(
   | z.infer<typeof entityQueryResultSchema>
   | z.infer<typeof entityBrowserMutationResultSchema>
 > {
+  refuseCreateOnlyFields(rawCommand);
   const command = entityCommandSchema.parse(rawCommand);
 
   switch (command.action) {
@@ -381,6 +402,7 @@ export async function executeEntityMutationRead(
   rawCommand: Extract<EntityMutationCommand, { action: "create" | "update" }>,
   fields: readonly string[],
 ): Promise<z.infer<typeof entityMutationReadResultSchema>> {
+  refuseCreateOnlyFields(rawCommand);
   const command = entityCommandSchema.parse(rawCommand);
   if (command.action === "create")
     return ENTITY_KERNEL_OPERATIONS[command.entity].createRead(context, {

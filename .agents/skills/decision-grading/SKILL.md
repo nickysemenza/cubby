@@ -17,7 +17,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   synthetic examples when a failure needs illustrating.
 - Your grade is a strong model's opinion, not ground truth. Keep independent
   grades in the session; record operational Feedback through
-  `suggestions.review_batch` only after member confirmation.
+  `suggestions.review` only after member confirmation.
 - Grade blind: read the original evidence and lock the grade before opening
   the suggestion, recorded outcome or fresh prediction.
 - Read the retained original body for every Email before locking its grade.
@@ -28,7 +28,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   replay calls. Keep private worklists and originals in session memory; files
   contain aggregates and synthetic examples only.
 - Keep originals immutable. Use the grading paths below for measurement;
-  `purchase_import.email_reclassify` and member review/apply through `suggestions.review_batch` change
+  `purchase_import.email_reclassify` and member review/apply through `suggestions.review` change
   operational authority rather than record an independent evaluation.
 
 ## Field decisions (prompts, options)
@@ -135,7 +135,7 @@ every Cubby-held value it disagrees with, without review.
 5. After grades are locked, read recorded decisions through
    `suggestions_read.automatic_decisions` or the Emails list's Accuracy view.
    Keep those historical outcomes separate from fresh triage previews. Member-
-   confirmed Feedback uses `suggestions.review_batch` with the recorded
+   confirmed Feedback uses `suggestions.review` with the recorded
    decision handle and `intent: "history"`; a session grade or fresh preview
    alone supplies no durable handle and changes no operational state.
 
@@ -189,7 +189,7 @@ every Cubby-held value it disagrees with, without review.
    judgments in the session; production MCP cannot grade disposable database
    handles.
 5. After member confirmation, record each served outcome's grade through
-   `suggestions.review_batch` with `suggestionId`, unique `operationId`,
+   `suggestions.review` with `suggestionId`, unique `operationId`,
    `intent: "history"`, `verdict`, and optional `reason`/`correction`. A correction
    carries the complete outcome, including reason or imported lines/total.
    Session model opinions remain independent grades until the member confirms

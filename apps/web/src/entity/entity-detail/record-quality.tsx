@@ -15,6 +15,7 @@ import { Link } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
 
 import { WhyValue } from "~/entity/fields/explanation/why-value";
+import { recordSuggestionScope } from "~/entity/suggestions/queue/record-scope";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -190,8 +191,7 @@ function SuggestionsImpactLink({
   const checks = new Set(failing.map((check) => check.check));
   const list = useQuery({
     ...suggestions.list.queryOptions({
-      recordEntity: kind,
-      recordIds: [id],
+      ...recordSuggestionScope(id),
       sort: [{ orderBy: "impact", direction: "desc" }],
       limit: IMPACT_READ_LIMIT,
     }),

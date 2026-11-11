@@ -25,11 +25,12 @@ function isReviewedSpendingClassification(
 
 export function assertReviewedSpendingClassification(
   db: Database | DrizzleTransaction,
+  action: string,
 ): void {
   if (!isReviewedSpendingClassification(db))
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "This policy changes historical spending. Preview and apply the reviewed spending classification change.",
+      `This change moves existing Expense history. Preview it with spendingClassification.preview (action "${action}"), then apply it with spendingClassification.apply and the preview's fingerprint. On the web, use the record's Spending classification section.`,
     );
 }
 

@@ -9,8 +9,6 @@ import { productShortcode, purchaseShortcode } from "./identifiers";
 import { relatednessOutSchema } from "./relatedness";
 import { productVariantComparison } from "./product-variant-comparison";
 
-export const recommendationOkSchema = z.object({ ok: z.literal(true) });
-
 /** @public Names a generated native model. */
 export const recommendationWorkbenchOut = relatednessOutSchema;
 
@@ -100,13 +98,8 @@ const productMatchQueueOut = z.object({
 });
 export type ProductMatchQueueOut = z.infer<typeof productMatchQueueOut>;
 
-/**
- * Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos.
- * @public Names a generated native model.
- */
-export const mergeProductMatchInput = z.object({
-  suggestionId: suggestionChildHandle,
-  expectedFingerprint: z.string().min(1),
+/** The keeper and incoming Product of a two-product merge preview. */
+export const productMergePairInput = z.object({
   keepId: productShortcode,
   mergeId: productShortcode,
 });

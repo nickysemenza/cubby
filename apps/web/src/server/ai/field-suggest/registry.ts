@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import type { OptionalAiUnavailable } from "@cubby/schemas/ai";
 import {
   spendingCategoryFiltersSchema,
   spendingCategoryOut,
@@ -122,7 +123,10 @@ export interface ReferenceSuggestSpec<C> extends ReferenceSuggestDecision {
     db: Database,
     basis: ResolvedBasis,
     raw: RawBasis,
-  ): Promise<readonly C[]>;
+  ): Promise<
+    | readonly C[]
+    | { candidates: readonly C[]; semanticUnavailable: OptionalAiUnavailable }
+  >;
   idOf(c: C): string;
   labelOf(c: C): string;
   detailOf?(c: C): string | null;
@@ -258,7 +262,13 @@ async function linkedCandidatesForProduct(
   db: Database,
   name: string | null,
   entityKind: "ingredient" | "plant",
-): Promise<readonly LinkedEntityCandidate[]> {
+): Promise<
+  | readonly LinkedEntityCandidate[]
+  | {
+      candidates: readonly LinkedEntityCandidate[];
+      semanticUnavailable: OptionalAiUnavailable;
+    }
+> {
   const trimmed = name?.trim() ?? "";
   if (trimmed.length < MIN_SEARCH_TEXT_LENGTH) return [];
   const [semantic, lexical] = await Promise.all([
@@ -274,7 +284,10 @@ async function linkedCandidatesForProduct(
     ),
   ]);
   const byId = new Map<string, LinkedEntityCandidate>();
-  for (const candidate of [...semantic.map(({ item }) => item), ...lexical]) {
+  for (const candidate of [
+    ...(Array.isArray(semantic) ? semantic : []).map(({ item }) => item),
+    ...lexical,
+  ]) {
     if (!byId.has(candidate.id))
       byId.set(candidate.id, {
         id: candidate.id,
@@ -282,7 +295,10 @@ async function linkedCandidatesForProduct(
         subtitle: candidate.subtitle,
       });
   }
-  return [...byId.values()].slice(0, INGREDIENT_ROSTER_CAP);
+  const candidates = [...byId.values()].slice(0, INGREDIENT_ROSTER_CAP);
+  return Array.isArray(semantic)
+    ? candidates
+    : { candidates, semanticUnavailable: semantic };
 }
 
 const renderProductCandidate = (candidate: InternalSearchCandidate): string =>

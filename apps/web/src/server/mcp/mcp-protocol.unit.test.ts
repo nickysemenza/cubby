@@ -277,7 +277,11 @@ describe("MCP protocol smoke", () => {
 
   it("dispatches entity commands through the explicit kernel capability", async () => {
     const runEntity = vi.fn<ExecuteEntity>(async (_context, command) => {
-      expect(command).toMatchObject({ action: "list", entity: "expense" });
+      expect(command).toMatchObject({
+        action: "list",
+        entity: "expense",
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
       return {
         action: "list" as const,
         entity: "expense" as const,
@@ -316,28 +320,11 @@ describe("MCP protocol smoke", () => {
     expect(result.structuredContent).toMatchObject({
       action: "list",
       entity: "expense",
-      meta: { pageIndex: 0, pageSize: 10, totalCount: 0 },
+      pageSize: 10,
+      nextCursor: null,
+      totalCount: 0,
     });
     expect(recordDatabaseWrite).not.toHaveBeenCalled();
-  });
-
-  it("materializes entity list pagination and rejects invalid boundaries", () => {
-    expect(
-      entityMcpReadCommandSchema.parse({ action: "list", entity: "expense" }),
-    ).toMatchObject({ pagination: { pageIndex: 0, pageSize: 10 } });
-    for (const pagination of [
-      { pageIndex: -1, pageSize: 10 },
-      { pageIndex: 0, pageSize: 501 },
-      { pageIndex: 0.5, pageSize: 10 },
-    ]) {
-      expect(
-        entityMcpReadCommandSchema.safeParse({
-          action: "list",
-          entity: "expense",
-          pagination,
-        }).success,
-      ).toBe(false);
-    }
   });
 
   it.each([

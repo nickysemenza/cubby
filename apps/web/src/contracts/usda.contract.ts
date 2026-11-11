@@ -1,5 +1,4 @@
 import { productShortcode } from "@cubby/schemas/identifiers";
-import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
   foodSummaryWithLinkedProducts,
   usdaFoodIdInput,
@@ -68,7 +67,8 @@ export const usdaFoodContract = defineContract(
         dataType: dataTypeEnum
           .optional()
           .describe("Optional exact USDA data-type filter"),
-        ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
+        pageIndex: z.number().int().min(0).default(0),
+        pageSize: z.number().int().min(1).max(100).default(25),
       }),
       output: usdaFoodListOut,
     }),

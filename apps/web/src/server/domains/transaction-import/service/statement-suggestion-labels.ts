@@ -44,7 +44,7 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
-import { recommendedWithLabels } from "~/server/domains/transaction-import/repo/statement-charge";
+import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementLabelSubject,
   statementCandidateSubject,
@@ -346,7 +346,7 @@ function prepareLabelledJudgment(
     ) {
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
-      judgment.recommended = recommendedWithLabels(judgment);
+      judgment.recommended = statementRecommendation(judgment);
       if (checkpoint.spending && previous)
         judgment.spending = await prepareStatementSpending(
           db,

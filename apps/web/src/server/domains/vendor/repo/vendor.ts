@@ -1,5 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { type VendorUpdateData } from "@cubby/schemas/entities/vendor";
+import {
+  type VendorCreateInput,
+  type VendorUpdateData,
+} from "@cubby/schemas/entities/vendor";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 import { entityRefKey } from "@cubby/schemas/entity";
 import {
@@ -753,13 +756,18 @@ async function lockVendorSenderSet(
   return current;
 }
 
+type VendorWriterData = VendorUpdateData &
+  Partial<
+    Pick<VendorCreateInput, "spendingProfile" | "defaultSpendingCategoryId">
+  >;
+
 export const updateVendor = defineMutationWriter({
   entity: "vendor",
   read: async (
     receipt: MutationReceipt<"vendor">,
     db: Database,
     _shortcode: VendorShortcode,
-    _data: VendorUpdateData,
+    _data: VendorWriterData,
     _actor: ActorContext,
   ) => ({
     output: await readVendorById(db, receipt.entityId),
@@ -769,7 +777,7 @@ export const updateVendor = defineMutationWriter({
     readOutput,
     db: Database,
     shortcode: VendorShortcode,
-    data: VendorUpdateData,
+    data: VendorWriterData,
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "vendor", shortcode);
@@ -809,7 +817,7 @@ export const updateVendor = defineMutationWriter({
           "objects",
         );
         if (affected.length) {
-          assertReviewedSpendingClassification(db);
+          assertReviewedSpendingClassification(db, "vendor");
           reclassifies = true;
         }
       }

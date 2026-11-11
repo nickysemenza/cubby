@@ -21,6 +21,7 @@ import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/en
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   embedQuery,
+  optionalAiUnavailable,
   semanticEmbeddingsConfigured,
 } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -43,8 +44,7 @@ export interface MergeShortlistPort {
   ) => Promise<MergeShortlistEntry[]>;
 }
 
-/** Degrades to `[]` (not an error) when embeddings are unconfigured or the
- * query fails to embed — the lexical leg alone is a fine shortlist. */
+/** The lexical leg remains usable when embeddings are unconfigured. */
 async function productionSemanticLeg(
   db: Database,
   name: string,
@@ -89,19 +89,30 @@ export async function buildMergeShortlist(
   owner: AiCallOwner,
   limit = 20,
   port: MergeShortlistPort = productionMergeShortlistPort,
-): Promise<MergeShortlistEntry[]> {
+): Promise<{
+  candidates: MergeShortlistEntry[];
+  semanticUnavailable?: import("@cubby/schemas/ai").OptionalAiUnavailable;
+}> {
   const [lexical, semantic] = await Promise.all([
     port.lexical(db, source.name, source.id, 12),
-    port.semantic(db, source.name, source.id, 12, owner),
+    port
+      .semantic(db, source.name, source.id, 12, owner)
+      .catch(optionalAiUnavailable),
   ]);
 
   const byId = new Map<string, MergeShortlistEntry>();
-  for (const entry of [...lexical, ...semantic]) {
+  for (const entry of [
+    ...lexical,
+    ...(Array.isArray(semantic) ? semantic : []),
+  ]) {
     if (entry.id === source.id) continue;
     if (byId.has(entry.id)) continue;
     byId.set(entry.id, entry);
   }
-  return [...byId.values()].slice(0, limit);
+  return {
+    candidates: [...byId.values()].slice(0, limit),
+    ...(!Array.isArray(semantic) ? { semanticUnavailable: semantic } : {}),
+  };
 }
 
 export const ingredientMergeSpec = {

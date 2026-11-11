@@ -1,6 +1,8 @@
 import type { ImageCaptureLocation } from "@cubby/schemas/image-capture-fields";
 import type { ImageSightingCamera } from "@cubby/schemas/image-sighting-fields";
 
+import { CLIENT_CLOCK_SKEW_MS } from "~/server/errors/app-error";
+
 /**
  * Embedded EXIF/GPS metadata read directly from an image's leading bytes —
  * the in-memory, `Date`-typed shape `extractImageMetadata` returns. Cached on
@@ -226,6 +228,7 @@ function parseExifDateTime(
   const utcMillis =
     Date.UTC(year, month - 1, day, hour, minute, second) -
     (offsetMinutes ?? 0) * 60_000;
+  if (utcMillis > Date.now() + CLIENT_CLOCK_SKEW_MS) return null;
   return { capturedAt: new Date(utcMillis), offsetMinutes };
 }
 

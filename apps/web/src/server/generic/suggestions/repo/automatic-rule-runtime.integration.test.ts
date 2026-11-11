@@ -1,6 +1,7 @@
 import { systemActor } from "@cubby/schemas/context";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -31,6 +32,10 @@ import {
   productCategoryId,
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import {
+  applySpendingClassificationReview,
+  previewSpendingClassificationReview,
+} from "~/server/domains/spending-category/repo/spending-classification-review";
 import { sourceObservationFrom } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
@@ -725,15 +730,18 @@ describe("automatic field assignments", () => {
         await confidentProfile(),
       ),
     ).toBe(true);
-    await executeEntity(
-      kernelCtx(ctx),
-      entityCommandSchema.parse({
-        action: "update",
-        entity: "vendor",
-        id: merchant.id,
-        data: { spendingProfile: "mixed_retail" },
-      }),
-    );
+    // A person decides the profile through the reviewed classification flow.
+    const request = {
+      action: "vendor" as const,
+      vendorId: parseShortcodeFor("vendor", merchant.id),
+      spendingProfile: "mixed_retail" as const,
+      defaultSpendingCategoryId: null,
+    };
+    await applySpendingClassificationReview(kernelCtx(ctx), {
+      request,
+      fingerprint: (await previewSpendingClassificationReview(ctx.db, request))
+        .fingerprint,
+    });
     expect(await holder()).toBe("person");
     expect(
       await canAutomaticallyFillField(

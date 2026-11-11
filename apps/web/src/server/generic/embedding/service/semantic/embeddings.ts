@@ -1,9 +1,11 @@
+import type { OptionalAiUnavailable } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   classifyFundingRefusal,
   paidFundingRefusal,
 } from "@cubby/shared/ai/funding-refusal";
 import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
+import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
@@ -29,6 +31,40 @@ import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 import { getSemanticEmbeddingConfig } from "./config";
 import { productionVectorStore, type VectorStorePort } from "./vector-store";
+
+class AiUpstreamError extends Error {
+  readonly detail: string;
+  constructor(
+    readonly status: number,
+    detail: string,
+  ) {
+    super(`AI upstream request failed (HTTP ${status})`);
+    this.name = "AiUpstreamError";
+    this.detail = scrubErrorMessage(detail);
+  }
+}
+
+const unparsedAiErrorSchema = z.unknown();
+export function optionalAiUnavailable(
+  error: z.input<typeof unparsedAiErrorSchema>,
+): OptionalAiUnavailable {
+  const detail =
+    error instanceof AiUpstreamError
+      ? error.detail
+      : scrubErrorMessage(
+          error instanceof Error ? error.message : String(error),
+        );
+  return {
+    status: "unavailable",
+    reason:
+      error instanceof AiUpstreamError && paidFundingRefusal(detail)
+        ? "quota"
+        : error instanceof AiUpstreamError && error.status === 429
+          ? "rate_limited"
+          : "upstream_error",
+    detail,
+  };
+}
 
 /** The OpenAI embeddings endpoint's response shape, parsed directly — there
  * is no provider SDK on this path, just the gateway's `/openai/embeddings`. */
@@ -172,20 +208,17 @@ export async function embedTexts(
           }
           if (!response.ok) {
             const body = await response.text();
-            const failure = `Embeddings request failed (HTTP ${response.status} ${response.statusText}): ${body}`;
+            const failure = new AiUpstreamError(response.status, body);
             if (funding === "paid" && paidFundingRefusal(body)) {
               // A member's search fails readably; background work waits for funding.
-              if (opts?.interactive)
-                throw new Error(
-                  `Semantic search is unavailable: OpenAI credit and paid AI are both unavailable. ${failure}`,
-                );
+              if (opts?.interactive) throw failure;
               throw new JobDeferredError(
-                failure,
+                failure.message,
                 fundingResumeAt(),
                 "ai_funding_window",
               );
             }
-            throw new Error(failure);
+            throw failure;
           }
           const json: unknown = await response.json();
           // Paid `/ai/run` wraps the provider answer in `result`.

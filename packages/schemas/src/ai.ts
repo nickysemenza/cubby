@@ -40,6 +40,13 @@ import {
 import { aiUsageTransport, type AiUsageTransport } from "./telemetry";
 import { usdaFoodListRow } from "./usda";
 
+export const optionalAiUnavailableSchema = z.object({
+  status: z.literal("unavailable"),
+  reason: z.enum(["quota", "rate_limited", "upstream_error"]),
+  detail: z.string(),
+});
+export type OptionalAiUnavailable = z.infer<typeof optionalAiUnavailableSchema>;
+
 // Confidence level values - single source of truth
 const confidenceValues = ["high", "medium", "low"] as const;
 
@@ -174,6 +181,7 @@ export const detectedInventorySchema = z.object({
   items: z.array(detectedItemSchema),
   summary: z.string(),
   cache: aiCacheMetadataSchema,
+  semanticUnavailable: optionalAiUnavailableSchema.optional(),
 });
 const rawDetectedInventorySchema = detectedInventorySchema.extend({
   items: z.array(rawDetectedItemSchema),
@@ -254,6 +262,7 @@ const ingredientMergeSuggestionRef = z.object({
 export const ingredientMergeSuggestionBatchOut = z.array(
   z.object({
     source: ingredientMergeSuggestionRef,
+    semanticUnavailable: optionalAiUnavailableSchema.optional(),
     target: ingredientMergeSuggestionRef.nullable(),
     confidence,
     reasoning: z.string(),
@@ -307,6 +316,7 @@ export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
         usda: usdaFoodSuggestionOut,
         merge: z
           .object({
+            semanticUnavailable: optionalAiUnavailableSchema.optional(),
             target: z
               .object({
                 id: z.string(),
@@ -744,11 +754,13 @@ export type FieldSuggestion = z.infer<typeof fieldSuggestionSchema>;
 export const fieldSuggestionOutcomeSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("skipped"),
+    semanticUnavailable: optionalAiUnavailableSchema.optional(),
     reviewStatus: z.literal("rejected").optional(),
     reason: z.enum(["no_signal", "no_candidates", "resolved"]),
   }),
   z.object({
     kind: z.literal("evaluated"),
+    semanticUnavailable: optionalAiUnavailableSchema.optional(),
     reviewStatus: z.literal("rejected").optional(),
     suggestionId: suggestionChildHandle.optional(),
     answer: z.enum(["pick", "none"]),

@@ -821,7 +821,8 @@ export const { definition, readSchemas } = defineEntityModel({
             field,
             byValue: { credit_card: "unknown" as const },
             otherwise: "not_allowed" as const,
-            refusal: "Only applies to credit-card accounts.",
+            refusal:
+              "Only applies to credit-card accounts. Leave this field out of the update for other accounts.",
           }),
         ),
       },

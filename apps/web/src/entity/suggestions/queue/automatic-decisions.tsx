@@ -357,7 +357,7 @@ function AutomaticDecision({ row }: { row: AutomaticDecisionRow }) {
                 operationId: crypto.randomUUID(),
                 verdict: "wrong",
                 intent: "history",
-                expectedFingerprint: row.fingerprint,
+                expectedFingerprint: row.fingerprint ?? undefined,
                 correction: { present: false },
               })
             }

@@ -69,6 +69,7 @@ import { Alert, AlertAction } from "~/ui/reui/alert";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
 import { AutomaticDecisions } from "./automatic-decisions";
+import { recordSuggestionScope } from "./record-scope";
 import { MobileEvidenceDisclosure } from "./suggestion-actions";
 import { SuggestionEvidence } from "./suggestion-evidence";
 import { acceptItem, dismissItem, neverSuggestItem } from "./suggestion-review";
@@ -94,11 +95,11 @@ const NO_GROUPS: SuggestionGroup[] = [];
 
 type ScopeFilters = z.input<typeof suggestionCountsInput>;
 
-/** Record scoping expands each family's declared affected records. */
+/** Record scoping selects subject records or related account/vendor suggestions. */
 function scopeFilters(search: SuggestionsSearch): ScopeFilters {
   const record = parseRecordParam(search.record);
   const recordScope: ScopeFilters = record
-    ? { recordEntity: record.entity, recordIds: [record.code] }
+    ? recordSuggestionScope(record.code)
     : {};
   return {
     ...recordScope,

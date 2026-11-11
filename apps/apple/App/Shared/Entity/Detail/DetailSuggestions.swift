@@ -186,7 +186,7 @@ struct DetailSuggestionsRow: View {
         items: fields.map {
             PendingFieldSuggestion(
                 id: "SUG-\($0.key)", suggestionID: "SUG-\($0.key)", field: $0.key,
-                suggestedValue: "Synthetic value", clean: true)
+                suggestedValue: "Synthetic value", fingerprint: "fp-\($0.key)", clean: true)
         })
     List { DetailSuggestionsRow(descriptor: descriptor, model: model) }
         .environment(app)

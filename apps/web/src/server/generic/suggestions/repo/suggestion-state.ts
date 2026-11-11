@@ -5,8 +5,6 @@ import {
   eq,
   getTableColumns,
   inArray,
-  isNull,
-  ne,
   or,
   is,
   sql,
@@ -140,10 +138,8 @@ export async function transitionSuggestionStates(
   );
 }
 
-/** One locked read and one set update for differing per-row transitions. The callback is pure and sees the complete locked set,
- * so domains can carry suppression across a publication without N rereads.
- */
-export async function transitionSuggestionStateBatch(
+/** One locked read and one set update for differing per-row transitions; the callback is pure. */
+async function transitionSuggestionStateBatch(
   db: RepositoryQueryInput,
   where: SQL | undefined,
   prepare: (rows: readonly StateRow[]) => readonly {
@@ -222,31 +218,6 @@ export async function transitionSuggestionState(
     patch,
   );
   return row ?? null;
-}
-
-/**
- * Replaced opinions are not history: a superseded row with no decision or
- * authority of its own goes once its replacement is published. Field rows stay,
- * since queued evaluations and settled answers name them by id.
- */
-export async function pruneReplacedSuggestions(
-  db: RepositoryQueryInput,
-  ids: readonly string[],
-) {
-  if (!ids.length) return;
-  await getDb(db)
-    .delete(suggestionTable)
-    .where(
-      and(
-        inArray(suggestionTable.id, [...ids]),
-        ne(suggestionTable.family, "field"),
-        eq(suggestionTable.status, "superseded"),
-        sql`${suggestionTable.decisions} = '[]'::jsonb`,
-        isNull(suggestionTable.suppression),
-        isNull(suggestionTable.confirmedValue),
-        isNull(suggestionTable.acceptanceReceipt),
-      ),
-    );
 }
 
 const retired = {

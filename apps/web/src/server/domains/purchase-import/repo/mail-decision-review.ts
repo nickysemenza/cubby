@@ -271,21 +271,18 @@ async function applyReview(
   context: EntityKernelContext,
   handle: MailDecisionHandle,
   input: Review,
-  command: typeof emailReview.$inferSelect,
+  writeReview: (
+    db: Database,
+  ) => Promise<{ event: typeof emailReview.$inferSelect }>,
   prepared: PreparedEmailRelevanceCorrection | null,
   scope: EmailEvidenceWriteScope | null,
 ): Promise<Outcome> {
-  const outcome: Outcome = {
-    suggestionId: handle.id,
-    feedbackId: command.id,
-    status: "applied",
-    applied: true,
-  };
   // Serialize commands without taking row locks ahead of the domain's parents.
   // Same key as generic review, so both commands serialize on one Suggestion.
   await advisoryXactLock(getDb(db), "suggestion-review", handle.id);
   const prior = await applicationReceipt(db, handle, input.operationId);
   if (prior) {
+    const { event: command } = await writeReview(db);
     const receipt = z
       .object({ commandFeedbackId: z.uuid() })
       .safeParse(prior.metadata);
@@ -307,10 +304,7 @@ async function applyReview(
       throw new Error(
         "Suggestion already resolved by another command; request a fresh suggestion",
       );
-    if (
-      input.expectedFingerprint !== undefined &&
-      input.expectedFingerprint !== current.evidenceChecksum
-    )
+    if (input.expectedFingerprint !== (current.evidenceChecksum ?? handle.id))
       throw new Error("Suggestion evidence fingerprint changed");
     const subject = suggestionSubjects.email_link.parse(handle.subject);
     if (!subject.recordId)
@@ -370,10 +364,7 @@ async function applyReview(
       throw new Error(
         "Suggestion already resolved by another command; request a fresh suggestion",
       );
-    if (
-      input.expectedFingerprint !== undefined &&
-      input.expectedFingerprint !== handle.fingerprint
-    )
+    if (input.expectedFingerprint !== (handle.fingerprint ?? handle.id))
       throw new Error("Suggestion evidence fingerprint changed");
     if (!scope)
       throw new Error("Email application requires its outer write scope");
@@ -388,6 +379,14 @@ async function applyReview(
       scope,
     );
   }
+  // The review commits with its application: a refused application records nothing.
+  const { event: command } = await writeReview(db);
+  const outcome: Outcome = {
+    suggestionId: handle.id,
+    feedbackId: command.id,
+    status: "applied",
+    applied: true,
+  };
   await appendEmailReview(db, {
     family: handle.family,
     subjectId: handle.id,
@@ -406,7 +405,7 @@ async function applyReview(
   return outcome;
 }
 
-/** Command review is durable before this provider-preparation boundary. */
+/** A committed receipt replays before provider preparation; the review commits with the application. */
 async function prepareAndApplyRelevance(
   db: Database,
   context: EntityKernelContext,
@@ -452,8 +451,8 @@ async function prepareAndApplyRelevance(
 }
 
 /**
- * `suggestion.review` of a mail decision. History settles first: a stale or
- * refused application cannot erase the review.
+ * `suggestion.review` of a mail decision. Draft and history verdicts settle on
+ * their own; an applying review commits with its application.
  */
 export async function settleMailDecisionReview(
   db: Database,
@@ -486,16 +485,6 @@ export async function settleMailDecisionReview(
         expectedFingerprint: input.expectedFingerprint ?? null,
       },
     });
-  const { event } = await withEmailReviewBoundary(
-    db,
-    handle,
-    (scopedDb) =>
-      withTransactionDatabase(scopedDb, async (transactionDb) => {
-        const publication = await writeReview(transactionDb);
-        return publication;
-      }),
-    emailScope,
-  );
   if (input.intent === "apply") {
     const execute = (prepared: PreparedEmailRelevanceCorrection | null) =>
       withEmailReviewBoundary(
@@ -508,7 +497,7 @@ export async function settleMailDecisionReview(
               { ...context, db: transactionDb },
               handle,
               input,
-              event,
+              writeReview,
               prepared,
               scope,
             ),
@@ -519,6 +508,12 @@ export async function settleMailDecisionReview(
       ? prepareAndApplyRelevance(db, context, handle, input, execute)
       : execute(null);
   }
+  const { event } = await withEmailReviewBoundary(
+    db,
+    handle,
+    (scopedDb) => withTransactionDatabase(scopedDb, writeReview),
+    emailScope,
+  );
   const status = await withEmailReviewBoundary(
     db,
     handle,

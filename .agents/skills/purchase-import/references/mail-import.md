@@ -24,8 +24,8 @@ Claude or Codex session researches it later through the Research queue.
    `purchase_import_read` `mail_read` only for an attachment's original (`attachmentId`,
    when the order details live in a PDF or image) or a later page. Note the
    read's `checksum`; item `images` give the exact `src` for a line's
-   `imageUrl`. When `content.nextOffset` is not null,
-   read again with `offset` set to it until it is null before extracting
+   `imageUrl`. When `content.nextByteOffset` is not null,
+   read again with `byteOffset` set to it until it is null before extracting
    lines or a total. If `content.truncated` is still true after the last page,
    evidence is missing: import only when every item line and the total are
    present; otherwise `purchase_import` `mail_resolve` it `unresolved` naming what is missing. Set its category to `missing_evidence`, `invalid_extraction`, `identity_ambiguity`, `member_decision`, `source_held`, `transient_failure` or `unknown` as appropriate; a category never grants extra authority.

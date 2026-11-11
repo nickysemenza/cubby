@@ -768,7 +768,7 @@ export async function admitMailImport(
           newEvidenceAt = new Date(current.evidenceAt);
           for (const source of sources) {
             const content = mailReadContent(source.content, {});
-            if (content.truncated || content.nextOffset !== null) return [];
+            if (content.truncated || content.nextByteOffset !== null) return [];
             const candidates = await readMailRuleCandidates(
               databaseForTransaction(tx),
               {
@@ -1432,7 +1432,7 @@ export async function importPendingEmails(db: Database) {
       const identifiers = new Map<string, string[]>();
       for (const original of originals) {
         const content = mailReadContent(original.content, {});
-        if (!content.truncated && content.nextOffset === null)
+        if (!content.truncated && content.nextByteOffset === null)
           identifiers.set(
             original.id,
             (await readEmailMailKeys(db, original)).orderKeys,

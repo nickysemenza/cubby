@@ -47,6 +47,7 @@ const source: WorkSource = {
     const ids = scope.record
       ? await touchingSuggestionIds(db, {
           entity: scope.record.entity,
+          includeRelated: true,
           records: [
             {
               entity: scope.record.entity,
