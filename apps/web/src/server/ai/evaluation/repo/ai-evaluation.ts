@@ -294,6 +294,33 @@ export async function settleAiEvaluations(
   });
 }
 
+/** The tail of each page's publication queue, keyed by its lease token. */
+const publicationTurns = new Map<string, Promise<void>>();
+
+/**
+ * One SERIALIZABLE publication at a time per page, while its items' inference
+ * still overlaps: concurrent siblings read each other's rows (a Purchase's
+ * lines, shared index pages) and abort each other. One page per feature
+ * (`aiEvaluationStore`) makes this one publisher per feature. The token is
+ * one invocation's, so no promise crosses requests.
+ */
+async function inPublicationTurn<T>(token: string, publish: () => Promise<T>) {
+  const previous = publicationTurns.get(token) ?? Promise.resolve();
+  let finish!: () => void;
+  const done = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const tail = previous.then(() => done);
+  publicationTurns.set(token, tail);
+  await previous;
+  try {
+    return await publish();
+  } finally {
+    finish();
+    if (publicationTurns.get(token) === tail) publicationTurns.delete(token);
+  }
+}
+
 /** DB-only publication replays its guards and receipt together; paid inference stays outside. */
 export async function publishAiEvaluation<T>(
   db: Database,
@@ -301,6 +328,18 @@ export async function publishAiEvaluation<T>(
   token: string,
   work: (tx: Database) => Promise<T>,
   settlement: "complete" | "continue" = "complete",
+) {
+  return inPublicationTurn(token, () =>
+    publishAiEvaluationNow(db, id, token, work, settlement),
+  );
+}
+
+async function publishAiEvaluationNow<T>(
+  db: Database,
+  id: string,
+  token: string,
+  work: (tx: Database) => Promise<T>,
+  settlement: "complete" | "continue",
 ) {
   return withSnapshotWriteDatabase(
     db,
