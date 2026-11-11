@@ -492,6 +492,8 @@ async function completeNoActionTargets(
     scope?: StatementSuggestionScope;
   },
 ) {
+  // Import authority executes the import-only rules, so none is a no-action stamp.
+  const importAuthority = Boolean(input.scope?.importId);
   const window = [];
   const positions: number[] = [];
   for (const [index, next] of input.targets.entries()) {
@@ -507,7 +509,9 @@ async function completeNoActionTargets(
       !evidenceFingerprint ||
       // A nonempty hint only declines batching. Absence still needs locked proof.
       matchStatementRules(next.row.judgment).some(
-        (match) => !importOnlyStatementRuleStamps().includes(match.stamp),
+        (match) =>
+          importAuthority ||
+          !importOnlyStatementRuleStamps().includes(match.stamp),
       )
     )
       break;
@@ -590,24 +594,26 @@ async function applyPublishedStatementLabels(
       continue;
     }
     try {
-      // Import-scoped application regenerates first and may introduce rules.
-      // A freshly locked no-rule prefix can bypass rule admission without
-      // import authority; its receipt completion still enforces the full scope.
-      const settled = importId
-        ? 0
-        : await completeNoActionTargets(db, {
-            targets: targets.slice(
-              targetIndex,
-              targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
-            ),
-            receipts,
-            published,
-            skipped,
-            failedCharges,
-            completed,
-            unfinished,
-            scope,
-          });
+      // A freshly locked prefix with no matching rule needs no effect and no
+      // regeneration; its receipt completion still enforces the full scope.
+      // After an application in this call, ledger evidence may have moved under
+      // the remaining receipts, so import scope regenerates each from here on.
+      const settled =
+        importId && applied.size
+          ? 0
+          : await completeNoActionTargets(db, {
+              targets: targets.slice(
+                targetIndex,
+                targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
+              ),
+              receipts,
+              published,
+              skipped,
+              failedCharges,
+              completed,
+              unfinished,
+              scope,
+            });
       if (settled) {
         targetIndex += settled - 1;
         continue;
