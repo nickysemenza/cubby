@@ -862,18 +862,28 @@ async function runStatementLabelBatch(
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: JobDeferredError[] = [];
+  // Admission resolves account-wide evidence, so each call is one preparation.
+  // A round admits twice: before model work, so nothing out of scope is paid
+  // for, and after it, because provider waits let account mappings move. The
+  // writes that follow (publication, application) enforce the scope in their
+  // own transactions, and a ledger write in this pass only happens in
+  // application, whose next round admits again.
   const admitTargets = async () => {
     const scope = input.scope;
     if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
       return;
+    const live = targets.filter(
+      (target) => !skipped.has(chargeId(target.charge)),
+    );
+    if (!live.length) return;
     const admitted = await statementLabelTargetsInScope(
       db,
       scope,
-      targets.map((target) => target.row.id),
+      live.map((target) => target.row.id),
     );
-    for (const target of targets) {
+    for (const target of live) {
       const key = chargeId(target.charge);
-      if (admitted.has(target.row.id) || skipped.has(key)) continue;
+      if (admitted.has(target.row.id)) continue;
       skipped.add(key);
       skippedIds.push(target.row.id);
       unfinished.delete(target.row.cursorId);
@@ -1236,7 +1246,6 @@ async function runStatementLabelBatch(
         fail(current.charge, error);
       }
     }
-    await admitTargets();
     const { applied, rebuild, excluded } = await time(
       "statement_application",
       () =>
