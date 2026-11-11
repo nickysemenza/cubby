@@ -9,6 +9,7 @@ import {
   financialSpendingRequest,
   financialSpendingSource,
   financialSpendingCostType,
+  type FinancialBookingInput,
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
@@ -17,7 +18,11 @@ import {
   financialTransactionStatus,
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
-import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  type FinancialTransactionShortcode,
+  parseShortcodeFor,
+  parseEntityId,
+} from "@cubby/schemas/identifiers";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import { moneyToMinor, cents } from "@cubby/shared";
@@ -26,7 +31,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
@@ -87,7 +92,7 @@ import {
 } from "~/server/lib/canonical-json";
 
 import {
-  bookFinancialTransaction,
+  bookFinancialTransactions,
   bookingGraph,
   bookingGraphs,
   digestValue,
@@ -2034,186 +2039,256 @@ export async function commitFinancialSpending(
   actor: ActorContext,
   transactionId = plan.request.transactionId,
 ) {
-  if (plan.status === "review_required")
-    return refuse(`Spending needs review: ${plan.reason}`);
-  if (plan.status === "deferred") return null;
-  if (plan.status === "ready" && !plan.purchaserSnapshot)
-    return refuse(
-      "Spending purchaser proof is missing; refresh the booking and review again.",
-    );
-  if (!transactionId)
-    return refuse(
-      "Create the financial transaction before applying its spending plan.",
-    );
-  return withSnapshotWrite(
+  const [result] = await commitFinancialSpendings(
+    db,
+    [{ plan, transactionId }],
+    actor,
+  );
+  return result ?? null;
+}
+
+type FinancialSpendingResult = { purchaseIds: string[]; replayed: boolean };
+
+/**
+ * Commit spending plans in one snapshot write: one source lock statement per
+ * namespace across every transaction, each plan rechecked in input order, and
+ * every resulting booking committed together. Deferred plans return null; an
+ * omitted transactionId means the plan's own.
+ */
+export async function commitFinancialSpendings(
+  db: Database,
+  entries: readonly {
+    plan: FinancialSpendingPlan;
+    transactionId?: FinancialTransactionShortcode | null;
+  }[],
+  actor: ActorContext,
+): Promise<(FinancialSpendingResult | null)[]> {
+  const committed: {
+    index: number;
+    plan: Exclude<
+      FinancialSpendingPlan,
+      { status: "review_required" | "deferred" }
+    >;
+    transactionId: FinancialTransactionShortcode;
+  }[] = [];
+  for (const [index, entry] of entries.entries()) {
+    const { plan } = entry;
+    const transactionId =
+      entry.transactionId === undefined
+        ? plan.request.transactionId
+        : entry.transactionId;
+    if (plan.status === "review_required")
+      return refuse(`Spending needs review: ${plan.reason}`);
+    if (plan.status === "deferred") continue;
+    if (plan.status === "ready" && !plan.purchaserSnapshot)
+      return refuse(
+        "Spending purchaser proof is missing; refresh the booking and review again.",
+      );
+    if (!transactionId)
+      return refuse(
+        "Create the financial transaction before applying its spending plan.",
+      );
+    committed.push({ index, plan, transactionId });
+  }
+  const results: (FinancialSpendingResult | null)[] = entries.map(() => null);
+  if (!committed.length) return results;
+  await withSnapshotWrite(
     db,
     async (tx) => {
       const txDb = databaseForTransaction(tx);
-      await lockFinancialTransactionSources(tx, [transactionId]);
-      const fresh = await previewFinancialSpending(txDb, {
-        ...plan.request,
-        source: undefined,
-        transactionId,
-      });
-      if (fresh.status === "already_booked") {
-        const facts = await spendingFacts(txDb, fresh.request);
-        if (
-          plan.status === "already_booked" &&
-          plan.snapshot !== fresh.snapshot
-        )
-          return refuse(
-            "Booked spending evidence changed; review its identity again.",
-          );
-        if (plan.status === "ready") {
-          const [identity] = await resolveNames(
-            txDb,
-            "vendor",
-            [{ name: plan.vendorName }],
-            { create: false },
-          );
-          const acceptedVendorCode = plan.vendorId;
-          const acceptedVendor = acceptedVendorCode
-            ? await getDb(txDb).query.vendor.findFirst({
-                where: {
-                  RAW: (table: PgTable) =>
-                    relationalSql(
-                      table,
-                      and(
-                        eq(vendorTable.shortcode, acceptedVendorCode),
-                        notDeleted(vendorTable),
-                      ),
-                    ),
-                },
-              })
-            : identity?.row;
-          if (
-            (facts.purchaser?.shortcode ?? null) !== plan.purchaserId ||
-            plan.purchaserSnapshot !==
-              (await digestValue({
-                account: facts.account,
-                purchaserProof: facts.purchaserProof,
-              })) ||
-            !acceptedVendor ||
-            facts.graphs.some(
-              (graph) =>
-                !graph.target || graph.target.vendorId !== acceptedVendor.id,
-            ) ||
-            (plan.purchaseId && !fresh.purchaseIds.includes(plan.purchaseId))
-          )
-            return refuse(
-              "The accepted spending identity changed; review its purchaser authority and Purchase Vendor.",
-            );
-        }
-        return { purchaseIds: fresh.purchaseIds, replayed: true };
-      }
-      if (fresh.status !== "ready" || fresh.snapshot !== plan.snapshot)
-        return refuse(
-          "Spending evidence changed; refresh the booking and review again.",
-        );
-      const facts = await spendingFacts(txDb, fresh.request);
-      if (fresh.effect === "settle_existing" && fresh.purchaseId) {
-        const purchaseId = await resolveOrThrow(
+      await lockFinancialTransactionSources(
+        tx,
+        committed.map((entry) => entry.transactionId),
+      );
+      const bookings: { index: number; input: FinancialBookingInput }[] = [];
+      for (const { index, plan, transactionId } of committed) {
+        const outcome = await recheckFinancialSpending(
           txDb,
-          "purchase",
-          fresh.purchaseId,
-        );
-        const result = await settlePurchaseFromRetainedPayments(tx, {
-          purchaseId,
-          ledgerPartyId: facts.account.ledgerPartyId!,
+          tx,
+          plan,
+          transactionId,
           actor,
-        });
-        if (result !== "allocated")
-          return refuse(`Retained settlement needs review: ${result}`);
-        const booked = await previewFinancialSpending(txDb, fresh.request);
-        if (booked.status !== "already_booked")
-          return refuse(
-            "Retained settlement did not establish booked spending; review its Expenses.",
-          );
-        return { purchaseIds: booked.purchaseIds, replayed: false };
+        );
+        if ("booking" in outcome)
+          bookings.push({ index, input: outcome.booking });
+        else results[index] = outcome;
       }
-      const merchant =
-        facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
-      const names = [
-        ...new Set(
-          [merchant, fresh.vendorName].filter((value): value is string =>
-            Boolean(value),
-          ),
-        ),
-      ];
-      const checked = await resolveNames(
+      const booked = await bookFinancialTransactions(
+        txDb,
+        bookings.map((booking) => booking.input),
+        actor,
+      );
+      for (const [position, { index }] of bookings.entries()) {
+        const saved = booked[position]!;
+        results[index] = {
+          purchaseIds: [saved.purchaseId],
+          replayed: saved.replayed,
+        };
+      }
+    },
+    { isolationLevel: "serializable" },
+  );
+  return results;
+}
+
+/** Recheck one plan under the batch's locks; a booking is returned, not written. */
+async function recheckFinancialSpending(
+  txDb: Database,
+  tx: DrizzleTransaction,
+  plan: Exclude<
+    FinancialSpendingPlan,
+    { status: "review_required" | "deferred" }
+  >,
+  transactionId: FinancialTransactionShortcode,
+  actor: ActorContext,
+): Promise<FinancialSpendingResult | { booking: FinancialBookingInput }> {
+  const fresh = await previewFinancialSpending(txDb, {
+    ...plan.request,
+    source: undefined,
+    transactionId,
+  });
+  if (fresh.status === "already_booked") {
+    const facts = await spendingFacts(txDb, fresh.request);
+    if (plan.status === "already_booked" && plan.snapshot !== fresh.snapshot)
+      return refuse(
+        "Booked spending evidence changed; review its identity again.",
+      );
+    if (plan.status === "ready") {
+      const [identity] = await resolveNames(
         txDb,
         "vendor",
-        names.map((name) => ({ name })),
+        [{ name: plan.vendorName }],
         { create: false },
       );
-      if (
-        !fresh.request.vendorId &&
-        checked.some(
-          (result) =>
-            (result.row && result.row.shortcode !== fresh.vendorId) ||
-            result.candidates.some(
-              (candidate) => candidate.shortcode !== fresh.vendorId,
-            ),
-        )
-      )
-        return refuse(
-          "The raw or cleaned Vendor identity changed before booking.",
-        );
-      const selectedVendorCode = fresh.request.vendorId;
-      const selectedVendor = selectedVendorCode
+      const acceptedVendorCode = plan.vendorId;
+      const acceptedVendor = acceptedVendorCode
         ? await getDb(txDb).query.vendor.findFirst({
             where: {
               RAW: (table: PgTable) =>
                 relationalSql(
                   table,
                   and(
-                    eq(vendorTable.shortcode, selectedVendorCode),
+                    eq(vendorTable.shortcode, acceptedVendorCode),
                     notDeleted(vendorTable),
                   ),
                 ),
             },
           })
-        : undefined;
-      const [resolved] = selectedVendor
-        ? [{ row: selectedVendor, candidates: [] }]
-        : fresh.vendorId
-          ? checked.filter((result) => result.row?.shortcode === fresh.vendorId)
-          : await resolveNames(
-              txDb,
-              "vendor",
-              [
-                {
-                  name: fresh.vendorName,
-                  values: async () => ({
-                    aliases:
-                      merchant && merchant !== fresh.vendorName
-                        ? [merchant]
-                        : [],
-                  }),
-                },
-              ],
-              { create: true, actor },
-            );
-      if (!resolved?.row || resolved.candidates.length)
-        return refuse("The Vendor identity changed before booking.");
-      const booked = await bookFinancialTransaction(
-        txDb,
-        financialBookingInput.parse({
-          transactionId,
-          purchaseId: fresh.purchaseId,
-          vendorId: resolved.row.shortcode,
-          spendingCategoryId: fresh.spendingCategoryId,
-          purchaserId: fresh.purchaserId,
-          costType: financialSpendingCostType(
-            facts.source.kind,
-            fresh.request.costType,
-          ),
-          beneficiaries: fresh.request.beneficiaries,
-        }),
-        actor,
+        : identity?.row;
+      if (
+        (facts.purchaser?.shortcode ?? null) !== plan.purchaserId ||
+        plan.purchaserSnapshot !==
+          (await digestValue({
+            account: facts.account,
+            purchaserProof: facts.purchaserProof,
+          })) ||
+        !acceptedVendor ||
+        facts.graphs.some(
+          (graph) =>
+            !graph.target || graph.target.vendorId !== acceptedVendor.id,
+        ) ||
+        (plan.purchaseId && !fresh.purchaseIds.includes(plan.purchaseId))
+      )
+        return refuse(
+          "The accepted spending identity changed; review its purchaser authority and Purchase Vendor.",
+        );
+    }
+    return { purchaseIds: fresh.purchaseIds, replayed: true };
+  }
+  if (fresh.status !== "ready" || fresh.snapshot !== plan.snapshot)
+    return refuse(
+      "Spending evidence changed; refresh the booking and review again.",
+    );
+  const facts = await spendingFacts(txDb, fresh.request);
+  if (fresh.effect === "settle_existing" && fresh.purchaseId) {
+    const purchaseId = await resolveOrThrow(txDb, "purchase", fresh.purchaseId);
+    const result = await settlePurchaseFromRetainedPayments(tx, {
+      purchaseId,
+      ledgerPartyId: facts.account.ledgerPartyId!,
+      actor,
+    });
+    if (result !== "allocated")
+      return refuse(`Retained settlement needs review: ${result}`);
+    const booked = await previewFinancialSpending(txDb, fresh.request);
+    if (booked.status !== "already_booked")
+      return refuse(
+        "Retained settlement did not establish booked spending; review its Expenses.",
       );
-      return { purchaseIds: [booked.purchaseId], replayed: booked.replayed };
-    },
-    { isolationLevel: "serializable" },
+    return { purchaseIds: booked.purchaseIds, replayed: false };
+  }
+  const merchant =
+    facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
+  const names = [
+    ...new Set(
+      [merchant, fresh.vendorName].filter((value): value is string =>
+        Boolean(value),
+      ),
+    ),
+  ];
+  const checked = await resolveNames(
+    txDb,
+    "vendor",
+    names.map((name) => ({ name })),
+    { create: false },
   );
+  if (
+    !fresh.request.vendorId &&
+    checked.some(
+      (result) =>
+        (result.row && result.row.shortcode !== fresh.vendorId) ||
+        result.candidates.some(
+          (candidate) => candidate.shortcode !== fresh.vendorId,
+        ),
+    )
+  )
+    return refuse("The raw or cleaned Vendor identity changed before booking.");
+  const selectedVendorCode = fresh.request.vendorId;
+  const selectedVendor = selectedVendorCode
+    ? await getDb(txDb).query.vendor.findFirst({
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(vendorTable.shortcode, selectedVendorCode),
+                notDeleted(vendorTable),
+              ),
+            ),
+        },
+      })
+    : undefined;
+  const [resolved] = selectedVendor
+    ? [{ row: selectedVendor, candidates: [] }]
+    : fresh.vendorId
+      ? checked.filter((result) => result.row?.shortcode === fresh.vendorId)
+      : await resolveNames(
+          txDb,
+          "vendor",
+          [
+            {
+              name: fresh.vendorName,
+              values: async () => ({
+                aliases:
+                  merchant && merchant !== fresh.vendorName ? [merchant] : [],
+              }),
+            },
+          ],
+          { create: true, actor },
+        );
+  if (!resolved?.row || resolved.candidates.length)
+    return refuse("The Vendor identity changed before booking.");
+  return {
+    booking: financialBookingInput.parse({
+      transactionId,
+      purchaseId: fresh.purchaseId,
+      vendorId: resolved.row.shortcode,
+      spendingCategoryId: fresh.spendingCategoryId,
+      purchaserId: fresh.purchaserId,
+      costType: financialSpendingCostType(
+        facts.source.kind,
+        fresh.request.costType,
+      ),
+      beneficiaries: fresh.request.beneficiaries,
+    }),
+  };
 }

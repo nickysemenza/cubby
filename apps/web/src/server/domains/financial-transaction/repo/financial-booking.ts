@@ -11,8 +11,8 @@ import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { cents, minorToMoney } from "@cubby/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { cents, minorToMoney, type ShortcodeFor } from "@cubby/shared";
+import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
@@ -58,7 +58,10 @@ import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchan
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { updateFinancialTransaction } from "./financial-transaction";
 
@@ -657,111 +660,165 @@ export async function commitFinancialBooking(
   review: FinancialBookingPreview,
   actor: ActorContext,
 ) {
+  const [saved] = await commitFinancialBookings(db, [review], actor);
+  return saved!;
+}
+
+type FinancialBookingResult = {
+  purchaseId: ShortcodeFor<"purchase">;
+  expenseId: ShortcodeFor<"expense"> | null;
+  replayed: boolean;
+};
+
+/**
+ * Commit reviewed bookings in one snapshot write. Replays are read first;
+ * the remaining bookings take their source and party locks together, write in
+ * input order with each fresh preview seeing earlier writes, and then stamp
+ * every fingerprint in one statement.
+ */
+export async function commitFinancialBookings(
+  db: Database,
+  reviews: readonly FinancialBookingPreview[],
+  actor: ActorContext,
+): Promise<FinancialBookingResult[]> {
+  if (!reviews.length) return [];
+  if (
+    new Set(reviews.map((review) => review.transactionId)).size !==
+    reviews.length
+  )
+    throw new Error("One booking batch names a transaction twice");
   return withSnapshotWrite(
     db,
     async (tx) => {
       const txDb = databaseForTransaction(tx);
-      const replayed = await replayBooking(txDb, review);
-      if (replayed) return replayed;
-      await lockFinancialTransactionSources(tx, [review.transactionId]);
-      await lockLedgerPartiesForReference(tx, [
-        ...(review.purchaserId ? [review.purchaserId] : []),
-        ...(review.beneficiaries?.flatMap((share) =>
-          share.partyId ? [share.partyId] : [],
-        ) ?? []),
-      ]);
-      const fresh = await previewFinancialBooking(txDb, {
-        ...review,
-        spendingCategoryId: review.categoryOverride,
-      });
-      if (
-        JSON.stringify(fresh) !==
-        JSON.stringify(financialBookingPreview.parse(review))
-      )
-        return constraintViolation(
-          "Spending changed after this review. Preview the booking again.",
-        );
-      const target =
-        review.purchaseId ??
-        parseShortcodeFor(
-          "purchase",
-          (
-            await createPurchase.read(
-              ["id"],
-              txDb,
-              purchaseCreateInput.parse({
-                vendorId: review.vendorId,
-                defaultTrade: review.trade,
-                date: fresh.date,
-                displayLabel: fresh.name,
-                purchaserOverrideId: review.purchaserId,
-              }),
-              actor,
-            )
-          ).output.id,
-        );
-      let expenseId = null;
-      if (fresh.action === "create_aggregate") {
-        const created = await createExpense.read(
+      const results: (FinancialBookingResult | null)[] = [];
+      for (const review of reviews)
+        results.push(await replayBooking(txDb, review));
+      const pending = reviews.filter((_, index) => !results[index]);
+      const settled = () =>
+        results.map((result) => {
+          if (!result) throw new Error("A booking in the batch has no result");
+          return result;
+        });
+      if (!pending.length) return settled();
+      await lockFinancialTransactionSources(
+        tx,
+        pending.map((review) => review.transactionId),
+      );
+      await lockLedgerPartiesForReference(
+        tx,
+        pending.flatMap((review) => [
+          ...(review.purchaserId ? [review.purchaserId] : []),
+          ...(review.beneficiaries?.flatMap((share) =>
+            share.partyId ? [share.partyId] : [],
+          ) ?? []),
+        ]),
+      );
+      for (const [index, review] of reviews.entries()) {
+        if (results[index]) continue;
+        const fresh = await previewFinancialBooking(txDb, {
+          ...review,
+          spendingCategoryId: review.categoryOverride,
+        });
+        if (
+          JSON.stringify(fresh) !==
+          JSON.stringify(financialBookingPreview.parse(review))
+        )
+          return constraintViolation(
+            "Spending changed after this review. Preview the booking again.",
+          );
+        const target =
+          review.purchaseId ??
+          parseShortcodeFor(
+            "purchase",
+            (
+              await createPurchase.read(
+                ["id"],
+                txDb,
+                purchaseCreateInput.parse({
+                  vendorId: review.vendorId,
+                  defaultTrade: review.trade,
+                  date: fresh.date,
+                  displayLabel: fresh.name,
+                  purchaserOverrideId: review.purchaserId,
+                }),
+                actor,
+              )
+            ).output.id,
+          );
+        let expenseId = null;
+        if (fresh.action === "create_aggregate") {
+          const created = await createExpense.read(
+            ["id"],
+            txDb,
+            expenseCreateInput.parse({
+              name: fresh.name,
+              cost: fresh.amount,
+              date: fresh.date,
+              purchaseId: target,
+              spendingCategoryId: review.categoryOverride,
+              economicRole: review.economicRole,
+              costType: review.costType,
+              trade: review.trade,
+              lineKind: "principal",
+              lineBasis: "allocation",
+              beneficiaries: review.beneficiaries,
+            }),
+            actor,
+          );
+          await getDb(txDb)
+            .update(expense)
+            .set({ bookingTransactionCode: review.transactionId })
+            .where(eq(expense.id, created.entityId));
+          expenseId = parseShortcodeFor("expense", created.output.id);
+        }
+        await updateFinancialTransaction.read(
           ["id"],
           txDb,
-          expenseCreateInput.parse({
-            name: fresh.name,
-            cost: fresh.amount,
-            date: fresh.date,
-            purchaseId: target,
-            spendingCategoryId: review.categoryOverride,
-            economicRole: review.economicRole,
-            costType: review.costType,
-            trade: review.trade,
-            lineKind: "principal",
-            lineBasis: "allocation",
-            beneficiaries: review.beneficiaries,
-          }),
+          review.transactionId,
+          {
+            allocations: [
+              {
+                purchaseId: target,
+                amount: fresh.amount,
+                confirmsMerchant: fresh.confirmsMerchant,
+              },
+            ],
+          },
           actor,
         );
-        await getDb(txDb)
-          .update(expense)
-          .set({ bookingTransactionCode: review.transactionId })
-          .where(eq(expense.id, created.entityId));
-        expenseId = parseShortcodeFor("expense", created.output.id);
+        results[index] = { purchaseId: target, expenseId, replayed: false };
       }
-      await updateFinancialTransaction.read(
-        ["id"],
-        txDb,
-        review.transactionId,
-        {
-          allocations: [
-            {
-              purchaseId: target,
-              amount: fresh.amount,
-              confirmsMerchant: fresh.confirmsMerchant,
-            },
-          ],
-        },
-        actor,
-      );
-      const id = await resolveOrThrow(
+      const ids = await resolveAllOrThrow(
         txDb,
         "financialTransaction",
-        review.transactionId,
+        pending.map((review) => review.transactionId),
       );
+      const fingerprints: SQL[] = [];
+      const lineages: SQL[] = [];
+      for (const [index, review] of pending.entries()) {
+        const id = ids[index]!;
+        fingerprints.push(
+          sql`WHEN ${id}::uuid THEN ${await digestValue(financialBookingPreview.parse(review))}`,
+        );
+        lineages.push(
+          sql`WHEN ${id}::uuid THEN ${await digestValue(
+            await loadFinancialBookingLineage(txDb, review.transactionId),
+          )}`,
+        );
+      }
       await getDb(txDb)
         .update(financialTransaction)
         .set({
-          bookingDecisionFingerprint: await digestValue(
-            financialBookingPreview.parse(review),
-          ),
-          bookingExpenseFingerprint: await digestValue(
-            await loadFinancialBookingLineage(txDb, review.transactionId),
-          ),
+          bookingDecisionFingerprint: sql`CASE ${financialTransaction.id} ${sql.join(fingerprints, sql` `)} END`,
+          bookingExpenseFingerprint: sql`CASE ${financialTransaction.id} ${sql.join(lineages, sql` `)} END`,
         })
-        .where(eq(financialTransaction.id, id));
+        .where(inArray(financialTransaction.id, ids));
       await recordChange(txDb, {
         kind: "source",
         categories: ["purchase", "financialTransaction", "expense"],
       });
-      return { purchaseId: target, expenseId, replayed: false };
+      return settled();
     },
     { isolationLevel: "serializable" },
   );
@@ -836,7 +893,20 @@ export async function bookFinancialTransaction(
   raw: FinancialBookingInput,
   actor: ActorContext,
 ) {
-  const input = financialBookingInput.parse(raw);
-  const review = await previewFinancialBooking(db, input);
-  return commitFinancialBooking(db, review, actor);
+  const [saved] = await bookFinancialTransactions(db, [raw], actor);
+  return saved!;
+}
+
+/** Preview every booking, then commit them together in input order. */
+export async function bookFinancialTransactions(
+  db: Database,
+  raws: readonly FinancialBookingInput[],
+  actor: ActorContext,
+) {
+  const reviews: FinancialBookingPreview[] = [];
+  for (const raw of raws)
+    reviews.push(
+      await previewFinancialBooking(db, financialBookingInput.parse(raw)),
+    );
+  return commitFinancialBookings(db, reviews, actor);
 }

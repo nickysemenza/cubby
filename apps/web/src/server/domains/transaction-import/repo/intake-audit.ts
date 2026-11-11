@@ -26,16 +26,15 @@ export function evidenceChanges<T extends object>(
   return Object.keys(changes).length ? changes : undefined;
 }
 
-export async function auditEvidenceRows<T extends { id: string }>(
-  db: Database | DrizzleTransaction,
-  actor: ActorContext,
+/** Audit entries for evidence rows whose stored values changed, in `after` order. */
+export function evidenceAuditEntries<T extends { id: string }>(
   entityKind:
     | "sourceTransactionRecord"
     | "transactionImport"
     | "sourceOccurrence",
   before: readonly T[],
   after: readonly T[],
-) {
+): AuditEntryInput[] {
   const previous = new Map(before.map((row) => [row.id, row]));
   const entries: AuditEntryInput[] = [];
   for (const row of after) {
@@ -49,5 +48,22 @@ export async function auditEvidenceRows<T extends { id: string }>(
         changes,
       });
   }
-  await logAuditEntries(db, actor, entries);
+  return entries;
+}
+
+export async function auditEvidenceRows<T extends { id: string }>(
+  db: Database | DrizzleTransaction,
+  actor: ActorContext,
+  entityKind:
+    | "sourceTransactionRecord"
+    | "transactionImport"
+    | "sourceOccurrence",
+  before: readonly T[],
+  after: readonly T[],
+) {
+  await logAuditEntries(
+    db,
+    actor,
+    evidenceAuditEntries(entityKind, before, after),
+  );
 }
