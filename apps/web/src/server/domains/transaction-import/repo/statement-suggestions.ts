@@ -3312,37 +3312,30 @@ async function prepareStatementGenerationPage(
   }
 }
 
-/**
- * Refresh named charges once the writing transaction commits. Calls in one
- * transaction or MCP batch coalesce per source, so a batch regenerates each
- * charge once after its last write.
- */
+/** Refresh named charges once after the writing transaction commits. */
 export async function regenerateChargesAfterCommit(
   db: Parameters<typeof runAfterCommit>[0],
   charges: readonly ChargeRef[],
 ) {
-  for (const source of new Set(charges.map((charge) => charge.source))) {
-    const items = charges.filter((charge) => charge.source === source);
-    await runAfterCommit(db, {
-      key: `statement-charges:${source}`,
-      items: [...items],
-      flush: async (committed, queued: readonly ChargeRef[]) => {
-        try {
-          await regenerateCharges(committed, [
-            ...new Map(
-              queued.map((charge) => [chargeId(charge), charge]),
-            ).values(),
-          ]);
-        } catch (error) {
-          // SILENT: advisory refresh only; the write committed and each
-          // charge's own accept rechecks evidence, so the next Sweep repairs it.
-          log.error("Charge suggestion refresh failed", {
-            error: scrubErrorMessage(String(error)),
-          });
-        }
-      },
-    });
-  }
+  if (!charges.length) return;
+  await runAfterCommit(db, {
+    key: "statement-charges",
+    items: [...charges],
+    flush: async (committed, queued: readonly ChargeRef[]) => {
+      try {
+        await regenerateCharges(committed, [
+          ...new Map(
+            queued.map((charge) => [chargeId(charge), charge]),
+          ).values(),
+        ]);
+      } catch (error) {
+        // SILENT: advisory refresh only; each accept rechecks evidence.
+        log.error("Charge suggestion refresh failed", {
+          error: scrubErrorMessage(String(error)),
+        });
+      }
+    },
+  });
 }
 
 /** Recompute and publish named charges, e.g. the siblings of an applied one. */
