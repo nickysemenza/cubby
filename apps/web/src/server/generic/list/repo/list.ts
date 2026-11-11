@@ -6,6 +6,11 @@
  */
 import { scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
+import { PHASE_GROUPING_KEY } from "@cubby/schemas/entity-definitions/definition";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+} from "@cubby/schemas/entity-definitions/list-filters";
 import {
   generatedEntityListFields,
   type GeneratedListScopeKey,
@@ -17,12 +22,16 @@ import {
   entityMembership,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
-import type { GeneratedGroupChoice } from "@cubby/schemas/entity-projection-types";
+import type {
+  GeneratedGroupChoice,
+  GeneratedPhase,
+} from "@cubby/schemas/entity-projection-types";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   buildTakeSkip,
+  type ListBatch,
   listGroupByDimensionsSchema,
   type ListGroupMargin,
   type ListGroupMetric,
@@ -57,6 +66,7 @@ import type { PgColumn, PgAsyncSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
+import { generatedEntityFilterCodecs } from "~/entity/generated/entity-filter-codecs.gen";
 import { listEntities } from "~/entity/generated/entity-read-keys.gen";
 import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
@@ -73,6 +83,7 @@ import {
   shortcodeSetCondition,
   unwrapDb,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { executeListQueryWithoutCount } from "~/server/db/helpers/query";
 import {
   repositoryQueries,
@@ -129,6 +140,7 @@ import {
   derivedValueSql,
   groupSql,
   type ListGroupSql,
+  listComposedValue,
   listMetricSql,
   storedFieldValueSql,
   listFilterValues,
@@ -300,6 +312,25 @@ const listNestingCarrier = z
  */
 const listNestingFromFilters = (filters: unknown): ListNesting =>
   listNestingCarrier.parse(filters).nesting ?? { scope: "flat" };
+const listTreeBatchSchema = z
+  .object({
+    by: z.string(),
+    when: z.array(
+      z.object({
+        id: z.string(),
+        value: z.union([z.string(), z.array(z.string())]),
+      }),
+    ),
+  })
+  .nullable();
+type ListTreeBatch = NonNullable<z.infer<typeof listTreeBatchSchema>>;
+const listBatchRowSchema = z.object({
+  value: z.string(),
+  phase: z.string().nullable(),
+  state: z.string().nullable(),
+  count: z.number().int(),
+  latest: z.string().nullable(),
+});
 const listResultMembershipCarrier = z
   .object({ resultMembership: listResultMembership.optional() })
   .passthrough();
@@ -601,6 +632,54 @@ export function listScaffold<
       return [{ via: scope.via, nested, value }];
     });
   const fieldModel = fieldModelFor(entity);
+  /** A declared key's row SQL: its derived value, else its stored column. */
+  const scalarSql = (key: string, context: ListContext): SQL => {
+    if (key in derivedSql)
+      return derivedValueSql(entity, derivedSql, key, context);
+    const stored = fieldModel?.storage.find((field) => field.key === key);
+    if (stored === undefined) throw new Error(`${entity}.${key} has no SQL`);
+    return storedFieldValueSql(
+      entity,
+      `"${getTableName(table)}"`,
+      stored.column,
+    );
+  };
+  /** A single-valued field's group key: the value its section and filter read. */
+  const groupKeySql = (key: string, context: ListContext): SQL =>
+    groupSql(entity, { key }, derivedSql, table, context).key;
+  const phaseField = derivedFields[PHASE_GROUPING_KEY];
+  const phase: GeneratedPhase | null =
+    phaseField?.shape === "value" ? (phaseField.phase ?? null) : null;
+  // Inputs the phase reads; a request that reads the phase prepares them too.
+  const phaseInputs = phase
+    ? [phase.state, phase.stalled, phase.recentBy].filter(
+        (key): key is string => key !== null && key in derivedFields,
+      )
+    : [];
+  if (phase !== null) {
+    if (PHASE_GROUPING_KEY in derivedSql)
+      throw new Error(
+        `${entity}.${PHASE_GROUPING_KEY}: the kernel owns its SQL`,
+      );
+    const among = (value: SQL, values: readonly string[]) =>
+      sql`(${value})::text = ANY(${textArrayParam(values)})`;
+    derivedSql[PHASE_GROUPING_KEY] = listComposedValue((context) => {
+      const state = groupKeySql(phase.state, context);
+      const recentBy =
+        phase.recentBy === null || phase.recentDays === null
+          ? null
+          : scalarSql(phase.recentBy, context);
+      return sql`(CASE${phase.needs.length ? sql` WHEN ${among(state, phase.needs)} THEN ${"needs"}::text` : sql``}${
+        phase.stalled === null
+          ? sql``
+          : sql` WHEN (${scalarSql(phase.stalled, context)}) IS TRUE THEN ${"needs"}::text`
+      }${phase.active.length ? sql` WHEN ${among(state, phase.active)} THEN ${"active"}::text` : sql``}${
+        recentBy === null
+          ? sql``
+          : sql` WHEN ${recentBy} < now() - make_interval(days => ${phase.recentDays}::int) THEN ${"older"}::text`
+      } ELSE ${"finished"}::text END)`;
+    });
+  }
   const readDeclaration: ListReadDeclaration<Row> = options?.read ?? {};
   const listEntity = listEntityOf(entity);
   let plan: ReturnType<typeof listReadPlan<Row>> | undefined;
@@ -728,11 +807,74 @@ export function listScaffold<
   const scoreSort = scored ? dataQualitySortResolver(scored, table) : null;
   // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
   const listTable: PgTable = table;
+  const treeDeclaration = () =>
+    Object.entries(entitySummary).find(([key]) => key === entity)?.[1].list
+      .tree ?? null;
+  let batchDeclaration: ListTreeBatch | null | undefined;
+  /** The declared `list.tree.batch`, or null. */
+  const treeBatch = (): ListTreeBatch | null =>
+    (batchDeclaration ??= listTreeBatchSchema.parse(
+      treeDeclaration()?.batch ?? null,
+    ));
+  let batchWhen: ListFilterValues | undefined;
+  /** `list.tree.batch.when` as request filters, through the list's own codecs. */
+  const batchWhenFilters = (batch: ListTreeBatch): ListFilterValues => {
+    if (batchWhen) return batchWhen;
+    if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
+    batchWhen = listFilterValues.parse(
+      buildFiltersFromManifest(
+        generatedEntityFilterCodecs[listEntity],
+        filterGetterFromColumnFilters(batch.when),
+      ),
+    );
+    return batchWhen;
+  };
+  /** Whether a request folds or pages `list.tree.batch` rows. */
+  const readsBatches = (nesting: ListNesting): boolean =>
+    treeBatch() !== null &&
+    (nesting.scope === "batch" ||
+      ((nesting.scope === "roots" || nesting.scope === "children") &&
+        nesting.batches === true));
+  /** The derived keys the batch rule reads, for `context` to prepare. */
+  const batchReadKeys = (batch: ListTreeBatch): string[] => {
+    const when = new Set(batch.when.map((filter) => filter.id));
+    return [
+      ...(phase ? [PHASE_GROUPING_KEY] : []),
+      batch.by,
+      ...descriptorsFor(entity).flatMap((descriptor) =>
+        when.has(descriptor.columnId) && descriptor.derived !== null
+          ? [descriptor.derived]
+          : [],
+      ),
+    ].filter((key) => key in derivedFields);
+  };
+  /**
+   * One row's batch membership beside its scope: every `when` filter
+   * matches, it has a `by` value, and its phase is not `needs`. The window,
+   * the page's batch rows and the `batch` scope all read this one rule.
+   */
+  const batchRule = (context: ListContext) => {
+    const batch = treeBatch();
+    if (batch === null)
+      throw new Error(`${entity} declares no list.tree.batch`);
+    const by = groupKeySql(batch.by, context);
+    const phaseValue = phase
+      ? derivedValueSql(entity, derivedSql, PHASE_GROUPING_KEY, context)
+      : null;
+    return {
+      by,
+      phase: phaseValue,
+      state: phase ? groupKeySql(phase.state, context) : null,
+      member: and(
+        ...scaffold.filterPredicates(batchWhenFilters(batch), context),
+        sql`${by} IS NOT NULL`,
+        phaseValue ? sql`${phaseValue} <> ${"needs"}::text` : undefined,
+      ),
+    };
+  };
   /** The self-reference a declared `list.tree` nests under. */
   const treeParent = (): AnyColumn => {
-    const tree = Object.entries(entitySummary).find(
-      ([key]) => key === entity,
-    )?.[1].list.tree;
+    const tree = treeDeclaration();
     if (!tree) throw new Error(`${entity} declares no list.tree to nest by`);
     const columns: Record<string, AnyColumn> = getTableColumns(table);
     const column = columns[tree.parentField];
@@ -752,19 +894,122 @@ export function listScaffold<
     nesting: Exclude<ListNesting, { scope: "flat" }>,
     parent: AnyColumn,
     filtered: SQL | undefined,
+    context: ListContext,
   ): SQL => {
-    // TODO: page `list.tree.batch` members; until then the scope is refused
-    // rather than read as roots.
-    if (nesting.scope === "batch")
-      throw new Error(`${entity} cannot page a list batch yet`);
-    if (nesting.scope === "children") {
+    if (nesting.scope === "batch") {
+      const rule = batchRule(context);
+      return sql`${siblingScope(parent, filtered, nesting.parentId)} AND (${rule.member}) IS TRUE AND ${rule.by} = ${nesting.value}`;
+    }
+    const siblings = siblingScope(
+      parent,
+      filtered,
+      nesting.scope === "children" ? nesting.parentId : null,
+    );
+    const batched = readsBatches(nesting)
+      ? batchedSiblings(parent, filtered, nesting, context)
+      : null;
+    // A batch member leaves the page: its batch row stands for it.
+    return batched === null
+      ? siblings
+      : sql`${siblings} AND NOT COALESCE((${batched.rule.member}) AND ${batched.rule.by} IN (
+          SELECT ${batched.rule.by} FROM ${table} WHERE ${batched.batchable} GROUP BY 1 HAVING count(*) >= 2), false)`;
+  };
+  /** Roots (`parentId` null) or one parent's direct children. */
+  const siblingScope = (
+    parent: AnyColumn,
+    filtered: SQL | undefined,
+    parentId: string | null,
+  ): SQL => {
+    if (parentId !== null) {
       const requested = shortcodeSetCondition(sql`${table.shortcode}`, [
-        nesting.parentId,
+        parentId,
       ]);
       return sql`${parent} IN (SELECT ${table.id} FROM ${table} WHERE ${requested})`;
     }
     // A row whose parent is absent, deleted, or filtered out is a root.
     return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${table} WHERE ${filtered ?? sql`true`}))`;
+  };
+  /**
+   * The scope's batchable rows: the filters, the sibling scope and the batch
+   * rule. A `by` value two or more of them hold is one batch.
+   */
+  const batchedSiblings = (
+    parent: AnyColumn,
+    filtered: SQL | undefined,
+    nesting: Extract<ListNesting, { scope: "roots" | "children" }>,
+    context: ListContext,
+  ) => {
+    const rule = batchRule(context);
+    const parentId = nesting.scope === "children" ? nesting.parentId : null;
+    return {
+      rule,
+      parentId,
+      batchable: sql`${and(filtered, siblingScope(parent, filtered, parentId))} AND (${rule.member}) IS TRUE`,
+    };
+  };
+  /** The scope's batch rows; only values with two or more members. */
+  const listBatches = async (
+    db: Database | DrizzleTransaction,
+    parent: AnyColumn,
+    filtered: SQL | undefined,
+    nesting: Extract<ListNesting, { scope: "roots" | "children" }>,
+    context: ListContext,
+  ): Promise<ListBatch[]> => {
+    const { rule, parentId, batchable } = batchedSiblings(
+      parent,
+      filtered,
+      nesting,
+      context,
+    );
+    const members = sql`(SELECT ${rule.by} AS value, ${rule.phase ?? sql`NULL::text`} AS phase,
+      ${rule.state ?? sql`NULL::text`} AS state, ${updatedAtSql(context)} AS activity
+      FROM ${table} WHERE ${batchable}) batch_member`;
+    const rows = await unwrapDb(db)
+      .select({
+        value: sql<string>`batch_member.value`,
+        phase: sql<string | null>`batch_member.phase`,
+        state: sql<string | null>`batch_member.state`,
+        count: sql<number>`count(*)::int`,
+        latest: sql<
+          string | null
+        >`to_char(max(batch_member.activity), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+      })
+      .from(members)
+      .groupBy(
+        sql`batch_member.value`,
+        sql`batch_member.phase`,
+        sql`batch_member.state`,
+      );
+    const batches = new Map<string, ListBatch>();
+    for (const row of z.array(listBatchRowSchema).parse(rows)) {
+      const batch = batches.get(row.value) ?? {
+        parentId,
+        value: row.value,
+        count: 0,
+        phases: {},
+        states: {},
+        latestActivity: null,
+      };
+      batch.count += row.count;
+      if (row.phase !== null)
+        batch.phases[row.phase] = (batch.phases[row.phase] ?? 0) + row.count;
+      if (row.state !== null)
+        batch.states[row.state] = (batch.states[row.state] ?? 0) + row.count;
+      if (
+        row.latest !== null &&
+        (batch.latestActivity === null || row.latest > batch.latestActivity)
+      )
+        batch.latestActivity = row.latest;
+      batches.set(row.value, batch);
+    }
+    return [...batches.values()]
+      .filter((batch) => batch.count >= 2)
+      .sort(
+        (left, right) =>
+          (right.latestActivity ?? "").localeCompare(
+            left.latestActivity ?? "",
+          ) || left.value.localeCompare(right.value),
+      );
   };
   /** Each listed parent's direct children that match `filtered`, by shortcode. */
   const childCounts = async (
@@ -874,6 +1119,11 @@ export function listScaffold<
               (projection &&
                 projects(key, request.projection ?? pageFields())))),
       );
+      const batch = treeBatch();
+      if (batch !== null && readsBatches(listNestingFromFilters(values)))
+        requested.push(...batchReadKeys(batch));
+      if (requested.includes(PHASE_GROUPING_KEY))
+        requested.push(...phaseInputs);
       const scopes = requestedScopes(values);
       const prepares = new Set(
         [
@@ -1170,7 +1420,7 @@ export function listScaffold<
       const where =
         nesting.scope === "flat" || !parent
           ? filtered
-          : and(filtered, nestingCondition(nesting, parent, filtered));
+          : and(filtered, nestingCondition(nesting, parent, filtered, context));
       const matches = unwrapDb(db)
         .selectDistinct({ id: sql<string>`${table.shortcode}` })
         .from(listTable)
@@ -1776,6 +2026,7 @@ export function listScaffold<
       memberships?: ListGroupMembership[];
       membershipCount?: number;
       metrics?: Record<string, ListGroupMetric>;
+      batches?: ListBatch[];
     }> {
       // Keep the PgTable object: interpolating an aliased table into SQL
       // emits only its alias, while Drizzle's FROM builder names its origin.
@@ -1804,10 +2055,24 @@ export function listScaffold<
       const where =
         nesting.scope === "flat" || !parent
           ? filtered
-          : and(filtered, nestingCondition(nesting, parent, filtered));
+          : and(filtered, nestingCondition(nesting, parent, filtered, context));
       const projection = request.projection ?? pageFields();
       const { take, skip } = buildTakeSkip(request.pagination);
       const readIntent = request.readIntent ?? "page";
+      // A scope's batch rows ride on its first page only.
+      const batchRows =
+        readIntent === "page" &&
+        skip === 0 &&
+        parent &&
+        (nesting.scope === "roots" || nesting.scope === "children") &&
+        nesting.batches === true
+          ? treeBatch() === null
+            ? Promise.resolve([])
+            : listBatches(db, parent, filtered, nesting, context)
+          : undefined;
+      batchRows?.catch(() => {
+        // SILENT: the page awaits this same promise and surfaces its failure.
+      });
       const includeCount =
         request.includeCount !== false || readIntent === "count";
       // Sections lead the total order, so a page never splits a section the
@@ -2041,8 +2306,9 @@ export function listScaffold<
             "hasNextPage" in result
               ? result.hasNextPage
               : count !== undefined && skip + take < count;
-          const grouped =
-            groupedPage === null
+          const batches = await batchRows;
+          const grouped = {
+            ...(groupedPage === null
               ? {}
               : {
                   metrics: groupedPage.metrics,
@@ -2054,7 +2320,9 @@ export function listScaffold<
                         membershipCount: groupedPage.membershipCount,
                       }
                     : {}),
-                };
+                }),
+            ...(batches === undefined ? {} : { batches }),
+          };
           const unresolvedCount = includeCount
             ? await scaffold.unresolvedCount(db, request.filters, context)
             : undefined;

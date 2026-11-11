@@ -11,6 +11,7 @@ import {
 import {
   buildPaginatedResponse,
   DEFAULT_PAGE_SIZE,
+  listBatchSchema,
   listGroupSummarySchema,
   listGroupMetricSchema,
   listGroupMarginSchema,
@@ -485,6 +486,13 @@ const buildEntityOperations = <
                         .nonnegative()
                         .optional()
                         .parse(mediaPage.membershipCount)
+                    : undefined,
+                batches:
+                  "batches" in mediaPage
+                    ? z
+                        .array(listBatchSchema)
+                        .optional()
+                        .parse(mediaPage.batches)
                     : undefined,
               },
             ),

@@ -333,6 +333,12 @@ export const listBatchSchema = z
   })
   .meta({ id: "ListBatch" });
 export type ListBatch = z.infer<typeof listBatchSchema>;
+/**
+ * The most members one batch command acts on: a client sends the existing
+ * per-record command once per unfinished member, and a larger batch is acted
+ * on from its opened member list.
+ */
+export const LIST_BATCH_COMMAND_LIMIT = 50;
 /** Select known matches or candidates awaiting a declared result. */
 export const listResultMembership = z.enum(["known", "unresolved"]);
 export type ListResultMembership = z.infer<typeof listResultMembership>;

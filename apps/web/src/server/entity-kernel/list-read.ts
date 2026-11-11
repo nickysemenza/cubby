@@ -194,6 +194,7 @@ export function defineListOperations<
           memberships: result.memberships,
           membershipCount: result.membershipCount,
           metrics: result.metrics,
+          batches: result.batches,
         }),
       };
     },

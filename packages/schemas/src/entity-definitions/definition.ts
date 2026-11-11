@@ -309,6 +309,13 @@ export type EntityPhase = (typeof ENTITY_PHASES)[number];
  */
 export const LIST_PHASES = [...ENTITY_PHASES, "older"] as const;
 export type ListPhase = (typeof LIST_PHASES)[number];
+/** Each phase's group and filter label. */
+export const LIST_PHASE_LABELS = {
+  needs: "Needs you",
+  active: "Active",
+  finished: "Recently finished",
+  older: "Older",
+} as const satisfies Record<ListPhase, string>;
 /**
  * The grouping and filter key `presentation.state` compiles: each row's
  * `ListPhase`, from the state field's declared option phases and `stalled`.

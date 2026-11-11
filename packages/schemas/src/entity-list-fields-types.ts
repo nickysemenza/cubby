@@ -6,6 +6,7 @@ export type GeneratedDerivedValueKey<E extends Entity> = {
   [K in keyof DerivedOf<E>]: DerivedOf<E>[K] extends
     | { shape: "value"; rollup: object }
     | { shape: "value"; fromResult: object }
+    | { shape: "value"; phase: object }
     ? never
     : DerivedOf<E>[K] extends { shape: "value" }
       ? K

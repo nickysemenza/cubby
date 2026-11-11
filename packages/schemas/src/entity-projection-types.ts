@@ -151,6 +151,21 @@ type GeneratedRollup<E extends string = Entity> = {
   readonly absent: readonly string[];
 };
 
+/**
+ * The `PHASE_GROUPING_KEY` value `presentation.state` compiles: the state
+ * field's option values per declared phase, and the keys the needs and
+ * finished-window tests read. Values outside `needs` and `active` are
+ * finished, `older` once `recentBy` is more than `recentDays` days ago.
+ */
+export type GeneratedPhase = {
+  readonly state: string;
+  readonly needs: readonly string[];
+  readonly active: readonly string[];
+  readonly stalled: string | null;
+  readonly recentBy: string | null;
+  readonly recentDays: number | null;
+};
+
 export type GeneratedListField<E extends string = Entity> =
   | {
       readonly shape: "via";
@@ -204,6 +219,8 @@ export type GeneratedListField<E extends string = Entity> =
       readonly group: string | null;
       /** Compiled from a `rollup` declaration; the repository passes no SQL. */
       readonly rollup?: GeneratedRollup<E>;
+      /** Compiled from `presentation.state`; the repository passes no SQL. */
+      readonly phase?: GeneratedPhase;
       readonly fromResult?: {
         readonly key: string;
         readonly path: readonly string[];
@@ -475,7 +492,15 @@ type EntityInspectorOptionValue =
   | number
   | boolean
   | null
-  | Readonly<{ phosphor: string; sfSymbol: string }>;
+  | Readonly<{ phosphor: string; sfSymbol: string }>
+  | Readonly<{
+      targets: string;
+      exclusions: string;
+      effects: string;
+      dependencies: string;
+      cost: string;
+      recovery: string;
+    }>;
 
 type EntityInspectorOption = Readonly<
   Record<string, EntityInspectorOptionValue>

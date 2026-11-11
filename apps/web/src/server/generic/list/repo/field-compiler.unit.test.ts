@@ -201,7 +201,11 @@ describe("list field compiler", () => {
   it("expands a stored filter over a hierarchical reference unless its toggle is off", () => {
     const scaffold = listScaffold("run", run, {
       readSchema: runRepositoryReadSchema,
-      derived: { stalled: sql`false`, needsAttention: sql`false` },
+      derived: {
+        stalled: sql`false`,
+        needsAttention: sql`false`,
+        displayStatus: sql`NULL::text`,
+      },
     });
     expect(whereSql(scaffold.where({ parentRunId: ["RUN-2345"] }))).toContain(
       "WITH RECURSIVE descendants",

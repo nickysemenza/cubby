@@ -13,6 +13,12 @@ import {
   filterExcludeField,
   filterFieldLabel,
 } from "@cubby/schemas/filter-sentinel-fields";
+import {
+  type EntityPhase,
+  LIST_PHASES,
+  optionPhase,
+  PHASE_GROUPING_KEY,
+} from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
 import { humanize } from "@cubby/shared/text-case";
 import {
@@ -2016,6 +2022,107 @@ const validateEvidenceMetrics = (
   }
 };
 
+/** A group choice; the compiled phase grouping is always in the menu. */
+const compileListedGroupChoice = (
+  ...args: Parameters<typeof compileGroupChoice>
+): CompiledGroupChoice => {
+  const choice = compileGroupChoice(...args);
+  return args[1] === PHASE_GROUPING_KEY ? { ...choice, listed: true } : choice;
+};
+
+/**
+ * The `PHASE_GROUPING_KEY` value `presentation.state` implies: the state
+ * field's option values split by `optionPhase`, plus the `stalled` and
+ * finished-window keys, each a stored column or a `model.derived` value.
+ */
+const compilePhase = (
+  entity: CompiledEntity,
+  derived: Readonly<Record<string, CompiledListField>>,
+) => {
+  const state = entity.inspector.state;
+  if (state === null) return {};
+  const context = `${entity.key}.presentation.state`;
+  if (
+    PHASE_GROUPING_KEY in derived ||
+    entity.fieldModel.fields.some((field) => field.key === PHASE_GROUPING_KEY)
+  )
+    throw new EntityDeclarationError(
+      `${context} compiles the ${PHASE_GROUPING_KEY} field, which ${entity.key} already declares.`,
+    );
+  const scalar = (key: string, where: string) => {
+    if (
+      derived[key]?.shape !== "value" &&
+      !entity.fieldModel.storage.some((column) => column.key === key)
+    )
+      throw new EntityDeclarationError(
+        `${context}.${where} ${key} must be a stored field or a model.derived value.`,
+      );
+    return key;
+  };
+  const field = entity.fieldModel.fields.find(({ key }) => key === state.field);
+  const options = field?.control?.options ?? field?.display.valueOptions ?? [];
+  const valuesIn = (phase: EntityPhase) =>
+    options.flatMap((option) =>
+      optionPhase(option) === phase ? [option.value] : [],
+    );
+  const value: CompiledListField = {
+    shape: "value",
+    type: "enum",
+    options: LIST_PHASES.filter(
+      (phase) => phase !== "older" || state.recentBy !== undefined,
+    ),
+    sort: null,
+    group: null,
+    phase: {
+      state: state.field,
+      needs: valuesIn("needs"),
+      active: valuesIn("active"),
+      stalled:
+        state.stalled === undefined ? null : scalar(state.stalled, "stalled"),
+      recentBy:
+        state.recentBy === undefined
+          ? null
+          : scalar(state.recentBy, "recentBy"),
+      recentDays: state.recentDays ?? null,
+    },
+  };
+  return { [PHASE_GROUPING_KEY]: value };
+};
+
+/**
+ * The list kernel reads the state field and a batch's `by` field through
+ * their single-valued group key, and a batch's `when` through the entity's
+ * own filters.
+ */
+const validateStateGrouping = (
+  entity: CompiledEntity,
+  grouping: readonly CompiledGroupChoice[],
+  descriptors: readonly FilterDescriptor[],
+): void => {
+  const single = (key: string, where: string) => {
+    const choice = grouping.find((candidate) => candidate.key === key);
+    const kind = choice?.value?.kind;
+    if (
+      choice === undefined ||
+      choice.multiple ||
+      (kind !== "column" && kind !== "derived" && kind !== "field")
+    )
+      throw new EntityDeclarationError(
+        `${entity.key}.${where} ${key} needs a single-valued group key (a stored column or a model.derived value): ${choice?.reason ?? "it has none"}.`,
+      );
+  };
+  const state = entity.inspector.state;
+  if (state !== null) single(state.field, "presentation.state.field");
+  const batch = entity.inspector.list.tree?.batch ?? null;
+  if (batch === null) return;
+  single(batch.by, "list.tree.batch.by");
+  for (const filter of batch.when)
+    if (!descriptors.some((descriptor) => descriptor.columnId === filter.id))
+      throw new EntityDeclarationError(
+        `${entity.key}.list.tree.batch.when ${filter.id} names no list filter.`,
+      );
+};
+
 /**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
@@ -2038,6 +2145,7 @@ export const compileListFields = (
     for (const [key, entry] of Object.entries(entity.fieldModel.derived)) {
       derived[key] = compileDerivedEntry(entity, key, entry, byKey, rows);
     }
+    Object.assign(derived, compilePhase(entity, derived));
     const sort = entity.fieldModel.sort;
     for (const key of sort?.fields ?? []) {
       const reason = derived[key]?.sort;
@@ -2214,7 +2322,7 @@ export const compileListFields = (
         ...relatedGroups,
       ]),
     ].map((key) =>
-      compileGroupChoice(
+      compileListedGroupChoice(
         entity,
         key,
         derived,
@@ -2224,6 +2332,7 @@ export const compileListFields = (
       ),
     );
     chooseGroupingMenuEntries(entity, grouping, derived);
+    validateStateGrouping(entity, grouping, filterDescriptors);
     if (
       new Set(entity.inspector.list.metrics).size !==
       entity.inspector.list.metrics.length
