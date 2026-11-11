@@ -7,6 +7,7 @@ import {
   jobWaitingOn,
   jobWaitingOnReason,
   jobWaitReason,
+  runWaitingOn,
 } from "@cubby/schemas/job";
 import { z } from "zod";
 
@@ -58,6 +59,8 @@ const runRollup = z.object({
   /** Live Jobs remain but none was claimed or finished for `stallMinutes`. */
   stalled: z.boolean(),
   stallMinutes: z.number().int().positive(),
+  /** The dominant wait, place in line and ETA; null when nothing holds the Run. */
+  waitingOn: runWaitingOn.nullable(),
 });
 export type RunRollup = z.infer<typeof runRollup>;
 

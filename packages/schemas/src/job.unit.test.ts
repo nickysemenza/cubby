@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { describeJobRollup, describeJobWaitingOn } from "./job";
+import {
+  describeJobRollup,
+  describeJobWaitingOn,
+  ordinalText,
+  summarizeRunWait,
+} from "./job";
 
 const now = new Date("2026-10-24T12:00:00.000Z");
 
@@ -106,5 +111,102 @@ describe("describeJobRollup", () => {
       "4 waiting for any Apple device",
     );
     expect(describeJobRollup({})).toBeNull();
+  });
+});
+
+describe("summarizeRunWait", () => {
+  const clock = (at: Date) => `${at.getUTCHours()}:00 UTC`;
+  const input = {
+    now,
+    formatTime: clock,
+    waitingForFunding: false,
+    fundingResumeAt: null,
+    groups: [],
+    perMinute: new Map<string, number>(),
+    paceMinutes: 5,
+    counts: {},
+    expiredLeases: 0,
+  };
+  const capacity = {
+    kind: "purchase.dispatch",
+    reason: "provider_capacity",
+    mine: 3,
+    position: 23,
+    total: 36,
+    nextAt: now,
+    errorClass: null,
+  } as const;
+
+  // A Run once read only "1 backing off" with no reason, place in line or ETA.
+  it("places the Run in its kind's line and estimates from the recent pace", () => {
+    const wait = summarizeRunWait({
+      ...input,
+      groups: [
+        capacity,
+        { ...capacity, reason: "retry", mine: 1, errorClass: "TimeoutError" },
+      ],
+      perMinute: new Map([["purchase.dispatch", 1.4]]),
+      counts: { backing_off: 4 },
+    });
+    expect(wait).toMatchObject({
+      reason: "model_capacity",
+      position: 23,
+      total: 36,
+      perMinute: 1.4,
+      // 23 ÷ 1.4 per minute ≈ 16.4 minutes.
+      etaAt: new Date(now.getTime() + (23 / 1.4) * 60_000).toISOString(),
+      label: "Queued for model capacity · 23rd of 36 · about 16 min",
+      jobs: "4 backing off",
+    });
+    expect(summarizeRunWait({ ...input, groups: [capacity] })?.label).toBe(
+      "Queued for model capacity · 23rd of 36 · pace unknown",
+    );
+  });
+
+  it("leads with funding and names the resume time or the retry's error", () => {
+    const resume = new Date("2026-10-24T18:01:00.000Z");
+    expect(
+      summarizeRunWait({
+        ...input,
+        groups: [{ ...capacity, mine: 30 }],
+        waitingForFunding: true,
+        fundingResumeAt: resume,
+      }),
+    ).toMatchObject({
+      reason: "funding",
+      etaAt: resume.toISOString(),
+      label: "Waiting for AI funding · resumes 18:00 UTC",
+    });
+    expect(
+      summarizeRunWait({
+        ...input,
+        groups: [
+          {
+            ...capacity,
+            reason: "retry",
+            errorClass: "GatewayBillingError",
+            nextAt: new Date(now.getTime() + 4 * 60_000),
+          },
+        ],
+      })?.label,
+    ).toBe(
+      "Retrying after an error (GatewayBillingError) · next try in about 4 min",
+    );
+  });
+
+  it("writes English ordinals", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 111].map(ordinalText)).toEqual([
+      "1st",
+      "2nd",
+      "3rd",
+      "4th",
+      "11th",
+      "12th",
+      "13th",
+      "21st",
+      "22nd",
+      "23rd",
+      "111th",
+    ]);
   });
 });

@@ -33,6 +33,8 @@ export type PurchaseAuditRenderedBatch = readonly {
     name: string;
     amount: number | null;
     lineKind: string;
+    /** `allocation`: an amount standing for item lines; it never carries a Product. */
+    lineBasis: "item_line" | "allocation";
     costType: string;
     quantity: number | null;
     product: {

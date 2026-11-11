@@ -1,7 +1,6 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
 import { runRawOut as rawRunOut } from "@cubby/schemas/entity-contracts/run";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { describeJobRollup } from "@cubby/schemas/job";
 import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
 import {
   runWorkSamples,
@@ -199,9 +198,7 @@ const runRead = {
             successorRunId: successor
               ? parseShortcodeFor("run", successor)
               : null,
-            waitingOn: rollup
-              ? describeJobRollup(rollup.counts, rollup.expiredLeases)
-              : null,
+            waitingOn: rollup?.waitingOn ?? null,
             stalled: rollup?.stalled ?? false,
             displayStatus: runDisplayStatusOf(row, successor !== null),
           };

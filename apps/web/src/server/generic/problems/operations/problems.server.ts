@@ -33,10 +33,23 @@ export const problemsHandlers = implementOperationDomain(problemsContract, {
     (await problemDetectors()).dryRunPruneAliases(context.db),
   deleteUnused: async (context, input) =>
     (await problemWorkflows()).deleteUnusedIngredientsWorkflow(context, input),
-  resolveRunFinding: async (context, input) =>
-    (
-      await import("~/server/domains/purchase-import/repo/findings")
-    ).resolveRunFinding(context.db, input, context.actorContext),
+  resolveRunFinding: async (context, input) => {
+    try {
+      return await (
+        await import("~/server/domains/purchase-import/repo/findings")
+      ).resolveRunFinding(context.db, input, context.actorContext);
+    } finally {
+      // Also after a stale replay: a finding resolved before this settlement
+      // existed still lets its reviewed Run complete.
+      await (
+        await import("~/server/domains/purchase-import/repo/mail-run-settlement")
+      ).settleReviewedMailRun(
+        context.db,
+        input.id,
+        context.actorContext.userId,
+      );
+    }
+  },
   resolveArrivedFindings: async (context, input) =>
     (
       await import("~/server/domains/purchase-import/repo/findings")

@@ -1,4 +1,9 @@
-import type { AiEvaluationBacklog, WorkQueueUnit } from "@cubby/schemas/job";
+import {
+  aboutSpanText,
+  type AiEvaluationBacklog,
+  type WorkQueueUnit,
+  type WorkQueueWait,
+} from "@cubby/schemas/job";
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -182,9 +187,40 @@ const AI_STATE_LABEL = {
 
 const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
 
+/**
+ * When a unit's due work drains at its recent pace: the pace is the whole
+ * kind's, so it divides every group's count together. A funding wait ends
+ * when the window reopens, whatever the pace, so it is left out.
+ */
+function drainText(
+  waits: readonly WorkQueueWait[],
+  perMinute: number,
+  paceMinutes: number,
+): string | null {
+  const due = waits
+    .filter((wait) => wait.reason !== "ai_funding_window")
+    .reduce((sum, wait) => sum + wait.count, 0);
+  if (!due) return null;
+  return perMinute > 0
+    ? `Drains in ${aboutSpanText((due / perMinute) * 60_000)} at the last ${paceMinutes} minutes' pace.`
+    : `Pace unknown: none finished in the last ${paceMinutes} minutes.`;
+}
+
 /** One permit unit: its name, what the last hour did with it, and why its work waits. */
-function QueueUnitRow({ unit, now }: { unit: WorkQueueUnit; now: number }) {
+function QueueUnitRow({
+  unit,
+  now,
+  perMinute,
+  paceMinutes,
+}: {
+  unit: WorkQueueUnit;
+  now: number;
+  /** The unit's stream pace; 0 when none finished or it has no stream. */
+  perMinute: number;
+  paceMinutes: number;
+}) {
   const page = unit.lastExecution;
+  const drain = drainText(unit.waits, perMinute, paceMinutes);
   return (
     <li className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
       <div className="min-w-0">
@@ -238,6 +274,7 @@ function QueueUnitRow({ unit, now }: { unit: WorkQueueUnit; now: number }) {
             })}
           </p>
         ))}
+        {drain ? <p className="text-muted-foreground">{drain}</p> : null}
       </div>
     </li>
   );
@@ -330,7 +367,16 @@ function QueueDetailsBody({ now }: { now: number }) {
         {data.queue.length ? (
           <ul data-testid="queue-units">
             {data.queue.map((unit) => (
-              <QueueUnitRow key={unit.unit} unit={unit} now={now} />
+              <QueueUnitRow
+                key={unit.unit}
+                unit={unit}
+                now={now}
+                perMinute={
+                  data.streams.find((stream) => stream.kind === unit.unit)
+                    ?.completedPerMinute ?? 0
+                }
+                paceMinutes={data.windows.paceMinutes}
+              />
             ))}
           </ul>
         ) : (

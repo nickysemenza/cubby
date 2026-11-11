@@ -4,14 +4,18 @@ import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
   jobState,
   jobWaitingOnReason,
+  summarizeRunWait,
+  workQueueWaitReason,
   type JobLane,
   type JobWaitingOnReason,
+  type RunWaitGroup,
 } from "@cubby/schemas/job";
 import {
   runStatus,
   ATTENTION_RUN_PURPOSES,
   RUN_PURPOSE_LABEL,
   isMemberStartedRun,
+  VISIBLE_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
 import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -32,6 +36,7 @@ import type {
   JobSetFilter,
   RunRollup,
 } from "~/contracts/job.contract";
+import { formatInstant } from "~/lib/date-format";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -55,8 +60,12 @@ import {
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
 import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
+import {
+  completedInPaceSql,
+  WORK_PACE_MINUTES,
+} from "~/server/generic/jobs/repo/observation";
 import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
-import { type JobRow } from "~/server/generic/jobs/repo/queue";
+import { jobDue, type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
   jobWaitingOnReasonSql,
   loadJobWaitingOn,
@@ -231,9 +240,11 @@ export async function retryJobSet(
 }
 
 /**
- * Each Run's live Jobs by waiting-on reason, its own funding wait, and the
- * stall flag: live work remains but nothing was claimed or finished for
- * `RUN_STALL_MS`.
+ * Each Run's live Jobs by waiting-on reason, its own funding wait, the stall
+ * flag (`runStalledSql`), and what it waits on: its waiting Jobs grouped by
+ * kind and wait, placed in each kind's claim order (`dueUnits`: the longest
+ * due first, each priority point a minute's head start) and paced by that
+ * kind's recent completions. One statement serves the whole page of Runs.
  */
 export async function readRunRollups(
   db: Database,
@@ -249,7 +260,10 @@ export async function readRunRollups(
     ids.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
-  const [tallies, imageTallies, progress, imageProgress, owners] =
+  const waitClass = sql`coalesce("Job"."waitReason", CASE WHEN "Job".state = ${jobState.enum.retry_wait}
+    THEN ${workQueueWaitReason.enum.retry}::text ELSE ${workQueueWaitReason.enum.turn}::text END)`;
+  const waitingStates = sql`"Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait})`;
+  const [tallies, imageTallies, progress, imageProgress, owners, groups] =
     await Promise.all([
       getDb(db).execute<{
         runId: RunId;
@@ -303,9 +317,61 @@ export async function readRunRollups(
           failureCode: run.failureCode,
           startedAt: run.startedAt,
           stalled: runStalledSql(now),
+          // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
+          // The one resume per funding window wakes every funding-paused Run (`run.funding-resume`).
+          fundingResume: sql<
+            number | null
+          >`(SELECT (extract(epoch FROM min(f."availableAt")) * 1000)::float8 FROM "Job" f
+            WHERE f.kind = ${"run.funding-resume"} AND f.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}))`,
         })
         .from(run)
         .where(inArray(run.id, ids)),
+      getDb(db).execute<{
+        runId: RunId;
+        kind: string;
+        reason: RunWaitGroup["reason"];
+        mine: number;
+        position: number | null;
+        total: number | null;
+        nextAt: number;
+        errorClass: string | null;
+        completedPace: number;
+      }>(
+        sql`WITH kinds AS MATERIALIZED (
+        SELECT DISTINCT "Job".kind FROM "Job" WHERE "Job"."runId" IN (${runList}) AND ${waitingStates}
+      ), active_runs AS MATERIALIZED (
+        SELECT id, purpose IN (${sql.join(
+          VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+          sql`, `,
+        )}) AS visible
+        FROM "Run" WHERE status = ${runStatus.enum.running} AND ${notDeleted(run)}
+      ), due AS (
+        SELECT "Job".id, row_number() OVER (PARTITION BY "Job".kind
+            ORDER BY ("Job".kind = 'run.execute' OR coalesce(active_runs.visible, false)) DESC,
+              "Job"."availableAt" - "Job".priority * interval '1 minute', "Job".priority DESC, "Job".id)::int AS position,
+          count(*) OVER (PARTITION BY "Job".kind)::int AS total
+        FROM "Job" LEFT JOIN active_runs ON active_runs.id = "Job"."runId"
+        WHERE ${jobDue(now)} AND "Job".kind IN (SELECT kind FROM kinds)
+      ), ranked AS (
+        SELECT "Job"."runId", "Job".kind, ${waitClass} AS reason, "Job"."availableAt",
+          "Job"."lastExecution"->>'errorClass' AS "errorClass", due.position, due.total
+        FROM "Job" LEFT JOIN due ON due.id = "Job".id
+        WHERE "Job"."runId" IN (${runList}) AND ${waitingStates}
+      ), pace AS (
+        SELECT "Job".kind, ${completedInPaceSql(at)} AS completed FROM "Job"
+        WHERE "Job".kind IN (SELECT kind FROM kinds) AND "Job".state = ${jobState.enum.completed}
+          AND "Job"."updatedAt" > ${at} - ${WORK_PACE_MINUTES} * interval '1 minute'
+        GROUP BY "Job".kind
+      )
+      SELECT ranked."runId", ranked.kind, ranked.reason, count(*)::int AS mine,
+        min(ranked.position) AS position, max(ranked.total) AS total,
+        (extract(epoch FROM min(ranked."availableAt")) * 1000)::float8 AS "nextAt",
+        mode() WITHIN GROUP (ORDER BY ranked."errorClass") AS "errorClass",
+        coalesce(max(pace.completed), 0)::int AS "completedPace"
+      FROM ranked LEFT JOIN pace ON pace.kind = ranked.kind
+      GROUP BY 1, 2, 3`,
+        "objects",
+      ),
     ]);
   const lastById = new Map<RunId, Date>();
   for (const row of [...progress, ...imageProgress]) {
@@ -331,14 +397,43 @@ export async function readRunRollups(
       owner?.failureCode === "execution_limit" &&
       (owner.status === runStatus.enum.paused_auth ||
         owner.status === runStatus.enum.needs_review);
+    const stalled = owner?.stalled ?? false;
+    const runGroups = groups.filter((group) => group.runId === entry.id);
     return {
       runId: runShortcode.parse(entry.shortcode),
       counts,
       expiredLeases,
       waitingForFunding,
       lastProgressAt: iso(last),
-      stalled: owner?.stalled ?? false,
+      stalled,
       stallMinutes: RUN_STALL_MS / 60_000,
+      waitingOn: summarizeRunWait({
+        now,
+        formatTime: (at) => formatInstant(at, "clock"),
+        fundingResumeAt:
+          waitingForFunding && owner?.fundingResume
+            ? new Date(owner.fundingResume)
+            : null,
+        waitingForFunding,
+        groups: runGroups.map((group) => ({
+          kind: group.kind,
+          reason: group.reason,
+          mine: group.mine,
+          position: group.position,
+          total: group.total,
+          nextAt: new Date(group.nextAt),
+          errorClass: group.errorClass,
+        })),
+        perMinute: new Map(
+          runGroups.map((group) => [
+            group.kind,
+            group.completedPace / WORK_PACE_MINUTES,
+          ]),
+        ),
+        paceMinutes: WORK_PACE_MINUTES,
+        counts,
+        expiredLeases,
+      }),
     };
   });
 }

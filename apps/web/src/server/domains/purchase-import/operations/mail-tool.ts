@@ -70,6 +70,7 @@ import {
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
 import { controlledMailScopeForRun } from "~/server/domains/purchase-import/repo/controlled-mail-import";
+import { republishEmailRelationship } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { GmailApiError } from "~/server/domains/purchase-import/repo/gmail/types";
 import { isClosedMailSearch } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import {
@@ -898,6 +899,10 @@ export async function settleMail(
           target: [runOperation.runId, runOperation.operationId],
         });
     }
+    // Lists, filters and the Email panel read the snapshot: a link, outcome
+    // or status written here must reach it now, not at the hourly pass.
+    for (const { id } of settledEmails)
+      await republishEmailRelationship(databaseForTransaction(tx), id);
   });
 }
 

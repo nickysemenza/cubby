@@ -23,6 +23,7 @@ import {
   runTrigger,
 } from "../run-fields.js";
 import { runWorkProgress } from "../run-work-progress.js";
+import { runWaitingOn } from "../run-waiting-on.js";
 import { mailRunOutcomeCounts } from "../email-fields.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
 
@@ -547,22 +548,30 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "waitingOn",
-        kind: "text",
+        kind: "json",
         nullable: true,
         provenance: {
           kind: "derived",
-          sources: [{ label: "The Run's live Jobs" }],
+          sources: [
+            { label: "The Run's live Jobs" },
+            { label: "Queue claim order" },
+            { label: "Recent completions of the same kind" },
+            { label: "AI funding window" },
+          ],
         },
         explanation: {
           ruleId: "run.waiting-on",
           description:
-            "The Run's live Jobs counted by what each waits on (due, waiting for an Apple device, waiting for AI funding, in progress, backing off, blocked, paused).",
+            "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among every due Job of that kind in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or when a Job not yet due (a retry or a deferral) falls due.",
         },
         display: {
           mobile: { slot: "meta", priority: 30 },
           columnGroup: "Execution",
+          labelPath: "waitingOn.label",
+          detailLabelPath: "waitingOn.label",
+          renderer: { list: "run-waiting-on", detail: "run-waiting-on" },
         },
-        validation: readOnly(z.string().nullable().default(null)),
+        validation: readOnly(runWaitingOn.nullable().default(null)),
       },
       {
         key: "stalled",

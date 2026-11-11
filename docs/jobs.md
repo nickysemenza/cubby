@@ -121,8 +121,8 @@ with no delay also rings at once (best effort).
 waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
 `jobWaitingOn` in `packages/schemas/src/job.ts` is the wire vocabulary:
 
-- `due`: claimable now. The server reports no queue position or ETA: with a
-  few dozen coarse Jobs, a position is noise.
+- `due`: claimable now. A single Job reports no queue position or ETA; a
+  Run's [wait](#run-wait) places its Jobs in line.
 - `waiting_device`: parked device work, with its position in device claim
   order, exact apart from a device's preference for work another device last
   ran.
@@ -147,7 +147,7 @@ so a lapsed lease reads "Lease on … expired; waiting to be reclaimed", never
 
 Declared entity fields carry the same facts to web, Apple and MCP:
 
-- Run: `waitingOn` (the rollup line), `stalled`, `successorRunId` ("Retried
+- Run: `waitingOn`, `stalled`, `successorRunId` ("Retried
   as", the newest Run whose `predecessorRunId` names it; `predecessorRunId`
   reads "Retry of"), and `displayStatus` for the header. A `needs_review` or
   `failed` Run with a successor reads `retried` (its open work moved; its own
@@ -158,6 +158,34 @@ Declared entity fields carry the same facts to web, Apple and MCP:
   predecessor photos are not shown as ungrouped once work continues in a
   successor.
 - Image job: `waitingOn` for open rows.
+
+### Run wait
+
+A Run's `waitingOn` (`runWaitingOn`) is derived on read by `readRunRollups`,
+one statement per page of Runs. Its waiting Jobs group by kind and wait
+(`waitReason`, else `retry` for `retry_wait`, else `queued`), the same groups
+Queue details shows. The dominant reason is the Run's own funding pause, else a
+funding group, else the group holding most of its waiting Jobs, else live
+leases, paused or other counts, else expired leases.
+
+- `position` is the Run's first due Job of the group among every due Job of
+  that kind (`jobDue`, lapsed leases included), in `dueUnits` claim order:
+  member-visible Run work first, then longest due first with each priority
+  point a minute's head start, then higher priority, then id. `total` counts
+  the kind's due Jobs. A group with no due Job has no position.
+- `etaAt` for a queued, capacity, rate-limit or device wait with a position is
+  `position ÷ perMinute`, where `perMinute` is the kind's completions over the
+  last `WORK_PACE_MINUTES` (the Work page pace, `completedInPaceSql`); the
+  kind drains its whole due queue at that pace. With no completion in that
+  window `perMinute` and `etaAt` are null and the line says the pace is
+  unknown. A group not yet due, and a retry, use the earliest `availableAt`; a
+  retry names the most common `lastExecution.errorClass`. A funding wait's
+  `etaAt` is the queued `run.funding-resume` Job's time.
+- `label` is the whole line for text clients ("Queued for model capacity ·
+  23rd of 36 · about 16 min", "Waiting for AI funding · resumes 6:00 AM",
+  "Retrying after an error (TimeoutError) · next try in about 4 min"); clock
+  times are in the household zone. Web recomputes it on the display clock.
+  `jobs` keeps the per-reason counts (`describeJobRollup`).
 - Device: `updateRequired`, `inactive` (not seen for 7 days or never) and
   `appleIntelligenceAvailable` (the hello's actual-image description
   availability, null until a hello reports it).
@@ -851,10 +879,13 @@ failure count alone does not establish uninterrupted execution.
 
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
   (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
-  "N expired leases awaiting reclaim"), its own funding wait, and `stalled`
-  when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
-  in flight. A Run's demand is the Jobs and image rows it owns by `runId`;
-  shared drain units belong to no Run.
+  "N expired leases awaiting reclaim"), its own funding wait, its
+  [wait](#run-wait), and `stalled` (`runStalledSql`): live work saw no claim
+  or completion for `RUN_STALL_MS` and no live lease is in flight. Stalled
+  Runs are only shown, never ended; `expireStaleRuns` ends abandoned ones
+  after two hours. A Run's demand
+  is the Jobs and image rows it owns by `runId`; shared drain units belong to
+  no Run.
 - `job.activity` (`queue`): every Job kind and drain unit that is live or ran
   in the last hour, with the rows claimed in that hour, rows by latest outcome
   (succeeded, deferred, failed), the oldest due work, live and expired leases

@@ -216,7 +216,11 @@ describe("Run lineage and waiting-on reads", () => {
 
     expect(read).toMatchObject({
       displayStatus: "waiting_for_funding",
-      waitingOn: "2 due",
+      waitingOn: {
+        reason: "funding",
+        label: "Waiting for AI funding",
+        jobs: "2 due",
+      },
       stalled: false,
     });
   });
@@ -248,7 +252,61 @@ describe("Run lineage and waiting-on reads", () => {
 
     const read = await readRun(ctx.db, await codeOf(runId));
 
-    expect(read?.waitingOn).toBe("1 expired lease awaiting reclaim");
+    expect(read?.waitingOn).toMatchObject({
+      reason: "reclaim",
+      jobs: "1 expired lease awaiting reclaim",
+    });
+  });
+
+  it("places a Run's queued Jobs in their kind's claim order", async () => {
+    const ahead = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const queue = async (key: string, owner: RunId, minutesAgo: number) => {
+      const job = await enqueueJob(ctx.db, {
+        key,
+        kind: "synthetic.capacity",
+        input: {},
+        runId: owner,
+      });
+      await updateJobs(
+        ctx.db,
+        { id: job.id },
+        {
+          waitReason: "provider_capacity",
+          availableAt: new Date(Date.now() - minutesAgo * 60_000),
+        },
+      );
+      return job;
+    };
+    await queue("synthetic.capacity.0", ahead, 30);
+    await queue("synthetic.capacity.1", ahead, 20);
+    await queue("synthetic.capacity.2", runId, 10);
+    await queue("synthetic.capacity.3", runId, 5);
+    const done = await queue("synthetic.capacity.done", ahead, 40);
+    await updateJobs(ctx.db, { id: done.id }, { state: "completed" });
+    // Not yet due: its priority head start must not place it ahead of due work.
+    const later = await queue("synthetic.capacity.later", ahead, -30);
+    await updateJobs(ctx.db, { id: later.id }, { priority: 60 });
+
+    const read = await readRun(ctx.db, await codeOf(runId));
+
+    // One completion in 5 minutes is 0.2 per minute; 3rd in line is 15 minutes.
+    expect(read?.waitingOn).toMatchObject({
+      reason: "model_capacity",
+      kind: "synthetic.capacity",
+      position: 3,
+      total: 4,
+      perMinute: 0.2,
+      label: "Queued for model capacity · 3rd of 4 · about 15 min",
+    });
   });
 });
 

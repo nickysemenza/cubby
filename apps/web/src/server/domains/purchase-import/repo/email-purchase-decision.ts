@@ -322,7 +322,10 @@ async function decideOnce(
 }
 
 /** A decision must reach the same snapshot used by list values and predicates. */
-async function republishEmailRelationship(db: Database, emailId: string) {
+export async function republishEmailRelationship(
+  db: Database,
+  emailId: string,
+) {
   const declaration = storedDerived("email", "relationshipFacts");
   if (!declaration)
     throw new Error("Email relationship declaration is missing");
