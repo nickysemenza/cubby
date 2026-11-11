@@ -742,6 +742,7 @@ export async function claimMailImportWork(db: Database, runId: string) {
     const recovery = await readMailAttemptRecovery(db, {
       ledgerPartyId: email.ledgerPartyId,
       orderMailId: source.orderMailId,
+      runId: id,
       source: { ...ref, checksum: email.checksum, evidenceVersion },
     });
     return {

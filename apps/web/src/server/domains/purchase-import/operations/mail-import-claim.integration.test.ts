@@ -1038,6 +1038,10 @@ describe("Mail import claim", () => {
         identity: "changed",
       }),
     ).toEqual({ kind: "pending" });
+    // The live owner's claim carries its own pending proposal for exact replay.
+    expect(await claimMailImportWork(ctx.db, first.owner.id)).toMatchObject({
+      recovery: { tool: "import_extracted_order", arguments: request.proposal },
+    });
     await recordMailAttempt(ctx.db, first.owner.id, {
       ...request,
       identity: "repair",
