@@ -323,7 +323,8 @@ export const suggestionReviewInput = feedbackEvent
         "Operation ID uses a reserved internal receipt namespace",
       ),
     suggestionId: suggestionChildHandle,
-    expectedFingerprint: z.string().nullable().optional(),
+    /** The listed `fingerprint`: the version of what applying writes that was reviewed. */
+    expectedFingerprint: z.string().min(1),
     application: z
       .discriminatedUnion("kind", [
         z.object({

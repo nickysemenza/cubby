@@ -197,7 +197,7 @@ struct ConnectionReviewTests {
         #expect(await model.reviewConnection(proposal, verdict: .correct))
         let input = try #require(await client.reviews.first)
         #expect(input.suggestionId == proposal.review.suggestionId)
-        #expect(input.expectedFingerprint == .value(proposal.fingerprint))
+        #expect(input.expectedFingerprint == proposal.fingerprint)
         #expect(input.intent == .apply)
         #expect(UUID(uuidString: input.operationId) != nil)
         #expect(input.suppression == .absent)

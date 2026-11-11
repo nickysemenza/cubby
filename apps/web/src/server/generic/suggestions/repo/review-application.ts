@@ -25,6 +25,7 @@ import {
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
+import { reviewKey } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import type { ReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   suggestionStateColumns,
@@ -108,14 +109,18 @@ export function executeReviewApplication(
             ? await query.for("update")
             : await query;
         const applicableState = planApplicableState(state, prediction.family);
+        const key =
+          "applicationKey" in family && family.applicationKey
+            ? await family.applicationKey(transactionDb, applicableState)
+            : applicableState.fingerprint;
         if (
-          input.expectedFingerprint !== undefined &&
           input.expectedFingerprint !==
-            ("currentFingerprint" in family && family.currentFingerprint
-              ? await family.currentFingerprint(transactionDb, applicableState)
-              : applicableState.fingerprint)
+          (key ??
+            reviewKey({ suggestionId: applicableState.id, fingerprint: null }))
         )
-          throw new Error("Suggestion evidence fingerprint changed");
+          throw new Error(
+            "Suggestion changed since review; list it again and review the current version",
+          );
         (family.target ?? suggestionProjectionTargets[name]).parse(
           applicableState,
         );

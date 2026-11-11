@@ -531,7 +531,6 @@ export async function applyEntityConnection(
     if (!freshState?.active || freshState.status !== "pending")
       throw new Error("Connection Suggestion is no longer pending");
     if (
-      !input.expectedFingerprint ||
       input.expectedFingerprint !== prediction.fingerprint ||
       (await sha256CanonicalJson({ ...evidence, basis })) !==
         prediction.fingerprint

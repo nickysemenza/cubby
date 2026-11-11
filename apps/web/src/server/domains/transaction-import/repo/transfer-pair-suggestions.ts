@@ -1653,7 +1653,7 @@ async function applyTransferPairSuggestion(
     await transitionSuggestionState(tx, state.id, { status: "applied" });
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
-      expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,
+      expectedFingerprint: input.expectedFingerprint,
       // Accepting a clean pair still holds it to today's clean rule.
       reviewed: !published.clean,
       stateId: state.id,

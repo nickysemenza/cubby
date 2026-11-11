@@ -90,6 +90,12 @@ export const emptyPendingCounts = (): SuggestionPendingCounts => ({
 
 type ReviewItem = z.input<typeof suggestionReviewInput>;
 
+/** What a review must name: the stored fingerprint, or the row itself when it has none. */
+export const reviewKey = (row: {
+  suggestionId: string;
+  fingerprint: string | null;
+}) => row.fingerprint ?? row.suggestionId;
+
 export const cleanAcceptance = (
   row: Pick<SuggestionKey, "suggestionId" | "fingerprint">,
 ) =>
@@ -99,7 +105,7 @@ export const cleanAcceptance = (
     verdict: "correct",
     correction: { present: false },
     intent: "apply",
-    expectedFingerprint: row.fingerprint,
+    expectedFingerprint: reviewKey(row),
     reason: null,
     evidence: null,
   }) satisfies ReviewItem;
@@ -171,7 +177,7 @@ export const outcome = (label: string): SuggestionImpact => ({
 export const keyBase = (key: SuggestionKey) => ({
   id: key.suggestionId,
   suggestionId: key.suggestionId,
-  fingerprint: key.fingerprint,
+  fingerprint: reviewKey(key),
   strength: key.strength,
   clean: key.clean,
   impact: key.impact,

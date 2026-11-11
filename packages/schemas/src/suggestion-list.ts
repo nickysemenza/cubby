@@ -112,7 +112,8 @@ const rowBase = {
   id: suggestionChildHandle,
   suggestionId: suggestionChildHandle,
   /** Pass as `expectedFingerprint` when reviewing. */
-  fingerprint: z.string().nullable(),
+  /** Pass as `expectedFingerprint` when reviewing this row. */
+  fingerprint: z.string(),
   record: suggestionRecordRef,
   other: suggestionRecordRef.optional(),
   review: z

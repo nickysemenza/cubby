@@ -391,7 +391,7 @@ public final class EntityRelationshipsModel {
             operationId: UUID().uuidString, verdict: .dismissed,
             correction: .value1(.init(present: .falseValue)),
             intent: verdict == .correct ? .apply : .history,
-            suggestionId: proposal.review.suggestionId, expectedFingerprint: .value(proposal.fingerprint))
+            suggestionId: proposal.review.suggestionId, expectedFingerprint: proposal.fingerprint)
         switch verdict {
         case .correct: input.verdict = .correct
         case .wrong: input.verdict = .wrong

@@ -158,17 +158,12 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   }),
   actionable,
   transactionBound: false,
-  currentFingerprint: reviewedProductPairFingerprint,
+  applicationKey: reviewedProductPairFingerprint,
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
       throw new Error("Product merging requires an accepted pair");
-    if (
-      input.application?.kind !== "product_merge" ||
-      !input.expectedFingerprint
-    )
-      throw new Error(
-        "Product merging requires a survivor and the current pair fingerprint",
-      );
+    if (input.application?.kind !== "product_merge")
+      throw new Error("Product merging requires a survivor");
     const { mergeProductMatch } =
       await import("~/server/domains/product/repo/match/product-match-review");
     await mergeProductMatch(

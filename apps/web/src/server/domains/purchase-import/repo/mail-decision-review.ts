@@ -304,10 +304,7 @@ async function applyReview(
       throw new Error(
         "Suggestion already resolved by another command; request a fresh suggestion",
       );
-    if (
-      input.expectedFingerprint !== undefined &&
-      input.expectedFingerprint !== current.evidenceChecksum
-    )
+    if (input.expectedFingerprint !== (current.evidenceChecksum ?? handle.id))
       throw new Error("Suggestion evidence fingerprint changed");
     const subject = suggestionSubjects.email_link.parse(handle.subject);
     if (!subject.recordId)
@@ -367,10 +364,7 @@ async function applyReview(
       throw new Error(
         "Suggestion already resolved by another command; request a fresh suggestion",
       );
-    if (
-      input.expectedFingerprint !== undefined &&
-      input.expectedFingerprint !== handle.fingerprint
-    )
+    if (input.expectedFingerprint !== (handle.fingerprint ?? handle.id))
       throw new Error("Suggestion evidence fingerprint changed");
     if (!scope)
       throw new Error("Email application requires its outer write scope");
@@ -488,7 +482,7 @@ export async function settleMailDecisionReview(
       metadata: {
         kind: "assessment_review",
         application: null,
-        expectedFingerprint: input.expectedFingerprint ?? null,
+        expectedFingerprint: input.expectedFingerprint,
       },
     });
   if (input.intent === "apply") {

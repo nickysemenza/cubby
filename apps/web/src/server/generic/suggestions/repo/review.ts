@@ -61,8 +61,12 @@ export type Handler = {
       "subject" | "judgment"
     >,
   ) => Promise<void>;
-  /** The fingerprint a review must match; defaults to the stored one. */
-  currentFingerprint?: (
+  /**
+   * The key of what applying writes, which a review must name; defaults to the
+   * stored fingerprint. Evidence that changes nothing the application writes
+   * must not change it.
+   */
+  applicationKey?: (
     db: Database,
     state: SuggestionStateRow,
   ) => Promise<string | null>;
@@ -197,7 +201,7 @@ async function settleReview(
       metadata: {
         kind: "assessment_review",
         application: input.application ?? null,
-        expectedFingerprint: input.expectedFingerprint ?? null,
+        expectedFingerprint: input.expectedFingerprint,
         ...(automatic && { rule: automatic.rule }),
       },
     });

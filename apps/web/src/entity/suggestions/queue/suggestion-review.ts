@@ -140,7 +140,7 @@ const base = (row: SuggestionListRow) => ({
   suggestionId: row.suggestionId,
   operationId: crypto.randomUUID(),
   correction: { present: false as const },
-  ...(row.fingerprint ? { expectedFingerprint: row.fingerprint } : {}),
+  expectedFingerprint: row.fingerprint,
   reason: null,
   evidence: null,
 });
