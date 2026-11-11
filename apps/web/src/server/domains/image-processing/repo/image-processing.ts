@@ -2042,6 +2042,7 @@ export async function getPreferredImageDescriptions(
     .orderBy(desc(aiAnalysis.createdAt));
   const grouped = new Map<string, DescriptionHistory[]>();
   for (const row of history) {
+    if (row.entityId === null) continue;
     const entries = grouped.get(row.entityId) ?? [];
     entries.push(row);
     grouped.set(row.entityId, entries);

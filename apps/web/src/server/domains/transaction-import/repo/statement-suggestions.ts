@@ -264,11 +264,14 @@ const plainDateOf = (value: unknown) =>
     ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
     : String(value).slice(0, 10);
 
-const tuples = (charges: readonly ChargeRef[]) =>
-  sql.join(
-    charges.map((charge) => sql`(${charge.source}, ${charge.chargeKey})`),
-    sql`, `,
+const tuples = (charges: readonly ChargeRef[]) => {
+  const rows = requestedRows(
+    charges,
+    { source: "text", chargeKey: "text" },
+    "requested_charges",
   );
+  return sql`SELECT ${rows.col("source")}, ${rows.col("chargeKey")} FROM ${rows.from}`;
+};
 
 export type { StatementSuggestionScope } from "./statement-input";
 
@@ -1925,7 +1928,7 @@ async function publishableCharges(
 ): Promise<ChargeRef[]> {
   if (!charges.length) return [];
   const held = await unwrapDb(db).execute<ChargeRef>(
-    sql`SELECT c.source, c."chargeKey" FROM (VALUES ${tuples(charges)}) c(source, "chargeKey")
+    sql`SELECT c.source, c."chargeKey" FROM (${tuples(charges)}) c(source, "chargeKey")
       WHERE ${statementChargeSourceHeld(sql`c.source`, sql`c."chargeKey"`)}`,
     "objects",
   );
@@ -1978,10 +1981,7 @@ async function retireUnproposedCharges(
       AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(unproposed)})
       ${
         accountIds?.length
-          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
-              accountIds.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid = ANY(${uuidArrayParam(accountIds)})`
           : sql``
       }`,
     { active: false, status: "superseded" },
@@ -2880,12 +2880,7 @@ export async function repairStatementApplicationReceipts(
   if (!receipts.length) return;
   await retireStatementPublications(db, {
     suggestionIds: receipts.map((receipt) => receipt.suggestionId),
-    charges: sql.join(
-      receipts.map(
-        ({ charge }) => sql`(${charge.source}, ${charge.chargeKey})`,
-      ),
-      sql`, `,
-    ),
+    charges: tuples(receipts.map(({ charge }) => charge)),
   });
 }
 
