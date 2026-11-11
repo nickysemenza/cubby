@@ -586,8 +586,9 @@ async function applyPublishedStatementLabels(
       continue;
     }
     // Checkpoint completed charges before regenerating the remaining suffix.
-    // A round that applied a rule retains its moved-evidence rebuild work.
-    if (budgetSpent() && settlementTargets.length > 0 && applied.size === 0)
+    // The budget bounds application too, since its per-charge cost is the
+    // page's largest; the blocked suffix regenerates below if a rule moved evidence.
+    if (budgetSpent() && (settlementTargets.length > 0 || completed.size > 0))
       applicationBlocked = true;
     if (applicationBlocked) {
       unfinished.add(target.row.cursorId);
