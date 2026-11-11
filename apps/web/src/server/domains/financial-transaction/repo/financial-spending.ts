@@ -1516,6 +1516,8 @@ async function existingSpendingOutcome(
 // match is unique on both sides: one same-Vendor unpaid receipt within three
 // days whose open capacity is exactly the charge, and no other unbooked charge
 // for that amount near the receipt. Older partly paid spending still blocks.
+// Retained payment evidence belongs to the retained matcher, which may have
+// rejected this charge (another card, for example); it never falls back here.
 async function exactReceiptTarget(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -1572,6 +1574,9 @@ async function exactReceiptTarget(
       )})
       AND r."amountMinor" = ${amount}
       AND abs(r."statementDate" - ${match!.date}::date) <= 3
+    UNION ALL
+    SELECT 1 FROM "PurchasePaymentEvidence" retained
+    WHERE retained."purchaseId" = ${match!.id}::uuid
     LIMIT 1
   `);
   return competing.rows.length ? undefined : match;
