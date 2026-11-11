@@ -50,6 +50,7 @@ import { z } from "zod";
 
 import { classifyWithDecisionModel } from "~/server/ai/classify";
 import {
+  decisionChoiceFitsContext,
   runDecisionChoices,
   type DecisionChoiceResult,
   type DecisionPort,
@@ -65,7 +66,10 @@ import {
   type FieldSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
-import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
+import {
+  type AiSelectionSpec,
+  classificationPrompt,
+} from "~/server/ai/policy/decision-choice";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import {
   prunePrompt,
@@ -446,6 +450,17 @@ async function resolveEnumTarget(
     ? await spec.candidates(db, rawBasis)
     : spec.values;
   if (values.length === 0) return skipped("no_candidates");
+  const prompt = classificationPrompt({
+    subject,
+    rules: spec.rules,
+    values,
+    describe: spec.describe,
+    allowNone: spec.allowNone,
+  });
+  // Long saved evidence can exceed the decision envelope; the shared
+  // selection overflow answers it instead of failing every attempt.
+  if (!decisionChoiceFitsContext(prompt))
+    return resolveEnumOverflow(spec, values, subject, usage, decisionModel);
   const result = await classifyWithDecisionModel({
     feature: FIELD_SUGGESTION_FEATURE,
     subject,
@@ -488,6 +503,59 @@ async function resolveEnumTarget(
       answer: "pick",
       confidence: result.confidence,
       probability: result.probability,
+      alternatives,
+    },
+  };
+}
+
+async function resolveEnumOverflow(
+  spec: Extract<FieldSuggestSpec, { kind: "enum" }>,
+  values: readonly string[],
+  subject: string,
+  usage: AiSelectionUsage,
+  decisionModel?: SupportedDecisionModel,
+): Promise<TargetResolution> {
+  const outcome = await runAiSelection(
+    {
+      feature: FIELD_SUGGESTION_FEATURE,
+      rules: spec.rules,
+      idOf: (value: string) => value,
+      renderLine: (value: string) => `${value}: ${spec.describe(value)}`,
+      maxCandidates: values.length,
+    },
+    { subject, candidates: values, usage, decisionModel },
+  );
+  if (!outcome.evaluated) return skipped("no_candidates");
+  const alternatives = mapAlternatives(
+    outcome.alternatives,
+    (value) => value,
+    (value) => spec.labelOf?.(value) ?? value,
+  );
+  if (outcome.selected === null)
+    return declined({
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      alternatives,
+    });
+  const value = outcome.selected;
+  return {
+    suggestion: {
+      value,
+      label: spec.labelOf?.(value) ?? value,
+      detail: null,
+      confidence: outcome.confidence,
+      probability: outcome.probability,
+      reasoning: outcome.reasoning,
+      alternatives,
+      operation: "set",
+      removals: [],
+    },
+    rawValue: value,
+    outcome: {
+      kind: "evaluated",
+      answer: "pick",
+      confidence: outcome.confidence,
+      probability: outcome.probability,
       alternatives,
     },
   };
