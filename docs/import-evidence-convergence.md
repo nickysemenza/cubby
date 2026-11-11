@@ -130,8 +130,12 @@ card/tender and owner evidence, the posting window, and a complete unique
 conserved set. The same evidence checks apply to pending and observed charges;
 status alone neither proves identity nor prevents settlement. Weaker
 same-Vendor candidates within fourteen days, including tips, partial payments,
-splits and combined charges, need review; amount/date coincidence never proves
-identity.
+splits and combined charges, need review; amount/date coincidence alone does not
+prove identity. One exception settles automatically: a positive purchase charge
+whose only exact match is one unpaid same-Vendor receipt within three days, with
+open capacity equal to the charge, no older blocking spending, and no other
+unbooked charge or Transaction for that amount within three days of the
+receipt. That link is the same capacity-checked link a member would choose.
 
 For positive charges, actual nonfuture vendor Expenses on partly paid
 same-Vendor Purchases outside that window or without dates also prevent
