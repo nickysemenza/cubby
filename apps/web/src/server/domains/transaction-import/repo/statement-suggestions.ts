@@ -2097,15 +2097,24 @@ async function priorStatementPublications(
   const result = new Map<string, ChargePublicationHistory[]>();
   if (!proposals.some((proposal) => proposal.observations.length))
     return result;
+  // Two indexed branches: an OR across them scans every statement Suggestion
+  // per call, seconds per charge once the family holds tens of thousands.
   const rows = await getDb(db).execute<SuggestionRow & { owner: string }>(
     sql`
-    WITH roots AS (SELECT owner, observation FROM ${roots.from})
-    SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
+    WITH roots AS (SELECT owner, observation FROM ${roots.from}),
+    matched AS (
+      SELECT roots.owner, s.id FROM roots JOIN "Suggestion" s
+        ON s.entity=${"sourceTransactionRecord"} AND s."recordId"=roots.observation
+        AND s.family=${suggestionFamily.enum.statement_transaction}
+      UNION
+      SELECT roots.owner, s.id FROM roots
+      JOIN "FinancialEvidenceAlias" evidence ON evidence."observationId"=roots.observation AND ${notDeleted("evidence")}
+      JOIN "Suggestion" s ON s.family=${suggestionFamily.enum.statement_transaction}
+        AND s.data->>${financialTransactionSourceRef.keyof().enum.source}=evidence.source AND s.data->>'chargeKey'=evidence.value
+    )
+    SELECT matched.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
-    FROM roots JOIN "Suggestion" s ON s.family=${suggestionFamily.enum.statement_transaction}
-      AND (s."recordId"=roots.observation OR EXISTS (
-        SELECT 1 FROM "FinancialEvidenceAlias" evidence
-        WHERE evidence."observationId"=roots.observation AND ${notDeleted("evidence")} AND evidence.source=s.data->>${financialTransactionSourceRef.keyof().enum.source} AND evidence.value=s.data->>'chargeKey'))
+    FROM matched JOIN "Suggestion" s ON s.id=matched.id
     ORDER BY "createdAt" DESC, id DESC`,
     "objects",
   );
