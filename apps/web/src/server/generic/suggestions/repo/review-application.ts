@@ -3,7 +3,7 @@ import {
   suggestionProjectionTargets,
   suggestionReviewOut,
 } from "@cubby/schemas/suggestion";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -156,6 +156,19 @@ export function executeReviewApplication(
             ),
             { status: "applied" },
           );
+        // The apply settled this subject; another live row for it is a
+        // duplicate whose apply would write the same thing twice.
+        await transitionSuggestionStates(
+          transactionDb,
+          and(
+            eq(suggestionTable.family, prediction.family),
+            sql`${suggestionTable.subject} = ${JSON.stringify(prediction.subject)}::jsonb`,
+            ne(suggestionTable.id, applicableState.id),
+            eq(suggestionTable.active, true),
+            eq(suggestionTable.status, "pending"),
+          ),
+          { active: false, status: "superseded" },
+        );
       }
       let fieldApplicationReceipt: z.infer<
         typeof suggestionAcceptanceReceipt
