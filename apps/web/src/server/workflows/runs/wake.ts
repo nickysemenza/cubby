@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { makeJobsDueNow } from "~/server/generic/jobs/repo/operator";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
@@ -15,14 +16,8 @@ export async function wakeAiEvaluationRequesters(
   if (!ids.length) return;
   await makeJobsDueNow(
     db,
-    sql`SELECT 'run:' || e."runId"::text FROM "AiEvaluation" e WHERE e.id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
-      UNION SELECT 'run:' || r."runId"::text FROM "AiEvaluationRequest" r WHERE r."evaluationId" IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )}) AND r."cancelledAt" IS NULL`,
+    sql`SELECT 'run:' || e."runId"::text FROM "AiEvaluation" e WHERE e.id = ANY(${uuidArrayParam(ids)})
+      UNION SELECT 'run:' || r."runId"::text FROM "AiEvaluationRequest" r WHERE r."evaluationId" = ANY(${uuidArrayParam(ids)}) AND r."cancelledAt" IS NULL`,
   );
   await runAfterCommit(db, () => wakeJobs({ source: "run-receipt" }));
 }

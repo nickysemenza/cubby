@@ -35,6 +35,7 @@ import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/rep
 import type { Database } from "~/server/db/database";
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { job, run } from "~/server/db/retained-tables";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
@@ -118,10 +119,7 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
         SELECT r.shortcode FROM "ImageProcessingJob" stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.lane = p.lane AND stream.state = ${pending} AND ${notDeleted("r")}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM "ImageProcessingJob" p
@@ -227,10 +225,7 @@ async function readAiEvaluationStreams(
         SELECT r.shortcode FROM "AiEvaluation" stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.feature = e.feature AND stream."runAt" IS NOT NULL AND ${notDeleted("r")}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM "AiEvaluation" e
@@ -399,10 +394,7 @@ async function readAiEvaluationBacklog(db: Database, now: Date) {
         FILTER (WHERE ${unpublished}) AS "unpublishedSince"
     FROM "AiEvaluation" e
     -- Every execution kind, spelled out so the (executionKind, state) index serves the read.
-    WHERE e."executionKind" IN (${sql.join(
-      aiExecutionKind.options.map((kind) => sql`${kind}`),
-      sql`, `,
-    )})
+    WHERE e."executionKind" = ANY(${textArrayParam(aiExecutionKind.options)})
       AND (e.state IN (${queued}, ${result_ready})
         OR (e.state = ${blocked} AND e."updatedAt" > ${at} - ${BLOCKED_DAYS} * interval '1 day'))
     GROUP BY e.feature, e.state
@@ -521,10 +513,7 @@ async function observeWork(
       WHERE (${live} OR "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})
         ${
           INTERNAL_JOB_KINDS.length
-            ? sql`AND "Job".kind NOT IN (${sql.join(
-                INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
-                sql`, `,
-              )})`
+            ? sql`AND "Job".kind <> ALL(${textArrayParam(INTERNAL_JOB_KINDS)})`
             : sql``
         }
     )
@@ -550,10 +539,7 @@ async function observeWork(
         SELECT r.shortcode FROM activity_jobs stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.kind = "Job".kind AND ${notDeleted(requester)}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM activity_jobs "Job"

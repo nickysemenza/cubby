@@ -14,6 +14,7 @@ import {
   evaluationRosterExists,
   evaluationRecoveryExists,
 } from "~/server/ai/evaluation/repo/evaluation-tally";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { related } from "~/server/db/helpers/related";
 import { imageProcessingJob } from "~/server/db/retained-tables";
 import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
@@ -79,10 +80,7 @@ export function historicalRoutineRunPredicate(input: {
 }): SQL<boolean> {
   if (!historicalRoutineStepPurposes.length) return sql<boolean>`false`;
   // CASE keeps obligation probes off unrelated Run kinds on every Work poll.
-  return sql<boolean>`CASE WHEN ${input.purpose} IN (${sql.join(
-    historicalRoutineStepPurposes.map((purpose) => sql`${purpose}`),
-    sql`, `,
-  )})
+  return sql<boolean>`CASE WHEN ${input.purpose} = ANY(${textArrayParam(historicalRoutineStepPurposes)})
     AND ${input.trigger} = ${runTrigger.enum.scheduled} AND ${input.endedAt} IS NOT NULL
     AND ${input.status} IN (${RUN.failed}, ${RUN.dispatch_failed}, ${RUN.needs_review})
     AND ${input.failureCode} IS DISTINCT FROM 'execution_limit'

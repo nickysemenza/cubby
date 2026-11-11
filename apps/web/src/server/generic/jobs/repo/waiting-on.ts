@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/job";
 import { sql, type SQL } from "drizzle-orm";
 
+import { textArrayParam } from "~/server/db/helpers/query";
 import {
   JOB_KIND_POLICY,
   jobKindPolicy,
@@ -107,12 +108,7 @@ const kindsOfLane = (lane: JobLane) =>
     .map(([kind]) => kind);
 
 const inKinds = (column: SQL, kinds: readonly string[]) =>
-  kinds.length
-    ? sql`${column} IN (${sql.join(
-        kinds.map((kind) => sql`${kind}`),
-        sql`, `,
-      )})`
-    : sql`false`;
+  kinds.length ? sql`${column} = ANY(${textArrayParam(kinds)})` : sql`false`;
 
 /**
  * The same classification in SQL, for aggregates over many Jobs (Run

@@ -149,12 +149,18 @@ export const fundingWaiters: readonly FundingWait[] = [
 
 export async function readFundingWaits(db: Database, now = new Date()) {
   const counts = await Promise.all(
-    fundingWaiters.map((entry) => entry.count(db, now)),
+    fundingWaiters.map(async (entry) => ({
+      name: entry.name,
+      count: await entry.count(db, now),
+    })),
   );
-  return {
-    runs: counts[0] ?? 0,
-    work: counts.slice(1).reduce((a, b) => a + b, 0),
-  };
+  return counts.reduce(
+    (total, item) =>
+      item.name === "runs"
+        ? { ...total, runs: total.runs + item.count }
+        : { ...total, work: total.work + item.count },
+    { runs: 0, work: 0 },
+  );
 }
 
 export async function resumeFundingPausedRuns(
