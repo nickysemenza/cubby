@@ -220,7 +220,18 @@ export async function migrateDatabase(
     // but no migration receipt. Each statement therefore has to be idempotent.
     for (const statement of migration.sql) {
       if (statement.includes("-- cubby:outside-transaction")) {
+        // An interrupted concurrent build leaves an invalid index that
+        // `IF NOT EXISTS` would keep; rebuild it and verify the result.
+        for (const name of await invalidIndexesNamedIn(db, statement))
+          await db.execute(
+            sql.raw(`DROP INDEX CONCURRENTLY IF EXISTS "${name}"`),
+          );
         await db.execute(sql.raw(statement));
+        const invalid = await invalidIndexesNamedIn(db, statement);
+        if (invalid.length)
+          throw new Error(
+            `Concurrent index build left invalid indexes: ${invalid.join(", ")}`,
+          );
         continue;
       }
       let remaining: boolean;
@@ -242,6 +253,17 @@ export async function migrateDatabase(
     await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
       VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
   }
+}
+
+async function invalidIndexesNamedIn(db: NodePgDatabase, statement: string) {
+  const { rows } = await db.execute<{ name: string }>(sql`
+    SELECT c.relname AS name FROM pg_index i
+    JOIN pg_class c ON c.oid = i.indexrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE NOT i.indisvalid AND n.nspname = current_schema()`);
+  return rows
+    .map((row) => row.name)
+    .filter((name) => statement.includes(`"${name}"`));
 }
 
 const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";
