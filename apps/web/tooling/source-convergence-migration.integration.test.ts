@@ -5,9 +5,13 @@ import { migrateDatabase } from "./db-migrate";
 import { withMigrationDatabase } from "./test-database-lease";
 
 // Consolidation must preserve observations and hold contradictory member decisions.
-it.each([false, true])(
-  "consolidates Monarch identities without discarding decisions (multiple providers: %s)",
-  async (multipleProviders) => {
+it.each([
+  { multipleProviders: false, conflict: true },
+  { multipleProviders: true, conflict: true },
+  { multipleProviders: false, conflict: false },
+])(
+  "consolidates Monarch identities without discarding decisions (%o)",
+  async ({ multipleProviders, conflict }) => {
     await withMigrationDatabase(async (client) => {
       const db = drizzle({ client, paramsInErrors: true });
       await migrateDatabase(db, {
@@ -25,6 +29,8 @@ it.each([false, true])(
         [4, "sourceOccurrence", "SOC-SYNTH2"],
         [5, "sourceTransactionRecord", "STR-SYNTH1"],
         [6, "sourceTransactionRecord", "STR-SYNTH2"],
+        [7, "financialAccount", "FAC-SYNTH1"],
+        [8, "financialTransaction", "FTX-SYNTH1"],
       ] as const)
         await client.query(
           `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,$2,$3)`,
@@ -45,9 +51,23 @@ it.each([false, true])(
           [id(4)],
         );
       await client.query(
-        `UPDATE "SourceOccurrence" SET disposition='ignored',"dispositionReason"='other',"dispositionNote"='Synthetic decision' WHERE id=$1`,
-        [id(4)],
+        `INSERT INTO "FinancialAccount" (id,shortcode,name,identity) VALUES ($1,'FAC-SYNTH1','Synthetic card','{"kind":"cash"}')`,
+        [id(7)],
       );
+      await client.query(
+        `INSERT INTO "FinancialTransaction" (id,shortcode,"accountId",kind,status,"postedDate","amountMinor") VALUES ($1,'FTX-SYNTH1',$2,'purchase','posted','2026-01-01',1000)`,
+        [id(8), id(7)],
+      );
+      // An account on one member and an accepted Transaction are agreeing evidence, not a conflict.
+      await client.query(
+        `UPDATE "SourceOccurrence" SET "accountId"=$1,"acceptedTransactionId"=$2 WHERE id=$3`,
+        [id(7), id(8), id(3)],
+      );
+      if (conflict)
+        await client.query(
+          `UPDATE "SourceOccurrence" SET disposition='ignored',"dispositionReason"='other',"dispositionNote"='Synthetic decision' WHERE id=$1`,
+          [id(4)],
+        );
       for (const n of [1, 2]) {
         await client.query(
           `INSERT INTO "SourceTransactionRecord" (id,shortcode,"batchId",source,"occurrenceId","factFingerprint","providerTransactionId","accountDescriptor","statementDate","amountMinor","providerAmountMinor","rawDescription") VALUES ($1,$2,$3,'monarch',$4,$5,'synthetic-charge','Synthetic card','2026-01-01',1000,-1000,'Synthetic charge')`,
@@ -60,15 +80,22 @@ it.each([false, true])(
       }
       await migrateDatabase(db, { through: "20261110232756_unusual_fenris" });
       const owners = await client.query(
-        `SELECT id,"identityKind","identityScope","reviewState","supersededByOccurrenceId" FROM "SourceOccurrence" ORDER BY id`,
+        `SELECT id,"identityKind","identityScope","reviewState","supersededByOccurrenceId","accountId","acceptedTransactionId","currentObservationId" FROM "SourceOccurrence" ORDER BY id`,
       );
       const survivor = owners.rows.find(
         (owner) => owner.identityScope === "provider:monarch",
       );
-      expect(survivor).toMatchObject({
-        identityKind: "provider",
-        reviewState: "identity_conflict",
-      });
+      expect(survivor).toMatchObject(
+        conflict
+          ? { identityKind: "provider", reviewState: "identity_conflict" }
+          : {
+              identityKind: "provider",
+              reviewState: "ready",
+              accountId: id(7),
+              acceptedTransactionId: id(8),
+              currentObservationId: id(6),
+            },
+      );
       expect(survivor?.id === id(3)).toBe(!multipleProviders);
       const retired = owners.rows.filter((owner) => owner.id !== survivor?.id);
       expect(

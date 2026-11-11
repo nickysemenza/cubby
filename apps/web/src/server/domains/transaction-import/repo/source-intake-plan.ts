@@ -369,9 +369,11 @@ export function planWithdrawals(
     );
   for (const owner of withdrawals) {
     const head = retained.find((row) => row.id === owner.currentObservationId);
+    // A provider id is unique without its account; a missing account is not another account.
     if (
       !head ||
-      head.providerAccountId !== coverage.account ||
+      (head.providerAccountId !== null &&
+        head.providerAccountId !== coverage.account) ||
       head.statementDate < coverage.from ||
       head.statementDate > coverage.to ||
       owner.lastObservedAt > observedAt ||

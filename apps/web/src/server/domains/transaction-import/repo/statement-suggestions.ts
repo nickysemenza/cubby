@@ -536,10 +536,12 @@ const byStatementOrder = (a: CopyMember, b: CopyMember) =>
   a.charge.chargeKey.localeCompare(b.charge.chargeKey);
 
 /**
- * Every live charge from any source on the same resolved account, at the exact
- * amount and within the sibling window, booked or not: the copies several
- * exports may hold of one bank event. Accounts resolve through the same
- * preview as the page, because intake leaves the owner's account unset.
+ * Every ready, unwithdrawn charge from any source on the same resolved account,
+ * at the exact amount and within twice the sibling window, booked or not: the
+ * copies several exports may hold of one bank event. The wider window lets
+ * every member see the same group; pairing refuses a group wider than one
+ * window. Accounts resolve through the same preview as the page, because
+ * intake leaves the owner's account unset.
  */
 async function copyMembersFor(
   db: Database,
@@ -572,8 +574,8 @@ async function copyMembersFor(
     o AS MATERIALIZED (
       SELECT DISTINCT p.key, o.source, ${chargeKeyOf("o")} AS "chargeKey"
       FROM p JOIN ${sourceObservations} o ON o."providerAmount" = p.amount
-        AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
-        AND ${notDeleted("o")}
+        AND o."statementDate" BETWEEN p.day - ${2 * SIBLING_WINDOW_DAYS}::int AND p.day + ${2 * SIBLING_WINDOW_DAYS}::int
+        AND ${notDeleted("o")} AND o."withdrawnAt" IS NULL
         AND NOT (o.source = p.source AND ${chargeKeyOf("o")} = p."chargeKey")
     ),
     cs AS MATERIALIZED ${chargeStateOf(
@@ -582,6 +584,7 @@ async function copyMembersFor(
     SELECT o.key, o.source, o."chargeKey" FROM o
     JOIN cs ON cs.source = o.source AND cs."chargeKey" = o."chargeKey"
       AND NOT cs.ignored AND NOT cs.superseded
+      AND cs."reviewState" = ${sourceOccurrenceReviewState.enum.ready}
   `,
     "objects",
   );
@@ -681,7 +684,8 @@ type CopyPairing =
 
 /**
  * The k-th charge of each source within the group is one bank event. Equal
- * counts are required, so two real repeat charges in each of two sources stay
+ * counts and a group no wider than one window are required, so every member
+ * computes the same pairing; so two real repeat charges in each of two sources stay
  * two events. One primary per event books; the others attach to its
  * Transaction once it exists.
  */
@@ -696,7 +700,9 @@ function copyPairing(charge: ChargeRef, members: readonly CopyMember[]) {
   const others = members.filter(
     (member) => chargeId(member.charge) !== chargeId(charge),
   );
-  if (counts.size !== 1)
+  const dates = members.map((member) => member.canonical.statementDate).sort();
+  const spread = plainDateDaysBetween(dates[0]!, dates.at(-1)!);
+  if (counts.size !== 1 || spread > SIBLING_WINDOW_DAYS)
     return {
       kind: "ambiguous",
       others: others
