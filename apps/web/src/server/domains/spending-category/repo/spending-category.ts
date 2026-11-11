@@ -414,7 +414,7 @@ async function mergeSpendingCategories(
     // Moving Expense history needs the reviewed preview/apply path
     // (`spendingCategoryMerge`), which runs this same merge.
     if (await reclassifiesExpenses(tx, loserIds))
-      assertReviewedSpendingClassification(tx);
+      assertReviewedSpendingClassification(tx, "spendingCategoryMerge");
     const repointed = await applyMergePolicy(tx, {
       entity: "spendingCategory",
       policy: SPENDING_CATEGORY_MERGE_EDGE_POLICY,

@@ -78,6 +78,7 @@ repository's transactions, locking, SQL or workflow rules.
 
 The model owns scalar validation, physical column factories and presentation. A concrete
 `validation.create` or `validation.update` grants that write mode; null or omission excludes it.
+A create-only field submitted to `entity.update` is refused with its field description.
 Fields enter the raw base read by default; `output: false` excludes storage-only and write-only
 fields. Writable fields audit by default; `audit: false` records an intentional exclusion and
 `audit: true` retains read-only evidence. The compiler derives the create/update/output/audit
@@ -3295,7 +3296,7 @@ whether it is allowed, in one vocabulary (`fieldPolicyValues`: `required` gaps a
 `not_expected` and `unknown` raise no gap, `not_allowed` also refuses a value). A fixed classification
 declares it under `capabilities.classificationPolicies`: the classifier enum, optionally the
 classified entity and its reference field (omit `target` when the classifier is on the governed
-record), and per target field a `byValue` map plus an `otherwise` policy. The generator checks every
+record), and per target field a `byValue` map plus an `otherwise` policy. Same-record `not_allowed` and enforced `required` policies declare an actionable refusal. The generator checks every
 name and value, requires a field refused by default to have exactly one admitting value, and emits
 `classification-field-policies.gen.ts`. A household-editable classification keeps its policy per row
 (SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy` registers
@@ -3510,7 +3511,7 @@ profile once (`fillOnly`) and never replaces a person's choice.
 Saved-record spending review is declared per field as `control.suggest.financeReview.context`:
 `finance` for the Purchase fallback and Expense category, `vendor` for the Vendor default category and
 spending profile. The context selects the saved evidence the server reads, the fingerprint-fenced
-writer (`finance` books `spendingCategoryId`; `vendor` patches the declared Vendor fields) and the
+writer (`finance` books `spendingCategoryId`; `vendor` patches the declared create-only Vendor fields) and the
 saved-record gating web and native read from the manifest. FinancialTransaction's read-only
 `spendingCategoryId` declares no review. The `financeCategoryReview` wire enums keep their literal
 order; a type check requires them to list every declared entity and field.
@@ -3546,9 +3547,16 @@ older pending Suggestions ineligible on reads; a later sweep supersedes prior pe
 same record and field. Historical hashes, model versions, provenance and actor intent are never
 reconstructed.
 
-`suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` and
-`suggestions.review_batch`) settle immutable review independently of apply intent; each batch item
-has its own outcome. A decision records correct, wrong, uncertain and presentation-only dismissal
+`suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` with `items`) record
+immutable review; each batch item has its own outcome. Draft and
+history verdicts settle on their own; an applying review commits with its application, so a stale
+or refused application records nothing and the same operation id may retry with a corrected review.
+Every applying review sends `expectedFingerprint`, the listed row's `fingerprint`, naming the
+version it reviewed; a family whose list computes that fingerprint live declares `applicationKey`.
+A mismatch refuses, naming each part of the family's `applicationTerms` (what its apply writes) that
+moved. Statement applications compare only the chosen action's terms inside their apply, so drift in
+evidence the application does not write never blocks.
+A decision records correct, wrong, uncertain and presentation-only dismissal
 separately, with an explicit correction-presence discriminator so a corrected JSON null survives.
 Draft acceptance records history; saved application commits a separate immutable command-bound
 receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each
@@ -3576,7 +3584,7 @@ immutable evidence loads only in the family action that consumes it, so generic 
 plumbing never transfer large snapshots. Canonical fingerprint serialization traverses validated JSON
 directly, sorting object keys and keeping array order and scalar encoding, without revalidating
 subtrees; normalize dates and optional values at the input boundary. Stored-family outcome counts use
-one status query scoped by family and optional Run. Suggestion lists resolve record scope once through family discovery and pass matched ids to family readers. Families declare primary records and JSON reference paths, with guards for the stored field or scope; the touching reader binds requested records and owns reverse discovery. Paths that store shortcodes can declare live-record resolution before matching. Statement settlement graph discovery is the only graph exception. Review uses family subject and projection
+one status query scoped by family and optional Run. Suggestion lists resolve record scope once through family discovery and pass matched ids to family readers. Families declare primary records and subject JSON reference paths, with guards for the stored field or scope; recordIds matches subjects, while account and vendor filters select related statement suggestions. The touching reader binds requested records and owns reverse discovery. Paths that store shortcodes can declare live-record resolution before matching. Statement settlement graph discovery is the only graph exception. Review uses family subject and projection
 schemas, the common verdict set and transaction-bound application by default; families keep explicit
 exceptions.
 
@@ -3631,6 +3639,15 @@ owns presentation, affected-record discovery and review commands in one typed de
 readers compose the same static declarations. The registry exposes live accessors because family
 implementations depend on generic review, and eager values could capture an unfinished circular
 import. Reference resolution, touching-record queries and Work tokens have separate runtimes.
+
+Every Suggestion is published through one module, `suggestion-publication.ts`; its immutable insert
+and pruning have no other caller. Statement transactions, transfer pairs, connections,
+recommendations, Product pairs and field sweeps each declare a `SuggestionFamily` slot and its
+suppression, unchanged and replacement policy. A candidate its family declares `unapplicable` (a
+transfer pair that cannot apply, a connection relation without an apply path) retires the slot's
+pending rows instead of publishing, so no pending row exists without an apply path. Run-scoped photo
+drafts and live field answers publish as exact immutable evidence keyed by publication, which never
+suppresses, matches or settles a queue row.
 
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue. Every
 multiselect, including Clean, offers **is / is not** through the shared filter editor with `__not__:`

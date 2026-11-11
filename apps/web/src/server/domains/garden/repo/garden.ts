@@ -144,7 +144,7 @@ const validatePlantingSource = async (
   ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "A planting source Product must be a garden product, not a food Product.",
+      "A planting source Product must be a garden product, not a food Product. Choose a garden Product or change the Product category before using it as a planting source.",
     );
   }
   if (source.growsPlantId && plantId && source.growsPlantId !== plantId) {

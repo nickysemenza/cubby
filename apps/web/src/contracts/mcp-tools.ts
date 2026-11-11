@@ -20,7 +20,6 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { expenseContract } from "~/contracts/expense.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
 import { ingredientContract } from "~/contracts/ingredient.contract";
@@ -46,7 +45,6 @@ import {
   usdaFoodContract,
   usdaSuggestionReason,
 } from "~/contracts/usda.contract";
-import { workQueueContract } from "~/contracts/work-queue.contract";
 
 import { suggestionContract } from "./suggestion.contract";
 
@@ -140,15 +138,8 @@ export const MCP_TOOL_DESCRIPTIONS = {
 } as const;
 
 export const MCP_ACTION_OVERRIDES = {
-  "suggestion.reviewBatch": mcpActionOverride(
-    suggestionContract.ops.reviewBatch,
-    {
-      project: (items) => ({ items }),
-      output: mcpItemsEnvelope(suggestionContract.ops.reviewBatch.output),
-    },
-  ),
-  "expense.analytics": mcpActionOverride(expenseContract.ops.analytics, {
-    strict: true,
+  "suggestion.review": mcpActionOverride(suggestionContract.ops.review, {
+    batch: { resultDetail: "full", reference: (item) => item.suggestionId },
   }),
   "image.attachExisting": mcpActionOverride(imageContract.ops.attachExisting, {
     telemetryEntity: (input) => parseShortcode(input.targetId)?.type,
@@ -232,9 +223,6 @@ export const MCP_ACTION_OVERRIDES = {
       output: recipeAvailabilityMcpOut,
     },
   ),
-  "run.lifecycle": mcpActionOverride(runContract.ops.lifecycle, {
-    strict: true,
-  }),
   "run.workSnapshot": mcpActionOverride(runContract.ops.workSnapshot, {
     project: (output) => ({
       ...output,
@@ -292,9 +280,6 @@ export const MCP_ACTION_OVERRIDES = {
       }),
     },
   ),
-  "workQueue.queue": mcpActionOverride(workQueueContract.ops.queue, {
-    strict: true,
-  }),
 } satisfies Readonly<Record<string, McpActionOverride>>;
 
 export const MCP_TOOLS = defineMcpTools({

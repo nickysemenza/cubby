@@ -218,7 +218,13 @@ const inputFieldsOf = (filter: RelationFilter) => {
   switch (filter.kind) {
     case "text":
       return {
-        [filter.columnId]: describe(z.string().max(500).optional(), "contains"),
+        [filter.columnId]: describe(
+          (filter.array
+            ? z.union([z.string().max(500), z.array(z.string().max(500))])
+            : z.string().max(500)
+          ).optional(),
+          "contains",
+        ),
       };
     case "boolean":
       return {

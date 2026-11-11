@@ -17,10 +17,8 @@ import { executeEntity } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import {
-  publishSuggestion,
-  recordFeedback,
-} from "~/server/generic/suggestions/repo/suggestion";
+import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { assessRecommendation } from "~/server/generic/suggestions/repo/suggestion-recommendation";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
@@ -49,10 +47,12 @@ describe("shared Suggestion history", () => {
   });
 
   it("publishes once and refuses changed evidence under a retry identity", async () => {
-    const first = await publishSuggestion(ctx.db, publication());
-    expect((await publishSuggestion(ctx.db, publication())).id).toBe(first.id);
+    const first = await publishExactSuggestion(ctx.db, publication());
+    expect((await publishExactSuggestion(ctx.db, publication())).id).toBe(
+      first.id,
+    );
     await expect(
-      publishSuggestion(ctx.db, {
+      publishExactSuggestion(ctx.db, {
         ...publication(),
         evidence: { changed: true },
       }),
@@ -63,7 +63,7 @@ describe("shared Suggestion history", () => {
     const record = await productFixture(ctx, "Synthetic receipt item", {
       notes: "Saved synthetic note",
     });
-    const prediction = await publishSuggestion(ctx.db, {
+    const prediction = await publishExactSuggestion(ctx.db, {
       publicationKey: "synthetic:draft-receipt",
       family: "field",
       subject: {
@@ -118,7 +118,7 @@ describe("shared Suggestion history", () => {
         intent: "apply",
         application: { kind: "saved_field", recordId: changed.id },
       }),
-    ).rejects.toThrow(/Immutable Feedback retry/);
+    ).rejects.toThrow(/already used for a different review/);
     await expect(
       reviewSuggestion(ctx.db, context, {
         suggestionId: prediction.id,
@@ -138,7 +138,7 @@ describe("shared Suggestion history", () => {
         notes: "Original note",
       });
       const target = await recordId(ctx.db, product.id, "product");
-      const prediction = await publishSuggestion(
+      const prediction = await publishExactSuggestion(
         ctx.db,
         {
           publicationKey: "synthetic:field-replay",
@@ -173,6 +173,8 @@ describe("shared Suggestion history", () => {
         operationId: "synthetic:apply-once",
         verdict: corrected ? ("wrong" as const) : ("correct" as const),
         intent: "apply" as const,
+        // A row without a stored fingerprint is reviewed by its id.
+        expectedFingerprint: prediction.id,
         correction: corrected
           ? { present: true as const, value: "Corrected note" }
           : { present: false as const },
@@ -186,7 +188,7 @@ describe("shared Suggestion history", () => {
         metadata: {
           kind: "assessment_review",
           application: null,
-          expectedFingerprint: null,
+          expectedFingerprint: prediction.id,
         },
       });
       await getDb(ctx.db)
@@ -210,7 +212,7 @@ describe("shared Suggestion history", () => {
           ...command,
           correction: { present: true, value: "Conflicting reuse" },
         }),
-      ).rejects.toThrow(/Immutable Feedback retry/);
+      ).rejects.toThrow(/already used for a different review/);
       await expect(
         reviewSuggestion(ctx.db, kernelCtx(ctx), {
           ...command,
@@ -295,7 +297,7 @@ describe("shared Suggestion history", () => {
     const record = await productFixture(ctx, "Synthetic receipt collision", {
       notes: "Synthetic saved note",
     });
-    const prediction = await publishSuggestion(ctx.db, {
+    const prediction = await publishExactSuggestion(ctx.db, {
       publicationKey: "synthetic:receipt-collision",
       family: "field",
       subject: {
@@ -363,7 +365,7 @@ describe("shared Suggestion history", () => {
     const category = await insertWithShortcode(ctx.db, "productCategory", {
       name: "Synthetic retired category",
     });
-    const prediction = await publishSuggestion(ctx.db, {
+    const prediction = await publishExactSuggestion(ctx.db, {
       ...publication(),
       publicationKey: "synthetic:category-lifecycle",
       subject: {
@@ -395,7 +397,7 @@ describe("shared Suggestion history", () => {
     ).toEqual(prediction.subject);
   });
   it("refuses invalid draft and saved intents before recording Feedback", async () => {
-    const prediction = await publishSuggestion(ctx.db, publication());
+    const prediction = await publishExactSuggestion(ctx.db, publication());
     for (const command of [
       { intent: "draft" as const },
       {
@@ -443,7 +445,7 @@ describe("shared Suggestion history", () => {
     const record = await productFixture(ctx, "Synthetic history subject");
     const subjectId = await recordId(ctx.db, record.id, "product");
     const original = publication();
-    const first = await publishSuggestion(ctx.db, {
+    const first = await publishExactSuggestion(ctx.db, {
       ...original,
       subject: { ...original.subject, recordId: subjectId },
     });

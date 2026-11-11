@@ -137,6 +137,11 @@ no retained payment evidence, open capacity equal to the charge, no older blocki
 unbooked charge or Transaction for that amount within three days of the
 receipt. That link is the same capacity-checked link a member would choose.
 
+Nearby candidates without explicit payment or member evidence require review
+only when known remaining Purchase capacity can cover the charge, or capacity
+is unknown. Settled Purchases and those with insufficient remaining capacity
+remain visible as context and do not prevent automatic new spending.
+
 For positive charges, actual nonfuture vendor Expenses on partly paid
 same-Vendor Purchases outside that window or without dates also prevent
 automatic new spending while their complete graphs have open, unknown or
@@ -172,8 +177,7 @@ explicit review before a standalone refund Purchase is booked.
 
 The clean import booking rule (clean spending creates, books and supersedes,
 clean income, transfer and card-payment creates, and paired copy attaches) is fixed code and always on; there is no member
-switch or audit sample. Each application still uses `suggestions.review` or
-`suggestions.review_batch` and records automatic authority and its policy
+switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
 Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
 transaction-only receipt into proof of spending; regenerate and revalidate the
@@ -1398,15 +1402,22 @@ effects; it is optional, never acceptance authority or a prerequisite to a
 supported `suggestions.review`. The write always validates the current
 Suggestion, application and spending. Preview and acceptance rebuild the charge
 from retained evidence, carry the reviewed model labels onto it, and refuse,
-naming each field, only when what was reviewed changed: the recommended action,
-the account, statement date and provider status, the created transaction's kind,
-amount, status, dates, merchant, descriptor and source reference, the candidate
-set (id, amount, differing fields, claimed by another charge), the superseded,
-voided or matched transaction, or the transfer. Accepting the recommendation as
-reviewed also refuses when a ready booking's effect, purchaser, Vendor,
-category or Purchase moved (`spending.<field>`). Merchant history, sibling and
-snapshot drift that leave those unchanged do not refuse; a correction's own
-action, kind or booking is replanned at acceptance.
+naming each part, only when what the chosen action writes changed: the
+account, statement date and provider status, plus a create's transaction fields,
+paired transaction and transfer, an attach's target (its amount, differing
+fields and eligibility), or the superseded, voided or matched transaction.
+Accepting the recommendation as reviewed also refuses when a ready booking's
+effect, purchaser, Vendor, category or Purchase moved (`spending.<field>`).
+Other candidates, merchant history, sibling and snapshot drift do not refuse; a
+correction's own action, kind or booking is replanned at acceptance.
+
+Candidates share the generic eligible-target predicate. A transaction another
+charge already settles or claims, or one of the wrong sign, amount or kind,
+stays listed as `eligibility: "context"` with its `contextReason`; it never
+blocks a create, never earns an attach recommendation, and attaching to it
+refuses with the next step. Evidence that names a transaction (a provider match,
+an identity hold, or the booked copy of the same bank event) marks it
+`explicit`.
 
 Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
 nonrecommended action, uses `verdict: "wrong"` with
@@ -1442,7 +1453,7 @@ group by group, filtering a group with
 `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
-   `suggestions.review_batch`: verdict `correct`, intent `apply`,
+   `suggestions.review`: verdict `correct`, intent `apply`,
    `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
    "statement_transaction", action: <recommended>}`; an attach also names
    `transactionId`, the first candidate. For transfer/card-payment creates use
@@ -1471,11 +1482,10 @@ group by group, filtering a group with
    `sourceTransactionRecord`, setting `supersededByRowId` to the reviewed
    successor record ID) before creating either. Siblings from other sources
    mean their counts disagree (see [Matching](#matching)): book each real
-   charge once and attach the other sources' copies to it. A `claimed` candidate already settles another charge from the same
-   source, so it is never recommended or clean: the suggestion recommends
-   `create` and accepting as is rejects it. Attach as a correction only when
-   this row is that charge re-exported under a new descriptor; two visits for
-   the same amount are two creates.
+   charge once and attach the other sources' copies to it. A `context`
+   candidate with `contextReason: "claimed"` already settles another charge,
+   so the recommendation is `create`; two visits for the same amount are two
+   creates.
 4. A person counterparty is never clean. An outgoing payment to a person is
    your share of a shared cost: create it as `purchase` and set the merchant.
    An incoming one is a repayment: create it, then book it with

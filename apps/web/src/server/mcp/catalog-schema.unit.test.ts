@@ -393,8 +393,7 @@ describe("MCP catalog schemas", () => {
       "cubby/error": {
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
-        message: "Invalid identifier",
-        diagnostics: { operation: "legacy_refusal.run", stage: "run" },
+        message: expect.stringContaining("Invalid identifier"),
       },
     });
     expect(capture).not.toHaveBeenCalled();
@@ -704,7 +703,6 @@ describe("MCP catalog schemas", () => {
       "run.reject_candidate.operationId",
       "image.confirm_description.operationId",
       "image.confirm_description.expectedEffectId",
-      "product_enrichment.merge_product_match.suggestionId",
       "purchase_import.commit.prepareOperationId",
       "purchase_import.commit.resolutions[].stableOrderId",
       "purchase_import.commit.resolutions[].stableLineId",
@@ -744,12 +742,10 @@ describe("MCP catalog schemas", () => {
       "shipments.reassign.sourcePackageId",
       "suggestions_read.automatic_decisions.recordIds",
       "suggestions_read.list.recordIds",
-      "suggestions.review.operationId",
+      "suggestions.review.items[].operationId",
       // Preview consumes the same opaque Suggestion review handle as acceptance.
       "finance_read.preview_suggestion.suggestionId",
-      "suggestions.review.suggestionId",
-      "suggestions.review_batch.items[].operationId",
-      "suggestions.review_batch.items[].suggestionId",
+      "suggestions.review.items[].suggestionId",
       // A Changes by Cubby row names the same opaque Suggestion handle.
       "suggestions.field_authority.suggestionId",
     ]);

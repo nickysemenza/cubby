@@ -25,6 +25,10 @@ import {
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
+import {
+  changedTerms,
+  reviewKey,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import type { ReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   suggestionStateColumns,
@@ -48,17 +52,20 @@ export function executeReviewApplication(
   prediction: Prediction,
   name: ReviewFamily,
   family: (typeof suggestionFamilies)[ReviewFamily],
-  event: FeedbackEvent,
+  writeReview: (db: Database) => Promise<{ event: FeedbackEvent }>,
 ) {
   const authority = automatic ? "automatic" : "member";
   const executeApplication = () => {
     const apply = async (transactionDb: Database) => {
-      const outcome: z.infer<typeof suggestionReviewOut> = {
-        suggestionId: prediction.id,
-        feedbackId: event.id,
-        status: "applied",
-        applied: true,
-      };
+      // The review and its application commit together: a refused or stale
+      // application leaves no Feedback, so a retry may carry a fresh review.
+      const outcome = (event: FeedbackEvent) =>
+        ({
+          suggestionId: prediction.id,
+          feedbackId: event.id,
+          status: "applied",
+          applied: true,
+        }) satisfies z.infer<typeof suggestionReviewOut>;
       // Serialize generic commands without taking projection locks ahead of the
       // domain's parent locks. Receipt and mutation commit in the same boundary.
       await advisoryXactLock(
@@ -75,9 +82,16 @@ export function executeReviewApplication(
         owner?.decisions ?? [],
         `command-application:${input.operationId}`,
       );
-      const priorOutcome = planApplicationReceipt(receipt, event, outcome);
-      if (priorOutcome) return priorOutcome;
+      if (receipt) {
+        const { event } = await writeReview(transactionDb);
+        return planApplicationReceipt(receipt, event, outcome(event));
+      }
+      let event: FeedbackEvent;
+      let applicationResult: z.infer<
+        typeof suggestionReviewOut
+      >["applicationResult"];
       if (input.application?.kind === "saved_field") {
+        ({ event } = await writeReview(transactionDb));
         await acknowledgeSavedField(transactionDb, context, prediction, {
           recordId: input.application.recordId,
           operationId: input.operationId,
@@ -98,25 +112,41 @@ export function executeReviewApplication(
             ? await query.for("update")
             : await query;
         const applicableState = planApplicableState(state, prediction.family);
-        if (
-          input.expectedFingerprint !== undefined &&
-          input.expectedFingerprint !==
-            ("currentFingerprint" in family && family.currentFingerprint
-              ? await family.currentFingerprint(transactionDb, applicableState)
-              : applicableState.fingerprint)
-        )
-          throw new Error("Suggestion evidence fingerprint changed");
+        if (!input.expectedFingerprint)
+          throw new Error(
+            "An applying review needs expectedFingerprint; send the listed row's fingerprint",
+          );
+        const key = reviewKey({
+          suggestionId: applicableState.id,
+          fingerprint:
+            "applicationKey" in family && family.applicationKey
+              ? await family.applicationKey(transactionDb, applicableState)
+              : applicableState.fingerprint,
+        });
+        if (input.expectedFingerprint !== key) {
+          const changed =
+            "applicationTerms" in family && family.applicationTerms
+              ? changedTerms(
+                  await family.applicationTerms(transactionDb, applicableState),
+                )
+              : [];
+          throw new Error(
+            `Suggestion changed since review${changed.length ? `: ${changed.join(", ")}` : ""}; list it again and review the current version`,
+          );
+        }
         (family.target ?? suggestionProjectionTargets[name]).parse(
           applicableState,
         );
-        const applicationResult = await family.apply(
-          transactionDb,
-          { ...context, db: transactionDb, reviewFeedbackId: event.id },
-          applicableState,
-          input,
-          automatic,
-        );
-        if (applicationResult) outcome.applicationResult = applicationResult;
+        applicationResult =
+          (await family.apply(
+            transactionDb,
+            { ...context, db: transactionDb },
+            applicableState,
+            input,
+            automatic,
+          )) ?? undefined;
+        // Domain parent locks precede the Suggestion row lock Feedback takes.
+        ({ event } = await writeReview(transactionDb));
         if (family.transactionBound === false)
           await transitionSuggestionStates(
             transactionDb,
@@ -152,6 +182,10 @@ export function executeReviewApplication(
           ),
         };
       }
+      const applied = {
+        ...outcome(event),
+        ...(applicationResult && { applicationResult }),
+      };
       await recordFeedback(transactionDb, {
         suggestionId: prediction.id,
         operationId: `command-application:${input.operationId}`,
@@ -159,7 +193,7 @@ export function executeReviewApplication(
         intent: "apply",
         authority,
         actorUserId: context.actorContext.userId,
-        receipt: outcome,
+        receipt: applied,
         metadata: {
           kind: "assessment_application",
           commandFeedbackId: event.id,
@@ -167,7 +201,7 @@ export function executeReviewApplication(
           ...(automatic && { rule: automatic.rule }),
         },
       });
-      return outcome;
+      return applied;
     };
     return withEmailReviewBoundary(
       db,

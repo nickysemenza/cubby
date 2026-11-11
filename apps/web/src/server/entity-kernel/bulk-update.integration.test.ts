@@ -440,7 +440,7 @@ describe("generic bulk updates", () => {
         ).id,
       }),
     ).rejects.toThrow(
-      `selected rows: ${[first.id, second.id, bystander.id].join(", ")}`,
+      /Bulk product update failed at row PRD-\w+; 3 selected rows/,
     );
     expect(await read("product", first.id)).toMatchObject({
       fields: {

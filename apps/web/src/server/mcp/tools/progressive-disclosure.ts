@@ -1,7 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { publicOperationErrorSchema } from "~/lib/operation-result";
 import { safeToJsonSchema } from "~/server/mcp/tools/tool-json-schema";
 import type {
   CompiledTool,
@@ -125,34 +124,6 @@ export function withProgressiveDisclosure(
       },
       extra,
     );
-    // Compact tools hide action fields until describe. An input refusal points
-    // at describe; the validation causes already name the failing paths, and
-    // inlining the whole input schema buried them.
-    if (!result.isError || !action || !tool.actions.has(action)) return result;
-    const error = publicOperationErrorSchema.safeParse(
-      result._meta?.["cubby/error"],
-    );
-    if (
-      !error.success ||
-      error.data.reason !== "INVALID_INPUT" ||
-      error.data.diagnostics?.stage !== "input"
-    )
-      return result;
-    const visible = await visibleActions?.(extra);
-    if (visible && !visible.has(tool.actions.get(action)!.name)) return result;
-    return {
-      ...result,
-      content: [
-        ...result.content,
-        {
-          type: "text",
-          text: JSON.stringify({
-            recovery: "input_schema",
-            instruction: `Correct the input from the validation causes, or call describe with input.actions ["${action}"] for the full contract, then retry. Missing source facts stay unknown; do not invent them or escalate a schema error.`,
-            action,
-          }),
-        },
-      ],
-    };
+    return result;
   };
 }

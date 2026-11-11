@@ -10,12 +10,10 @@ import {
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
-import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
 
-import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
@@ -35,7 +33,7 @@ import { updateSourceTransactionRecords } from "~/server/domains/transaction-imp
 import {
   type ChargeProposal,
   pendingChargesNear,
-  regenerateCharges,
+  regenerateChargesAfterCommit,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -51,8 +49,6 @@ import {
   statementApplicationSelection,
   statementTransactionPatch,
 } from "./statement-suggestion-application";
-
-const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
@@ -259,7 +255,7 @@ export async function applyStatementTransactionSuggestion(
         judgment.accountId,
         dates,
       );
-      await regenerateCharges(
+      await regenerateChargesAfterCommit(
         committed,
         [...neighbours, ...judgment.copies].filter(
           (other) =>

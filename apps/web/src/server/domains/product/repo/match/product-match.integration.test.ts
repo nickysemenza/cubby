@@ -2,12 +2,11 @@ import {
   type ProductShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
-import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
+import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -30,7 +29,6 @@ import {
 import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import {
   getProductMatchQueue,
-  mergeProductMatch,
   proposeProductMatch,
 } from "~/server/domains/product/repo/match/product-match-review";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
@@ -50,7 +48,6 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
-import { createTestRequestContext } from "~/server/testing/request-context";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 type Category = Parameters<typeof taxonomyShortcode>[0];
@@ -263,10 +260,6 @@ describe("product match queue", () => {
       },
       { entityId: photo.entityId, imageId: own.id, sortOrder: 1 },
     ]);
-    const base = createTestRequestContext(ctx.db, {
-      auth: { userId: testUserId(TEST_USER_ID) },
-    });
-    if (!base.actorContext) throw new Error("Test actor is required");
 
     const pair = await upsertAgentProductMatch(ctx.db, {
       productIds: [bought.entityId, photo.entityId],
@@ -299,30 +292,10 @@ describe("product match queue", () => {
           mergeId: bought.id,
         },
       }),
-    ).rejects.toThrow(/Immutable Feedback retry/);
-    expect(
-      await mergeProductMatch(
-        { ...base, actorContext: base.actorContext },
-        {
-          keepId: bought.id,
-          mergeId: photo.id,
-          suggestionId: pair.id,
-          expectedFingerprint: pair.fingerprint!,
-        },
-      ),
-    ).toEqual({ ok: true });
+    ).rejects.toThrow(/already used for a different review/);
     const receipts = await readSuggestionDecisions(ctx.db, pair.id);
     expect(receipts).toEqual(appliedHistory);
-    expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(2);
-    expect(
-      receipts.find((row) => row.operationId.startsWith("application:merge:"))
-        ?.receipt,
-    ).toEqual(
-      expect.objectContaining({
-        kind: "product_merge",
-        auditIds: expect.any(Array),
-      }),
-    );
+    expect(receipts.filter((row) => row.receipt !== null)).toHaveLength(1);
     expect(
       receipts.find(
         (row) =>
@@ -504,7 +477,7 @@ describe("product_enrichment.propose_product_match", () => {
       },
     }).then(
       () => expect.fail("A stale fingerprint must not merge"),
-      (error: Error) => expect(error.message).toMatch(/fingerprint changed/),
+      (error: Error) => expect(error.message).toMatch(/changed since review/),
     );
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: pair.id,

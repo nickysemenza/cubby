@@ -12,11 +12,11 @@ import {
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import {
-  publishSuggestion,
-  publishSuggestions,
-  recordFeedback,
-} from "~/server/generic/suggestions/repo/suggestion";
+  publishExactSuggestion,
+  publishExactSuggestions,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
@@ -66,7 +66,7 @@ describe("Suggestion publication and transitions", () => {
       suggestedValue: null,
       data: { candidateKey: "bulk-parity" },
     };
-    const singleton = await publishSuggestion(ctx.db, input, projection);
+    const singleton = await publishExactSuggestion(ctx.db, input, projection);
     const fresh = { ...input, publicationKey: `${input.publicationKey}:batch` };
     const nullProjection = recommendation(productId, "null-projection");
     const entries = [
@@ -78,7 +78,7 @@ describe("Suggestion publication and transitions", () => {
         projection: { suggestedValue: "ignored duplicate projection" },
       },
     ];
-    const rows = await publishSuggestions(ctx.db, entries);
+    const rows = await publishExactSuggestions(ctx.db, entries);
     expect(rows.map((row) => row.publicationKey)).toEqual(
       entries.map((entry) => entry.input.publicationKey),
     );
@@ -93,20 +93,20 @@ describe("Suggestion publication and transitions", () => {
     const states = await liveRows(ctx, ids);
     expect(states).toHaveLength(3);
     expect(states.every((state) => state.suggestedValue === null)).toBe(true);
-    expect(await publishSuggestions(ctx.db, entries)).toEqual(rows);
+    expect(await publishExactSuggestions(ctx.db, entries)).toEqual(rows);
     expect(await liveRows(ctx, ids)).toEqual(states);
-    expect(await publishSuggestions(ctx.db, [])).toEqual([]);
+    expect(await publishExactSuggestions(ctx.db, [])).toEqual([]);
   });
 
   it("rolls back new batch publications when an existing key changes immutable evidence", async () => {
     const product = await productFixture(ctx, "Synthetic bulk conflict item");
     const productId = await recordId(ctx.db, product.id, "product");
     const input = recommendation(productId, "existing-bulk-conflict");
-    const existing = await publishSuggestion(ctx.db, input);
+    const existing = await publishExactSuggestion(ctx.db, input);
     const fresh = recommendation(productId, "rolled-back-bulk-publication");
     const before = await liveRows(ctx, [existing.id]);
     await expect(
-      publishSuggestions(ctx.db, [
+      publishExactSuggestions(ctx.db, [
         { input: fresh },
         { input: { ...input, evidence: { changed: true } } },
       ]),
@@ -131,7 +131,7 @@ describe("Suggestion publication and transitions", () => {
     const duplicate = recommendation(productId, "conflicting-bulk-duplicate");
     const other = recommendation(productId, "duplicate-bulk-bystander");
     await expect(
-      publishSuggestions(ctx.db, [
+      publishExactSuggestions(ctx.db, [
         { input: other },
         { input: duplicate },
         { input: { ...duplicate, judgment: { candidateKey: "changed" } } },
@@ -158,13 +158,13 @@ describe("Suggestion publication and transitions", () => {
     const valid = recommendation(productId, "valid-before-invalid-bulk");
     const invalid = recommendation(productId, "invalid-bulk");
     await expect(
-      publishSuggestions(ctx.db, [
+      publishExactSuggestions(ctx.db, [
         { input: valid },
         { input: { ...invalid, judgment: null } },
       ]),
     ).rejects.toThrow(/expected object/);
     await expect(
-      publishSuggestions(ctx.db, [
+      publishExactSuggestions(ctx.db, [
         { input: valid },
         { input: invalid, projection: { recordId: "invalid-target" } },
       ]),
@@ -186,7 +186,7 @@ describe("Suggestion publication and transitions", () => {
     const product = await productFixture(ctx, "Synthetic bulk replay item");
     const productId = await recordId(ctx.db, product.id, "product");
     const reviewedInput = recommendation(productId, "bulk-reviewed");
-    const [reviewed] = await publishSuggestions(ctx.db, [
+    const [reviewed] = await publishExactSuggestions(ctx.db, [
       { input: reviewedInput },
     ]);
     await withTransaction(ctx.db, (tx) =>
@@ -202,7 +202,7 @@ describe("Suggestion publication and transitions", () => {
       .from(suggestionTable)
       .where(inArray(suggestionTable.id, ids));
     const fresh = recommendation(productId, "bulk-with-replays");
-    const rows = await publishSuggestions(ctx.db, [
+    const rows = await publishExactSuggestions(ctx.db, [
       { input: fresh },
       {
         input: reviewedInput,
@@ -221,12 +221,12 @@ describe("Suggestion publication and transitions", () => {
   it("applies publication, member review and system transitions in statement order", async () => {
     const product = await productFixture(ctx, "Synthetic parity item");
     const productId = await recordId(ctx.db, product.id, "product");
-    const kept = await publishSuggestion(
+    const kept = await publishExactSuggestion(
       ctx.db,
       recommendation(productId, "kept"),
       { data: { candidateKey: "kept" } },
     );
-    const dismissed = await publishSuggestion(
+    const dismissed = await publishExactSuggestion(
       ctx.db,
       recommendation(productId, "dismissed"),
       { data: { candidateKey: "dismissed" } },
@@ -283,7 +283,7 @@ describe("Suggestion publication and transitions", () => {
       "Synthetic heterogeneous transitions",
     );
     const productId = await recordId(ctx.db, product.id, "product");
-    const publications = await publishSuggestions(
+    const publications = await publishExactSuggestions(
       ctx.db,
       Array.from({ length: 260 }, (_, index) => ({
         input: recommendation(productId, `bulk-${index}`),
@@ -358,7 +358,7 @@ describe("Suggestion publication and transitions", () => {
   it("decodes an explicit native update projection without returning evidence payloads", async () => {
     const product = await productFixture(ctx, "Synthetic native projection");
     const productId = await recordId(ctx.db, product.id, "product");
-    const published = await publishSuggestion(
+    const published = await publishExactSuggestion(
       ctx.db,
       recommendation(productId, "native-projection"),
       { data: { retained: "synthetic evidence" }, fingerprint: "before" },
@@ -402,7 +402,7 @@ describe("Suggestion publication and transitions", () => {
   it("retires a removed record's rows", async () => {
     const product = await productFixture(ctx, "Synthetic removed parity item");
     const productId = await recordId(ctx.db, product.id, "product");
-    const published = await publishSuggestion(
+    const published = await publishExactSuggestion(
       ctx.db,
       recommendation(productId, "removed"),
     );

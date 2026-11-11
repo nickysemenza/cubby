@@ -162,25 +162,20 @@ export function planReviewInput(input: Review, prediction: Prediction): Review {
 }
 
 export function planApplicationReceipt(
-  receipt: ReturnType<typeof decisionForOperation>,
+  receipt: NonNullable<ReturnType<typeof decisionForOperation>>,
   event: FeedbackEvent,
   outcome: z.infer<typeof suggestionReviewOut>,
 ) {
-  if (receipt) {
-    assertApplicationReceipt(receipt, event, "assessment_application");
-    const priorOutcome = suggestionReviewOut.parse(receipt.receipt);
-    if (
-      !isEqual(
-        { ...priorOutcome, applicationResult: undefined },
-        { ...outcome, applicationResult: undefined },
-      )
+  assertApplicationReceipt(receipt, event, "assessment_application");
+  const priorOutcome = suggestionReviewOut.parse(receipt.receipt);
+  if (
+    !isEqual(
+      { ...priorOutcome, applicationResult: undefined },
+      { ...outcome, applicationResult: undefined },
     )
-      throw new Error(
-        "Application receipt does not match this command outcome",
-      );
-    return priorOutcome;
-  }
-  return null;
+  )
+    throw new Error("Application receipt does not match this command outcome");
+  return priorOutcome;
 }
 
 export function planApplicableState(

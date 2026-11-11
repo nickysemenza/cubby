@@ -31,6 +31,25 @@ const shortBudget = { budget: { ms: deadlines } };
 const errorText = (result: Awaited<ReturnType<typeof callMcpTool>>) =>
   z.array(z.object({ text: z.string() })).parse(result.content)[0]!.text;
 
+describe("MCP input validation", () => {
+  it("refuses an unknown action input key", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    registerTestTool(server, {
+      name: "strict_read",
+      kind: "query",
+      input: z.object({ merchant: z.string().optional() }),
+      output: z.object({ ok: z.boolean() }),
+      run: async () => ({ ok: true }),
+    });
+    const result = await callMcpTool(server, "strict_read", {
+      action: "run",
+      input: { merchnt: "Example" },
+    });
+    expect(result.isError).toBe(true);
+    expect(errorText(result)).toContain("merchnt");
+  });
+});
+
 describe("MCP tool deadline", () => {
   it("answers a read that outlives its budget with a timeout error and aborts its signal", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
@@ -74,13 +93,7 @@ describe("MCP tool deadline", () => {
         code: "INTERNAL_SERVER_ERROR",
         reason: "MCP_TOOL_DEADLINE_EXCEEDED",
         requestId: RAY,
-        diagnostics: {
-          operation: "slow_read.run",
-          stage: "run",
-          cfRayId: RAY,
-          sentryEventId: "sentry-event-1",
-          sentryUrl: expect.stringContaining("sentry-event-1"),
-        },
+        next: expect.stringContaining("Try a narrower request"),
       },
     });
     expect(signal?.aborted).toBe(true);
@@ -383,8 +396,7 @@ describe("MCP tool output validation", () => {
         code: "INTERNAL_SERVER_ERROR",
         reason: "INVALID_OUTPUT",
         requestId: RAY,
-        validationIssues: [{ path: ["totals", "count"] }],
-        diagnostics: { operation: "drifted_output.run", stage: "output" },
+        issues: [{ path: ["totals", "count"] }],
       },
     });
   });

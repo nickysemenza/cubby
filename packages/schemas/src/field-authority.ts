@@ -31,6 +31,8 @@ export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });
 /** Cubby's current answer for an empty or offered field, shown first in its picker. */
 const fieldGuess = z.object({
   suggestionId: z.string(),
+  /** What accepting the guess names as `expectedFingerprint`. */
+  fingerprint: z.string(),
   value: z.json(),
   confidence: z.number().min(0).max(1),
   runnerUp: z

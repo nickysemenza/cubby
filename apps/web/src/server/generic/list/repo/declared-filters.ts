@@ -334,8 +334,15 @@ const columnPredicate = (
     : undefined;
   switch (descriptor.kind) {
     case "text": {
-      const term = optionalText.parse(value)?.trim();
-      return term ? textPredicate(first, term) : undefined;
+      const terms = descriptor.stored?.array
+        ? optionalTextList.parse(value)
+        : [optionalText.parse(value)];
+      return or(
+        ...(terms ?? []).flatMap((term) => {
+          const trimmed = term?.trim();
+          return trimmed ? [textPredicate(first, trimmed)] : [];
+        }),
+      );
     }
     case "boolean":
       return or(

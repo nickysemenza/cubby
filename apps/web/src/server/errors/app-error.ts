@@ -34,6 +34,22 @@ export class AppError extends Error {
   }
 }
 
+export const isPolicyRefusal = (error: unknown): error is AppError =>
+  error instanceof AppError && error.reason === "CLASSIFICATION_POLICY_REFUSED";
+
+export const CLIENT_CLOCK_SKEW_MS = 5 * 60_000;
+export function assertNotFuture(
+  field: string,
+  value: Date | string,
+  now: Date = new Date(),
+): void {
+  const date = new Date(value);
+  if (date.getTime() > now.getTime() + CLIENT_CLOCK_SKEW_MS)
+    constraintViolation(
+      `${field} ${date.toISOString()} is later than server time ${now.toISOString()}; send when the evidence was observed.`,
+    );
+}
+
 export function constraintViolation(message: string): never {
   throw createAppError("CONSTRAINT_VIOLATION", message);
 }

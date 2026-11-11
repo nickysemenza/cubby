@@ -11,10 +11,8 @@ import { appendEmailReview } from "~/server/domains/email/repo/email-review-stor
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import {
-  publishSuggestion,
-  recordFeedback,
-} from "~/server/generic/suggestions/repo/suggestion";
+import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 
 import { withEmailEvidenceWrite } from "./email-evidence-write-scope";
 import { readEmailProtectingIntent } from "./email-review-intent";
@@ -126,7 +124,7 @@ describe("Email review transaction and retained intent", () => {
       },
     });
     const publishConnection = (source: string) =>
-      publishSuggestion(ctx.db, {
+      publishExactSuggestion(ctx.db, {
         publicationKey: `synthetic-connection:${source}`,
         family: "recommendation",
         subject: {

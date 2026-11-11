@@ -1978,7 +1978,7 @@ Rules:
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
             refusal:
-              "Only a principal item or service line may be assigned to a Project. Fee, discount, tax and credit lines follow their items' Project; leave them out of Project assignments, or resolve an unclassified line's receipt role first.",
+              "Only a principal item or service line may be assigned to a Project. Fee, discount, tax and credit lines follow their parent item's Project; leave them out of the update, or resolve an unclassified line's receipt role first.",
           },
         ],
       },
@@ -1991,7 +1991,7 @@ Rules:
             byValue: { allocation: "not_allowed" },
             otherwise: "unknown",
             refusal:
-              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item. Link the Product to the Purchase's products instead.",
+              "An allocation Expense may not link a Product — the money is a slice of an un-itemized total, so it buys no particular item. Link the Product to the Purchase instead (entity.link on the Purchase's products relation), or itemize the Purchase so a principal line carries it.",
           },
         ],
       },

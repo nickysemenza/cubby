@@ -88,12 +88,6 @@ export interface McpActionSpec<
   readonly destructive?: true;
   readonly openWorld?: true;
   /**
-   * Refuse unknown input keys instead of stripping them, naming the valid
-   * ones — for filter inputs where a misspelled key would silently widen the
-   * result (the member's own callers keep the lenient schema).
-   */
-  readonly strict?: true;
-  /**
    * A read that may wait on a model (the decision model or another AI call). Its MCP deadline
    * outlasts the model's retry budget instead of using the plain read budget.
    * Writes already have the longer write budget.
@@ -116,7 +110,7 @@ export type McpActionOverride<Op extends OperationMember = OperationMember> =
   Partial<
     Pick<
       McpActionSpec<Op, ErasedMcpType>,
-      "project" | "output" | "strict" | "batch" | "telemetryEntity"
+      "project" | "output" | "batch" | "telemetryEntity"
     >
   >;
 

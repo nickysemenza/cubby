@@ -69,7 +69,7 @@ export const financialSpendingRequest = z.object({
 const spendingCandidate = z.object({
   purchaseId: purchaseShortcode,
   name: z.string(),
-  strength: z.enum(["strong", "weak"]),
+  strength: z.enum(["strong", "weak", "context"]),
 });
 const spendingPlanBasis = z.object({
   request: financialSpendingRequest,

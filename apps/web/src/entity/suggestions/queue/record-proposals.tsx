@@ -13,6 +13,7 @@ import { Button } from "~/ui/primitives/button";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import { useAcceptClean } from "./accept-clean";
+import { recordSuggestionScope } from "./record-scope";
 import { ScopedListPager } from "./scoped-list-pager";
 import {
   MobileEvidenceDisclosure,
@@ -27,8 +28,9 @@ export function RecordProposals({ id }: { id: string }) {
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const [offset, setOffset] = useState(0);
+  const scope = recordSuggestionScope(id);
   const query = useQuery(
-    suggestions.list.queryOptions({ recordIds: [id], offset, limit: 50 }),
+    suggestions.list.queryOptions({ ...scope, offset, limit: 50 }),
   );
   const loading = useHydratedLoading(query.isLoading);
   const accept = useAcceptClean(
@@ -57,7 +59,7 @@ export function RecordProposals({ id }: { id: string }) {
               accept.confirm({
                 label: "This record",
                 count: clean,
-                filters: { recordIds: [id] },
+                filters: scope,
               })
             }
           >

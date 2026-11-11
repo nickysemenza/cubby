@@ -422,6 +422,8 @@ const financialStatementNewAccount = z.object({
 
 const rawImportPreviewExistingTransaction = z.object({
   id: financialTransactionShortcode,
+  /** The provider's own transaction id names this transaction. */
+  provider: z.boolean().default(false),
   amount: z.number(),
   status: financialTransactionStatus,
   postedDate: plainDate.nullable(),

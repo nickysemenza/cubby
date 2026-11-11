@@ -16,16 +16,29 @@ import { loadImportScope } from "~/server/domains/purchase-import/repo/import-sc
 import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
-import { constraintViolation } from "~/server/errors/app-error";
+import {
+  assertNotFuture,
+  constraintViolation,
+} from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { canonical } from "./evidence-internal";
 
 export async function loadSourceCapture(
   db: Database,
-  input: Pick<RecordShipmentEvidenceInput, "source">,
+  input: Pick<RecordShipmentEvidenceInput, "source"> & {
+    shipments: ReadonlyArray<{
+      observations: ReadonlyArray<{
+        time: RecordShipmentEvidenceInput["shipments"][number]["observations"][number]["time"];
+      }>;
+    }>;
+  },
   actor: ActorContext,
 ) {
+  for (const shipment of input.shipments)
+    for (const observation of shipment.observations)
+      if (observation.time.kind === "instant")
+        assertNotFuture("observation.time", observation.time.value);
   const source = input.source;
   let emailId: EmailId | null = null;
   let ownerId: string | null = null;
@@ -94,10 +107,9 @@ export async function loadSourceCapture(
       return constraintViolation(
         "Unattended mail processing cannot submit interactive shipment captures.",
       );
-    if (new Date(source.capturedAt).getTime() > Date.now() + 300000)
-      return constraintViolation(
-        "Tracking capture time cannot be in the future.",
-      );
+    assertNotFuture("capturedAt", source.capturedAt);
+    if (source.kind === "sms_export" && source.sentAt.kind === "instant")
+      assertNotFuture("sentAt", source.sentAt.value);
     sourceKey =
       source.kind === "tracking_page"
         ? `tracking_page:${actor.userId}:${source.url}:${source.externalKey}`

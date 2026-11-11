@@ -75,7 +75,6 @@ const actionCapability = {
   "finance.accept_transfer_pair": "member_decision",
   "product_enrichment.verify_images": "generic_mutation",
   "product_enrichment.propose_product_match": "match_proposal",
-  "product_enrichment.merge_product_match": "member_decision",
   "product_enrichment.find_or_create_by_upc": "generic_mutation",
   "run.propose_groups": "photo_commit",
   "run.commit_group": "photo_commit",

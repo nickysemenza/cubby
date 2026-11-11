@@ -36,17 +36,20 @@ import {
   assertValidParent,
   getCategoryFeature,
   resolveProductCategory,
+  updateProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
 import { externalIdsContainIsbn } from "~/server/domains/product/repo/update-helpers";
 import {
   assertReviewedSpendingClassification,
   withReviewedSpendingClassification,
 } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import { updateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   executeEntity,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { constraintViolation } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   resolveAllOrThrow,
@@ -514,7 +517,7 @@ export async function applyReviewedSpendingClassificationPolicy(
   ctx: EntityKernelContext,
   request: SpendingClassificationReviewInput,
 ) {
-  assertReviewedSpendingClassification(ctx.db);
+  assertReviewedSpendingClassification(ctx.db, request.action);
   if (request.action === "products") {
     for (const id of request.productIds)
       await executeEntity(ctx, {
@@ -535,28 +538,33 @@ export async function applyReviewedSpendingClassificationPolicy(
         );
     }
   } else if (request.action === "productCategory") {
-    await executeEntity(ctx, {
-      action: "update",
-      entity: "productCategory",
-      id: request.productCategoryId,
-      data: {
+    await updateProductCategory(
+      ctx.db,
+      request.productCategoryId,
+      {
         ...(request.parentId === undefined
           ? {}
           : { parentId: request.parentId }),
         spendingCategoryMode: request.spendingCategoryMode,
         spendingCategoryId: request.spendingCategoryId,
       },
+      ctx.actorContext,
+    );
+    await recordChange(ctx.db, {
+      kind: "source",
+      categories: ["productCategory"],
     });
   } else if (request.action === "vendor") {
-    await executeEntity(ctx, {
-      action: "update",
-      entity: "vendor",
-      id: request.vendorId,
-      data: {
+    await updateVendor(
+      ctx.db,
+      request.vendorId,
+      {
         spendingProfile: request.spendingProfile,
         defaultSpendingCategoryId: request.defaultSpendingCategoryId,
       },
-    });
+      ctx.actorContext,
+    );
+    await recordChange(ctx.db, { kind: "source", categories: ["vendor"] });
   } else if (request.action === "spendingCategoryMerge") {
     await executeEntity(ctx, {
       action: "merge",

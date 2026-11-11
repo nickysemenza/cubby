@@ -295,11 +295,8 @@ describe("statement spending review and re-import", () => {
             ).rejects.toSatisfy(isSerializationFailure);
             expect(calls).toBe(3);
             expect(builds).toBe(3);
-            expect(await read()).toEqual({
-              ...before,
-              feedback: before.feedback + 1,
-              totalFeedback: before.totalFeedback + 1,
-            });
+            // A refused application records no review.
+            expect(await read()).toEqual(before);
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
                 where: {
@@ -316,11 +313,8 @@ describe("statement spending review and re-import", () => {
               reviewSuggestion(ctx.db, kernelCtx(ctx), command),
             ).rejects.toThrow(/changed since review: spending\./i);
             expect(builds).toBe(2);
-            expect(await read()).toEqual({
-              ...before,
-              feedback: before.feedback + 1,
-              totalFeedback: before.totalFeedback + 1,
-            });
+            // A refused application records no review.
+            expect(await read()).toEqual(before);
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
                 where: {
@@ -396,7 +390,7 @@ describe("statement spending review and re-import", () => {
     });
     const command = {
       suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       operationId: "synthetic-source-replay",
       verdict: "wrong" as const,
       correction: { present: true as const, value: application },
@@ -426,7 +420,7 @@ describe("statement spending review and re-import", () => {
     const suggestion = await pendingPreview();
     const input = {
       suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       application: { kind: "statement_transaction", action: "create" },
     };
     await expect(
@@ -446,7 +440,7 @@ describe("statement spending review and re-import", () => {
         ...input,
         expectedFingerprint: "synthetic-stale",
       }),
-    ).rejects.toThrow(/fingerprint changed/i);
+    ).rejects.toThrow(/changed since review/i);
     await getDb(ctx.db).execute(
       sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
     );
@@ -475,7 +469,7 @@ describe("statement spending review and re-import", () => {
     const before = await snapshot();
     const input = {
       suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       application: {
         kind: "statement_transaction",
         action: "create",
@@ -534,7 +528,7 @@ describe("statement spending review and re-import", () => {
     const suggestion = await pendingPreview();
     const input = {
       suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       application: { kind: "statement_transaction", action: "attach" },
     };
     await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
@@ -587,7 +581,7 @@ describe("statement spending review and re-import", () => {
         present: true,
         value: statementTransactionApplication.parse(application),
       },
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       intent: "apply",
       application: statementTransactionApplication.parse(application),
     });
@@ -624,7 +618,7 @@ describe("statement spending review and re-import", () => {
     const suggestion = await pendingPreview();
     const result = await previewStatementSuggestion(ctx.db, {
       suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint,
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
       application: {
         kind: "statement_transaction",
         action: "attach",
@@ -920,7 +914,7 @@ describe("statement spending review and re-import", () => {
       relatedAudit.items.some((row) =>
         row.automaticRule?.startsWith("statement_transaction.book_spending@"),
       ),
-    ).toBe(true);
+    ).toBe(false);
     await executeEntity(
       kernelCtx(ctx),
       entityCommandSchema.parse({
@@ -967,6 +961,7 @@ describe("statement spending review and re-import", () => {
       verdict: "wrong",
       correction: { present: true, value: application },
       intent: "apply",
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.id,
       application,
     });
     expect(await total()).toBe(42.5);

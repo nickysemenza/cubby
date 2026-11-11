@@ -190,6 +190,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       { kind: "primary" },
       ...(["source", "target"] as const).map((end) => ({
         kind: "value" as const,
+        subject: true,
         at: {
           column: "evidence" as const,
           path: ["candidate", end, "entityId"],

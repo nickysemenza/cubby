@@ -270,8 +270,7 @@ describe("MCP catalog", () => {
       "cubby/error": {
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
-        diagnostics: { stage: "input" },
-        validationIssues: [{ code: "invalid_type", path: ["_runExecution"] }],
+        issues: [{ path: ["_runExecution"] }],
       },
     });
     const refusal = z
@@ -282,28 +281,7 @@ describe("MCP catalog", () => {
       })
       .parse(result._meta)["cubby/error"];
     expect(StatusCodes[refusal.code]).toBe(400);
-    const recoverySchema = z.object({
-      recovery: z.literal("input_schema"),
-      action: z.string(),
-      instruction: z.string(),
-    });
-    const recovery = result.content
-      .filter((block) => block.type === "text")
-      .flatMap((block) => {
-        try {
-          const parsed = recoverySchema.safeParse(JSON.parse(block.text));
-          return parsed.success ? [parsed.data] : [];
-        } catch {
-          return [];
-        }
-      })[0];
-    expect(recovery).toMatchObject({
-      recovery: "input_schema",
-      action: "record",
-      instruction: expect.stringContaining(
-        'call describe with input.actions ["record"]',
-      ),
-    });
+    expect(JSON.stringify(result.content)).not.toContain("input_schema");
   });
 
   it("refuses purchase_import mutations for a run purpose that does not mount them", async () => {
@@ -350,16 +328,7 @@ describe("MCP catalog", () => {
     );
     expect(malformed.isError).toBe(true);
     expect(JSON.stringify(malformed.content)).not.toContain("inputSchema");
-    // The purpose gate refuses before the writer runs.
-    expect(
-      z
-        .object({
-          "cubby/error": z.object({
-            diagnostics: z.object({ stage: z.string() }),
-          }),
-        })
-        .parse(commit._meta)["cubby/error"].diagnostics.stage,
-    ).toBe("context");
+    expect(commit.isError).toBe(true);
     // describe hides unmounted actions too, including from the available list.
     const described = await callMcpTool(
       createMcpServer(),

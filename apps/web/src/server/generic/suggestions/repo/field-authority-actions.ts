@@ -111,7 +111,9 @@ export async function applyFieldAuthorityAction(
       return { holder: "person" };
     }
     if (financeReviewContext(input.entity, input.field))
-      throw new Error("Clear this spending field from its editor");
+      throw new Error(
+        "Clear this spending field using spendingClassification.preview and spendingClassification.apply, or the record's Spending classification section",
+      );
     await recordFeedback(tx, {
       suggestionId,
       operationId: `clear:${suggestionId}`,

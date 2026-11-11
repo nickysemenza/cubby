@@ -886,6 +886,7 @@ describe("Email Purchase links", () => {
         operationId: "synthetic-link-review",
         verdict: correction ? ("wrong" as const) : ("correct" as const),
         intent: "apply" as const,
+        expectedFingerprint: f.checksum,
         correction: correction
           ? { present: true as const, value: { decision: correction } }
           : { present: false as const },
@@ -944,6 +945,7 @@ describe("Email Purchase links", () => {
       operationId: "synthetic-event-a-review",
       verdict: "correct",
       intent: "apply",
+      expectedFingerprint: f.checksum,
     });
     const [currentB] = await getDb(ctx.db)
       .select()
@@ -997,6 +999,7 @@ describe("Email Purchase links", () => {
           operationId: "synthetic-waiting-link",
           verdict: "correct",
           intent: "apply",
+          expectedFingerprint: f.checksum,
         }).then(
           (result) => ({ ok: true as const, result }),
           (error: unknown) => ({
@@ -1021,7 +1024,8 @@ describe("Email Purchase links", () => {
       .select()
       .from(emailReview)
       .where(eq(emailReview.subjectId, prediction.id));
-    expect(reviews.map((row) => row.operationId)).toContain(
+    // The refused application records neither the review nor a receipt.
+    expect(reviews.map((row) => row.operationId)).not.toContain(
       "synthetic-waiting-link",
     );
     expect(reviews.map((row) => row.operationId)).not.toContain(
@@ -1051,6 +1055,7 @@ describe("Email Purchase links", () => {
       operationId: "synthetic-repointed-link-review",
       verdict: "correct",
       intent: "apply",
+      expectedFingerprint: f.checksum,
     });
     const [current] = await getDb(ctx.db)
       .select()
@@ -1089,11 +1094,15 @@ describe("Email Purchase links", () => {
       "suggestions",
       {
         action: "review",
-        suggestionId: prediction.id,
-        operationId: "synthetic-relevance-review",
-        verdict: "wrong",
-        intent: "history",
-        correction: { present: true, value: "unrelated" },
+        items: [
+          {
+            suggestionId: prediction.id,
+            operationId: "synthetic-relevance-review",
+            verdict: "wrong",
+            intent: "history",
+            correction: { present: true, value: "unrelated" },
+          },
+        ],
       },
       kernelRequestContext(kernelCtx(ctx)),
     );
@@ -1163,15 +1172,26 @@ describe("Email Purchase links", () => {
         "suggestions",
         {
           action: "review",
-          suggestionId: prediction.id,
-          operationId: `synthetic-invalid-relevance-${index}`,
-          verdict: "correct",
-          intent: "apply",
-          ...command,
+          items: [
+            {
+              suggestionId: prediction.id,
+              operationId: `synthetic-invalid-relevance-${index}`,
+              verdict: "correct",
+              intent: "apply",
+              expectedFingerprint: f.checksum,
+              ...command,
+            },
+          ],
         },
         kernelRequestContext(kernelCtx(ctx)),
       );
-      expect(result.isError).toBe(true);
+      // Refused at input validation or as the batch's only failed item.
+      expect(
+        result.isError === true ||
+          JSON.stringify(result.structuredContent).includes(
+            '"status":"failed"',
+          ),
+      ).toBe(true);
       expect(
         await getDb(ctx.db)
           .select()
@@ -1620,6 +1640,7 @@ describe("Email Purchase links", () => {
       operationId: "synthetic-exact-link-correction",
       verdict: "wrong",
       intent: "apply",
+      expectedFingerprint: single.checksum,
       correction: { present: true, value: { decision: "dismissed" } },
     });
     await drainStoredDerived(ctx.db);

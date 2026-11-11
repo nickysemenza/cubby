@@ -274,7 +274,10 @@ async function linkedCandidatesForProduct(
     ),
   ]);
   const byId = new Map<string, LinkedEntityCandidate>();
-  for (const candidate of [...semantic.map(({ item }) => item), ...lexical]) {
+  for (const candidate of [
+    ...(Array.isArray(semantic) ? semantic : []).map(({ item }) => item),
+    ...lexical,
+  ]) {
     if (!byId.has(candidate.id))
       byId.set(candidate.id, {
         id: candidate.id,

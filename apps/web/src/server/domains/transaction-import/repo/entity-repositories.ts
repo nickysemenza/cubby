@@ -12,11 +12,7 @@ import {
 } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
-import {
-  unwrapDb,
-  withTransactionOn,
-  runAfterCommit,
-} from "~/server/db/helpers";
+import { unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { sourceTransactionRecord } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
@@ -311,11 +307,9 @@ const updateSource = defineMutationWriter({
           data.identityResolution,
           actor,
         );
-        await runAfterCommit(tx, async (committed) => {
-          const { regenerateCharges } =
-            await import("~/server/domains/transaction-import/repo/statement-suggestions");
-          await regenerateCharges(committed, [charge]);
-        });
+        const { regenerateChargesAfterCommit } =
+          await import("~/server/domains/transaction-import/repo/statement-suggestions");
+        await regenerateChargesAfterCommit(tx, [charge]);
       }
       await updateSourceObservationJudgments(
         tx,

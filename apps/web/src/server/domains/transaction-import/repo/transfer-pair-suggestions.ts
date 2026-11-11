@@ -18,7 +18,6 @@ import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fi
 import {
   suggestionFamily,
   suggestionSubjects,
-  type suggestionReviewInput,
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { transferPairSuggestionRow } from "@cubby/schemas/suggestion-list";
@@ -99,7 +98,11 @@ import {
   transferPairRows,
   TRANSFER_WEAK_BLOCKERS,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import { type SuggestionFamily } from "~/server/generic/suggestions/repo/suggestion-publication";
+import {
+  revisionSuppresses,
+  type SuggestionFamily,
+  type SuggestionRow,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   entities,
   leg,
@@ -1110,7 +1113,7 @@ export async function lockTransferPairLegs(db: Database, pairKey: string) {
  * re-run would drop.
  */
 export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair"> &
-  SuggestionFamily<Pair> = {
+  SuggestionFamily<Pair, SuggestionRow, "unavailable"> = {
   family: suggestionFamily.enum.transfer_pair,
   slot: ({ judgment }) => ({
     lock: advisoryLockKey("transfer-pair", judgment.key),
@@ -1119,6 +1122,10 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   fingerprint: ({ judgment }) => fingerprintTransferPair(judgment),
   evidenceFingerprint: ({ judgment }) =>
     transferPairEvidenceFingerprint(judgment),
+  suppresses: revisionSuppresses,
+  // A pair whose legs cannot be paired would leave a pending row only dismissal clears.
+  unapplicable: ({ judgment }) =>
+    judgment.apply.available ? null : "unavailable",
   onUnchanged: { reconfirm: "transfer_pair_reconfirmed" },
   publication: (pair, prior, producer, fingerprints) => {
     const { judgment } = pair;
@@ -1315,6 +1322,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       },
       {
         kind: "value" as const,
+        subject: true,
         at: { column: "judgment" as const, path: [end, "transactionId"] },
         entity: entities.financialTransaction,
       },
@@ -1340,7 +1348,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       throw new Error(
         "Transfer pairing requires member acceptance of the current pair.",
       );
-    await applyTransferPairSuggestion(db, context, state, input);
+    await applyTransferPairSuggestion(db, context, state);
   },
 };
 
@@ -1634,7 +1642,6 @@ async function applyTransferPairSuggestion(
   db: Database,
   context: EntityKernelContext,
   state: SuggestionStateRow,
-  input: Pick<z.infer<typeof suggestionReviewInput>, "expectedFingerprint">,
 ) {
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
@@ -1653,7 +1660,7 @@ async function applyTransferPairSuggestion(
     await transitionSuggestionState(tx, state.id, { status: "applied" });
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
-      expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,
+      expectedFingerprint: state.fingerprint,
       // Accepting a clean pair still holds it to today's clean rule.
       reviewed: !published.clean,
       stateId: state.id,

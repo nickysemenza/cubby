@@ -73,6 +73,7 @@ import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-polic
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
+import { assertNotFuture } from "~/server/errors/app-error";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
@@ -867,6 +868,9 @@ export async function importVendorOrder(
   } = {},
 ): Promise<ImportWriterOutput> {
   const input = importWriterInput.parse(rawInput);
+  for (const payment of input.extraction.candidate?.payments ?? [])
+    if (payment.chargedAt)
+      assertNotFuture("payments.chargedAt", payment.chargedAt);
   await assertRunCapabilityById(db, input.runId, "business_writer");
   await assertImportOwnership(db, input, actorUserId);
   const candidateDateMissing = input.extraction.candidate?.orderedAt === null;
