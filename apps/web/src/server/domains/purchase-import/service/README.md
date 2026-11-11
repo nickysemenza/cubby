@@ -563,7 +563,8 @@ The stored transcript keeps every Email for the Run page. Each Anthropic
 request marks a cache breakpoint at the end of that kept prefix, and each
 OpenAI request keys `prompt_cache_key` to the coordinator purpose
 (`withWorkItemCaching`), so every Run reads the shared prefix from cache on each
-Email. Unattended coordinators request OpenAI's `flex` service tier. Shared instructions precede
+Email. Coordinators request OpenAI's standard service tier: a flex turn's latency
+held the household coordinator-turn cap long enough to stall settlement. Shared instructions precede
 dynamic context. The ChatGPT plan transport places the tool block before the
 conversation so the plan's prefix cache covers it
 ([runbook](../../../../../../../docs/runbooks/chatgpt-plan.md)).

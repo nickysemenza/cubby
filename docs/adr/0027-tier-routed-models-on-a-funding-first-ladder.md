@@ -42,7 +42,7 @@ tier's model — Terra or Luna where that is the tier — never Sol by default.
 Both provider credits are free and renew monthly, so the order between them
 decides which work each credit buys. OpenAI answers first: its tier models list
 at or below Claude's, they tokenize the coordinator's tools into fewer than
-half Haiku's tokens, and its credit serves the half-price flex tier. Measured
+half Haiku's tokens, and its credit serves the half-price flex tier for feature calls. Measured
 on Haiku, the Mail coordinator averaged about $0.006 standard cost per Email. When no source
 can fund a call, background work pauses and interactive work fails with the
 provider's raw diagnostics, as before. Tiers are chosen by judgment and move
@@ -67,14 +67,15 @@ in November 2026, Terra escalations were two to four times Luna's daily
 standard cost. A transient-failure retry runs on the primary. Photo inventory
 runs on `quality`; it has no escalation.
 
-**Unattended OpenAI calls use flex.** Work no member waits on (coordinators and
-automatic feature calls) asks OpenAI for the `flex` service tier on credit and
-paid gateway routes, and resends at the standard tier when OpenAI refuses for
+**Unattended feature calls use flex.** Automatic feature calls no member waits
+on ask OpenAI for the `flex` service tier on credit and paid gateway routes, and resends at the standard tier when OpenAI refuses for
 flex capacity, whether as a 429 or as a stream failure before any output. Flex publishes half of every standard rate, so its usage rows
 record flex rates as their standard cost. OpenAI credit through the native
 route serves flex; the paid Unified Billing `/ai/v1` route answers at the
 default tier, which its rows record. The ChatGPT plan and Claude credit are
-unaffected.
+unaffected. Import coordinators stay on the standard tier: they share the
+household coordinator-turn cap, and flex latency slowed each turn until the cap
+could not admit Runs as fast as discovery queued them.
 
 ## Carried forward from ADR 0017
 
