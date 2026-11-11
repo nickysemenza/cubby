@@ -1096,9 +1096,10 @@ export const { definition, readSchemas } = defineEntityModel({
     intents: {
       fields: {
         capture: ["name", "website", "notes"],
+        // The spending-classification panel owns spendingProfile and
+        // defaultSpendingCategoryId: a change on a Vendor with spending must
+        // be previewed and applied there.
         full: [
-          "spendingProfile",
-          "defaultSpendingCategoryId",
           "itemizationExpectation",
           "name",
           "aliases",

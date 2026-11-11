@@ -148,10 +148,13 @@ installment plans and payment schedules. Undated retained payment evidence for
 the exact charge amount also keeps an older Purchase as a blocker. Otherwise an
 older Purchase with no allocated payment does not block a later charge.
 These additional candidates are review-only: even a complete retained payment
-set cannot make them automatic settlement targets. Only confidently zero
-remaining capacity excludes an additional candidate; nearby, payment and
-explicit selectors stay intact. Explicit member selection or rejection keeps
-its authority. A header total without actual vendor lines is outside this
+set cannot make them automatic settlement targets. Confidently zero remaining
+capacity excludes a nearby or additional candidate, such as the Purchase an
+earlier charge booked, so an extra charge on a fully paid order books new
+spending unless the member names that Purchase. Complete settlement targets,
+the explicitly chosen Purchase, refund originals and Purchases whose retained
+payment evidence names the charge's amount stay intact. Explicit member
+selection or rejection keeps its authority. A header total without actual vendor lines is outside this
 check, and exhausted capacity does not prove source-event identity.
 
 Refunds require supported original-Purchase evidence independently of that
@@ -1452,7 +1455,10 @@ group by group, filtering a group with
    candidates stay listed, and accepting as is rejects them. Attach to a different candidate, tick `fields`, override the
    kind, or create anyway (`rejectedCandidateIds` listing every candidate) as
    verdict `wrong` with `correction {present: true, value: <the same
-   application>}`.
+   application>}`. Applying a suggestion republishes the pending suggestions
+   near it on the same account. A create still applies when a candidate
+   appeared since review: the refusal names it, and listing it in
+   `rejectedCandidateIds` retries the same review.
 3. A charge with `siblings` has a same-amount charge from another export: the
    pair may be one charge whose descriptor firmed up. Within one source,
    supersede the thinner row (generic `entity.update` on
@@ -1460,9 +1466,10 @@ group by group, filtering a group with
    successor record ID) before creating either. Siblings from other sources
    mean their counts disagree (see [Matching](#matching)): book each real
    charge once and attach the other sources' copies to it. A `claimed` candidate already settles another charge from the same
-   source, so it is never clean: attach only when this row is that charge
-   re-exported under a new descriptor; two visits for the same amount are two
-   creates.
+   source, so it is never recommended or clean: the suggestion recommends
+   `create` and accepting as is rejects it. Attach as a correction only when
+   this row is that charge re-exported under a new descriptor; two visits for
+   the same amount are two creates.
 4. A person counterparty is never clean. An outgoing payment to a person is
    your share of a shared cost: create it as `purchase` and set the merchant.
    An incoming one is a repayment: create it, then book it with

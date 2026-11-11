@@ -1346,8 +1346,9 @@ describe("statement Transaction suggestions", () => {
       rawDescription: "EXAMPLE GROCER 0001",
       sourceRefs: [],
     });
+    // The create names the new candidate it must reject instead.
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
-      /changed since review: recommended, candidates/,
+      /must be rejected before creating: FTX-/,
     );
     expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "pending",
@@ -1391,7 +1392,8 @@ describe("statement Transaction suggestions", () => {
     const [posted] = await readPendingStatements(ctx);
     expect(posted).toMatchObject({
       recommended: "supersede",
-      clean: false,
+      clean: true,
+      spending: expect.objectContaining({ status: "already_booked" }),
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
       // The hold's own pending refs never read as another charge's claim.
       candidates: [expect.objectContaining({ claimed: false })],
@@ -3388,9 +3390,12 @@ describe("statement Transaction suggestions", () => {
     expect(created.rows[0]?.count).toBe(1);
   });
 
-  // Failure mode: accepting one of two firmed-up twins leaves the other's
-  // suggestion stale until a whole-ledger refresh.
-  it("refreshes a sibling's suggestion after its twin is applied", async () => {
+  // Failure modes: accepting one charge leaves a twin's or a different-amount
+  // neighbour's suggestion stale, so each refuses at apply until a
+  // whole-ledger refresh; the booked Transaction, already claimed by its
+  // charge, is recommended as an attach target; the Purchase it booked blocks
+  // the next charge as a possible existing Purchase.
+  it("refreshes neighbouring suggestions after one is applied", async () => {
     await card(ctx);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
     await record(
@@ -3398,20 +3403,56 @@ describe("statement Transaction suggestions", () => {
       [rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" })],
       { fingerprint: "fp-firmed" },
     );
-    await generate(ctx);
-    const [first] = await readPendingStatements(ctx);
-    await accept(ctx, first!);
-    const [twin] = await readPendingStatements(ctx);
-    expect(twin).toMatchObject({
-      recommended: "attach",
-      siblings: 0,
-      candidates: [
-        expect.objectContaining({
-          transactionId: expect.stringMatching(/^FTX-/),
+    await record(
+      ctx,
+      [
+        rowInput({
+          rawDescription: "EXAMPLE MKTPL*EF56GH78",
+          statementDate: "2026-05-05",
+          providerAmount: -17.25,
         }),
       ],
-    });
-    expect(twin!.rawDescription).not.toBe(first!.rawDescription);
+      { fingerprint: "fp-neighbour" },
+    );
+    await generate(ctx);
+    const byDescription = async (rawDescription: string) =>
+      (await readPendingStatements(ctx)).find(
+        (row) => row.rawDescription === rawDescription,
+      );
+    const neighbourBefore = await byDescription("EXAMPLE MKTPL*EF56GH78");
+    expect(neighbourBefore).toMatchObject({ candidates: [] });
+    await accept(ctx, (await byDescription("EXAMPLE MKTPLACE PMTS"))!);
+    for (const rawDescription of [
+      "EXAMPLE MKTPL*AB12CD34",
+      "EXAMPLE MKTPL*EF56GH78",
+    ]) {
+      const refreshed = await byDescription(rawDescription);
+      expect(refreshed).toMatchObject({
+        recommended: "create",
+        siblings: 0,
+        candidates: expect.arrayContaining([
+          expect.objectContaining({
+            transactionId: expect.stringMatching(/^FTX-/),
+          }),
+        ]),
+      });
+      expect(refreshed!.candidates.every((c) => c.claimed)).toBe(true);
+      await accept(
+        ctx,
+        refreshed!,
+        {
+          rejectedCandidateIds: refreshed!.candidates.map(
+            (candidate) => candidate.transactionId,
+          ),
+        },
+        true,
+      );
+    }
+    expect(await readPendingStatements(ctx)).toEqual([]);
+    const { rows } = await getDb(ctx.db).execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM "FinancialTransaction" WHERE "deletedAt" IS NULL`,
+    );
+    expect(rows[0]!.n).toBe(3);
   });
 
   it("books one Transaction for a charge several sources exported", async () => {
@@ -3492,9 +3533,9 @@ describe("statement Transaction suggestions", () => {
   });
 
   // Failure mode: once one of two same-amount charges is attached, the other
-  // has no unmatched sibling left, so a model "same" alone would bulk-attach a
+  // has no unmatched sibling left, so a model "same" alone would attach a
   // second real charge onto the transaction that already settles the first.
-  it("never cleans an attach to a transaction another charge already settles", async () => {
+  it("never recommends an attach to a transaction another charge already settles", async () => {
     await card(ctx);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE CAFE 0001" })]);
     await record(
@@ -3516,7 +3557,7 @@ describe("statement Transaction suggestions", () => {
     const [second] = await readPendingStatements(ctx);
     expect(second).toMatchObject({
       rawDescription: "EXAMPLE CAFE 0002",
-      recommended: "attach",
+      recommended: "create",
       siblings: 0,
       clean: false,
       candidates: [

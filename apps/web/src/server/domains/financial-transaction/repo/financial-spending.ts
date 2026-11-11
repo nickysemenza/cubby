@@ -1313,11 +1313,35 @@ async function discoverSpendingEvidence(
     candidateEvidence.map((candidate) => [candidate.id, candidate.graph]),
   );
   const liveCandidates = unrejectedCandidates.filter((candidate) => {
-    if (!candidate.reviewOnly) return true;
-    const graph = candidateGraphs.get(candidate.id);
-    // Only confidently exhausted capacity removes an added-only blocker.
-    // Unknown and negative capacity cannot establish ordinary full settlement.
-    return availableCents(graph, source.amount, row?.id) !== 0;
+    if (!candidate.reviewOnly) {
+      if (
+        strong.has(candidate.shortcode) ||
+        candidate.shortcode === request.purchaseId ||
+        source.kind === "refund"
+      )
+        return true;
+      // A payment record at this amount may be this very charge.
+      const evidence = candidateEvidence.find(
+        (entry) => entry.id === candidate.id,
+      );
+      if (
+        evidence?.payments.some(
+          (payment) =>
+            Math.abs(cents(payment.amount)) === Math.abs(cents(source.amount)),
+        )
+      )
+        return true;
+    }
+    // Only confidently exhausted capacity removes a blocker: other charges
+    // already settle every line, as a Purchase booked from an earlier charge
+    // does. Unknown and negative capacity cannot establish full settlement.
+    return (
+      availableCents(
+        candidateGraphs.get(candidate.id),
+        source.amount,
+        row?.id,
+      ) !== 0
+    );
   });
   let categoryFromPurchase = false;
   if (source.kind === "refund" && !request.spendingCategoryId) {

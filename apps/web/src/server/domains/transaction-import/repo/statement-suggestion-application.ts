@@ -212,10 +212,23 @@ export async function currentStatementApplication(
   if (rebuilt.judgment.reviewReason)
     throw refuseStatementApplication(rebuilt.judgment.reviewReason);
   const judgment = withPublishedLabels(rebuilt.judgment, published);
-  const changed = changedFields(
-    decisiveJudgment(published),
-    decisiveJudgment(judgment),
-  );
+  const reviewed = decisiveJudgment(published);
+  const now = decisiveJudgment(judgment);
+  // A create rejects every current candidate by id at selection, so a
+  // candidate added since review is named there rather than refusing the
+  // whole review. Reviewed candidates still compare: a rejected candidate
+  // whose amount or claim changed was rejected on other facts. Hold, match and
+  // copy changes that flip the recommendation stay decisive on their own.
+  if (application.action === "create") {
+    const seen = new Set(
+      reviewed.candidates.map((candidate) => candidate.transactionId),
+    );
+    now.candidates = now.candidates.filter((candidate) =>
+      seen.has(candidate.transactionId),
+    );
+    now.recommended = reviewed.recommended;
+  }
+  const changed = changedFields(reviewed, now);
   // The reviewed ready booking applies as shown unless the member chose
   // another action, kind or booking, which is replanned at apply.
   if (
@@ -231,7 +244,10 @@ export async function currentStatementApplication(
         reviewedBooking(
           await prepareStatementSpending(
             db,
-            judgment,
+            // A create books as a create whatever candidate appeared since.
+            application.action === "create"
+              ? { ...judgment, recommended: "create" }
+              : judgment,
             published.spending.request.advice ?? null,
           ),
         ),
