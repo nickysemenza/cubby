@@ -295,11 +295,8 @@ describe("statement spending review and re-import", () => {
             ).rejects.toSatisfy(isSerializationFailure);
             expect(calls).toBe(3);
             expect(builds).toBe(3);
-            expect(await read()).toEqual({
-              ...before,
-              feedback: before.feedback + 1,
-              totalFeedback: before.totalFeedback + 1,
-            });
+            // A refused application records no review.
+            expect(await read()).toEqual(before);
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
                 where: {
@@ -316,11 +313,8 @@ describe("statement spending review and re-import", () => {
               reviewSuggestion(ctx.db, kernelCtx(ctx), command),
             ).rejects.toThrow(/changed since review: spending\./i);
             expect(builds).toBe(2);
-            expect(await read()).toEqual({
-              ...before,
-              feedback: before.feedback + 1,
-              totalFeedback: before.totalFeedback + 1,
-            });
+            // A refused application records no review.
+            expect(await read()).toEqual(before);
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
                 where: {
@@ -446,7 +440,7 @@ describe("statement spending review and re-import", () => {
         ...input,
         expectedFingerprint: "synthetic-stale",
       }),
-    ).rejects.toThrow(/fingerprint changed/i);
+    ).rejects.toThrow(/changed since review/i);
     await getDb(ctx.db).execute(
       sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
     );
@@ -956,6 +950,7 @@ describe("statement spending review and re-import", () => {
       verdict: "wrong",
       correction: { present: true, value: application },
       intent: "apply",
+      expectedFingerprint: suggestion.fingerprint ?? suggestion.id,
       application,
     });
     expect(await total()).toBe(42.5);

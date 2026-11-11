@@ -477,7 +477,7 @@ describe("product_enrichment.propose_product_match", () => {
       },
     }).then(
       () => expect.fail("A stale fingerprint must not merge"),
-      (error: Error) => expect(error.message).toMatch(/fingerprint changed/),
+      (error: Error) => expect(error.message).toMatch(/changed since review/),
     );
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: pair.id,

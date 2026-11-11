@@ -173,6 +173,8 @@ describe("shared Suggestion history", () => {
         operationId: "synthetic:apply-once",
         verdict: corrected ? ("wrong" as const) : ("correct" as const),
         intent: "apply" as const,
+        // A row without a stored fingerprint is reviewed by its id.
+        expectedFingerprint: prediction.id,
         correction: corrected
           ? { present: true as const, value: "Corrected note" }
           : { present: false as const },
@@ -186,7 +188,7 @@ describe("shared Suggestion history", () => {
         metadata: {
           kind: "assessment_review",
           application: null,
-          expectedFingerprint: null,
+          expectedFingerprint: prediction.id,
         },
       });
       await getDb(ctx.db)

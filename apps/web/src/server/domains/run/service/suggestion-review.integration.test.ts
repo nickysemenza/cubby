@@ -561,6 +561,10 @@ describe("Suggestion review", () => {
     });
     const idFor = (recordId: string) =>
       pending.find((row) => row.recordId === recordId)?.id ?? "";
+    const [listed] = await getDb(ctx.db)
+      .select({ fingerprint: suggestionTable.fingerprint })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, idFor(accepted.id)));
     const accept = await reviewSuggestionBatch(ctx.db, context, {
       items: [
         {
@@ -568,6 +572,7 @@ describe("Suggestion review", () => {
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",
+          expectedFingerprint: listed?.fingerprint ?? idFor(accepted.id),
         },
       ],
     });

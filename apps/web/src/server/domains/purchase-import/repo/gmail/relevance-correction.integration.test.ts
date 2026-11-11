@@ -205,6 +205,7 @@ describe("member-only exact original relevance correction", () => {
       operationId: "synthetic-prepared-review",
       verdict: "wrong" as const,
       intent: "apply" as const,
+      expectedFingerprint: f.input.reviewedChecksum,
       correction: { present: true as const, value: "uncertain" },
     };
     return { ...f, review };
@@ -367,7 +368,7 @@ describe("member-only exact original relevance correction", () => {
     ).toEqual(observations);
     expect(f.objects.size).toBe(1);
   });
-  it("retains command Feedback and raw retrieval failure when preparation fails", async () => {
+  it("keeps the raw retrieval failure and records no review when preparation fails", async () => {
     const f = await sharedReviewFixture();
     const [before] = await getDb(ctx.db)
       .select()
@@ -386,9 +387,10 @@ describe("member-only exact original relevance correction", () => {
       .select()
       .from(emailReview)
       .where(eq(emailReview.subjectId, f.review.suggestionId));
+    // A refused application records no review; the member retries the command.
     expect(
       events.find((event) => event.operationId === f.review.operationId),
-    ).toMatchObject({ intent: "apply", authority: "member", verdict: "wrong" });
+    ).toBeUndefined();
     expect(
       events.find(
         (event) =>
@@ -725,6 +727,7 @@ describe("member-only exact original relevance correction", () => {
         operationId: "synthetic-valid-relevance",
         verdict: "wrong",
         intent: "apply",
+        expectedFingerprint: f.input.reviewedChecksum,
         correction: { present: true, value: "uncertain" },
       }),
     ).toMatchObject({ applied: true });

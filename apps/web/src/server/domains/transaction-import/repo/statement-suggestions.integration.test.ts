@@ -1347,7 +1347,7 @@ describe("statement Transaction suggestions", () => {
       sourceRefs: [],
     });
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
-      /changed since review: recommended, candidates/,
+      /Possible existing transactions must be rejected/,
     );
     expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "pending",
@@ -1391,7 +1391,7 @@ describe("statement Transaction suggestions", () => {
     const [posted] = await readPendingStatements(ctx);
     expect(posted).toMatchObject({
       recommended: "supersede",
-      clean: false,
+      clean: true,
       supersedeTransactionId: expect.stringMatching(/^FTX-/),
       // The hold's own pending refs never read as another charge's claim.
       candidates: [expect.objectContaining({ eligibility: "explicit" })],
@@ -3358,12 +3358,10 @@ describe("statement Transaction suggestions", () => {
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
       /changed since review|stale/,
     );
-    // Republication, not a scanner, replaces the stale advice.
+    // Republication, not a scanner, replaces the stale advice; the refused
+    // review recorded nothing, so the replaced row is pruned.
     expect(await generate(ctx)).toBe(1);
-    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
-      status: "superseded",
-      active: false,
-    });
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toBeUndefined();
     expect((await readPendingStatements(ctx))[0]).toMatchObject({
       recommended: "book",
       clean: false,
@@ -3388,8 +3386,9 @@ describe("statement Transaction suggestions", () => {
     expect(created.rows[0]?.count).toBe(1);
   });
 
-  // Failure mode: accepting one of two firmed-up twins leaves the other's
-  // suggestion stale until a whole-ledger refresh.
+  // Failure mode: accepting one of two same-amount twins leaves the other's
+  // suggestion stale until a whole-ledger refresh. The booked Transaction
+  // settles the first charge, so the twin is a create beside it.
   it("refreshes a sibling's suggestion after its twin is applied", async () => {
     await card(ctx);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
@@ -3403,11 +3402,13 @@ describe("statement Transaction suggestions", () => {
     await accept(ctx, first!);
     const [twin] = await readPendingStatements(ctx);
     expect(twin).toMatchObject({
-      recommended: "attach",
+      recommended: "create",
       siblings: 0,
       candidates: [
         expect.objectContaining({
           transactionId: expect.stringMatching(/^FTX-/),
+          eligibility: "context",
+          contextReason: "claimed",
         }),
       ],
     });
