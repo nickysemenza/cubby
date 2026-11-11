@@ -18,6 +18,32 @@ compact schema per action; `describe` with `input.actions` returns the selected
 actions' full input/output JSON Schema, and the server validates each request
 against the action's full Zod schema.
 
+## Paged reads
+
+Every MCP read that pages takes `cursor` (opaque) and `pageSize`, and returns
+`pageSize`, `nextCursor` (null on the last page), `totalCount` when the member
+counts, and `truncated` when the page is incomplete. No MCP input publishes
+`pageIndex`, `offset`, `limit` or `page`. Member contracts keep their own
+paging (pageIndex/pageSize, offset/limit, a keyset or numeric cursor, or a
+first-N limit); `server/mcp/tools/list-page.ts` reads it from the member's
+input fields, publishes the cursor fields in its place with the member's
+page-size bounds and default, and translates each call. A cursor encodes an
+absolute row offset, or a member keyset cursor plus the rows of that page
+already returned. An output whose rows are not under `items` names its array
+with `page.items` in `contracts/mcp-tools.ts`; compilation fails otherwise.
+
+Each paged read accepts `fields` (dot paths, `id` always kept, unknown fields
+refused with the closest keys) and `resultDetail`: compact by default (scalar
+fields and nested objects reduced to their scalars, without child collections
+or image payloads) or `full`. `entity_read` keeps its own entity selection
+(`summary` default, `compact`, `full`, `fields`) from
+`server/mcp/entity-field-selection.ts`, which owns both selections. A page
+whose serialized response exceeds `MCP_PAGE_MAX_BYTES` ends at the longest
+prefix that fits, at least one row, with `truncated: true` and a `nextCursor`
+for the next row. Rows that depend on each other (`entity_graph_read.graph`
+nodes and edges) declare `page.refetch` and are read again at half the page
+size instead of cut.
+
 ## Runs and Burn-down
 
 Run-delegated mutations execute permitted writes without a separate approval.

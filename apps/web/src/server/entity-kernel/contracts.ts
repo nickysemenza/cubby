@@ -18,7 +18,6 @@ import {
   listResultMembership,
   MAX_PAGE_SIZE,
   MAX_SORTS,
-  mcpPaginationFields,
 } from "@cubby/schemas/pagination";
 import {
   relatedSearchOutSchema,
@@ -109,16 +108,6 @@ const listFields = {
 
 const resultDetail = mcpResultDetail;
 const resultDetailFields = z.object(mcpResultDetailFields);
-const mcpListPagination = z
-  .object({
-    ...mcpPaginationFields({
-      defaultPageSize: DEFAULT_PAGE_SIZE,
-      maxPageSize: MAX_PAGE_SIZE,
-    }),
-    // The entity list shares the kernel's summary-only page size 0.
-    pageSize: listFields.pagination.unwrap().shape.pageSize,
-  })
-  .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE });
 
 const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
   (entity) => {
@@ -137,7 +126,8 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       entity: z.literal(entity),
       filters,
       sort: listFields.sort,
-      pagination: mcpListPagination,
+      // MCP publishes cursor/pageSize in its place (`server/mcp/tools/list-page.ts`).
+      pagination: listFields.pagination,
       groupBy: listFields.groupBy,
       nesting: listFields.nesting,
       resultMembership: listFields.resultMembership,

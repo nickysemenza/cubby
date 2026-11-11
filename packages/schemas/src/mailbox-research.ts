@@ -417,13 +417,13 @@ export const mailReadInput = mailMessageRef.extend({
     .describe(
       "Return one page of the raw HTML body instead of the compact text. Omitted: only compact text.",
     ),
-  offset: z
+  byteOffset: z
     .number()
     .int()
     .min(0)
     .optional()
     .describe(
-      "UTF-8 byte offset of the page to read: 0, or the previous page's nextOffset. Pages the compact body text, or the raw HTML with includeHtml.",
+      "UTF-8 byte offset of the page to read: 0, or the previous page's nextByteOffset. Pages the compact body text, or the raw HTML with includeHtml.",
     ),
   maxBytes: z
     .number()
@@ -508,15 +508,15 @@ const mailReadContent = z.object({
   textBytes: z.number().int().nullable().default(null),
   /** One raw HTML page, only when `includeHtml` asked for it. */
   bodyHtml: z.string().nullable(),
-  /** Exact `offset` of the next page of `bodyText` (or of the HTML page when
-   * `includeHtml`); null at the end. */
-  nextOffset: z.number().int().nullable(),
+  /** Exact `byteOffset` of the next page of `bodyText` (or of the HTML page
+   * when `includeHtml`); null at the end. */
+  nextByteOffset: z.number().int().nullable(),
   headers: z.record(z.string(), z.string()).optional(),
   /** UTF-8 size of the stored HTML body. */
   htmlBytes: z.number().int().nullable(),
   /** `bodyText` was converted from the HTML body. */
   compacted: z.boolean(),
-  /** More compact pages follow (`nextOffset`), the compact text lost
+  /** More compact pages follow (`nextByteOffset`), the compact text lost
    * purchase evidence, or the HTML page is a fragment of the original. */
   truncated: z.boolean(),
   /** Cue-bearing links first, from the HTML body. */
@@ -532,7 +532,7 @@ const mailReadContent = z.object({
   /** `headers` left out because they alone overflow the response cap. */
   headersOmitted: z.boolean().default(false),
   /** The body text or HTML page was cut further to fit the response cap;
-   * an HTML read continues from `nextOffset`. */
+   * an HTML read continues from `nextByteOffset`. */
   bodyShortened: z.boolean().default(false),
 });
 export type MailReadContent = z.infer<typeof mailReadContent>;

@@ -25,6 +25,7 @@ import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
 import { installMockStrippedListToolsHandler } from "./tools/tool-catalog";
 import type { ToolCatalogView } from "./tools/tool-catalog";
 import {
+  compiledMcpTools,
   principalInExtra,
   registerMcpTools,
   type ToolExtra,
@@ -72,7 +73,7 @@ Workflow tips:
 - Household contribution accounting uses standard entities: Expense beneficiaries/funders describe who consumed and initially funded existing cost; LedgerTransfer records later movement between Ledger Parties and owns its complete normalized-claim and evidence-transaction sets. LPY-/LTR- records use entity_read/entity rather than search_read.global; they are not indexed for semantic search.
 - Ledger imports are client-orchestrated through standard mutations. Independent creates/updates may use entity.commands; there is intentionally no custom cross-record transactional importer. Retry with the same normalized Source Claim and use a reviewed disambiguator for legitimate indistinguishable duplicates.
 - Financial evidence: load the financial-evidence-import playbook for Monarch MCP or Monarch, Mint, Copilot and Apple Card exports. Submit normalized observations through finance.record, preserving scoped provider identities, original fields and stable collection positions. Cubby owns downstream matching, Suggestions and guarded booking; inspect retained collection counts and receipts instead of chaining transaction creation, attachment or Expense writes after intake. Evidence retention, settlement matching and spending completeness are separate outcomes. Scheduled sync requires verified historical reconciliation and explicit member enablement.
-- entity_read.list returns { meta, items } paginated objects. Every other action documents its own batch behavior.
+- Every paged read (entity_read.list and search, and each generated list) takes \`cursor\` and \`pageSize\`, returns \`pageSize\`, \`nextCursor\` (pass it back unchanged as \`cursor\`; null on the last page), \`totalCount\` when known and \`truncated\` when the page ended early under the response size cap. Generated lists return compact rows by default; pass \`fields\` or \`resultDetail: "full"\` for more. Every other action documents its own batch behavior.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
 function registerEntityCatalog(server: McpServer) {
@@ -92,25 +93,28 @@ function registerEntityCatalog(server: McpServer) {
           text: JSON.stringify({
             entities: ENTITY_KERNEL_ENTITIES,
             actions: Object.fromEntries(
-              (["entity_read", "entity"] as const).flatMap((tool) =>
-                Object.entries(MCP_TOOL_BINDINGS[tool].actions).flatMap(
-                  ([action, binding]) =>
-                    "kernel" in binding
+              compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS)
+                .filter(
+                  (tool) => tool.name === "entity_read" || tool.name === "entity",
+                )
+                .flatMap((tool) =>
+                  [...tool.actions].flatMap(([action, compiled]) =>
+                    "kernel" in MCP_TOOL_BINDINGS[tool.name]!.actions[action]!
                       ? [
                           [
-                            `${tool}.${action}`,
+                            `${tool.name}.${action}`,
                             {
-                              writes: tool === "entity",
-                              inputSchema: z.toJSONSchema(
-                                binding.kernel.input,
-                                { unrepresentable: "any", io: "input" },
-                              ),
+                              writes: tool.name === "entity",
+                              inputSchema: z.toJSONSchema(compiled.input, {
+                                unrepresentable: "any",
+                                io: "input",
+                              }),
                             },
                           ],
                         ]
                       : [],
+                  ),
                 ),
-              ),
             ),
           }),
         },

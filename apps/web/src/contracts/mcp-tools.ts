@@ -20,6 +20,8 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
+import { auditLogContract } from "~/contracts/audit-log.contract";
+import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
 import { ingredientContract } from "~/contracts/ingredient.contract";
@@ -35,12 +37,16 @@ import {
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "~/contracts/mcp-projections";
+import { mcpContract } from "~/contracts/mcp.contract";
+import { photoImportContract } from "~/contracts/photo-import.contract";
 import { productContract } from "~/contracts/product.contract";
 import {
   recipeContract,
   recipeAvailabilityContract,
 } from "~/contracts/recipe.contract";
 import { runContract } from "~/contracts/run.contract";
+import { searchContract } from "~/contracts/search.contract";
+import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import {
   usdaFoodContract,
   usdaSuggestionReason,
@@ -138,6 +144,35 @@ export const MCP_TOOL_DESCRIPTIONS = {
 } as const;
 
 export const MCP_ACTION_OVERRIDES = {
+  "auditLog.list": mcpActionOverride(auditLogContract.ops.list, {
+    page: { items: "entries" },
+  }),
+  "entity.graph": mcpActionOverride(entityGraphContract.ops.graph, {
+    page: { items: "nodes", refetch: true },
+  }),
+  "mcp.usageActivity": mcpActionOverride(mcpContract.ops.usageActivity, {
+    page: { items: "entries" },
+  }),
+  "photoImport.runContext": mcpActionOverride(
+    photoImportContract.ops.runContext,
+    { page: { items: "images" } },
+  ),
+  "run.transcript": mcpActionOverride(runContract.ops.transcript, {
+    page: { items: "messages" },
+  }),
+  "search.debug": mcpActionOverride(searchContract.ops.debug, {
+    page: { items: "results" },
+  }),
+  "search.global": mcpActionOverride(searchContract.ops.global, {
+    page: { items: "results" },
+  }),
+  "search.similar": mcpActionOverride(searchContract.ops.similar, {
+    page: { items: "results" },
+  }),
+  "sourceTransactionRecord.drift": mcpActionOverride(
+    sourceTransactionRecordContract.ops.drift,
+    { page: { items: "candidates" } },
+  ),
   "suggestion.review": mcpActionOverride(suggestionContract.ops.review, {
     batch: { resultDetail: "full", reference: (item) => item.suggestionId },
   }),
@@ -221,6 +256,7 @@ export const MCP_ACTION_OVERRIDES = {
     {
       project: (output) => ({ recipes: output.recipes }),
       output: recipeAvailabilityMcpOut,
+      page: { items: "recipes" },
     },
   ),
   "run.workSnapshot": mcpActionOverride(runContract.ops.workSnapshot, {
@@ -293,10 +329,11 @@ export const MCP_TOOLS = defineMcpTools({
       list: mcpAction({
         op: kernelAction("list", "query"),
         description:
-          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `pagination` and `groupBy`; returns { meta, items }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = most missing checks first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (identity and status: scalar list fields, dataQuality status/score when the entity declares it required, no child collections or long notes) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
+          'One page of a kind, with that kind\'s own typed `filters`, `sort`, `groupBy`, `cursor` and `pageSize`; returns { meta, items, pageSize, nextCursor, totalCount }. `sort` is a stack, primary first: sort=[{orderBy:"name",direction:"asc"}]. Every scored entity accepts orderBy "dataQuality" (ascending = most missing checks first) plus dataStatus/dataGap filters, the enrichment worklist. A full page of a large kind can exceed the output limit: prefer `resultDetail: "compact"` (identity and status: scalar list fields, dataQuality status/score when the entity declares it required, no child collections or long notes) or `fields` (only those keys, dot paths allowed, `id` always) over "full".',
       }),
       search: mcpAction({
         op: kernelAction("search", "query"),
+        page: { items: "lexical" },
         description:
           "Name/alias search within one kind; semantic hits are returned separately and never replace lexical ones.",
       }),

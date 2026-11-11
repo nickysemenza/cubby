@@ -40,7 +40,7 @@ function jsonLength(codePoint: number) {
 /**
  * A page of whole characters starting at UTF-8 byte `offset` (moved back to
  * its character's start) whose JSON-escaped size fits `maxBytes`. It holds at
- * least one character, so paging by `nextOffset` always progresses and
+ * least one character, so paging by `nextByteOffset` always progresses and
  * concatenates back to the original. It walks code points, not a Uint8Array:
  * the byte-indexed loop intermittently ended early under Node 26's Maglev JIT
  * (mail-tool integration suite, passing with --no-maglev).
@@ -64,7 +64,7 @@ function jsonPage(text: string, offset: number, maxBytes: number) {
       return {
         text: text.slice(start.index, index),
         start: start.byte,
-        nextOffset: byte,
+        nextByteOffset: byte,
       };
     size += cost;
     byte += bytes;
@@ -73,7 +73,7 @@ function jsonPage(text: string, offset: number, maxBytes: number) {
   return {
     text: start === null ? "" : text.slice(start.index),
     start: start?.byte ?? byte,
-    nextOffset: null,
+    nextByteOffset: null,
   };
 }
 
@@ -165,7 +165,7 @@ const readableChars = (text: string) =>
  */
 export function mailReadContent(
   content: RetainedMailContent,
-  input: Pick<MailReadInput, "includeHtml" | "offset" | "maxBytes">,
+  input: Pick<MailReadInput, "includeHtml" | "byteOffset" | "maxBytes">,
 ): MailReadContent {
   const htmlBytes = content.bodyHtml
     ? encoder.encode(content.bodyHtml).length
@@ -183,19 +183,19 @@ export function mailReadContent(
     input.includeHtml && htmlBytes !== null
       ? jsonPage(
           content.bodyHtml ?? "",
-          input.offset ?? 0,
+          input.byteOffset ?? 0,
           input.maxBytes ?? MAIL_READ_HTML_PAGE_MAX_BYTES,
         )
       : null;
   // An HTML page replaces the text so the response stays under the agent cap.
   const textPage =
     page === null && body !== null
-      ? jsonPage(body, input.offset ?? 0, MAIL_READ_TEXT_MAX_BYTES)
+      ? jsonPage(body, input.byteOffset ?? 0, MAIL_READ_TEXT_MAX_BYTES)
       : null;
-  if (textPage !== null && textPage.text === "" && (input.offset ?? 0) > 0)
+  if (textPage !== null && textPage.text === "" && (input.byteOffset ?? 0) > 0)
     throw createAppError(
       "MAIL_REQUEST_REFUSED",
-      `Offset ${input.offset} is past the end of this Email's ${encoder.encode(body ?? "").length}-byte compact body.`,
+      `Offset ${input.byteOffset} is past the end of this Email's ${encoder.encode(body ?? "").length}-byte compact body.`,
     );
   // A compact page is truncated while more pages follow or evidence is
   // missing; a fully paged body's last page is complete. An HTML page is
@@ -203,8 +203,8 @@ export function mailReadContent(
   const truncated =
     page === null
       ? (compacted && compact.truncated) ||
-        (textPage !== null && textPage.nextOffset !== null)
-      : page.start > 0 || page.nextOffset !== null;
+        (textPage !== null && textPage.nextByteOffset !== null)
+      : page.start > 0 || page.nextByteOffset !== null;
   const structured = withinBytes(
     compact?.structured_data ?? [],
     MAIL_READ_STRUCTURED_MAX_BYTES,
@@ -215,7 +215,7 @@ export function mailReadContent(
     bodyText: textPage?.text ?? null,
     textBytes: body === null ? null : encoder.encode(body).length,
     bodyHtml: page?.text ?? null,
-    nextOffset: page?.nextOffset ?? textPage?.nextOffset ?? null,
+    nextByteOffset: page?.nextByteOffset ?? textPage?.nextByteOffset ?? null,
     ...(content.headers
       ? {
           headers: mailAttributionHeaders(
@@ -251,26 +251,26 @@ function shortenBody(
   if (budget < 1) return null;
   if (content.bodyHtml !== null) {
     const pageBytes = encoder.encode(content.bodyHtml).length;
-    const start = (content.nextOffset ?? content.htmlBytes ?? 0) - pageBytes;
+    const start = (content.nextByteOffset ?? content.htmlBytes ?? 0) - pageBytes;
     const page = jsonPage(content.bodyHtml, 0, budget);
-    if (page.nextOffset === null) return content;
+    if (page.nextByteOffset === null) return content;
     return {
       ...content,
       bodyHtml: page.text,
-      nextOffset: start + page.nextOffset,
+      nextByteOffset: start + page.nextByteOffset,
       truncated: true,
       bodyShortened: true,
     };
   }
   if (content.bodyText === null) return null;
   const pageBytes = encoder.encode(content.bodyText).length;
-  const start = (content.nextOffset ?? content.textBytes ?? 0) - pageBytes;
+  const start = (content.nextByteOffset ?? content.textBytes ?? 0) - pageBytes;
   const page = jsonPage(content.bodyText, 0, budget);
-  if (page.nextOffset === null) return content;
+  if (page.nextByteOffset === null) return content;
   return {
     ...content,
     bodyText: page.text,
-    nextOffset: start + page.nextOffset,
+    nextByteOffset: start + page.nextByteOffset,
     truncated: true,
     bodyShortened: true,
   };
@@ -280,7 +280,7 @@ function shortenBody(
  * Bound a whole Email read under the agent's response cap, measured on the
  * exact text the agent adapter emits (`mailReadAgentText`): images and
  * structured data go first, then trailing links, then headers, then the body is cut (an HTML page continues from an
- * earlier `nextOffset`), each reported. Purchase associations are never
+ * earlier `nextByteOffset`), each reported. Purchase associations are never
  * trimmed; a read whose remaining metadata alone overflows is refused.
  */
 export function fitMailRead<

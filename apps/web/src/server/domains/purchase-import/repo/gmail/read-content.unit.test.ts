@@ -24,18 +24,18 @@ function pages(bodyHtml: string, maxBytes: number) {
   while (offset !== null) {
     const page = mailReadContent(mail(bodyHtml), {
       includeHtml: true,
-      offset,
+      byteOffset: offset,
       maxBytes,
     });
-    expect(page.nextOffset === null || page.nextOffset > offset).toBe(true);
+    expect(page.nextByteOffset === null || page.nextByteOffset > offset).toBe(true);
     parts.push(page.bodyHtml ?? "");
-    offset = page.nextOffset;
+    offset = page.nextByteOffset;
   }
   return parts;
 }
 
 describe("mailReadContent HTML paging", () => {
-  it("reconstructs a multibyte body exactly from nextOffset pages", () => {
+  it("reconstructs a multibyte body exactly from nextByteOffset pages", () => {
     const bodyHtml = "<p>€5 — 日本 🧾 total</p>";
     for (const maxBytes of [1, 2, 3, 5, 7, 64])
       expect(pages(bodyHtml, maxBytes).join("")).toBe(bodyHtml);
@@ -46,10 +46,10 @@ describe("mailReadContent HTML paging", () => {
     expect(parts).toEqual(["🧾", "€"]);
   });
 
-  it("returns a null nextOffset when the page reaches the end", () => {
+  it("returns a null nextByteOffset when the page reaches the end", () => {
     const page = mailReadContent(mail("<p>done</p>"), { includeHtml: true });
     expect(page.bodyHtml).toBe("<p>done</p>");
-    expect(page.nextOffset).toBeNull();
+    expect(page.nextByteOffset).toBeNull();
   });
 });
 
@@ -65,7 +65,7 @@ describe("mailReadContent response bound", () => {
     const page = mailReadContent(mail(bodyHtml, text), { includeHtml: true });
     expect(page.bodyHtml).not.toBe("");
     expect(page.bodyText).toBeNull();
-    expect(page.nextOffset).toBeGreaterThan(0);
+    expect(page.nextByteOffset).toBeGreaterThan(0);
     expect(serialized(page)).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
   });
 
@@ -111,15 +111,15 @@ describe("fitMailRead minimum response", () => {
     expect(fitted.content.bodyText?.length).toBeGreaterThan(0);
   });
 
-  it("shortens an HTML page and continues it from an earlier nextOffset", () => {
+  it("shortens an HTML page and continues it from an earlier nextByteOffset", () => {
     const html = `<table>${'<td class="c">cell</td>'.repeat(8_000)}</table>`;
     const content = mailReadContent(mail(html), { includeHtml: true });
     const fitted = fitMailRead({ content, attachments: descriptors });
     expect(agentBytes(fitted)).toBeLessThanOrEqual(
       MAIL_READ_RESPONSE_MAX_BYTES,
     );
-    const next = fitted.content.nextOffset ?? 0;
-    expect(next).toBeLessThan(content.nextOffset ?? 0);
+    const next = fitted.content.nextByteOffset ?? 0;
+    expect(next).toBeLessThan(content.nextByteOffset ?? 0);
     expect(fitted.content.bodyHtml).toBe(html.slice(0, next));
     expect(fitted.content.bodyShortened).toBe(true);
   });
@@ -146,12 +146,12 @@ describe("fitMailRead minimum response", () => {
     const fitted = fitMailRead({ content, attachments: descriptors });
     expect(fitted.content.bodyShortened).toBe(true);
     const parts = [fitted.content.bodyHtml ?? ""];
-    let offset = fitted.content.nextOffset;
+    let offset = fitted.content.nextByteOffset;
     while (offset !== null) {
-      const page = mailReadContent(mail(html), { includeHtml: true, offset });
-      expect(page.nextOffset === null || page.nextOffset > offset).toBe(true);
+      const page = mailReadContent(mail(html), { includeHtml: true, byteOffset: offset });
+      expect(page.nextByteOffset === null || page.nextByteOffset > offset).toBe(true);
       parts.push(page.bodyHtml ?? "");
-      offset = page.nextOffset;
+      offset = page.nextByteOffset;
     }
     expect(parts.join("")).toBe(html);
   });
@@ -243,11 +243,11 @@ describe("mailReadContent compact evidence", () => {
     while (offset !== null) {
       const page = mailReadContent(
         { snippet: null, bodyText: text, bodyHtml: null },
-        { offset },
+        { byteOffset: offset },
       );
       expect(page.bodyHtml).toBeNull();
       parts.push(page.bodyText ?? "");
-      offset = page.nextOffset;
+      offset = page.nextByteOffset;
     }
     expect(parts.length).toBeGreaterThan(1);
     expect(parts.join("")).toBe(text);
@@ -264,21 +264,21 @@ describe("mailReadContent compact evidence", () => {
     );
     expect(first.truncated).toBe(true);
     let last = first;
-    while (last.nextOffset !== null)
+    while (last.nextByteOffset !== null)
       last = mailReadContent(
         { snippet: null, bodyText: text, bodyHtml: null },
-        { offset: last.nextOffset },
+        { byteOffset: last.nextByteOffset },
       );
     expect(last.truncated).toBe(false);
     expect(() =>
       mailReadContent(
         { snippet: null, bodyText: text, bodyHtml: null },
-        { offset: (first.textBytes ?? 0) + 10 },
+        { byteOffset: (first.textBytes ?? 0) + 10 },
       ),
     ).toThrow(/past the end/u);
   });
 
-  it("continues a body that fitMailRead shortened from its nextOffset", () => {
+  it("continues a body that fitMailRead shortened from its nextByteOffset", () => {
     const text = "Synthetic line item $1.00\n".repeat(6_000);
     const descriptors = Array.from({ length: 100 }, (_, index) => ({
       attachmentId: `synthetic-attachment-${index}-${"x".repeat(150)}`,
@@ -296,7 +296,7 @@ describe("mailReadContent compact evidence", () => {
     expect(first.content.bodyShortened).toBe(true);
     const rest = mailReadContent(
       { snippet: null, bodyText: text, bodyHtml: null },
-      { offset: first.content.nextOffset ?? -1 },
+      { byteOffset: first.content.nextByteOffset ?? -1 },
     );
     expect(
       `${first.content.bodyText}${rest.bodyText}`.startsWith(

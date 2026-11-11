@@ -557,7 +557,7 @@ describe("MCP catalog schemas", () => {
         bodyText: "Synthetic shoe $104.00",
         textBytes: 22,
         bodyHtml: null,
-        nextOffset: null,
+        nextByteOffset: null,
         headers: { from: "orders@vendor.example" },
         htmlBytes: 2048,
         compacted: true,
@@ -887,6 +887,143 @@ function schemaFaults(schema: JsonObject): string[] {
 }
 
 describe("MCP catalog publication without services", () => {
+  it("pages every paged read by cursor and refuses unknown keys", () => {
+    const legacy = new Set(["pageIndex", "offset", "limit", "page"]);
+    const published: string[] = [];
+    const loose: string[] = [];
+    const paged = new Set<string>();
+    for (const tool of compiledMcpTools(
+      MCP_TOOL_BINDINGS,
+      MCP_TOOL_DECLARATIONS,
+    ))
+      for (const [name, action] of tool.actions) {
+        const label = `${tool.name}.${name}`;
+        const schema = parseJsonObject(
+          safeToJsonSchema(action.publishedInput ?? action.input, "input"),
+        );
+        const definitions = schema.$defs ?? schema.definitions ?? {};
+        if (!isJsonObject(definitions)) throw new Error("Bad definitions");
+        const roots = (node: JSONType): JsonObject[] => {
+          if (!isJsonObject(node)) return [];
+          if (isString(node.$ref ?? null))
+            return roots(definitions[String(node.$ref).split("/").at(-1)!]!);
+          const branches = node.anyOf ?? node.oneOf ?? node.allOf;
+          return Array.isArray(branches) ? branches.flatMap(roots) : [node];
+        };
+        for (const root of roots(schema)) {
+          const keys = Object.keys(schemaProperties(root) ?? {});
+          for (const key of keys)
+            if (legacy.has(key)) published.push(`${label}.${key}`);
+          const pagination = schemaProperties(root)?.pagination;
+          if (pagination !== undefined)
+            for (const key of Object.keys(schemaProperties(pagination) ?? {}))
+              published.push(`${label}.pagination.${key}`);
+          if (keys.includes("cursor") && keys.includes("pageSize"))
+            paged.add(label);
+          if (action.kind === "query" && root.additionalProperties !== false)
+            loose.push(label);
+        }
+      }
+    expect(published).toEqual([]);
+    expect([...new Set(loose)]).toEqual([]);
+    expect([...paged]).toEqual(
+      expect.arrayContaining([
+        "activity_read.list",
+        "activity_read.queue",
+        "activity_read.report",
+        "ai_read.usage_recent",
+        "entity_graph_read.graph",
+        "entity_graph_read.relation",
+        "entity_read.list",
+        "entity_read.search",
+        "finance_read.drift",
+        "maintenance_read.usage_activity",
+        "product_enrichment_read.search",
+        "purchase_import_read.mail_import_outcomes",
+        "run_read.run_context",
+        "run_read.transcript",
+        "search_read.global",
+        "suggestions_read.automatic_decisions",
+        "suggestions_read.list",
+      ]),
+    );
+  });
+
+  it("reads a member's offset page through one cursor, compact and under the size cap", async () => {
+    const server = new McpServer({ name: "test", version: "1.0.0" });
+    const calls: unknown[] = [];
+    const rows = Array.from({ length: 30 }, (_, index) => ({
+      id: `SYN-${index}`,
+      note: "n".repeat(30_000),
+      lines: [{ amount: index }],
+    }));
+    registerTestTool(server, {
+      name: "paged_rows",
+      kind: "query",
+      input: z.object({
+        offset: z.number().int().min(0).default(0),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      output: z.object({
+        items: z.array(
+          z.object({
+            id: z.string(),
+            note: z.string(),
+            lines: z.array(z.object({ amount: z.number() })),
+          }),
+        ),
+        nextOffset: z.number().int().nullable(),
+      }),
+      run: async (_context, input) => {
+        calls.push(input);
+        const end = input.offset + input.limit;
+        return {
+          items: rows.slice(input.offset, end),
+          nextOffset: end < rows.length ? end : null,
+        };
+      },
+    });
+    const page = async (input: JsonObject) =>
+      z
+        .object({
+          items: z.array(z.looseObject({ id: z.string() })),
+          pageSize: z.number(),
+          nextCursor: z.string().nullable(),
+          truncated: z.boolean().optional(),
+        })
+        .strict()
+        .parse(
+          (await callMcpTool(server, "paged_rows", { action: "run", input }))
+            .structuredContent,
+        );
+
+    const first = await page({ pageSize: 10 });
+    expect(calls).toEqual([{ offset: 0, limit: 10 }]);
+    expect(first.items.map((row) => row.id)).toEqual([
+      "SYN-0",
+      "SYN-1",
+      "SYN-2",
+    ]);
+    expect(first.items[0]).not.toHaveProperty("lines");
+    expect(first).toMatchObject({ pageSize: 10, truncated: true });
+
+    const second = await page({
+      pageSize: 10,
+      cursor: first.nextCursor ?? "",
+      fields: ["lines.amount"],
+    });
+    expect(calls.at(-1)).toEqual({ offset: 3, limit: 10 });
+    expect(second.items).toHaveLength(10);
+    expect(second.items[0]).toEqual({ id: "SYN-3", lines: [{ amount: 3 }] });
+    expect(second.truncated).toBeUndefined();
+
+    const refused = await callMcpTool(server, "paged_rows", {
+      action: "run",
+      input: { offset: 3 },
+    });
+    expect(refused.isError).toBe(true);
+  });
+
   it("marks a tool read-only only when every generated action is a query", async () => {
     const { tools } = catalog;
     for (const tool of tools) {

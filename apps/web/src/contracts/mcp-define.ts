@@ -56,6 +56,20 @@ interface McpBatchSpec<Output> {
   readonly uniqueIds?: true;
 }
 
+/**
+ * How a paged read's output holds its page (`server/mcp/tools/list-page.ts`).
+ * Paging itself is read from the member's input fields.
+ */
+export interface McpPageSpec {
+  /** The output array one page fills. Default `items`. */
+  readonly items?: string;
+  /**
+   * The rows depend on each other (graph nodes and the edges between them):
+   * an oversized page is read again at half the size instead of cut.
+   */
+  readonly refetch?: true;
+}
+
 /** A kernel verb's input: the command object an agent sends. */
 type KernelInput = { readonly [field: string]: JSONType };
 
@@ -98,6 +112,7 @@ export interface McpActionSpec<
   /** A dedicated render tool's MCP Apps resource; never attach to data tools. */
   readonly uiResourceUri?: string;
   readonly batch?: McpBatchSpec<Projected>;
+  readonly page?: McpPageSpec;
   /**
    * The entity a call acted on, for `McpToolCall.entityKind` (a batch passes
    * its first item). Absent, an input `entity` field is used.
@@ -110,7 +125,7 @@ export type McpActionOverride<Op extends OperationMember = OperationMember> =
   Partial<
     Pick<
       McpActionSpec<Op, ErasedMcpType>,
-      "project" | "output" | "batch" | "telemetryEntity"
+      "project" | "output" | "batch" | "page" | "telemetryEntity"
     >
   >;
 

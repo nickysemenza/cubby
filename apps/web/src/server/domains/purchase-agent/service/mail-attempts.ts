@@ -42,7 +42,7 @@ const completeClaim = z.object({
       preheader: z.string().nullable().optional(),
       bodyText: z.string().min(1),
       truncated: z.literal(false),
-      nextOffset: z.null(),
+      nextByteOffset: z.null(),
       bodyShortened: z.literal(false),
       headersOmitted: z.literal(false),
       linksOmitted: z.literal(0),

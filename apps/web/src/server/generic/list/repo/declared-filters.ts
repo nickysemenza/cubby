@@ -334,9 +334,8 @@ const columnPredicate = (
     : undefined;
   switch (descriptor.kind) {
     case "text": {
-      const terms = descriptor.stored?.array
-        ? optionalTextList.parse(value)
-        : [optionalText.parse(value)];
+      // Like every list filter, one term or several; several match any.
+      const terms = optionalTextList.parse(value);
       return or(
         ...(terms ?? []).flatMap((term) => {
           const trimmed = term?.trim();

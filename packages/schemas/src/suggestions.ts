@@ -18,8 +18,8 @@ export const makeableRecipesInput = z.object({
     .int()
     .positive()
     .max(100)
-    .optional()
-    .describe("Max recipes to return (default 24, max 100)"),
+    .default(24)
+    .describe("Max recipes to return"),
 });
 
 // Ranking scores a bounded candidate pool, so the answer can be partial:

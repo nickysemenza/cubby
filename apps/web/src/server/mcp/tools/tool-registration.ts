@@ -52,6 +52,7 @@ import {
   mergeActionInputSchemas,
   requiredFields,
 } from "./action-schema";
+import { pagedRead } from "./list-page";
 import {
   describeToolOutputSchema,
   withProgressiveDisclosure,
@@ -415,47 +416,63 @@ function compileAction(
 
   if ("kernel" in binding) {
     const { kernel } = binding;
+    const paged =
+      kind === "query"
+        ? pagedRead(toolAction, kernel.input, kernel.output, spec.page)
+        : null;
+    // The verb runs as an ad hoc runner operation named by its tool action;
+    // its input was already parsed, so the runner parses only its output.
+    const runKernel = async (
+      input: ActionValue,
+      call: ActionCall,
+      name: string,
+      execution: z.output<typeof purchaseImportRunExecution> | undefined,
+    ) =>
+      settled(
+        await (call.runtime.executeOperation ?? executeOperation)({
+          operation: { id: name, kind },
+          type: kind,
+          input,
+          inputSchema: z.unknown(),
+          outputSchema: kernel.output,
+          request: {
+            principal: call.principal,
+            headers: call.headers ?? new Headers(),
+            signal: call.signal,
+            modelBacked: spec.modelBacked,
+          },
+          run: (context, parsed) =>
+            kernel.run(
+              parsed,
+              principalWithContext(call.principal, context),
+              name,
+              execution,
+            ),
+        }),
+      );
     return {
       name: toolAction,
       kind,
       spec,
       batch: false,
       keepsRunExecution: false,
-      input: strictSchema(toolAction, kernel.input),
+      input: strictSchema(toolAction, paged?.input ?? kernel.input),
       prepareInput: (args) =>
         kernel.verb ? { ...args, action: kernel.verb } : args,
-      output: kernel.output,
+      output: paged?.output ?? kernel.output,
       parsesOutput: true,
       composite: false,
       telemetryEntity: (input) =>
         spec.telemetryEntity?.(input) ??
         entityOf.safeParse(input).data?.entity ??
         entityOf.safeParse(firstItem(input)).data?.entity,
-      // The verb runs as an ad hoc runner operation named by its tool action;
-      // its input was already parsed, so the runner parses only its output.
-      invoke: async (input, call, name, execution) =>
-        settled(
-          await (call.runtime.executeOperation ?? executeOperation)({
-            operation: { id: name, kind },
-            type: kind,
-            input,
-            inputSchema: z.unknown(),
-            outputSchema: kernel.output,
-            request: {
-              principal: call.principal,
-              headers: call.headers ?? new Headers(),
-              signal: call.signal,
-              modelBacked: spec.modelBacked,
-            },
-            run: (context, parsed) =>
-              kernel.run(
-                parsed,
-                principalWithContext(call.principal, context),
-                name,
-                execution,
-              ),
-          }),
-        ),
+      invoke: (input, call, name, execution) => {
+        if (!paged) return runKernel(input, call, name, execution);
+        const parsed = z.looseObject({}).parse(input);
+        return paged.read(parsed, parsed, (member) =>
+          runKernel(member, call, name, execution),
+        );
+      },
     };
   }
 
@@ -543,7 +560,12 @@ function compileAction(
     };
   }
 
-  const publishedInput = publishMemberAction(published);
+  const paged =
+    kind === "query"
+      ? pagedRead(toolAction, object, memberOutput, spec.page)
+      : null;
+  const pagedInput = paged ? strictSchema(toolAction, paged.input) : published;
+  const publishedInput = publishMemberAction(pagedInput);
   return {
     name: toolAction,
     kind,
@@ -551,20 +573,25 @@ function compileAction(
     batch: false,
     publishedInput,
     keepsRunExecution:
-      published instanceof z.ZodObject && "_runExecution" in published.shape,
-    input: published,
+      pagedInput instanceof z.ZodObject && "_runExecution" in pagedInput.shape,
+    input: pagedInput,
     prepareInput: (args) => {
-      if (publishedInput === published) return args;
+      if (publishedInput === pagedInput) return args;
       const { operationAction, ...member } = args;
       return { ...member, action: operationAction };
     },
-    output: memberOutput,
+    output: paged?.output ?? memberOutput,
     // A projection changes the member's shape after the runner's parse.
     parsesOutput: !spec.project,
     composite: false,
     telemetryEntity: (input) =>
       spec.telemetryEntity?.(input) ?? entityOf.safeParse(input).data?.entity,
-    invoke: (_input, call, _name, _execution, raw) => runMember(raw, call),
+    invoke: (input, call, _name, _execution, raw) =>
+      paged
+        ? paged.read(z.looseObject({}).parse(input), raw, (member) =>
+            runMember(member, call),
+          )
+        : runMember(raw, call),
   };
 }
 

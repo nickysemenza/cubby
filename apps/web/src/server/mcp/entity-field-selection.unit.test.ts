@@ -1,10 +1,58 @@
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   projectSelection,
   readSelection,
+  rowSelection,
   selectionListFields,
+  selectRow,
 } from "./entity-field-selection";
+
+describe("paged row selection", () => {
+  const row = z.object({
+    id: z.string(),
+    label: z.string(),
+    owner: z.object({
+      id: z.string(),
+      tags: z.array(z.object({ key: z.string() })),
+    }),
+    lines: z.array(z.object({ amount: z.number() })),
+    logo: z.string().nullable(),
+  });
+  const value = {
+    id: "SUG-4K7M",
+    label: "Synthetic row",
+    owner: { id: "LPY-4K7M", tags: [{ key: "synthetic" }] },
+    lines: [{ amount: 12.5 }],
+    logo: "https://example.com/logo.png",
+  };
+
+  it("compacts rows to scalars without child collections or image payloads", () => {
+    const compact = rowSelection("test.list", row, {});
+    if (!compact) throw new Error("Expected the compact default");
+    expect(selectRow(value, row, compact)).toEqual({
+      id: "SUG-4K7M",
+      label: "Synthetic row",
+      owner: { id: "LPY-4K7M" },
+    });
+    expect(rowSelection("test.list", row, { resultDetail: "full" })).toBeNull();
+  });
+
+  it("selects dot paths beside the id and refuses unknown fields", () => {
+    const selected = rowSelection("test.list", row, {
+      fields: ["owner.tags.key"],
+    });
+    if (!selected) throw new Error("Expected a field selection");
+    expect(selectRow(value, row, selected)).toEqual({
+      id: "SUG-4K7M",
+      owner: { tags: [{ key: "synthetic" }] },
+    });
+    expect(() =>
+      rowSelection("test.list", row, { fields: ["lable"] }),
+    ).toThrow('Unknown test.list field "lable"; expected one of label');
+  });
+});
 
 describe("compact media contract", () => {
   it.each([

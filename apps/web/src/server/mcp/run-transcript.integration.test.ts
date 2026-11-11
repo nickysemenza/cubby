@@ -114,18 +114,24 @@ describe("member Run transcript through MCP", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
-    const read = (runId: string, cursor?: number) =>
+    const read = (runId: string, cursor?: string) =>
       callMcpTool(
         createMcpServer(),
         "run_read",
-        { action: "transcript", runId, limit: 1, cursor },
+        {
+          action: "transcript",
+          runId,
+          pageSize: 1,
+          resultDetail: "full",
+          cursor,
+        },
         mcpContext,
       );
     const first = await read(owned.shortcode);
     expect(first.isError).not.toBe(true);
     expect(first.structuredContent).toMatchObject({
       status: "idle",
-      nextCursor: 1,
+      nextCursor: expect.any(String),
       messages: [
         {
           id: "message-1",
@@ -143,7 +149,10 @@ describe("member Run transcript through MCP", () => {
       ],
       settlements: [{ outcome: "done" }],
     });
-    const second = await read(owned.shortcode, 1);
+    const second = await read(
+      owned.shortcode,
+      String(first.structuredContent?.nextCursor),
+    );
     expect(second.isError).not.toBe(true);
     expect(second.structuredContent).toMatchObject({
       messages: [{ id: "message-2" }],

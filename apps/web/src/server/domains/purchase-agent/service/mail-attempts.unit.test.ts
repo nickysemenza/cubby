@@ -31,7 +31,7 @@ describe("Mail extraction attempts", () => {
         content: {
           bodyText: "Synthetic retained original",
           truncated: false,
-          nextOffset: null,
+          nextByteOffset: null,
           bodyShortened: false,
           headersOmitted: false,
           linksOmitted: 0,
@@ -59,7 +59,7 @@ describe("Mail extraction attempts", () => {
         content: {
           bodyText: "Synthetic priced receipt with omitted decorative links",
           truncated: false,
-          nextOffset: null,
+          nextByteOffset: null,
           bodyShortened: false,
           headersOmitted: false,
           linksOmitted: 1,
