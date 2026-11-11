@@ -1185,11 +1185,16 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
 const FLEX_CAPACITY_REFUSAL =
   /resource[ _-]?unavailable|flex processing is temporarily unavailable/i;
 
-/** Stream lifecycle events that precede any model output. */
+/**
+ * Stream events that precede any model output. Production flex refusals
+ * followed `response.created`, `response.in_progress` and sometimes a
+ * `keepalive`.
+ */
 const PRE_OUTPUT_EVENTS = new Set([
   "response.created",
   "response.in_progress",
   "response.queued",
+  "keepalive",
 ]);
 
 /**

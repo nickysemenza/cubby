@@ -1779,18 +1779,23 @@ describe("flex service tier", () => {
   };
 
   it("resends a stream refused for flex capacity at standard", async () => {
+    // The shape production returned, after these lifecycle events.
     const refused = {
-      type: "response.failed",
-      response: {
-        error: {
-          code: "server_error",
-          message:
-            "Flex processing is temporarily unavailable. Please try again later or use standard processing.",
-        },
+      type: "error",
+      error: {
+        type: "resource_unavailable",
+        code: "flex_unavailable",
+        message:
+          "Flex processing is temporarily unavailable. Please try again later or use standard processing.",
       },
     };
     const { tiers, response } = send(
-      sse({ type: "response.created" }, refused),
+      sse(
+        { type: "response.created" },
+        { type: "response.in_progress" },
+        { type: "keepalive" },
+        refused,
+      ),
     );
     expect(await (await response).text()).toContain("response.completed");
     expect(tiers).toEqual(["flex", "standard"]);
