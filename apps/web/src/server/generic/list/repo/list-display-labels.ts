@@ -13,6 +13,7 @@ import type { PurchaseReconciliation } from "@cubby/schemas/purchase";
 import { type RecipeTimes } from "@cubby/schemas/recipe";
 
 import {
+  formatAiCost,
   formatCount,
   formatCurrency,
   formatCurrencyRange,
@@ -120,6 +121,13 @@ export const valuationLabel = (
     .join(", ");
   const total = formatCurrency(valuation.directValuation);
   return caveat ? `${total} (${caveat})` : total;
+};
+
+/** Known cost, then the calls with no price; a bare zero never stands for unpriced calls. */
+export const runCostLabel = (cost: number, unpricedCalls: number): string => {
+  if (unpricedCalls <= 0) return formatAiCost(cost);
+  const unpriced = `${unpricedCalls} unpriced ${unpricedCalls === 1 ? "call" : "calls"}`;
+  return cost > 0 ? `${formatAiCost(cost)} + ${unpriced}` : unpriced;
 };
 
 export const expenseCountLabel = (count: number, unpriced: number): string =>

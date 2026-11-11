@@ -9,7 +9,6 @@ import { RunWorkProgress } from "~/ui/records/run-work-progress";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
 
-import { runCostLabel } from "../detail-field-renderers/run";
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 
 type RunRow = ListRowOf<"run">;
@@ -82,10 +81,7 @@ const activity: ListRenderer<"run"> = (helper) =>
   });
 
 const costLabel = (row: RunRow) =>
-  runCostLabel(
-    fieldValueOf(row.fields.chargedCost) ?? 0,
-    fieldValueOf(row.fields.chargedUnpricedCount) ?? 0,
-  );
+  fieldValueOf(row.fields.chargedCostLabel) ?? null;
 
 const aiCost: ListRenderer<"run"> = (helper) =>
   createCubbyColumnCollection((add) => {

@@ -269,10 +269,7 @@ export const nativeCoverage = {
     },
     "run-ai-cost": {
       status: "generic",
-      inputs: [
-        { path: "chargedCost", schema: z.number() },
-        { path: "chargedUnpricedCount", schema: z.number() },
-      ],
+      inputs: [{ path: "chargedCostLabel", schema: listLabel }],
     },
     "task-progress": {
       status: "generic",

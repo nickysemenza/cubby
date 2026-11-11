@@ -34,6 +34,7 @@ import {
 } from "~/server/generic/jobs/repo/job-queue";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
+import { runCostLabel } from "~/server/generic/list/repo/list-display-labels";
 import {
   selectedListProjection,
   type ListReadOptions,
@@ -169,11 +170,21 @@ const runRead = {
     });
     return [
       costs.fields(
-        rawRunOut.pick({ chargedCost: true, chargedUnpricedCount: true }),
-        (row, loaded) => ({
-          chargedCost: loaded.get(row.id)?.chargedCost ?? 0,
-          chargedUnpricedCount: loaded.get(row.id)?.chargedUnpricedCount ?? 0,
+        rawRunOut.pick({
+          chargedCost: true,
+          chargedUnpricedCount: true,
+          chargedCostLabel: true,
         }),
+        (row, loaded) => {
+          const chargedCost = loaded.get(row.id)?.chargedCost ?? 0;
+          const chargedUnpricedCount =
+            loaded.get(row.id)?.chargedUnpricedCount ?? 0;
+          return {
+            chargedCost,
+            chargedUnpricedCount,
+            chargedCostLabel: runCostLabel(chargedCost, chargedUnpricedCount),
+          };
+        },
       ),
       outcomes.fields(
         rawRunOut.pick({ outcomeCounts: true }),

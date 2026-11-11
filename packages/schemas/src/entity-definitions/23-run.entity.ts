@@ -26,6 +26,7 @@ import { runWorkProgress } from "../run-work-progress.js";
 import { runWaitingOn } from "../run-waiting-on.js";
 import { mailRunOutcomeCounts } from "../email-fields.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
+import { labelField } from "./label-field.js";
 
 const RUN_PURPOSE_GLYPH = {
   account_sync: { phosphor: "Bank", sfSymbol: "building.columns" },
@@ -594,11 +595,14 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnLabel: "AI cost",
           format: "currency",
+          labelPath: "chargedCostLabel",
+          detailLabelPath: "chargedCostLabel",
           renderer: { list: "run-ai-cost", detail: "run-ai-cost" },
         },
         provenance: { kind: "derived", sources: [{ label: "Run AI usage" }] },
         validation: readOnly(z.number().default(0)),
       },
+      labelField("chargedCostLabel", "Run AI usage"),
       {
         // Calls with no charged price: a zero cost beside them is unknown, not free.
         key: "chargedUnpricedCount",

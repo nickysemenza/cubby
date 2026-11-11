@@ -2,7 +2,6 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { RunSentryAction } from "~/entity/entity-detail/report-slot";
-import { formatAiCost } from "~/lib/number-format";
 import { RunWaitDetail } from "~/ui/records/run-wait";
 import { NoneValue } from "~/ui/text/none-value";
 
@@ -17,13 +16,6 @@ const OUTCOME_COUNT_LABEL = [
   ["needsMember", "Needs you"],
 ] as const;
 
-/** Known cost, then the calls with no price; a bare zero never stands for unpriced calls. */
-export const runCostLabel = (cost: number, unpricedCalls: number): string => {
-  if (unpricedCalls <= 0) return formatAiCost(cost);
-  const unpriced = `${unpricedCalls} unpriced ${unpricedCalls === 1 ? "call" : "calls"}`;
-  return cost > 0 ? `${formatAiCost(cost)} + ${unpriced}` : unpriced;
-};
-
 export const runDetailFields = {
   "run-waiting-on": (run) => {
     const wait = fieldValueOf(run.fields.waitingOn);
@@ -32,10 +24,7 @@ export const runDetailFields = {
   "run-ai-cost": (run) => ({
     value: (
       <span className="tabular-nums">
-        {runCostLabel(
-          fieldValueOf(run.fields.chargedCost) ?? 0,
-          fieldValueOf(run.fields.chargedUnpricedCount) ?? 0,
-        )}
+        {fieldValueOf(run.fields.chargedCostLabel)}
       </span>
     ),
   }),
