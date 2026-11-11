@@ -11,6 +11,7 @@ import type { ListEntity } from "~/entity/model/list-contracts";
 import { wasm } from "~/lib/wasm";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
+import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import {
   image as imageTable,
   expense as expenseTable,
@@ -97,10 +98,7 @@ describe("row-set filters", () => {
     ids,
   });
   const matchesValues = (expression: SQL, values: readonly string[]) =>
-    sql`${expression} IN (${sql.join(
-      values.map((value) => sql`${value}`),
-      sql`, `,
-    )})`;
+    sql`${expression} = ANY(${columnArrayParam(values)})`;
 
   it("matches account aliases on one alias, cards by exact last four", async () => {
     const account = (
@@ -424,10 +422,7 @@ describe("row-set filters", () => {
       .select({ publicId: imageProcessingSubmission.publicId })
       .from(imageProcessingSubmission);
     const fixture = await getDb(ctx.db).execute<{ shortcode: string }>(
-      sql`SELECT "shortcode" FROM "ImageProcessingJob" WHERE "id" IN (${sql.join(
-        [...first, ...second].map((id) => sql`${id}`),
-        sql`, `,
-      )})`,
+      sql`SELECT "shortcode" FROM "ImageProcessingJob" WHERE "id" = ANY(${uuidArrayParam([...first, ...second])})`,
     );
     const codes = new Set(fixture.rows.map((row) => row.shortcode));
     const inFixture = (ids: string[]) => ids.filter((id) => codes.has(id));

@@ -24,6 +24,8 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { columnArrayParam } from "~/server/db/helpers/query";
+
 /** The row an effective value reads: a table alias in scope, or its id. */
 export type InheritedRow = string | { readonly id: SQL };
 
@@ -449,11 +451,11 @@ export const inheritedSourceSql = (
  * hierarchy alone has this form; null otherwise, and the caller compares
  * `effectiveFieldSql` instead.
  */
-export const effectiveFieldInSql = (
+const effectiveFieldMatchingSql = (
   entity: Entity,
   field: string,
   rowId: SQL,
-  values: SQL,
+  matches: (value: SQL) => SQL,
 ): SQL<boolean> | null => {
   const chain = requireChain(entity, field);
   const [source, ...rest] = chain.from;
@@ -471,7 +473,7 @@ export const effectiveFieldInSql = (
     WITH RECURSIVE ${set} AS (
       SELECT ${ref(node, "id")}, 0 AS ih_depth, ARRAY[${ref(node, "id")}] AS ih_visited
       FROM ${table} ${name(node)}
-      WHERE ${ownDecides(chain, node)} AND ${ownValue(chain, node)} IN (${values})${live(node, softDelete)}
+      WHERE ${ownDecides(chain, node)} AND ${matches(ownValue(chain, node))}${live(node, softDelete)}
       UNION ALL
       SELECT ${ref(node, "id")}, ${set}."ih_depth" + 1, ${set}."ih_visited" || ${ref(node, "id")}
       FROM ${set} JOIN ${table} ${name(node)} ON ${ref(node, source.parentColumn)} = ${set}."id"
@@ -480,6 +482,33 @@ export const effectiveFieldInSql = (
     ) SELECT "id" FROM ${set}
   ), false)`;
 };
+
+export const effectiveFieldInSql = (
+  entity: Entity,
+  field: string,
+  rowId: SQL,
+  values: SQL,
+): SQL<boolean> | null =>
+  effectiveFieldMatchingSql(
+    entity,
+    field,
+    rowId,
+    (value) => sql`${value} IN (${values})`,
+  );
+
+/** Compare request-sized sets as one array while retaining the set-form hierarchy read. */
+export const effectiveFieldAnySql = (
+  entity: Entity,
+  field: string,
+  rowId: SQL,
+  values: readonly string[],
+): SQL<boolean> | null =>
+  effectiveFieldMatchingSql(
+    entity,
+    field,
+    rowId,
+    (value) => sql`${value} = ANY(${columnArrayParam(values)})`,
+  );
 
 /**
  * The record whose decision a row's effective value is: `{ position, id }`

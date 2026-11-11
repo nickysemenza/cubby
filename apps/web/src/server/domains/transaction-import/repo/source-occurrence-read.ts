@@ -14,6 +14,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sourceOccurrence } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -56,13 +57,9 @@ async function loadOccurrenceClosures(
         return constraintViolation(
           "Occurrence closure needs a snapshot read outside a read-committed write transaction.",
         );
-      const ids = sql.join(
-        rows.map((row) => sql`${row.id}::uuid`),
-        sql`, `,
-      );
       // CTEs select complete sets, including tombstones. LIMIT is only a sentinel: overflow refuses the bundle.
       const definitions = sql`
-      WITH owners AS MATERIALIZED (SELECT * FROM "SourceOccurrence" WHERE id IN (${ids})),
+      WITH owners AS MATERIALIZED (SELECT * FROM "SourceOccurrence" WHERE id = ANY(${uuidArrayParam(rows.map((row) => row.id))})),
       observations AS MATERIALIZED (SELECT * FROM "SourceTransactionRecord" WHERE "occurrenceId" IN (SELECT id FROM owners)),
       root_aliases AS MATERIALIZED (SELECT * FROM "FinancialEvidenceAlias" WHERE "observationId" IN (SELECT id FROM observations) OR "occurrenceId" IN (SELECT id FROM owners)),
       siblings AS MATERIALIZED (SELECT DISTINCT sibling.* FROM "FinancialEvidenceAlias" sibling JOIN root_aliases root ON sibling.source=root.source AND sibling.value=root.value WHERE sibling."observationId" IS NOT NULL),

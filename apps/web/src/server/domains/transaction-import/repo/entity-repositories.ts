@@ -111,7 +111,7 @@ const sourceRead = {
           importFingerprint: sql<string>`${initialFingerprint}`,
           supersededBy: sql<
             string | null
-          >`(SELECT successor."externalId" FROM ${sourceObservations} successor WHERE successor.id = ${sourceObservationField("supersededByRowId")})`,
+          >`(SELECT successor.value FROM "FinancialEvidenceAlias" successor WHERE successor."observationId" = ${sourceObservationField("supersededByRowId")} AND successor.kind = 'externalId')`,
         })
         .from(sourceTransactionRecord)
         .where(
@@ -203,7 +203,7 @@ export const sourceTransactionRecordScaffold = listScaffold<
   readSchema: sourceTransactionRecordRepositoryReadSchema,
   rows: {
     runStepInputs: runStepInputListRows("sourceTransactionRecord"),
-    reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
+    reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservationFacts} r`,
     acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
   },
   derived: {

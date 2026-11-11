@@ -35,7 +35,7 @@ import {
   ingredient,
   product,
 } from "~/server/db/schema";
-import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
+import { getPreferredImageDescriptions } from "~/server/domains/image-processing/repo/image-processing";
 import { readImageById } from "~/server/domains/image/repo/image";
 import { readImageIdentification } from "~/server/domains/image/repo/image-identification";
 import { getRecipeUsagesForIngredient } from "~/server/domains/ingredient/repo/recipe-usages";
@@ -96,18 +96,19 @@ const reviewableLabels = async (
   saved: { source?: string | null } | null,
 ) => {
   const reviewable = new Set<string>();
-  await Promise.all(
-    labels.map(async (label) => {
-      const status = await getImageProcessingReadProjection(db, label.imageId);
-      const analysis = status.analyses.find((entry) => entry.preferred);
-      if (!analysis?.result.nutritionFacts) return;
-      if (
-        saved?.source !==
-        labelNutritionSource(label.code, String(analysis.createdAt))
-      )
-        reviewable.add(label.code);
-    }),
+  const analyses = await getPreferredImageDescriptions(
+    db,
+    labels.map((label) => label.imageId),
   );
+  for (const label of labels) {
+    const analysis = analyses.get(label.imageId);
+    if (
+      analysis?.result.nutritionFacts &&
+      saved?.source !==
+        labelNutritionSource(label.code, String(analysis.createdAt))
+    )
+      reviewable.add(label.code);
+  }
   return reviewable;
 };
 

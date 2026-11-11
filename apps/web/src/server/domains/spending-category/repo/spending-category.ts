@@ -32,6 +32,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -360,10 +361,7 @@ async function reclassifiesExpenses(
     sql`
     SELECT 1 FROM "Expense" e
     WHERE ${notDeleted("e")}
-      AND ${effectiveExpenseSpendingCategorySql("e")} IN (${sql.join(
-        loserIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      AND ${effectiveExpenseSpendingCategorySql("e")} = ANY(${uuidArrayParam(loserIds)})
     LIMIT 1`,
     "objects",
   );

@@ -17,6 +17,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   lockFinancialTransactionSources,
@@ -114,10 +115,7 @@ export async function applyStatementTransactionSuggestion(
       const candidates = candidateIds.length
         ? await unwrapDb(tx).execute<{ shortcode: string }>(sql`
             SELECT shortcode FROM "FinancialTransaction"
-            WHERE id IN (${sql.join(
-              candidateIds.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})
+            WHERE id = ANY(${uuidArrayParam(candidateIds)})
           `)
         : { rows: [] };
       await lockFinancialTransactionSources(
@@ -356,10 +354,7 @@ async function applySupersede(
   }>(
     sql`
     SELECT source, "externalId" FROM ${sourceObservationFrom}
-    WHERE id IN (${sql.join(
-      supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("SourceTransactionRecord")}
+    WHERE id = ANY(${uuidArrayParam(supersede.pendingRowIds)}) AND ${notDeleted("SourceTransactionRecord")}
   `,
     "objects",
   );

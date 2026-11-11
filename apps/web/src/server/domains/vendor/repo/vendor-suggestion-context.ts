@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { outer } from "~/server/db/helpers/related";
 import {
   expense,
@@ -172,22 +173,24 @@ export async function loadVendorSuggestionContext(
 /** Full coverage for the evidence breakdown; the AI's bounded sample never supplies these totals. */
 export async function loadVendorCategoryEvidence(
   db: Database | DrizzleTransaction,
-  id: string,
+  ids: readonly string[],
 ) {
+  if (!ids.length) return new Map();
   const rows = await unwrapDb(db).execute(
-    sql`SELECT pc.shortcode AS id,pc.emoji,
+    sql`SELECT p."vendorId" AS "vendorId", pc.shortcode AS id,pc.emoji,
     CASE WHEN pc.id IS NULL THEN NULL ELSE ${categoryMappingSql(sql`pc.id`)}->>'path' END AS name,
     count(*)::int AS "principalLineCount",count(DISTINCT p.id)::int AS "distinctPurchaseCount"
     FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
     LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
     LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND ${notDeleted("pc")}
-    WHERE p."vendorId"=${id} AND ${notDeleted("e")} AND e."lineKind"='principal'
-    GROUP BY pc.id,pc.shortcode,pc.emoji ORDER BY pc.shortcode NULLS LAST`,
+    WHERE p."vendorId"=ANY(${uuidArrayParam(ids)}) AND ${notDeleted("e")} AND e."lineKind"='principal'
+    GROUP BY p."vendorId",pc.id,pc.shortcode,pc.emoji ORDER BY pc.shortcode NULLS LAST`,
     "objects",
   );
   const evidence = z
     .array(
       z.object({
+        vendorId: z.string(),
         id: z.string().nullable(),
         name: z.string().nullable(),
         emoji: z.string().nullable(),
@@ -196,23 +199,32 @@ export async function loadVendorCategoryEvidence(
       }),
     )
     .parse(rows);
-  return {
-    purchasedCategories: evidence.flatMap((group) =>
-      group.id
-        ? [
-            {
-              ...group,
-              id: parseShortcodeFor("productCategory", group.id),
-              name: `${group.name} · ${group.principalLineCount} lines / ${group.distinctPurchaseCount} purchases`,
-            },
-          ]
-        : [],
-    ),
-    principalLineCount: evidence.reduce(
-      (sum, group) => sum + group.principalLineCount,
-      0,
-    ),
-    unknownCategoryLineCount:
-      evidence.find((group) => group.id === null)?.principalLineCount ?? 0,
-  };
+  return new Map(
+    ids.map((id) => {
+      const groups = evidence.filter((group) => group.vendorId === id);
+      return [
+        id,
+        {
+          purchasedCategories: groups.flatMap(
+            ({ vendorId: _vendorId, ...group }) =>
+              group.id
+                ? [
+                    {
+                      ...group,
+                      id: parseShortcodeFor("productCategory", group.id),
+                      name: `${group.name} · ${group.principalLineCount} lines / ${group.distinctPurchaseCount} purchases`,
+                    },
+                  ]
+                : [],
+          ),
+          principalLineCount: groups.reduce(
+            (sum, group) => sum + group.principalLineCount,
+            0,
+          ),
+          unknownCategoryLineCount:
+            groups.find((group) => group.id === null)?.principalLineCount ?? 0,
+        },
+      ] as const;
+    }),
+  );
 }

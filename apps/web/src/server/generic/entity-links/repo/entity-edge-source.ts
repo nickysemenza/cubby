@@ -51,6 +51,8 @@ import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
+import { textArrayParam } from "~/server/db/helpers/query";
 import {
   describeUnresolvableCode,
   isShortcodeEntity,
@@ -244,10 +246,7 @@ const branchSql = (spec: EntityEdgeSpec, filter: EdgeFilter): SQL => {
     conditions.push(sql`s.${ident(spec.column)} = ${filter.id}::uuid`);
   if (filter?.side === "targets")
     conditions.push(
-      sql`s.${ident(spec.column)} IN (${sql.join(
-        filter.ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})`,
+      sql`s.${ident(spec.column)} = ANY(${uuidArrayParam(filter.ids)})`,
     );
   if (filter?.side === "source")
     conditions.push(sql`${sourceId} = ${filter.id}::uuid`);
@@ -563,10 +562,7 @@ export async function readMergeCandidates(
     sql`
     SELECT e."id", e."shortcode", e."createdAt" FROM "Entity" e
     WHERE e."kind" = ${kind} AND ${notDeleted("e")}
-      AND e."shortcode" IN (${sql.join(
-        codes.map((code) => sql`${code}`),
-        sql`, `,
-      )})`,
+      AND e."shortcode" = ANY(${textArrayParam(codes)})`,
     "objects",
   );
   const identities = z

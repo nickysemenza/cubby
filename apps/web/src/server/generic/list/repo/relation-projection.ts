@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   compileTraversal,
   tableFacts,
@@ -38,10 +39,7 @@ export async function loadRelationProjection(
     sql`
     SELECT ${root}."id" AS "sourceId", ${leaf}."id" AS "targetId"
     FROM ${sql.identifier(traversal.rootTable)} ${root} ${traversal.joins}
-    WHERE ${root}."id" IN (${sql.join(
-      ids.map((id) => sql`${id}`),
-      sql`, `,
-    )})
+    WHERE ${root}."id" = ANY(${uuidArrayParam(ids)})
   `,
     "objects",
   );
