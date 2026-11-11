@@ -2995,9 +2995,7 @@ describe("statement Transaction suggestions", () => {
         expect(
           await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
         ).toEqual(before);
-        expect(publication).toHaveBeenCalledTimes(
-          failure === "cancelled" ? 0 : 1,
-        );
+        expect(publication).toHaveBeenCalledTimes(1);
       } finally {
         vi.useRealTimers();
         publication.mockRestore();
