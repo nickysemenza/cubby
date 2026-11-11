@@ -47,7 +47,9 @@ Search existing [GitHub Issues](https://github.com/nickysemenza/cubby/issues)
 before implementation. For matches or backlog changes, follow the
 [issue workflow](docs/agents/issues.md#agent-workflow-with-gh): labels, Status,
 and closing completed or superseded issues in the same change. Issues own
-unfinished work; do not create one for work you are starting immediately.
+unfinished work nobody is taking up now. Create none for work you are starting
+immediately, including a remainder the member is doing next; the PR body or
+done report carries it.
 
 ## Breaking changes
 
