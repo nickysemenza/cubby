@@ -1184,6 +1184,12 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       { name: "Run_parent_started_idx", on: ["parentRunId", "startedAt"] },
       {
+        // Mail import's attempted-revision probes otherwise read every Run input.
+        name: "Run_party_evidenceRevision_idx",
+        on: ["ledgerPartyId", { sql: "({input}->>'evidenceRevision')" }],
+        where: "({input}->>'evidenceRevision') IS NOT NULL",
+      },
+      {
         name: "Run_vendorAccount_started_idx",
         on: ["vendorAccountId", { column: "startedAt", desc: true }],
       },

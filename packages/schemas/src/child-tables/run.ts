@@ -328,6 +328,12 @@ export const runChildren = [
           "{kind} = 'target_outcome' AND ({result}->'mailOutcome') IS NOT NULL",
       },
       {
+        // A sender recheck asks whether a completed claim already holds an Email.
+        name: "RunOperation_claim_email_message_idx",
+        on: [{ sql: "({result} #>> '{email,messageId}')" }],
+        where: "{kind} = 'claim_next_work' AND {state} = 'completed'",
+      },
+      {
         name: "RunOperation_mail_outcome_id_key",
         unique: true,
         on: [{ sql: "({result} #>> '{mailOutcome,id}')" }],

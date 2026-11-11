@@ -73,6 +73,7 @@ import {
   runOperation,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
 import {
   readRetainedMail,
@@ -1007,13 +1008,14 @@ async function mailImportHeldBack(db: Database, ledgerPartyId: LedgerPartyId) {
 /**
  * A Mail import coordinator already read this Email at its checksum with the
  * sender attributed to this Vendor: the mapping is not new evidence for it.
+ * Literal kind and state let a generic plan use the partial claim index.
  */
 const claimedWithSenderVendor = (vendorShortcode: SQL) => sql`EXISTS (
   SELECT 1 FROM "RunOperation" claim
   JOIN "Run" claimer ON claimer.id = claim."runId"
   WHERE claimer."ledgerPartyId" = ${emailTable.ledgerPartyId}
     AND claimer.purpose = ${runPurpose.enum.mail_import} AND ${notDeleted("claimer")}
-    AND claim.kind = ${"claim_next_work"} AND claim.state = ${runStatus.enum.completed}
+    AND claim.kind = 'claim_next_work' AND claim.state = ${sqlEnumConstant(runStatus, runStatus.enum.completed)}
     AND claim.result #>> '{email,mailboxId}' = ${emailTable.mailboxId}
     AND claim.result #>> '{email,messageId}' = ${emailTable.messageId}
     AND claim.result #>> '{email,checksum}' = ${emailTable.checksum}
