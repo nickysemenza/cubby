@@ -1361,6 +1361,58 @@ describe("shared spending booking", () => {
         .sort(),
     ).toEqual([42.5, null]);
   });
+  // Older same-vendor spending blocks only while charge-side capacity can be open.
+  it.each([
+    ["never paid", "ready", { posted: 0, expected: 0, returned: 0 }],
+    [
+      "an expected installment",
+      "review_required",
+      { posted: 10, expected: 30, returned: 0 },
+    ],
+    [
+      "returned principal",
+      "review_required",
+      { posted: 30, expected: 0, returned: 10 },
+    ],
+  ] as const)("older spending %s previews %s", async (_case, status, setup) => {
+    const { account, transaction, vendor, advice } = await fixture();
+    const receipt = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-03-01",
+      statedTotal: 40,
+    });
+    for (const [name, cost] of [
+      ["Synthetic receipt", 40],
+      ["Synthetic return", -setup.returned],
+    ] as const)
+      if (cost)
+        await createRepoIdentity(ctx, "expense", {
+          purchaseId: receipt.output.id,
+          name,
+          cost,
+          trade: "other",
+        });
+    for (const [state, amount] of [
+      ["posted", setup.posted],
+      ["expected", setup.expected],
+    ] as const)
+      if (amount)
+        await createRepoIdentity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: state,
+          amount,
+          transactionDate: "2026-03-01",
+          postedDate: state === "posted" ? "2026-03-01" : null,
+          allocations: [{ purchaseId: receipt.output.id, amount }],
+        });
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status });
+  });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {
     const { account, advice } = await fixture();

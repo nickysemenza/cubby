@@ -12,7 +12,11 @@ import {
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
+import {
+  financialTransactionKind,
+  financialTransactionStatus,
+  type FinancialTransactionSourceRef,
+} from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -926,20 +930,34 @@ const vendorLines = sql`FROM "Expense" e WHERE e."purchaseId" = p.id
   AND ${notDeleted("e")} AND NOT e.future
   AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}`;
 const vendorSpendingExists = sql`EXISTS (SELECT 1 ${vendorLines})`;
-const livePayments = sql`FROM "FinancialTransactionAllocation" paid
-  JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId" AND ${notDeleted("pf")}
-  WHERE paid."purchaseId" = p.id AND ${notDeleted("paid")}`;
+// Positive charges compare with charge-side lines and payments, as in
+// availableCents; returned principal and refund allocations are excluded there.
+const chargeSideLine = sql`(e.cost >= 0 OR e."lineKind" <> ${expenseLineKindSchema.enum.principal})`;
+const chargePayments = sql`FROM "FinancialTransactionAllocation" paid
+  JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId"
+  JOIN "FinancialAccount" pa ON pa.id = pf."accountId"
+  WHERE paid."purchaseId" = p.id AND ${notDeleted("paid")} AND paid."amountMinor" > 0`;
+// Settlement evidence the graph capacity check cannot treat as plain payment.
+const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NOT NULL
+  OR pf.status IN (${financialTransactionStatus.enum.void}, ${financialTransactionStatus.enum.expected})
+  OR pf."ledgerTransferId" IS NOT NULL OR pf."amountMinor" <= 0
+  OR pf.kind NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.fee}, ${financialTransactionKind.enum.refund})
+  OR pf."amountMinor" IS DISTINCT FROM (SELECT sum(coverage."amountMinor")
+    FROM "FinancialTransactionAllocation" coverage
+    WHERE coverage."transactionId" = pf.id AND ${notDeleted("coverage")}))`;
 // Outside the nearby window only partly paid spending blocks creation: an
 // installment plan or payment schedule has a linked payment and an open or
 // unknown balance. Never-paid older Purchases are left to settlement review;
-// loading every one of them per charge exhausts Worker memory. The graph
-// capacity check still decides each Purchase this selects.
+// loading every one of them per charge exhausts Worker memory. This prefilter
+// keeps every unknown or uncertain case; the graph capacity check still
+// decides each Purchase it selects.
 const partlyPaidSpending = sql`(${vendorSpendingExists}
-  AND EXISTS (SELECT 1 ${livePayments}) AND (
+  AND EXISTS (SELECT 1 ${chargePayments}) AND (
   EXISTS (SELECT 1 ${vendorLines} AND (e.cost IS NULL
     OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
-  OR (SELECT round(sum(e.cost) * 100) ${vendorLines})
-    IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${livePayments})))`;
+  OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
+  OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
+    IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${chargePayments})))`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
