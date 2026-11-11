@@ -27,6 +27,8 @@ charges then take precedence over discounted-rate estimates, which override
 nominal SDK estimates. Published prompt-cache rates are part of the standard
 comparison.
 Standard comparisons prefer the captured models.dev registry on every AI path.
+A call OpenAI served at the `flex` service tier records that tier's published
+rates, half of each standard rate, as its standard comparison and snapshot.
 An unavailable registry may retain a caller or SDK comparison with its explicit
 pricing source. Provider-reported amounts remain distinguishable from
 usage-based estimates.
@@ -94,6 +96,18 @@ only the displayed call list, not the subtotal. Missing usage on any attempt or
 an external processor makes coverage incomplete; device-completed work proves
 zero charge but does not invent a standard-cost comparison. Reads never call a
 model or count budget reservations as spend.
+
+Household usage summaries group by day, feature, provider, model, operation
+and transport; `groupBy: "job"` also splits by job and is for short windows.
+Each summary row splits its standard cost into input, cache write, cache read
+and output by multiplying the row's tokens (or a cache replay's avoided tokens)
+by the rates in that row's own pricing snapshot. A row without a snapshot is
+not split; its standard cost is reported as `unsplitCost`.
+
+A Mail import coordinator turn, and each escalated question
+(`agent.escalation`), records the Email its latest claim returned as the row's
+`entity` (`email`), so cost per Email, and through the Email's accepted
+sources per Purchase, Vendor or outcome, reads from `entityKind`/`entityId`.
 
 `AiUsage.runId` names the member or agent session that spent the call. Automatic
 work and a member's one-off AI action (a suggestion, preview, recipe flow) have no

@@ -22,7 +22,6 @@ import {
   assertImageLeaseHeld,
   claimImageProcessingJob,
   completeImageProcessingJob,
-  SERVER_FAILURE_RETRYABLE,
 } from "~/server/domains/image-processing/repo/image-processing";
 import {
   assignImageProcessingExecutor,
@@ -36,7 +35,7 @@ import { withJobFence } from "~/server/workflows/runs/execution";
 
 import { completeCloudImageDescription } from "./cloud-description";
 import { completeCloudImageIdentification } from "./cloud-identification";
-import { safeImageProcessingError } from "./safe-error";
+import { cloudFailureRetryable, safeImageProcessingError } from "./safe-error";
 
 export type CloudImageDispatchOptions = {
   /** External storage/provider boundary; adoption still uses the real job ledger. */
@@ -159,7 +158,7 @@ export async function dispatchImageProcessingWakeup(
           outcome: {
             kind: claimed.kind,
             status: "failed",
-            retryable: SERVER_FAILURE_RETRYABLE,
+            retryable: cloudFailureRetryable(error),
             reason: safeImageProcessingError(error),
           },
         },

@@ -373,14 +373,20 @@ export function runServicesFor(
     },
 
     recordAgentUsage: (input) => {
-      const event = agentUsageEvent.parse(input);
+      const { source, ...event } = agentUsageEvent.parse(input);
       return withDatabase(async (db) => {
-        const [{ recordAiUsage }, { runEntityId }] = await Promise.all([
-          import("~/server/ai/usage"),
-          import("@cubby/schemas/identifiers"),
-        ]);
+        const [{ recordAiUsage }, { runEntityId }, { readRunEmailId }] =
+          await Promise.all([
+            import("~/server/ai/usage"),
+            import("@cubby/schemas/identifiers"),
+            import("~/server/domains/purchase-import/repo/gmail/persistence"),
+          ]);
+        const emailId = source
+          ? await readRunEmailId(db, { runId, ...source })
+          : null;
         await recordAiUsage(db, {
           ...event,
+          entity: emailId ? { entityKind: "email", entityId: emailId } : null,
           eventId: await sha256Uuid(`purchase-agent:${runId}:${event.eventId}`),
           runId: runEntityId.parse(runId),
           // Prompt-cache traffic is token evidence, not a caller cache.

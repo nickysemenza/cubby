@@ -115,7 +115,8 @@ async function mailRunTargets(
 
 /**
  * A transiently failed Mail import retries its unsettled Emails as one
- * successor on the escalation coordinator model. Only Emails this Run still
+ * successor on the primary coordinator model; stronger models answer only
+ * escalated questions (`escalation.ts`). Only Emails this Run still
  * owns with unchanged evidence and an admission attempt left at that checksum
  * move (`MAIL_IMPORT_ATTEMPTS_PER_REVISION`, three in total); settled ones
  * stay. Null when nothing is left to retry.
@@ -166,7 +167,7 @@ async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
       ),
     }),
     dispatchEventId,
-    coordinatorModel: manifest.escalationModel ?? manifest.model,
+    coordinatorModel: manifest.model,
     skillRevision: locked.skillRevision,
     runtimeRevision: locked.runtimeRevision,
     decisionRevision: locked.decisionRevision + 1,

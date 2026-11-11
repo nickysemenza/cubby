@@ -615,7 +615,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     items: await listRecentAiUsage(context.db, input),
   }),
   usageSummary: async (context, input) => ({
-    items: await summarizeAiUsage(context.db, input.days),
+    items: await summarizeAiUsage(context.db, input.days, input.groupBy),
   }),
 });
 

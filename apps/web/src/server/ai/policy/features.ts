@@ -12,7 +12,9 @@
  * `model` is DERIVED from `tier` ({@link MODEL_FOR_TIER}): retiering a
  * feature moves its model, and swapping a tier's model moves every feature on
  * it. The AiAnalysis fingerprint and cache key read `model` off the record,
- * so both follow automatically.
+ * so both follow automatically. A chat feature's tier is its ceiling: the
+ * runner answers on the fast tier first and spends each stronger tier once,
+ * only on an unusable or invalid answer (ADR 0027).
  */
 import {
   type AiSelectionResult,
@@ -183,7 +185,7 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   prompt: mailTriagePrompt,
   feature: "mailbox-triage",
-  promptVersion: "2026-11-09.1",
+  promptVersion: "2026-11-11.1",
   cache: true,
   tier: "decision",
   collectPayload: false,
@@ -389,11 +391,8 @@ export const PURCHASE_LINE_DECISIONS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Chat tiers. Quality — GPT-6 Sol: purchase evidence (extraction, receipts,
-// mail classification, audit, repair), recipe flow, and photo identity and
-// detection. Fast — GPT-6 Luna: oversized selection and bulk descriptions.
-// Production reaches OpenAI through the household's ChatGPT plan, where Sol's
-// marginal cost is about zero (`docs/infrastructure.md`).
+// Chat tiers (ADR 0027). Each declared tier is a ceiling: answers start on the
+// fast tier and a stronger tier answers only an unusable or invalid one.
 // ---------------------------------------------------------------------------
 
 /**
@@ -460,16 +459,15 @@ const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * Quality tier since 2026-10-06, when Sol was judged the better model.
- * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
- * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
- * the cost. Its schema carries no array bounds; a failed audit surfaces
- * instead of retrying on another model.
+ * Fast tier at high effort: `eval:features` found Luna at high effort matched
+ * Sol high 12/16 with zero unsafe answers on both, at about 1/19 of the cost.
+ * Its schema carries no array bounds; a failed audit surfaces instead of
+ * retrying on another model.
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   request: purchaseAuditPrompt,
   feature: "purchase-import-audit",
-  tier: "quality",
+  tier: "fast",
   maxTokens: 8_000,
   effort: "high",
   cache: true,

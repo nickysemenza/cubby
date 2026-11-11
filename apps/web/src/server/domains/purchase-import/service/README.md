@@ -281,16 +281,19 @@ generation. `mail_resolve` and `shipments.record` publish their complete input
 schemas to the coordinator; other compact actions keep `describe`.
 
 **Escalation.** Stronger-model escalation is explicitly requested with a
-blocker category. Missing evidence, member decisions, held sources and
-transient failures do not escalate. An unresolved disposition or refused
-preparation does not automatically spend a stronger-model turn; repairable
-extraction, identity, contradictory evidence or an unclassified reasoning gap
-may request one. Its durable per-Email decision survives re-claims and
-coordinator recovery. Escalation moves the coordinator from the `fast` to the
-`standard` tier ([ADR 0027](../../../../../../../docs/adr/0027-tier-routed-models-on-a-funding-first-ladder.md)).
-A background Run whose free sources are all refused or spent lets the primary
-settle the Email rather than escalate onto paid funding. A receipt naming a
-retired model resumes on the current one.
+blocker category and one question. Missing evidence, member decisions, held
+sources and transient failures do not escalate. An unresolved disposition or
+refused preparation does not automatically spend a stronger-model turn;
+repairable extraction, identity, contradictory evidence or an unclassified
+reasoning gap may ask. The host asks the `standard` tier, then the `quality`
+tier, one question each per Email, with the compact Email and the
+coordinator's stated facts, outside the conversation; the `fast` coordinator
+keeps the Email, its cache and every write
+([ADR 0027](../../../../../../../docs/adr/0027-tier-routed-models-on-a-funding-first-ladder.md)).
+Spent questions survive re-claims and coordinator recovery, and each answer's
+usage records operation `agent.escalation`. A background Run whose free sources
+are all refused or spent lets the primary settle the Email rather than
+escalate onto paid funding.
 
 **Extraction budgets.** The RunOperation ledger owns claim-evidence extraction
 budgets across Runs: two primary submissions (initial plus repair) and one
@@ -333,6 +336,8 @@ totals, lines and payments; the tool checks their coverage and occurrence in
 the current complete compact original before preparation. Excerpts establish
 traceability; the writers still own money and identity validation. It
 generates stable IDs and runs the prepare/commit tools as durable nested calls.
+Its model-facing `extraction` is one candidate beside `status`, `reason` and
+`detail` (`importExtractionAgentInput`), parsed into the stored outcome union.
 Newly discovered Product candidates return the preparation for review instead
 of creating a possible duplicate. Incomplete source views and complex originals
 keep the exception path. After a known, non-conflicting publication, the same
@@ -341,7 +346,9 @@ does not spend a separate turn on that claim. Unknown writes and conflicts do
 not advance.
 
 **Claims.** A Mail import claim (`operations/mail-import-claim.ts`) returns
-the claimed Email's compact read (`readMail`, bounded by `fitMailRead`).
+the claimed Email's compact read (`readMail`, bounded by `fitMailRead`, which
+also drops a snippet or preheader the body page already begins with). Tracking
+pixels and click-tracking redirect images are not listed in `images`.
 Coordinator claims also include up to 20 Product candidates from exact printed
 ASIN-shaped link identifiers under the verified sender's registered issuer, and
 live Products recorded on up to 5 matching own-account Purchases at that
@@ -466,7 +473,7 @@ tool result the coordinator recorded (`run-agent.ts` `recordFailure`):
 - a funding stop pauses;
 - `agent_transient` (including Pi's `stale`, `reset`, `restart_limit` and
   `interrupted` stops) retries in `markRunFailed` as one successor
-  (`cause: retry`, escalation coordinator model) taking only the Run's held
+  (`cause: retry`, the primary coordinator model) taking only the Run's held
   unsettled Emails with an attempt left;
 - `agent_failed` (including any explicit 401/403) never retries.
 
@@ -549,8 +556,9 @@ and system messages, and the latest `claim_next_import_work` onward, because
 each Email is independent and durable records carry what earlier ones settled.
 The stored transcript keeps every Email for the Run page. Each Anthropic
 request marks a cache breakpoint at the end of that kept prefix, and each
-OpenAI request keys `prompt_cache_key` to the Run (`withWorkItemCaching`), so
-the prefix can be read from cache on each Email. Shared instructions precede
+OpenAI request keys `prompt_cache_key` to the coordinator purpose
+(`withWorkItemCaching`), so every Run reads the shared prefix from cache on each
+Email. Unattended coordinators request OpenAI's `flex` service tier. Shared instructions precede
 dynamic context. The ChatGPT plan transport places the tool block before the
 conversation so the plan's prefix cache covers it
 ([runbook](../../../../../../../docs/runbooks/chatgpt-plan.md)).

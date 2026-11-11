@@ -14,6 +14,7 @@
  */
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
+  parseEntityId,
   parseShortcodeFor,
   runEntityId,
   type ShortcodeFor,
@@ -44,6 +45,7 @@ import {
   shipmentSourceCapture,
   vendorAccount,
 } from "~/server/db/schema";
+import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { readMailAttemptRecovery } from "~/server/domains/purchase-import/repo/mail-attempts";
 import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
@@ -213,6 +215,57 @@ const OBSERVED_KIND = {
  * live Purchase holds creates that order's empty Purchase and links to it in
  * one transaction (`createNoticePurchase`); the confirmation later itemizes it.
  */
+/**
+ * A lifecycle notice already associated with exactly one live Purchase settles
+ * as that link without a coordinator, which would only repeat it. Package
+ * references still need the coordinator's extraction.
+ */
+async function settleExistingLink(
+  db: Database,
+  input: {
+    source: MailRunSource;
+    ref: { mailboxId: string; messageId: string; checksum: string };
+    subject: string | null;
+    text: string;
+    tracked: boolean;
+    actor: ActorContext;
+  },
+) {
+  if (input.tracked) return false;
+  const event = mailLifecycleEvent(input.subject, input.text);
+  if (!event) return false;
+  const live = (
+    await readEmailPurchaseAssociations(
+      db,
+      parseEntityId("email", input.source.email.id),
+    )
+  ).filter((association) => !association.purchaseDeleted);
+  const [only] = live;
+  if (!only || live.length > 1) return false;
+  try {
+    await resolveMail(
+      db,
+      {
+        ...input.ref,
+        disposition: {
+          kind: "linked",
+          purchaseIds: [parseShortcodeFor("purchase", only.shortcode)],
+          event,
+        },
+      },
+      input.actor,
+      undefined,
+      undefined,
+      { revision: MAIL_IMPORT_RULE_REVISION },
+    );
+  } catch (error) {
+    // SILENT: a refusal the coordinator would also get hands it the Email instead.
+    if (error instanceof AppError) return false;
+    throw error;
+  }
+  return true;
+}
+
 async function linkByExactEvidence(
   db: Database,
   input: {
@@ -621,6 +674,18 @@ async function settleByRule(
     }),
   });
   if (decision.kind === "coordinator") {
+    if (
+      retainedAttachments === 0 &&
+      (await settleExistingLink(db, {
+        source,
+        ref,
+        subject: mail.subject,
+        text,
+        tracked: keys.trackingKeys.length > 0,
+        actor,
+      }))
+    )
+      return "settled";
     // Before spending a coordinator, an exact and unambiguous link settles a
     // lifecycle notice of a Purchase Cubby already holds.
     if (

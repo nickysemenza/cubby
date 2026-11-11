@@ -34,11 +34,6 @@ lines were purchased. Exclude any line explicitly listed for return even when
 the same order has a real charge for retained items. Treat duplicate saved pages
 for one stable order id as one source observation, not two orders.
 
-On a retailer product page, a generic product-details identifier can differ
-from the selected variant's order-line link. Preserve the exact line URL and
-selected color/size; do not replace that line's identifier with a different
-identifier found in generic page prose.
-
 For a saved confirmation, extract only its explicitly assigned order. A generic
 subject is not itemization. Exclude recommendations, upsells and promotional
 sections even when they show item prices. A savings banner is not an additional

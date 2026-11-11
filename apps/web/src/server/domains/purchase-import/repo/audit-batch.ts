@@ -17,7 +17,8 @@ import {
 /**
  * A successor also audits matching unaudited predecessor writes. Stop at an
  * audited boundary and never cross owner, actor, account, vendor or purpose;
- * distinct Purchase ids keep repeated writes and retry chains neutral.
+ * distinct Purchase ids keep repeated writes and retry chains neutral. Only
+ * writes the agent made by judgment are rendered; a Run with none audits nothing.
  */
 export async function loadPurchaseAuditBatch(
   db: Database,
@@ -60,6 +61,9 @@ export async function loadPurchaseAuditBatch(
           ) SELECT "id" FROM audit_runs)`,
         ),
         eq(auditLog.entityKind, "purchase"),
+        // Judgment writes only: rule-settled writes are "system"; replayed
+        // commits record no Purchase write.
+        eq(auditLog.channel, "mcp"),
       ),
     )
     .orderBy(asc(purchase.id))

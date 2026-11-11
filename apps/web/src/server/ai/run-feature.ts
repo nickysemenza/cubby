@@ -302,6 +302,8 @@ export function planStructuredRun<T = unknown>(
         ? cachedCall({ metadata, force: ctx.force })
         : { metadata, skipCache: true }),
       collectPayload: spec.collectPayload,
+      // No member waits on automatic work, so it takes the half-price tier.
+      flex: !ctx.interactive,
       subscriptionRequired: ctx.subscriptionRequired,
       subscriptionFallback: ctx.subscriptionFallback,
       beforePaidRequest: withAiBudget(
@@ -1032,6 +1034,11 @@ export async function runStructuredFeature<T>(
       // window. Failing would release the Run's Emails to a pass that fails too.
       if (ctx.db && paidFundingRefusal(failure.message))
         throw await paidFundingStop(ctx.db, ctx.runId, failure.message);
+      if (
+        error instanceof z.ZodError ||
+        getErrorMessage(error).startsWith("Expected a forced")
+      )
+        unusableAnswers.add(failure);
       throw failure;
     }
   };
@@ -1071,38 +1078,73 @@ export async function runStructuredFeature<T>(
       ),
     compute: async (applicationCacheStatus, recordUsage) => {
       const callContext = { ...ctx, applicationCacheStatus };
-      const firstResult = await placeCall(
-        media.sent,
-        planStructuredRun(spec, callContext),
-        callContext,
-        recordUsage,
-      );
-      if (!ctx.validate) return firstResult;
-      const firstValidation = ctx.validate(firstResult.value);
-      if (firstValidation.ok) return firstResult;
-      const repairRequest: AiChatRequest = {
-        systemPrompts: media.sent.systemPrompts,
-        messages: [
-          ...media.sent.messages,
-          buildRepairTurn(firstValidation.issues, firstResult.value),
-        ],
-      };
-      const repairCallContext = { ...callContext, force: true };
-      const repairedResult = await placeCall(
-        repairRequest,
-        planStructuredRun(spec, repairCallContext),
-        repairCallContext,
-        recordUsage,
-      );
-      const repairValidation = ctx.validate(repairedResult.value);
-      if (repairValidation.ok) return repairedResult;
-      throw new Error(
-        `Structured output for "${spec.feature}" is invalid after one repair attempt: ${repairValidation.issues.join("; ")}`,
-      );
+      // Fast first; each stronger tier up to the declared one answers once,
+      // only after an unusable or invalid answer (ADR 0027).
+      const ladder = escalationLadder(spec, Boolean(ctx.validate));
+      let issues: { list: string[]; value: unknown } | undefined;
+      for (const [index, tier] of ladder.entries()) {
+        const last = index === ladder.length - 1;
+        const attempt =
+          tier === spec.tier
+            ? spec
+            : { ...spec, tier, model: MODEL_FOR_TIER[tier] };
+        const attemptContext =
+          index === 0 ? callContext : { ...callContext, force: true };
+        let result: Answered<T>;
+        try {
+          result = await placeCall(
+            issues
+              ? {
+                  systemPrompts: media.sent.systemPrompts,
+                  messages: [
+                    ...media.sent.messages,
+                    buildRepairTurn(issues.list, issues.value),
+                  ],
+                }
+              : media.sent,
+            planStructuredRun(attempt, attemptContext),
+            attemptContext,
+            recordUsage,
+          );
+        } catch (error) {
+          if (last || !(error instanceof Error) || !unusableAnswers.has(error))
+            throw error;
+          continue;
+        }
+        if (!ctx.validate) return result;
+        const validation = ctx.validate(result.value);
+        if (validation.ok) return result;
+        if (last)
+          throw new Error(
+            `Structured output for "${spec.feature}" is invalid after ${ladder.length} attempts: ${validation.issues.join("; ")}`,
+          );
+        issues = { list: validation.issues, value: result.value };
+      }
+      throw new Error(`No model tier answered "${spec.feature}"`);
     },
   });
   ctx.onAnswered?.(answer.model);
   return answer.value;
+}
+
+/** Failed answers a stronger tier may repair: no forced call, or schema-invalid. */
+const unusableAnswers = new WeakSet<object>();
+
+const ESCALATION_TIERS = ["fast", "standard", "quality"] as const;
+
+/**
+ * The tiers one structured call may use, cheapest first, up to its declared
+ * tier. A pinned model (an evaluation comparing models) answers alone, and a
+ * declared model of a single tier keeps one attempt plus its own repair.
+ */
+function escalationLadder(
+  spec: Pick<AiChatFeature, "tier" | "model">,
+  repairable: boolean,
+): AiChatFeature["tier"][] {
+  const top = ESCALATION_TIERS.findIndex((tier) => tier === spec.tier);
+  const single = repairable ? [spec.tier, spec.tier] : [spec.tier];
+  if (top < 1 || spec.model !== MODEL_FOR_TIER[spec.tier]) return single;
+  return ESCALATION_TIERS.slice(0, top + 1);
 }
 
 /** What an embedding call reports while its request is in flight. */

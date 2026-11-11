@@ -27,6 +27,7 @@ import {
 } from "@cubby/shared/ai/funding-refusal";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import {
+  QUALITY_MODEL,
   storedChatModelSchema,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
@@ -36,7 +37,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { createModels } from "@earendil-works/pi-ai/models";
+import { createModels, type MutableModels } from "@earendil-works/pi-ai/models";
 import {
   createRegistry,
   defineExtension,
@@ -80,13 +81,18 @@ import {
   coordinatorEscalation,
   coordinatorModelsFor,
   type CoordinatorEscalation,
+  type EscalationRequest,
 } from "./escalation";
 import {
   importExtractedOrderTool,
   extractedOrderInput,
 } from "./import-order-tool";
 import { workflowForRun } from "./import-run-workflows";
-import { mailAttempts, isMailExtractionCall } from "./mail-attempts";
+import {
+  CURRENT_MAIL_SOURCE_KEY,
+  isMailExtractionCall,
+  mailAttempts,
+} from "./mail-attempts";
 import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
@@ -103,7 +109,7 @@ const context = BACKGROUND_CONTEXT;
 const runIdentity = z.object({
   runId: z.uuid(),
   purpose: agentImportRunPurpose,
-  /** The Run's recorded coordinator model; a transient retry records its escalation model. */
+  /** The Run's recorded coordinator model. */
   model: storedChatModelSchema.optional(),
 });
 type RunIdentity = z.infer<typeof runIdentity>;
@@ -128,6 +134,9 @@ const assistantPartial = z.custom<AssistantMessage>(
 // SAFETY: an empty environment; the SDK finds no binding in it, which is
 // the intent, and nothing in this module reads `this.env`.
 const NO_BINDINGS = Object.freeze({}) as Cloudflare.Env;
+
+/** One escalated question: the stronger model answers, the coordinator acts. */
+const ESCALATION_QUESTION_PROMPT = `You answer one question for a Mail import agent that is settling the Email below into household purchase records. Use only the Email and the facts given. Quote the exact Email text for identifiers, dates, amounts and item names you rely on. If the Email cannot answer the question, say so and name the missing evidence. Answer briefly; the agent makes every write.`;
 
 /**
  * Model requests one Mail source may consume in a Run before it settles
@@ -168,6 +177,10 @@ export class PurchaseImportRunAgent
   private installed: string | undefined;
   /** The installed Run's per-Email escalation; set with its extensions. */
   private escalation: CoordinatorEscalation | undefined;
+  /** The installed Run's coordinator model; set with its extensions. */
+  private primaryModel: SupportedChatModel | undefined;
+  /** The funded providers pi requests through; set when pi opens. */
+  private piModels: MutableModels | undefined;
   private requestStartedAt = 0;
   /** What carried the current model request; the coordinator runs one at a time. */
   private requestTransport: AiUsageTransport = "unknown";
@@ -323,13 +336,19 @@ export class PurchaseImportRunAgent
 
   private async openPi({ storage, context: open, onWake }: PiHarnessContext) {
     const models = createModels();
+    this.piModels = models;
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
       // A harness override measures its named models, never tier substitutes.
       pinnedModel: this.agentEnv.coordinatorModels !== undefined,
-      cacheKey: () => this.identity()?.runId,
+      // Every Run of a purpose sends the same instructions and tools first, so
+      // a shared key lets a new Run read that prefix instead of writing it.
+      cacheKey: () => {
+        const purpose = this.identity()?.purpose;
+        return purpose ? `cubby-coordinator:${purpose}` : undefined;
+      },
       onFundingRefusal: async (message, { local }) => {
         // The usage row records the refusal text in `failure`; Cubby's own
         // refusal made no provider call and records nothing.
@@ -397,15 +416,6 @@ export class PurchaseImportRunAgent
         : manifest,
       this.agentEnv.coordinatorModels,
     );
-    const escalation = coordinatorEscalation({
-      models,
-      store: {
-        read: (key) => this.readState(key),
-        write: (key, value) => this.writeState(key, value),
-      },
-      useModel: (model) => this.useModel(model),
-      unavailable: () => this.services().escalationUnavailable(),
-    });
     const attempts =
       purpose === "mail_import"
         ? mailAttempts({
@@ -413,6 +423,22 @@ export class PurchaseImportRunAgent
             write: (key, value) => this.writeState(key, value),
           })
         : undefined;
+    const escalation = coordinatorEscalation({
+      models,
+      store: {
+        read: (key) => this.readState(key),
+        write: (key, value) => this.writeState(key, value),
+      },
+      // A harness override measures only its named escalation model.
+      ladder: models.escalation
+        ? this.agentEnv.coordinatorModels
+          ? [models.escalation]
+          : [models.escalation, QUALITY_MODEL]
+        : [],
+      ask: (model, request) =>
+        this.askEscalation(model, request, attempts?.ordinaryEvidence()?.text),
+      unavailable: () => this.services().escalationUnavailable(),
+    });
     const reserveExtraction = async (
       call: Pick<
         import("@earendil-works/pi-ai").ToolCall,
@@ -480,10 +506,7 @@ export class PurchaseImportRunAgent
             "This extraction names a different Email or checksum. Claim its current evidence before extracting; no attempt was charged.",
         };
       this.writeState(`mail-attempt-source:${call.id}`, JSON.stringify(source));
-      const stage =
-        escalation.active && escalation.model() !== models.primary
-          ? "escalation"
-          : "primary";
+      const stage = escalation.escalated() ? "escalation" : "primary";
       const identity = await extractionIdentity(call);
       const proposal =
         call.name === EXTRACT_ORDER_TOOL
@@ -530,6 +553,7 @@ export class PurchaseImportRunAgent
       };
     };
     this.escalation = escalation;
+    this.primaryModel = models.primary;
     const workflow = workflowForRun(purpose, runId, {
       escalation: escalation.active,
     });
@@ -613,11 +637,9 @@ export class PurchaseImportRunAgent
                           identity: await extractionIdentity(call),
                           invocation: call.id,
                           publicationPossible: validExtraction(call),
-                          stage:
-                            escalation.active &&
-                            escalation.model() !== models.primary
-                              ? "escalation"
-                              : "primary",
+                          stage: escalation.escalated()
+                            ? "escalation"
+                            : "primary",
                           action,
                         });
                       }
@@ -833,13 +855,22 @@ export class PurchaseImportRunAgent
         responseKey,
         JSON.stringify(breakdown),
       );
+    await this.recordUsage(message, "agent.generation");
+  }
+
+  private async recordUsage(
+    message: AssistantMessage,
+    operation: "agent.generation" | "agent.escalation",
+  ) {
+    const responseKey = message.responseId ?? `t:${message.timestamp}`;
     try {
       await this.services().recordAgentUsage({
         eventId: `model-turn:${responseKey}`,
         provider: message.provider,
         model: message.model,
         feature: "purchase_import_agent",
-        operation: "agent.generation",
+        operation,
+        source: this.currentMailSource(),
         attempt: 1,
         ...piTokenUsage(message),
         durationMs: Math.max(0, Date.now() - this.requestStartedAt),
@@ -857,6 +888,19 @@ export class PurchaseImportRunAgent
       // Usage accounting never fails the coordinator's turn.
       this.report(error);
     }
+  }
+
+  /** The Email the latest claim returned, for attributing model usage. */
+  private currentMailSource() {
+    const raw = this.readState(CURRENT_MAIL_SOURCE_KEY);
+    const source = z
+      .object({
+        source: z.object({ mailboxId: z.string(), messageId: z.string() }),
+      })
+      .safeParse(raw ? JSON.parse(raw) : undefined).data?.source;
+    return source
+      ? { mailboxId: source.mailboxId, messageId: source.messageId }
+      : undefined;
   }
 
   /** Durable and bound to the latest submission, like the funding stop. */
@@ -947,8 +991,10 @@ export class PurchaseImportRunAgent
     const root = await (await this.harness.pi()).root(context);
     await root.configure(
       {
-        // A resumed Run keeps an escalated Email on its escalation model.
-        model: cubbyAgentModel(escalation.model(), this.agentEnv.fixedModel),
+        model: cubbyAgentModel(
+          this.primaryModel ?? manifest.model,
+          this.agentEnv.fixedModel,
+        ),
         thinkingLevel: manifest.effort,
         instructions: workflowForRun(identity.purpose, identity.runId, {
           escalation: escalation.active,
@@ -958,13 +1004,53 @@ export class PurchaseImportRunAgent
     );
   }
 
-  /** The model of the conversation's next request (`escalation.ts`). */
-  private async useModel(model: SupportedChatModel): Promise<void> {
-    const root = await (await this.harness.pi()).root(context);
-    await root.configure(
-      { model: cubbyAgentModel(model, this.agentEnv.fixedModel) },
-      context,
+  /**
+   * One escalated question to a stronger model, outside the conversation: the
+   * coordinator keeps its model, cache and writes (`escalation.ts`).
+   */
+  private async askEscalation(
+    model: SupportedChatModel,
+    request: EscalationRequest,
+    evidence: string | undefined,
+  ): Promise<{ text: string } | { refused: string }> {
+    const target = cubbyAgentModel(model, this.agentEnv.fixedModel);
+    const resolved = this.piModels?.getModel(target.provider, target.modelId);
+    if (!resolved)
+      return { refused: `Escalation model ${model} is unavailable` };
+    this.requestStartedAt = Date.now();
+    this.requestTransport = "unknown";
+    this.requestGateway = undefined;
+    const message = await this.piModels!.completeSimple(
+      resolved,
+      {
+        systemPrompt: ESCALATION_QUESTION_PROMPT,
+        messages: [
+          {
+            role: "user",
+            timestamp: Date.now(),
+            content: [
+              `Email:\n${evidence ?? "(The compact Email text is incomplete or has attachments; rely on the facts.)"}`,
+              `Facts the agent established:\n${request.facts ?? "(none)"}`,
+              `Question (${request.category}): ${request.question}`,
+            ].join("\n\n"),
+          },
+        ],
+      },
+      { reasoning: "medium" },
     );
+    // The question's context breakdown is not a coordinator turn's.
+    await this.recorder.settled();
+    this.recorder.take(CONTEXT_SCOPE);
+    await this.recordUsage(message, "agent.escalation");
+    if (message.stopReason === "error")
+      return { refused: message.errorMessage || "model error without text" };
+    const text = message.content
+      .flatMap((part) => (part.type === "text" ? [part.text] : []))
+      .join("\n")
+      .trim();
+    return text
+      ? { text }
+      : { refused: "The escalation model returned no text" };
   }
 
   async onRequest(request: Request): Promise<Response> {

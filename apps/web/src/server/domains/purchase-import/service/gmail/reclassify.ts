@@ -35,6 +35,7 @@ import {
   startPreparedReclassifyRuns,
   startReclassifyRun,
 } from "../../repo/gmail/reclassify-state";
+import { readSenderHistory } from "../../repo/gmail/sender-history";
 import {
   extractEmailCandidatePreview,
   type EmailCandidateChoice,
@@ -195,6 +196,12 @@ export async function previewMailTriage(
       message,
       normalized,
       triage,
+      undefined,
+      (address) =>
+        readSenderHistory(db, {
+          ledgerPartyId: email.ledgerPartyId,
+          address,
+        }),
     );
     let relevance: MailTriagePreviewOut["relevance"] = null;
     let relevanceModel: string | null = null;

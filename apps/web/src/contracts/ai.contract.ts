@@ -199,7 +199,7 @@ export const aiContract = defineContract(
       exposure: "capability",
       note: "AI spend telemetry",
       description:
-        "Summarize AI usage and cost over the requested filters and time window. Use usage_recent to inspect individual calls.",
+        "Summarize AI usage and cost over the requested time window by day, feature, provider, model, operation and transport, with standard cost split by token class from each call's stored rates. groupBy=job also splits by job and is too large for long windows. Use usage_recent to inspect individual calls.",
       input: aiUsageSummaryInput,
       output: aiUsageSummaryOut,
       cache: { tags: [["ai", "usage"]] },

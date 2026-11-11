@@ -72,9 +72,6 @@ const MAIL_IMPORT_MCP_ACTIONS = [
   "entity_read.get",
   "entity_read.list",
   "entity_read.resolve",
-  "search_read.global",
-  "product_enrichment_read.external_id_collisions",
-  "finance.converge",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 const PHOTO_MCP_ACTIONS = [
@@ -142,6 +139,19 @@ export type ImportRunAgentConfig = {
    * kind and input.
    */
   entityRead?: EntityReadView;
+  /**
+   * Parts of the advertised inputs this purpose's workflow never submits,
+   * dropped from the agent's copy of every mounted schema. Server validation
+   * still accepts the full input.
+   */
+  inputView?: InputView;
+};
+
+export type InputView = {
+  /** Discriminator `kind` value → the properties its branch no longer advertises. */
+  omitProperties: Readonly<Record<string, readonly string[]>>;
+  /** Union branches with these `kind` values are not advertised. */
+  omitKinds: readonly string[];
 };
 
 export type EntityReadView = {
@@ -184,6 +194,16 @@ const MAIL_IMPORT_ENTITY_READ = {
   omit: ["groupBy", "nesting"],
 } as const satisfies EntityReadView;
 
+/**
+ * Packages go through `shipments.record` from Email sources only, and a
+ * refund settlement, a financial association or an admission path is a
+ * member's call, so Mail import's copy of those inputs omits them.
+ */
+const MAIL_IMPORT_INPUT_VIEW = {
+  omitProperties: { linked: ["shipments", "settlement", "via"] },
+  omitKinds: ["financial", "tracking_page", "sms_export"],
+} as const satisfies InputView;
+
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
 export const importRunAgentManifest = {
   photo_inventory: {
@@ -208,6 +228,7 @@ export const importRunAgentManifest = {
     mcpInputActions: ["purchase_import.mail_resolve", "shipments.record"],
     workItemContext: "current",
     entityRead: MAIL_IMPORT_ENTITY_READ,
+    inputView: MAIL_IMPORT_INPUT_VIEW,
     delegatedRunIdentity: true,
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;

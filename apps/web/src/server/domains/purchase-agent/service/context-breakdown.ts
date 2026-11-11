@@ -43,6 +43,7 @@ const responsesItem = z.looseObject({
   role: optionalName,
   call_id: optionalName,
   name: optionalName,
+  tools,
 });
 const responsesRequest = z.looseObject({
   model: optionalName,
@@ -164,7 +165,11 @@ function measureResponses(body: ResponsesRequest) {
     }
   }
   for (const item of body.input) {
-    if (item.role === "system" || item.role === "developer") {
+    // The ChatGPT plan transport sends tool schemas as one developer item in
+    // `input` rather than `tools`.
+    if (item.type === "additional_tools") {
+      measureTools(sections, item.tools);
+    } else if (item.role === "system" || item.role === "developer") {
       sections.instructions += size(item);
     } else if (isToolOutput(item)) {
       addToolResult(

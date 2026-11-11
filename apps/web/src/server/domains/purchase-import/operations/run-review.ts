@@ -617,7 +617,7 @@ export async function auditImportBatch(
   };
 }
 
-/** Server-side finalization guard: every run mutation is audited in pages of 25. */
+/** Server-side finalization guard: every judgment write is audited in pages of 25. */
 export async function auditAllImportBatches(
   db: Database,
   input: { runId: RunId; operationId: string; allowPaused?: boolean },

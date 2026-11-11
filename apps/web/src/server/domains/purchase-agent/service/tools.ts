@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 
 import type { RunServices } from "./environment";
+import { claimImportTool } from "./mail-attempts";
 import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
 
 const toolInputs = photoInventoryToolInputs;
@@ -168,7 +169,7 @@ export function runAgentTools(
   return [
     tool("escalate_import_work", {
       description:
-        "Classify the current Email blocker and request stronger reasoning only for extraction, identity, contradictions or an unclassified reasoning gap. Missing evidence, member decisions, held sources and transient failures are refused without escalation. A refusal that names its next step is not a reason: take that step. That model continues this Email; claiming another Email returns to you. Returns escalated: false when this Email is already escalated, or with `unavailable` (the reason) when the escalation model cannot be funded now: settle it yourself.",
+        "Ask a stronger model one question about the current Email, only for extraction, identity, contradictions or an unclassified reasoning gap. It reads the Email and your facts and returns `answer`; you keep working this Email and make every write yourself. Each Email may ask twice (a second, stronger model answers the second). Missing evidence, member decisions, held sources and transient failures are refused. Returns answered: false with `unavailable` (the reason) when no question remains or none can be funded now: settle the Email yourself.",
       execute: async (args, api, context) => {
         if (!escalate) throw new Error("This Run has no escalation model");
         return result(
@@ -214,7 +215,16 @@ export function runAgentTools(
           }
         }
         // The run ended (for example an outdated Mac stopped it): nothing to claim.
-        return result(output, claimStopped(output));
+        return result(
+          purpose === "mail_import" &&
+            z.object({ kind: z.literal("email") }).safeParse(output).success &&
+            typeof output === "object" &&
+            output !== null &&
+            !Array.isArray(output)
+            ? { ...output, importTool: claimImportTool(output) }
+            : output,
+          claimStopped(output),
+        );
       },
     }),
     tool("report_agent_progress", {

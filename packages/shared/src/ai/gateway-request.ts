@@ -959,6 +959,12 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
   rewriteQuery?: (query: GatewayQuery) => GatewayQuery;
+  /**
+   * Work no member waits on: OpenAI Responses through the gateway (credit or
+   * paid) asks for the half-price `flex` service tier, and resends at the
+   * standard tier when OpenAI has no flex capacity.
+   */
+  flex?: boolean;
   /** Called before the request leaves with what will carry it. */
   onTransport?: (transport: GatewayTransport) => void;
   /** The paid gateway route. */
@@ -1150,9 +1156,31 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       await routes.beforePaidRequest?.(request);
     request.signal?.throwIfAborted();
     routes.onTransport?.("gateway");
+    if (
+      routes.flex &&
+      routes.provider === "openai" &&
+      endpoint === "responses" &&
+      routes.funding !== "subscriber_credit"
+    ) {
+      const flex = await routes.gateway({
+        ...request,
+        query: async () => ({
+          ...(await request.query()),
+          service_tier: "flex",
+        }),
+      });
+      if (
+        flex.status !== 429 ||
+        !FLEX_CAPACITY_REFUSAL.test(await flex.clone().text())
+      )
+        return observe(flex);
+    }
     return observe(await routes.gateway(request));
   };
 }
+
+/** OpenAI's "Resource Unavailable" 429 for flex is unbilled; resend at standard. */
+const FLEX_CAPACITY_REFUSAL = /resource[ _-]?unavailable/i;
 
 /** Cubby's AI Gateway as the Worker binding exposes it (`AiGateway.run`). */
 export interface UniversalGateway {

@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { sha256Hex } from "@cubby/shared/sha256";
 import type { Context } from "@earendil-works/chord";
-import type { JsonObject } from "@earendil-works/pi-ai";
+import type { JsonObject, JsonValue } from "@earendil-works/pi-ai";
 import {
   defineExtension,
   defineTool,
@@ -26,7 +26,7 @@ import { z } from "zod";
 
 import type { McpToolDefinition, RunServices } from "./environment";
 import type { MailAttemptEvidence } from "./mail-attempts";
-import { CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
+import { CLAIM_IMPORT_WORK_TOOL, CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
 
 // The transport needs a URL. No request leaves the Worker: `mcpFetch` hands
 // it to Cubby's MCP handler in process with the run's bearer.
@@ -326,7 +326,7 @@ export function cubbyMcpExtension(
           if (!isJsonObject(raw))
             throw new Error(`${tool.name} arguments must be an object`);
           const args = raw;
-          return photoCoordinatorToolResult(
+          const result = photoCoordinatorToolResult(
             tool.name,
             args,
             callResult.parse(
@@ -345,10 +345,60 @@ export function cubbyMcpExtension(
               ),
             ),
           );
+          // A settled Mail source continues with the next durable claim, as
+          // `import_extracted_order` does, instead of a claim-only model turn.
+          if (
+            !runId ||
+            result.isError ||
+            tool.name !== "purchase_import" ||
+            args.action !== "mail_resolve"
+          )
+            return result;
+          const next = await api.executeTool(
+            CLAIM_IMPORT_WORK_TOOL,
+            {},
+            context,
+            {
+              key: "next-work",
+            },
+          );
+          const nextWork = continuationOf(next);
+          return {
+            ...result,
+            output: [
+              ...(result.output ?? []),
+              {
+                type: "text",
+                text: JSON.stringify({ kind: RESOLVE_CONTINUATION, nextWork }),
+              },
+            ],
+          };
         },
       }),
     ),
   });
+}
+
+/** The tool-result part that carries a resolved Email's next work item. */
+const RESOLVE_CONTINUATION = "resolve_result";
+
+/** The nested claim's result, or a request to claim again when unreadable. */
+function continuationOf(next: {
+  isError?: boolean;
+  structuredOutput?: unknown;
+}): JsonValue {
+  const retry = { kind: "retry" };
+  if (next.isError) return retry;
+  try {
+    const value =
+      typeof next.structuredOutput === "string"
+        ? JSON.parse(next.structuredOutput)
+        : next.structuredOutput;
+    return z.json().safeParse(value).data ?? retry;
+  } catch {
+    // SILENT: an unreadable continuation asks for a new claim.
+    return retry;
+  }
 }
 
 /**

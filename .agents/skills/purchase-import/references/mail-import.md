@@ -50,6 +50,9 @@ Claude or Codex session researches it later through the Research queue.
    Compare their recorded facts with the source before reusing one; a candidate
    or shared identifier never resolves a variant contradiction. `omitted: true`
    means the list is incomplete; normal preparation still checks candidates.
+   The claim's `importTool` names the writer this Email admits:
+   `import_extracted_order` for complete, attachment-free evidence, otherwise
+   `purchase_import.prepare` (the exception flow).
    If the claim includes `recovery`, call its tool with its exact retained
    arguments before extracting again. This recovers an uncertain writer outcome;
    changed extraction is mechanically blocked until that result is known.
@@ -90,7 +93,8 @@ Claude or Codex session researches it later through the Research queue.
      `commit_result` item: conflict is review work, not success.
      A successful `commit_result.nextWork` is already the next durable claim,
      including its read and known facts: process it directly without another
-     claim call. `none` means the roster is settled. `retry` requests a new
+     claim call. A successful `mail_resolve` ends with the same continuation
+     (`resolve_result.nextWork`). `none` means the roster is settled. `retry` requests a new
      claim because continuation was interrupted; the order already committed.
      `needs_resolution` returns the canonical preparation and its Product
      candidates: review those and call the existing commit with that preparation's
@@ -124,12 +128,8 @@ Claude or Codex session researches it later through the Research queue.
      `resolve` with `linked`, `purchaseIds` containing
      every source-supported Purchase, and the event. A refund
      Email never books money by itself; the refund remains review work.
-     A combined-credit alert may support several Purchases. A member reviews
-     each existing posted refund, its allocation and account identity before
-     providing `settlement`; the Mail import coordinator leaves account-mapping
-     review for that member. The reviewed credit must equal those refund legs,
-     whose existing allocations must explain exactly the named Purchases.
-     This associates evidence without changing money, allocations or stock.
+     A combined-credit alert may support several Purchases; a member reviews
+     its refund settlement. This associates evidence without changing money, allocations or stock.
      A supported link to an existing Purchase does not require another
      extraction preview. Unlinked related originals still need extraction;
      linking never manufactures itemization or resolves unknown Product facts.
@@ -147,19 +147,9 @@ Claude or Codex session researches it later through the Research queue.
      `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
      neither retrying nor escalating changes that refusal.
    - **A payment, refund, transfer, card repayment or reimbursement Email
-     without an order** (a payment app or bank notice): find the posted
-     Financial Transaction with `search` (`entityKinds:
-     ["financialTransaction"]`, by merchant). For a purchase payment,
-     `finance` `converge` with its FTX- code and the Email's EML- `id`; Cubby
-     books only what server evidence establishes. For a transfer, incoming
-     payment, reimbursement, card repayment or refund, `purchase_import` `mail_resolve` with
-     `financial`, the FTX- `transactionId` and a reason: Cubby associates the
-     Email, without spending, only when a current member-accepted mapping
-     proves this Email/checksum/transaction/account and its event amount and
-     direction agree. Provider identifier equality alone cannot establish a
-     cross-provider mapping. On `review_required` or a
-     refused association, `purchase_import` `mail_resolve` the Email `unresolved` with the
-     blocker.
+     without an order** (a payment app or bank notice): `purchase_import`
+     `mail_resolve` it `unresolved` with category `member_decision`, naming the
+     payment; a member books or associates it.
    - **A forwarded or shared copy of someone else's purchase**: forwarding
      alone never proves the recipient bought it. Automatic import refuses an
      Email whose transaction Cubby cannot attribute to the recipient; `mail`
@@ -168,11 +158,6 @@ Claude or Codex session researches it later through the Research queue.
      fine and creates no vendor relationship.
    - **An order whose Purchase you cannot establish**: `purchase_import` `mail_resolve` with
      `unresolved` and the concrete gap.
-   - **A payment notice `finance` `converge` returns review-required for**
-     (a provider wallet such as Amazon Pay naming a card label but no
-     member-accepted account): resolve it `unresolved` at once with the raw
-     converge reason; do not retry. Only a member's `financial` disposition
-     with `review` settles it.
    - **Not about a purchase**: `purchase_import` `mail_resolve` with `unrelated`. Cubby deletes
      its unprotected retained copy.
 4. When the order's original is missing (a shipment Email for an order you have
@@ -183,13 +168,7 @@ Claude or Codex session researches it later through the Research queue.
    purchase, name it in `prepare` or `resolve` like an admitted Email: Cubby
    admits it to this Run only when its decisions establish the same purchase
    and the recipient's own transaction, within the Run's limits; otherwise
-   the call refuses with a CONFLICT naming the missing link. When no admitted
-   Email shares an identifier with it (an order confirmation traced from an
-   admitted carrier notice), name the connecting Emails in `via`, nearest the
-   admitted Email first: a shipping Email naming both the tracking number and
-   the order number bridges them. Each Email on the path is judged against the
-   one before it and joins the Run, so resolve it too. Every path must reach an
-   Email already admitted to this Run; cyclic `via` paths are refused.
+   the call refuses with a CONFLICT naming the missing link.
    A `mail_search` row's `heldBy` names the Run already processing that Email;
    another live Run's Email cannot join yours, so say "held by RUN-…" in the
    unresolved reason, never "not admitted". `retryableMessageIds` lost a

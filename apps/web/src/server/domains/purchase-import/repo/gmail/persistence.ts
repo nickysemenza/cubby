@@ -296,6 +296,26 @@ export async function readEmail(
     .limit(1);
   return row ?? null;
 }
+/** The Email a Run's coordinator worked on, for attributing its usage. */
+export async function readRunEmailId(
+  db: Database,
+  input: { runId: string; mailboxId: string; messageId: string },
+) {
+  const [row] = await getDb(db)
+    .select({ id: emailTable.id })
+    .from(emailTable)
+    .innerJoin(run, eq(run.ledgerPartyId, emailTable.ledgerPartyId))
+    .where(
+      and(
+        eq(run.id, parseEntityId("run", input.runId)),
+        eq(emailTable.provider, "gmail"),
+        eq(emailTable.mailboxId, input.mailboxId),
+        eq(emailTable.messageId, input.messageId),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
 export async function saveEmail(
   db: Database,
   input: {

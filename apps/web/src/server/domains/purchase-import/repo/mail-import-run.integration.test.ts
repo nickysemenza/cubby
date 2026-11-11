@@ -1911,7 +1911,7 @@ describe("mail research admission", () => {
       expect(successor).toMatchObject({
         cause: "retry",
         status: "running",
-        coordinatorModel: "gpt-6.1-terra",
+        coordinatorModel: coordinatorModelFor("mail_import"),
       });
       expect(await frozenSources(successor!.id)).toEqual([
         { orderMailId: mail.id, checksum: mail.rawChecksum },

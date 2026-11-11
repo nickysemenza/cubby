@@ -218,6 +218,7 @@ export async function importedPurchaseFixture(
       entityKind: "purchase",
       entityId: order.id,
       action: "create",
+      channel: "mcp",
       userId: actor.userId,
       runId: parent.id,
     });

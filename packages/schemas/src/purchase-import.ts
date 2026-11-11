@@ -301,6 +301,39 @@ export const importExtractionOutcome = z
   });
 export type ImportExtractionOutcome = z.infer<typeof importExtractionOutcome>;
 
+/**
+ * The agent-facing spelling of `importExtractionOutcome`: one candidate beside
+ * status, reason and detail, so the candidate schema is advertised once instead
+ * of once per union branch. It parses into the union, so stored shapes and the
+ * union's refinements are unchanged. It avoids `$ref` because the Anthropic
+ * adapter copies only root properties.
+ */
+export const importExtractionAgentInput = z
+  .object({
+    status: z.enum(["ready", "needs_review", "unreadable"]),
+    candidate: extractedOrderCandidate
+      .optional()
+      .describe("Required unless status is unreadable and nothing was read."),
+    reason: importExtractionReviewReason
+      .optional()
+      .describe("Required when status is needs_review."),
+    detail: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2_000)
+      .optional()
+      .describe("Required when status is needs_review or unreadable."),
+  })
+  .transform(
+    (value) =>
+      // SAFETY: the union parse piped next validates every branch's fields.
+      Object.fromEntries(
+        Object.entries(value).filter(([, field]) => field !== undefined),
+      ) as z.input<typeof importExtractionOutcome>,
+  )
+  .pipe(importExtractionOutcome);
+
 /** Accepted ordered-item identity remains independent of later catalog or ledger edits. */
 export const acceptedSourceOrder = z.object({
   checksum: z.string().regex(/^[a-f0-9]{64}$/),

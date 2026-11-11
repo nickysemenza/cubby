@@ -38,17 +38,38 @@ The **funding ladder** is source-first, model-second (`fundedChatAttempts`):
 4. Paid Unified Billing, with the tier's OpenAI model, where the caller allows it.
 
 A step advances only on a funding refusal. A paid fallback therefore buys the
-tier's model — Terra or Luna where that is the tier — never Sol by default. A
-feature's tier is its quality floor: no source answers below it. When no source
-can fund the floor, background work pauses and interactive work fails with the
+tier's model — Terra or Luna where that is the tier — never Sol by default.
+Both provider credits are free and renew monthly, so the order between them
+only decides which lapses unspent; Claude credit stays first. When no source
+can fund a call, background work pauses and interactive work fails with the
 provider's raw diagnostics, as before. Tiers are chosen by judgment and move
 when production evidence — audit findings, corrections, member reports —
 shows a problem; there is no evaluation gate.
 
-Mail import keeps Luna as its primary (#2151) and escalates one tier, to
-`standard`, on the coordinator's own escalation request; escalation stays per
-Email. Photo inventory runs on `quality`. Purchase audit has no second-model
-recovery: a failed audit surfaces instead of buying a paid Opus retry.
+**A feature's tier is its ceiling.** Standard cost per answer, not per call,
+decides what work costs, and most answers need only the fast tier. A structured
+feature answers on `fast` first; each stronger tier up to the declared one
+answers once, only after an answer without the forced tool call, a
+schema-invalid answer or one its caller's validation rejects. A transport or
+funding failure surfaces as before. Purchase audit runs on `fast` at high
+effort and has no second-model recovery.
+
+**Escalation is one question.** The Mail import coordinator stays on Luna
+(#2151) for the whole Email. Its escalation request names one question; the
+host asks `standard`, then `quality`, once each per Email, with the compact
+Email and the coordinator's stated facts, outside the conversation, and returns
+the answer. Switching the conversation's model re-wrote the cached prefix
+under the stronger model and priced every later step at its rate; over two days
+in November 2026, Terra escalations were two to four times Luna's daily
+standard cost. A transient-failure retry runs on the primary. Photo inventory
+runs on `quality`; it has no escalation.
+
+**Unattended OpenAI calls use flex.** Work no member waits on (coordinators and
+automatic feature calls) asks OpenAI for the `flex` service tier on credit and
+paid gateway routes, and resends at the standard tier when OpenAI refuses for
+flex capacity. Flex publishes half of every standard rate, so its usage rows
+record flex rates as their standard cost. The ChatGPT plan and Claude credit
+are unaffected.
 
 ## Carried forward from ADR 0017
 
@@ -107,8 +128,13 @@ dropped when the settings row is read and rewritten.
 
 ## Consequences
 
-- Fast-tier calls on Claude credit run on Haiku, whose price rises fivefold
-  above 100k prompt tokens.
+- Fast-tier calls on Claude credit run on Haiku, priced like Luna below 100k
+  prompt tokens and fivefold above; it tokenizes the coordinator's tools to
+  about twice Luna's count.
+- A structured feature whose fast answer is usable never spends its declared
+  tier; one whose answers are invalid spends every tier once.
+- Flex answers may be slower or refused for capacity; the standard-tier resend
+  keeps the answer, at the standard price.
 - Durable coordinator state written before this change may name a retired model;
   `storedChatModelSchema` reads it as absent and the Run resumes on its
   manifest's model.
