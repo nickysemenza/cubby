@@ -459,15 +459,15 @@ const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * Fast tier at high effort: `eval:features` found Luna at high effort matched
- * Sol high 12/16 with zero unsafe answers on both, at about 1/19 of the cost.
- * Its schema carries no array bounds; a failed audit surfaces instead of
- * retrying on another model.
+ * Quality ceiling at high effort: `eval:features` found Luna at high effort
+ * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
+ * the cost, so answers start on the fast tier. A proposed fix that fails the
+ * domain schema escalates instead of failing the Run's required audit.
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   request: purchaseAuditPrompt,
   feature: "purchase-import-audit",
-  tier: "fast",
+  tier: "quality",
   maxTokens: 8_000,
   effort: "high",
   cache: true,

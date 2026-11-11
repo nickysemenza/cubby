@@ -95,8 +95,7 @@ describe("the AI feature table", () => {
 describe("the audit output schema", () => {
   // Anthropic structured outputs reject array bounds (`maxItems`/`minItems`)
   // with a 400 that no retry can fix. The audit schema shipped one and every
-  // stop-for-review of an account-sync run failed on it. A failed audit is
-  // retried on the Anthropic recovery model (`extract.ts`).
+  // stop-for-review of an account-sync run failed on it.
   it("carries no array bounds Anthropic rejects", () => {
     const rendered = JSON.stringify(
       z.toJSONSchema(PURCHASE_IMPORT_AUDIT_FEATURE.schema),

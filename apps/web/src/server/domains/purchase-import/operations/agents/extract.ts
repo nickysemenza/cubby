@@ -1,5 +1,6 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { normalizeImportAuditModelOutput } from "@cubby/schemas/purchase-import";
+import { getErrorMessage } from "@cubby/shared";
 
 import { PURCHASE_IMPORT_AUDIT_FEATURE } from "~/server/ai/policy/features";
 import { type PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
@@ -78,6 +79,16 @@ export const auditPurchaseImportBatch = async (args: {
         db: args.db,
         operation: "purchaseImport.audit",
         runId: runEntityId.parse(args.runId),
+        // The wire schema carries each fix as JSON text, so the domain check
+        // runs here: an invalid fix escalates and is never cached.
+        validate: (output) => {
+          try {
+            normalizeImportAuditModelOutput(output);
+            return { ok: true };
+          } catch (error) {
+            return { ok: false, issues: [getErrorMessage(error)] };
+          }
+        },
       },
     ),
   );
