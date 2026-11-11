@@ -1,4 +1,9 @@
-import type { AiEvaluationBacklog, WorkQueueUnit } from "@cubby/schemas/job";
+import {
+  aboutSpanText,
+  type AiEvaluationBacklog,
+  type WorkQueueUnit,
+  type WorkQueueWait,
+} from "@cubby/schemas/job";
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -182,8 +187,34 @@ const AI_STATE_LABEL = {
 
 const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
 
+/**
+ * When a wait group should drain at its kind's recent pace. A funding wait
+ * ends when the window reopens, whatever the pace, so it gets no estimate.
+ */
+function drainText(
+  wait: WorkQueueWait,
+  perMinute: number,
+  paceMinutes: number,
+): string | null {
+  if (wait.reason === "ai_funding_window") return null;
+  return perMinute > 0
+    ? `Drains in ${aboutSpanText((wait.count / perMinute) * 60_000)} at the last ${paceMinutes} minutes' pace.`
+    : `Pace unknown: none finished in the last ${paceMinutes} minutes.`;
+}
+
 /** One permit unit: its name, what the last hour did with it, and why its work waits. */
-function QueueUnitRow({ unit, now }: { unit: WorkQueueUnit; now: number }) {
+function QueueUnitRow({
+  unit,
+  now,
+  perMinute,
+  paceMinutes,
+}: {
+  unit: WorkQueueUnit;
+  now: number;
+  /** The unit's stream pace; 0 when none finished or it has no stream. */
+  perMinute: number;
+  paceMinutes: number;
+}) {
   const page = unit.lastExecution;
   return (
     <li className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
@@ -221,23 +252,29 @@ function QueueUnitRow({ unit, now }: { unit: WorkQueueUnit; now: number }) {
               : "."}
           </p>
         ) : null}
-        {unit.waits.map((wait) => (
-          <p key={`${wait.reason}:${wait.runPurpose}`}>
-            {wait.summary}
-            {wait.runIds.map((id) => {
-              const href: string = `/runs/${id}`;
-              return (
-                <Link
-                  key={id}
-                  to={href}
-                  className="ml-2 font-mono text-xs text-link hover:underline"
-                >
-                  {id}
-                </Link>
-              );
-            })}
-          </p>
-        ))}
+        {unit.waits.map((wait) => {
+          const drain = drainText(wait, perMinute, paceMinutes);
+          return (
+            <p key={`${wait.reason}:${wait.runPurpose}`}>
+              {wait.summary}
+              {drain ? (
+                <span className="text-muted-foreground"> {drain}</span>
+              ) : null}
+              {wait.runIds.map((id) => {
+                const href: string = `/runs/${id}`;
+                return (
+                  <Link
+                    key={id}
+                    to={href}
+                    className="ml-2 font-mono text-xs text-link hover:underline"
+                  >
+                    {id}
+                  </Link>
+                );
+              })}
+            </p>
+          );
+        })}
       </div>
     </li>
   );
@@ -330,7 +367,16 @@ function QueueDetailsBody({ now }: { now: number }) {
         {data.queue.length ? (
           <ul data-testid="queue-units">
             {data.queue.map((unit) => (
-              <QueueUnitRow key={unit.unit} unit={unit} now={now} />
+              <QueueUnitRow
+                key={unit.unit}
+                unit={unit}
+                now={now}
+                perMinute={
+                  data.streams.find((stream) => stream.kind === unit.unit)
+                    ?.completedPerMinute ?? 0
+                }
+                paceMinutes={data.windows.paceMinutes}
+              />
             ))}
           </ul>
         ) : (

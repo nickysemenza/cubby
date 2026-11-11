@@ -28,7 +28,7 @@ import { RUN_PURPOSE_LABEL, runPurpose } from "@cubby/schemas/run-fields";
 import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
@@ -45,9 +45,16 @@ import {
   type DrainDue,
 } from "~/server/generic/jobs/repo/queue";
 
+/** Completions per minute average over this window: the Work page pace and Run ETAs. */
+export const WORK_PACE_MINUTES = 5;
+
+/** Jobs of the grouped kind that completed within the pace window. */
+export const completedInPaceSql = (at: SQL) =>
+  sql<number>`count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${at} - ${WORK_PACE_MINUTES} * interval '1 minute')::int`;
+
 /** Completions and failures are counted over these recent windows. */
 const RECENT_MINUTES = {
-  pace: 5,
+  pace: WORK_PACE_MINUTES,
   completed: 15,
   failed: 60,
   outcome: 60,
@@ -530,7 +537,7 @@ async function observeWork(
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.retry_wait} AND "Job"."availableAt" > ${at})::int AS "backingOff",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.queued} AND "Job"."availableAt" > ${at})::int AS "scheduled",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.paused})::int AS "paused",
-      count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
+      ${completedInPaceSql(at)} AS "completedPace",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.completed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
       count(*) FILTER (WHERE "Job".state = ${jobState.enum.failed} AND "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)}
         AND "Job"."updatedAt" > coalesce((SELECT max(done."updatedAt") FROM activity_jobs done WHERE done.kind = "Job".kind AND done.state = ${jobState.enum.completed}), '-infinity'::timestamp))::int AS "failed",

@@ -7,6 +7,7 @@ import {
   jobWaitingOn,
   jobWaitingOnReason,
   jobWaitReason,
+  runWaitingOn,
 } from "@cubby/schemas/job";
 import { z } from "zod";
 
@@ -53,11 +54,15 @@ const runRollup = z.object({
   expiredLeases: z.number().int().nonnegative(),
   /** The Run itself waits for AI funding (paused, or a legacy review stop). */
   waitingForFunding: z.boolean(),
-  /** Latest claim or completion across the Run's Jobs. */
+  /** Latest claim or completion across the Run's Jobs; with no live work, the Run's own latest activity. */
   lastProgressAt: z.iso.datetime().nullable(),
-  /** Live Jobs remain but none was claimed or finished for `stallMinutes`. */
+  /** Nothing moved for `stallMinutes` (`runStalledSql`). */
   stalled: z.boolean(),
+  /** `no_progress`: live work saw no claim or completion. `never_finished`: no live work, yet the Run still runs. */
+  stallReason: z.enum(["no_progress", "never_finished"]).nullable(),
   stallMinutes: z.number().int().positive(),
+  /** The dominant wait, place in line and ETA; null when nothing holds the Run. */
+  waitingOn: runWaitingOn.nullable(),
 });
 export type RunRollup = z.infer<typeof runRollup>;
 

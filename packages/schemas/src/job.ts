@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { runShortcode } from "./identifiers";
 import { dateTime } from "./codec";
+import type { RunWaitingOn, RunWaitReason } from "./run-waiting-on";
 
 export const jobState = z.enum([
   "queued",
@@ -575,3 +576,206 @@ export const workActivity = z.object({
   evaluations: z.array(aiEvaluationBacklog),
 });
 export type WorkActivity = z.infer<typeof workActivity>;
+
+export {
+  runWaitingOn,
+  runWaitReason,
+  type RunWaitingOn,
+  type RunWaitReason,
+} from "./run-waiting-on";
+
+/** Waiting Jobs of one kind and wait owned by one Run, placed in the kind's claim order. */
+export type RunWaitGroup = {
+  kind: string;
+  reason: z.infer<typeof workQueueWaitReason>;
+  /** This Run's Jobs in the group. */
+  mine: number;
+  position: number;
+  total: number;
+  /** The earliest `availableAt` among this Run's Jobs in the group. */
+  nextAt: Date;
+  errorClass: string | null;
+};
+
+const GROUP_REASON = {
+  ai_funding_window: "funding",
+  provider_capacity: "model_capacity",
+  rate_limit: "rate_limit",
+  retry: "retry",
+  device: "device",
+  turn: "queued",
+} as const satisfies Record<RunWaitGroup["reason"], RunWaitReason>;
+
+/** Fallback when no Job waits in a group (image rows, leases, pauses), by precedence. */
+const COUNT_REASON: readonly [JobWaitingOnReason, RunWaitReason][] = [
+  ["waiting_funding", "funding"],
+  ["leased", "in_progress"],
+  ["backing_off", "retry"],
+  ["due", "queued"],
+  ["waiting_device", "device"],
+  ["update_required", "device"],
+  ["blocked", "blocked"],
+  ["paused", "paused"],
+];
+
+const RUN_WAIT_TEXT = {
+  funding: "Waiting for AI funding",
+  model_capacity: "Queued for model capacity",
+  rate_limit: "Waiting out a provider rate limit",
+  retry: "Retrying after an error",
+  device: "Waiting for an Apple device",
+  queued: "Queued",
+  in_progress: "In progress",
+  reclaim: "Waiting to be picked up again",
+  blocked: "Blocked",
+  paused: "Paused",
+  unfinished: "No work left, but the Run never finished",
+} as const satisfies Record<RunWaitReason, string>;
+
+/** Reasons whose ETA is the Run's place in line at the kind's pace. */
+const PACED: ReadonlySet<RunWaitReason> = new Set([
+  "model_capacity",
+  "rate_limit",
+  "device",
+  "queued",
+]);
+
+/** When `position` Jobs drain at `perMinute`; null without a pace. */
+export function queueEtaAt(
+  position: number,
+  perMinute: number | null,
+  now: Date,
+): Date | null {
+  if (!perMinute || perMinute <= 0) return null;
+  return new Date(now.getTime() + (position / perMinute) * 60_000);
+}
+
+/** "less than a minute", "about 16 min", "about 2 h", "about 3 d". */
+export function aboutSpanText(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "less than a minute";
+  if (minutes < 90) return `about ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `about ${hours} h` : `about ${Math.round(hours / 24)} d`;
+}
+
+/** 1st, 2nd, 3rd, 4th, 11th, 22nd. */
+export function ordinalText(value: number): string {
+  const tens = value % 100;
+  const ones = value % 10;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? "th"
+      : ones === 1
+        ? "st"
+        : ones === 2
+          ? "nd"
+          : ones === 3
+            ? "rd"
+            : "th";
+  return `${value}${suffix}`;
+}
+
+/**
+ * A Run wait as one line: the reason, the place in line, and when it should
+ * end. `formatTime` names a clock time ("6:00 AM") in the household zone.
+ */
+export function describeRunWait(
+  wait: Omit<RunWaitingOn, "label" | "jobs">,
+  now: Date,
+  formatTime: (at: Date) => string,
+): string {
+  const head =
+    wait.reason === "retry" && wait.errorClass
+      ? `${RUN_WAIT_TEXT.retry} (${wait.errorClass})`
+      : RUN_WAIT_TEXT[wait.reason];
+  const parts: string[] = [head];
+  if (wait.position !== null && wait.total !== null)
+    parts.push(`${ordinalText(wait.position)} of ${wait.total}`);
+  const eta = wait.etaAt ? new Date(wait.etaAt) : null;
+  const left = eta ? eta.getTime() - now.getTime() : 0;
+  if (wait.reason === "funding") {
+    if (eta && left > 0) parts.push(`resumes ${formatTime(eta)}`);
+  } else if (wait.reason === "retry") {
+    if (eta && left > 0) parts.push(`next try in ${aboutSpanText(left)}`);
+  } else if (PACED.has(wait.reason)) {
+    parts.push(eta ? aboutSpanText(Math.max(0, left)) : "pace unknown");
+  }
+  return parts.join(" · ");
+}
+
+/**
+ * The dominant wait among a Run's live work. A funding wait holds every AI
+ * step, so it leads; otherwise the group holding most of the Run's waiting
+ * Jobs, then live leases, then the remaining counts. A Run with no live work
+ * that is stalled never finished.
+ */
+export function summarizeRunWait(input: {
+  now: Date;
+  formatTime: (at: Date) => string;
+  /** The Run itself is paused for the AI funding window. */
+  waitingForFunding: boolean;
+  /** When that window's resume is scheduled; null when none is queued. */
+  fundingResumeAt: Date | null;
+  groups: readonly RunWaitGroup[];
+  /** Completions per minute by Job kind over `paceMinutes`. */
+  perMinute: ReadonlyMap<string, number>;
+  paceMinutes: number;
+  counts: Partial<Record<JobWaitingOnReason, number>>;
+  expiredLeases: number;
+  stalled: boolean;
+}): RunWaitingOn | null {
+  const { now, paceMinutes } = input;
+  const jobs = describeJobRollup(input.counts, input.expiredLeases);
+  const base = {
+    kind: null,
+    position: null,
+    total: null,
+    perMinute: null,
+    paceMinutes,
+    etaAt: null,
+    errorClass: null,
+  };
+  const finish = (wait: Omit<RunWaitingOn, "label" | "jobs">) => ({
+    ...wait,
+    label: describeRunWait(wait, now, input.formatTime),
+    jobs,
+  });
+  if (input.waitingForFunding)
+    return finish({
+      ...base,
+      reason: "funding",
+      etaAt: input.fundingResumeAt?.toISOString() ?? null,
+    });
+  const order = Object.keys(GROUP_REASON);
+  const group = [...input.groups].sort(
+    (left, right) =>
+      Number(right.reason === "ai_funding_window") -
+        Number(left.reason === "ai_funding_window") ||
+      right.mine - left.mine ||
+      order.indexOf(left.reason) - order.indexOf(right.reason) ||
+      left.kind.localeCompare(right.kind),
+  )[0];
+  if (group) {
+    const reason = GROUP_REASON[group.reason];
+    const perMinute = input.perMinute.get(group.kind) ?? 0;
+    const paced = PACED.has(reason);
+    const etaAt = paced
+      ? queueEtaAt(group.position, perMinute, now)
+      : group.nextAt;
+    return finish({
+      ...base,
+      reason,
+      kind: group.kind,
+      position: paced ? group.position : null,
+      total: paced ? group.total : null,
+      perMinute: perMinute > 0 ? perMinute : null,
+      etaAt: etaAt?.toISOString() ?? null,
+      errorClass: reason === "retry" ? group.errorClass : null,
+    });
+  }
+  const counted = COUNT_REASON.find(([key]) => (input.counts[key] ?? 0) > 0);
+  if (counted) return finish({ ...base, reason: counted[1] });
+  if (input.expiredLeases) return finish({ ...base, reason: "reclaim" });
+  return input.stalled ? finish({ ...base, reason: "unfinished" }) : null;
+}

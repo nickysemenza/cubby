@@ -4,6 +4,7 @@ import { fieldEmptyLabel } from "@cubby/schemas/field-envelope-presentation";
 import { textCellData } from "~/ui/data-table/cell-data";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
+import { RunWaitCell } from "~/ui/records/run-wait";
 import { RunWorkProgress } from "~/ui/records/run-work-progress";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
@@ -105,7 +106,31 @@ const aiCost: ListRenderer<"run"> = (helper) =>
     );
   });
 
+const waitLabel = (row: RunRow) =>
+  fieldValueOf(row.fields.waitingOn)?.label ?? null;
+
+const waitingOn: ListRenderer<"run"> = (helper) =>
+  createCubbyColumnCollection((add) => {
+    add(
+      helper.accessor(waitLabel, {
+        id: "waitingOn",
+        header: "Waiting on",
+        enableSorting: false,
+        meta: attachCubbyColumnMeta<RunRow>({
+          className: "w-64",
+          cellData: textCellData("text", waitLabel),
+          mobile: { slot: "meta", priority: 30 },
+        }),
+        cell: ({ row }) => {
+          const wait = fieldValueOf(row.original.fields.waitingOn);
+          return wait ? <RunWaitCell wait={wait} /> : <NoneValue />;
+        },
+      }),
+    );
+  });
+
 export const runListRenderers = {
+  "run-waiting-on": waitingOn,
   "run-throughput": throughput,
   "run-activity": activity,
   "run-ai-cost": aiCost,

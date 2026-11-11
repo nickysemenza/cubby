@@ -291,7 +291,13 @@ export const nativeCoverage = {
     // Drawn from the field's declared `display.labelPath`: the server-composed figure (a rule
     // computed once, not per client) or the display name of the record a cell links to. The rich
     // web cell (tooltip, pill, link, workbench) stays web-only; the fact it carries does not.
-    ...generic(["tag-links", "purchase-links", "product-link", "run-activity"]),
+    ...generic([
+      "tag-links",
+      "purchase-links",
+      "product-link",
+      "run-activity",
+      "run-waiting-on",
+    ]),
     // The Image row IS the picture: native draws it as the row thumbnail.
   },
   detail: {
@@ -316,6 +322,7 @@ export const nativeCoverage = {
       "run-failure-details",
       "run-ai-cost",
       "run-outcome-counts",
+      "run-waiting-on",
       "email-import-outcome",
       "shipment-order",
       "financial-account-identity",

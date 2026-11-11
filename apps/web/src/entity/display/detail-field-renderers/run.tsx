@@ -3,6 +3,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { DetailAction } from "~/entity/entity-detail/detail-action-bar";
 import { RunSentryAction } from "~/entity/entity-detail/report-slot";
 import { formatAiCost } from "~/lib/number-format";
+import { RunWaitDetail } from "~/ui/records/run-wait";
 import { NoneValue } from "~/ui/text/none-value";
 
 import type { EntityDetailFieldRenderers } from "./index";
@@ -24,6 +25,10 @@ export const runCostLabel = (cost: number, unpricedCalls: number): string => {
 };
 
 export const runDetailFields = {
+  "run-waiting-on": (run) => {
+    const wait = fieldValueOf(run.fields.waitingOn);
+    return { value: wait ? <RunWaitDetail wait={wait} /> : <NoneValue /> };
+  },
   "run-ai-cost": (run) => ({
     value: (
       <span className="tabular-nums">
