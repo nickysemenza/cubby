@@ -600,6 +600,30 @@ the entity's type icon. Runs project `iconEntity` on entity and Activity reads: 
 wins, AI work can use its ledger party, otherwise the purpose selects the entity concerned. Status
 and execution device never change identity. The projection is not stored.
 
+Three optional roles name the fields a record's state, progress and kind come from;
+`StateBadge`, `ProgressMeter` and `KindTag` draw them on every surface that shows the role:
+
+- `presentation.state: { field, reason?, wait?, stalled?, recentBy?, recentDays? }`. `field` is a
+  status roster with a single-valued group key (a stored column or a `model.derived` value); the
+  generator refuses any other. Each option declares `phase` (`needs`, `active` or `finished`);
+  without one, a `closed` option is `finished` and the rest `active`, so `needs` is always explicit.
+  `reason` is muted text after the label, `wait` the Run-wait value, and a true `stalled` places
+  the record in `needs`. `recentBy` and `recentDays` bound the finished phase; older finished
+  records read `older`. The badge draws the list cell unless the field declares its own renderer,
+  and draws once in the detail header. State compiles the `phase` grouping
+  ([Named groupings](#named-groupings)).
+- `presentation.progress: { field, note? }` names a `ProgressValue` field
+  (`packages/schemas/src/progress.ts`: done, failed, active, stalled, queued, a nullable total, a
+  unit and optional parts) and an optional note field drawn beside the meter.
+- `presentation.kind: { field }` names the roster that says what kind of record this is. Its label
+  is a tag in the title cell and detail header, and its option `explanation` (targets, exclusions,
+  effects, dependencies, cost, recovery) is the "What a {label} does" block in the detail side
+  column.
+
+`display.priority` (`essential`, `default`, `optional`) decides which columns leave the default
+visible set below 1100px of table width: optional columns drop, essential columns never do, and a
+column the member shows in the session stays.
+
 A select option's `description` is the tooltip of its pill wherever the value renders. A `number`
 field whose provenance is `derived` from one `{ entity, relation }` source links to that target's
 list, filtered by the entity's relation section for that relation, in its list cell and as the
@@ -620,15 +644,19 @@ under readable ids:
 - `slot`: the one per-platform hand-written fill, rendered only where a registry provides it
   (`DetailSlotId<E>` / `ListSlotId<E>` in `entity-manifest.ts` type those registries).
 
-Sections are authored for reading; nothing derives from edit groups. A section keeps its declared
-`workspace` (`overview`, `work` or `evidence`); otherwise relations join Work, timelines Evidence and
-other sections Overview. On full web detail, sections that set `overview: false` join Evidence
-unless they choose another group; `detail.overviewSections` still emits independent `overview`
-metadata for web and Swift. Web renders sections in declaration order after any `detail.lead`
-sections, full width unless `detail.pairs` sets two side by side; pairs stack below 1000px of
-workspace, relation tables cannot pair, and there is no supporting rail. Native ignores `lead` and
-`pairs` (`detailSectionJSON` omits them), and a board list view marked `webOnly` is omitted from
-Swift. A section's `placement` is `primary` (shares a ruled plane) or `full` (its own plane);
+Sections are authored for reading; nothing derives from edit groups. Web detail is a two-pane
+workspace: tabs on the left, the side column on the right. `detail.groups: [{ id, title }]` declares
+the tabs in order, and each section's `group` names its tab. An entity without `groups` gets
+`DEFAULT_DETAIL_GROUPS` (Overview, Work, Evidence, Relations, Activity), and a section without
+`group` joins one from its kind and position: relations join Work, timelines and sections that set
+`overview: false` Evidence, and other sections Overview, while Relations and Activity hold the
+capability-derived Connected records, Relationships and history. The generator refuses a
+`group` that names no tab. Tabs show counts and are deep-linked as `#<group>`; every panel stays
+mounted, inactive panels are `hidden="until-found"`, and a section anchor or a find-in-page match
+selects its tab. Sections render full width in declaration order within their tab.
+`detail.overviewSections` still emits independent `overview` metadata for web and Swift. Native
+keeps its own Contents order and reads no groups, and a board list view marked `webOnly` is omitted
+from Swift. A section's `placement` is `primary` (shares a ruled plane) or `full` (its own plane);
 journal presentations keep relation-first ordering. A quality check's `placement: "images"` shows
 its result in Images. Web identity and media composition follow
 [the web design contract](../apps/web/DESIGN.md); galleries remain their own section.
@@ -715,6 +743,17 @@ keeps one order. Entries have stable `id` and `title` and one of four kinds:
   Workflow forms and commands stay in their owning section.
 - `chart` names an Expense-ending connection view and draws the canonical monthly-spend series; it
   consumes one of the eight slots.
+
+Three more header declarations sit between the summary and the tabs on web. Each names a readable
+field placed once, so it leaves later field sections:
+
+- `detail.lines: [{ label, field }]`, at most `MAX_DETAIL_LINES` (3), are labelled lines under the
+  title. A field is text, a `labelField` or a `displayItem`; references stay links. Runs declare
+  Why, What and Outcome.
+- `detail.aiSummary` names a stored AI-written summary drawn under the lines, absent until written.
+- `detail.side: { needs? }` fills the side column. `needs` is a `displayItems` field listing what
+  waits on a member and shows only when non-empty, followed by the `fields` summary cells as key
+  facts and the kind explanation.
 
 Do not maintain per-entity header maps, a second chart registry or client arithmetic. Empty optional
 relationships may disappear; meaningful unknown values, pending reads and failed reads stay
@@ -836,7 +875,10 @@ the list route with `query`. Records are typed against the generated id unions;
 generate` writes `native-coverage.json` into the CubbyKit bundle for `NativePresentationCoverage` and
 refuses a detail-slot handoff to an undeclared section; the schema page lists each entity's handoffs.
 To move a surface to web, classify it `handoff` in review; to bring it native, build the view and
-flip the status. Named renderers are classified by this owner during compilation; whole-row
+flip the status. The `presentation.state` badge and `presentation.progress` meter are the shared
+list cells `state` and `progress` (`SHARED_LIST_RENDERERS`), classified whether or not a
+declaration names them. Native draws neither the detail tabs, header lines, AI summary nor side
+column. Named renderers are classified by this owner during compilation; whole-row
 renderers declare their minimum consumed inputs beside that disposition. Compiler schema checks do
 not prove executable web or native registration.
 
@@ -1046,8 +1088,12 @@ editing `dates` changes stored overrides only.
 Every listable entity gets the shared List (`table`) and Cards (`shelf`) presentations without
 requiring photos; first-view defaults are unchanged. Cards use the title and
 `list.shelfSubtitleOverride` fields, else declared mobile subtitle metadata; missing captions stay
-absent. Web RTable name cells show one line with no subtitle; `list.titleSubtitle` is native-only.
-Server-resolved display images are reused, with the entity icon when none exists; exceptional list
+absent. `list.titleSubtitle` declares that rows have a second line, read from the mobile subtitle
+fields. Native shows it; web RTable offers a Rows choice (`rows=2` in the URL, never persisted) in
+which line 2 joins those fields with " · " and any column already drawn on line 2 hides. Single
+rows, the default, show only the name. `list.layoutRevision` is emitted to the Swift catalog and
+bumped when a list's default columns change enough that saved native table layouts should start
+over; only Runs declares it, and web has no saved layouts to reset. Server-resolved display images are reused, with the entity icon when none exists; exceptional list
 projections use explicit adapters, not per-card detail requests. Compact is the card presentation
 with screen-local density state (not a stored preference or URL parameter), carried across the
 phone header boundary. Shared web and Swift grid components own tile sizing. All three presentations
@@ -1164,6 +1210,18 @@ Named groupings are code-declared saved views with category, family, location, b
 filters; Locations provide physical grouping ([ADR 0022](adr/0022-named-groupings-are-saved-views.md)).
 Product and Location tags are plain tags. The Product Category family column reads the effective
 inherited family, matching its filter.
+
+An entity with `presentation.state` gets the compiled `phase` grouping and filter
+(`PHASE_GROUPING_KEY`), from its state options' phases and `stalled` over the state field's group
+key, and its list opens grouped by it in the order Needs you, Active, Recently finished. Older
+finished records (`older`) leave the default view; empty groups draw nothing. Runs and Purchases
+declare state; Purchase reconciliation reads `mismatch` as needs, `unknown` as active, and `match`
+and `refund_adjusted` as finished, with no recent bound.
+
+`list.tree.batch: { by, when }` folds sibling rows sharing a `by` value into one batch row when a
+request asks for `nesting.batches`. A row joins only while every `when` filter matches, it is not
+member-started, and its phase is not `needs`; a value needs two such rows. Runs batch scheduled,
+discovery, backfill and ephemeral Runs by kind.
 
 ### Declared board lists
 
