@@ -8,7 +8,7 @@ import {
   sourceTransactionRecord,
   transactionImport,
 } from "~/server/db/schema";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { findIncompleteTransactionImports } from "~/server/generic/problems/repo/detectors-financial";
 import {
   selectWorkCandidates,
@@ -34,7 +34,7 @@ const source: WorkSource = {
       SELECT array_agg(DISTINCT account."ledgerPartyId")
       FROM "TransactionImport" batch
       JOIN ${transactionImportRecord} member ON member."importId" = batch.id
-      JOIN ${sourceObservations} row ON row.id = member."statementRowId" AND ${notDeleted(alias(sourceTransactionRecord, "row"))}
+      JOIN ${sourceObservationFacts} row ON row.id = member."statementRowId" AND ${notDeleted(alias(sourceTransactionRecord, "row"))}
       LEFT JOIN "FinancialAccount" account ON account.id = row."accountId" AND ${notDeleted(alias(financialAccount, "account"))}
       WHERE batch.source = ${incomplete.source} AND batch.fingerprint = ${incomplete.fingerprint} AND ${notDeleted(alias(transactionImport, "batch"))}
     ), ARRAY[NULL::uuid])`;
