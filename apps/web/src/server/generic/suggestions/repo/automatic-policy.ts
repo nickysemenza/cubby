@@ -103,11 +103,6 @@ export type AutomaticRuleMatch = {
 export const ruleBase = (key: AutomaticRuleKey) =>
   `${key}@${AUTOMATIC_RULES[key].revision()}`;
 
-/** Unscoped statement sweeps cannot execute these current-revision rules. */
-export const importOnlyStatementRuleStamps = () => [
-  ruleBase("statement_transaction.book_spending"),
-];
-
 function evaluate<F extends AutomaticRuleFamily>(
   key: AutomaticRuleKey,
   rule: Declaration<F>,

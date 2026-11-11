@@ -96,7 +96,7 @@ export type AutomaticBatchEntry = {
   input: Review;
 };
 
-export type AutomaticBatchHandler = {
+type AutomaticBatchHandler = {
   /**
    * Advisory identities {@link Handler.lockForApply} would take for these
    * predictions. The page takes them after its review locks and before any
