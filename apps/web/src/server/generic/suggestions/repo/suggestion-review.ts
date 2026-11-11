@@ -52,6 +52,10 @@ import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read"
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  decideAutomaticField,
+  type AutomaticFieldInput,
+} from "~/server/generic/suggestions/field-policy";
 import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
 import {
   fieldInputFingerprint,
@@ -417,133 +421,135 @@ async function applySuggestionValue(
   return receipt;
 }
 
-/**
- * A replacement of Cubby's own value must win by this much. Decision-model
- * probabilities sum to 1, so at a bar of 0.60 or more the winner already leads
- * every other answer by this margin; it stays as the conservative statement of
- * "beats the current value".
- */
-const REPLACEMENT_MARGIN = 0.2;
-
-/**
- * Cubby fills an open field and revises a value it set itself; it never
- * overwrites a value a member, an import or an agent decided.
- */
-async function automaticFieldRefusal(
+/** Load the field, policy and history before evaluating the automatic decision. */
+async function loadAutomaticField(
   db: Database,
   context: EntityKernelContext,
   row: SuggestionStateRow,
-) {
+): Promise<AutomaticFieldInput> {
   const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
   const recordId = suggestionRecordId(row);
   const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
-  const empty = (value: unknown) =>
-    undecidedFieldValue(entity, row.field, value);
-  if (
-    !row.active ||
-    row.suppression ||
-    policy?.mode !== "fill" ||
-    suggestApplyPolicy(entity, row.field) !== "auto" ||
-    row.confidence < HIGH_CONFIDENCE_PROBABILITY ||
-    empty(row.suggestedValue)
-  )
-    return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
-  const [saved] = await getDb(db)
-    .select({ id: suggestionTable.id })
-    .from(suggestionTable)
-    .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql));
-  if (!saved) return "Only a saved field suggestion can apply automatically";
-  const provenance = aiProvenance.safeParse(row.provenance);
-  const manifest = await producingAiManifest(db);
-  if (
-    !provenance.success ||
-    !fieldDependencyKeys(entity, row.field).every((feature) =>
-      provenance.data.dependencies.some((stamp) => stamp.feature === feature),
-    ) ||
-    !dependenciesCurrent(provenance.data, manifest)
-  )
-    return "Automatic fill requires current complete AI policy provenance";
+  const input: AutomaticFieldInput = {
+    entity: row.entity,
+    field: row.field,
+    eligible: Boolean(
+      row.active &&
+      !row.suppression &&
+      policy?.mode === "fill" &&
+      suggestApplyPolicy(entity, row.field) === "auto" &&
+      !(row.confidence < HIGH_CONFIDENCE_PROBABILITY) &&
+      !undecidedFieldValue(entity, row.field, row.suggestedValue),
+    ),
+    saved: false,
+    provenanceCurrent: false,
+    subjectExists: false,
+    hasEvidence: false,
+    holder: "open",
+    explicitNone: false,
+    currentAvailable: false,
+    effectiveEmpty: true,
+    fillOnly: Boolean(policy?.fillOnly),
+    confidence: row.confidence,
+    runnerUpConfidence: row.runnerUpConfidence,
+    rejected: false,
+    replaced: false,
+  };
+  if (!input.eligible || policy?.mode !== "fill") return input;
   const table = SHORTCODE_TABLE[entity];
-  const [record] = await getDb(db)
-    .select({ shortcode: table.shortcode })
-    .from(table)
-    .where(eq(sql`${table.id}`, row.recordId))
-    .limit(1);
-  if (!record) return "Automatic fill subject no longer exists";
+  const [saved, manifest, records, authority, previous] = await Promise.all([
+    getDb(db)
+      .select({ id: suggestionTable.id })
+      .from(suggestionTable)
+      .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql)),
+    producingAiManifest(db),
+    getDb(db)
+      .select({ shortcode: table.shortcode })
+      .from(table)
+      .where(eq(sql`${table.id}`, row.recordId))
+      .limit(1),
+    fieldAuthority(db, entity, recordId, row.field),
+    getDb(db)
+      .select({
+        value: suggestionTable.suggestedValue,
+        status: suggestionTable.status,
+        receipt: suggestionTable.acceptanceReceipt,
+      })
+      .from(suggestionTable)
+      .where(
+        and(
+          eq(suggestionTable.family, "field"),
+          eq(suggestionTable.entity, row.entity),
+          eq(suggestionTable.recordId, recordId),
+          eq(suggestionTable.field, row.field),
+          inArray(suggestionTable.status, [
+            "rejected",
+            "superseded",
+            "applied",
+          ]),
+        ),
+      ),
+  ]);
+  input.saved = saved.length > 0;
+  const provenance = aiProvenance.safeParse(row.provenance);
+  input.provenanceCurrent =
+    provenance.success &&
+    fieldDependencyKeys(entity, row.field).every((feature) =>
+      provenance.data.dependencies.some((stamp) => stamp.feature === feature),
+    ) &&
+    dependenciesCurrent(provenance.data, manifest);
+  input.holder = authority.holder;
+  const sameValue = (value: unknown) =>
+    canonicalJson(z.json().parse(value)) ===
+    canonicalJson(z.json().parse(row.suggestedValue));
+  input.rejected = previous.some(
+    (earlier) => earlier.status === "rejected" && sameValue(earlier.value),
+  );
+  input.replaced = previous.some(
+    (earlier) =>
+      sameValue(earlier.value) &&
+      suggestionAcceptanceReceipt.safeParse(earlier.receipt).data?.mode ===
+        "automatic",
+  );
+  const record = records[0];
+  if (!record) return input;
   const [live] = await readSelectedEntityRecords({
     context: { ...context, db },
     entity,
     ids: [record.shortcode],
     fields: [row.field, ...policy.basis],
   });
-  if (!live) return "Automatic fill subject no longer exists";
+  if (!live) return input;
+  input.subjectExists = true;
   const governed = (key: string) =>
     Object.hasOwn(entityFieldEnvelopeFields[entity], key);
-  if (
-    !policy.basis.some((key) => {
-      const source = fieldEnvelopeFor(live, key);
-      const value = governed(key) ? source && fieldValueOf(source) : live[key];
-      return key !== row.field && basisValueOf(value) !== null;
-    })
-  )
-    return "Automatic fill requires supporting field evidence";
-  const authority = await fieldAuthority(db, entity, recordId, row.field);
-  if (authority.holder === "person")
-    return "Automatic fill preserves a person's value";
+  input.hasEvidence = policy.basis.some((key) => {
+    const source = fieldEnvelopeFor(live, key);
+    const value = governed(key) ? source && fieldValueOf(source) : live[key];
+    return key !== row.field && basisValueOf(value) !== null;
+  });
   const envelope = fieldEnvelopeFor(live, row.field);
-  // Explicit None set at creation has no update audit row; it is a decision.
-  if (envelope?.current.assignment?.kind === "none")
-    return "Automatic fill preserves an existing field decision";
-  if (governed(row.field) && (!envelope || envelope.result.kind === "missing"))
-    return "Automatic fill requires an available current field result";
-  const effective = governed(row.field)
-    ? envelope && fieldValueOf(envelope)
-    : live[row.field];
-  if (authority.holder === "open" && !empty(effective))
-    return "Automatic fill preserves populated effective values";
-  const sameValue = (value: unknown) =>
-    canonicalJson(z.json().parse(value)) ===
-    canonicalJson(z.json().parse(row.suggestedValue));
-  if (authority.holder === "cubby" && !empty(effective)) {
-    if (policy.fillOnly)
-      return "Other records inherit this field; Cubby only fills it";
-    if (row.confidence - (row.runnerUpConfidence ?? 0) < REPLACEMENT_MARGIN)
-      return "A replacement must clearly beat Cubby's current value";
-  }
-  const previous = await getDb(db)
-    .select({
-      value: suggestionTable.suggestedValue,
-      status: suggestionTable.status,
-      receipt: suggestionTable.acceptanceReceipt,
-    })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.family, "field"),
-        eq(suggestionTable.entity, row.entity),
-        eq(suggestionTable.recordId, recordId),
-        eq(suggestionTable.field, row.field),
-        inArray(suggestionTable.status, ["rejected", "superseded", "applied"]),
-      ),
-    );
-  if (
-    previous.some(
-      (earlier) => earlier.status === "rejected" && sameValue(earlier.value),
-    )
-  )
-    return "Automatic fill preserves a rejected value";
-  // A value Cubby replaced is never applied again, so two answers cannot flap.
-  if (
-    authority.holder === "cubby" &&
-    previous.some(
-      (earlier) =>
-        sameValue(earlier.value) &&
-        suggestionAcceptanceReceipt.safeParse(earlier.receipt).data?.mode ===
-          "automatic",
-    )
-  )
-    return "Cubby already replaced this value once";
-  return null;
+  input.explicitNone = envelope?.current.assignment?.kind === "none";
+  input.currentAvailable =
+    !governed(row.field) ||
+    Boolean(envelope && envelope.result.kind !== "missing");
+  input.effectiveEmpty = undecidedFieldValue(
+    entity,
+    row.field,
+    governed(row.field) ? envelope && fieldValueOf(envelope) : live[row.field],
+  );
+  return input;
+}
+
+async function automaticFieldRefusal(
+  db: Database,
+  context: EntityKernelContext,
+  row: SuggestionStateRow,
+) {
+  const decision = decideAutomaticField(
+    await loadAutomaticField(db, context, row),
+  );
+  return decision.kind === "refuse" ? decision.reason : null;
 }
 
 /** Read-only preflight; acceptance repeats all checks inside its write fence. */

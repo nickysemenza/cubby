@@ -27,6 +27,7 @@ import {
 } from "~/server/domains/run/repo/field-automation";
 import { fieldEvaluationScheduler } from "~/server/domains/run/service/ai-refresh";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { personHoldsField } from "~/server/generic/suggestions/field-policy";
 import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
 
 const log = createLogger("field-automation");
@@ -66,7 +67,7 @@ async function scheduleField(
   cause: FieldAutomationCause,
 ) {
   const authority = await fieldAuthority(db, entity, recordId, field);
-  if (authority.holder === "person") return "unchanged";
+  if (personHoldsField(authority.holder)) return "unchanged";
   return schedule(
     { kind: "field", entity, recordId, field, suggestionIds: [], cause },
     { populated: authority.holder === "cubby" },
