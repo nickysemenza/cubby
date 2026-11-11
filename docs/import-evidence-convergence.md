@@ -1059,8 +1059,8 @@ model inputs and policy still agree. Acceptance always validates the current
 broader evidence fingerprint.
 
 **Pages.** Generation commits bounded batches of independent charges: import-
-scoped generation, labeling and retained generation retries admit at most 16
-charges per page, because they regenerate and apply money sequentially;
+scoped generation, labeling and retained generation retries admit at most 64
+charges per page, because each page applies money;
 unscoped generation selects at most 32; holds and explicit callers keep the
 512-suggestion ceiling ([statement pages](jobs.md#statement-pages)). Label pages
 default to 32 suggestions. Identity questions stay batched; merchant/spending

@@ -39,7 +39,7 @@ import {
 export const refuseStatementApplication = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
 
-const projection = z.object({
+export const statementApplicationProjection = z.object({
   refs: z.array(z.string()),
 });
 
@@ -74,7 +74,7 @@ export async function loadStatementApplication(
       prediction?.subject,
     ),
     published,
-    stored: projection.parse(state.data),
+    stored: statementApplicationProjection.parse(state.data),
   };
 }
 
@@ -83,7 +83,7 @@ export async function loadStatementApplication(
  * while their inputs still agree, as label publication does, so the kind and
  * candidates compare like for like.
  */
-function withPublishedLabels(
+export function withPublishedLabels(
   current: StatementTransactionJudgment,
   published: StatementTransactionJudgment,
 ): StatementTransactionJudgment {
@@ -217,6 +217,28 @@ function changedFields<T extends object>(reviewed: T, current: T) {
   return changed.includes("status") ? ["status"] : changed;
 }
 
+/** The terms of `action` that differ between the published and current judgments. */
+export function changedStatementTerms(
+  published: StatementTransactionJudgment,
+  current: StatementTransactionJudgment,
+  action: StatementTransactionApplication["action"],
+  targetId: string | null,
+) {
+  return changedFields(
+    statementApplicationTerms(published, action, targetId),
+    statementApplicationTerms(current, action, targetId),
+  );
+}
+
+/** A reviewed ready booking's fields that differ from its current replan. */
+export const changedStatementBooking = (
+  published: FinancialSpendingPlan | null | undefined,
+  current: FinancialSpendingPlan | null | undefined,
+) =>
+  changedFields(reviewedBooking(published), reviewedBooking(current)).map(
+    (key) => `spending.${key}`,
+  );
+
 /** Rebuild from retained evidence, never the published spending plan or client source. */
 export async function currentStatementApplication(
   db: Database,
@@ -252,9 +274,11 @@ export async function currentStatementApplication(
           .limit(1)
       )[0]?.id ?? null)
     : null;
-  const changed = changedFields(
-    statementApplicationTerms(published, application.action, targetId),
-    statementApplicationTerms(judgment, application.action, targetId),
+  const changed = changedStatementTerms(
+    published,
+    judgment,
+    application.action,
+    targetId,
   );
   // The reviewed ready booking applies as shown unless the member chose
   // another action, kind or booking, which is replanned at apply.
@@ -266,19 +290,17 @@ export async function currentStatementApplication(
     !application.booking
   )
     changed.push(
-      ...changedFields(
-        reviewedBooking(published.spending),
-        reviewedBooking(
-          await prepareStatementSpending(
-            db,
-            // A create books as a create whatever candidate appeared since.
-            application.action === "create"
-              ? { ...judgment, recommended: "create" }
-              : judgment,
-            published.spending.request.advice ?? null,
-          ),
+      ...changedStatementBooking(
+        published.spending,
+        await prepareStatementSpending(
+          db,
+          // A create books as a create whatever candidate appeared since.
+          application.action === "create"
+            ? { ...judgment, recommended: "create" }
+            : judgment,
+          published.spending.request.advice ?? null,
         ),
-      ).map((key) => `spending.${key}`),
+      ),
     );
   if (changed.length)
     throw refuseStatementApplication(

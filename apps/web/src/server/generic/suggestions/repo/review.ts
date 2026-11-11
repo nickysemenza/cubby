@@ -31,6 +31,7 @@ import {
   assertReviewAction,
   assertApplicationFamily,
   planReviewInput,
+  type Prediction,
 } from "./review-plan";
 
 export type Review = z.infer<typeof suggestionReviewInput>;
@@ -44,7 +45,7 @@ export type AutomaticReview = {
   rule: { key: AutomaticRuleKey; revision: string; stamp: string };
   statementScope?: StatementSuggestionScope;
 };
-const automaticReviewInput = suggestionReviewInput.extend({
+export const automaticReviewInput = suggestionReviewInput.extend({
   operationId: z.string().regex(/^automatic:/),
 });
 export type Handler = {
@@ -85,6 +86,35 @@ export type Handler = {
     input: Review,
     automatic: AutomaticReview | null,
   ) => Promise<z.infer<typeof suggestionReviewOut>["applicationResult"] | void>;
+  /** Automatic reviews applied together under {@link reviewAutomaticPage}. */
+  applyBatch?: AutomaticBatchHandler;
+};
+
+export type AutomaticBatchEntry = {
+  state: SuggestionStateRow;
+  prediction: Prediction;
+  input: Review;
+};
+
+type AutomaticBatchHandler = {
+  /**
+   * Advisory identities {@link Handler.lockForApply} would take for these
+   * predictions. The page takes them after its review locks and before any
+   * Suggestion row lock.
+   */
+  lockKeys: (predictions: readonly Prediction[]) => string[];
+  /**
+   * Apply every entry it can, in order, under the page's locks. A `fallback`
+   * entry has written nothing and keeps the single-review path; a throw rolls
+   * back every entry. The handler owns the applied state transition, as
+   * `apply` does.
+   */
+  apply: (
+    db: Database,
+    context: EntityKernelContext,
+    entries: readonly AutomaticBatchEntry[],
+    automatic: Omit<AutomaticReview, "rule">,
+  ) => Promise<readonly ("applied" | "fallback")[]>;
 };
 
 /**
