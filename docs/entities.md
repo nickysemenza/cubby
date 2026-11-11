@@ -942,8 +942,12 @@ The storage-only `getRunWorkProgress` projection supplies both `run_read.work_sn
 and the Run's `progress` block. Every Run purpose declares a count source; exploratory populations
 have `total: null`, never zero. Producers fill `runWorkItems`, where `processed` is an absolute
 completed count including failures and skips, and persist samples through `sampleRunWork`; use a
-new phase or unit, or reset, for a restarted population. ETA needs a known total and at least three
-intervals; stale or paused estimates name the reused rate and last progress time. Later phases never
+new phase or unit, or reset, for a restarted population. A Run in an ended status (`needs_review`,
+`completed`, `failed`, `dispatch_failed`) reads its last phase finished, never paused, whatever its
+ender last recorded. ETA needs a known total and at least three
+intervals; stale or paused estimates name the reused rate and last progress time. A Mail import Run
+also reads `outcomeCounts`, each admitted Email counted once by its newest outcome in that Run, and
+every Run reads `chargedUnpricedCount`, its calls without a charged price. Later phases never
 take an overall ETA from the current phase, timeline event frequency is not throughput, and
 generation charges and label suggestions never share a percentage. Web and Apple draw the same
 server-composed summary.
@@ -2286,7 +2290,11 @@ Email declares one typed `relationshipFacts` result: candidate discovery and ret
 evidence compute once per batch, and filters, sorts and hydration read them, while current Purchase
 liveness, account ownership and the requested scope stay separate gates. Pair folding precedes scope
 selection so replacement actions keep out-of-scope links; sender-proof Vendor inclusion is
-independent; import progress reads the current Run over selected accepted flags. Negative boolean
+independent. `importOutcome` folds selected accepted flags with the newest retained Mail import outcome
+for the current checksum (an unresolved gap maps through `MAIL_IMPORT_GAP_OUTCOME`) and, only when
+that holder recorded none, the holding Mail import Run (`importing` while active, `failed` once
+ended); `importOutcomeDetail` adds the gap category, its executor, reason, awaited source and Run by
+public code. Without published facts the outcome projects live. Negative boolean
 filters require an available publication, so missing facts never match Unlinked. A member's Email link
 or dismissal, and an automatic exact order link, republishes that Email's relationship snapshot inside
 the decision transaction with the pass's compute and publisher. Before a page of Emails publishes, the

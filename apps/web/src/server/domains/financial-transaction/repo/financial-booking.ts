@@ -52,6 +52,7 @@ import { lockFinancialTransactionSources } from "~/server/domains/financial-tran
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
+import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -236,8 +237,37 @@ async function bookingAction(
   row: Awaited<ReturnType<typeof transactionForBooking>>,
   graph: Awaited<ReturnType<typeof bookingGraph>>,
 ) {
+  // Unpriced item lines whose money a source-backed aggregate carries (foreign
+  // receipts, total-only USD itemizations) neither block nor count toward settlement.
+  const pendingUnpriced = graph.lines.filter((line) => line.cost === null);
+  const carriedElsewhere = new Set(
+    pendingUnpriced.length
+      ? (
+          await getDb(db)
+            .select({ id: expense.id })
+            .from(expense)
+            .where(
+              and(
+                inArray(
+                  expense.id,
+                  pendingUnpriced.map((line) => line.id),
+                ),
+                unpricedForeignExpenseSql({
+                  id: sql`${expense.id}`,
+                  purchaseId: sql`${expense.purchaseId}`,
+                  lineKind: sql`${expense.lineKind}`,
+                  cost: sql`${expense.cost}`,
+                }),
+              ),
+            )
+        ).map((line) => line.id)
+      : [],
+  );
   const vendorLines = graph.lines.filter(
-    (line) => !line.future && line.economicRole === "vendor",
+    (line) =>
+      !line.future &&
+      line.economicRole === "vendor" &&
+      !carriedElsewhere.has(line.id),
   );
   if (
     input.economicRole === "vendor" &&

@@ -16,6 +16,7 @@ import {
   suggestionFamily,
   type SuggestionFamily,
 } from "@cubby/schemas/suggestion";
+import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import type { JobFacts, JobListOut } from "~/contracts/job.contract";
@@ -234,15 +235,32 @@ function stepCounts(
   };
 }
 
+/**
+ * A Run that has ended cannot be pausing, waiting or running a step: its
+ * stored step state is stale, so it reads as failed (the Run failed) or not
+ * finished (any other end) instead of a live phase.
+ */
+const settledPhase = (phase: StepPhase, runStatus: string): StepPhase => {
+  if (
+    ACTIVE_RUN_STATUSES.some((active) => active === runStatus) ||
+    (phase !== "running" && phase !== "waiting" && phase !== "paused")
+  )
+    return phase;
+  return runStatus === "failed" || runStatus === "dispatch_failed"
+    ? "failed"
+    : "not_started";
+};
+
 function stepView(
   purpose: string,
   step: RunDetailStep,
   job: JobFacts | null,
   now: number,
+  runStatus: string,
 ): RunStepView {
   const meta = readMeta(step.meta);
   const declaration = runStepDeclaration(purpose, step.key);
-  const phase = PHASE_OF[step.state];
+  const phase = settledPhase(PHASE_OF[step.state], runStatus);
   // The frozen input wins; a step that has not counted yet reads as declared.
   const mode = meta.input?.mode ?? declaration?.input.mode ?? "tally";
   const { processed, total, left, fraction } = stepCounts(mode, step, meta);
@@ -368,6 +386,7 @@ export function runOverview(
         },
         primary,
         now,
+        detail.status,
       );
     },
   );

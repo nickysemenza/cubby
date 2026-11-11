@@ -197,7 +197,10 @@ exception closes that gap without suppressing independent logo research.
 Email relevance decided by a rule, the decision model or the relevance model is
 final, and an import outcome settles it. Only Email whose relevance stays
 uncertain after escalation reaches a member; import and preview gaps wait on
-Mail import, and a missing original goes to an agent.
+Mail import, and a missing original goes to an agent. An Email a Mail import
+left unresolved is its own item, routed by its gap: Needs research goes to an
+agent, Needs you to the member, and a Waiting Email (a held source or a
+transient failure) is no item because Cubby re-runs it by itself.
 
 People resolve material ambiguity and conflicting accepted facts. Supported
 unambiguous work should complete automatically within the Mail import switch

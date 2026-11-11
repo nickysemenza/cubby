@@ -694,7 +694,8 @@ describe("Email Purchase links", () => {
       .update(emailTable)
       .set({ runId: f.runId })
       .where(eq(emailTable.orderMailId, f.source.id));
-    expect(await read()).toMatchObject({ importOutcome: "importing" });
+    // A holder that ended without an outcome for the Email failed it.
+    expect(await read()).toMatchObject({ importOutcome: "failed" });
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "failed" })
@@ -755,8 +756,9 @@ describe("Email Purchase links", () => {
       .update(runTable)
       .set({ status: "completed" })
       .where(eq(runTable.id, f.runId));
-    expect((await explainOutcome()).envelope.result).toEqual({
-      kind: "missing",
+    expect((await explainOutcome()).envelope.result).toMatchObject({
+      kind: "live",
+      decision: { outcome: { kind: "value", value: "failed" } },
     });
     await getDb(ctx.db)
       .update(emailTable)
@@ -1213,7 +1215,8 @@ describe("Email Purchase links", () => {
       expect(row).toMatchObject({
         messageId: f.source.messageId,
         status,
-        importOutcome: "importing",
+        // Its holder ended without an outcome for it.
+        importOutcome: "failed",
         // A content-disposed Email keeps its retained order event's exact link.
         linkState: "linked",
       });

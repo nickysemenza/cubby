@@ -118,6 +118,21 @@ describe("purchase import semantic plan", () => {
       }).writeBlockReason,
     ).toBe("sum_mismatch");
   });
+
+  it("never writes priced lines for a total-only confirmation", () => {
+    expect(
+      buildPurchaseImportPlan({
+        status: "needs_review",
+        candidate: {
+          ...candidate,
+          printedGrandTotal: 5.52,
+          lines: [{ ...candidate.lines[0]!, amount: null, quantity: 1 }],
+        },
+        reason: "unpriced_itemization",
+        detail: "The confirmation prints its total but no item prices.",
+      }).writeBlockReason,
+    ).toBe("unpriced_itemization");
+  });
 });
 
 describe("explicitLineDecisions", () => {

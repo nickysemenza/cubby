@@ -32,6 +32,7 @@ import {
   externalSource,
   emailClassificationObservation,
   email as emailTable,
+  expense,
   importSourceClaim,
   importSourceOrder,
   orderMail,
@@ -368,6 +369,57 @@ describe("Mail import claim", () => {
       trackingKeys: [{ carrier: "UPS", number: "1Z999AA10123456784" }],
       mailKeysChecksum: tracked.rawChecksum,
     });
+  });
+
+  // A notice that arrives before its order holds the order number on one
+  // Purchase, so the confirmation later itemizes it instead of a second one.
+  it("creates the empty Purchase a shipped notice's order names and links its package", async () => {
+    const { party, seller, retain } = await world();
+    const notice = await retain(
+      "notice-first",
+      "Your order SYN-5001 has shipped",
+      "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456791",
+    );
+    const { owner } = await admit(party, [notice]);
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ classification: "related", classificationStage: "decision" })
+      .where(eq(emailTable.runId, owner.id));
+
+    expect(await claimMailImportWork(ctx.db, owner.id)).toEqual({
+      kind: "none",
+    });
+    const created = await getDb(ctx.db)
+      .select({
+        id: purchase.id,
+        vendorId: purchase.vendorId,
+        orderId: purchase.orderId,
+        runId: purchase.runId,
+      })
+      .from(purchase)
+      .where(eq(purchase.vendorId, seller.id));
+    expect(created).toEqual([
+      expect.objectContaining({ orderId: "SYN-5001", runId: owner.id }),
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(expense)
+        .where(eq(expense.purchaseId, created[0]!.id)),
+    ).toEqual([]);
+    expect(await linkRows(notice)).toMatchObject({
+      events: ["shipped"],
+      links: [expect.objectContaining({ decision: "linked" })],
+      email: { status: "completed" },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          tracking: shipment.trackingNumber,
+          purchase: shipment.purchaseId,
+        })
+        .from(shipment),
+    ).toEqual([{ tracking: "1Z999AA10123456791", purchase: created[0]!.id }]);
   });
 
   // A rule link must never pick a side of contradicting evidence or record
@@ -737,6 +789,7 @@ describe("Mail import claim", () => {
         kind: "unresolved",
         category: "missing_evidence",
         reason: "Synthetic package or refund needs evidence review.",
+        waitingOn: null,
       });
     }
     expect(claimed).toEqual([ruleShipped.messageId, refund.messageId]);

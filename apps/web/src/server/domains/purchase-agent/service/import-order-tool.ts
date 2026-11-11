@@ -106,7 +106,7 @@ export function importExtractedOrderTool(
   return defineTool({
     name: EXTRACT_ORDER_TOOL,
     description:
-      "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, change the refused extraction or Product decision; do not resubmit identical input. A commit refusal can reuse its preparation with a repaired Product decision. On operation_error at prepare, no money was written: retry identical input. At commit the outcome is unknown: replay identical input to recover its durable result before changing it.",
+      "Import one ordinary order Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. A ready extraction books priced item lines. A USD confirmation that prints its total and item names but no item prices is needs_review with reason unpriced_itemization and null line amounts: Cubby books the printed total as one aggregate Expense beside unpriced item lines, with no review finding; never price an item from the total. Other incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, change the refused extraction or Product decision; do not resubmit identical input. A commit refusal can reuse its preparation with a repaired Product decision. On operation_error at prepare, no money was written: retry identical input. At commit the outcome is unknown: replay identical input to recover its durable result before changing it.",
     parameters,
     structuredOutputSchema: resultSchema,
     replay: "safe",
@@ -138,11 +138,17 @@ export function importExtractedOrderTool(
           reason:
             "The ordinary path requires the current admitted Email's complete, untruncated, attachment-free evidence. Use the exception flow for incomplete pages, attachments or other originals.",
         });
-      if (args.extraction.status !== "ready")
+      // A printed total with unpriced items imports through the aggregate
+      // writer; any other incomplete extraction stays an evidence gap.
+      if (
+        args.extraction.status === "unreadable" ||
+        (args.extraction.status === "needs_review" &&
+          args.extraction.reason !== "unpriced_itemization")
+      )
         return finish({
           kind: "incomplete",
           reason:
-            "Resolve the Email with its precise evidence gap; incomplete extraction does not establish priced itemization.",
+            "Resolve the Email with its precise evidence gap; incomplete extraction does not establish priced itemization or a printed total with unpriced items.",
         });
       const candidate = args.extraction.candidate;
       const refs = candidate.sourceReferences;
@@ -184,9 +190,7 @@ export function importExtractedOrderTool(
         }),
       );
       const stableOrderId = `mail:${identity}`;
-      const lineIds = args.extraction.candidate.lines.map(
-        (_, index) => `line-${index + 1}`,
-      );
+      const lineIds = candidate.lines.map((_, index) => `line-${index + 1}`);
       const preparation = preparePurchaseImportInput.parse({
         _runExecution: { runId, operationId: `extract:${identity}:prepare` },
         orders: [

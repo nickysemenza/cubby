@@ -278,6 +278,7 @@ const buildListRendererCoverage = () => {
     run: {
       "run-throughput": implemented(runListRenderers["run-throughput"]),
       "run-activity": implemented(runListRenderers["run-activity"]),
+      "run-ai-cost": implemented(runListRenderers["run-ai-cost"]),
     },
   } satisfies {
     [E in ListRendererEntity]: EntityListRendererCoverage<E>;

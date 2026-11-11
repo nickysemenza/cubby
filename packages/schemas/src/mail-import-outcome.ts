@@ -6,6 +6,7 @@ import {
 } from "./suggestion";
 import { mailMessageRef } from "./mailbox-research";
 import { runShortcode } from "./identifier-fields";
+import { mailImportWaitingOnOut } from "./email-fields";
 
 export const mailImportOutcomesInput = mailMessageRef.extend({
   offset: z.number().int().nonnegative().default(0),
@@ -26,11 +27,20 @@ export const mailOutcomeSnapshot = z.object({
 });
 export type MailOutcomeSnapshot = z.infer<typeof mailOutcomeSnapshot>;
 
+/** A stored judgment as public reads expose it: `waitingOn` names public codes. */
+const [importedOutcome, linkedOutcome, unrelatedOutcome, unresolvedOutcome] =
+  mailImportOutcome.options;
+const mailImportOutcomeOut = z.discriminatedUnion("kind", [
+  importedOutcome,
+  linkedOutcome,
+  unrelatedOutcome,
+  unresolvedOutcome.extend({ waitingOn: mailImportWaitingOnOut.nullable() }),
+]);
 export const mailImportOutcomesOut = z.object({
   items: z.array(
     z.object({
       suggestionId: suggestionChildHandle,
-      judgment: mailImportOutcome,
+      judgment: mailImportOutcomeOut,
       producer: suggestionProducer
         .extend({ runId: runShortcode.nullable() })
         .nullable(),

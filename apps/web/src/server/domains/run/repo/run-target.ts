@@ -1,9 +1,21 @@
-import type { EntityId, EntityRef, RunId } from "@cubby/schemas/identifiers";
+import {
+  MAIL_IMPORT_GAP_EXECUTOR,
+  MAIL_IMPORT_GAP_OUTCOME,
+  mailImportGapCategory,
+  type MailRunOutcomeCounts,
+} from "@cubby/schemas/email-fields";
+import {
+  runEntityId,
+  type EntityId,
+  type EntityRef,
+  type RunId,
+} from "@cubby/schemas/identifiers";
 import type { RunTargetDeviceWorkState } from "@cubby/schemas/photo-import-run";
 import {
   runTargetOutcomeReceipt,
   type RunTargetOutcomeReceipt,
 } from "@cubby/schemas/run-fields";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import {
   and,
   asc,
@@ -15,6 +27,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { z } from "zod";
 
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -265,4 +278,100 @@ export async function reportRunTargetDeviceWork(
       .where(eq(photoRunImage.id, target.id));
     return { recorded: true };
   });
+}
+
+const mailOutcomeRow = z.object({
+  runId: z.string(),
+  emailId: z.string(),
+  judgment: mailImportOutcome,
+});
+
+/** Each admitted Email's newest outcome in each of these Mail import Runs. */
+async function readNewestMailOutcomes(
+  db: Database | DrizzleClient | DrizzleTransaction,
+  runIds: readonly string[],
+) {
+  if (!runIds.length) return [];
+  const client = "select" in db ? db : unwrapDb(db);
+  const rows = await client
+    .selectDistinctOn(
+      [runOperation.runId, sql`${runOperation.result} #>> '{target,entityId}'`],
+      {
+        runId: runOperation.runId,
+        emailId: sql<string>`${runOperation.result} #>> '{target,entityId}'`,
+        judgment: sql<unknown>`${runOperation.result} #> '{mailOutcome,judgment}'`,
+      },
+    )
+    .from(runOperation)
+    .where(
+      and(
+        inArray(
+          runOperation.runId,
+          runIds.map((id) => runEntityId.parse(id)),
+        ),
+        eq(runOperation.kind, "target_outcome"),
+        eq(runOperation.state, "completed"),
+        sql`(${runOperation.result}->'mailOutcome') IS NOT NULL`,
+      ),
+    )
+    .orderBy(
+      runOperation.runId,
+      sql`${runOperation.result} #>> '{target,entityId}'`,
+      desc(runOperation.completedAt),
+      desc(runOperation.id),
+    );
+  return z.array(mailOutcomeRow).parse(rows);
+}
+
+export const emptyMailRunOutcomeCounts = (): MailRunOutcomeCounts => ({
+  imported: 0,
+  linked: 0,
+  unrelated: 0,
+  waiting: 0,
+  needsResearch: 0,
+  needsMember: 0,
+});
+
+const UNRESOLVED_COUNT = {
+  waiting: "waiting",
+  needs_research: "needsResearch",
+  needs_member: "needsMember",
+} as const satisfies Record<
+  (typeof MAIL_IMPORT_GAP_OUTCOME)[keyof typeof MAIL_IMPORT_GAP_OUTCOME],
+  keyof MailRunOutcomeCounts
+>;
+
+/** Per-outcome Email counts of Mail import Runs, from their target outcomes. */
+export async function readMailRunOutcomeCounts(
+  db: Database | DrizzleClient | DrizzleTransaction,
+  runIds: readonly string[],
+): Promise<Map<string, MailRunOutcomeCounts>> {
+  const counts = new Map<string, MailRunOutcomeCounts>();
+  for (const { runId, judgment } of await readNewestMailOutcomes(db, runIds)) {
+    const current = counts.get(runId) ?? emptyMailRunOutcomeCounts();
+    const key =
+      judgment.kind === "unresolved"
+        ? UNRESOLVED_COUNT[
+            MAIL_IMPORT_GAP_OUTCOME[MAIL_IMPORT_GAP_EXECUTOR[judgment.category]]
+          ]
+        : judgment.kind;
+    current[key] += 1;
+    counts.set(runId, current);
+  }
+  return counts;
+}
+
+/** The gap category of each Email a Mail import Run left unresolved, by Email id. */
+export async function readMailRunGapCategories(
+  db: Database | DrizzleClient | DrizzleTransaction,
+  runId: RunId,
+): Promise<Map<string, z.infer<typeof mailImportGapCategory>>> {
+  return new Map(
+    (await readNewestMailOutcomes(db, [runId])).flatMap(
+      ({ emailId, judgment }) =>
+        judgment.kind === "unresolved"
+          ? [[emailId, judgment.category] as const]
+          : [],
+    ),
+  );
 }

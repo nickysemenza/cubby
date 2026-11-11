@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { entityIdSchema, purchaseShortcode } from "./identifier-fields.js";
+import {
+  entityIdSchema,
+  purchaseShortcode,
+  shortcodeSchema,
+} from "./identifier-fields.js";
 
 /** Persisted import gaps distinguish missing facts from execution and member choices. */
 export const mailImportGapCategory = z.enum([
@@ -126,6 +130,17 @@ export const emailImportOutcome = z.enum([
   "not_imported",
 ]);
 export type EmailImportOutcome = z.infer<typeof emailImportOutcome>;
+export const EMAIL_IMPORT_OUTCOME_LABEL = {
+  imported: "Imported",
+  linked: "Linked",
+  waiting: "Waiting",
+  needs_research: "Needs research",
+  needs_member: "Needs you",
+  importing: "Importing",
+  failed: "Import failed",
+  unrelated: "Unrelated",
+  not_imported: "Not imported",
+} as const satisfies Record<EmailImportOutcome, string>;
 
 /** Who settles an unresolved import gap. Hands-off: automatic unless only an agent or the member can. */
 export const mailImportGapExecutor = z.enum(["automatic", "agent", "human"]);
@@ -164,15 +179,25 @@ export const mailImportWaitingOn = z.discriminatedUnion("kind", [
 ]);
 export type MailImportWaitingOn = z.infer<typeof mailImportWaitingOn>;
 
+/** `mailImportWaitingOn` as a read shows it: public codes, never stored UUIDs. */
+export const mailImportWaitingOnOut = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("email"), emailId: shortcodeSchema("email") }),
+  z.object({
+    kind: z.literal("order"),
+    orderId: z.string().min(1),
+    vendorId: shortcodeSchema("vendor").nullable(),
+  }),
+]);
+
 /** The Email's import outcome with the reason a member or agent reads beside it. */
 export const emailImportOutcomeDetail = z.object({
   outcome: emailImportOutcome,
   category: mailImportGapCategory.nullable(),
   executor: mailImportGapExecutor.nullable(),
   reason: z.string().nullable(),
-  waitingOn: mailImportWaitingOn.nullable(),
+  waitingOn: mailImportWaitingOnOut.nullable(),
   /** The Run that produced the outcome, or that holds the Email now. */
-  runId: entityIdSchema("run").nullable(),
+  runId: shortcodeSchema("run").nullable(),
 });
 export type EmailImportOutcomeDetail = z.infer<typeof emailImportOutcomeDetail>;
 

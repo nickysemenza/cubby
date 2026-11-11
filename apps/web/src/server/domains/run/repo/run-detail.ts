@@ -53,7 +53,7 @@ import { getRunHeaderByShortcode } from "~/server/domains/run/repo/run";
 import { DEBUG_EVENT_KIND } from "~/server/domains/run/repo/run-operation";
 
 import { loadRunFindings } from "./run-finding";
-import { listRunTargetOutcomes } from "./run-target";
+import { listRunTargetOutcomes, readMailRunGapCategories } from "./run-target";
 
 /**
  * The target outcome receipts of a Run without its own roster, with the
@@ -352,6 +352,7 @@ export async function loadRunDetail(
     controlHistory,
     targets,
     agentModelUsage,
+    gapCategories,
   ] = await Promise.all([
     database
       .select({ publicId: runTable.shortcode })
@@ -408,6 +409,9 @@ export async function loadRunDetail(
           eq(aiUsage.feature, "purchase_import_agent"),
         ),
       ),
+    run.purpose === "mail_import"
+      ? readMailRunGapCategories(database, run.id)
+      : Promise.resolve(new Map<string, never>()),
   ]);
   const { lookupEntityLabels } =
     await import("~/server/generic/shortcode/repo/shortcode-resolver");
@@ -542,6 +546,10 @@ export async function loadRunDetail(
         target.sourceKind === "mail_message" ? null : target.targetFingerprint,
       outcome: target.outcome,
       warning: target.warning,
+      category:
+        target.entityKind === "email"
+          ? (gapCategories.get(target.entityId) ?? null)
+          : null,
       diff: z
         .json()
         .nullable()

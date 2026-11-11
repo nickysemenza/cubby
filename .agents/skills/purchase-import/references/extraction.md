@@ -17,8 +17,14 @@ writes ordinary unpriced Expense lines and keeps any actual USD settlement
 aggregate separate. Never convert or allocate that aggregate across source items.
 See [foreign receipt itemization](../../../../docs/import-evidence-convergence.md#foreign-receipt-itemization-with-usd-accounting)
 for replay, Product correction and reviewed USD replacement rules.
-If items have no published amounts, retain their descriptions in the original
-evidence and submit no priced lines. Never supply zero for an unknown price.
+If items have no published amounts, never supply zero or a share of the total
+for an unknown price. A USD order that prints its grand total and item names
+but no item prices is `needs_review` with reason `unpriced_itemization`: give
+each printed item a line with `amount: null` (with its quantity, SKU and links
+when printed) and the printed total. Cubby books that total as one aggregate
+Expense beside unpriced item lines, resolves each line's Product, and files no
+review finding. `sum_mismatch` is different: printed item amounts that disagree
+with the printed total. Any other extraction keeps every line priced.
 
 Check the page's order program and lifecycle before preparing a purchase. A
 try-before-you-buy order lists trial items before the customer decides what to

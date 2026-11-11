@@ -1,6 +1,7 @@
 import { agentConversationSchema } from "@cubby/schemas/agent-conversation";
 import { aiRunUsageInput, aiRunUsageOut } from "@cubby/schemas/ai";
 import { mailReclassificationRead } from "@cubby/schemas/email-actions";
+import { mailImportGapCategory } from "@cubby/schemas/email-fields";
 import { runOut } from "@cubby/schemas/entities/run";
 import {
   runShortcode,
@@ -181,6 +182,8 @@ const runDetail = z
         fingerprint: z.string().nullable(),
         outcome: z.string().nullable(),
         warning: z.string().nullable(),
+        /** A Mail import's unresolved gap category for this Email. */
+        category: mailImportGapCategory.nullable().optional(),
         diff: z.json().nullable(),
         completedAt: z.iso.datetime().nullable(),
       }),
@@ -373,6 +376,7 @@ export const runContract = defineContract(
             state: true,
             outcome: true,
             warning: true,
+            category: true,
             completedAt: true,
           }),
         ),

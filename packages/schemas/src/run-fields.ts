@@ -142,6 +142,13 @@ type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
  * notice. The bound only stops a runaway coordinator.
  */
 export const MAIL_RUN_ROSTER_LIMIT = 150;
+/**
+ * What a Mail import can handle, stamped on each Run it admits as its
+ * `skillRevision`. Raise it when the importer learns to settle evidence it
+ * previously resolved unresolved: an agent-routed gap recorded under an older
+ * revision is readmitted once (`importPendingEmails`).
+ */
+export const MAIL_IMPORT_SKILL_REVISION = "purchase-import@2";
 /** Original retained sources; interpreted order identity remains a research decision. */
 export const mailResearchRunInput = z.object({
   kind: z.literal("mail_research"),

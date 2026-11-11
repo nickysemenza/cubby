@@ -35,7 +35,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -294,7 +294,16 @@ export async function readMailImportOutcomes(
       "No Email in this mailbox belongs to this member.",
     );
   const rows = await getDb(db)
-    .select({ result: runOperation.result, producerRun: runTable.shortcode })
+    .select({
+      result: runOperation.result,
+      producerRun: runTable.shortcode,
+      waitingEmail: sql<
+        string | null
+      >`(SELECT shortcode FROM "Entity" WHERE id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,emailId}')`,
+      waitingVendor: sql<
+        string | null
+      >`(SELECT shortcode FROM "Entity" WHERE id::text = ${runOperation.result} #>> '{mailOutcome,judgment,waitingOn,vendorId}')`,
+    })
     .from(runOperation)
     .leftJoin(runTable, eq(runTable.id, runOperation.runId))
     .where(mailOutcomeOfEmailSql(source.id))
@@ -309,7 +318,23 @@ export async function readMailImportOutcomes(
       const { mailOutcome } = storedMailOutcome.parse(row.result);
       return {
         suggestionId: mailOutcome.id,
-        judgment: mailOutcome.judgment,
+        judgment:
+          mailOutcome.judgment.kind === "unresolved"
+            ? {
+                ...mailOutcome.judgment,
+                waitingOn:
+                  mailOutcome.judgment.waitingOn?.kind === "email"
+                    ? row.waitingEmail
+                      ? { kind: "email" as const, emailId: row.waitingEmail }
+                      : null
+                    : mailOutcome.judgment.waitingOn?.kind === "order"
+                      ? {
+                          ...mailOutcome.judgment.waitingOn,
+                          vendorId: row.waitingVendor,
+                        }
+                      : null,
+              }
+            : mailOutcome.judgment,
         producer: mailOutcome.producer
           ? {
               ...mailOutcome.producer,
@@ -693,7 +718,7 @@ export async function settleMail(
     detail: string;
     /** The Mail import rule revision that applied a classification. */
     ruleRevision?: string;
-    judgment?: z.infer<typeof mailImportOutcome>;
+    judgment?: z.input<typeof mailImportOutcome>;
   },
   actor?: ActorContext,
 ) {
@@ -803,7 +828,7 @@ export async function settleMail(
           "Email assignment changed before settlement.",
         );
       const emailId = settledEmails[0]!.id;
-      const judgment =
+      const judgment: z.input<typeof mailImportOutcome> =
         input.judgment ??
         mailImportOutcome.parse(
           input.status === "unsettled"
@@ -825,7 +850,7 @@ export async function settleMail(
       const mailOutcome = await mailOutcomeSnapshotFor({
         runId: input.importRunId,
         checksum: input.mail.rawChecksum,
-        judgment,
+        judgment: await withAwaitedOrder(tx, originalEmail, judgment),
         ruleRevision: input.ruleRevision,
         createdAt: now,
       });
@@ -874,6 +899,44 @@ export async function settleMail(
         });
     }
   });
+}
+
+/**
+ * A held source names what it waits on. Unless the resolution named it, it
+ * waits on the one order number the Email prints, at its sender's Vendor;
+ * an Email printing none or several waits on nothing it can name.
+ */
+async function withAwaitedOrder(
+  tx: DrizzleTransaction,
+  message: Pick<
+    typeof emailTable.$inferSelect,
+    "orderKeys" | "mailKeysChecksum" | "checksum" | "orderMailId"
+  >,
+  judgment: z.input<typeof mailImportOutcome>,
+): Promise<z.infer<typeof mailImportOutcome>> {
+  const parsed = mailImportOutcome.parse(judgment);
+  if (
+    parsed.kind !== "unresolved" ||
+    parsed.category !== "source_held" ||
+    parsed.waitingOn
+  )
+    return parsed;
+  const keys =
+    message.mailKeysChecksum === message.checksum
+      ? (message.orderKeys ?? [])
+      : [];
+  const [orderId] = keys;
+  if (keys.length !== 1 || !orderId) return parsed;
+  const [original] = message.orderMailId
+    ? await tx
+        .select({ vendorId: orderMail.vendorId })
+        .from(orderMail)
+        .where(eq(orderMail.id, message.orderMailId))
+    : [];
+  return {
+    ...parsed,
+    waitingOn: { kind: "order", orderId, vendorId: original?.vendorId ?? null },
+  };
 }
 
 /**

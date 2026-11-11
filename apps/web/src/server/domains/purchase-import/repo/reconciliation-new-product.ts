@@ -90,7 +90,9 @@ async function acceptedSiblingConflicts(
       items.some(
         ({ row }) =>
           (row.quantity ?? 1) === quantity &&
-          cents(row.amount) !== cents(line.amount),
+          (row.amount === null || line.amount === null
+            ? row.amount !== line.amount
+            : cents(row.amount) !== cents(line.amount)),
       )
     )
       contradicting++;

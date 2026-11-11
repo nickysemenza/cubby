@@ -51,7 +51,8 @@ import type {
 export function planLineMatch(
   candidate: ExtractedOrderCandidate,
   current: ExistingExpenseSnapshot[],
-  unpricedForeign: boolean,
+  /** Lines are written without cost: a foreign receipt or an unpriced itemization. */
+  unpriced: boolean,
   valuation: "USD" | "unknown",
   { sources, bindings }: Awaited<ReturnType<typeof loadOriginalLineBindings>>,
 ) {
@@ -84,7 +85,7 @@ export function planLineMatch(
         importedLineMatchesExpense(row, line, valuation),
     );
   const decision =
-    unpricedForeign && current.length && !originalExpenses.size
+    unpriced && current.length && !originalExpenses.size
       ? { kind: "conflict" as const, reason: "duplicate_lines" as const }
       : decideLineWrite(current, candidate.lines, valuation);
   return { matchingExpenses, decision };
@@ -198,6 +199,8 @@ export function planPurchaseHeader(
   orderId: string | null,
   orderDate: string | null,
   assignedLine: boolean,
+  /** The target is a lifecycle notice's empty Purchase, dated by the notice. */
+  replacesNoticeDate = false,
 ) {
   const vendorId = parseEntityId("vendor", input.vendorId);
   const vendorAccountId = input.vendorAccountId
@@ -234,7 +237,7 @@ export function planPurchaseHeader(
     target,
     values: {
       orderId: target.orderId ?? orderId,
-      date: target.date ?? orderDate,
+      date: replacesNoticeDate ? orderDate : (target.date ?? orderDate),
       vendorAccountId: target.vendorAccountId ?? vendorAccountId,
       defaultTrade:
         target.defaultTrade ??
@@ -406,7 +409,8 @@ export function receiptProductQuantity(
   decision: Pick<LineIdentityDecision, "reversalKind">,
 ): number | null {
   if (!productId || line.quantity === undefined) return null;
-  if (line.amount >= 0) return Math.abs(line.quantity);
+  // An unpriced item line is an acquisition; only a printed negative reverses.
+  if (line.amount === null || line.amount >= 0) return Math.abs(line.quantity);
   if (decision.reversalKind === "return") return -Math.abs(line.quantity);
   return decision.reversalKind === "concession" ? 0 : null;
 }
@@ -417,7 +421,7 @@ export function planImportedExpense(
   identity: LineIdentityDecision,
   productId: string | null,
   orderDate: string | null,
-  unpricedForeign: boolean,
+  unpriced: boolean,
 ) {
   const parsedProductId = productId
     ? parseEntityId("product", productId)
@@ -428,7 +432,7 @@ export function planImportedExpense(
       name: line.title,
       notes: line.seller ? `Seller: ${line.seller}` : null,
       url: line.productUrl ?? null,
-      cost: unpricedForeign ? null : line.amount,
+      cost: unpriced ? null : line.amount,
       date: orderDate,
       lineKind: identity.lineKind,
       lineBasis: "item_line" as const,
@@ -522,6 +526,7 @@ export function planInsertedFindings(
     });
   if (
     identity.lineKind === "principal" &&
+    line.amount !== null &&
     line.amount < 0 &&
     identity.reversalKind !== "return" &&
     identity.reversalKind !== "concession"
@@ -547,6 +552,16 @@ export function planLineMode(
       ? input.extraction.detail
       : "Imported order requires review.";
   if (identityOnly) return { kind: "identity" as const };
+  const lineWrite =
+    decision.kind === "no_op"
+      ? ("no_op" as const)
+      : decision.kind === "insert"
+        ? ("insert" as const)
+        : ("none" as const);
+  // The printed total books as one aggregate beside unpriced item lines; the
+  // missing item prices are expected evidence, not a review finding.
+  if (reason === "unpriced_itemization")
+    return { kind: "unpriced_itemization" as const, lines: lineWrite };
   if (reason === "sum_mismatch" || reason === "missing_total")
     return { kind: "aggregate" as const, detail };
   if (
@@ -560,14 +575,7 @@ export function planLineMode(
           ? input.extraction.detail
           : `Order uses ${candidate.currency}; no expense lines were written.`,
     };
-  return {
-    kind:
-      decision.kind === "no_op"
-        ? ("no_op" as const)
-        : decision.kind === "insert"
-          ? ("insert" as const)
-          : ("none" as const),
-  };
+  return { kind: lineWrite };
 }
 
 export function planAggregateExpense(
@@ -636,7 +644,7 @@ export function planPurchaseNote(
 }
 
 export function planLineAction(
-  mode: ReturnType<typeof planLineMode>["kind"],
+  mode: "identity" | "no_op" | "insert",
   line: ExtractedPurchaseLine,
   lineIndex: number,
   identityDecisions: LineIdentityDecision[],

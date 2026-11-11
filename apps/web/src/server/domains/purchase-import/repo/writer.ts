@@ -1,5 +1,5 @@
 import { plainDate } from "@cubby/schemas/base-entity";
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { type ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { GTIN_KIND, GTIN_SOURCE } from "@cubby/schemas/external-id";
 import {
@@ -71,6 +71,7 @@ import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/r
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
+import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -81,6 +82,7 @@ import {
   learnPurchaseProductExternalId,
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
+import { isAwaitingOrderDetails } from "./notice-purchase";
 import { canonicalOrderId } from "./order-identity";
 import {
   acceptedSourceExtraction,
@@ -192,16 +194,21 @@ export function buildPurchaseImportPlan(
     : candidate.currency === null
       ? "missing_currency"
       : candidate.orderedAt === null &&
-          candidate.lines.some((line) => line.amount !== 0)
+          (candidate.lines.some((line) => line.amount !== 0) ||
+            (extraction.status === "needs_review" &&
+              extraction.reason === "unpriced_itemization"))
         ? "missing_date"
         : candidate.printedGrandTotal === null
           ? "missing_total"
           : candidate.currency !== "USD"
             ? "foreign_currency"
             : extraction.status === "needs_review" &&
-                ["sum_mismatch", "foreign_currency", "missing_total"].includes(
-                  extraction.reason,
-                )
+                [
+                  "sum_mismatch",
+                  "unpriced_itemization",
+                  "foreign_currency",
+                  "missing_total",
+                ].includes(extraction.reason)
               ? extraction.reason
               : null;
   return {
@@ -441,7 +448,9 @@ export async function explicitLineDecisions(
     if (!resolution)
       throw new Error(`Missing product resolution for line ${index}`);
     const reversal =
-      line.amount < 0 ? await resolveReversal(index, line) : null;
+      line.amount !== null && line.amount < 0
+        ? await resolveReversal(index, line)
+        : null;
     const reversalKind = reversal
       ? ((["return", "concession", "cancellation", "replacement"] as const)[
           reversal.selectedIndex ?? 1
@@ -890,7 +899,10 @@ export async function importVendorOrder(
     (input.extraction.candidate?.sourceEvent === "refunded" ||
       input.extraction.candidate?.sourceEvent === "cancelled" ||
       input.extraction.candidate?.lines.some(
-        (line) => line.lineKind === "principal" && line.amount < 0,
+        (line) =>
+          line.lineKind === "principal" &&
+          line.amount !== null &&
+          line.amount < 0,
       ));
   const unpricedForeign =
     semanticPlan.writeBlockReason === "foreign_currency" &&
@@ -899,8 +911,13 @@ export async function importVendorOrder(
     (input.extraction.status === "ready" ||
       (input.extraction.status === "needs_review" &&
         input.extraction.reason === "foreign_currency"));
-  const writesLines = !skipsLineWrites || unpricedForeign;
-  const valuation = unpricedForeign ? "unknown" : "USD";
+  // A USD order with a printed total and unpriced items: the total books as
+  // one aggregate Expense and the items as unpriced lines beside it.
+  const unpricedItemization =
+    semanticPlan.writeBlockReason === "unpriced_itemization";
+  const unpriced = unpricedForeign || unpricedItemization;
+  const writesLines = !skipsLineWrites || unpriced;
+  const valuation = unpriced ? "unknown" : "USD";
   const identityOnly =
     !unpricedForeign &&
     !foreignReversal &&
@@ -912,7 +929,7 @@ export async function importVendorOrder(
     ].includes(semanticPlan.writeBlockReason ?? "");
   const explicitResolutions = input.productResolutions ?? [];
   const identityDecisions =
-    skipsLineWrites && !identityOnly && !unpricedForeign
+    skipsLineWrites && !identityOnly && !unpriced
       ? []
       : await explicitLineDecisions(
           input.extraction.candidate?.lines ?? [],
@@ -1114,17 +1131,17 @@ export async function importVendorOrder(
     const ledger =
       target && writesLines ? await existingExpenses(tx, target.id) : [];
     // A booked aggregate carries USD spending; these lines add only unpriced items.
-    const current = unpricedForeign
+    const current = unpriced
       ? ledger.filter((row) => row.lineBasis !== "allocation")
       : ledger;
     const originalBindings =
-      target && unpricedForeign && current.length
+      target && unpriced && current.length
         ? await loadOriginalLineBindings(tx, target.id)
         : { sources: [], bindings: [] };
     const { matchingExpenses, decision } = planLineMatch(
       candidate,
       current,
-      unpricedForeign,
+      unpriced,
       valuation,
       originalBindings,
     );
@@ -1162,9 +1179,16 @@ export async function importVendorOrder(
         });
       }
     }
-    const usedFallbackDate = fallbackAt !== null && !target?.date;
+    // A lifecycle notice dated the empty Purchase it created by its own day;
+    // the order's evidence supplies the order date.
+    const replacesNoticeDate =
+      !!target && confirmation && (await isAwaitingOrderDetails(tx, target.id));
+    const usedFallbackDate =
+      fallbackAt !== null && (!target?.date || replacesNoticeDate);
     const orderDate = purchaseDateFor(
-      target?.date ?? candidate.orderedAt,
+      replacesNoticeDate
+        ? (candidate.orderedAt ?? target?.date ?? null)
+        : (target?.date ?? candidate.orderedAt),
       null,
     );
     const canFillTrade =
@@ -1182,9 +1206,15 @@ export async function importVendorOrder(
       orderId,
       orderDate,
       !!assignedLine,
+      replacesNoticeDate,
     );
     target = await applyPurchaseHeader(tx, header);
     const purchaseId = parseEntityId("purchase", target.id);
+    // A Shipment recorded before this Purchase held its order number links now.
+    if (target.orderId)
+      await linkShipmentsByOrderId(databaseForTransaction(tx), systemActor(), {
+        purchaseIds: [purchaseId],
+      });
     const note = planPurchaseNote(
       purchaseId,
       fallbackAt,
@@ -1238,7 +1268,7 @@ export async function importVendorOrder(
         mode: lineMode,
         lineMatch: { matchingExpenses, decision },
         orderDate,
-        unpricedForeign,
+        unpriced,
         loadExpenses: () => existingExpenses(tx, purchaseId),
         resolveProduct: (line, identity, previous, onCreated) =>
           resolveLineProduct(tx, line, identity, input.vendorId, previous, {

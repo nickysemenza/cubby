@@ -123,6 +123,7 @@ import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { awaitingOrderDetailsSql } from "~/server/domains/purchase-import/repo/notice-purchase";
 import {
   canonicalOrderId,
   normalizeOrderKey,
@@ -542,6 +543,7 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
             settleableExpenseTotal: purchaseSettleableExpenseTotal,
             settleableUnpricedExpenseCount:
               purchaseSettleableUnpricedExpenseCount,
+            awaitingOrderDetails: awaitingOrderDetailsSql(sql`${purchase.id}`),
           })
           .from(purchase)
           .where(inArray(purchase.id, purchaseIds(ids)));
@@ -651,10 +653,13 @@ export const purchaseScaffold = listScaffold("purchase", purchase, {
               documentCoverage: value.coverage.document,
               itemizationCoverage: value.coverage.itemization,
               productsCoverage: value.coverage.products,
-              expenseCountLabel: expenseCountLabel(
-                Number(value.expenseCount),
-                Number(value.unpricedExpenseCount),
-              ),
+              // A notice-created Purchase holds no lines until its order details arrive.
+              expenseCountLabel: value.awaitingOrderDetails
+                ? "Waiting for order details"
+                : expenseCountLabel(
+                    Number(value.expenseCount),
+                    Number(value.unpricedExpenseCount),
+                  ),
             };
           },
         ),

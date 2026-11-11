@@ -267,6 +267,13 @@ export const nativeCoverage = {
         { path: "status", schema: z.string() },
       ],
     },
+    "run-ai-cost": {
+      status: "generic",
+      inputs: [
+        { path: "chargedCost", schema: z.number() },
+        { path: "chargedUnpricedCount", schema: z.number() },
+      ],
+    },
     "task-progress": {
       status: "generic",
       inputs: [
@@ -307,6 +314,10 @@ export const nativeCoverage = {
       "product-tags",
       "financial-transaction-allocations",
       "run-failure-details",
+      "run-ai-cost",
+      "run-outcome-counts",
+      "email-import-outcome",
+      "shipment-order",
       "financial-account-identity",
       "financial-transaction-vendor-inference",
       "ledger-transfer-classification",

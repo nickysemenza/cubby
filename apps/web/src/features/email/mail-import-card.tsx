@@ -2,7 +2,9 @@ import type { MailImportStatus } from "@cubby/schemas/mail-import-settings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { entityListHref } from "~/entity/entity-list-href";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
@@ -23,6 +25,27 @@ export const mailImportRefetchInterval = (
   )
     ? MAIL_IMPORT_REFRESH_MS
     : false;
+
+/**
+ * Only Emails the import routed to the member (`needs_member`) wait on them;
+ * waiting and needs-research Emails are Cubby's or an agent's to settle.
+ */
+function NeedsYouLink() {
+  const queryClient = useQueryClient();
+  const metadata = useQuery(entityMetadataQueryOptions("email"));
+  if (metadata.error) throw metadata.error;
+  if (!metadata.data) return null;
+  return (
+    <Link
+      to={entityListHref(queryClient, "email", {
+        filters: [{ id: "importOutcome", value: ["needs_member"] }],
+      })}
+      className="text-sm underline"
+    >
+      Mail imports that need you
+    </Link>
+  );
+}
 
 /** Discovery spends within the household AI funding budgets. */
 export function MailImportSettings() {
@@ -87,15 +110,7 @@ export function MailImportSettings() {
             </div>
           );
         })}
-        {mailboxes.length > 0 ? (
-          <Link
-            to="/runs"
-            search={{ purpose: "mail_import", status: "needs_review" }}
-            className="text-sm underline"
-          >
-            Mail imports waiting for review
-          </Link>
-        ) : null}
+        {mailboxes.length > 0 ? <NeedsYouLink /> : null}
         <Link
           to="/emails/coverage"
           search={{}}

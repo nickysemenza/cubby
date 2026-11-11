@@ -493,7 +493,13 @@ const importTargets = (run: RunDetail): ReportBlock[] =>
                   `${target.sourceLabel ?? "No source selected"}${target.vendorAccountLabel ? ` · ${target.vendorAccountLabel}` : ""}`,
                   "muted",
                 ),
-                ...(target.outcome ? [line(`Outcome: ${target.outcome}`)] : []),
+                ...(target.outcome
+                  ? [
+                      line(
+                        `Outcome: ${target.outcome}${target.category ? ` · ${target.category}` : ""}`,
+                      ),
+                    ]
+                  : []),
                 ...(target.warning ? [line(target.warning, "warning")] : []),
               ],
               detail:

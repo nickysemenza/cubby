@@ -81,6 +81,7 @@ describe("Mail replay disagreement", () => {
       kind: "unresolved" as const,
       category: "unknown" as const,
       reason: "Synthetic missing itemization",
+      waitingOn: null,
     };
     expect(mailReplayDisagreement(baseline, null)).toEqual(["unavailable"]);
     expect(
@@ -112,6 +113,7 @@ it("retains model usage and attempt errors before failed replay teardown", async
           kind: "unresolved",
           category: "unknown" as const,
           reason: "Synthetic missing total",
+          waitingOn: null,
         },
         run: async () => {
           order.push("run");
@@ -125,6 +127,7 @@ it("retains model usage and attempt errors before failed replay teardown", async
               kind: "unresolved",
               category: "unknown" as const,
               reason: "Synthetic missing total",
+              waitingOn: null,
             },
             actualModels: ["claude-haiku-5-5", "claude-opus-5-5"],
             failure: "agent_failed: Coordinator unanswered: error",

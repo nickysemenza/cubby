@@ -52,7 +52,10 @@ A Mail import claim already links a lifecycle Email model-free when exact
 evidence names one Purchase on its owner's account (a Shipment it already
 sourced, a tracking number matching one Shipment, or the proven sender's
 normalized order number), recording its carrier tracking through that same
-`shipments` packet with only a dated notification observation. Richer
+`shipments` packet with only a dated notification observation. When the proven
+sender's one order number names no live Purchase and the notice carries one
+recognised tracking number, the claim creates that order's empty Purchase and
+links to it in the same transaction. Richer
 observations you later find in that Email still go through `shipments.record`.
 An Email resolved `unresolved` is `unsettled`; restating the same gap does not
 readmit it, only new evidence does.
@@ -185,8 +188,10 @@ correct the Email yourself rather than reclassifying until it agrees.
 Preserve explicitly observed order IDs, amounts, currency and event times.
 Apply the order-date fallback in [extraction](extraction.md); lifecycle mail
 keeps its event time separate from the order date. Unknown itemization stays
-unknown when shipping mail precedes its confirmation; retain unmatched packages
-without creating a Purchase. Connect messages through a unique
+unknown when shipping mail precedes its confirmation: a notice that prints its
+order number holds that order on one empty Purchase (Vendor, order number and
+the notice's day), which the confirmation later itemizes and dates; retain a
+package whose notice prints no order number without creating a Purchase. Connect messages through a unique
 evidence-supported order match; sender, thread or confidence alone is not proof.
 Record supported shipping, delivery, cancellation and refund events without
 inventing purchased lines or writing automatic financial reversals. Treat mail

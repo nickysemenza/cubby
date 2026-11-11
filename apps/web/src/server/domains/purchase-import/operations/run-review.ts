@@ -4,7 +4,9 @@
  * run-service repo with the audit here rather than inside the repo.
  */
 import { buildActorContext } from "@cubby/schemas/context";
+import type { mailImportGapCategory } from "@cubby/schemas/email-fields";
 import {
+  emailId as emailEntityId,
   parseEntityId,
   purchaseId,
   runEntityId,
@@ -18,6 +20,7 @@ import {
   runTargetOutcomeReceipt,
   EXECUTED_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
+import { mailImportOutcome } from "@cubby/schemas/suggestion";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -49,6 +52,7 @@ import {
 } from "~/server/db/helpers";
 import {
   auditLog,
+  email as emailTable,
   ledgerParty,
   photoGroupProposal,
   run as runTable,
@@ -57,6 +61,7 @@ import {
   photoRunImage,
 } from "~/server/db/schema";
 import {
+  importAttemptsExhaustedSql,
   readMailRunSources,
   readMailSourceTransfers,
   releaseUnsettledMailRunSources,
@@ -269,9 +274,11 @@ async function reconcileSettledRunOnce(
       return { reconciled: false as const, status: "running" as const };
   }
   // A Mail import has no explicit finish tool: once every admitted Email is
-  // imported, linked, excluded or resolved unresolved, Pi's settled submission
-  // completes it after auditing every batch, or reviews its open findings
-  // and unresolved Emails. Researching Emails mean the coordinator ended early.
+  // imported, linked, excluded or resolved unresolved with a recorded outcome,
+  // Pi's settled submission completes it after auditing every batch. Each
+  // unresolved Email is its own Work item, routed by its gap. Open findings or
+  // an unresolved Email without an outcome stop it for review; researching
+  // Emails mean the coordinator ended early.
   if (scope.public.purpose === "mail_import") {
     await auditAllImportBatches(db, {
       runId: input.runId,
@@ -315,8 +322,16 @@ async function reconcileSettledRunOnce(
         )
       )
         return null;
+      const outcomes = await unresolvedMailOutcomes(
+        tx,
+        scope.public.runId,
+        remaining
+          .filter((source) => source.email.status === "unsettled")
+          .map(({ email }) => email),
+      );
       const unresolved = remaining.filter(
-        (source) => source.email.status === "unsettled",
+        (source) =>
+          source.email.status === "unsettled" && !outcomes.has(source.email.id),
       );
       const findings = await tx
         .select({
@@ -334,11 +349,7 @@ async function reconcileSettledRunOnce(
       if (unresolved.length || findings.length)
         return {
           unresolved: unresolved.map(({ email }) => email),
-          reasons: await unresolvedMailReasons(
-            tx,
-            scope.public.runId,
-            unresolved.map(({ email }) => email.id),
-          ),
+          reasons: new Map<string, string>(),
           findings,
         };
       await tx
@@ -350,7 +361,8 @@ async function reconcileSettledRunOnce(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.public.runId));
-      await recordChange(tx, { kind: "source", categories: ["email"] });
+      await retryTransientMailGaps(tx, scope.public.runId, outcomes);
+      await recordChange(tx, { kind: "source", categories: ["email", "run"] });
       return {
         unresolved: [],
         reasons: new Map<string, string>(),
@@ -672,15 +684,22 @@ export async function auditAllImportBatches(
   }
 }
 
+type MailImportGapCategory = z.infer<typeof mailImportGapCategory>;
+
 /** Admitted Email outcomes a settled Mail import accepts as final. */
 const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "unsettled"]);
 
-/** Pi's latest recorded reason for each unresolved Email, by Email id. */
-async function unresolvedMailReasons(
+/**
+ * The outcome this Run recorded for each unresolved Email at its current
+ * checksum, by Email id: the gap category the Work queue routes by.
+ */
+async function unresolvedMailOutcomes(
   tx: DrizzleTransaction,
   runId: RunId,
-  emailIds: readonly string[],
+  emails: readonly { id: string; checksum: string }[],
 ) {
+  const outcomes = new Map<string, MailImportGapCategory>();
+  if (!emails.length) return outcomes;
   const rows = await tx
     .select({ result: runOperation.result })
     .from(runOperation)
@@ -688,20 +707,54 @@ async function unresolvedMailReasons(
       and(
         eq(runOperation.runId, runEntityId.parse(runId)),
         eq(runOperation.kind, "target_outcome"),
+        eq(runOperation.state, "completed"),
       ),
     )
     .orderBy(runOperation.completedAt);
-  const reasons = new Map<string, string>();
+  const checksums = new Map(emails.map((email) => [email.id, email.checksum]));
   for (const row of rows) {
-    const parsed = runTargetOutcomeReceipt.safeParse(row.result);
+    const parsed = runTargetOutcomeReceipt
+      .extend({ mailOutcome: z.object({ judgment: mailImportOutcome }) })
+      .safeParse(row.result);
     if (
       parsed.success &&
-      parsed.data.target.warning &&
-      emailIds.includes(parsed.data.target.entityId)
+      parsed.data.mailOutcome.judgment.kind === "unresolved" &&
+      checksums.get(parsed.data.target.entityId) ===
+        parsed.data.target.targetFingerprint
     )
-      reasons.set(parsed.data.target.entityId, parsed.data.target.warning);
+      outcomes.set(
+        parsed.data.target.entityId,
+        parsed.data.mailOutcome.judgment.category,
+      );
   }
-  return reasons;
+  return outcomes;
+}
+
+/**
+ * A transient failure retries automatically: the completed Run releases the
+ * Email to ordinary admission, which the per-checksum attempt bound limits.
+ * Its outcome stays retained, so the Email reads waiting until re-admitted.
+ */
+async function retryTransientMailGaps(
+  tx: DrizzleTransaction,
+  runId: RunId,
+  outcomes: ReadonlyMap<string, MailImportGapCategory>,
+) {
+  const transient = [...outcomes]
+    .filter(([, category]) => category === "transient_failure")
+    .map(([emailId]) => emailEntityId.parse(emailId));
+  if (!transient.length) return;
+  await tx
+    .update(emailTable)
+    .set({ runId: null, status: "pending", updatedAt: new Date() })
+    .where(
+      and(
+        eq(emailTable.runId, runEntityId.parse(runId)),
+        eq(emailTable.status, "unsettled"),
+        inArray(emailTable.id, transient),
+        sql`NOT ${importAttemptsExhaustedSql}`,
+      ),
+    );
 }
 
 function unresolvedTargetsSummary(

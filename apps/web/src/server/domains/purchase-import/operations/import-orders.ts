@@ -814,6 +814,7 @@ export async function preparePurchaseImport(
             if (
               line.lineKind === "unclassified" &&
               lineKind === "discount" &&
+              line.amount !== null &&
               line.amount > 0 &&
               (candidate.printedGrandTotal === null ||
                 candidate.printedGrandTotal >= 0)

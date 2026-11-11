@@ -89,14 +89,27 @@ export function formatRunWorkEstimate(
   return `${lower < 1 ? "under 1" : lower}–${upper} ${label} remaining · ${estimate.confidence} confidence · ${estimate.samples} progress intervals, including queue delays`;
 }
 
+/** Statuses a Run reaches only after it ended; its last phase is finished, never paused. */
+const ENDED_RUN_STATUSES: ReadonlySet<string> = new Set([
+  "needs_review",
+  "completed",
+  "failed",
+  "dispatch_failed",
+]);
+export const runStatusEnded = (status: string) =>
+  ENDED_RUN_STATUSES.has(status);
+
 /** Present a recorded sample consistently in list cells and live work snapshots. */
 export function readRunWorkPhase(
-  sample: RunWorkSample,
+  recorded: RunWorkSample,
   status: string,
   now: Date,
   waiting = false,
 ): RunWorkPhase {
-  const paused = status.startsWith("paused") || status === "needs_review";
+  const sample = runStatusEnded(status)
+    ? { ...recorded, finished: true }
+    : recorded;
+  const paused = status.startsWith("paused");
   const stale = now.getTime() - Date.parse(sample.sampledAt) > 120_000;
   const state =
     status === "failed" || status === "dispatch_failed"

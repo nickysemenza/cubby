@@ -32,7 +32,7 @@ export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
     lines: sorted(
       candidate.lines.map((line) => ({
         title: text(line.title),
-        amount: cents(line.amount),
+        amount: line.amount === null ? null : cents(line.amount),
         lineKind: line.lineKind,
         quantity: line.quantity ?? null,
         sku: text(line.sku),
@@ -75,8 +75,11 @@ export type LineWriteDecision =
   | { kind: "no_op" }
   | { kind: "conflict"; reason: "duplicate_lines" };
 
-const linesTotal = (lines: ExtractedPurchaseLine[]): number =>
-  lines.reduce((total, line) => total + cents(line.amount), 0);
+/** Null when any line is unpriced: unpriced lines never sum to a known total. */
+const linesTotal = (lines: ExtractedPurchaseLine[]): number | null =>
+  lines.some((line) => line.amount === null)
+    ? null
+    : lines.reduce((total, line) => total + cents(line.amount ?? 0), 0);
 
 export const sameLineTitle = (left: string, right: string) =>
   left.trim().replace(/\s+/gu, " ") === right.trim().replace(/\s+/gu, " ");
@@ -102,14 +105,24 @@ export const foreignReceiptSourceSql = (
   AND COALESCE(${original} #>> '{extraction,candidate,sourceEvent}', '') NOT IN (${mailEvent.enum.refunded}, ${mailEvent.enum.cancelled})
 )`;
 
-/** Pricing protection follows immutable provenance, even after moving/reclassifying the Expense. */
+/** A USD order that printed its total and item names but no item prices. */
+const unpricedItemizationSourceSql = (original: SQL): SQL<boolean> =>
+  sql<boolean>`(${original} #>> '{extraction,status}' = ${"needs_review"}
+  AND ${original} #>> '{extraction,reason}' = ${"unpriced_itemization"})`;
+
+/**
+ * Pricing protection follows immutable provenance, even after
+ * moving/reclassifying the Expense: a foreign receipt line, or an unpriced
+ * itemization line whose money its aggregate Expense already carries.
+ */
 export const foreignExpenseOriginSql = (expenseId: SQL): SQL<boolean> =>
   related(importSourceProduct, (binding) => eq(binding.expenseId, expenseId))
     .join(
       importSourceOrder,
       (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
-  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' IS NOT NULL
-  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' <> 'USD'`,
+  AND ((${order.originalOrder} #>> '{extraction,candidate,currency}' IS NOT NULL
+  AND ${order.originalOrder} #>> '{extraction,candidate,currency}' <> 'USD')
+  OR ${unpricedItemizationSourceSql(order.originalOrder)})`,
     )
     .exists();
 
@@ -128,13 +141,34 @@ export const foreignReceiptExpenseSql = (row: {
     )
     .exists();
 
+/** An unpriced item line of an unpriced USD itemization, still on its original Purchase and role. */
+const unpricedItemizationExpenseSql = (row: {
+  id: SQL;
+  purchaseId: SQL;
+  lineKind: SQL;
+}): SQL<boolean> =>
+  related(importSourceProduct, (binding) => eq(binding.expenseId, row.id))
+    .join(
+      importSourceOrder,
+      (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
+  AND ${order.purchaseId} = ${row.purchaseId} AND ${unpricedItemizationSourceSql(order.originalOrder)}
+  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}`,
+    )
+    .exists();
+
+/**
+ * An unpriced item line whose money is carried elsewhere by source provenance:
+ * a foreign receipt line beside its USD settlement, or an unpriced
+ * itemization line beside its printed-total aggregate. Sums and settlement
+ * skip it rather than treat the Purchase as partly priced.
+ */
 export const unpricedForeignExpenseSql = (row: {
   id: SQL;
   purchaseId: SQL;
   lineKind: SQL;
   cost: SQL;
 }): SQL<boolean> =>
-  sql<boolean>`(${row.cost} IS NULL AND ${foreignReceiptExpenseSql(row)})`;
+  sql<boolean>`(${row.cost} IS NULL AND (${foreignReceiptExpenseSql(row)} OR ${unpricedItemizationExpenseSql(row)}))`;
 
 export const importedLineMatchesExpense = (
   row: Pick<
@@ -147,7 +181,9 @@ export const importedLineMatchesExpense = (
   sameLineTitle(line.title, row.title) &&
   (valuation === "unknown"
     ? row.amount === null
-    : row.amount !== null && cents(line.amount) === cents(row.amount)) &&
+    : row.amount !== null &&
+      line.amount !== null &&
+      cents(line.amount) === cents(row.amount)) &&
   line.lineKind === row.lineKind &&
   (row.productQuantity == null ||
     line.quantity === undefined ||
@@ -215,6 +251,7 @@ export const decideLineWrite = (
     aggregate.productId === null &&
     !aggregate.sourceClaimed &&
     aggregate.amount !== null &&
+    linesTotal(extracted) !== null &&
     cents(aggregate.amount) === linesTotal(extracted)
   ) {
     return { kind: "review_aggregate", aggregate, lines: extracted };

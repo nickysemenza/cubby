@@ -331,6 +331,7 @@ export const runHandlers = implementOperationDomain(runContract, {
         state: target.state,
         outcome: target.outcome,
         warning: target.warning,
+        category: target.category ?? null,
         completedAt: target.completedAt,
       })),
       progress: run.progress,

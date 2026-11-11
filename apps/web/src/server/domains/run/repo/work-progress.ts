@@ -25,6 +25,7 @@ import {
 import {
   runWorkSamples,
   readRunWorkPhase,
+  runStatusEnded,
   type RunWorkItems,
   type RunWorkSample,
   type RunWorkSamples,
@@ -430,7 +431,7 @@ export async function getRunWorkProgress(
     failures: counts.failures,
     total: missingMailRoster
       ? null
-      : (targetTotal ?? (status === "completed" ? counts.total : null)),
+      : (targetTotal ?? (runStatusEnded(status) ? counts.total : null)),
   };
   if (purpose === "photo_inventory")
     items = {
@@ -450,7 +451,7 @@ export async function getRunWorkProgress(
       total:
         owner.ordersSeen > 0
           ? owner.ordersSeen
-          : status === "completed"
+          : runStatusEnded(status)
             ? owner.imported + owner.updated + owner.skipped
             : null,
     };
@@ -470,7 +471,7 @@ export async function getRunWorkProgress(
         ? sampledAt
         : owner.startedAt,
     sampledAt,
-    finished: status === "completed",
+    finished: runStatusEnded(status),
   });
   return {
     current: readRunWorkPhase(samples.current, status, now),
