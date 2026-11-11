@@ -18,6 +18,7 @@ import {
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
+import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -41,6 +42,7 @@ import {
   spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { readExpenseAttributionParties } from "~/server/domains/expense/repo/expense-attribution";
 import {
   effectiveExpenseSpendingCategoriesSql,
@@ -771,6 +773,47 @@ function digestSpendingEvidence(
   });
 }
 
+/** Purchases whose every settling Transaction another proven occurrence of the charge's source accepted. */
+async function settledByOtherOccurrences(
+  db: Database,
+  purchases: readonly { id: string; transactionIds: readonly string[] }[],
+  sourceRefs: readonly { source: string; externalId: string }[],
+) {
+  const settled = purchases.filter(
+    (purchase) => purchase.transactionIds.length,
+  );
+  const ids = [
+    ...new Set(settled.flatMap((purchase) => purchase.transactionIds)),
+  ];
+  if (!ids.length || !sourceRefs.length) return new Set<string>();
+  const proven = await getDb(db).execute<{ id: string }>(sql`
+    SELECT DISTINCT o."acceptedTransactionId"::text AS id FROM "SourceOccurrence" o
+    WHERE ${notDeleted("o")} AND o."supersededByOccurrenceId" IS NULL
+      AND o.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
+      AND o."acceptedTransactionId" IN (${sql.join(
+        ids.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+      AND o.source IN (${sql.join(
+        [...new Set(sourceRefs.map((ref) => ref.source))].map(
+          (name) => sql`${name}`,
+        ),
+        sql`, `,
+      )})
+      AND o.shortcode NOT IN (${sql.join(
+        sourceRefs.map((ref) => sql`${ref.externalId}`),
+        sql`, `,
+      )})`);
+  const accepted = new Set(proven.rows.map((entry) => String(entry.id)));
+  return new Set(
+    settled
+      .filter((purchase) =>
+        purchase.transactionIds.every((id) => accepted.has(String(id))),
+      )
+      .map((purchase) => purchase.id),
+  );
+}
+
 function availableCents(
   graph: Awaited<ReturnType<typeof spendingGraph>> | undefined,
   amount: number,
@@ -1312,36 +1355,49 @@ async function discoverSpendingEvidence(
   const candidateGraphs = new Map(
     candidateEvidence.map((candidate) => [candidate.id, candidate.graph]),
   );
-  const liveCandidates = unrejectedCandidates.filter((candidate) => {
-    if (!candidate.reviewOnly) {
-      if (
-        strong.has(candidate.shortcode) ||
-        candidate.shortcode === request.purchaseId ||
-        source.kind === "refund"
-      )
-        return true;
-      // A payment record at this amount may be this very charge.
-      const evidence = candidateEvidence.find(
-        (entry) => entry.id === candidate.id,
-      );
-      if (
-        evidence?.payments.some(
-          (payment) =>
-            Math.abs(cents(payment.amount)) === Math.abs(cents(source.amount)),
-        )
-      )
-        return true;
-    }
-    // Only confidently exhausted capacity removes a blocker: other charges
-    // already settle every line, as a Purchase booked from an earlier charge
-    // does. Unknown and negative capacity cannot establish full settlement.
+  // Exhausted capacity alone never proves a different event: a nearby
+  // Purchase stops blocking only when every settlement is another proven
+  // occurrence of this charge's source, as an earlier booking of the same
+  // statement creates. Manual or unproven settlements may be this charge.
+  const exhausted = unrejectedCandidates.filter((candidate) => {
+    if (
+      candidate.reviewOnly ||
+      strong.has(candidate.shortcode) ||
+      candidate.shortcode === request.purchaseId ||
+      source.kind === "refund"
+    )
+      return false;
+    const evidence = candidateEvidence.find(
+      (entry) => entry.id === candidate.id,
+    );
     return (
+      !evidence?.payments.some(
+        (payment) =>
+          Math.abs(cents(payment.amount)) === Math.abs(cents(source.amount)),
+      ) &&
       availableCents(
         candidateGraphs.get(candidate.id),
         source.amount,
         row?.id,
-      ) !== 0
+      ) === 0
     );
+  });
+  const distinctlySettled = await settledByOtherOccurrences(
+    db,
+    exhausted.map((candidate) => ({
+      id: candidate.id,
+      transactionIds: (candidateGraphs.get(candidate.id)?.settlements ?? [])
+        .map((entry) => entry.transactionId)
+        .filter((id) => id !== row?.id),
+    })),
+    source.sourceRefs,
+  );
+  const liveCandidates = unrejectedCandidates.filter((candidate) => {
+    if (!candidate.reviewOnly) return !distinctlySettled.has(candidate.id);
+    const graph = candidateGraphs.get(candidate.id);
+    // Only confidently exhausted capacity removes an added-only blocker.
+    // Unknown and negative capacity cannot establish ordinary full settlement.
+    return availableCents(graph, source.amount, row?.id) !== 0;
   });
   let categoryFromPurchase = false;
   if (source.kind === "refund" && !request.spendingCategoryId) {

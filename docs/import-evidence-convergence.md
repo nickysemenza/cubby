@@ -148,11 +148,13 @@ installment plans and payment schedules. Undated retained payment evidence for
 the exact charge amount also keeps an older Purchase as a blocker. Otherwise an
 older Purchase with no allocated payment does not block a later charge.
 These additional candidates are review-only: even a complete retained payment
-set cannot make them automatic settlement targets. Confidently zero remaining
-capacity excludes a nearby or additional candidate, such as the Purchase an
-earlier charge booked, so an extra charge on a fully paid order books new
-spending unless the member names that Purchase. Complete settlement targets,
-the explicitly chosen Purchase, refund originals and Purchases whose retained
+set cannot make them automatic settlement targets. Only confidently zero
+remaining capacity excludes an additional candidate. A nearby candidate is
+excluded only when its capacity is confidently zero and every settling
+Transaction is another proven occurrence of the charge's source, such as the
+Purchase an earlier statement booking created; a manual or unproven settlement
+may be this same charge and keeps blocking. Complete settlement targets, the
+explicitly chosen Purchase, refund originals and Purchases whose retained
 payment evidence names the charge's amount stay intact. Explicit member
 selection or rejection keeps its authority. A header total without actual vendor lines is outside this
 check, and exhausted capacity does not prove source-event identity.
