@@ -862,6 +862,10 @@ export const { definition, readSchemas } = defineEntityModel({
         on: ["source", "accountDescriptor", "statementDate", "providerAmount"],
       },
       {
+        name: "SourceTransactionRecord_amount_date_idx",
+        on: ["providerAmount", "statementDate"],
+      },
+      {
         name: "SourceTransactionRecord_rawDescription_gin_idx",
         using: "gin",
         on: [{ sql: "{rawDescription} gin_trgm_ops" }],

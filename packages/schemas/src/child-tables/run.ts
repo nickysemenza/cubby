@@ -907,12 +907,6 @@ export const runChildren = [
       },
       { name: "AiEvaluation_work_key", unique: true, on: ["workKey"] },
       {
-        name: "AiEvaluation_pending_share_key",
-        on: ["shareKey"],
-        where:
-          "{shareKey} IS NOT NULL AND {state} IN ('queued','result_ready')",
-      },
-      {
         name: "AiEvaluation_admission_idx",
         on: ["executionKind", "state"],
       },

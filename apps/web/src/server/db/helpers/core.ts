@@ -226,8 +226,17 @@ export async function runAfterCommit<T>(
     return;
   }
   if (!("rollback" in db)) {
+    const scope = afterCommitScope.getStore();
     if (typeof entry === "function") await entry(db);
-    else await entry.flush(db, entry.items);
+    else if (scope) {
+      if (
+        !scope.some(
+          (item) => typeof item !== "function" && item.key === entry.key,
+        )
+      )
+        scopeDatabases.set(entry, db);
+      enrollAfterCommit(scope, entry);
+    } else await entry.flush(db, entry.items);
   } else {
     const parent = transactionParents.get(db);
     if (!parent)

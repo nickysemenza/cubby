@@ -1,0 +1,90 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "90093de1-eb0a-47bd-864b-509578fd9d8d",
+  "prevIds": [
+    "eabca027-8ecb-4b53-a454-f6a2285dda1f"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AiEvaluation",
+        "AiEvaluation_pending_share_key"
+      ],
+      "writes": [
+        "s|idx|public.AiEvaluation_pending_share_key",
+        "n|idx|public.AiEvaluation_pending_share_key",
+        "e|idx|public.AiEvaluation_pending_share_key",
+        "n|rel|public.AiEvaluation_pending_share_key"
+      ],
+      "reads": [
+        "e|tbl|public.AiEvaluation",
+        "n|sch|public",
+        "e|col|public.AiEvaluation.shareKey"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "SourceTransactionRecord",
+        "SourceTransactionRecord_amount_date_idx"
+      ],
+      "writes": [
+        "s|idx|public.SourceTransactionRecord_amount_date_idx",
+        "n|idx|public.SourceTransactionRecord_amount_date_idx",
+        "e|idx|public.SourceTransactionRecord_amount_date_idx",
+        "n|rel|public.SourceTransactionRecord_amount_date_idx"
+      ],
+      "reads": [
+        "n|tbl|public.SourceTransactionRecord",
+        "n|sch|public",
+        "n|col|public.SourceTransactionRecord.providerAmountMinor",
+        "n|col|public.SourceTransactionRecord.statementDate"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "SourceTransactionRecord",
+        "name": "SourceTransactionRecord_amount_date_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "providerAmountMinor",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "statementDate",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_pending_share_key\"]"
+    }
+  ]
+}

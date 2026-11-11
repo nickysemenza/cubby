@@ -25,7 +25,7 @@ import { transactionDollars } from "~/server/domains/financial-transaction/repo/
 import {
   sourceObservationColumns,
   sourceObservationFrom,
-  sourceObservations,
+  sourceObservationFacts,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -76,11 +76,11 @@ async function replacementDecisionClosure(
   }>(
     sql`
     WITH RECURSIVE decisions AS (
-      SELECT r.id, r."occurrenceId", r."supersededByRowId", ARRAY[r.id] AS visited FROM ${sourceObservations} r
+      SELECT r.id, r."occurrenceId", r."supersededByRowId", ARRAY[r.id] AS visited FROM ${sourceObservationFacts} r
       WHERE r.id = ANY(${uuidArrayParam(ids)})
       UNION ALL
       SELECT r.id, r."occurrenceId", r."supersededByRowId", decisions.visited || r.id
-      FROM decisions JOIN ${sourceObservations} r ON r.id = decisions."supersededByRowId"
+      FROM decisions JOIN ${sourceObservationFacts} r ON r.id = decisions."supersededByRowId"
       WHERE NOT r.id = ANY(decisions.visited)
     ) SELECT DISTINCT id, "occurrenceId" FROM decisions`,
     "objects",

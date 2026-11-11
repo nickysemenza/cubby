@@ -106,12 +106,6 @@ export const sourceObservationsForPage = (
   observationIds: readonly SourceTransactionRecordId[],
 ): SQL => sourceObservationRead(observationIds);
 
-/** Hash the complete negative fence once; never re-run history closure for each suggestion. */
-export const sourceReadyOccurrenceIds = sql`-- includes-deleted: reserved ownership and stored review state remain binding after tombstoning.
-  SELECT ready.id FROM "SourceOccurrence" ready
-  WHERE ready."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-    AND ready.id NOT IN (SELECT id FROM ${sourceOccurrencesWithUnresolvedHistory} unresolved)`;
-
 const occurrenceStateColumns = (
   unresolved: SQL,
 ) => sql`o.source, o.shortcode AS "chargeKey", o.id AS "occurrenceId", CASE WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${unresolved} THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END AS "reviewState", o.version, o."acceptedTransactionId",
@@ -240,18 +234,28 @@ export const SOURCE_HELD_REASON =
 export const statementChargeSourceHeld = (
   source: SQL,
   chargeKey: SQL,
-) => sql`NOT EXISTS (
+) => sql`-- includes-deleted: retained occurrences continue to fence source eligibility.
+NOT EXISTS (
   SELECT 1 FROM ${sourceObservationFacts} reviewed
   WHERE reviewed.source=${source} AND reviewed."chargeKey"=${chargeKey}
     AND reviewed."occurrenceId" IS NOT NULL AND reviewed.current
-    AND reviewed."occurrenceId" IN (${sourceReadyOccurrenceIds})
+    -- includes-deleted: retained ownership remains binding.
+    AND EXISTS (SELECT 1 FROM "SourceOccurrence" point_owner
+      WHERE point_owner.id=reviewed."occurrenceId" AND point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)})
 )`;
 
 /** Held advice can be dismissed, but cannot suppress a later proven occurrence. */
-export const statementSuggestionSourceHeld = (alias: string) => sql`NOT EXISTS (
+export const statementSuggestionSourceHeld = (
+  alias: string,
+) => sql`-- includes-deleted: retained occurrences continue to fence source eligibility.
+NOT EXISTS (
   SELECT 1 FROM ${sourceObservationFacts} reviewed
   WHERE reviewed.id=${sql.identifier(alias)}."recordId" AND reviewed."occurrenceId" IS NOT NULL
-    AND reviewed.current AND reviewed."occurrenceId" IN (${sourceReadyOccurrenceIds})
+    AND reviewed.current -- includes-deleted: retained ownership remains binding.
+    AND EXISTS (SELECT 1 FROM "SourceOccurrence" point_owner
+      WHERE point_owner.id=reviewed."occurrenceId" AND point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)})
     AND reviewed."withdrawnAt" IS NULL AND reviewed."supersededByRowId" IS NULL
     AND reviewed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
 )`;

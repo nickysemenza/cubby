@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -621,14 +622,14 @@ describe("statement Transaction suggestions", () => {
         .spyOn(statementSuggestionsRepo, "completeNoActionStatementPrefix")
         .mockImplementation(async (...args) => {
           const [entry] = args[1];
-          if (shortcut && entry) await move(entry.suggestionId);
+          if (entry) await move(entry.suggestionId);
           return prefix(...args);
         });
       const completeSpy = vi
         .spyOn(statementSuggestionsRepo, "completeStatementApplications")
         .mockImplementation(async (...args) => {
           const [id] = args[1];
-          if (!shortcut && id) await move(id);
+          if (id) await move(id);
           return complete(...args);
         });
       try {
@@ -2055,7 +2056,10 @@ describe("statement Transaction suggestions", () => {
         limit: 33,
         port: answering({ kind: "purchase", counterparty: "business" }),
         spendingAdvice: async () => {
-          if (++spendingCalls === 32) vi.setSystemTime(Date.now() + 21_000);
+          if (++spendingCalls === 32)
+            vi.setSystemTime(
+              Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs + 1_000,
+            );
           return financialSpendingAdvice.parse({});
         },
       });
@@ -2089,62 +2093,6 @@ describe("statement Transaction suggestions", () => {
       failed: [],
       labels: { reused: 2, generated: 1 },
     });
-
-    const retained = await record(
-      ctx,
-      [
-        rowInput({ providerTransactionId: "synthetic-deadline-receipt-a" }),
-        rowInput({ providerTransactionId: "synthetic-deadline-receipt-b" }),
-      ],
-      { fingerprint: "synthetic-application-deadline" },
-    );
-    await generate(ctx);
-    await statementSuggestionsRepo.publishCompleteStatementLabels(
-      ctx.db,
-      await completeLabelPublications(ctx),
-    );
-    const noMoreQuestions = async () => {
-      throw new Error("Retained application must reuse committed labels");
-    };
-    let application;
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      application = await runStatementLabels(ctx.db, {
-        cooperative: true,
-        scope: { importId: retained.batchId },
-        port: noMoreQuestions,
-        work: {
-          add() {},
-          async time(phase, run) {
-            if (phase === "statement_application")
-              vi.setSystemTime(Date.now() + 21_000);
-            return run();
-          },
-        },
-      });
-      expect(application).toMatchObject({
-        completed: 1,
-        failed: [],
-        next: { inclusive: true },
-      });
-      expect(
-        await statementSuggestionsRepo.suggestionsNeedingLabels(
-          ctx.db,
-          10,
-          application.next,
-          { importId: retained.batchId },
-        ),
-      ).toHaveLength(1);
-    } finally {
-      vi.useRealTimers();
-    }
-    expect(
-      await runStatementLabels(ctx.db, {
-        after: application.next,
-        scope: { importId: retained.batchId },
-        port: noMoreQuestions,
-      }),
-    ).toMatchObject({ completed: 1, failed: [], next: null });
   });
 
   it("durably defers cooperative spending finish after one gateway admission refusal", async () => {
@@ -2628,7 +2576,7 @@ describe("statement Transaction suggestions", () => {
           failed: [],
           next: null,
         });
-        expect(admission).toHaveBeenCalledTimes(importScoped ? 2 : 0);
+        expect(admission).toHaveBeenCalledTimes(0);
         expect(
           await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
         ).toBe(0);

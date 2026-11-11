@@ -1,4 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
 import {
   statementTransactionAction,
@@ -8,10 +9,10 @@ import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { cents } from "@cubby/shared";
 import { type SQL, sql } from "drizzle-orm";
 
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
-  sourceReadyOccurrenceIds,
   sourceObservationFacts,
   sourceOccurrenceStates,
   sourceOccurrenceStatesWhere,
@@ -110,7 +111,7 @@ export const suggestionField = (
     | "evidenceFingerprint"
     | "needsLabel",
   alias = "s",
-) => sql`${sql.raw(`"${alias}"`)}.data->>${key}`;
+) => sql`${sql.raw(`"${alias}"`)}.data->>${sql.raw(`'${key}'`)}`;
 
 /**
  * Current unsettled evidence gates reads as well as discovery. Schema-owned
@@ -132,10 +133,14 @@ export const pendingSuggestion = (alias = "s") =>
 export const sourceSuggestionAutomaticEligible = (
   alias = "s",
   allowRetainedCorrection = false,
-) => sql`EXISTS (
+) => sql`-- includes-deleted: retained occurrences continue to fence source eligibility.
+EXISTS (
   SELECT 1 FROM ${sourceObservationFacts} observed
   WHERE observed.id=${sql.identifier(alias)}."recordId" AND ${notDeleted("observed")}
-    AND observed."occurrenceId" IN (${sourceReadyOccurrenceIds})
+    -- includes-deleted: retained ownership remains binding.
+    AND EXISTS (SELECT 1 FROM "SourceOccurrence" point_owner
+      WHERE point_owner.id=observed."occurrenceId" AND point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
+        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)})
     AND observed.current AND observed.disposition <> ${sourceTransactionRecordDisposition.enum.ignored} AND observed."supersededByRowId" IS NULL
     AND observed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
     AND (observed."withdrawnAt" IS NULL OR ${allowRetainedCorrection ? sql`${sql.identifier(alias)}.data->>'reviewReason' IS NOT NULL` : sql`${sql.identifier(alias)}.data->>'recommended'=${statementTransactionAction.enum.void}`})

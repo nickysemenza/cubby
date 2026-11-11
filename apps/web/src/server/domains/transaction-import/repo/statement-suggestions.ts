@@ -53,6 +53,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import {
   databaseForTransaction,
   getDb,
@@ -62,12 +63,14 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
+import { withAfterCommitScope } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
@@ -77,7 +80,6 @@ import {
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationFacts,
-  sourceObservations,
   sourceObservationsForPage,
   sourceObservationIdentities,
   statementChargeSourceHeld,
@@ -188,7 +190,6 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 import {
   statementHoldAccounts as holdAccounts,
   statementInputCharges,
-  statementInputChargeKeys,
   scopedStatementChargeKeys,
   statementPendingInputTransactions,
   type StatementSuggestionScope,
@@ -297,27 +298,14 @@ async function nextUnmatchedCharges(
     scope: StatementSuggestionScope;
   },
 ): Promise<ChargeRef[]> {
-  const result: ChargeRef[] = [];
-  let after = input.after;
-  for (;;) {
-    const keys = await unwrapDb(db).execute<ChargeRef>(
-      statementInputChargeKeys(input.scope, after, input.limit),
-      "objects",
-    );
-    if (!keys.length) return result;
-    const rows = await unwrapDb(db).execute<ChargeRef>(
-      sql`
-      SELECT cs.source,cs."chargeKey" FROM (${statementInputCharges(input.scope, keys)}) cs
-      ORDER BY cs.source,cs."chargeKey"`,
-      "objects",
-    );
-    result.push(
-      ...rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey })),
-    );
-    if (result.length >= input.limit) return result.slice(0, input.limit);
-    if (keys.length < input.limit) return result;
-    after = keys.at(-1)!;
-  }
+  return unwrapDb(db).execute<ChargeRef>(
+    sql`
+    SELECT inputs.source, inputs."chargeKey" FROM (${statementInputCharges(input.scope)}) inputs
+    ${input.after ? sql`WHERE (inputs.source, inputs."chargeKey") > (${input.after.source}, ${input.after.chargeKey})` : sql``}
+    ORDER BY inputs.source, inputs."chargeKey" LIMIT ${input.limit}
+  `,
+    "objects",
+  );
 }
 
 /**
@@ -548,7 +536,7 @@ async function siblingsFor(
   const values = sql.join(
     proposals.map(({ charge, observations }) => {
       const row = observations[0]!;
-      return sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${row.accountDescriptor}, ${row.providerAmount}::numeric, ${row.statementDate}::date, ${`{${observations.map((o) => o.id).join(",")}}`}::uuid[])`;
+      return sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${row.accountDescriptor}, ${cents(row.providerAmount)}::bigint, ${row.statementDate}::date, ${`{${observations.map((o) => o.id).join(",")}}`}::uuid[])`;
     }),
     sql`, `,
   );
@@ -563,13 +551,14 @@ async function siblingsFor(
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", descriptor, amount, day, "rowIds")
     ),
     o AS MATERIALIZED (
-      SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN ${sourceObservationFacts} o ON o.source = p.source
+      SELECT p.key, p."rowIds", o.id, o.source, o."batchId", o."rowPosition", o."providerTransactionId", owner.shortcode AS "chargeKey"
+      FROM p JOIN "SourceTransactionRecord" o ON o.source = p.source
+      JOIN "SourceOccurrence" owner ON owner.id=o."occurrenceId"
         AND normalize(o."accountDescriptor", NFKC) = normalize(p.descriptor, NFKC)
-        AND o."providerAmount" = p.amount
+        AND o."providerAmountMinor" = p.amount
         AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
         AND ${notDeleted("o")}
-        AND ${chargeKeyOf("o")} <> p."chargeKey"
+        AND owner.shortcode <> p."chargeKey"
     ),
     cs AS MATERIALIZED ${chargeStateOf(
       sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
@@ -588,7 +577,7 @@ async function siblingsFor(
     WHERE NOT EXISTS (
       SELECT 1 FROM members mo
       JOIN members mp ON mp."importId" = mo."importId"
-      JOIN ${sourceObservationFacts} own ON own.id = mp."statementRowId"
+      JOIN "SourceTransactionRecord" own ON own.id = mp."statementRowId"
       WHERE mo."statementRowId" = o.id AND mp."statementRowId" = ANY(o."rowIds")
         AND ${notDeleted("own")}
         AND ((o."providerTransactionId" IS NOT NULL AND own."providerTransactionId" IS NOT NULL)
@@ -655,7 +644,7 @@ async function copyMembersFor(
   const values = sql.join(
     grouped.map(
       ({ charge, canonical }) =>
-        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${canonical.providerAmount}::numeric, ${canonical.statementDate}::date)`,
+        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${cents(canonical.providerAmount)}::bigint, ${canonical.statementDate}::date)`,
     ),
     sql`, `,
   );
@@ -669,11 +658,12 @@ async function copyMembersFor(
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", amount, day)
     ),
     o AS MATERIALIZED (
-      SELECT DISTINCT p.key, o.source, ${chargeKeyOf("o")} AS "chargeKey"
-      FROM p JOIN ${sourceObservationFacts} o ON o."providerAmount" = p.amount
+      SELECT DISTINCT p.key, o.source, owner.shortcode AS "chargeKey"
+      FROM p JOIN "SourceTransactionRecord" o ON o."providerAmountMinor" = p.amount
+      JOIN "SourceOccurrence" owner ON owner.id=o."occurrenceId"
         AND o."statementDate" BETWEEN p.day - ${2 * SIBLING_WINDOW_DAYS}::int AND p.day + ${2 * SIBLING_WINDOW_DAYS}::int
-        AND ${notDeleted("o")} AND o."withdrawnAt" IS NULL
-        AND NOT (o.source = p.source AND ${chargeKeyOf("o")} = p."chargeKey")
+        AND ${notDeleted("o")} AND owner."withdrawnAt" IS NULL
+        AND NOT (o.source = p.source AND owner.shortcode = p."chargeKey")
     ),
     cs AS MATERIALIZED ${chargeStateOf(
       sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
@@ -756,9 +746,9 @@ async function bookedCopies(db: Database, charge: ChargeRef) {
   const rows = await unwrapDb(db).execute<{ copies: unknown }>(
     sql`
     SELECT s.judgment->'copies' AS copies FROM "Suggestion" s
-    WHERE s.family = ${suggestionFamily.enum.statement_transaction}
+    WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)}
       AND s.status = ${suggestionStatus.enum.applied}
-      AND s.data->>${"source"} = ${charge.source} AND s.data->>${"chargeKey"} = ${charge.chargeKey}
+      AND s.data->>${sql.raw("'source'")} = ${charge.source} AND s.data->>${sql.raw("'chargeKey'")} = ${charge.chargeKey}
     ORDER BY s."updatedAt" DESC LIMIT 1
   `,
     "objects",
@@ -966,6 +956,14 @@ async function merchantHistory(
       SELECT v.key, v.account, ${merchantKey(sql`v.merchant`)} AS merchant, v.day, v.direction
       FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
     ),
+    candidates AS MATERIALIZED (
+      SELECT p.key, ft.id, ft.shortcode, ft.kind
+      FROM p JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
+        AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
+        AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
+        AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
+        AND sign(ft."amountMinor")::int = p.direction
+    ),
     -- Transactions clean creates on these accounts made when accepted as is,
     -- derived once from retained accept decisions and their historical evidence. Ref keys split at the first ':', the
     -- separator suggestionRefKey writes after the source.
@@ -976,7 +974,8 @@ async function merchantHistory(
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
       JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
-      WHERE s.family = ${suggestionFamily.enum.statement_transaction}
+      WHERE fx.owner IN (SELECT id FROM candidates)
+        AND s.family = ${suggestionFamily.enum.statement_transaction}
         AND (s.judgment->>'clean')::boolean
         AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
         AND s.status = ${suggestionStatus.enum.applied}
@@ -985,7 +984,7 @@ async function merchantHistory(
         AND f.event->>'verdict' = ${feedbackVerdict.enum.correct}
         AND f.event @> ${JSON.stringify({ correction: { present: false } })}::jsonb
     )
-    SELECT p.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
+    SELECT ft.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
       bool_or(EXISTS (
         SELECT 1 FROM "Expense" e
         WHERE e."bookingTransactionCode" = ft.shortcode AND ${notDeleted("e")}
@@ -997,14 +996,9 @@ async function merchantHistory(
           AND pu."vendorId" IS NOT NULL
         WHERE fta."transactionId" = ft.id AND ${notDeleted("fta")}
       )) AS purchased
-    FROM p
-    JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
-      AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
-      AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
-      AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
-      AND sign((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}))::int = p.direction
+    FROM candidates ft
     WHERE ft.id NOT IN (SELECT id FROM ruled)
-    GROUP BY p.key
+    GROUP BY ft.key
   `,
     "objects",
   );
@@ -1363,8 +1357,11 @@ async function assertProviderIdentityPublication(
 export async function buildChargeProposals(
   db: Database,
   charges: readonly ChargeRef[],
+  sharedPreparation?: Awaited<
+    ReturnType<typeof prepareFinancialStatementPreview>
+  >,
 ): Promise<ChargeProposal[]> {
-  const prepared = await prepareChargePreviews(db, charges);
+  const prepared = await prepareChargePreviews(db, charges, sharedPreparation);
   if (!prepared) return [];
   const {
     grouped,
@@ -2219,7 +2216,7 @@ async function priorStatementPublications(
       SELECT roots.owner, s.id FROM roots
       JOIN "FinancialEvidenceAlias" evidence ON evidence."observationId"=roots.observation AND ${notDeleted("evidence")}
       JOIN "Suggestion" s ON s.family=${suggestionFamily.enum.statement_transaction}
-        AND s.data->>${financialTransactionSourceRef.keyof().enum.source}=evidence.source AND s.data->>'chargeKey'=evidence.value
+        AND s.data->>${financialTransactionSourceRef.keyof().enum.source}=evidence.source AND s.data->>${sql.raw("'chargeKey'")}=evidence.value
     )
     SELECT matched.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
@@ -3319,37 +3316,34 @@ async function prepareStatementGenerationPage(
   }
 }
 
-/**
- * Refresh named charges once the writing transaction commits. Calls in one
- * transaction or MCP batch coalesce per source, so a batch regenerates each
- * charge once after its last write.
- */
+/** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
+export const coalesceChargeRefreshes = <T>(fn: () => Promise<T>) =>
+  withAfterCommitScope(fn);
+
+/** Refresh named charges once after the writing transaction commits. */
 export async function regenerateChargesAfterCommit(
   db: Parameters<typeof runAfterCommit>[0],
   charges: readonly ChargeRef[],
 ) {
-  for (const source of new Set(charges.map((charge) => charge.source))) {
-    const items = charges.filter((charge) => charge.source === source);
-    await runAfterCommit(db, {
-      key: `statement-charges:${source}`,
-      items: [...items],
-      flush: async (committed, queued: readonly ChargeRef[]) => {
-        try {
-          await regenerateCharges(committed, [
-            ...new Map(
-              queued.map((charge) => [chargeId(charge), charge]),
-            ).values(),
-          ]);
-        } catch (error) {
-          // SILENT: advisory refresh only; the write committed and each
-          // charge's own accept rechecks evidence, so the next Sweep repairs it.
-          log.error("Charge suggestion refresh failed", {
-            error: scrubErrorMessage(String(error)),
-          });
-        }
-      },
-    });
-  }
+  if (!charges.length) return;
+  await runAfterCommit(db, {
+    key: "statement-charges",
+    items: [...charges],
+    flush: async (committed, queued: readonly ChargeRef[]) => {
+      try {
+        await regenerateCharges(committed, [
+          ...new Map(
+            queued.map((charge) => [chargeId(charge), charge]),
+          ).values(),
+        ]);
+      } catch (error) {
+        // SILENT: advisory refresh only; each accept rechecks evidence.
+        log.error("Charge suggestion refresh failed", {
+          error: scrubErrorMessage(String(error)),
+        });
+      }
+    },
+  });
 }
 
 /** Recompute and publish named charges, e.g. the siblings of an applied one. */
@@ -3364,8 +3358,7 @@ export async function regenerateCharges(
       ? new Set(
           (
             await unwrapDb(db).execute<ChargeRef>(sql`
-        SELECT scoped.source, scoped."chargeKey" FROM (${scopedStatementChargeKeys(scope)}) scoped
-        WHERE (scoped.source, scoped."chargeKey") IN (${tuples(charges)})
+        SELECT scoped.source, scoped."chargeKey" FROM (${scopedStatementChargeKeys(scope, sql`(o.source, o.shortcode) IN (${tuples(charges)})`)}) scoped
       `)
           ).rows.map(chargeId),
         )
@@ -3477,8 +3470,9 @@ export async function retryStatementGenerationRefs(
       }>(
         sql`
         SELECT DISTINCT observation.source,observation."chargeKey",
-          (observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
-        FROM ${sourceObservations} observation
+          (observation."storedReviewState"<>${sourceOccurrenceReviewState.enum.ready}
+            OR ${sourceOccurrenceHasUnresolvedHistory(sql`observation."occurrenceId"`, sql`observation."acceptedTransactionId"`)}) AS held
+        FROM ${sourceObservationFacts} observation
         WHERE observation.source=${original.source} AND ${notDeleted("observation")}
           AND (observation."chargeKey"=${original.chargeKey} OR
             -- includes-deleted: retained aliases rebind original work references without accepting ownership.
@@ -3701,51 +3695,54 @@ export async function generateStatementSuggestionPage(
     // This page's publication is current until one of its charges applies a
     // rule; only charges after such a money write regenerate first.
     let wrote = false;
-    for (const [chargeIndex, charge] of proposalCharges.entries()) {
-      const ref = `charge:${chargeId(charge)}`;
-      if (failed.some((failure) => failure.ref === ref)) continue;
-      try {
-        if (wrote) {
+    // Each write's neighbour refresh joins one page-wide refresh at the end.
+    await coalesceChargeRefreshes(async () => {
+      for (const [chargeIndex, charge] of proposalCharges.entries()) {
+        const ref = `charge:${chargeId(charge)}`;
+        if (failed.some((failure) => failure.ref === ref)) continue;
+        try {
+          if (wrote) {
+            log.info("Statement generation phase", {
+              phase: "regeneration",
+              chargeIndex,
+              charges: proposalCharges.length,
+            });
+            await regenerateCharges(db, [charge], input.scope);
+          }
           log.info("Statement generation phase", {
-            phase: "regeneration",
+            phase: "application",
             chargeIndex,
             charges: proposalCharges.length,
           });
-          await regenerateCharges(db, [charge], input.scope);
+          const outcome = await applyAutomaticRulesForCharge(
+            db,
+            charge,
+            input.servicesFor,
+            true,
+            input.scope,
+          );
+          if (outcome.applied.length) wrote = true;
+          // Booking a primary republished its copies as attaches; settle the
+          // ones this import covers in the same pass.
+          for (const copy of await bookedCopies(db, charge))
+            if (
+              (
+                await applyAutomaticRulesForCharge(
+                  db,
+                  copy,
+                  input.servicesFor,
+                  true,
+                  input.scope,
+                )
+              ).applied.length
+            )
+              wrote = true;
+        } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
+          failed.push(statementGenerationFailure(ref, error));
         }
-        log.info("Statement generation phase", {
-          phase: "application",
-          chargeIndex,
-          charges: proposalCharges.length,
-        });
-        const outcome = await applyAutomaticRulesForCharge(
-          db,
-          charge,
-          input.servicesFor,
-          true,
-          input.scope,
-        );
-        if (outcome.applied.length) wrote = true;
-        // Booking a primary republished its copies as attaches; settle the
-        // ones this import covers in the same pass.
-        for (const copy of await bookedCopies(db, charge))
-          if (
-            (
-              await applyAutomaticRulesForCharge(
-                db,
-                copy,
-                input.servicesFor,
-                true,
-                input.scope,
-              )
-            ).applied.length
-          )
-            wrote = true;
-      } catch (error) {
-        if (isWorkflowInterrupted(error)) throw error;
-        failed.push(statementGenerationFailure(ref, error));
       }
-    }
+    });
   }
   const timings = {
     selection: Math.round(selectedAt - startedAt),
@@ -4045,7 +4042,6 @@ export async function completeNoActionStatementPrefix(
   }[],
   scope?: StatementSuggestionScope,
 ) {
-  if (scope?.importId) return 0;
   const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
   if (!window.length) return 0;
   if (new Set(window.map((entry) => entry.suggestionId)).size !== window.length)
@@ -4054,10 +4050,11 @@ export async function completeNoActionStatementPrefix(
   // Positive results prove nothing until the whole prefix is locked and checked.
   // Import-only rules are inapplicable to this unscoped path regardless of their switch.
   // Unknown or obsolete stamps remain boundaries; only exact current stamps are excluded.
-  const excluded = importOnlyStatementRuleStamps();
+  // Import authority executes the import-only rules, so none is excluded.
+  const excluded = scope?.importId ? [] : importOnlyStatementRuleStamps();
   const hasApplicableRules = (data: SQL) => sql<boolean>`EXISTS (
     SELECT 1 FROM jsonb_array_elements_text(${matchedRulesOf(data)}) AS matched(value)
-    WHERE matched.value IS NULL OR NOT ${inArray(sql`matched.value`, excluded)})`;
+    WHERE matched.value IS NULL${excluded.length ? sql` OR NOT ${inArray(sql`matched.value`, excluded)}` : sql` OR true`})`;
   const first = window[0]!;
   const [candidate] = await getDb(db)
     .select({ id: suggestionTable.id })
@@ -4281,9 +4278,7 @@ export async function suggestionsNeedingLabels(
 
 const labelIdentityScope = (scope: StatementSuggestionScope) =>
   scope.importId || scope.since
-    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
-        WITH label_scope AS MATERIALIZED (${scopedStatementChargeKeys(scope)})
-        SELECT source,"chargeKey" FROM label_scope)`
+    ? sql`EXISTS (${scopedStatementChargeKeys(scope, sql`o.source=${suggestionField("source")} AND o.shortcode=${suggestionField("chargeKey")}`)})`
     : sql`true`;
 
 /** Resolve only named cursor candidates or write-admission targets. */
@@ -4291,6 +4286,9 @@ async function statementLabelScope(
   db: Database,
   scope: StatementSuggestionScope,
   suggestionIds: readonly string[],
+  sharedPreparation?: Awaited<
+    ReturnType<typeof prepareFinancialStatementPreview>
+  >,
 ) {
   const identity = labelIdentityScope(scope);
   const selected = suggestionIds.length
@@ -4320,7 +4318,7 @@ async function statementLabelScope(
   );
   const admitted: string[] = [];
   const preparation = rows.length
-    ? await prepareFinancialStatementPreview(db)
+    ? (sharedPreparation ?? (await prepareFinancialStatementPreview(db)))
     : undefined;
   for (
     let offset = 0;
@@ -4355,8 +4353,14 @@ export async function statementLabelTargetsInScope(
   db: Database,
   scope: StatementSuggestionScope,
   suggestionIds: readonly string[],
+  preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
-  const scoped = await statementLabelScope(db, scope, suggestionIds);
+  const scoped = await statementLabelScope(
+    db,
+    scope,
+    suggestionIds,
+    preparation,
+  );
   const rows = await unwrapDb(db).execute<{ id: string }>(
     sql`
     SELECT s.id FROM "Suggestion" s

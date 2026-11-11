@@ -1,4 +1,5 @@
 import type { PermitRecovery } from "@cubby/schemas/queue-messages";
+import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { eq, inArray, asc, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,6 +8,7 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { addJobAiCost, countDrainItems } from "~/server/generic/jobs/context";
 import { seedJobs } from "~/server/generic/jobs/jobs.fixtures";
 import {
@@ -15,6 +17,7 @@ import {
   type PermitRuntime,
 } from "~/server/generic/jobs/service/permits";
 import type { JobHandlers } from "~/server/generic/jobs/types";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
 import { enqueueJob } from "./producer";
@@ -353,5 +356,55 @@ describe("durable Job selection", () => {
       await holding;
     }
     expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(100);
+  });
+
+  it("holds a Sweep's page while another Sweep on its import source holds a lease", async () => {
+    const importOn = async (source: string) => {
+      await ensureExternalSources(ctx.db, [source]);
+      return (
+        await insertWithShortcode(ctx.db, "transactionImport", {
+          source,
+          label: source,
+          fingerprint: crypto.randomUUID(),
+        })
+      ).id;
+    };
+    const sweepOn = async (importId: string) => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "sweep",
+        trigger: "manual",
+        status: "running",
+        execution: false,
+        input: sweepRunInput.parse({
+          kind: "sweep",
+          families: [{ family: "statement_transaction", scope: { importId } }],
+        }),
+      });
+      return enqueueJob(ctx.db, {
+        key: `run:${runId}`,
+        kind: "run.execute",
+        input: { runId, purpose: "sweep" },
+        runId,
+      });
+    };
+    const held = await sweepOn(await importOn("synthetic-bank"));
+    const waiting = await sweepOn(await importOn("synthetic-bank"));
+    const other = await sweepOn(await importOn("synthetic-card"));
+    expect(await claimJob(ctx.db, held.id)).not.toBeNull();
+
+    const selected = await dueUnits(ctx.db, [], 10);
+    const ids = selected.flatMap((entry) =>
+      entry.type === "job" ? [entry.id] : [],
+    );
+    expect(ids).toEqual([other.id]);
+    expect(await claimJob(ctx.db, waiting.id)).toBeNull();
+    expect(await claimJob(ctx.db, other.id)).not.toBeNull();
+
+    // A lapsed lease holds nothing: the waiting Sweep takes its turn.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(job.id, held.id));
+    expect(await claimJob(ctx.db, waiting.id)).not.toBeNull();
   });
 });
