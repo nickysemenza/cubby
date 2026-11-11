@@ -21,6 +21,8 @@ import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
+import { resolveRunFinding } from "../repo/findings";
+import { settleReviewedMailRun } from "../repo/mail-run-settlement";
 import * as extraction from "./agents/extract";
 import { claimMailImportWork } from "./mail-import-claim";
 import { resolveMail } from "./mail-tool";
@@ -317,11 +319,15 @@ describe("Mail import settlement", () => {
       .select({ kind: runFinding.kind, summary: runFinding.summary })
       .from(runFinding)
       .where(eq(runFinding.runId, runId));
+    return { outcome, findings, status: await runStatusOf(runId), runId };
+  }
+
+  async function runStatusOf(runId: RunId) {
     const [stored] = await getDb(ctx.db)
       .select({ status: run.status })
       .from(run)
       .where(eq(run.id, runId));
-    return { outcome, findings, status: stored?.status };
+    return stored?.status;
   }
 
   it("completes a Run whose admitted Email is all imported, linked or excluded", async () => {
@@ -329,7 +335,7 @@ describe("Mail import settlement", () => {
       "settled-imported": "completed",
       "settled-excluded": "excluded",
     });
-    expect(settled).toEqual({
+    expect(settled).toMatchObject({
       outcome: { reconciled: true, status: "completed" },
       findings: [],
       status: "completed",
@@ -337,7 +343,7 @@ describe("Mail import settlement", () => {
   });
 
   it.each(["completed", "unsettled"] as const)(
-    "reviews open commit findings alongside %s Emails",
+    "reviews open commit findings alongside %s Emails, then completes once they are resolved",
     async (status) => {
       const settled = await settledRun(
         { "synthetic-imported": "completed", "synthetic-with-finding": status },
@@ -350,6 +356,20 @@ describe("Mail import settlement", () => {
           summary: expect.stringMatching(/product_unresolved/u),
         }),
       );
+      const open = await getDb(ctx.db)
+        .select({ id: runFinding.id })
+        .from(runFinding)
+        .where(eq(runFinding.runId, settled.runId));
+      const statuses = [];
+      for (const { id } of open) {
+        await resolveRunFinding(ctx.db, { id, action: "dismiss" }, ctx.actor);
+        await settleReviewedMailRun(ctx.db, id, ctx.actor.userId);
+        statuses.push(await runStatusOf(settled.runId));
+      }
+      expect(statuses).toEqual([
+        ...open.slice(1).map(() => "needs_review"),
+        "completed",
+      ]);
     },
   );
 
@@ -358,7 +378,7 @@ describe("Mail import settlement", () => {
       "settled-imported": "completed",
       "payment-notice": "unsettled",
     });
-    expect(settled).toEqual({
+    expect(settled).toMatchObject({
       outcome: { reconciled: true, status: "completed" },
       findings: [],
       status: "completed",

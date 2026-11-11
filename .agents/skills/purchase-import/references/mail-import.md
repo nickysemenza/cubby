@@ -204,9 +204,11 @@ Claude or Codex session researches it later through the Research queue.
    `unresolved` and continue. Stop with `stop_import_run_for_review` and reason
    `provider_failure` only when the same failure has blocked two Emails in a
    row; Cubby refuses any other stop for a Mail import. Once every admitted Email is
-   imported, linked, excluded or resolved, the Run completes; any `unresolved`
-   Email instead puts it in review under one `unresolved_targets` finding that
-   lists each Email with your reason. An unresolved Email stays `unsettled` with
+   imported, linked, excluded or resolved with a recorded outcome, the Run
+   completes, and each `unresolved` Email becomes its own Work item routed by
+   its category. An open finding, or an Email left without an outcome, instead
+   puts it in review under one `unresolved_targets` finding; resolving the last
+   open finding completes it. An unresolved Email stays `unsettled` with
    this Run; only new evidence (a verified sender, new accepted order evidence,
    or changed retained bytes) admits it again, so restating the same gap never
    helps. If the coordinator itself fails, Cubby retries a provider, gateway or
