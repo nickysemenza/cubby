@@ -48,10 +48,6 @@ import {
   withTrace,
 } from "~/server/observability/tracing";
 import { testDurationOverrideMs } from "~/server/testing/test-duration-override";
-import {
-  FORWARDED_QUEUE_PATH,
-  handleForwardedQueue,
-} from "~/server/worker/queue";
 
 // A selected protocol's first evaluation is caught by the invocation failure
 // policy. A rejected ESM evaluation stays failed; clearing a promise is not recovery.
@@ -120,10 +116,7 @@ const log = createLogger("cf-server");
 
 let fetchInvocationOrdinal = 0;
 
-type HttpContext = {
-  waitUntil(promise: Promise<unknown>): void;
-  props?: unknown;
-};
+type HttpContext = { waitUntil(promise: Promise<unknown>): void };
 
 async function invokeApplication(
   request: Request,
@@ -280,17 +273,6 @@ export async function handleHttpRequest(
   env: Env,
   ctx: HttpContext,
 ): Promise<Response> {
-  if (new URL(request.url).pathname === FORWARDED_QUEUE_PATH) {
-    if (
-      !ctx.props ||
-      typeof ctx.props !== "object" ||
-      !("backgroundQueue" in ctx.props) ||
-      ctx.props.backgroundQueue !== true ||
-      request.method !== "POST"
-    )
-      return new Response("Not found", { status: 404 });
-    return handleForwardedQueue(request, env);
-  }
   const startedAt = performance.now();
   const invocationOrdinal = ++fetchInvocationOrdinal;
   const url = new URL(request.url);
