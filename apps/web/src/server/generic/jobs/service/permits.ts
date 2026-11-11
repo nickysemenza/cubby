@@ -90,7 +90,7 @@ export type PermitRuntime = {
 };
 
 /** Every drain's due rows, each tagged with the drain that will run them. */
-export const dueDrains = (drains: readonly BackgroundDrain[]): DrainDue[] =>
+const dueDrains = (drains: readonly BackgroundDrain[]): DrainDue[] =>
   drains.flatMap((drain) => {
     const due = drain.due();
     return due

@@ -278,11 +278,21 @@ describe("AI funding availability", () => {
       const unrelated = await ensureRun(ctx.db, ctx.actor, {
         purpose: "ai_suggest",
       });
+      const predecessor = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_import",
+        trigger: "scheduled",
+        execution: false,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ predecessorRunId: predecessor })
+        .where(eq(run.id, unrelated));
       const past = new Date(Date.now() - 60_000);
       for (const [id, status] of [
         [discovery, "paused_auth"],
         [imported, "needs_review"],
         [unrelated, "paused_auth"],
+        [predecessor, "paused_auth"],
       ] as const)
         await getDb(ctx.db)
           .update(run)
@@ -321,6 +331,11 @@ describe("AI funding availability", () => {
         .from(run)
         .where(eq(run.id, unrelated));
       expect(untouched?.status).toBe("paused_auth");
+      const [superseded] = await getDb(ctx.db)
+        .select({ status: run.status })
+        .from(run)
+        .where(eq(run.id, predecessor));
+      expect(superseded?.status).toBe("paused_auth");
       // Re-arm the same synthetic work for the production wake journey.
       await getDb(ctx.db)
         .update(run)
