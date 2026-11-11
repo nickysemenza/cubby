@@ -2254,6 +2254,20 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     // Source identity review owns an unproven occurrence; a Suggestion that can
     // only be dismissed would duplicate that queue.
     if (isIdentityHold(judgment)) return { kind: "retire", reason: "held" };
+    // One bank event is one Suggestion: its copies wait for this primary, so
+    // advice they published before the pairing retires with this publication.
+    if (judgment.copies.length)
+      await transitionSuggestionStates(
+        tx,
+        sql`${pendingStatementState} AND (${sql.join(
+          judgment.copies.map(
+            (copy) =>
+              sql`(${suggestionField("source", STATE)}=${copy.source} AND ${suggestionField("chargeKey", STATE)}=${copy.chargeKey})`,
+          ),
+          sql` OR `,
+        )})`,
+        { active: false, status: "superseded" },
+      );
     if (
       rows.some(
         (row) => row.active && row.status === suggestionStatus.enum.pending,
