@@ -184,6 +184,20 @@ calls. One Worker serves all events.
 
 #### Background connection budget
 
+Background queue permits and the cron tick run in the placed default fetch
+handler, next to Postgres: [placement](https://developers.cloudflare.com/workers/configuration/placement/#placement-behavior)
+applies to fetch, not queue or scheduled events. The event handler forwards the
+event through the `BACKGROUND_WORKER` self service binding to
+`/__internal/background` with a key derived from `BETTER_AUTH_SECRET`; any other
+request to that path gets 404. The callee settles each message and the caller
+applies those outcomes. A 404 from the callee (an old version, a key mismatch)
+runs the event in place and records `cubby.forward = fallback`; any other
+failure throws, as the same failure in place would. The caller opens no pool
+while it forwards, so a forwarded event still holds one pool, in the callee.
+Placed spans use `cubby.workload = queue.placed` or `scheduled.placed`, and the
+caller records the callee's `cf-placement` as `cloudflare.forwarded_placement`.
+Local dev and the workerd harness have no binding and run events in place.
+
 Every background invocation — one queue permit, one telemetry batch, the hourly
 cron tick, or one Durable Object request — holds exactly one shared two-socket
 pool on `HYPERDRIVE_BACKGROUND` (`withInvocationDb`); both database roles

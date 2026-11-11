@@ -257,8 +257,9 @@ providers outside a transaction and returns an outcome with an optional
 everything else:
 
 - **Lease.** Sixteen minutes, without renewal, longer than a Queue consumer can
-  execute. Token/generation fences and pre-provider checks still refuse stale
-  work. Device image leases renew through their own wire contract.
+  execute. A permit forwarded to placed fetch has no wall limit of its own, and
+  Cloudflare may cancel it once its consumer ends. Token/generation fences and
+  pre-provider checks still refuse stale work. Device image leases renew through their own wire contract.
 - **Fence.** `publish` runs in a transaction that takes the handler's domain
   locks first, then one `FOR UPDATE` on the Job just before commit, and commits
   only while the claim's token, generation and lease still hold.

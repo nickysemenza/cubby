@@ -157,6 +157,8 @@ export const productionWorker = defineWorker({
     BACKGROUND_QUEUE: bindings.queue({
       name: workerQueueNames.background,
     }),
+    // Background events re-enter placed fetch (src/server/worker/placed.ts).
+    BACKGROUND_WORKER: bindings.worker({ worker: "cubby" }),
     TELEMETRY_QUEUE: bindings.queue({
       name: workerQueueNames.telemetry,
     }),

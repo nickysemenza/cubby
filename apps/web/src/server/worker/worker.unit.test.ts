@@ -1,5 +1,5 @@
 import { fromPartial } from "@total-typescript/shoehorn";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getAppOrigin, getAuthBindings, withCfEnv } from "~/server/cf-env";
 
@@ -110,6 +110,49 @@ describe("Worker event composition", () => {
       ),
     ).rejects.toThrow("Unexpected queue: future-queue");
     expect(acknowledgements).toBe(0);
+  });
+
+  it("rejects background requests without the derived key", async () => {
+    const attempts: HeadersInit[] = [{}, { "x-cubby-background": "forged" }];
+    for (const headers of attempts) {
+      const response = await handleHttpRequest(
+        new Request("https://fixture.example/__internal/background", {
+          method: "POST",
+          headers,
+          body: "{}",
+        }),
+        fromPartial<Env>({ BETTER_AUTH_SECRET: "synthetic-secret" }),
+        context,
+      );
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it("applies placed outcomes and throws only for transport failures", async () => {
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([{ action: "retry", delaySeconds: 30 }]),
+      )
+      .mockRejectedValueOnce(new Error("synthetic transport failure"));
+    const env = fromPartial<Env>({
+      CF_VERSION_METADATA: version,
+      BETTER_AUTH_SECRET: "synthetic-secret",
+      BACKGROUND_WORKER: { fetch },
+    });
+    const batch = {
+      queue: "cubby-background",
+      messages: [{ body: {}, ack, retry }],
+    };
+    await handleQueueInvocation(batch, env, context);
+    expect(retry).toHaveBeenCalledWith({ delaySeconds: 30 });
+    await expect(handleQueueInvocation(batch, env, context)).rejects.toThrow(
+      "synthetic transport failure",
+    );
+    expect(ack).not.toHaveBeenCalled();
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it("rejects unexpected schedules before resolving a database", async () => {
