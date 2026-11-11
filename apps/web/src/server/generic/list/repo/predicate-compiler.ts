@@ -26,7 +26,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
-  effectiveFieldInSql,
+  effectiveFieldAnySql,
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
@@ -594,18 +594,14 @@ const derivedFilterPredicates = (
           : null;
       return [
         anyOrAll(optionalTextList.parse(value), (leaf, column, items) => {
-          const list = sql.join(
-            items.map((item) => sql`${item}`),
-            sql`, `,
-          );
           return (
             (inherited === null
               ? null
-              : effectiveFieldInSql(
+              : effectiveFieldAnySql(
                   field.target,
                   inherited,
                   sql`${leaf}."id"`,
-                  list,
+                  items,
                 )) ?? sql`${column} = ANY(${columnArrayParam(items)})`
           );
         }),
