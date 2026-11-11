@@ -873,8 +873,9 @@ its family says acceptance closes. It is a list, not a number.
 **Automatic rule**:
 A fixed, always-on, versioned code rule that applies matching Suggestions without
 review: save a field answer at 85% or more for an open or Cubby-set field of an
-`apply: "auto"` field, and book clean spending from imports. Attaching a charge
-to an existing transaction always needs review. Every field change a rule makes
+`apply: "auto"` field, book clean spending and create clean income, transfers
+and card payments from imports, and attach another source's copy of an
+already-booked charge. Any other attach to an existing transaction needs review. Every field change a rule makes
 is listed in Changes by Cubby and can be kept or cleared.
 _Avoid_: auto-apply threshold, confidence cutoff, member switch
 

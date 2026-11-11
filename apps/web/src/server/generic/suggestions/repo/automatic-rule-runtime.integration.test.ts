@@ -134,7 +134,7 @@ const card = async (ctx: Ctx) => {
   });
 };
 
-async function unmatchedCharge(ctx: Ctx) {
+async function unmatchedCharge(ctx: Ctx, income = false) {
   const account = (await card(ctx)).output;
   const recorded = await recordSourceTransactionRecords(
     ctx.db,
@@ -151,10 +151,19 @@ async function unmatchedCharge(ctx: Ctx) {
         {
           accountDescriptor: "Synthetic Card (...4242)",
           statementDate: "2026-05-04",
-          providerAmount: -42.5,
-          merchant: "Example Grocer",
-          rawDescription: "EXAMPLE GROCER 0001",
-          sourceCategory: "Groceries",
+          ...(income
+            ? {
+                providerAmount: 1200,
+                merchant: "Example Employer",
+                rawDescription: "EXAMPLE EMPLOYER PAYROLL",
+                sourceCategory: "Paychecks",
+              }
+            : {
+                providerAmount: -42.5,
+                merchant: "Example Grocer",
+                rawDescription: "EXAMPLE GROCER 0001",
+                sourceCategory: "Groceries",
+              }),
           providerStatus: "posted",
           providerNotes: null,
           rowPosition: 1,
@@ -206,12 +215,13 @@ describe("clean import booking controls", () => {
   const ctx = withTestDb();
 
   it.each([
-    { scope: "import", booking: true, booked: true },
-    { scope: "account/date", booking: true, booked: false },
+    { scope: "import", income: false, booked: true },
+    { scope: "account/date", income: false, booked: false },
+    { scope: "import", income: true, booked: true },
   ] as const)(
-    "books clean $scope spending only in import scope",
-    async ({ scope, booked }) => {
-      const { account, recorded } = await unmatchedCharge(ctx);
+    "books clean $scope work only in import scope (income: $income)",
+    async ({ scope, income, booked }) => {
+      const { account, recorded } = await unmatchedCharge(ctx, income);
       const collection = await getDb(ctx.db).query.transactionImport.findFirst({
         where: {
           RAW: (table, { eq }) =>
@@ -227,7 +237,9 @@ describe("clean import booking controls", () => {
         );
       const beforeWithdrawals = await withdrawals();
       const result = await labelStatementSuggestions(ctx.db, {
-        port: sameCharge,
+        port: income
+          ? answering({ kind: "income", counterparty: "business" })
+          : sameCharge,
         scope:
           scope === "import"
             ? { importId: recorded.batchId! }
@@ -243,8 +255,9 @@ describe("clean import booking controls", () => {
       expect((await stateOf(ctx, suggestion.id)).status).toBe(
         booked ? "applied" : "pending",
       );
+      // Income settles without spending.
       expect(await getDb(ctx.db).select().from(expense)).toHaveLength(
-        booked ? 1 : 0,
+        booked && !income ? 1 : 0,
       );
       const audit = await listAutomaticDecisions(ctx.db, {
         family: "statement_transaction",

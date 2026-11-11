@@ -20,7 +20,9 @@ imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
 Clean purchases and fees book spending automatically; uncertain work remains in
 the shared Suggestions queue. Transfers, card payments and ordinary income
-remain settlement-only. All money continues to be `SUM(Expense.cost)`.
+remain settlement-only: clean ones are created automatically without Expenses,
+and a money move is clean only with its clean opposite leg, created as a pair.
+All money continues to be `SUM(Expense.cost)`.
 
 Pending or unknown provider status does not prevent an otherwise supported
 booking, and spending advice is generated for pending and observed spending
@@ -150,8 +152,8 @@ explicit review before a standalone refund Purchase is booked.
 
 ### Automatic booking rule
 
-The clean import booking rule (clean creates, books and supersedes, and
-paired copy attaches) is fixed code and always on; there is no member
+The clean import booking rule (clean spending creates, books and supersedes,
+clean income, transfer and card-payment creates, and paired copy attaches) is fixed code and always on; there is no member
 switch or audit sample. Each application still uses `suggestions.review` or
 `suggestions.review_batch` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
