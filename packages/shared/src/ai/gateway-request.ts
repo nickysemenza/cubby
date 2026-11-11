@@ -237,12 +237,13 @@ export interface GatewayResponseObservers {
 function sseEventFeed(
   onEvent: (event: EventSourceMessage) => void,
   onOverflow: () => void,
+  maxBufferSize = 65_536,
 ): (bytes: Uint8Array) => void {
   const decoder = new TextDecoder();
   let trailingCR = false;
   const parser = createParser({
     // Framing counts toward parser buffering, but not decoded error data.
-    maxBufferSize: 65_536,
+    maxBufferSize,
     onError: (error) => {
       // SSE ignores unknown fields and invalid retry hints.
       if (error.type === "max-buffer-size-exceeded") onOverflow();
@@ -1198,11 +1199,18 @@ const PRE_OUTPUT_EVENTS = new Set([
 ]);
 
 /**
+ * `response.created` and `response.in_progress` each echo the request's
+ * instructions and tools. A Mail import coordinator's echo passed 64 KiB, so a
+ * smaller hold released its refusal to the agent and ended the Run.
+ */
+const FLEX_HOLD_BYTES = 1_048_576;
+
+/**
  * The flex attempt's response, or undefined when OpenAI refused flex
  * capacity. The refusal arrives as a 429 or, on a stream, as a failure event
  * after a 200: production streams failed about 13 s in, and every one ended
  * its Mail import Run (2026-11-11). Only lifecycle events before the first
- * output are held, at most 64 KiB; any other event releases them and the live
+ * output are held, at most {@link FLEX_HOLD_BYTES}; any other event releases them and the live
  * stream unchanged, so no model output is retained or replayed.
  */
 async function flexAttempt(response: Response): Promise<Response | undefined> {
@@ -1233,6 +1241,7 @@ async function flexAttempt(response: Response): Promise<Response | undefined> {
     () => {
       verdict ??= "released";
     },
+    FLEX_HOLD_BYTES,
   );
   let ended = false;
   while (!verdict) {
@@ -1248,7 +1257,7 @@ async function flexAttempt(response: Response): Promise<Response | undefined> {
     } catch {
       verdict = "released"; /* An unreadable prefix is the SDK's to report. */
     }
-    if (heldBytes > 65_536) verdict ??= "released";
+    if (heldBytes > FLEX_HOLD_BYTES) verdict ??= "released";
   }
   if (verdict === "refused") {
     await reader.cancel();
