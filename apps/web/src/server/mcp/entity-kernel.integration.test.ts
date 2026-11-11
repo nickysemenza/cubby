@@ -78,7 +78,7 @@ const vendorSummaryResultSchema = z.object({
 });
 const listSummarySchema = z.object({
   items: z.array(z.object({ id: z.string(), name: z.string() }).strict()),
-  meta: z.object({ totalCount: z.number().int() }),
+  totalCount: z.number().int(),
 });
 const idResultSchema = z.object({
   item: z.object({ id: z.string() }).passthrough(),
@@ -257,7 +257,7 @@ describe("MCP entity kernel boundary", () => {
     );
     const response = z.object({
       items: z.array(z.object({ id: z.string() })),
-      meta: z.object({ totalCount: z.number() }),
+      totalCount: z.number(),
     });
     const list = async (
       filters: z.input<typeof sourceTransactionRecordFilters>,
@@ -280,17 +280,17 @@ describe("MCP entity kernel boundary", () => {
       providerAccountId: "synthetic-account-1",
     };
     const history = await list(identity);
-    expect(history.meta.totalCount).toBe(2);
+    expect(history.totalCount).toBe(2);
     expect(history.items.map((row) => row.id).sort()).toEqual(
       [head.shortcode, previous.shortcode].sort(),
     );
     expect(await list({ ...identity, current: true })).toMatchObject({
       items: [{ id: head.shortcode }],
-      meta: { totalCount: 1 },
+      totalCount: 1,
     });
     expect(await list({ ...identity, current: false })).toMatchObject({
       items: [{ id: previous.shortcode }],
-      meta: { totalCount: 1 },
+      totalCount: 1,
     });
     const otherAccount = before.find(
       (row) => row.providerAccountId === "synthetic-account-2",
@@ -303,19 +303,19 @@ describe("MCP entity kernel boundary", () => {
       }),
     ).toMatchObject({
       items: [{ id: otherAccount.shortcode }],
-      meta: { totalCount: 1 },
+      totalCount: 1,
     });
     expect(
       await list({ source: "monarch", chargeKey: head.chargeKey }),
     ).toMatchObject({
-      meta: { totalCount: 2 },
+      totalCount: 2,
     });
     expect(
       await list({
         source: "monarch",
         chargeKey: [head.chargeKey.slice(0, -1)],
       }),
-    ).toMatchObject({ items: [], meta: { totalCount: 0 } });
+    ).toMatchObject({ items: [], totalCount: 0 });
     expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
       before,
     );
@@ -329,7 +329,7 @@ describe("MCP entity kernel boundary", () => {
     ).rejects.toThrow("Retained replacement or accepted financial evidence");
     expect(await list({ ...identity, current: true })).toMatchObject({
       items: [{ id: head.shortcode }],
-      meta: { totalCount: 1 },
+      totalCount: 1,
     });
     expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
       before,
@@ -597,7 +597,7 @@ describe("MCP entity kernel boundary", () => {
     expect(filtered.isError).not.toBe(true);
     expect(listSummarySchema.parse(filtered.structuredContent)).toMatchObject({
       items: [{ id: otherVendor.id, name: "MCP list filter vendor" }],
-      meta: { totalCount: 1 },
+      totalCount: 1,
     });
 
     const wrongPrefix = await callEntity({
@@ -635,7 +635,7 @@ describe("MCP entity kernel boundary", () => {
       entity: "product",
       filters: { ids },
       sort: [{ orderBy: "name", direction: "desc" }],
-      pagination: { pageIndex: 0, pageSize: 2 },
+      pageSize: 2,
     };
     const findFoodsBatch = vi.fn(async (lookups: unknown[]) =>
       lookups.map(() => null),
@@ -665,7 +665,8 @@ describe("MCP entity kernel boundary", () => {
         meta: z
           .object({})
           .catchall(z.unknown())
-          .transform(({ derived: _derived, ...meta }) => meta),
+          .transform(({ derived: _derived, ...meta }) => meta)
+          .optional(),
       })
       .passthrough();
     expect(withoutDerived.parse(summary.structuredContent)).toEqual(
@@ -679,7 +680,7 @@ describe("MCP entity kernel boundary", () => {
           externalIds: [expect.objectContaining({ source: "gtin" })],
         },
       ],
-      meta: { totalCount: 3 },
+      totalCount: 3,
     });
   });
 
@@ -895,7 +896,7 @@ describe("MCP entity kernel boundary", () => {
       listSummarySchema.parse(
         (await callKernel({ action: "list", entity: "vendor" }, entityKernel))
           .structuredContent,
-      ).meta.totalCount;
+      ).totalCount;
     const before = await vendorCount();
 
     const resolved = await callMcpTool(

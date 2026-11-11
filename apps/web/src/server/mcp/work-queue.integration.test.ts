@@ -8,6 +8,7 @@ import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -86,6 +87,7 @@ describe("activity.queue member routing", () => {
           action: "queue",
           reason: ["product_category", "account:run"],
           pageSize: 100,
+          resultDetail: "full",
           ...filters,
         },
         requireActor({
@@ -95,7 +97,10 @@ describe("activity.queue member routing", () => {
         {},
       );
       expect(response.isError).not.toBe(true);
-      return workQueueOutSchema.parse(response.structuredContent);
+      return workQueueOutSchema
+        .omit({ meta: true })
+        .extend({ totalCount: z.number().int() })
+        .parse(response.structuredContent);
     };
     const firstPage = await read(ctx.actor.userId);
     expect(firstPage.items.map((row) => row.id)).toEqual(
@@ -118,8 +123,7 @@ describe("activity.queue member routing", () => {
       expect.arrayContaining([shared.id, theirs.shortcode]),
     );
     expect(
-      (await read(ctx.actor.userId, { owner: second.shortcode })).meta
-        .totalCount,
+      (await read(ctx.actor.userId, { owner: second.shortcode })).totalCount,
     ).toBe(1); // Shared work lists every member.
     const own = await read(ctx.actor.userId, { owner: CURRENT_MEMBER_FILTER });
     expect(own.items.map((row) => row.id)).toEqual(
@@ -127,14 +131,14 @@ describe("activity.queue member routing", () => {
     );
     const page = await read(ctx.actor.userId, { pageSize: 1 });
     expect(page.items).toHaveLength(1);
-    expect(page.meta.totalCount).toBe(firstPage.meta.totalCount);
+    expect(page.totalCount).toBe(firstPage.totalCount);
     await getDb(ctx.db)
       .update(run)
       .set({ actorUserId: otherUser })
       .where(eq(run.id, mine.id));
     const unresolved = await read(ctx.actor.userId);
     expect(unresolved.items.map((row) => row.id)).not.toContain(mine.shortcode);
-    expect(unresolved.meta.totalCount).toBe(firstPage.meta.totalCount - 1);
+    expect(unresolved.totalCount).toBe(firstPage.totalCount - 1);
     expect((await read(otherUser)).items.map((row) => row.id)).not.toContain(
       mine.shortcode,
     );
@@ -157,7 +161,7 @@ describe("activity.queue member routing", () => {
     expect(visible.items.map((row) => row.key)).toEqual([
       `finding:${finding.id}`,
     ]);
-    expect(visible.meta.totalCount).toBe(1);
+    expect(visible.totalCount).toBe(1);
     expect(visible.items[0]?.owners).toEqual([
       expect.objectContaining({ id: first.shortcode }),
     ]);
@@ -165,17 +169,13 @@ describe("activity.queue member routing", () => {
       ...NEEDS_YOU_FILTERS,
       reason: undefined,
     });
-    expect(human.meta.totalCount).toBeGreaterThan(0);
-    expect((await read(otherUser, { reason: "finding" })).meta.totalCount).toBe(
-      0,
-    );
+    expect(human.totalCount).toBeGreaterThan(0);
+    expect((await read(otherUser, { reason: "finding" })).totalCount).toBe(0);
     await getDb(ctx.db)
       .update(run)
       .set({ actorUserId: otherUser })
       .where(eq(run.id, findingRun));
-    expect((await read(ctx.actor.userId, findings)).meta.totalCount).toBe(0);
-    expect((await read(otherUser, { reason: "finding" })).meta.totalCount).toBe(
-      0,
-    );
+    expect((await read(ctx.actor.userId, findings)).totalCount).toBe(0);
+    expect((await read(otherUser, { reason: "finding" })).totalCount).toBe(0);
   });
 });

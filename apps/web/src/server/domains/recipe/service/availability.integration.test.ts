@@ -116,7 +116,7 @@ describe("AvailabilityService.getRecipeAvailability", () => {
     expect(row.quantityIssues).toEqual([]);
     const discovered = await getMakeableWorkflow(
       tdb.db,
-      { minCoverage: 1 },
+      { minCoverage: 1, limit: 24 },
       ctx().services.availability,
     );
     expect(discovered.recipes.map(({ recipeId }) => recipeId)).toContain(

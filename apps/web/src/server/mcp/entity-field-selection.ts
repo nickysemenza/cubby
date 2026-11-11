@@ -1,8 +1,9 @@
 import { dateTime } from "@cubby/schemas/codec";
 /**
- * `entity_read` get/list field selection and the compact preset. Both are
- * generic over the generated MCP output schemas and list-read declarations,
- * so no entity carries a hand-curated field list.
+ * `entity_read` get/list field selection and the compact preset, and the same
+ * selection over any other paged read's published row schema. Both are
+ * generic over published output schemas and list-read declarations, so no
+ * entity or tool carries a hand-curated field list.
  */
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { z } from "zod";
@@ -286,6 +287,12 @@ function compactKeys(entity: string): string[] {
   });
 }
 
+const unknownFieldMessage = (
+  label: string,
+  miss: { path: string; expected: string[] },
+) =>
+  `Unknown ${label} field "${miss.path}"; expected one of ${closestKeys(miss.path.split(".").at(-1) ?? miss.path, miss.expected).join(", ")}`;
+
 /** The selection a read command asked for, validated against the entity's published schema. */
 export function readSelection(command: {
   action: string;
@@ -316,7 +323,7 @@ export function readSelection(command: {
           .map((miss) =>
             miss.enveloped
               ? `Unknown ${command.entity} field "${miss.path}"; select it as "fields.${miss.path}"`
-              : `Unknown ${command.entity} field "${miss.path}"; expected one of ${closestKeys(miss.path.split(".").at(-1) ?? miss.path, miss.expected).join(", ")}`,
+              : unknownFieldMessage(command.entity, miss),
           )
           .join("; "),
       );
@@ -515,4 +522,58 @@ export function projectSelection(result: unknown, selection: ReadSelection) {
     ...(parsed.items ? { items: parsed.items.map(select) } : {}),
     ...(parsed.item ? { item: select(parsed.item) } : {}),
   };
+}
+
+/**
+ * The row selection a paged operation read asked for, validated against its
+ * published row schema; null returns complete rows.
+ */
+export function rowSelection(
+  label: string,
+  row: z.core.$ZodType,
+  request: { fields?: string[]; resultDetail?: "compact" | "full" },
+): ReadSelection | null {
+  if (request.fields) {
+    const paths = request.fields.map((field) => field.split("."));
+    const unknown = paths.flatMap((path) => {
+      const miss = unknownSegment(row, path);
+      return miss ? [unknownFieldMessage(label, miss)] : [];
+    });
+    if (unknown.length > 0)
+      throw createAppError("MCP_FIELD_UNKNOWN", unknown.join("; "));
+    return { kind: "fields", paths };
+  }
+  return request.resultDetail === "full" ? null : { kind: "compact", keys: [] };
+}
+
+/** A paged row a selection can narrow; other rows pass through unselected. */
+export const selectableRow = selectedObject;
+
+/**
+ * One paged row narrowed to its selection: selected paths keep the row's
+ * `id`; compact keeps what `compactValue` keeps, minus image payloads.
+ */
+export function selectRow(
+  source: SelectedObject,
+  row: z.core.$ZodType,
+  selection: ReadSelection,
+): SelectedObject {
+  if (selection.kind === "compact") {
+    const compact = selectedObject.safeParse(compactValue([row], source));
+    if (!compact.success) return source;
+    return Object.fromEntries(
+      Object.entries(compact.data).filter(
+        ([key]) => !imagePayloadFields.has(key),
+      ),
+    );
+  }
+  const seed: SelectedValue = Object.hasOwn(source, "id")
+    ? { id: source.id }
+    : {};
+  return selectedObject.parse(
+    selection.paths.reduce<SelectedValue>(
+      (output, path) => merge(output, pick(source, path) ?? {}),
+      seed,
+    ),
+  );
 }

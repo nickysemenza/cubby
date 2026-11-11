@@ -177,37 +177,6 @@ const paginationParams = z.object({
     .default(DEFAULT_PAGE_SIZE),
 });
 
-function mcpPageSizeParam(opts: {
-  defaultPageSize: number;
-  maxPageSize: number;
-}) {
-  const { defaultPageSize, maxPageSize } = opts;
-  return z
-    .number()
-    .int()
-    .min(1)
-    .max(maxPageSize)
-    .default(defaultPageSize)
-    .describe(
-      `Items per page (default ${defaultPageSize}, max ${maxPageSize})`,
-    );
-}
-
-export function mcpPaginationFields(opts: {
-  defaultPageSize: number;
-  maxPageSize: number;
-}) {
-  return {
-    pageIndex: z
-      .number()
-      .int()
-      .min(0)
-      .default(0)
-      .describe("Page index, 0-based (default 0)"),
-    pageSize: mcpPageSizeParam(opts),
-  };
-}
-
 export const sortPaginationFields = {
   sort: sortInput
     .optional()

@@ -14,6 +14,7 @@ import {
   withTestClient,
 } from "../testing/mcp-test-utils";
 import { handleMcpHttpRequest, type McpServe } from "./http-handler";
+import type { ToolArguments } from "./tools/tool-registration";
 
 /**
  * Failures that used to reach the connector proxy as no valid JSON-RPC
@@ -32,21 +33,66 @@ const errorText = (result: Awaited<ReturnType<typeof callMcpTool>>) =>
   z.array(z.object({ text: z.string() })).parse(result.content)[0]!.text;
 
 describe("MCP input validation", () => {
-  it("refuses an unknown action input key", async () => {
+  it("refuses unknown keys at any depth, keeps discriminated issues and takes one list value", async () => {
     const server = new McpServer({ name: "test", version: "1.0.0" });
+    const received: unknown[] = [];
     registerTestTool(server, {
       name: "strict_read",
       kind: "query",
-      input: z.object({ merchant: z.string().optional() }),
+      input: z.object({
+        merchant: z.string().optional(),
+        match: z
+          .discriminatedUnion("kind", [
+            z.object({ kind: z.literal("name"), name: z.string() }),
+            z.object({ kind: z.literal("code"), code: z.string() }),
+          ])
+          .optional(),
+        tags: z.array(z.string()).optional(),
+      }),
       output: z.object({ ok: z.boolean() }),
-      run: async () => ({ ok: true }),
+      run: async (_context, input) => {
+        received.push(input);
+        return { ok: true };
+      },
     });
-    const result = await callMcpTool(server, "strict_read", {
+    const issues = async (input: ToolArguments) => {
+      const result = await callMcpTool(server, "strict_read", {
+        action: "run",
+        input,
+      });
+      expect(result.isError).toBe(true);
+      return z
+        .object({
+          message: z.string(),
+          issues: z.array(z.object({ path: z.array(z.unknown()) })),
+          next: z.string(),
+        })
+        .parse(result._meta?.["cubby/error"]);
+    };
+
+    expect(
+      errorText(
+        await callMcpTool(server, "strict_read", {
+          action: "run",
+          input: { merchnt: "Example" },
+        }),
+      ),
+    ).toContain("merchnt");
+    expect(
+      await issues({ match: { kind: "name", name: "Synthetic", nam: "x" } }),
+    ).toMatchObject({ issues: [{ path: ["match"] }] });
+    expect(await issues({ match: { kind: "code" } })).toMatchObject({
+      message: "Invalid input at match.code; see issues",
+      issues: [{ path: ["match", "code"] }],
+      next: 'Correct the input from issues, or call describe with input.actions ["run"] for the full contract, then retry.',
+    });
+
+    const listed = await callMcpTool(server, "strict_read", {
       action: "run",
-      input: { merchnt: "Example" },
+      input: { tags: "synthetic" },
     });
-    expect(result.isError).toBe(true);
-    expect(errorText(result)).toContain("merchnt");
+    expect(listed.isError).not.toBe(true);
+    expect(received).toEqual([{ tags: ["synthetic"] }]);
   });
 });
 
@@ -389,7 +435,7 @@ describe("MCP tool output validation", () => {
 
     expect(result.isError).toBe(true);
     expect(errorText(result)).toContain(
-      "Output does not match its schema: totals.count:",
+      "Output does not match its schema at totals.count; see issues",
     );
     expect(result._meta).toMatchObject({
       "cubby/error": {

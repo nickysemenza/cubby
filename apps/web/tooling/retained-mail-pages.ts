@@ -11,7 +11,7 @@ const sourceRead = mailReadOut.pick({
 
 export const retainedMailPage = z.object({
   /** The offset actually requested, not an offset inferred from the response. */
-  offset: z.number().int().nonnegative(),
+  byteOffset: z.number().int().nonnegative(),
   response: sourceRead,
 });
 
@@ -46,7 +46,7 @@ function sequence(input: Pages, mode: "text" | "html") {
       errors.push(`${mode} page ${index}: source/checksum mismatch`);
     if (currentIdentity !== identity || size !== total)
       errors.push(`${mode} page ${index}: original changed between pages`);
-    if (page.offset !== offset)
+    if (page.byteOffset !== offset)
       errors.push(
         `${mode} page ${index}: missing, repeated or reordered bytes`,
       );
@@ -54,7 +54,7 @@ function sequence(input: Pages, mode: "text" | "html") {
     offset += bytes(body ?? "");
     text += body ?? "";
     const last = index === pages.length - 1;
-    if (content.nextOffset !== (last ? null : offset))
+    if (content.nextByteOffset !== (last ? null : offset))
       errors.push(
         `${mode} page ${index}: continuation does not match coverage`,
       );

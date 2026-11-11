@@ -1,5 +1,6 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   MCP_TOOL_BINDINGS,
@@ -21,8 +22,17 @@ describe("MCP response policies", () => {
     const text = JSON.stringify(result.content);
     expect(text).toContain("INVALID_INPUT");
     expect(text).not.toContain("inputSchema");
-    expect(text).toContain("call describe with input.actions");
-    expect(text).toContain("stableOrderId");
+    expect(result._meta?.["cubby/error"]).toMatchObject({
+      message: expect.stringMatching(
+        /^Invalid input at .* and \d+ more; see issues$/u,
+      ),
+      issues: expect.arrayContaining([
+        expect.objectContaining({ path: ["orders", 0, "stableOrderId"] }),
+      ]),
+      next: expect.stringContaining(
+        'call describe with input.actions ["prepare"]',
+      ),
+    });
   });
 
   it("publishes the same page and recipe defaults that handlers apply", () => {
@@ -37,7 +47,7 @@ describe("MCP response policies", () => {
         describeMcpActions(tool, [actionName]).actions[0]?.inputSchema,
       ).toMatchObject({
         properties: {
-          pageIndex: { default: 0, minimum: 0 },
+          cursor: { type: "string" },
           pageSize: { default: 25, minimum: 1, maximum: 100 },
         },
       });
@@ -52,41 +62,7 @@ describe("MCP response policies", () => {
     ).toMatchObject({ properties: { detail: { default: "lines" } } });
   });
 
-  it.each([
-    [{}, { pageIndex: 0, pageSize: 25 }],
-    [
-      { pageIndex: 2, pageSize: 5 },
-      { pageIndex: 2, pageSize: 5 },
-    ],
-  ])(
-    "forwards USDA pagination and preserves complete totals: %j",
-    async (input, page) => {
-      const listFoods = vi.fn(async () => ({ data: [], count: 123 }));
-      const result = await callMcpTool(
-        createMcpServer(),
-        "product_enrichment_read",
-        {
-          action: "search",
-          input: { query: "synthetic food", ...input },
-        },
-        { usdaService: fromPartial({ listFoods }) },
-      );
-      expect(result.isError).not.toBe(true);
-      expect(listFoods).toHaveBeenCalledWith(
-        "synthetic food",
-        undefined,
-        { orderBy: "relevance", direction: "asc" },
-        page,
-        true,
-      );
-      expect(result.structuredContent).toEqual({
-        items: [],
-        meta: { ...page, totalCount: 123, hasNextPage: true },
-      });
-    },
-  );
-
-  it("projects compact USDA search rows, which carry no nutrient summary", async () => {
+  it("pages compact USDA search rows by cursor and preserves complete totals", async () => {
     // A complete member row: the runner validates the member's own output
     // before the MCP projection slims it.
     const row = {
@@ -103,36 +79,53 @@ describe("MCP response policies", () => {
       portionInfoRaw: [],
       linkedProducts: [],
     };
-    const result = await callMcpTool(
-      createMcpServer(),
-      "product_enrichment_read",
-      { action: "search", input: { query: "synthetic oats" } },
-      {
-        usdaService: fromPartial({
-          listFoods: async () => ({ data: [row], count: 1 }),
-        }),
-      },
-    );
-    expect(result.isError).not.toBe(true);
-    expect(result.structuredContent).toMatchObject({
+    const listFoods = vi.fn(async (..._args: unknown[]) => ({
+      data: [row],
+      count: 123,
+    }));
+    const search = (input: { cursor?: string; pageSize: number }) =>
+      callMcpTool(
+        createMcpServer(),
+        "product_enrichment_read",
+        { action: "search", input: { query: "synthetic oats", ...input } },
+        { usdaService: fromPartial({ listFoods }) },
+      );
+    const first = await search({ pageSize: 1 });
+    expect(first.isError).not.toBe(true);
+    expect(first.structuredContent).toEqual({
       items: [
-        {
+        expect.objectContaining({
           fdc_id: 9900001,
           description: "Synthetic rolled oats",
           nutrientsPer100: { "208": 380 },
-        },
+        }),
       ],
+      pageSize: 1,
+      nextCursor: expect.any(String),
+      totalCount: 123,
     });
+    const second = await search({
+      cursor: z
+        .object({ nextCursor: z.string() })
+        .parse(first.structuredContent).nextCursor,
+      pageSize: 1,
+    });
+    expect(second.isError).not.toBe(true);
+    expect(listFoods.mock.calls.map((call) => call.at(3))).toEqual([
+      { pageIndex: 0, pageSize: 1 },
+      { pageIndex: 1, pageSize: 1 },
+    ]);
   });
 
   it.each([
-    ["activity", "problems"],
+    ["activity_read", "report"],
     ["product_enrichment_read", "search"],
   ])(
-    "rejects invalid pagination before executing %s.%s",
+    "rejects invalid or legacy paging before executing %s.%s",
     async (tool, action) => {
       for (const input of [
-        { pageIndex: -1 },
+        { pageIndex: 1 },
+        { cursor: "not-a-cursor" },
         { pageSize: 0 },
         { pageSize: 101 },
       ]) {

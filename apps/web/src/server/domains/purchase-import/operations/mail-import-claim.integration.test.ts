@@ -630,7 +630,9 @@ describe("Mail import claim", () => {
     expect(claimed).toMatchObject({
       kind: "email",
       email: { messageId: mail.messageId },
-      read: { content: { truncated: true, nextOffset: expect.any(Number) } },
+      read: {
+        content: { truncated: true, nextByteOffset: expect.any(Number) },
+      },
       // First-page lookups still spare the coordinator its Vendor and
       // Purchase reads; only the deterministic settlement needs every page.
       known: {

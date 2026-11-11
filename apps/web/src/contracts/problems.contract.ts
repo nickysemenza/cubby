@@ -2,7 +2,6 @@ import {
   problemsTypeSliceOut,
   problemsUnknownTypeOut,
 } from "@cubby/schemas/mcp";
-import { mcpPaginationFields } from "@cubby/schemas/pagination";
 import {
   deleteUnusedIngredientsInput,
   deleteUnusedIngredientsOut,
@@ -109,7 +108,8 @@ export const problemsContract = defineContract(
           .describe(
             "Return only this problem category (e.g. 'orphanedProducts'). Ignored when countsOnly is true.",
           ),
-        ...mcpPaginationFields({ defaultPageSize: 25, maxPageSize: 100 }),
+        pageIndex: z.number().int().min(0).default(0),
+        pageSize: z.number().int().min(1).max(100).default(25),
       }),
       output: z.union([
         problemsCountSchema,

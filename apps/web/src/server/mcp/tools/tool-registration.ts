@@ -52,6 +52,7 @@ import {
   mergeActionInputSchemas,
   requiredFields,
 } from "./action-schema";
+import { oneOrManyLists, pagedRead } from "./list-page";
 import {
   describeToolOutputSchema,
   withProgressiveDisclosure,
@@ -230,14 +231,20 @@ function renderToolError(
             message.trimStart().startsWith("[")
           ),
       ) ?? [];
+  const issues = detail.validationIssues?.map(({ path, message }) => ({
+    path,
+    message,
+  }));
+  // Validation detail lives in `issues`; the message only names where.
+  const paths = issues?.map(({ path }) => path.join(".") || "(root)") ?? [];
+  const message = paths.length
+    ? `${detail.reason === "INVALID_OUTPUT" ? "Output does not match its schema" : "Invalid input"} at ${paths.slice(0, 3).join(", ")}${paths.length > 3 ? ` and ${paths.length - 3} more` : ""}; see issues`
+    : [detail.message, ...causes].join(": ");
   const envelope = {
     code: detail.code,
     reason: detail.reason,
-    message: [detail.message, ...causes].join(": "),
-    issues: detail.validationIssues?.map(({ path, message }) => ({
-      path,
-      message,
-    })),
+    message,
+    issues,
     next: suffix?.(detail).trim(),
     requestId: detail.requestId,
   };
@@ -265,6 +272,14 @@ function deadlineSuffix(write: boolean, elapsedMs: number) {
       : "";
     return ` (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}${sentry}). ${next}`;
   };
+}
+
+/** What a refused input's caller does next; a compact tool names `describe`. */
+function inputNext(tool: CompiledTool, operationName: string) {
+  const action = tool.actions.get(operationName.split(".")[1] ?? "");
+  return tool.compact && action
+    ? `Correct the input from issues, or call describe with input.actions ["${shortName(action)}"] for the full contract, then retry.`
+    : "Correct the input from issues, then retry.";
 }
 
 const overran = (detail: ToolErrorDetail) =>
@@ -300,20 +315,77 @@ function memberInput(name: string, schema: z.ZodType) {
   );
 }
 
-/** Preserve member refinements while rejecting undeclared keys. */
-function strictInput(object: z.ZodObject) {
-  return object.strict();
+/** Def fields that differ per schema class; `clone` takes them back. */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- each schema class names its own child def fields.
+type DefChanges = Record<string, unknown>;
+
+/** The def fields of `schema` that hold child schemas, made strict; null for a leaf. */
+function strictChildren(
+  schema: z.ZodType,
+  strict: (inner: z.core.$ZodType) => z.ZodType,
+): DefChanges | null {
+  if (schema instanceof z.ZodObject)
+    return {
+      shape: Object.fromEntries(
+        Object.entries(schema.shape).map(([key, field]) => [
+          key,
+          strict(field),
+        ]),
+      ),
+      catchall: schema.def.catchall ? strict(schema.def.catchall) : z.never(),
+    };
+  if (schema instanceof z.ZodArray)
+    return { element: strict(schema.def.element) };
+  if (
+    schema instanceof z.ZodOptional ||
+    schema instanceof z.ZodNullable ||
+    schema instanceof z.ZodDefault ||
+    schema instanceof z.ZodPrefault ||
+    schema instanceof z.ZodNonOptional ||
+    schema instanceof z.ZodReadonly ||
+    schema instanceof z.ZodCatch
+  )
+    return { innerType: strict(schema.def.innerType) };
+  // A discriminated union is a ZodUnion; the clone keeps its discriminator.
+  if (schema instanceof z.ZodUnion)
+    return { options: schema.def.options.map(strict) };
+  if (schema instanceof z.ZodIntersection)
+    return { left: strict(schema.def.left), right: strict(schema.def.right) };
+  if (schema instanceof z.ZodRecord)
+    return { valueType: strict(schema.def.valueType) };
+  if (schema instanceof z.ZodTuple)
+    return {
+      items: schema.def.items.map(strict),
+      rest: schema.def.rest ? strict(schema.def.rest) : null,
+    };
+  if (schema instanceof z.ZodPipe)
+    return { in: strict(schema.def.in), out: strict(schema.def.out) };
+  if (schema instanceof z.ZodLazy) {
+    const { getter } = schema.def;
+    return { getter: () => strict(getter()) };
+  }
+  return null;
 }
 
-/** Refuse unknown keys for each object variant of an action. */
+const strictSchemas = new WeakMap<z.core.$ZodType, z.ZodType>();
+
+/**
+ * Refuse undeclared keys in every object an action accepts, at any depth.
+ * Each schema is cloned from its own def, so refinements, defaults,
+ * descriptions and discriminated unions survive; an explicit catchall
+ * (`z.looseObject`) stays open.
+ */
 function strictSchema(name: string, schema: z.core.$ZodType): z.ZodType {
-  if (schema instanceof z.ZodObject) return strictInput(schema);
-  if (schema instanceof z.ZodUnion) {
-    const options = schema.options.map((option) => strictSchema(name, option));
-    return z.union([options[0]!, options[1]!, ...options.slice(2)]);
-  }
-  if (schema instanceof z.ZodType) return schema;
-  throw new Error(`MCP action ${name}: unsupported input schema`);
+  if (!(schema instanceof z.ZodType))
+    throw new Error(`MCP action ${name}: unsupported input schema`);
+  const cached = strictSchemas.get(schema);
+  if (cached) return cached;
+  const children = strictChildren(schema, (inner) => strictSchema(name, inner));
+  const result = children
+    ? schema.clone({ ...schema.def, ...children }, { parent: true })
+    : schema;
+  strictSchemas.set(schema, result);
+  return result;
 }
 
 /**
@@ -415,47 +487,66 @@ function compileAction(
 
   if ("kernel" in binding) {
     const { kernel } = binding;
+    const paged =
+      kind === "query"
+        ? pagedRead(toolAction, kernel.input, kernel.output, spec.page)
+        : null;
+    const lists = oneOrManyLists(kind, paged?.input ?? kernel.input);
+    // The verb runs as an ad hoc runner operation named by its tool action;
+    // its input was already parsed, so the runner parses only its output.
+    const runKernel = async (
+      input: ActionValue,
+      call: ActionCall,
+      name: string,
+      execution: z.output<typeof purchaseImportRunExecution> | undefined,
+    ) =>
+      settled(
+        await (call.runtime.executeOperation ?? executeOperation)({
+          operation: { id: name, kind },
+          type: kind,
+          input,
+          inputSchema: z.unknown(),
+          outputSchema: kernel.output,
+          request: {
+            principal: call.principal,
+            headers: call.headers ?? new Headers(),
+            signal: call.signal,
+            modelBacked: spec.modelBacked,
+          },
+          run: (context, parsed) =>
+            kernel.run(
+              parsed,
+              principalWithContext(call.principal, context),
+              name,
+              execution,
+            ),
+        }),
+      );
     return {
       name: toolAction,
       kind,
       spec,
       batch: false,
       keepsRunExecution: false,
-      input: strictSchema(toolAction, kernel.input),
-      prepareInput: (args) =>
-        kernel.verb ? { ...args, action: kernel.verb } : args,
-      output: kernel.output,
+      input: strictSchema(toolAction, lists.schema),
+      prepareInput: (args) => {
+        const listed = lists.normalize(args);
+        return kernel.verb ? { ...listed, action: kernel.verb } : listed;
+      },
+      output: paged?.output ?? kernel.output,
       parsesOutput: true,
       composite: false,
       telemetryEntity: (input) =>
         spec.telemetryEntity?.(input) ??
         entityOf.safeParse(input).data?.entity ??
         entityOf.safeParse(firstItem(input)).data?.entity,
-      // The verb runs as an ad hoc runner operation named by its tool action;
-      // its input was already parsed, so the runner parses only its output.
-      invoke: async (input, call, name, execution) =>
-        settled(
-          await (call.runtime.executeOperation ?? executeOperation)({
-            operation: { id: name, kind },
-            type: kind,
-            input,
-            inputSchema: z.unknown(),
-            outputSchema: kernel.output,
-            request: {
-              principal: call.principal,
-              headers: call.headers ?? new Headers(),
-              signal: call.signal,
-              modelBacked: spec.modelBacked,
-            },
-            run: (context, parsed) =>
-              kernel.run(
-                parsed,
-                principalWithContext(call.principal, context),
-                name,
-                execution,
-              ),
-          }),
-        ),
+      invoke: (input, call, name, execution) => {
+        if (!paged) return runKernel(input, call, name, execution);
+        const parsed = z.looseObject({}).parse(input);
+        return paged.read(parsed, parsed, (member) =>
+          runKernel(member, call, name, execution),
+        );
+      },
     };
   }
 
@@ -543,7 +634,13 @@ function compileAction(
     };
   }
 
-  const publishedInput = publishMemberAction(published);
+  const paged =
+    kind === "query"
+      ? pagedRead(toolAction, object, memberOutput, spec.page)
+      : null;
+  const lists = oneOrManyLists(kind, paged?.input ?? object);
+  const readInput = strictSchema(toolAction, lists.schema);
+  const publishedInput = publishMemberAction(readInput);
   return {
     name: toolAction,
     kind,
@@ -551,20 +648,26 @@ function compileAction(
     batch: false,
     publishedInput,
     keepsRunExecution:
-      published instanceof z.ZodObject && "_runExecution" in published.shape,
-    input: published,
+      readInput instanceof z.ZodObject && "_runExecution" in readInput.shape,
+    input: readInput,
     prepareInput: (args) => {
-      if (publishedInput === published) return args;
-      const { operationAction, ...member } = args;
+      const listed = lists.normalize(args);
+      if (publishedInput === readInput) return listed;
+      const { operationAction, ...member } = listed;
       return { ...member, action: operationAction };
     },
-    output: memberOutput,
+    output: paged?.output ?? memberOutput,
     // A projection changes the member's shape after the runner's parse.
     parsesOutput: !spec.project,
     composite: false,
     telemetryEntity: (input) =>
       spec.telemetryEntity?.(input) ?? entityOf.safeParse(input).data?.entity,
-    invoke: (_input, call, _name, _execution, raw) => runMember(raw, call),
+    invoke: (input, call, _name, _execution, raw) =>
+      paged
+        ? paged.read(z.looseObject({}).parse(input), raw, (member) =>
+            runMember(member, call),
+          )
+        : runMember(raw, call),
   };
 }
 
@@ -741,18 +844,10 @@ function compileTools(
       (binding) => "kernel" in binding,
     );
     const actions = new Map(
-      Object.entries(tool.actions)
-        .filter(
-          ([, binding]) =>
-            !(
-              "operation" in binding &&
-              binding.operation === "suggestion.reviewBatch"
-            ),
-        )
-        .map(([action, binding]) => [
-          action,
-          compileAction(`${name}.${action}`, binding),
-        ]),
+      Object.entries(tool.actions).map(([action, binding]) => [
+        action,
+        compileAction(`${name}.${action}`, binding),
+      ]),
     );
     const withJson = [...actions.values()].map((action) => ({
       action,
@@ -896,7 +991,9 @@ function registerCompiledTool(
                 mutation,
                 Math.round(performance.now() - startedAt),
               )
-            : undefined,
+            : stage === "input" && detail.reason === "INVALID_INPUT"
+              ? () => inputNext(tool, operationName)
+              : undefined,
         );
       };
       try {

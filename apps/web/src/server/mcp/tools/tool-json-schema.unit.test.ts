@@ -130,8 +130,12 @@ describe("MCP tool JSON Schema — toWire parity", () => {
       fromPartial({}),
     );
     expect(unknownResult.isError).toBe(true);
-    expect(unknownResult.content[0]).toMatchObject({
-      text: expect.stringContaining('Unknown action "missing"'),
+    expect(unknownResult._meta?.["cubby/error"]).toMatchObject({
+      code: "BAD_REQUEST",
+      message: expect.stringMatching(
+        /^Unknown action "missing"\. Available actions: \w+/u,
+      ),
+      next: expect.any(String),
     });
   });
 

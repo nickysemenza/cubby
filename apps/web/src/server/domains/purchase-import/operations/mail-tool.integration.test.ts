@@ -1611,7 +1611,7 @@ describe("public mail tool", () => {
         mailboxId,
         messageId: mail.messageId,
         includeHtml: true,
-        offset: 10,
+        byteOffset: 10,
         maxBytes: 20,
       },
       ctx.actor,
@@ -1619,7 +1619,7 @@ describe("public mail tool", () => {
     expect(page.content.bodyHtml).toBe(bodyHtml.slice(10, 30));
     expect(page.content).toMatchObject({
       bodyText: null,
-      nextOffset: 30,
+      nextByteOffset: 30,
       truncated: true,
     });
 
@@ -1628,7 +1628,7 @@ describe("public mail tool", () => {
       { mailboxId, messageId: mail.messageId, includeHtml: true },
       ctx.actor,
     );
-    expect(firstPage.content.nextOffset).toBeGreaterThan(0);
+    expect(firstPage.content.nextByteOffset).toBeGreaterThan(0);
     expect(
       new TextEncoder().encode(JSON.stringify(firstPage)).length,
     ).toBeLessThan(MAIL_READ_RESPONSE_MAX_BYTES);
