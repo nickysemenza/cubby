@@ -9,6 +9,7 @@
  * implementation.
  */
 import { runDecisionChoice } from "~/server/ai/decision-model";
+import { preparingAiInputs } from "~/server/ai/evaluation-inputs";
 import { classificationPrompt } from "~/server/ai/policy/decision-choice";
 
 type ClassificationInput<Value extends string> = Omit<
@@ -74,7 +75,9 @@ export async function classifyWithDecisionModel<Value extends string>(
       onTokenUsage: args.onTokenUsage,
     });
   const value = selectedIndex === null ? undefined : args.values[selectedIndex];
-  if (value === undefined && !args.allowNone) {
+  // Input preparation captures the request and discards an answer that has no
+  // selection, so only a live call must pick an exhaustive value.
+  if (value === undefined && !args.allowNone && !preparingAiInputs()) {
     throw new Error("Decision-model classification returned no value.");
   }
   return {
