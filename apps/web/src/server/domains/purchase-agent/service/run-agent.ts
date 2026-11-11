@@ -408,11 +408,20 @@ export class PurchaseImportRunAgent
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
     const manifest = importRunAgentManifest[purpose];
-    // A transient-failure retry records its escalation model as the Run's
-    // coordinator; equal primary and escalation turns escalation off.
+    // A Run records its coordinator model. Earlier transient-failure retries
+    // recorded the escalation model; they resume on the primary, since a
+    // stronger model now answers only escalated questions.
+    const recorded =
+      identity.model &&
+      !(
+        "escalationModel" in manifest &&
+        identity.model === manifest.escalationModel
+      )
+        ? identity.model
+        : undefined;
     const models = coordinatorModelsFor(
-      identity.model && !this.agentEnv.coordinatorModels
-        ? { ...manifest, model: identity.model }
+      recorded && !this.agentEnv.coordinatorModels
+        ? { ...manifest, model: recorded }
         : manifest,
       this.agentEnv.coordinatorModels,
     );
@@ -435,6 +444,7 @@ export class PurchaseImportRunAgent
           ? [models.escalation]
           : [models.escalation, QUALITY_MODEL]
         : [],
+      useModel: (model) => this.useModel(model),
       ask: (model, request) =>
         this.askEscalation(model, request, attempts?.ordinaryEvidence()?.text),
       unavailable: () => this.services().escalationUnavailable(),
@@ -569,7 +579,7 @@ export class PurchaseImportRunAgent
             (api, context) => this.toolProgressStamp(api, context),
             purpose,
             (error) => this.report(error),
-            (request) => escalation.escalate(request),
+            (request, callId) => escalation.escalate(request, callId),
           ),
           ...(attempts
             ? [importExtractedOrderTool(runId, attempts.ordinaryEvidence)]
@@ -1003,6 +1013,15 @@ export class PurchaseImportRunAgent
           escalation: escalation.active,
         }).instructions,
       },
+      context,
+    );
+  }
+
+  /** The conversation's model for its next request. */
+  private async useModel(model: SupportedChatModel): Promise<void> {
+    const root = await (await this.harness.pi()).root(context);
+    await root.configure(
+      { model: cubbyAgentModel(model, this.agentEnv.fixedModel) },
       context,
     );
   }

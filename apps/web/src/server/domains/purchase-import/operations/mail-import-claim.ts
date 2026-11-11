@@ -216,8 +216,10 @@ const OBSERVED_KIND = {
  * one transaction (`createNoticePurchase`); the confirmation later itemizes it.
  */
 /**
- * A lifecycle notice already associated with exactly one live Purchase settles
- * as that link without a coordinator, which would only repeat it. Package
+ * A lifecycle notice already linked by review to exactly one live Purchase
+ * settles as that link without a coordinator, which would only repeat it.
+ * Accepted import sources are excluded: their accepted bytes may differ from
+ * the current evidence, which needs extraction and reconciliation. Package
  * references still need the coordinator's extraction.
  */
 async function settleExistingLink(
@@ -241,7 +243,7 @@ async function settleExistingLink(
     )
   ).filter((association) => !association.purchaseDeleted);
   const [only] = live;
-  if (!only || live.length > 1) return false;
+  if (!only || live.length > 1 || only.kind !== "linked") return false;
   try {
     await resolveMail(
       db,

@@ -39,7 +39,17 @@ const claimedEmail = z.looseObject({
 const KEYS = {
   item: "escalation:work-item",
   questions: (item: string) => `escalation:questions:${item}`,
+  /** A conversation model an earlier coordinator switched to on escalation. */
+  legacyConfiguration: "escalation:model-configuration",
 };
+const answeredQuestions = z.array(
+  z.object({
+    callId: z.string(),
+    model: z.string(),
+    answer: z.string(),
+  }),
+);
+const legacyConfiguration = z.object({ model: z.string() });
 
 /** The stronger model's reply to one escalated question. */
 export type EscalationAnswer =
@@ -62,6 +72,8 @@ export function coordinatorEscalation(input: {
   store: EscalationStore;
   /** The stronger models, in the order one Email may ask them. */
   ladder: readonly SupportedChatModel[];
+  /** Configure the conversation's model for its next request. */
+  useModel?: (model: SupportedChatModel) => Promise<void>;
   /** One question to one model; resolves its text or a raw refusal. */
   ask: (
     model: SupportedChatModel,
@@ -78,10 +90,18 @@ export function coordinatorEscalation(input: {
   const active = ladder.length > 0;
   const { store } = input;
   const item = () => store.read(KEYS.item) ?? "";
-  const asked = (key = item()) => Number(store.read(KEYS.questions(key)) ?? 0);
+  const answers = (key = item()) => {
+    const raw = store.read(KEYS.questions(key));
+    return raw ? answeredQuestions.parse(JSON.parse(raw)) : [];
+  };
 
+  /**
+   * `callId` is the durable tool call: a recovered call returns its recorded
+   * answer, and the answer and the spent question are one write.
+   */
   async function escalate(
     request: EscalationRequest,
+    callId: string,
   ): Promise<EscalationAnswer> {
     if (!active)
       return { answered: false, unavailable: "This Run has no escalation." };
@@ -98,8 +118,12 @@ export function coordinatorEscalation(input: {
         unavailable:
           "This blocker needs evidence, authority or execution recovery, not a stronger model. Resolve or defer it under the owning policy.",
       };
-    const spent = asked();
-    const model = ladder[spent];
+    const spent = answers();
+    const recorded = spent.find((entry) => entry.callId === callId);
+    const recordedModel = ladder.find((model) => model === recorded?.model);
+    if (recorded && recordedModel)
+      return { answered: true, model: recordedModel, answer: recorded.answer };
+    const model = ladder[spent.length];
     if (!model)
       return {
         answered: false,
@@ -111,18 +135,38 @@ export function coordinatorEscalation(input: {
     const reply = await input.ask(model, request);
     if ("refused" in reply)
       return { answered: false, model, unavailable: reply.refused };
-    store.write(KEYS.questions(item()), String(spent + 1));
+    store.write(
+      KEYS.questions(item()),
+      JSON.stringify([...spent, { callId, model, answer: reply.text }]),
+    );
     return { answered: true, model, answer: reply.text };
   }
 
   return {
     active,
     /** Whether the current Email has received a stronger model's answer. */
-    escalated: () => asked() > 0,
+    escalated: () => answers().length > 0,
     escalate,
-    /** A claim changes the active item. */
-    afterTool(call: ToolCall, result: ToolExecutionResult): undefined {
+    /**
+     * A claim changes the active item, and returns a conversation an earlier
+     * coordinator switched to its escalation model to the primary.
+     */
+    async afterTool(
+      call: ToolCall,
+      result: ToolExecutionResult,
+    ): Promise<undefined> {
       if (!active || call.name !== CLAIM_TOOL) return undefined;
+      const legacy = store.read(KEYS.legacyConfiguration);
+      const configured = legacy
+        ? legacyConfiguration.safeParse(JSON.parse(legacy)).data?.model
+        : undefined;
+      if (configured && configured !== primary && input.useModel) {
+        await input.useModel(primary);
+        store.write(
+          KEYS.legacyConfiguration,
+          JSON.stringify({ model: primary }),
+        );
+      }
       const text = result.output?.find((part) => part.type === "text");
       let claimed: unknown;
       try {

@@ -1082,6 +1082,17 @@ export async function runStructuredFeature<T>(
       // only after an unusable or invalid answer (ADR 0027).
       const ladder = escalationLadder(spec, Boolean(ctx.validate));
       let issues: { list: string[]; value: unknown } | undefined;
+      // The cache prices replayed usage at the answering model's rates, so
+      // it keeps only the answering attempt's tokens: earlier tiers' tokens
+      // priced at a stronger tier would overstate the avoided cost.
+      let answering: AiAvoidedUsage | undefined;
+      const keep = (usage: AiAvoidedUsage) => {
+        answering = usage;
+      };
+      const answered = (result: Answered<T>) => {
+        if (answering) recordUsage(answering);
+        return result;
+      };
       for (const [index, tier] of ladder.entries()) {
         const last = index === ladder.length - 1;
         const attempt =
@@ -1104,16 +1115,16 @@ export async function runStructuredFeature<T>(
               : media.sent,
             planStructuredRun(attempt, attemptContext),
             attemptContext,
-            recordUsage,
+            keep,
           );
         } catch (error) {
           if (last || !(error instanceof Error) || !unusableAnswers.has(error))
             throw error;
           continue;
         }
-        if (!ctx.validate) return result;
+        if (!ctx.validate) return answered(result);
         const validation = ctx.validate(result.value);
-        if (validation.ok) return result;
+        if (validation.ok) return answered(result);
         if (last)
           throw new Error(
             `Structured output for "${spec.feature}" is invalid after ${ladder.length} attempts: ${validation.issues.join("; ")}`,

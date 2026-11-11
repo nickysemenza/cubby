@@ -164,6 +164,7 @@ export function runAgentTools(
   /** Move the current work item to the escalation model (`escalation.ts`). */
   escalate?: (
     request: z.infer<ToolInputs["escalate_import_work"]>,
+    callId: string,
   ) => Promise<object>,
 ): ToolRegistration[] {
   return [
@@ -173,7 +174,9 @@ export function runAgentTools(
       execute: async (args, api, context) => {
         if (!escalate) throw new Error("This Run has no escalation model");
         return result(
-          await step(api, context, "escalate", () => escalate(args)),
+          await step(api, context, "escalate", () =>
+            escalate(args, String(api.taskId)),
+          ),
         );
       },
     }),

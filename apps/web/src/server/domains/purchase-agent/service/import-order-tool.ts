@@ -202,8 +202,7 @@ export function importExtractedOrderTool(
           vendor: args.vendor,
           targetPurchaseId: args.targetPurchaseId,
           distinctFromPurchases: args.distinctFromPurchases,
-          // A reworded review detail is the same order (`run-agent.ts`).
-          extraction: { ...args.extraction, detail: undefined },
+          extraction: args.extraction,
         }),
       );
       const stableOrderId = `mail:${identity}`;
