@@ -574,14 +574,7 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
               ) ?? null,
         })),
       bind
-        .ids(({ db, ids }) =>
-          Promise.all(
-            ids.map(
-              async (id) =>
-                [id, await loadVendorCategoryEvidence(db, id)] as const,
-            ),
-          ).then((loaded) => new Map(loaded)),
-        )
+        .ids(({ db, ids }) => loadVendorCategoryEvidence(db, ids))
         .fields(
           rawVendorOut.pick({
             purchasedCategories: true,

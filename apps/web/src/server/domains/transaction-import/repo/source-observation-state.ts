@@ -21,6 +21,7 @@ import {
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   sourceOccurrenceHasUnresolvedHistory,
+  sourceHistoricalTransactionRows,
   sourceOccurrencesWithUnresolvedHistory,
   sourceObservationHistoricalLinks,
   sourcePageHistory,
@@ -204,13 +205,18 @@ export const sourceObservationField = (
 ): SQL => {
   const id = sql`${sql.identifier(root)}.id`;
   if (key === "matchState") {
-    return sql`CASE ${sql.join(
-      sourceTransactionRecordMatchState.options.map(
-        (state) =>
-          sql`WHEN ${id} IN (SELECT observed.id FROM ${sourceObservations} observed WHERE observed."matchState"=${state}) THEN ${state}`,
-      ),
-      sql` `,
-    )} END`;
+    return sql`(SELECT CASE
+      WHEN facts.disposition=${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
+      WHEN facts."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
+      WHEN facts."transactionShortcode" IS NULL AND (
+        facts."storedReviewState" <> ${sourceOccurrenceReviewState.enum.ready}
+        OR ${sourceOccurrenceHasUnresolvedHistory(sql`facts."occurrenceId"`, sql`facts."acceptedTransactionId"`)}
+        OR EXISTS (${sourceHistoricalTransactionRows(sql`facts.id`, sql`ARRAY[facts."occurrenceId"]`)})
+        OR facts."acceptedTransactionId" IS NOT NULL
+      ) THEN ${sourceTransactionRecordMatchState.enum.held}
+      WHEN facts."transactionShortcode" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.matched}
+      ELSE ${sourceTransactionRecordMatchState.enum.unmatched} END
+      FROM ${sourceObservationFacts} facts WHERE facts.id=${id})`;
   }
   if (key === "reviewState") {
     // The point helper owns an inner "owner" alias; keep its root distinct.

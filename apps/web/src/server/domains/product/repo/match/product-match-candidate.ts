@@ -35,6 +35,7 @@ import {
   getDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
@@ -291,14 +292,19 @@ async function publishProductPairPublications(
     }),
   );
   const priorByPair = new Map<string, { dismissed: boolean }>();
+  const pairs = requestedRows(
+    [...byPair.keys()].map((key) => {
+      const [recordId, otherId] = key.split("|");
+      return { recordId: recordId!, otherId: otherId! };
+    }),
+    { recordId: "uuid", otherId: "text" },
+    "requested_pair",
+  );
   await transitionSuggestionStateBatch(
     tx,
     and(
       eq(suggestionTable.family, "product_pair"),
-      sql`(${suggestionTable.recordId}::text || '|' || (${suggestionTable.data}->>'otherId')) IN (${sql.join(
-        [...byPair.keys()].map((key) => sql`${key}`),
-        sql`, `,
-      )})`,
+      sql`EXISTS (SELECT 1 FROM ${pairs.from} WHERE ${pairs.col("recordId")} = ${suggestionTable.recordId} AND ${pairs.col("otherId")} = ${suggestionTable.data}->>'otherId')`,
     ),
     (rows) => {
       for (const row of rows) {

@@ -15,6 +15,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -71,6 +72,11 @@ export const statementInputCharges = (
 ) => {
   // Cursor admission selects whole charge identities before aggregation; every
   // retained observation of each admitted identity still participates.
+  const requestedKeys = requestedRows(
+    keys ?? [],
+    { source: "text", chargeKey: "text" },
+    "requested_charge",
+  );
   const chargeFilters = [
     ...(scope.importId || scope.since
       ? [
@@ -80,10 +86,7 @@ export const statementInputCharges = (
     ...(keys
       ? [
           keys.length
-            ? sql`(r.source,${chargeKeyOf("r")}) IN (${sql.join(
-                keys.map((key) => sql`(${key.source},${key.chargeKey})`),
-                sql`, `,
-              )})`
+            ? sql`EXISTS (SELECT 1 FROM ${requestedKeys.from} WHERE ${requestedKeys.col("source")}=r.source AND ${requestedKeys.col("chargeKey")}=${chargeKeyOf("r")})`
             : sql`false`,
         ]
       : []),

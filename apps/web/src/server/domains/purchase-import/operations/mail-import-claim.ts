@@ -37,6 +37,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/requested";
 import {
   purchase as purchaseTable,
   run as runTable,
@@ -350,14 +351,8 @@ async function linkByExactEvidence(
         .where(
           and(
             notDeleted(shipmentTable),
-            sql`(upper(regexp_replace(${shipmentTable.trackingNumber}, '[[:space:]]', '', 'g')) IN (${sql.join(
-              numbers.map((number) => sql`${number}`),
-              sql`, `,
-            )}) OR EXISTS (SELECT 1 FROM jsonb_array_elements(${shipmentTable.extraTrackingNumbers}) ref
-              WHERE upper(regexp_replace(ref->>'trackingNumber', '[[:space:]]', '', 'g')) IN (${sql.join(
-                numbers.map((number) => sql`${number}`),
-                sql`, `,
-              )})))`,
+            sql`(upper(regexp_replace(${shipmentTable.trackingNumber}, '[[:space:]]', '', 'g')) = ANY(${textArrayParam(numbers)}) OR EXISTS (SELECT 1 FROM jsonb_array_elements(${shipmentTable.extraTrackingNumbers}) ref
+              WHERE upper(regexp_replace(ref->>'trackingNumber', '[[:space:]]', '', 'g')) = ANY(${textArrayParam(numbers)})))`,
           ),
         )
     : [];
