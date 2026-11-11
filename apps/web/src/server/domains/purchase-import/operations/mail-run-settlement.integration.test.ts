@@ -347,30 +347,22 @@ describe("Mail import settlement", () => {
       expect(settled.findings).toContainEqual(
         expect.objectContaining({
           kind: "unresolved_targets",
-          summary: expect.stringMatching(
-            status === "unsettled"
-              ? /product_unresolved.*synthetic-with-finding/su
-              : /product_unresolved/u,
-          ),
+          summary: expect.stringMatching(/product_unresolved/u),
         }),
       );
     },
   );
 
-  it("reviews a settled Run with an unresolved Email under a finding naming it and its reason", async () => {
+  it("completes a Run whose unresolved Email has a recorded outcome", async () => {
     const settled = await settledRun({
       "settled-imported": "completed",
       "payment-notice": "unsettled",
     });
-    expect(settled.status).toBe("needs_review");
-    expect(settled.findings).toEqual([
-      {
-        kind: "unresolved_targets",
-        summary: expect.stringMatching(
-          /payment-notice.*needs a dated, confirmed funding account/su,
-        ),
-      },
-    ]);
+    expect(settled).toEqual({
+      outcome: { reconciled: true, status: "completed" },
+      findings: [],
+      status: "completed",
+    });
   });
 
   it("keeps the unfinished-coordinator finding for Email still being researched", async () => {

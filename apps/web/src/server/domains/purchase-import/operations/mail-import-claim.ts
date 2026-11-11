@@ -16,6 +16,7 @@ import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
 import {
   parseShortcodeFor,
   runEntityId,
+  type ShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import {
@@ -29,7 +30,12 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/db/helpers";
 import {
   purchase as purchaseTable,
   run as runTable,
@@ -61,6 +67,7 @@ import {
   type MailProductEvidence,
   type MailRuleCandidate,
 } from "../repo/mail-rule-evidence";
+import { createNoticePurchase } from "../repo/notice-purchase";
 import {
   carrierNotice,
   decideMailByRule,
@@ -201,7 +208,10 @@ const OBSERVED_KIND = {
  * disposition's shipment evidence; a shipping or delivery notice without
  * recognised tracking, with several packages or with any unrecognised
  * tracking reference goes to the coordinator. A confirmation links only to a
- * Purchase an import already sourced, so no lines are lost.
+ * Purchase an import already sourced, so no lines are lost. A shipping or
+ * delivery notice whose sender-proven Vendor prints one order number that no
+ * live Purchase holds creates that order's empty Purchase and links to it in
+ * one transaction (`createNoticePurchase`); the confirmation later itemizes it.
  */
 async function linkByExactEvidence(
   db: Database,
@@ -339,6 +349,25 @@ async function linkByExactEvidence(
       rule: "ordered",
     });
   }
+  const day = input.receivedAt ? householdLocalDate(input.receivedAt) : null;
+  const [orderKey, ...otherOrderKeys] = input.keys.orderKeys;
+  if (
+    !proposals.length &&
+    !input.candidates.length &&
+    event !== "confirmation" &&
+    input.senderVendorId &&
+    orderKey &&
+    !otherOrderKeys.length &&
+    numbers.length === 1 &&
+    day
+  )
+    return linkNoticePurchase(db, {
+      ...input,
+      event,
+      senderVendorId: input.senderVendorId,
+      orderKey,
+      day,
+    });
   const purchaseIds = new Set(proposals.map((item) => item.purchaseId));
   const [purchaseCode] = purchaseIds;
   if (purchaseIds.size !== 1 || !purchaseCode) return false;
@@ -349,40 +378,12 @@ async function linkByExactEvidence(
   )
     return false;
   const sourcedOnly = proposals.every((item) => item.rule === "sourced");
-  const day = input.receivedAt ? householdLocalDate(input.receivedAt) : null;
   if (!sourcedOnly && event !== "confirmation" && !numbers.length) return false;
   if (!sourcedOnly && numbers.length && !day) return false;
   const purchaseId = parseShortcodeFor("purchase", purchaseCode);
   const shipments =
     !sourcedOnly && numbers.length && day
-      ? [
-          {
-            purchaseId,
-            shipments: input.keys.trackingKeys.map((key) => ({
-              shipmentId: null,
-              sourceShipmentKey: null,
-              distinctPackageEvidence: null,
-              carrierId: null,
-              carrierName: key.carrier,
-              trackingNumber: key.number,
-              extraTrackingNumbers: [],
-              purpose: "unknown" as const,
-              observations: [
-                {
-                  sourceEventKey: null,
-                  kind: OBSERVED_KIND[event],
-                  time: { kind: "date" as const, value: day },
-                  timeBasis: "notification_received" as const,
-                  rawStatus: input.subject ?? event,
-                  location: null,
-                  carrierId: null,
-                  carrierName: key.carrier,
-                  trackingNumber: key.number,
-                },
-              ],
-            })),
-          },
-        ]
+      ? noticeShipments({ ...input, event, purchaseId, day })
       : undefined;
   try {
     await resolveMail(
@@ -407,6 +408,99 @@ async function linkByExactEvidence(
     throw error;
   }
   return true;
+}
+
+/** The notice's one recognised package, recorded through its linked disposition. */
+function noticeShipments(input: {
+  purchaseId: ShortcodeFor<"purchase">;
+  keys: MailKeys;
+  event: keyof typeof OBSERVED_KIND;
+  subject: string | null;
+  day: string;
+}) {
+  return [
+    {
+      purchaseId: input.purchaseId,
+      shipments: input.keys.trackingKeys.map((key) => ({
+        shipmentId: null,
+        sourceShipmentKey: null,
+        distinctPackageEvidence: null,
+        carrierId: null,
+        carrierName: key.carrier,
+        trackingNumber: key.number,
+        extraTrackingNumbers: [],
+        purpose: "unknown" as const,
+        observations: [
+          {
+            sourceEventKey: null,
+            kind: OBSERVED_KIND[input.event],
+            time: { kind: "date" as const, value: input.day },
+            timeBasis: "notification_received" as const,
+            rawStatus: input.subject ?? input.event,
+            location: null,
+            carrierId: null,
+            carrierName: key.carrier,
+            trackingNumber: key.number,
+          },
+        ],
+      })),
+    },
+  ];
+}
+
+/**
+ * A shipping or delivery notice that arrives before its order: create the
+ * empty Purchase its order number names and link the notice and its package
+ * to it in one transaction, so a refused link leaves no Purchase behind.
+ */
+async function linkNoticePurchase(
+  db: Database,
+  input: {
+    source: MailRunSource;
+    ref: { mailboxId: string; messageId: string; checksum: string };
+    subject: string | null;
+    keys: MailKeys;
+    senderVendorId: VendorId;
+    orderKey: string;
+    day: string;
+    event: Exclude<keyof typeof OBSERVED_KIND, "confirmation">;
+    actor: ActorContext;
+  },
+) {
+  try {
+    return await withTransaction(db, async (tx) => {
+      const purchaseCode = await createNoticePurchase(tx, {
+        ledgerPartyId: input.source.email.ledgerPartyId,
+        vendorId: input.senderVendorId,
+        orderKey: input.orderKey,
+        day: input.day,
+        actor: input.actor,
+      });
+      if (!purchaseCode) return false;
+      const purchaseId = parseShortcodeFor("purchase", purchaseCode);
+      await resolveMail(
+        databaseForTransaction(tx),
+        {
+          ...input.ref,
+          disposition: {
+            kind: "linked",
+            purchaseIds: [purchaseId],
+            event: input.event,
+            shipments: noticeShipments({ ...input, purchaseId }),
+          },
+        },
+        input.actor,
+        undefined,
+        undefined,
+        { revision: MAIL_IMPORT_RULE_REVISION },
+      );
+      return true;
+    });
+  } catch (error) {
+    // SILENT: a refused link rolls back the empty Purchase and leaves the Email to the coordinator.
+    if (error instanceof AppError) return false;
+    throw error;
+  }
 }
 
 /**

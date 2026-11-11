@@ -1,4 +1,4 @@
-import { mailImportGapCategory } from "./email-fields";
+import { mailImportGapCategory, mailImportWaitingOn } from "./email-fields";
 import {
   suggestionChildHandle,
   suggestionSuppression,
@@ -216,6 +216,8 @@ export const mailImportOutcome = z.discriminatedUnion("kind", [
     reason: z.string().min(1),
     // Existing stored outcomes predate categorized gaps; retain their meaning.
     category: mailImportGapCategory.default("unknown"),
+    /** The source a `source_held` gap waits on; its settlement re-admits this Email. */
+    waitingOn: mailImportWaitingOn.nullable().default(null),
   }),
 ]);
 export const suggestionJudgments = {

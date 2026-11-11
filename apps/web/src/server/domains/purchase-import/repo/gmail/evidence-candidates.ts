@@ -109,8 +109,9 @@ function readyOrder(value: StructuredEvidence) {
     0,
   );
   if (
-    !extraction.candidate.lines.every((line) =>
-      Number.isSafeInteger(cents(line.amount)),
+    !extraction.candidate.lines.every(
+      (line) =>
+        line.amount !== null && Number.isSafeInteger(cents(line.amount)),
     ) ||
     !Number.isSafeInteger(total) ||
     total !== facts.total ||

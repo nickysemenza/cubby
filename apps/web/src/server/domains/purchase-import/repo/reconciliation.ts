@@ -128,7 +128,10 @@ export async function reviewResolution(
     (candidate.sourceEvent === "refunded" ||
       candidate.sourceEvent === "cancelled" ||
       candidate.lines.some(
-        (line) => line.lineKind === "principal" && line.amount < 0,
+        (line) =>
+          line.lineKind === "principal" &&
+          line.amount !== null &&
+          line.amount < 0,
       ))
   )
     throw new Error(
@@ -256,8 +259,10 @@ export async function reviewResolution(
       (!selected ||
         (foreign
           ? selected.lineBasis !== "item_line"
-          : selected.cost === null ||
-            cents(selected.cost) !== cents(line.amount)) ||
+          : line.amount === null
+            ? selected.cost !== null || selected.lineBasis !== "item_line"
+            : selected.cost === null ||
+              cents(selected.cost) !== cents(line.amount)) ||
         selected.lineKind !== line.lineKind ||
         (selected.productQuantity !== null &&
           binding.productId !== null &&
@@ -302,8 +307,14 @@ export async function reviewResolution(
       throw new Error(
         "Expense corrections require reviewed complete USD order facts.",
       );
+    // A ready extraction prices every line (importExtractionOutcome).
+    const pricedCents = (row: (typeof candidate.lines)[number]) => {
+      if (row.amount === null)
+        throw new Error("Expense corrections require every line's price.");
+      return cents(row.amount);
+    };
     if (
-      candidate.lines.reduce((sum, row) => sum + cents(row.amount), 0) !==
+      candidate.lines.reduce((sum, row) => sum + pricedCents(row), 0) !==
       cents(candidate.printedGrandTotal)
     )
       throw new Error(
@@ -331,7 +342,10 @@ export async function reviewResolution(
       unpricedIds.size &&
       (selected.some((row) => unpricedIds.has(row.id)) ||
         candidate.lines.some(
-          (line) => line.lineKind === "principal" && line.amount >= 0,
+          (line) =>
+            line.lineKind === "principal" &&
+            line.amount !== null &&
+            line.amount >= 0,
         ))
     ) {
       if (
@@ -422,7 +436,7 @@ export async function reviewResolution(
       0,
     );
     const proposedTotal = candidate.lines.reduce(
-      (sum, row) => sum + cents(row.amount),
+      (sum, row) => sum + pricedCents(row),
       0,
     );
     if (selectedTotal !== proposedTotal && !resolution.attributionTargets)

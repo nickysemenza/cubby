@@ -49,6 +49,7 @@ import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email
 import {
   emailInScopeSql,
   emailPurchaseEvidenceSql,
+  cachedEmailAcceptedSql,
   cachedEmailLinkedSql,
   emailLinkRankSql,
   emailLinkStateSql,
@@ -61,7 +62,10 @@ import {
   emailPurchaseAssociationsSql,
   emailReviewConflictSql,
 } from "~/server/domains/email/repo/email-sql";
-import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
+import {
+  emailImportOutcomeSql,
+  loadEmailImportOutcomes,
+} from "~/server/domains/email/repo/import-outcome";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
@@ -419,6 +423,7 @@ const emailRead: ListReadOptions<EmailRow> = {
           ownedByViewer: true,
           linkState: true,
           importOutcome: true,
+          importOutcomeDetail: true,
           reviewedClassification: true,
           reviewedClassificationReason: true,
         }),
@@ -436,7 +441,8 @@ const emailRead: ListReadOptions<EmailRow> = {
           linkState: loaded.purchaseLinks.has(row.id)
             ? strongestLinkState(loaded.purchaseLinks.get(row.id)?.links ?? [])
             : null,
-          importOutcome: loaded.importOutcome.get(row.id) ?? null,
+          importOutcome: loaded.importOutcome.get(row.id)?.outcome ?? null,
+          importOutcomeDetail: loaded.importOutcome.get(row.id) ?? null,
           reviewedClassification:
             loaded.reviews.get(row.id)?.classification ?? null,
           reviewedClassificationReason:
@@ -529,6 +535,7 @@ export const emailScaffold = listScaffold("email", emailTable, {
     scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
     linked: cachedEmailLinkedSql(),
     reviewConflict: emailReviewConflictSql(),
+    importOutcome: emailImportOutcomeSql(cachedEmailAcceptedSql()),
     purchaseId: inScope,
     vendorId: inScope,
     vendorAccountId: inScope,

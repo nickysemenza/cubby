@@ -29,6 +29,7 @@ import {
   runFinding,
   runOperation,
   emailReview,
+  vendor,
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
@@ -398,6 +399,174 @@ describe("mail research admission", () => {
       const retried = await owner();
       expect(retried).not.toBe(refreshedOwner);
       expect((await attempts())?.count).toBe(2);
+    },
+  );
+  // Unchanged evidence buys no second Run: a sender mapping the holder's
+  // coordinator already read is not new, while the order it waits on is.
+  it("readmits a waiting Email when its awaited order arrives, not for a sender mapping its claim already saw", async () => {
+    const { party, mail } = await source({
+      subject: "Order SYN-WAIT-7 shipped",
+      bodyText: "Your order SYN-WAIT-7 shipped.",
+    });
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic waiting shop",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    const [sellerRow] = await getDb(ctx.db)
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(eq(vendor.shortcode, seller.output.id));
+    if (!sellerRow) throw new Error("Synthetic waiting Vendor missing");
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const [holder] = await admitMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+      automatic: true,
+    });
+    if (!holder) throw new Error("Synthetic holder missing");
+    await getDb(ctx.db)
+      .insert(runOperation)
+      .values({
+        runId: holder.row.id,
+        operationId: "claim:synthetic",
+        kind: "claim_next_work",
+        state: "completed",
+        inputFingerprint: "synthetic",
+        result: {
+          kind: "email",
+          email: {
+            mailboxId: mail.mailboxId,
+            messageId: mail.messageId,
+            checksum: mail.rawChecksum,
+          },
+          known: { senderVendor: { id: seller.output.id } },
+        },
+      });
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: holder.row.id,
+      status: "unsettled",
+      detail: "The confirmation of SYN-WAIT-7 is not imported yet.",
+      judgment: {
+        kind: "unresolved",
+        reason: "The confirmation of SYN-WAIT-7 is not imported yet.",
+        category: "source_held",
+        waitingOn: { kind: "order", orderId: "SYN-WAIT-7", vendorId: null },
+      },
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(run.id, holder.row.id));
+    const owner = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0]?.runId;
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(holder.row.id);
+    await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: sellerRow.id,
+      orderId: "#syn-wait-7",
+    });
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    const successor = await owner();
+    expect(successor).not.toBe(holder.row.id);
+    // The same settlement readmits once.
+    if (!successor) throw new Error("The awaited order must readmit the Email");
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: successor,
+      status: "unsettled",
+      detail: "Still waiting.",
+      judgment: {
+        kind: "unresolved",
+        reason: "Still waiting.",
+        category: "source_held",
+        waitingOn: { kind: "order", orderId: "SYN-WAIT-7", vendorId: null },
+      },
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(run.id, successor));
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await owner()).toBe(successor);
+  });
+  // A newer importer may settle what an older one left to an agent, once per
+  // revision; a gap only the member settles is never re-run.
+  it.each([
+    { category: "missing_evidence", readmitted: true },
+    { category: "member_decision", readmitted: false },
+  ] as const)(
+    "readmits a $category gap from an older importer revision: $readmitted",
+    async ({ category, readmitted }) => {
+      const { party, mail } = await source();
+      await getDb(ctx.db).insert(account).values({
+        id: crypto.randomUUID(),
+        accountId: mail.mailboxId,
+        providerId: "google",
+        userId: ctx.actor.userId,
+        updatedAt: new Date(),
+      });
+      await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+      const settle = async (runId: (typeof run.$inferSelect)["id"]) => {
+        await settleMail(ctx.db, {
+          mail,
+          importRunId: runId,
+          status: "unsettled",
+          detail: "Only a total is printed.",
+          judgment: {
+            kind: "unresolved",
+            reason: "Only a total is printed.",
+            category,
+            waitingOn: null,
+          },
+        });
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "completed", endedAt: new Date() })
+          .where(eq(run.id, runId));
+      };
+      const [holder] = await admitMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        mailboxId: mail.mailboxId,
+        messageIds: [mail.id],
+        automatic: true,
+      });
+      if (!holder) throw new Error("Synthetic holder missing");
+      await settle(holder.row.id);
+      await getDb(ctx.db)
+        .update(run)
+        .set({ skillRevision: "purchase-import@0" })
+        .where(eq(run.id, holder.row.id));
+      const owner = async () =>
+        (
+          await getDb(ctx.db)
+            .select({ runId: emailTable.runId })
+            .from(emailTable)
+            .where(eq(emailTable.orderMailId, mail.id))
+        )[0]?.runId;
+      expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+      const successor = await owner();
+      expect(successor !== holder.row.id).toBe(readmitted);
+      if (!readmitted || !successor) return;
+      // The current revision's own gap stays settled.
+      await settle(successor);
+      expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+      expect(await owner()).toBe(successor);
     },
   );
   // A member's cancel is a decision: a sender mapping that already existed

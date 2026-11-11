@@ -73,6 +73,12 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         {
           kind: "fields",
+          id: "order",
+          title: "Order",
+          fields: ["orderId"],
+        },
+        {
+          kind: "fields",
           id: "seller",
           title: "Seller",
           fields: ["vendorName"],
@@ -124,6 +130,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "id",
             "name",
             "purchaseId",
+            "orderId",
             "vendorId",
             "carrierId",
             "trackingNumber",
@@ -165,6 +172,21 @@ export const { definition, readSchemas } = defineEntityModel({
         reference: { entity: "purchase" },
         display: { columnGroup: "Purchase", labelPath: "purchaseName" },
         validation: readOnly(shortcodeSchema("purchase").nullable()),
+      },
+      {
+        // The merchant order number its source named. While no Purchase
+        // holds the Shipment, a Purchase gaining this order id links it.
+        audit: true,
+        key: "orderId",
+        kind: "text",
+        nullable: true,
+        label: "Order number",
+        display: {
+          list: false,
+          columnGroup: "Purchase",
+          renderer: { detail: "shipment-order" },
+        },
+        validation: readOnly(z.string().nullable()),
       },
       {
         key: "vendorId",
@@ -352,6 +374,7 @@ export const { definition, readSchemas } = defineEntityModel({
       { key: "shortcode", specialized: "shortcode" },
       "name",
       "purchaseId",
+      "orderId",
       { key: "purchaseAssociationReviewed", defaultValue: false },
       "carrierId",
       "trackingNumber",
@@ -505,7 +528,7 @@ export const { definition, readSchemas } = defineEntityModel({
         urlKey: "q",
         kind: "text",
         deriveSchema: true,
-        anyOf: ["name", "trackingNumber", "notes"],
+        anyOf: ["name", "trackingNumber", "orderId", "notes"],
         placeholder: "Search shipments...",
       },
       {

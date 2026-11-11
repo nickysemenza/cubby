@@ -26,6 +26,7 @@ import {
   inventoryEntry,
   email,
   ledgerParty,
+  orderMail,
   purchase,
   user,
 } from "~/server/db/schema";
@@ -56,6 +57,7 @@ import {
   reassignShipmentEvidence,
   editShipmentObservation,
   editShipmentReferences,
+  linkShipmentsByOrderId,
 } from "./evidence";
 import { readShipmentTimeline } from "./timeline";
 
@@ -707,6 +709,75 @@ describe("Shipment retained evidence", () => {
     expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
       1,
     );
+  });
+
+  // An early shipping notice keeps its order number; the Purchase that later
+  // holds that order holds the Shipment, while a second candidate holds it back.
+  it("records an Email's order number and links the Shipment once one Purchase holds that order", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    await retainedMailFixture(ctx.db, {
+      ledgerPartyId: world.party.id,
+      messageId: "synthetic-early-notice",
+      checksum: "c".repeat(64),
+      content: {
+        snippet: null,
+        bodyText: "Order SYN-SHIP-9 shipped. Tracking EXAMPLE-EARLY.",
+        bodyHtml: null,
+      },
+    });
+    const [message] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.messageId, "synthetic-early-notice"));
+    const recorded = await recordShipmentEvidence(
+      ctx.db,
+      {
+        source: {
+          kind: "email",
+          emailId: parseShortcodeFor("email", message!.shortcode),
+          checksum: "c".repeat(64),
+        },
+        purchaseId: null,
+        shipments: [packet("EXAMPLE-EARLY")],
+      },
+      ctx.actor,
+    );
+    const read = async () =>
+      (
+        await getDb(ctx.db)
+          .select({
+            orderId: shipment.orderId,
+            purchaseId: shipment.purchaseId,
+          })
+          .from(shipment)
+          .where(eq(shipment.shortcode, recorded.shipmentIds[0]!))
+      )[0];
+    expect(await read()).toEqual({ orderId: "SYN-SHIP-9", purchaseId: null });
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic early merchant",
+    });
+    const order = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: seller.id,
+      orderId: "#syn-ship-9",
+    });
+    const other = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: (
+        await insertWithShortcode(ctx.db, "vendor", { name: "Synthetic other" })
+      ).id,
+      orderId: "SYN-SHIP-9",
+    });
+    // Order numbers are unique only per Vendor: a notice naming no Vendor never links.
+    expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(0);
+    await getDb(ctx.db)
+      .update(orderMail)
+      .set({ vendorId: seller.id })
+      .where(eq(orderMail.id, message!.orderMailId!));
+    expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(1);
+    expect(await read()).toEqual({
+      orderId: "SYN-SHIP-9",
+      purchaseId: order.id,
+    });
+    expect(other.id).not.toBe(order.id);
   });
 
   it("uses exact carrier tracking links only from the independently retained Email original", async () => {

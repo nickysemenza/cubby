@@ -16,6 +16,7 @@ import {
   settlementReferencePredicate,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import { settlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { awaitingOrderDetailsSql } from "~/server/domains/purchase-import/repo/notice-purchase";
 import {
   purchaseItemizationExpectationSql,
   purchaseHasItemizationSql,
@@ -26,13 +27,16 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const PURCHASE_QUALITY_RULES_VERSION = 3;
+export const PURCHASE_QUALITY_RULES_VERSION = 4;
 type PurchaseQualityRecord = Awaited<
   ReturnType<typeof loadPurchaseQualityRecords>
 >[number];
 const vendorRole = expenseCreateInput.shape.economicRole.parse("vendor");
 const observed = qualityCheck.observed<PurchaseQualityRecord>;
 const when = qualityCheck.when<PurchaseQualityRecord>;
+/** Ledger checks wait while a notice's empty Purchase waits for its order details. */
+const withOrderDetails = (check: ReturnType<typeof observed>) =>
+  when((r) => !r.awaitingOrderDetails, check);
 
 export const purchaseChecks = defineStoredEntityChecks({
   entity: "purchase",
@@ -58,10 +62,10 @@ export const purchaseChecks = defineStoredEntityChecks({
       observed((r) => r.orderId !== null),
     ),
     stated_total: when(
-      (r) => r.hasPrimaryDocument,
+      (r) => r.hasPrimaryDocument && !r.awaitingOrderDetails,
       observed((r) => r.statedTotal !== null),
     ),
-    empty_expenses: observed((r) => r.expenseCount > 0),
+    empty_expenses: withOrderDetails(observed((r) => r.expenseCount > 0)),
     purchase_spending_category_origin: when(
       (r) => r.spendingCategoryId !== null,
       observed((r) => r.spendingCategoryOrigin !== "legacy"),
@@ -71,7 +75,9 @@ export const purchaseChecks = defineStoredEntityChecks({
     ),
     // A receipt on an empty Purchase still needs extraction, regardless of policy.
     purchase_itemization: when(
-      (r) => r.hasPrimaryDocument || r.expectation === "required",
+      (r) =>
+        (r.hasPrimaryDocument || r.expectation === "required") &&
+        !r.awaitingOrderDetails,
       observed((r) => r.hasItemization),
     ),
     unpriced_expense: observed((r) => r.settleableUnpricedCount === 0),
@@ -85,7 +91,9 @@ export const purchaseChecks = defineStoredEntityChecks({
           cents(r.postedRefundTotal) === delta)
       );
     }),
-    settlement_reference: observed((r) => r.hasSettlementReference),
+    settlement_reference: withOrderDetails(
+      observed((r) => r.hasSettlementReference),
+    ),
     settlement_mismatch: observed(
       (r) =>
         r.settleableUnpricedCount > 0 ||
@@ -169,6 +177,7 @@ async function loadPurchaseQualityRecords(
       partyConflict: sql<boolean>`coalesce(quality_settlements."partyConflict", false)`,
       tenderConflict: sql<boolean>`coalesce(quality_settlements."tenderConflict", false)`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("purchase", sql`${purchase.id}`)}`,
+      awaitingOrderDetails: sql<boolean>`${awaitingOrderDetailsSql(sql`${purchase.id}`)}`,
     })
     .from(purchase)
     .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))

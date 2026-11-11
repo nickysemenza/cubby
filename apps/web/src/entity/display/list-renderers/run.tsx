@@ -8,6 +8,7 @@ import { RunWorkProgress } from "~/ui/records/run-work-progress";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
 
+import { runCostLabel } from "../detail-field-renderers/run";
 import type { ListRenderer, ListRowOf } from "../list-renderer-types";
 
 type RunRow = ListRowOf<"run">;
@@ -79,7 +80,33 @@ const activity: ListRenderer<"run"> = (helper) =>
     );
   });
 
+const costLabel = (row: RunRow) =>
+  runCostLabel(
+    fieldValueOf(row.fields.chargedCost) ?? 0,
+    fieldValueOf(row.fields.chargedUnpricedCount) ?? 0,
+  );
+
+const aiCost: ListRenderer<"run"> = (helper) =>
+  createCubbyColumnCollection((add) => {
+    add(
+      helper.accessor(costLabel, {
+        id: "chargedCost",
+        header: "AI cost",
+        enableSorting: false,
+        meta: attachCubbyColumnMeta<RunRow>({
+          className: "w-28",
+          cellData: textCellData("text", costLabel),
+          mobile: { slot: "meta", priority: 50 },
+        }),
+        cell: ({ getValue }) => (
+          <span className="tabular-nums">{getValue()}</span>
+        ),
+      }),
+    );
+  });
+
 export const runListRenderers = {
   "run-throughput": throughput,
   "run-activity": activity,
+  "run-ai-cost": aiCost,
 } as const;

@@ -14,6 +14,7 @@ import {
 } from "~/entity/presentation-coverage";
 
 import type { DetailFieldRenderer } from "../entity-display";
+import { emailDetailFields } from "./email";
 import { financialAccountDetailFields } from "./financial-account";
 import { imageDetailFields } from "./image-capture";
 import { inventoryDetailFields } from "./inventory";
@@ -21,6 +22,7 @@ import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
 import { recipeDetailFields } from "./recipe";
 import { runDetailFields } from "./run";
+import { shipmentDetailFields } from "./shipment";
 import { renderSpendingCategorySummary } from "./spending-category-summary";
 
 export type EntityDetailFieldRenderers<E extends GenericDetailEntity> =
@@ -78,7 +80,17 @@ const buildDetailRendererCoverage = () => {
     recipe: {
       "recipe-source": implemented(recipeDetailFields["recipe-source"]),
     },
+    email: {
+      "email-import-outcome": implemented(
+        emailDetailFields["email-import-outcome"],
+      ),
+    },
+    shipment: {
+      "shipment-order": implemented(shipmentDetailFields["shipment-order"]),
+    },
     run: {
+      "run-ai-cost": implemented(runDetailFields["run-ai-cost"]),
+      "run-outcome-counts": implemented(runDetailFields["run-outcome-counts"]),
       "run-failure-details": implemented(
         runDetailFields["run-failure-details"],
       ),
@@ -152,6 +164,10 @@ const detailCoverageFor = (
       return coverage.product;
     case "recipe":
       return coverage.recipe;
+    case "email":
+      return coverage.email;
+    case "shipment":
+      return coverage.shipment;
     case "run":
       return coverage.run;
     case "financialAccount":

@@ -97,6 +97,27 @@ describe("purchase import writer policy", () => {
     ).toEqual({ kind: "conflict", reason: "duplicate_lines" });
   });
 
+  it("never prices an aggregate's items from its total", () => {
+    expect(
+      decideLineWrite(
+        [
+          {
+            id: "expense-1",
+            title: "Synthetic order",
+            amount: 5.52,
+            lineKind: "principal",
+            productId: null,
+            tradeId: null,
+            projectId: null,
+            costType: null,
+            sourceClaimed: false,
+          },
+        ],
+        [{ title: "Synthetic soap", amount: null, lineKind: "principal" }],
+      ),
+    ).toEqual({ kind: "conflict", reason: "duplicate_lines" });
+  });
+
   it("settles only when every payment has one distinct match", () => {
     const payments = [
       { amount: 12, chargedAt: "2026-09-18T10:00:00.000Z" },

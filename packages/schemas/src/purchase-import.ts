@@ -142,9 +142,11 @@ export type PurchaseImportRunExecution = z.infer<
 
 const LINE_COST_TYPE =
   "The line's accounting role: materials for consumed or installed goods, tools for equipment that outlives the job, services for labor, travel, delivery, taxes, fees, and other non-material charges. Event tickets, airfare and other travel, lodging, rides, labor and prepared food are services.";
+const LINE_AMOUNT =
+  "The line's printed amount. Null only when the source prints the item without a price, under the `unpriced_itemization` review reason; never zero for an unknown price.";
 export const extractedPurchaseLine = z.object({
   title: z.string().trim().min(1).max(500),
-  amount: money,
+  amount: money.nullable().describe(LINE_AMOUNT),
   lineKind: expenseLineKindSchema.default("principal"),
   costType: costTypeSchema.optional().describe(LINE_COST_TYPE),
   quantity: z.number().positive().finite().optional(),
@@ -226,31 +228,77 @@ export const extractedOrderCandidate = z.object({
 });
 export type ExtractedOrderCandidate = z.infer<typeof extractedOrderCandidate>;
 
+/**
+ * `sum_mismatch`: printed item amounts disagree with the printed total.
+ * `unpriced_itemization`: a USD order prints its total and item names but no
+ * item prices; Cubby books the total as one aggregate Expense beside unpriced
+ * item lines, with no review finding.
+ */
 const importExtractionReviewReason = z.enum([
   "missing_currency",
   "sum_mismatch",
+  "unpriced_itemization",
   "foreign_currency",
   "missing_total",
   "ambiguous_order",
 ]);
 
-export const importExtractionOutcome = z.discriminatedUnion("status", [
-  z.object({
-    status: z.literal("ready"),
-    candidate: extractedOrderCandidate,
-  }),
-  z.object({
-    status: z.literal("needs_review"),
-    candidate: extractedOrderCandidate,
-    reason: importExtractionReviewReason,
-    detail: z.string().trim().min(1).max(2_000),
-  }),
-  z.object({
-    status: z.literal("unreadable"),
-    candidate: extractedOrderCandidate.optional(),
-    detail: z.string().trim().min(1).max(2_000),
-  }),
-]);
+export const importExtractionOutcome = z
+  .discriminatedUnion("status", [
+    z.object({
+      status: z.literal("ready"),
+      candidate: extractedOrderCandidate,
+    }),
+    z.object({
+      status: z.literal("needs_review"),
+      candidate: extractedOrderCandidate,
+      reason: importExtractionReviewReason,
+      detail: z.string().trim().min(1).max(2_000),
+    }),
+    z.object({
+      status: z.literal("unreadable"),
+      candidate: extractedOrderCandidate.optional(),
+      detail: z.string().trim().min(1).max(2_000),
+    }),
+  ])
+  .superRefine((value, context) => {
+    const candidate = value.candidate;
+    if (!candidate) return;
+    // An unpriced line is valid only in a USD itemization with a printed total.
+    if (
+      value.status === "needs_review" &&
+      value.reason === "unpriced_itemization"
+    ) {
+      if (candidate.currency !== "USD" || candidate.printedGrandTotal === null)
+        context.addIssue({
+          code: "custom",
+          path: ["reason"],
+          message:
+            "unpriced_itemization requires a USD order with its printed grand total.",
+        });
+      // Printed item prices are itemization to reconcile, never carried by the total.
+      candidate.lines.forEach((line, index) => {
+        if (line.amount !== null)
+          context.addIssue({
+            code: "custom",
+            path: ["candidate", "lines", index, "amount"],
+            message:
+              "unpriced_itemization lines carry no printed price; priced lines that disagree with the total are sum_mismatch.",
+          });
+      });
+      return;
+    }
+    if (value.status !== "unreadable")
+      candidate.lines.forEach((line, index) => {
+        if (line.amount === null)
+          context.addIssue({
+            code: "custom",
+            path: ["candidate", "lines", index, "amount"],
+            message:
+              "A line without a printed price needs reason unpriced_itemization; never supply zero for an unknown price.",
+          });
+      });
+  });
 export type ImportExtractionOutcome = z.infer<typeof importExtractionOutcome>;
 
 /** Accepted ordered-item identity remains independent of later catalog or ledger edits. */
@@ -273,7 +321,7 @@ export type SourceOrderObservationBindings = z.infer<
 
 const extractedPurchaseLineModelOutput = z.object({
   title: z.string().trim().min(1).max(500),
-  amount: money,
+  amount: money.nullable().describe(LINE_AMOUNT),
   lineKind: expenseLineKindSchema.nullable(),
   costType: costTypeSchema.nullable().describe(LINE_COST_TYPE),
   quantity: z.number().positive().finite().nullable(),

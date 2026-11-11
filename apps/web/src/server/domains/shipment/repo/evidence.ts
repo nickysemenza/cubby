@@ -1,6 +1,9 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseShortcodeFor,
+  type EmailId,
+  type PurchaseId,
+  type ShipmentId,
   type ShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import {
@@ -13,7 +16,7 @@ import {
   type RecordShipmentEvidenceInput,
 } from "@cubby/schemas/shipment-evidence";
 import { type ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -34,6 +37,9 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
+import { normalizedOrderIdSql } from "~/server/domains/purchase-import/repo/order-identity";
 import {
   carrierCaptureEvidence,
   deliveryFieldCodes,
@@ -137,6 +143,12 @@ async function writeShipmentEvidence(
         },
         state,
       );
+    if (source.emailId)
+      await recordShipmentOrderId(tdb, actor, {
+        emailId: source.emailId,
+        purchaseId,
+        shipmentIds: [...new Set(state.shipmentIds)],
+      });
     return {
       shipmentIds: [...new Set(state.shipmentIds)],
       insertedObservations: state.insertedObservations,
@@ -144,6 +156,172 @@ async function writeShipmentEvidence(
       unresolvedPackages: state.unresolvedPackages,
     };
   });
+}
+
+/**
+ * The merchant order number an Email's Shipments belong to: the linked
+ * Purchase's, else the one order number the Email prints. Existing order
+ * numbers stay; an unlinked Shipment then joins its order's Purchase.
+ */
+async function recordShipmentOrderId(
+  db: Database,
+  actor: ActorContext,
+  input: {
+    emailId: EmailId;
+    purchaseId: PurchaseId | null;
+    shipmentIds: readonly ShortcodeFor<"shipment">[];
+  },
+) {
+  if (!input.shipmentIds.length) return;
+  const database = getDb(db);
+  const [linked] = input.purchaseId
+    ? await database
+        .select({ orderId: purchase.orderId })
+        .from(purchase)
+        .where(eq(purchase.id, input.purchaseId))
+    : [];
+  let orderId = linked?.orderId ?? null;
+  if (!orderId) {
+    const [message] = await database
+      .select({
+        orderMailId: email.orderMailId,
+        ledgerPartyId: email.ledgerPartyId,
+      })
+      .from(email)
+      .where(eq(email.id, input.emailId));
+    const [original] = message?.orderMailId
+      ? await readRetainedMail(db, {
+          ledgerPartyIds: [message.ledgerPartyId],
+          orderMailIds: [message.orderMailId],
+        })
+      : [];
+    const keys = original
+      ? (await readEmailMailKeys(db, original)).orderKeys
+      : [];
+    orderId = keys.length === 1 ? keys[0]! : null;
+  }
+  if (!orderId) return;
+  const recorded = await database
+    .update(shipment)
+    .set({ orderId })
+    .where(
+      and(
+        inArray(shipment.shortcode, [...input.shipmentIds]),
+        isNull(shipment.orderId),
+        notDeleted(shipment),
+      ),
+    )
+    .returning({ id: shipment.id });
+  if (!recorded.length) return;
+  await logAuditEntries(
+    db,
+    actor,
+    recorded.map((row) => ({
+      entityKind: "shipment" as const,
+      entityId: row.id,
+      action: "update" as const,
+      changes: { orderId: { from: null, to: orderId } },
+    })),
+  );
+  await linkShipmentsByOrderId(db, actor, {
+    shipmentIds: recorded.map((row) => row.id),
+  });
+}
+
+/**
+ * Unlinked, unreviewed Shipments whose order number names exactly one live
+ * Purchase join it: the same normalized order id, at the Vendor its source
+ * Emails attribute when they name one, owned by those Emails' member.
+ * Returns how many Shipments it linked.
+ */
+export async function linkShipmentsByOrderId(
+  db: Database,
+  actor: ActorContext,
+  scope: {
+    shipmentIds?: readonly ShipmentId[];
+    purchaseIds?: readonly PurchaseId[];
+  } = {},
+) {
+  if (scope.shipmentIds?.length === 0 || scope.purchaseIds?.length === 0)
+    return 0;
+  const database = getDb(db);
+  const candidates = await database
+    .select({
+      shipmentId: shipment.id,
+      purchaseId: sql<PurchaseId>`(array_agg(DISTINCT ${purchase.id}))[1]`,
+    })
+    .from(shipment)
+    .innerJoin(
+      purchase,
+      and(
+        sql`${normalizedOrderIdSql(purchase.orderId)} = ${normalizedOrderIdSql(shipment.orderId)}`,
+        notDeleted(purchase),
+      ),
+    )
+    .where(
+      and(
+        isNull(shipment.purchaseId),
+        eq(shipment.purchaseAssociationReviewed, false),
+        isNotNull(shipment.orderId),
+        notDeleted(shipment),
+        scope.shipmentIds
+          ? inArray(shipment.id, [...scope.shipmentIds])
+          : undefined,
+        scope.purchaseIds
+          ? inArray(purchase.id, [...scope.purchaseIds])
+          : undefined,
+        // Order numbers are only unique per Vendor: a source Email must name
+        // the Purchase's Vendor, and any source Vendor or member that
+        // disagrees blocks the link.
+        sql`EXISTS (
+          SELECT 1 FROM ${shipmentObservation} observation
+          JOIN ${shipmentSourceCapture} capture ON capture.id = observation."sourceCaptureId"
+          JOIN ${email} source_email ON source_email.id = capture."emailId"
+          JOIN "OrderMail" original ON original.id = source_email."orderMailId"
+          WHERE observation."shipmentId" = ${shipment.id} AND ${notDeleted("source_email")}
+            AND original."vendorId" = ${purchase.vendorId}
+        )`,
+        sql`NOT EXISTS (
+          SELECT 1 FROM ${shipmentObservation} observation
+          JOIN ${shipmentSourceCapture} capture ON capture.id = observation."sourceCaptureId"
+          JOIN ${email} source_email ON source_email.id = capture."emailId"
+          LEFT JOIN "OrderMail" original ON original.id = source_email."orderMailId"
+          LEFT JOIN "VendorAccount" account ON account.id = ${purchase.vendorAccountId} AND ${notDeleted("account")}
+          WHERE observation."shipmentId" = ${shipment.id} AND ${notDeleted("source_email")}
+            AND ((original."vendorId" IS NOT NULL AND original."vendorId" IS DISTINCT FROM ${purchase.vendorId})
+              OR (account."ledgerPartyId" IS NOT NULL AND account."ledgerPartyId" <> source_email."ledgerPartyId"))
+        )`,
+      ),
+    )
+    .groupBy(shipment.id)
+    .having(sql`count(DISTINCT ${purchase.id}) = 1`);
+  let linked = 0;
+  for (const candidate of candidates) {
+    const [row] = await database
+      .update(shipment)
+      .set({ purchaseId: candidate.purchaseId })
+      .where(
+        and(
+          eq(shipment.id, candidate.shipmentId),
+          isNull(shipment.purchaseId),
+          eq(shipment.purchaseAssociationReviewed, false),
+        ),
+      )
+      .returning({ id: shipment.id });
+    if (!row) continue;
+    linked += 1;
+    await logAuditEntries(db, actor, [
+      {
+        entityKind: "shipment",
+        entityId: row.id,
+        action: "update",
+        changes: { purchaseId: { from: null, to: candidate.purchaseId } },
+      },
+    ]);
+  }
+  if (linked)
+    await recordChange(db, { kind: "source", categories: ["shipment"] });
+  return linked;
 }
 
 export async function editShipmentObservation(

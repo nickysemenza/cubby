@@ -1183,6 +1183,50 @@ Foreign refunds and cancellations remain reviewed accounting work. Native
 foreign balances, optional USD allocations and automatic stock changes are
 unsupported.
 
+### Total-only USD confirmations
+
+A USD order Email that prints its grand total and item names but no item
+prices is extracted as `needs_review` with reason `unpriced_itemization`: each
+printed item is a line with `amount: null`. Unpriced lines are valid only under
+that reason, which requires USD and a printed total; `sum_mismatch` remains the
+reason for printed item amounts that disagree with the total and still files
+its review finding. The ordinary Mail import tool and the writer accept
+`unpriced_itemization` without a finding: the Purchase header takes the order
+number, date and printed total, one `allocation` Expense carries the total, and
+each item becomes an item-line Expense with `cost: null`, its supported
+quantity and its own Product resolution. No item is priced from the total.
+
+The unpriced lines follow the foreign roster rules above. Their source binding
+marks them as covered by the aggregate, so settlement, booking coverage and
+reconciliation sums count the aggregate alone, and ordinary Expense updates
+cannot price them. Retained payment evidence settles a statement charge
+against the aggregate. Later
+priced evidence for the same order reaches the same Purchase by Vendor and
+order number and goes through reviewed source reconciliation, which replaces
+the aggregate and reuses each unpriced acquisition once. The unpriced-line
+data-quality gap stays visible until then.
+
+### Purchases waiting for order details
+
+A Vendor's shipping or delivery notice that prints one order number, when no
+live Purchase at that Vendor holds it, creates that order's empty Purchase:
+Vendor, order number, the member's only account at that Vendor, and the
+notice's household day, with no Expense, payment, money or stock. The Mail
+import claim creates it and links the notice (`linked`, its lifecycle event)
+and the notice's recognised package to it in one transaction; a refused link
+leaves no Purchase. The marker is derived, not stored: no live Expense, no
+accepted import source, and an active link from a shipping or delivery Email.
+While it holds, the Purchase's ledger and settlement checks (`empty_expenses`,
+`stated_total`, `purchase_itemization`, `settlement_reference`) are not
+applicable rather than gaps, so it files no queue item. With no Expense it
+adds nothing to spending and cannot absorb a statement charge's capacity.
+
+The order's confirmation imports onto that Purchase through the ordinary
+order-number target, never as a second Purchase: an empty Purchase without an
+accepted source is not already imported. Its order date replaces the notice's
+day; header facts the notice left empty fill in, and its lines, aggregate and
+payments are written as for any new order.
+
 ### Correcting a purchased Product
 
 Correct an imported item's Product through the ordinary Expense entity update.

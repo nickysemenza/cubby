@@ -250,8 +250,11 @@ async function completeAcceptedAttachmentResolution(
         row.purchaseId === state.target.id &&
         !used.has(parseShortcodeFor("expense", row.shortcode)) &&
         sameLineTitle(row.name, sourceLine.title) &&
-        row.cost !== null &&
-        cents(row.cost) === cents(sourceLine.amount) &&
+        // An unpriced source line binds only its unpriced Expense.
+        (sourceLine.amount === null
+          ? row.cost === null
+          : row.cost !== null &&
+            cents(row.cost) === cents(sourceLine.amount)) &&
         row.lineKind === sourceLine.lineKind &&
         (row.productQuantity === null ||
           !row.productId ||
@@ -324,8 +327,10 @@ function validateAcceptedAttachmentExpenses(
       selected.lineBasis !== "item_line" ||
       !titleMatches ||
       (candidate?.currency === "USD" &&
-        (selected.cost === null ||
-          cents(selected.cost) !== cents(line.amount))) ||
+        (line.amount === null
+          ? selected.cost !== null
+          : selected.cost === null ||
+            cents(selected.cost) !== cents(line.amount))) ||
       selected.lineKind !== line.lineKind ||
       (selected.productQuantity !== null &&
         line.quantity !== undefined &&

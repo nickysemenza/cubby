@@ -23,6 +23,7 @@ import {
   runTrigger,
 } from "../run-fields.js";
 import { runWorkProgress } from "../run-work-progress.js";
+import { mailRunOutcomeCounts } from "../email-fields.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
 
 const RUN_PURPOSE_GLYPH = {
@@ -156,7 +157,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "fields",
           id: "progress",
           title: "Processing",
-          fields: ["workProgress", "waitingOn", "stalled"],
+          fields: ["workProgress", "outcomeCounts", "waitingOn", "stalled"],
         },
         {
           kind: "fields",
@@ -196,6 +197,7 @@ export const { definition, readSchemas } = defineEntityModel({
             "waitingOn",
             "stalled",
             "chargedCost",
+            "chargedUnpricedCount",
             "purpose",
             "trigger",
             "routine",
@@ -580,9 +582,41 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "chargedCost",
         kind: "number",
-        display: { columnLabel: "AI cost", format: "currency" },
+        display: {
+          columnLabel: "AI cost",
+          format: "currency",
+          renderer: { list: "run-ai-cost", detail: "run-ai-cost" },
+        },
         provenance: { kind: "derived", sources: [{ label: "Run AI usage" }] },
         validation: readOnly(z.number().default(0)),
+      },
+      {
+        // Calls with no charged price: a zero cost beside them is unknown, not free.
+        key: "chargedUnpricedCount",
+        kind: "number",
+        label: "Unpriced AI calls",
+        display: { list: false, format: "count" },
+        provenance: { kind: "derived", sources: [{ label: "Run AI usage" }] },
+        validation: readOnly(z.number().int().nonnegative().default(0)),
+      },
+      {
+        key: "outcomeCounts",
+        kind: "json",
+        label: "Email outcomes",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The newest outcome of each admitted Email" }],
+        },
+        explanation: {
+          ruleId: "run.outcome-counts",
+          description:
+            "A Mail import counts each Email by its newest outcome in this Run: imported, linked, unrelated, or an unresolved gap by who settles it (waiting for Cubby, needs research by an agent, needs the member). Other Runs have none.",
+        },
+        display: {
+          list: false,
+          renderer: { detail: "run-outcome-counts" },
+        },
+        validation: readOnly(mailRunOutcomeCounts.nullable().default(null)),
       },
       {
         key: "purpose",

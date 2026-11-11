@@ -238,8 +238,16 @@ to `needs_review`, using the saved member actor and owner without requiring a
 coordinator session. If auditing fails after commit, exact commit replay resumes
 finalization from the saved result; replay after the audited stop returns that
 result without importing again or auditing the stopped Run. At Mail batch
-settlement, every import batch is audited, and open
-commit or audit findings require review alongside any unresolved Emails.
+settlement, every import batch is audited. A Run whose every admitted Email was
+imported, linked, excluded or resolved unresolved with a recorded outcome ends
+`completed`: each unresolved Email is its own Work item routed by who settles
+its gap (`MAIL_IMPORT_GAP_EXECUTOR`). An agent researches `missing_evidence`,
+`invalid_extraction`, `attempt_limit` and `unknown` gaps; only the member
+settles `identity_ambiguity` and `member_decision`. Cubby settles the rest by
+itself: a `source_held` Email waits for its source, and a `transient_failure`
+Email returns to ordinary admission, bounded by its attempts. `needs_review` is
+left for a Run that could not finish: open commit or audit findings, or an
+unresolved Email without a recorded outcome.
 
 A Mail import Run that ends before settling every Email (its coordinator fails
 or aborts, or it stops for review) returns the Emails no coordinator reached to
@@ -256,8 +264,17 @@ is retired, while its roster still holds a `researching` Email.
 
 An `unsettled` Email is readmitted from any ended holder, failed and retired
 ones included, only when a new evidence revision appears: a newly verified
-sender mapping, new accepted Purchase evidence for an order it prints, or new
-retained bytes. Each revision admits at most one attempt, so repeatedly
+sender mapping its coordinator never read with that Vendor, new accepted
+Purchase evidence for an order it prints, the source its `source_held` outcome
+waits on settling after that outcome, a newer importer revision
+(`MAIL_IMPORT_SKILL_REVISION`, stamped as each Mail import Run's
+`skillRevision`) for a gap an agent would settle, or new retained bytes. A gap
+only the member settles is never re-run for a newer importer. A held outcome
+names what it waits on (`waitingOn`): the awaited Email, imported or linked, or
+an order number, held by a live Purchase on the owner's account (at the awaited
+Vendor when known) that is created or gains an accepted source. Without a named
+source, a held Email waits on the one order number it prints at its sender's
+Vendor. Each revision admits at most one attempt, so repeatedly
 unsettled messages never spend a coordinator every pass. Without a new revision,
 automatic import admits one Email at one evidence revision (its checksum, plus
 any sender, order or source revision that rechecked it) into at most three Runs
@@ -287,9 +304,16 @@ or any package reference after a tracking, package, parcel or shipment label,
 or in a tracking link, that is not a recognised key. A
 tracking or order-number link records the Email's one package as shipment
 evidence; a confirmation links only to a Purchase an import already sourced.
-Run targets retain that Run's recorded Email outcomes. An unsettled target
-now held elsewhere names the owning Run; it never inherits that Run's live
-Email state or completion time.
+Run targets retain that Run's recorded Email outcomes, with an unresolved
+target's gap category. An unsettled target now held elsewhere names the owning
+Run; it never inherits that Run's live Email state or completion time.
+
+A shipping notice that arrives before its order keeps the order number on its
+Shipment (`orderId`: the linked Purchase's, else the one order number the Email
+prints). An unlinked, unreviewed Shipment joins the one live Purchase holding
+that normalized order number, at the Vendor its source Emails attribute and on
+their member's account; recording the notice and each catch-up pass link it, and
+two candidate Purchases hold it back.
 
 The household AI budget is a stopgap safety net on frontier chat-model spend:
 $1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from

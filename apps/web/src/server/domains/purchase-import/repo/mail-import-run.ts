@@ -1,4 +1,6 @@
+import { systemActor } from "@cubby/schemas/context";
 import { emailLinkEvidenceKind } from "@cubby/schemas/email-fields";
+import { MAIL_IMPORT_GAP_EXECUTOR } from "@cubby/schemas/email-fields";
 /**
  * Mail import admission: classified Emails become one Pi Run's targets. The
  * Run freezes each Email's checksum and owns it through `Email.runId`,
@@ -25,8 +27,10 @@ import {
 import { agentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import {
   runTargetOutcomeReceipt,
+  runPurpose,
   runStatus,
   mailResearchRunInput,
+  MAIL_IMPORT_SKILL_REVISION,
 } from "@cubby/schemas/run-fields";
 import { suggestionFamily, feedbackAuthority } from "@cubby/schemas/suggestion";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -103,6 +107,7 @@ import {
   assertRunParent,
 } from "~/server/domains/run/repo/ensure-run";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
+import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { hasLiveRunJobLease } from "~/server/generic/jobs/repo/job-reads";
@@ -150,6 +155,10 @@ type MailImportAdmission = {
   };
   /** A retained original changed after an automatic unresolved outcome. */
   sourceRecheck?: true;
+  /** The source an unresolved outcome waits on settled after that outcome. */
+  waitRecheck?: { outcomeId: string; settledAt: Date };
+  /** An agent-routed gap was recorded under an older importer revision. */
+  capabilityRecheck?: true;
 };
 
 type PurchaseRecheck = {
@@ -631,8 +640,16 @@ export async function admitMailImport(
                 sources.map((source) => [source.id, source.rawChecksum]).sort(),
               ]),
             )
-          : undefined;
-      let newEvidenceAt: Date | undefined;
+          : input.waitRecheck
+            ? await sha256Hex(
+                JSON.stringify(["waiting-on", input.waitRecheck.outcomeId]),
+              )
+            : input.capabilityRecheck
+              ? await sha256Hex(
+                  JSON.stringify(["importer", MAIL_IMPORT_SKILL_REVISION]),
+                )
+              : undefined;
+      let newEvidenceAt: Date | undefined = input.waitRecheck?.settledAt;
       if (input.senderRecheck) {
         const [identity] = await readSenderAttributions(tx, [
           input.senderRecheck.sender,
@@ -741,6 +758,7 @@ export async function admitMailImport(
           vendorId: controlled ? (parent?.vendorId ?? null) : null,
           cause: memberSelected ? "member_request" : "source_discovered",
           coordinatorModel: coordinatorModelFor("mail_import"),
+          skillRevision: MAIL_IMPORT_SKILL_REVISION,
           input: senderRevision
             ? { ...sourceSet, evidenceRevision: senderRevision }
             : sourceSet,
@@ -831,7 +849,10 @@ export async function admitMailImport(
         admitted.push(await start(transferred, fromRunId));
       return admitted;
     });
-  return input.senderRecheck || input.sourceRecheck
+  return input.senderRecheck ||
+    input.sourceRecheck ||
+    input.waitRecheck ||
+    input.capabilityRecheck
     ? withEmailEvidenceWrite(db, (writeDb) => admit(writeDb))
     : admit(db);
 }
@@ -891,6 +912,81 @@ async function mailImportHeldBack(db: Database, ledgerPartyId: LedgerPartyId) {
   );
 }
 
+/**
+ * A Mail import coordinator already read this Email at its checksum with the
+ * sender attributed to this Vendor: the mapping is not new evidence for it.
+ */
+const claimedWithSenderVendor = (vendorShortcode: SQL) => sql`EXISTS (
+  SELECT 1 FROM "RunOperation" claim
+  JOIN "Run" claimer ON claimer.id = claim."runId"
+  WHERE claimer."ledgerPartyId" = ${emailTable.ledgerPartyId}
+    AND claimer.purpose = ${runPurpose.enum.mail_import} AND ${notDeleted("claimer")}
+    AND claim.kind = ${"claim_next_work"} AND claim.state = ${runStatus.enum.completed}
+    AND claim.result #>> '{email,mailboxId}' = ${emailTable.mailboxId}
+    AND claim.result #>> '{email,messageId}' = ${emailTable.messageId}
+    AND claim.result #>> '{email,checksum}' = ${emailTable.checksum}
+    AND claim.result #>> '{known,senderVendor,id}' = ${vendorShortcode}
+)`;
+
+/** Gaps an agent settles: an importer that learns more may settle them itself. */
+const AGENT_GAP_CATEGORIES = Object.entries(MAIL_IMPORT_GAP_EXECUTOR).flatMap(
+  ([category, executor]) => (executor === "agent" ? [category] : []),
+);
+const capabilityRevision = () =>
+  sha256Hex(JSON.stringify(["importer", MAIL_IMPORT_SKILL_REVISION]));
+
+/** The holder Run's newest outcome for the Email, when it is an unresolved one at the current checksum. */
+const newestUnresolvedOutcome = sql`SELECT o.result, o."completedAt" FROM "RunOperation" o
+  WHERE o."runId" = ${run.id} AND o.kind = ${"target_outcome"} AND o.state = ${runStatus.enum.completed}
+    AND o.result #>> '{target,entityId}' = ${emailTable.id}::text
+    AND o.result #>> '{mailOutcome,checksum}' = ${emailTable.checksum}
+    AND o.result #>> '{mailOutcome,judgment,kind}' = ${"unresolved"}
+    AND NOT EXISTS (SELECT 1 FROM "RunOperation" newer
+      WHERE newer."runId" = o."runId" AND newer.kind = o.kind
+        AND newer.result #>> '{target,entityId}' = ${emailTable.id}::text
+        AND newer."completedAt" > o."completedAt")
+  ORDER BY o."completedAt" DESC, o.id DESC LIMIT 1`;
+
+/** The holder Run's newest unresolved outcome for the Email's current checksum. */
+const newestHolderOutcome = sql`SELECT o.result, o."completedAt" FROM "RunOperation" o
+  WHERE o."runId" = ${run.id} AND o.kind = ${"target_outcome"} AND o.state = ${runStatus.enum.completed}
+    AND o.result #>> '{target,entityId}' = ${emailTable.id}::text
+    AND o.result #>> '{mailOutcome,checksum}' = ${emailTable.checksum}
+    AND o.result #>> '{mailOutcome,judgment,kind}' = ${"unresolved"}
+    AND (o.result #> '{mailOutcome,judgment,waitingOn}') IS NOT NULL
+    AND jsonb_typeof(o.result #> '{mailOutcome,judgment,waitingOn}') = 'object'
+    AND NOT EXISTS (SELECT 1 FROM "RunOperation" newer
+      WHERE newer."runId" = o."runId" AND newer.kind = o.kind
+        AND newer.result #>> '{target,entityId}' = ${emailTable.id}::text
+        AND newer."completedAt" > o."completedAt")
+  ORDER BY o."completedAt" DESC, o.id DESC LIMIT 1`;
+
+/**
+ * When the source an unresolved outcome waits on last settled: a live,
+ * owner-eligible Purchase holding the awaited order (at the awaited Vendor
+ * when known) was created or gained an accepted source, or the awaited Email
+ * was imported or linked. Null while it has not.
+ */
+const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
+  SELECT greatest(p."createdAt", (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
+      WHERE accepted."purchaseId" = p.id)) AS at
+  FROM ${purchase} p
+  LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
+  WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
+    AND ${notDeleted("p")}
+    AND ${normalizedOrderIdSql(sql`p."orderId"`)} = ${normalizedOrderIdSql(sql`newest.result #>> '{mailOutcome,judgment,waitingOn,orderId}'`)}
+    AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL
+      OR p."vendorId"::text = newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}')
+    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = ${emailTable.ledgerPartyId})
+  UNION ALL
+  SELECT awaited."completedAt" FROM "RunOperation" awaited
+  WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"email"}
+    AND awaited.kind = ${"target_outcome"} AND awaited.state = ${runStatus.enum.completed}
+    AND (awaited.result->'mailOutcome') IS NOT NULL
+    AND awaited.result #>> '{target,entityId}' = newest.result #>> '{mailOutcome,judgment,waitingOn,emailId}'
+    AND awaited.result #>> '{mailOutcome,judgment,kind}' IN (${"imported"}, ${"linked"})
+) source`;
+
 export async function importPendingEmails(db: Database) {
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
@@ -912,6 +1008,14 @@ export async function importPendingEmails(db: Database) {
     })),
   );
   const errors: unknown[] = [];
+  try {
+    // A Purchase that gained a Shipment's order number holds that Shipment.
+    await withTransactionDatabase(db, (tx) =>
+      linkShipmentsByOrderId(tx, systemActor()),
+    );
+  } catch (error) {
+    errors.push(error);
+  }
   for (const target of await listMemberMailboxes(db)) {
     const actorId = target.userId;
     if (!actorId) continue;
@@ -1058,6 +1162,110 @@ export async function importPendingEmails(db: Database) {
       } catch (error) {
         errors.push(error);
       }
+    const waiting = await getDb(db)
+      .select({
+        id: orderMail.id,
+        checksum: orderMail.rawChecksum,
+        outcomeId: sql<string>`newest.result #>> '{mailOutcome,id}'`,
+        settledAt: sql<Date>`settled.at`.mapWith(runOperation.completedAt),
+      })
+      .from(emailTable)
+      .innerJoin(
+        orderMail,
+        and(
+          eq(orderMail.id, emailTable.orderMailId),
+          eq(orderMail.rawChecksum, emailTable.checksum),
+        ),
+      )
+      .innerJoin(run, eq(run.id, emailTable.runId))
+      .innerJoin(sql`LATERAL (${newestHolderOutcome}) newest`, sql`true`)
+      .innerJoin(sql`LATERAL (${waitedSourceSettledSql}) settled`, sql`true`)
+      .where(
+        and(
+          eq(
+            emailTable.ledgerPartyId,
+            parseEntityId("ledgerParty", target.ledgerPartyId),
+          ),
+          eq(emailTable.mailboxId, target.mailboxId),
+          eq(emailTable.status, "unsettled"),
+          eq(emailTable.classification, "related"),
+          eq(run.purpose, "mail_import"),
+          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+          notDeleted(run),
+          notDeleted(emailTable),
+          retainedEmailImportContentCondition(),
+          sql`settled.at > newest."completedAt"`,
+        ),
+      )
+      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
+      .limit(50);
+    for (const row of waiting)
+      try {
+        await admitMailImport(db, {
+          ledgerPartyId: target.ledgerPartyId,
+          userId: actorId,
+          mailboxId: target.mailboxId,
+          automatic: true,
+          messageIds: [row.id],
+          expectedChecksums: [{ orderMailId: row.id, checksum: row.checksum }],
+          waitRecheck: { outcomeId: row.outcomeId, settledAt: row.settledAt },
+        });
+      } catch (error) {
+        errors.push(error);
+      }
+    const outdated = await getDb(db)
+      .select({ id: orderMail.id, checksum: orderMail.rawChecksum })
+      .from(emailTable)
+      .innerJoin(
+        orderMail,
+        and(
+          eq(orderMail.id, emailTable.orderMailId),
+          eq(orderMail.rawChecksum, emailTable.checksum),
+        ),
+      )
+      .innerJoin(run, eq(run.id, emailTable.runId))
+      .innerJoin(sql`LATERAL (${newestUnresolvedOutcome}) newest`, sql`true`)
+      .where(
+        and(
+          eq(
+            emailTable.ledgerPartyId,
+            parseEntityId("ledgerParty", target.ledgerPartyId),
+          ),
+          eq(emailTable.mailboxId, target.mailboxId),
+          eq(emailTable.status, "unsettled"),
+          eq(emailTable.classification, "related"),
+          eq(run.purpose, "mail_import"),
+          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
+          ne(run.skillRevision, MAIL_IMPORT_SKILL_REVISION),
+          notDeleted(run),
+          notDeleted(emailTable),
+          retainedEmailImportContentCondition(),
+          sql`coalesce(newest.result #>> '{mailOutcome,judgment,category}', ${"unknown"}) IN (${sql.join(
+            AGENT_GAP_CATEGORIES.map((category) => sql`${category}`),
+            sql`, `,
+          )})`,
+          unattemptedSenderMapping(sql`${await capabilityRevision()}`),
+        ),
+      )
+      .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
+      .limit(50);
+    if (outdated.length)
+      try {
+        await admitMailImport(db, {
+          ledgerPartyId: target.ledgerPartyId,
+          userId: actorId,
+          mailboxId: target.mailboxId,
+          automatic: true,
+          capabilityRecheck: true,
+          messageIds: outdated.map((row) => row.id),
+          expectedChecksums: outdated.map((row) => ({
+            orderMailId: row.id,
+            checksum: row.checksum,
+          })),
+        });
+      } catch (error) {
+        errors.push(error);
+      }
     if (!recheckIdentities.length) continue;
     let cursor: typeof emailTable.$inferSelect.id | undefined;
     for (;;) {
@@ -1070,7 +1278,7 @@ export async function importPendingEmails(db: Database) {
           sender: sql<string>`sender_identity.sender`,
           vendorId: sql<string>`sender_identity."vendorId"`,
           revision: sql<string>`sender_identity.revision`,
-          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision AND NOT ${memberStoppedHolder}`,
+          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision AND NOT ${memberStoppedHolder} AND NOT ${claimedWithSenderVendor(sql`sender_identity."vendorId"`)}`,
           // An outcome-free attempt dates from its holder's end; evidence must
           // also postdate a member's cancel.
           outcomeAt:

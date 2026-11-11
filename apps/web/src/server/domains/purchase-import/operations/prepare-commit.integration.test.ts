@@ -631,7 +631,7 @@ describe("caller-driven purchase import writes", () => {
     orderedAt: "2026-09-01T18:00:00Z",
     merchant: "Synthetic service merchant",
     currency: "USD",
-    printedGrandTotal: lines.reduce((sum, line) => sum + line.amount, 0),
+    printedGrandTotal: lines.reduce((sum, line) => sum + (line.amount ?? 0), 0),
     lines,
     payments: [],
     allShipmentsDelivered: false,

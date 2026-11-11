@@ -298,6 +298,13 @@ export const cachedEmailLinkedSql = (): SQL<
   SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${KIND.accepted}, ${KIND.linked})
 ) ELSE NULL::boolean END`;
 
+/** An import accepted the Email as a live Purchase's source, by its published facts. */
+export const cachedEmailAcceptedSql = (): SQL<
+  boolean | null
+> => sql`CASE WHEN ${emailRelationshipResultExistsSql} THEN EXISTS (
+  SELECT 1 FROM (${cachedEmailPurchaseEvidenceSql()}) evidence WHERE evidence.kind = ${KIND.accepted}
+) ELSE NULL::boolean END`;
+
 const evidenceRow = emailPurchaseFact.extend({ emailId: z.string() });
 type EvidenceRow = z.infer<typeof evidenceRow>;
 

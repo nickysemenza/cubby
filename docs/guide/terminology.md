@@ -663,6 +663,14 @@ _Avoid_: receipt expectation, evidence expectation, receipt policy
 A Purchase or charge booked as an amount without its item lines.
 _Avoid_: aggregate order, unitemized receipt
 
+**Unpriced itemization**:
+An order whose source prints its total and item names but no item prices. It books as one Lump Expense for the printed total beside unpriced item lines that still name their Products; the lines never take a share of the total, and settlement and sums count only the Lump. Later priced evidence replaces it on the same Purchase. It files no review.
+_Avoid_: partial import, missing prices
+
+**Waiting for order details**:
+An empty Purchase a shipping or delivery notice created from the Vendor order number it prints. It carries no money and puts nothing in the Work queue; it exists so the notice and its Shipment have a record to attach to, and the order's confirmation itemizes this same Purchase when it arrives.
+_Avoid_: placeholder purchase, provisional order
+
 **Contribution position**:
 A party's cumulative outlay and transfer movement less attributed consumption. It is a reconciliation position, not an automatic claim that someone owes money.
 _Avoid_: debt, settlement balance
@@ -900,6 +908,18 @@ _Avoid_: dry run, Jev-only scan
 **Mail import**:
 Unattended interpretation of classified Emails into Purchases, Expenses and Product resolutions.
 _Avoid_: mail research, email processing
+
+**Import outcome**:
+What a Mail import did with one Email at its current checksum: Imported, Linked, Waiting, Needs research, Needs you, Unrelated or Not imported, plus Importing while a Run is still working on it and Failed when that Run ended without one. An unresolved Email's Import gap category decides which: Cubby settles Waiting by itself, an agent researches Needs research, and only Needs you reaches the member. A Mail import Run that records an outcome for every Email it admitted is completed, whatever those outcomes are.
+_Avoid_: import status, unsettled, stuck
+
+**Import gap**:
+Why a Mail import left an Email unresolved (missing evidence, invalid extraction, identity ambiguity, member decision, waiting on a source, transient failure, attempt limit), with a reason. The category routes it: automatic, agent or human.
+_Avoid_: import error, blocker
+
+**Waiting on a source**:
+An unresolved Email whose order details live in another Email or in an order number no Purchase holds yet. When that source settles, the waiting Email is admitted again by itself; an unchanged Email is otherwise never re-run.
+_Avoid_: held, blocked
 
 **Exact identity match**:
 An existing Product that already owns one of an imported line's identifiers, or whose name or alias equals the line's name apart from letter case and surrounding spaces. A merely similar name is never an exact identity match.

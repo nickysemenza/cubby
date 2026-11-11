@@ -42,6 +42,10 @@ import {
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { listRunStepsForRuns } from "./run-step";
+import {
+  emptyMailRunOutcomeCounts,
+  readMailRunOutcomeCounts,
+} from "./run-target";
 import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
 
 /**
@@ -106,8 +110,16 @@ const runRead = {
             )
             .groupBy(aiUsage.runId)
         : [];
-      return new Map(values.map((row) => [row.runId, row.chargedCost]));
+      return new Map(values.map((row) => [row.runId, row]));
     });
+    const outcomes = bind.batch(async ({ db, rows }) =>
+      readMailRunOutcomeCounts(
+        db,
+        rows.flatMap((row) =>
+          row.purpose === runPurpose.enum.mail_import ? [row.id] : [],
+        ),
+      ),
+    );
     const steps = bind.batch(async ({ db, rows }) => {
       const loaded = await listRunStepsForRuns(
         db,
@@ -157,9 +169,22 @@ const runRead = {
       };
     });
     return [
-      costs.fields(rawRunOut.pick({ chargedCost: true }), (row, loaded) => ({
-        chargedCost: loaded.get(row.id) ?? 0,
-      })),
+      costs.fields(
+        rawRunOut.pick({ chargedCost: true, chargedUnpricedCount: true }),
+        (row, loaded) => ({
+          chargedCost: loaded.get(row.id)?.chargedCost ?? 0,
+          chargedUnpricedCount: loaded.get(row.id)?.chargedUnpricedCount ?? 0,
+        }),
+      ),
+      outcomes.fields(
+        rawRunOut.pick({ outcomeCounts: true }),
+        (row, loaded) => ({
+          outcomeCounts:
+            row.purpose === runPurpose.enum.mail_import
+              ? (loaded.get(row.id) ?? emptyMailRunOutcomeCounts())
+              : null,
+        }),
+      ),
       lineage.fields(
         rawRunOut.pick({
           successorRunId: true,

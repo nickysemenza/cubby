@@ -1,6 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
+  EMAIL_IMPORT_OUTCOME_LABEL as IMPORT_OUTCOME_LABEL,
   EMAIL_LINK_STATE_LABEL,
+  type EmailImportOutcomeDetail,
   type EmailPurchaseLink,
 } from "@cubby/schemas/email-fields";
 import type {
@@ -49,6 +51,7 @@ import {
 } from "~/server/db/schema";
 import { readEmailAssociations } from "~/server/domains/email/repo/email";
 import { readEmailPurchaseLinks } from "~/server/domains/email/repo/email-purchase-links";
+import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { runRowState } from "~/server/generic/entity-report/repo/record-items";
@@ -524,6 +527,40 @@ function previewRow(
       });
 }
 
+/** The import outcome with who settles a gap, its reason and what it waits on. */
+function outcomeRow(detail: EmailImportOutcomeDetail | undefined) {
+  if (!detail) return null;
+  const state: PipelineState =
+    detail.outcome === "importing"
+      ? "Running"
+      : detail.outcome === "failed"
+        ? "Failed"
+        : detail.outcome === "needs_member" ||
+            detail.outcome === "needs_research"
+          ? "Paused"
+          : detail.outcome === "not_imported"
+            ? "Not reached"
+            : "Ran";
+  return pipelineRow("Import outcome", state, {
+    ...(detail.runId ? { entity: "run", id: detail.runId } : {}),
+    lines: [
+      [
+        IMPORT_OUTCOME_LABEL[detail.outcome],
+        detail.category,
+        detail.executor ? `settled by ${detail.executor}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      detail.reason,
+      detail.waitingOn
+        ? detail.waitingOn.kind === "email"
+          ? `Waiting on ${detail.waitingOn.emailId}`
+          : `Waiting on order ${detail.waitingOn.orderId}${detail.waitingOn.vendorId ? ` at ${detail.waitingOn.vendorId}` : ""}`
+        : null,
+    ],
+  });
+}
+
 function importRow(
   email: EmailRow,
   shortcode: EmailShortcode,
@@ -877,6 +914,11 @@ export async function emailReviewReport(
     return foreignEmailReport(client, email, selected.ownerName, links);
   const shortcode = parseShortcodeFor("email", email.shortcode);
   const costs = await loadImportCosts(client, email);
+  const outcome = (
+    await loadEmailImportOutcomes(db, [
+      { id: email.id, accepted: links.some((link) => link.accepted) },
+    ])
+  ).get(email.id);
   const [predictions, candidates, failures, reviews] = await Promise.all([
     client
       .select()
@@ -1012,6 +1054,7 @@ export async function emailReviewReport(
           current,
         ),
         importRow(email, shortcode, costs, canImport, automaticImport),
+        ...[outcomeRow(outcome)].filter((row) => row !== null),
         purchaseRow(email, associations.purchases),
       ],
       empty: "No pipeline steps.",

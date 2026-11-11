@@ -7,6 +7,7 @@ import type {
   ExtractedOrderCandidate,
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { importSourceProduct } from "~/server/db/schema";
@@ -47,7 +48,8 @@ export async function writePurchaseLines(
     mode: ReturnType<typeof planLineMode>;
     lineMatch: ReturnType<typeof planLineMatch>;
     orderDate: string | null;
-    unpricedForeign: boolean;
+    /** Item lines carry no cost: a foreign receipt or an unpriced itemization. */
+    unpriced: boolean;
     loadExpenses: () => Promise<ExistingExpenseSnapshot[]>;
     resolveProduct: (
       line: ExtractedPurchaseLine,
@@ -65,7 +67,7 @@ export async function writePurchaseLines(
     mode,
     lineMatch,
     orderDate,
-    unpricedForeign,
+    unpriced,
   } = args;
   const findingIds: string[] = [];
   const productLines: Array<
@@ -87,7 +89,7 @@ export async function writePurchaseLines(
       fields: ["name", "externalIds", "notes"],
     });
 
-  if (mode.kind === "aggregate") {
+  const writeAggregate = async () => {
     if (candidate.printedGrandTotal !== null) {
       const existing = await args.loadExpenses();
       const plan = planAggregateExpense(
@@ -106,18 +108,56 @@ export async function writePurchaseLines(
         });
       }
     }
+  };
+  // An unpriced itemization books its printed total first, then its item
+  // lines without cost; never price an item from the total.
+  // Existing money (a statement booking on a notice Purchase, an earlier
+  // import) must already hold exactly the printed total: otherwise the items
+  // are not written as carried and the gap is reviewed.
+  let carriedTotalConflict = false;
+  if (mode.kind === "unpriced_itemization") {
+    const existing = await args.loadExpenses();
+    const printed =
+      candidate.printedGrandTotal === null
+        ? null
+        : cents(candidate.printedGrandTotal);
+    carriedTotalConflict =
+      existing.length > 0 &&
+      !existing.some(
+        (row) =>
+          row.lineBasis === "allocation" &&
+          row.amount !== null &&
+          cents(row.amount) === printed,
+      );
+    if (carriedTotalConflict)
+      await fileFindings([
+        {
+          kind: "sum_mismatch",
+          summary:
+            "The Purchase already holds Expenses that do not carry the printed total; its unpriced items were not written.",
+        },
+      ]);
+    else await writeAggregate();
+  }
+  const lineMode = carriedTotalConflict
+    ? ("none" as const)
+    : mode.kind === "unpriced_itemization"
+      ? mode.lines
+      : mode.kind;
+  if (mode.kind === "aggregate") {
+    await writeAggregate();
     await fileFindings([{ kind: "sum_mismatch", summary: mode.detail }]);
   } else if (mode.kind === "foreign") {
     await fileFindings([{ kind: "foreign_currency", summary: mode.detail }]);
   } else if (
-    mode.kind === "identity" ||
-    mode.kind === "no_op" ||
-    mode.kind === "insert"
+    lineMode === "identity" ||
+    lineMode === "no_op" ||
+    lineMode === "insert"
   ) {
     const productsByExternalIdentity = new Map<string, string>();
     for (const [lineIndex, line] of candidate.lines.entries()) {
       const action = planLineAction(
-        mode.kind,
+        lineMode,
         line,
         lineIndex,
         identityDecisions,
@@ -141,10 +181,10 @@ export async function writePurchaseLines(
         productsByExternalIdentity,
         onCreated,
       );
-      if (mode.kind === "identity") {
+      if (lineMode === "identity") {
         if (productId) productLines.push({ lineIndex, productId });
         await fileFindings(planIdentityFindings(line, identity));
-      } else if (mode.kind === "no_op") {
+      } else if (lineMode === "no_op") {
         if (!productId) continue;
         const { row, binding } = planResolvedNoOp(
           line,
@@ -174,7 +214,7 @@ export async function writePurchaseLines(
           identity,
           productId,
           orderDate,
-          unpricedForeign,
+          unpriced,
         );
         const inserted = await insertWithShortcode(tx, "expense", plan.values);
         productLines.push({ lineIndex, productId, expenseId: inserted.id });

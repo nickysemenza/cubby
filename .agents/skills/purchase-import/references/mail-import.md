@@ -11,7 +11,12 @@ Claude or Codex session researches it later through the Research queue.
    identity; a new call observes current work, while retrying that same call
    preserves its result. Before claiming, Cubby settles confident unrelated
    classifier outcomes and exact carrier notices whose package it can record
-   without conflict. Other related lifecycle and duplicate confirmation Emails
+   without conflict. A Vendor's shipping or delivery notice that prints one
+   order number and one recognised tracking number, when no live Purchase at
+   that Vendor holds the order number, creates that order's empty Purchase
+   (Vendor, order number and the notice's day; no Expense, money or stock) and
+   links the notice and its package to it; the order's confirmation later
+   itemizes that same Purchase. Other related lifecycle and duplicate confirmation Emails
    reach you even when their Purchase is already itemized: inspect and record
    their package evidence before resolving them.
 2. The claim's `read` is the Email's first `mcp__cubby__purchase_import_read` `mail_read`
@@ -55,6 +60,13 @@ Claude or Codex session researches it later through the Research queue.
      When `known.existingOrders` already holds that order's receipt Purchase,
      `linked` it there instead. Never import the notice as its own Purchase.
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
+     A USD confirmation that prints its total and item names but no item
+     prices imports the same way, as `needs_review` with reason
+     `unpriced_itemization` and null line amounts
+     ([extraction](extraction.md)); never resolve it unresolved for the missing
+     item prices. A Purchase in `known.purchases` with `imported: false` and no
+     Expenses is an order a notice created while waiting for its details: it is
+     this confirmation's target, never an already imported order.
      Check the receipt's printed seller against `known.senderVendor` before
      using that mapping. If clear seller evidence names someone else, resolve
      the actual seller by `vendorId` or `vendor.name`; never reuse the sender's
@@ -103,8 +115,9 @@ Claude or Codex session researches it later through the Research queue.
      supported Purchase or null. Follow
      [shipment intake](order-mail.md#record-shipment-evidence) and
      [package extraction](extraction.md#package-observations). Then resolve the
-     Email using the applicable disposition below. An unmatched package stays
-     retained; no Purchase, priced line or stock receipt is invented.
+     Email using the applicable disposition below. A package whose notice
+     prints no order number stays retained without a Purchase; no priced line
+     or stock receipt is ever invented.
    - **A lifecycle Email about an existing Purchase** (shipped, delivered,
      cancelled, refunded, or another event): take that Purchase from
      `known.purchases`, or find it by order id and Vendor, then `mail`
@@ -126,7 +139,11 @@ Claude or Codex session researches it later through the Research queue.
      yours (`boundToRun`) or a `purchase_import` `mail_search` shows it `pending` or
      `unsettled`. When no Purchase exists yet and the confirmation is yours or
      admissible, import it first, then link the notice; a full batch still
-     admits it, so never resolve the notice unresolved just to wait for it. When another Run holds it, `prepare` refuses with
+     admits it, so never resolve the notice unresolved just to wait for it.
+     When the confirmation is not available, record the package with a null
+     Purchase and resolve the notice `unresolved` with category `source_held`,
+     waiting on its order number at the sender's Vendor; the confirmation's
+     import readmits it. When another Run holds it, `prepare` refuses with
      `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
      neither retrying nor escalating changes that refusal.
    - **A payment, refund, transfer, card repayment or reimbursement Email

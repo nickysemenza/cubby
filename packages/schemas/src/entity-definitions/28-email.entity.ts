@@ -6,8 +6,10 @@ import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import {
+  EMAIL_IMPORT_OUTCOME_LABEL,
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
+  emailImportOutcomeDetail,
   emailLinkState,
   emailPurchaseLink,
 } from "../email-fields.js";
@@ -104,33 +106,28 @@ const linkStateOptions = [
   color?: import("@cubby/shared/enum-palette").ColorToken;
   glyph?: import("@cubby/shared/enum-palette").EnumIcon;
 }[];
-const importOutcomeOptions = [
-  {
-    value: "imported",
-    label: "Imported",
-    color: "positive",
+const IMPORT_OUTCOME_PRESENTATION = {
+  imported: { color: "positive" },
+  linked: { color: "positive" },
+  waiting: { color: "info" },
+  needs_research: {
+    color: "warning",
+    glyph: { phosphor: "MagnifyingGlass", sfSymbol: "magnifyingglass" },
   },
-  {
-    value: "importing",
-    label: "Importing",
-    color: "info",
+  needs_member: {
+    color: "warning",
+    glyph: { phosphor: "WarningCircle", sfSymbol: "exclamationmark.circle" },
   },
-  {
-    value: "failed",
-    label: "Import failed",
-    color: "destructive",
-  },
-  {
-    value: "not_imported",
-    label: "Not imported",
-    color: "neutral-status",
-  },
-] satisfies {
-  value: string;
-  label: string;
-  color?: import("@cubby/shared/enum-palette").ColorToken;
-  glyph?: import("@cubby/shared/enum-palette").EnumIcon;
-}[];
+  importing: { color: "info" },
+  failed: { color: "destructive" },
+  unrelated: { color: "neutral-status" },
+  not_imported: { color: "neutral-status" },
+} satisfies Record<z.infer<typeof emailImportOutcome>, OptionPresentation>;
+const importOutcomeOptions = emailImportOutcome.options.map((value) => ({
+  value,
+  label: EMAIL_IMPORT_OUTCOME_LABEL[value],
+  ...IMPORT_OUTCOME_PRESENTATION[value],
+}));
 
 /**
  * The promoted processing ledger owns identity and headers; retained content is optional.
@@ -610,7 +607,7 @@ export const { definition, readSchemas } = defineEntityModel({
         explanation: {
           ruleId: "email.import-outcome",
           description:
-            "Accepted import source facts mean Imported. Otherwise the current import Run supplies Importing or Failed, even while relationship facts are missing. An absent or completed Run means Not imported only when published facts confirm no accepted source; otherwise the outcome remains unavailable.",
+            "Accepted import source facts mean Imported. Otherwise the newest import outcome recorded for the Email's current checksum decides: Linked, Unrelated, or an unresolved gap routed by who settles it (Waiting when Cubby re-runs it by itself, Needs research for an agent, Needs you for the member). Without an outcome, the holding Run supplies Importing while it runs and Import failed once it ended. No Run, outcome or source means Not imported only when published facts confirm no accepted source; otherwise the outcome remains unavailable.",
           sourceDependencies: [
             {
               path: "storedResult.evidence",
@@ -625,16 +622,36 @@ export const { definition, readSchemas } = defineEntityModel({
         provenance: {
           kind: "derived",
           sources: [
-            { label: "Accepted import sources and the Email's import Run" },
+            {
+              label:
+                "Accepted import sources, the newest import outcome and the Email's import Run",
+            },
           ],
         },
         display: {
           columnGroup: "Import",
-          listHidden: true,
+          width: "sm",
           optionRole: "status",
           optionColor: "neutral-status",
+          renderer: { detail: "email-import-outcome" },
         },
         validation: readOnly(emailImportOutcome.nullable()),
+      },
+      {
+        key: "importOutcomeDetail",
+        kind: "json",
+        label: "Import detail",
+        provenance: {
+          kind: "derived",
+          sources: [
+            {
+              label:
+                "The import outcome with its gap category, who settles it, its reason, the source it waits on and its Run",
+            },
+          ],
+        },
+        display: { list: false, detail: false },
+        validation: readOnly(emailImportOutcomeDetail.nullable()),
       },
       timestampField("createdAt"),
       timestampField("updatedAt"),
@@ -701,6 +718,7 @@ export const { definition, readSchemas } = defineEntityModel({
       linked: { type: "boolean", requiresResult: "relationshipFacts" },
       // The pipeline stage disagrees with a review decision.
       reviewConflict: { type: "boolean" },
+      importOutcome: { type: "enum", options: [...emailImportOutcome.options] },
       purchaseId: {
         predicate: "idMulti",
         reason: EMAIL_SCOPE_REASON,
@@ -1005,6 +1023,14 @@ export const { definition, readSchemas } = defineEntityModel({
         placeholder: "Emails for Vendor account...",
         brandRef: { entity: "vendorAccount" },
         singleValue: { reason: EMAIL_SCOPE_REASON, group: "emailScope" },
+      },
+      {
+        columnId: "importOutcome",
+        label: "Import",
+        kind: "multiselect",
+        placeholder: "Filter by import...",
+        deriveSchema: true,
+        options: importOutcomeOptions,
       },
       {
         columnId: "reviewConflict",

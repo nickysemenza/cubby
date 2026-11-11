@@ -1,3 +1,4 @@
+import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   acceptedSourceOrder,
@@ -7,6 +8,7 @@ import {
 import { moneyToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -27,6 +29,10 @@ import {
   createExpense,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import {
+  commitFinancialBooking,
+  previewFinancialBooking,
+} from "~/server/domains/financial-transaction/repo/financial-booking";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
@@ -115,6 +121,149 @@ describe("incomplete itemized purchase identity", () => {
     };
     return { party, vendor, input };
   }
+
+  // A total-only confirmation: one aggregate carries the money, its items stay
+  // unpriced with their Products, and an order-number Purchase that waited
+  // for its details is the one itemized.
+  it("books a printed total beside unpriced items on the order's existing Purchase without review", async () => {
+    const { input } = await scope();
+    const waiting = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: parseEntityId("vendor", input.vendorId),
+      orderId: "EXAMPLE-TOTAL-ONLY",
+      date: "2032-03-04",
+    });
+    input.extraction = {
+      status: "needs_review",
+      reason: "unpriced_itemization",
+      detail: "The confirmation prints its total but no item prices.",
+      candidate: {
+        ...input.extraction.candidate!,
+        orderId: "EXAMPLE-TOTAL-ONLY",
+        orderedAt: "2032-03-01",
+        printedGrandTotal: 5.52,
+        lines: [
+          {
+            title: "Synthetic soap",
+            amount: null,
+            quantity: 1,
+            lineKind: "principal",
+          },
+        ],
+      },
+    };
+    const first = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+    expect(first).toMatchObject({
+      outcome: "updated",
+      purchaseId: waiting.id,
+      findingIds: [],
+    });
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(and(eq(expense.purchaseId, waiting.id), notDeleted(expense)));
+    expect(
+      rows.map(({ cost, lineBasis, name }) => ({ cost, lineBasis, name })),
+    ).toEqual(
+      expect.arrayContaining([
+        { cost: 5.52, lineBasis: "allocation", name: "Example variant maker" },
+        { cost: null, lineBasis: "item_line", name: "Synthetic soap" },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.cost === null)?.productId).not.toBeNull();
+    const [coverage] = await getDb(ctx.db)
+      .select({ value: purchaseCoverageSql("Purchase") })
+      .from(purchase)
+      .where(eq(purchase.id, waiting.id));
+    expect(coverage?.value).toMatchObject({ booking: "recorded" });
+    expect(
+      await importVendorOrder(ctx.db, input, ctx.actor.userId),
+    ).toMatchObject({ outcome: "replayed", purchaseId: waiting.id });
+    // The card charge settles against the printed total; unpriced items never block it.
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic total-only member",
+      kind: "member",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic total-only cash",
+      identity: { kind: "cash" },
+      ledgerPartyId: owner.output.id,
+    });
+    const charge = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 5.52,
+      postedDate: "2032-03-02",
+      merchant: "Synthetic total-only merchant",
+    });
+    const preview = await previewFinancialBooking(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId: charge.output.id,
+        purchaseId: waiting.shortcode,
+      }),
+    );
+    await commitFinancialBooking(ctx.db, preview, ctx.actor);
+    const allocations = await getDb(ctx.db)
+      .select({ purchaseId: financialTransactionAllocation.purchaseId })
+      .from(financialTransactionAllocation)
+      .innerJoin(
+        financialTransaction,
+        eq(
+          financialTransaction.id,
+          financialTransactionAllocation.transactionId,
+        ),
+      )
+      .where(eq(financialTransaction.shortcode, charge.output.id));
+    expect(allocations).toEqual([{ purchaseId: waiting.id }]);
+  });
+
+  // Money already on the order that is not its printed total (a partial
+  // charge booked on a notice Purchase) never makes the items "carried".
+  it("reviews a total-only confirmation whose Purchase already holds a different amount", async () => {
+    const { input } = await scope();
+    const waiting = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: parseEntityId("vendor", input.vendorId),
+      orderId: "EXAMPLE-PARTIAL",
+      date: "2032-03-04",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: waiting.id,
+      name: "Synthetic partial charge",
+      cost: 3,
+      date: "2032-03-04",
+      costType: "materials",
+      lineKind: "principal",
+      lineBasis: "allocation",
+    });
+    input.extraction = {
+      status: "needs_review",
+      reason: "unpriced_itemization",
+      detail: "The confirmation prints its total but no item prices.",
+      candidate: {
+        ...input.extraction.candidate!,
+        orderId: "EXAMPLE-PARTIAL",
+        orderedAt: "2032-03-01",
+        printedGrandTotal: 5.52,
+        lines: [
+          {
+            title: "Synthetic soap",
+            amount: null,
+            quantity: 1,
+            lineKind: "principal",
+          },
+        ],
+      },
+    };
+    const result = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+    expect(result.findingIds).toHaveLength(1);
+    const rows = await getDb(ctx.db)
+      .select({ cost: expense.cost, name: expense.name })
+      .from(expense)
+      .where(and(eq(expense.purchaseId, waiting.id), notDeleted(expense)));
+    expect(rows).toEqual([{ cost: 3, name: "Synthetic partial charge" }]);
+  });
 
   it.each(["same source", "separate source"] as const)(
     "retains foreign items as unpriced Expenses beside one USD aggregate through replay and equivalent evidence (%s)",

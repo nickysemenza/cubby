@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "305b383c-5605-4775-94b1-7c6cf28ca402",
+  "prevIds": [
+    "6498c6d7-ce76-4e74-a176-664a883ff585"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Shipment",
+        "orderId"
+      ],
+      "writes": [
+        "s|col|public.Shipment.orderId",
+        "n|col|public.Shipment.orderId",
+        "e|col|public.Shipment.orderId"
+      ],
+      "reads": [
+        "n|tbl|public.Shipment",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Shipment",
+        "name": "orderId",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}
