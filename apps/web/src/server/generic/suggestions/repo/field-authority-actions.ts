@@ -7,6 +7,7 @@ import {
 import {
   financeReviewContext,
   suggestApplyPolicy,
+  undecidedFieldValue,
 } from "@cubby/schemas/field-suggestion-policy";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -74,7 +75,11 @@ export async function applyFieldAuthorityAction(
         throw new Error("Cubby only fills this field; it never revises it");
       // An unchanged value with the released authority: the field is Cubby's again.
       await markPerson("released");
-      return { holder: value == null || value === "" ? "open" : "cubby" };
+      return {
+        holder: undecidedFieldValue(input.entity, input.field, value)
+          ? "open"
+          : "cubby",
+      };
     }
     if (authority.holder !== "cubby")
       throw new Error("This value was not set by Cubby");

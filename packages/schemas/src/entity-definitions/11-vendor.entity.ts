@@ -297,8 +297,10 @@ export const { definition, readSchemas } = defineEntityModel({
           suggest: {
             basis: ["name", "website", "notes"],
             financeReview: { context: "vendor" },
+            fillOnly: true,
+            undecided: "unspecified",
             rules: [
-              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Preserve existing decisions.`,
+              `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail. single_category means every purchase from this vendor belongs to one spending category (a software subscription, hosting, an API or utility provider); it requires independent purchase evidence whose principal lines all fall in one category and no mixed goods, and a vendor name alone never establishes it. Ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Preserve existing decisions.`,
             ],
           },
           options: [
@@ -331,6 +333,12 @@ export const { definition, readSchemas } = defineEntityModel({
               value: "coffee_shop",
               label: "Coffee shop",
               description: "Coffee shop",
+            },
+            {
+              value: "single_category",
+              label: "Single category",
+              description:
+                "Everything bought here is one spending category; the vendor default applies to every item",
             },
           ],
         },

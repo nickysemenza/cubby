@@ -1,0 +1,38 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "7d110b2b-8afb-4277-8633-a2f7a6ad5ef7",
+  "prevIds": [
+    "305b383c-5605-4775-94b1-7c6cf28ca402"
+  ],
+  "footprints": [
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Vendor"
+      ],
+      "writes": [
+        "s|ck|public.Vendor.Vendor_spendingProfile_check"
+      ],
+      "reads": [
+        "n|tbl|public.Vendor",
+        "n|sch|public",
+        "n|col|public.Vendor.spendingProfile",
+        "e|col|public.Vendor.spendingProfile"
+      ],
+      "sqlHash": "b7af666a0071c998"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Vendor\",\"Vendor_spendingProfile_check\"]",
+      "set": {
+        "value": "\"spendingProfile\" IN ('unspecified', 'mixed_retail', 'food_retail', 'restaurant', 'coffee_shop', 'single_category')"
+      }
+    }
+  ]
+}

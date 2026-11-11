@@ -10,6 +10,7 @@ import {
   fieldSuggestionContextKeys,
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
+import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { sweepFieldTargets } from "@cubby/schemas/run-fields";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
@@ -155,6 +156,8 @@ async function suggestTarget(
     input.model ??
     "unknown";
   const primary = makeSweepSuggestion({
+    entity: input.entity,
+    field: input.field,
     currentValue: target.currentValue,
     decision: {
       value: jsonValue(decision.value),
@@ -556,7 +559,6 @@ export type SweepDecision = {
   runnerUpValue?: SuggestionValue;
   runnerUpConfidence?: number;
 };
-const isBlank = (value: SuggestionValue) => value == null || value === "";
 const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
   canonicalJson(left) === canonicalJson(right);
 
@@ -565,13 +567,17 @@ const equalValue = (left: SuggestionValue, right: SuggestionValue) =>
  * `field.addition` Automatic rule may then apply it.
  */
 export function makeSweepSuggestion(args: {
+  entity: string;
+  field: string;
   currentValue: SuggestionValue;
   decision: SweepDecision;
   model: string;
 }): SweepSuggestion | null {
   if (equalValue(args.currentValue, args.decision.value)) return null;
   return {
-    kind: isBlank(args.currentValue) ? "addition" : "correction",
+    kind: undecidedFieldValue(args.entity, args.field, args.currentValue)
+      ? "addition"
+      : "correction",
     currentValue: args.currentValue,
     suggestedValue: args.decision.value,
     confidence: args.decision.confidence,

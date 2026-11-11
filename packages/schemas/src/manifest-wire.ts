@@ -110,6 +110,7 @@ export const manifestWire = {
       allowNone: "boolean~",
       apply: "string~",
       fillOnly: "boolean~",
+      undecided: "string?",
       basis: "[string]",
       backedBy: "Json?",
       mode: "string~",

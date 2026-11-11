@@ -679,6 +679,71 @@ describe("automatic field assignments", () => {
     expect(await feedbackFor(ctx, pending.id)).toEqual([]);
   });
 
+  // Dangerous rule: an undecided placeholder is open to Cubby, while a profile
+  // a person chose is never overwritten.
+  it("treats an undecided Vendor spending profile as open until a person decides it", async () => {
+    const merchant = (
+      await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic hosting vendor",
+      })
+    ).output;
+    const recordId = await resolveOrThrow(ctx.db, "vendor", merchant.id);
+    const holder = async () =>
+      (await fieldAuthority(ctx.db, "vendor", recordId, "spendingProfile"))
+        .holder;
+    const confidentProfile = async () => {
+      const pending = await seedPending(ctx, {
+        entity: "vendor",
+        recordId,
+        field: "spendingProfile",
+        currentValue: "unspecified",
+        suggestedValue: "single_category",
+        kind: "addition",
+      });
+      await getDb(ctx.db)
+        .update(suggestionTable)
+        .set({
+          confidence: 0.97,
+          provenance: {
+            dependencies: dependencyStamps(
+              await producingAiManifest(ctx.db),
+              fieldDependencyKeys("vendor", "spendingProfile"),
+            ),
+            inputFingerprint: "synthetic",
+            optionFingerprint: "synthetic",
+            model: "typesafe/jev",
+          },
+        })
+        .where(eq(suggestionTable.id, pending.id));
+      return pending.id;
+    };
+    expect(await holder()).toBe("open");
+    expect(
+      await canAutomaticallyFillField(
+        ctx.db,
+        kernelCtx(ctx),
+        await confidentProfile(),
+      ),
+    ).toBe(true);
+    await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "vendor",
+        id: merchant.id,
+        data: { spendingProfile: "mixed_retail" },
+      }),
+    );
+    expect(await holder()).toBe("person");
+    expect(
+      await canAutomaticallyFillField(
+        ctx.db,
+        kernelCtx(ctx),
+        await confidentProfile(),
+      ),
+    ).toBe(false);
+  });
+
   // Failure: a mode-only explicit None looks empty and has no target-field audit.
   it("preserves explicit None assignment intent with a null effective value", async () => {
     const project = (

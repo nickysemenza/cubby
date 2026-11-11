@@ -18,6 +18,7 @@ import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
 import {
   spendingCategoryMappingMode,
   type SpendingCategoryMappingMode,
+  vendorSpendingProfile,
   type VendorSpendingProfile,
 } from "@cubby/schemas/spending-classification";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -230,7 +231,7 @@ function expenseSpendingCategoryChoiceSql(
       SELECT f.*,
         f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND food AND COALESCE(profile IN ('restaurant','coffee_shop'),FALSE) AS context_eligible,
         f.principal AND (COALESCE(mapping_mode=${sqlEnumConstant(spendingCategoryMappingMode, spendingCategoryMappingMode.enum.blocked)},FALSE) OR NOT food OR COALESCE(profile IN ('mixed_retail','food_retail'),FALSE)) AS mapping_eligible,
-        f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND f.product_id IS NULL AND COALESCE(profile IN ('food_retail','restaurant','coffee_shop'),FALSE) AS merchant_eligible
+        f.principal AND COALESCE(mapping_mode<>'blocked',TRUE) AND COALESCE(profile=${sqlEnumConstant(vendorSpendingProfile, vendorSpendingProfile.enum.single_category)} OR (f.product_id IS NULL AND profile IN ('food_retail','restaurant','coffee_shop')),FALSE) AS merchant_eligible
       FROM facts f
     ), candidates AS (
       SELECT f.*,

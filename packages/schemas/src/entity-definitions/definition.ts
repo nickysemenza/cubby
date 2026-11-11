@@ -453,6 +453,12 @@ const buildMetadataSchemas = () => {
              */
             fillOnly: z.boolean().optional().default(false),
             /**
+             * A stored value that records no decision, such as a required
+             * enum's placeholder default. Cubby treats it as empty when it
+             * decides whether the field is open to automatic fill.
+             */
+            undecided: nonEmptyString().optional(),
+            /**
              * Saved-record spending review: the proposal carries an evidence
              * fingerprint and applies through the fenced finance writer.
              * `finance` reviews a Purchase/Expense category from its lines;

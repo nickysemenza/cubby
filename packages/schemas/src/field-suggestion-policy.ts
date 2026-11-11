@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { type EntityFieldModel, entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 
@@ -12,6 +14,36 @@ export function suggestApplyPolicy(
     entityFieldModels[entity].fields.find((item) => item.key === field)?.control
       ?.suggest?.apply ?? "auto"
   );
+}
+
+/** Each field's declared `suggest.undecided` placeholder, keyed `entity.field`. */
+const undecidedPlaceholders = new Map<string, string>(
+  Object.entries(entityFieldModels).flatMap(([entity, model]) =>
+    model.fields.flatMap((field: EntityFieldModel["fields"][number]) => {
+      const suggest = field.control?.suggest;
+      return suggest && "undecided" in suggest && suggest.undecided
+        ? [[`${entity}.${field.key}`, suggest.undecided] as const]
+        : [];
+    }),
+  ),
+);
+const blankValue = z.union([z.null(), z.undefined(), z.literal("")]);
+
+/**
+ * Whether a stored value records no decision: blank, or the field's declared
+ * `suggest.undecided` placeholder. Every open-field check reads this.
+ */
+export function undecidedFieldValue(
+  entity: string,
+  field: string,
+  value: unknown,
+): boolean {
+  const placeholder = undecidedPlaceholders.get(`${entity}.${field}`);
+  return (
+    placeholder === undefined
+      ? blankValue
+      : z.union([blankValue, z.literal(placeholder)])
+  ).safeParse(value).success;
 }
 
 /** Entities with at least one field Cubby may evaluate after a write. */

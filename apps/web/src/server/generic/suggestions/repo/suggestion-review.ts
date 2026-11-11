@@ -14,6 +14,7 @@ import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import {
   financeReviewContext,
   suggestApplyPolicy,
+  undecidedFieldValue,
 } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
@@ -436,7 +437,8 @@ async function automaticFieldRefusal(
   const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
   const recordId = suggestionRecordId(row);
   const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
-  const empty = (value: unknown) => value == null || value === "";
+  const empty = (value: unknown) =>
+    undecidedFieldValue(entity, row.field, value);
   if (
     !row.active ||
     row.suppression ||

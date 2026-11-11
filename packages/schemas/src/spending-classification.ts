@@ -16,6 +16,7 @@ const vendorSpendingProfileValues = [
   "food_retail",
   "restaurant",
   "coffee_shop",
+  "single_category",
 ] as const;
 export const vendorSpendingProfile = z.enum(vendorSpendingProfileValues);
 

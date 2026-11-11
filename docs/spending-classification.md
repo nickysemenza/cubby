@@ -25,10 +25,18 @@ its branch, with narrower assignments and blocks expressing exceptions.
 
 The resolver uses an explicit Expense category first, then narrow food/merchant
 context, the nearest Product Category mapping, a stored Purchase fallback, and
-a selective merchant default. Unresolved values remain unresolved. A blocked
+a selective merchant default. The merchant default covers productless principal
+lines at grocery, restaurant and coffee-shop Vendors, and every principal line,
+including lines that link a Product, at a `single_category` Vendor, whose
+purchases all belong to its default category. A Vendor default is a live input,
+never copied onto Purchases or Expenses, so a profile or default change moves
+every Expense that reads it. Unresolved values remain unresolved. A blocked
 Product Category mapping stops automatic defaults; deliberate Expense and
 Purchase choices remain available. Product mappings update historical Expenses
-live, while explicit purposes such as Gifts stay in place.
+live, while explicit purposes such as Gifts stay in place. A newly resolved
+category also brings that category's Product expectation and stock-tracking
+inheritance to the line, so a classification change can change itemization
+coverage; the reviewed preview reports money only.
 
 The Expense category resolver owns SQL eligibility, chosen categories, and
 ordered explanation evidence. Explanations retain assigned but inapplicable
@@ -69,7 +77,8 @@ unless the adjustment names its own trade, which claims the whole charge at the
 adjustment's own cost type. A share with no principal reports under no trade
 and the adjustment's own cost type, and under the Purchase's own Spending
 Category when it has one that did not come from a statement (the rule
-principal lines follow); otherwise it is uncategorized. Filtering never changes the full Purchase
+principal lines follow); otherwise it is uncategorized, even at a
+`single_category` Vendor. Filtering never changes the full Purchase
 weights. Unknown shares remain in the
 report, and the allocated total equals `SUM(Expense.cost)`. Refund-only baskets
 use absolute principal weights; unidentified refund adjustments on a positive
