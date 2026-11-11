@@ -292,6 +292,9 @@ describe("Run lineage and waiting-on reads", () => {
     await queue("synthetic.capacity.3", runId, 5);
     const done = await queue("synthetic.capacity.done", ahead, 40);
     await updateJobs(ctx.db, { id: done.id }, { state: "completed" });
+    // Not yet due: its priority head start must not place it ahead of due work.
+    const later = await queue("synthetic.capacity.later", ahead, -30);
+    await updateJobs(ctx.db, { id: later.id }, { priority: 60 });
 
     const read = await readRun(ctx.db, await codeOf(runId));
 
@@ -303,49 +306,6 @@ describe("Run lineage and waiting-on reads", () => {
       total: 4,
       perMinute: 0.2,
       label: "Queued for model capacity · 3rd of 4 · about 15 min",
-    });
-  });
-
-  // A Run kept running with no work left after its coordinator's last claim,
-  // and the stall rule only considered Runs with live Jobs.
-  it("reads a running Run with no live work and no activity as stalled", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const job = await enqueueJob(ctx.db, {
-      key: "synthetic.finished",
-      kind: "synthetic.finished",
-      input: {},
-      runId,
-    });
-    const quiet = new Date(Date.now() - 20 * 60_000);
-    await updateJobs(
-      ctx.db,
-      { id: job.id },
-      { state: "completed", updatedAt: quiet, lastClaimedAt: quiet },
-    );
-    const touch = (at: Date) =>
-      getDb(ctx.db)
-        .update(runTable)
-        .set({ status: "running", startedAt: quiet, updatedAt: at })
-        .where(eq(runTable.id, runId));
-    await touch(quiet);
-    const code = await codeOf(runId);
-
-    expect(await readRun(ctx.db, code)).toMatchObject({
-      stalled: true,
-      waitingOn: {
-        reason: "unfinished",
-        label: "No work left, but the Run never finished",
-      },
-    });
-
-    await touch(new Date());
-    expect(await readRun(ctx.db, code)).toMatchObject({
-      stalled: false,
-      waitingOn: null,
     });
   });
 });

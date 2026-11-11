@@ -15,6 +15,7 @@ import {
   ATTENTION_RUN_PURPOSES,
   RUN_PURPOSE_LABEL,
   isMemberStartedRun,
+  VISIBLE_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
 import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -44,7 +45,7 @@ import {
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
-import { run, runOperation, runStep } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
 import {
   memberStoppedRunPredicate,
@@ -64,13 +65,13 @@ import {
   WORK_PACE_MINUTES,
 } from "~/server/generic/jobs/repo/observation";
 import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
-import { type JobRow } from "~/server/generic/jobs/repo/queue";
+import { jobDue, type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
   jobWaitingOnReasonSql,
   loadJobWaitingOn,
 } from "~/server/generic/jobs/repo/waiting-on";
 
-/** A Run whose work saw no claim, completion or other activity for this long is stalled. */
+/** A Run whose live Jobs saw no claim or completion for this long is stalled. */
 const RUN_STALL_MS = 15 * 60_000;
 
 const LIVE_STATES = [
@@ -113,41 +114,24 @@ function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
   )`;
 }
 
-/**
- * The list filter/sort and the rollup share the same demand and stall test.
- * A Run is stalled when its live work saw no claim or completion for
- * `RUN_STALL_MS`, or when it is still `running` with no live work at all and
- * nothing touched it for as long: its coordinator or Jobs ran, then it never
- * ended. Activity there is the stale-Run sweep's (`expireStaleRuns`: the Run
- * row, its heartbeat and operations) plus its steps and Jobs.
- */
+/** The list filter/sort and the rollup share the same demand and stall test. */
 export function runStalledSql(now = new Date()): SQL<boolean> {
   const demand = runDemandPairs(sql`SELECT ${outer(run.id)}`);
   const at = sql`${now.toISOString()}::timestamp`;
-  const cutoff = sql`${at} - ${RUN_STALL_MS} * interval '1 millisecond'`;
   // A Run's open image rows are demand too, on their own execution columns.
   const images = sql`"ImageProcessingJob" p WHERE p."runId" = ${outer(run.id)}`;
-  const liveDemand = sql`(${runHasLiveJobs(outer(run.id))}
-      OR EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending}))`;
-  const lastProgress = sql`greatest(
+  return sql<boolean>`(
+    NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
+    AND (${runHasLiveJobs(outer(run.id))}
+      OR EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending}))
+    AND NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
+      WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
+    AND NOT EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending} AND p."leaseUntil" > ${at})
+    AND coalesce(greatest(
       (SELECT max(greatest(j."lastClaimedAt", CASE WHEN j.state = ${jobState.enum.completed} THEN j."updatedAt" END))
         FROM ${demand} d JOIN "Job" j ON j.id = d.job_id),
       (SELECT max(greatest(p."dispatchedAt", p."completedAt")) FROM ${images})
-    )`;
-  return sql<boolean>`(
-    NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
-    AND CASE WHEN ${liveDemand} THEN (
-      NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
-        WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
-      AND NOT EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending} AND p."leaseUntil" > ${at})
-      AND coalesce(${lastProgress}, ${run.startedAt}) <= ${cutoff}
-    ) ELSE (
-      ${run.status} = ${runStatus.enum.running}
-      AND (${run.coordinatorStartedAt} IS NOT NULL OR EXISTS (SELECT 1 FROM ${demand} d))
-      AND greatest(${lastProgress}, ${run.startedAt}, ${run.updatedAt}, ${run.heartbeatAt},
-        (SELECT max(o."startedAt") FROM ${runOperation} o WHERE o."runId" = ${outer(run.id)}),
-        (SELECT max(s."updatedAt") FROM ${runStep} s WHERE s."runId" = ${outer(run.id)})) <= ${cutoff}
-    ) END
+    ), ${run.startedAt}) <= ${at} - ${RUN_STALL_MS} * interval '1 millisecond'
   )`;
 }
 
@@ -334,11 +318,6 @@ export async function readRunRollups(
           startedAt: run.startedAt,
           stalled: runStalledSql(now),
           // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-          activity: sql<
-            number | null
-          >`(extract(epoch FROM greatest(${run.updatedAt}, ${run.heartbeatAt},
-            (SELECT max(o."startedAt") FROM ${runOperation} o WHERE o."runId" = ${run.id}),
-            (SELECT max(s."updatedAt") FROM ${runStep} s WHERE s."runId" = ${run.id}))) * 1000)::float8`,
           // The one resume per funding window wakes every funding-paused Run (`run.funding-resume`).
           fundingResume: sql<
             number | null
@@ -352,21 +331,32 @@ export async function readRunRollups(
         kind: string;
         reason: RunWaitGroup["reason"];
         mine: number;
-        position: number;
-        total: number;
+        position: number | null;
+        total: number | null;
         nextAt: number;
         errorClass: string | null;
         completedPace: number;
       }>(
         sql`WITH kinds AS MATERIALIZED (
         SELECT DISTINCT "Job".kind FROM "Job" WHERE "Job"."runId" IN (${runList}) AND ${waitingStates}
+      ), active_runs AS MATERIALIZED (
+        SELECT id, purpose IN (${sql.join(
+          VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
+          sql`, `,
+        )}) AS visible
+        FROM "Run" WHERE status = ${runStatus.enum.running} AND ${notDeleted(run)}
+      ), due AS (
+        SELECT "Job".id, row_number() OVER (PARTITION BY "Job".kind
+            ORDER BY ("Job".kind = 'run.execute' OR coalesce(active_runs.visible, false)) DESC,
+              "Job"."availableAt" - "Job".priority * interval '1 minute', "Job".priority DESC, "Job".id)::int AS position,
+          count(*) OVER (PARTITION BY "Job".kind)::int AS total
+        FROM "Job" LEFT JOIN active_runs ON active_runs.id = "Job"."runId"
+        WHERE ${jobDue(now)} AND "Job".kind IN (SELECT kind FROM kinds)
       ), ranked AS (
         SELECT "Job"."runId", "Job".kind, ${waitClass} AS reason, "Job"."availableAt",
-          "Job"."lastExecution"->>'errorClass' AS "errorClass",
-          row_number() OVER (PARTITION BY "Job".kind, ${waitClass}
-            ORDER BY "Job"."availableAt" - "Job".priority * interval '1 minute', "Job".id)::int AS position,
-          count(*) OVER (PARTITION BY "Job".kind, ${waitClass})::int AS total
-        FROM "Job" WHERE ${waitingStates} AND "Job".kind IN (SELECT kind FROM kinds)
+          "Job"."lastExecution"->>'errorClass' AS "errorClass", due.position, due.total
+        FROM "Job" LEFT JOIN due ON due.id = "Job".id
+        WHERE "Job"."runId" IN (${runList}) AND ${waitingStates}
       ), pace AS (
         SELECT "Job".kind, ${completedInPaceSql(at)} AS completed FROM "Job"
         WHERE "Job".kind IN (SELECT kind FROM kinds) AND "Job".state = ${jobState.enum.completed}
@@ -374,12 +364,11 @@ export async function readRunRollups(
         GROUP BY "Job".kind
       )
       SELECT ranked."runId", ranked.kind, ranked.reason, count(*)::int AS mine,
-        min(ranked.position)::int AS position, max(ranked.total)::int AS total,
+        min(ranked.position) AS position, max(ranked.total) AS total,
         (extract(epoch FROM min(ranked."availableAt")) * 1000)::float8 AS "nextAt",
         mode() WITHIN GROUP (ORDER BY ranked."errorClass") AS "errorClass",
         coalesce(max(pace.completed), 0)::int AS "completedPace"
       FROM ranked LEFT JOIN pace ON pace.kind = ranked.kind
-      WHERE ranked."runId" IN (${runList})
       GROUP BY 1, 2, 3`,
         "objects",
       ),
@@ -409,24 +398,14 @@ export async function readRunRollups(
       (owner.status === runStatus.enum.paused_auth ||
         owner.status === runStatus.enum.needs_review);
     const stalled = owner?.stalled ?? false;
-    const live =
-      expiredLeases > 0 || Object.values(counts).some((count) => count > 0);
-    const activity =
-      owner?.activity === null || owner?.activity === undefined
-        ? null
-        : new Date(owner.activity);
     const runGroups = groups.filter((group) => group.runId === entry.id);
     return {
       runId: runShortcode.parse(entry.shortcode),
       counts,
       expiredLeases,
       waitingForFunding,
-      // A Run with no live work last moved when its row, steps or operations did.
-      lastProgressAt: iso(
-        live || !activity || (last && last > activity) ? last : activity,
-      ),
+      lastProgressAt: iso(last),
       stalled,
-      stallReason: stalled ? (live ? "no_progress" : "never_finished") : null,
       stallMinutes: RUN_STALL_MS / 60_000,
       waitingOn: summarizeRunWait({
         now,
@@ -454,7 +433,6 @@ export async function readRunRollups(
         paceMinutes: WORK_PACE_MINUTES,
         counts,
         expiredLeases,
-        stalled: stalled && !live,
       }),
     };
   });
@@ -559,20 +537,17 @@ export async function readStoppedRuns(db: Database, now: Date) {
       : [];
   });
   const rollups = stalled.length ? await readRunRollups(db, stalled, now) : [];
-  const rollupOf = new Map(rollups.map((rollup) => [rollup.runId, rollup]));
+  const progress = new Map<string, string | null>(
+    rollups.map((rollup) => [rollup.runId, rollup.lastProgressAt]),
+  );
   return [
     ...stalled.map((row): WorkStuckItem => {
-      const rollup = rollupOf.get(runShortcode.parse(row.shortcode));
-      const lastProgress = rollup?.lastProgressAt;
+      const lastProgress = progress.get(row.shortcode);
       const since = lastProgress ? new Date(lastProgress) : row.startedAt;
-      const age = formatStuckAge(now.getTime() - since.getTime());
       return {
         key: `run:${row.shortcode}`,
         title: `${RUN_PURPOSE_LABEL[row.purpose] ?? row.purpose} Run stopped`,
-        body:
-          rollup?.stallReason === "never_finished"
-            ? `${row.shortcode} has no work left but never finished. Nothing has happened for ${age}.`
-            : `${row.shortcode} has made no progress for ${age}.`,
+        body: `${row.shortcode} has made no progress for ${formatStuckAge(now.getTime() - since.getTime())}.`,
         since: since.toISOString(),
         action: runLink(row.shortcode),
         diagnostic: row.dispatchError ?? row.failureCode,

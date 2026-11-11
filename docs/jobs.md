@@ -166,19 +166,21 @@ one statement per page of Runs. Its waiting Jobs group by kind and wait
 (`waitReason`, else `retry` for `retry_wait`, else `queued`), the same groups
 Queue details shows. The dominant reason is the Run's own funding pause, else a
 funding group, else the group holding most of its waiting Jobs, else live
-leases, paused or other counts, else expired leases. A stalled Run with no live
-work reads `unfinished`.
+leases, paused or other counts, else expired leases.
 
-- `position` is the Run's first Job among every waiting Job of that kind and
-  wait, in the queue's claim order (`dueUnits`: longest due first, each
-  priority point a minute's head start); `total` counts the group.
-- `etaAt` for a queued, capacity, rate-limit or device wait is
+- `position` is the Run's first due Job of the group among every due Job of
+  that kind (`jobDue`, lapsed leases included), in `dueUnits` claim order:
+  member-visible Run work first, then longest due first with each priority
+  point a minute's head start, then higher priority, then id. `total` counts
+  the kind's due Jobs. A group with no due Job has no position.
+- `etaAt` for a queued, capacity, rate-limit or device wait with a position is
   `position ÷ perMinute`, where `perMinute` is the kind's completions over the
-  last `WORK_PACE_MINUTES` (the Work page pace, `completedInPaceSql`). With no
-  completion in that window `perMinute` and `etaAt` are null and the line says
-  the pace is unknown. A retry's `etaAt` is its next attempt and names the most
-  common `lastExecution.errorClass`. A funding wait's `etaAt` is the queued
-  `run.funding-resume` Job's time.
+  last `WORK_PACE_MINUTES` (the Work page pace, `completedInPaceSql`); the
+  kind drains its whole due queue at that pace. With no completion in that
+  window `perMinute` and `etaAt` are null and the line says the pace is
+  unknown. A group not yet due, and a retry, use the earliest `availableAt`; a
+  retry names the most common `lastExecution.errorClass`. A funding wait's
+  `etaAt` is the queued `run.funding-resume` Job's time.
 - `label` is the whole line for text clients ("Queued for model capacity ·
   23rd of 36 · about 16 min", "Waiting for AI funding · resumes 6:00 AM",
   "Retrying after an error (TimeoutError) · next try in about 4 min"); clock
@@ -878,13 +880,10 @@ failure count alone does not establish uninterrupted execution.
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason
   (`leased` counts live leases; lapsed ones are `expiredLeases`, summarized as
   "N expired leases awaiting reclaim"), its own funding wait, its
-  [wait](#run-wait), and `stalled` (`runStalledSql`). `stallReason` is
-  `no_progress` when live work saw no claim or completion for `RUN_STALL_MS`
-  and no live lease is in flight, or `never_finished` when a `running` Run
-  whose coordinator started or that owned a Job has no live work and nothing
-  touched it for as long: no Job claim or completion, Run row write,
-  heartbeat, operation or step update. Stalled Runs are only shown, never
-  ended; `expireStaleRuns` ends abandoned ones after two hours. A Run's demand
+  [wait](#run-wait), and `stalled` (`runStalledSql`): live work saw no claim
+  or completion for `RUN_STALL_MS` and no live lease is in flight. Stalled
+  Runs are only shown, never ended; `expireStaleRuns` ends abandoned ones
+  after two hours. A Run's demand
   is the Jobs and image rows it owns by `runId`; shared drain units belong to
   no Run.
 - `job.activity` (`queue`): every Job kind and drain unit that is live or ran

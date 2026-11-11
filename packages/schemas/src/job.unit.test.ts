@@ -126,7 +126,6 @@ describe("summarizeRunWait", () => {
     paceMinutes: 5,
     counts: {},
     expiredLeases: 0,
-    stalled: false,
   };
   const capacity = {
     kind: "purchase.dispatch",
@@ -192,13 +191,6 @@ describe("summarizeRunWait", () => {
       })?.label,
     ).toBe(
       "Retrying after an error (GatewayBillingError) · next try in about 4 min",
-    );
-  });
-
-  it("reads a stalled Run with no live work as never finished", () => {
-    expect(summarizeRunWait(input)).toBeNull();
-    expect(summarizeRunWait({ ...input, stalled: true })?.label).toBe(
-      "No work left, but the Run never finished",
     );
   });
 

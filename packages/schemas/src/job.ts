@@ -590,8 +590,13 @@ export type RunWaitGroup = {
   reason: z.infer<typeof workQueueWaitReason>;
   /** This Run's Jobs in the group. */
   mine: number;
-  position: number;
-  total: number;
+  /**
+   * The Run's first due Job of the group in the kind's claim order across
+   * every due Job of the kind (`dueUnits`), 1-based; null while none is due.
+   */
+  position: number | null;
+  /** Due Jobs of the kind; null while none of the Run's is due. */
+  total: number | null;
   /** The earliest `availableAt` among this Run's Jobs in the group. */
   nextAt: Date;
   errorClass: string | null;
@@ -629,7 +634,6 @@ const RUN_WAIT_TEXT = {
   reclaim: "Waiting to be picked up again",
   blocked: "Blocked",
   paused: "Paused",
-  unfinished: "No work left, but the Run never finished",
 } as const satisfies Record<RunWaitReason, string>;
 
 /** Reasons whose ETA is the Run's place in line at the kind's pace. */
@@ -707,8 +711,7 @@ export function describeRunWait(
 /**
  * The dominant wait among a Run's live work. A funding wait holds every AI
  * step, so it leads; otherwise the group holding most of the Run's waiting
- * Jobs, then live leases, then the remaining counts. A Run with no live work
- * that is stalled never finished.
+ * Jobs, then live leases, then the remaining counts.
  */
 export function summarizeRunWait(input: {
   now: Date;
@@ -723,7 +726,6 @@ export function summarizeRunWait(input: {
   paceMinutes: number;
   counts: Partial<Record<JobWaitingOnReason, number>>;
   expiredLeases: number;
-  stalled: boolean;
 }): RunWaitingOn | null {
   const { now, paceMinutes } = input;
   const jobs = describeJobRollup(input.counts, input.expiredLeases);
@@ -759,16 +761,17 @@ export function summarizeRunWait(input: {
   if (group) {
     const reason = GROUP_REASON[group.reason];
     const perMinute = input.perMinute.get(group.kind) ?? 0;
-    const paced = PACED.has(reason);
-    const etaAt = paced
-      ? queueEtaAt(group.position, perMinute, now)
-      : group.nextAt;
+    // The kind drains its whole due queue at its pace, so a due Job's ETA is
+    // its place in that queue; one not yet due waits for its own time.
+    const position = PACED.has(reason) ? group.position : null;
+    const etaAt =
+      position === null ? group.nextAt : queueEtaAt(position, perMinute, now);
     return finish({
       ...base,
       reason,
       kind: group.kind,
-      position: paced ? group.position : null,
-      total: paced ? group.total : null,
+      position,
+      total: position === null ? null : group.total,
       perMinute: perMinute > 0 ? perMinute : null,
       etaAt: etaAt?.toISOString() ?? null,
       errorClass: reason === "retry" ? group.errorClass : null,
@@ -776,6 +779,5 @@ export function summarizeRunWait(input: {
   }
   const counted = COUNT_REASON.find(([key]) => (input.counts[key] ?? 0) > 0);
   if (counted) return finish({ ...base, reason: counted[1] });
-  if (input.expiredLeases) return finish({ ...base, reason: "reclaim" });
-  return input.stalled ? finish({ ...base, reason: "unfinished" }) : null;
+  return input.expiredLeases ? finish({ ...base, reason: "reclaim" }) : null;
 }

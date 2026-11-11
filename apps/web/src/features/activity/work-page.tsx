@@ -188,17 +188,21 @@ const AI_STATE_LABEL = {
 const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
 
 /**
- * When a wait group should drain at its kind's recent pace. A funding wait
- * ends when the window reopens, whatever the pace, so it gets no estimate.
+ * When a unit's due work drains at its recent pace: the pace is the whole
+ * kind's, so it divides every group's count together. A funding wait ends
+ * when the window reopens, whatever the pace, so it is left out.
  */
 function drainText(
-  wait: WorkQueueWait,
+  waits: readonly WorkQueueWait[],
   perMinute: number,
   paceMinutes: number,
 ): string | null {
-  if (wait.reason === "ai_funding_window") return null;
+  const due = waits
+    .filter((wait) => wait.reason !== "ai_funding_window")
+    .reduce((sum, wait) => sum + wait.count, 0);
+  if (!due) return null;
   return perMinute > 0
-    ? `Drains in ${aboutSpanText((wait.count / perMinute) * 60_000)} at the last ${paceMinutes} minutes' pace.`
+    ? `Drains in ${aboutSpanText((due / perMinute) * 60_000)} at the last ${paceMinutes} minutes' pace.`
     : `Pace unknown: none finished in the last ${paceMinutes} minutes.`;
 }
 
@@ -216,6 +220,7 @@ function QueueUnitRow({
   paceMinutes: number;
 }) {
   const page = unit.lastExecution;
+  const drain = drainText(unit.waits, perMinute, paceMinutes);
   return (
     <li className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
       <div className="min-w-0">
@@ -252,29 +257,24 @@ function QueueUnitRow({
               : "."}
           </p>
         ) : null}
-        {unit.waits.map((wait) => {
-          const drain = drainText(wait, perMinute, paceMinutes);
-          return (
-            <p key={`${wait.reason}:${wait.runPurpose}`}>
-              {wait.summary}
-              {drain ? (
-                <span className="text-muted-foreground"> {drain}</span>
-              ) : null}
-              {wait.runIds.map((id) => {
-                const href: string = `/runs/${id}`;
-                return (
-                  <Link
-                    key={id}
-                    to={href}
-                    className="ml-2 font-mono text-xs text-link hover:underline"
-                  >
-                    {id}
-                  </Link>
-                );
-              })}
-            </p>
-          );
-        })}
+        {unit.waits.map((wait) => (
+          <p key={`${wait.reason}:${wait.runPurpose}`}>
+            {wait.summary}
+            {wait.runIds.map((id) => {
+              const href: string = `/runs/${id}`;
+              return (
+                <Link
+                  key={id}
+                  to={href}
+                  className="ml-2 font-mono text-xs text-link hover:underline"
+                >
+                  {id}
+                </Link>
+              );
+            })}
+          </p>
+        ))}
+        {drain ? <p className="text-muted-foreground">{drain}</p> : null}
       </div>
     </li>
   );

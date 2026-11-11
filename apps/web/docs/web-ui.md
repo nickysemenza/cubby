@@ -482,9 +482,10 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   and drain unit as a flat hairline row: member label and stored unit name,
   then claimed, finished, deferred and failed counts for the last hour, the
   oldest due work, leases held, a drain's last pass and each group of waiting
-  Jobs with its Run links and when it drains at the kind's last-5-minute pace
-  ("Drains in about 26 min at the last 5 minutes' pace."); a funding group
-  gets no estimate, and a kind with no recent completion reads "Pace unknown". AI evaluations follow, one row per feature with its
+  Jobs with its Run links, then when the unit's due work drains at the kind's
+  last-5-minute pace ("Drains in about 26 min at the last 5 minutes' pace.");
+  funding groups are left out of that count, and a kind with no recent
+  completion reads "Pace unknown". AI evaluations follow, one row per feature with its
   queued, answered-not-saved and blocked counts, oldest age and most common
   error. Rows put the name beside the facts from 768px and stack below it; no
   row scrolls sideways. A failed read shows the raw error and Try again.

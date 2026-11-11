@@ -562,12 +562,13 @@ export const { definition, readSchemas } = defineEntityModel({
         explanation: {
           ruleId: "run.waiting-on",
           description:
-            "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among waiting Jobs of the same kind and wait in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or the next retry. A Run with no live work that never finished says so.",
+            "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among every due Job of that kind in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or when a Job not yet due (a retry or a deferral) falls due.",
         },
         display: {
           mobile: { slot: "meta", priority: 30 },
           columnGroup: "Execution",
           labelPath: "waitingOn.label",
+          detailLabelPath: "waitingOn.label",
           renderer: { list: "run-waiting-on", detail: "run-waiting-on" },
         },
         validation: readOnly(runWaitingOn.nullable().default(null)),
@@ -577,15 +578,12 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "boolean",
         provenance: {
           kind: "derived",
-          sources: [
-            { label: "Latest Job claim or completion" },
-            { label: "Latest Run, step or operation activity" },
-          ],
+          sources: [{ label: "Latest Job claim or completion" }],
         },
         explanation: {
           ruleId: "run.stalled",
           description:
-            "Live Jobs remain but none was claimed or finished for 15 minutes, or a running Run has no live work left and nothing touched it for 15 minutes.",
+            "Live Jobs remain but none was claimed or finished for 15 minutes.",
         },
         display: { columnGroup: "Execution", width: "sm" },
         validation: readOnly(z.boolean().default(false)),

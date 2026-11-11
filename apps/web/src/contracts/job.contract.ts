@@ -54,12 +54,10 @@ const runRollup = z.object({
   expiredLeases: z.number().int().nonnegative(),
   /** The Run itself waits for AI funding (paused, or a legacy review stop). */
   waitingForFunding: z.boolean(),
-  /** Latest claim or completion across the Run's Jobs; with no live work, the Run's own latest activity. */
+  /** Latest claim or completion across the Run's Jobs. */
   lastProgressAt: z.iso.datetime().nullable(),
-  /** Nothing moved for `stallMinutes` (`runStalledSql`). */
+  /** Live Jobs remain but none was claimed or finished for `stallMinutes`. */
   stalled: z.boolean(),
-  /** `no_progress`: live work saw no claim or completion. `never_finished`: no live work, yet the Run still runs. */
-  stallReason: z.enum(["no_progress", "never_finished"]).nullable(),
   stallMinutes: z.number().int().positive(),
   /** The dominant wait, place in line and ETA; null when nothing holds the Run. */
   waitingOn: runWaitingOn.nullable(),

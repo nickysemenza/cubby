@@ -513,7 +513,7 @@ One durable unit of image processing (subject lift, description, or identificati
 _Avoid_: image processing run, activity row
 
 **Run**:
-A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs list presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself. While it runs, it names what it waits on, its place in line and an estimate; a running Run with nothing happening for 15 minutes reads as stalled.
+A durable record of coordinated work, identified by `RUN-`, with a purpose, trigger, status, and optional targets or operations. It may group image jobs, but its recorded cost can already include their costs. The Runs list presents every purpose together. Retained target outcomes, including Email targets, remain visible after the mutable target roster is retired. A vendor mail search is a Run: what was asked and where its page-by-page walk stands belong to the Run itself. While it runs, it names what it waits on, its place in line and an estimate; a Run whose live work saw no claim or completion for 15 minutes reads as stalled.
 _Avoid_: image processing job, individual attempt, search job
 
 **Run kind**:

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-/** What holds a Run back, in member words; `unfinished` is a Run with no work left that never ended. */
+/** What holds a Run back, in member words. */
 export const runWaitReason = z.enum([
   "funding",
   "model_capacity",
@@ -12,7 +12,6 @@ export const runWaitReason = z.enum([
   "reclaim",
   "blocked",
   "paused",
-  "unfinished",
 ]);
 export type RunWaitReason = z.infer<typeof runWaitReason>;
 
@@ -27,14 +26,14 @@ export const runWaitingOn = z.object({
   label: z.string(),
   /** The Job kind `reason` describes; null for a Run-level wait. */
   kind: z.string().nullable(),
-  /** The Run's first Job among waiting Jobs of `kind` with the same wait, in claim order, 1-based. */
+  /** The Run's first due Job among every due Job of `kind`, in claim order, 1-based. */
   position: z.number().int().positive().nullable(),
-  /** Waiting Jobs of `kind` with the same wait, across every Run. */
+  /** Due Jobs of `kind`, across every Run. */
   total: z.number().int().positive().nullable(),
   /** Jobs of `kind` finished per minute over `paceMinutes`; null when none finished. */
   perMinute: z.number().positive().nullable(),
   paceMinutes: z.number().int().positive(),
-  /** When the wait should end: position at that pace, the funding resume, or the next retry. */
+  /** When the wait should end: position at that pace, the funding resume, or when the Job falls due. */
   etaAt: z.iso.datetime().nullable(),
   /** The most common error class behind a retry. */
   errorClass: z.string().nullable(),
