@@ -18,6 +18,7 @@ import {
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
+import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -773,7 +774,12 @@ function digestSpendingEvidence(
   });
 }
 
-/** Purchases whose every settling Transaction another proven occurrence of the charge's source accepted. */
+/**
+ * Purchases whose every settling Transaction an occurrence accepted that is
+ * provably a different bank event from this charge's: another provider ID in
+ * the same provider scope, or another position in the same collection. A
+ * legacy, reviewed or cross-kind pair may be one event and proves nothing.
+ */
 async function settledByOtherOccurrences(
   db: Database,
   purchases: readonly { id: string; transactionIds: readonly string[] }[],
@@ -786,24 +792,35 @@ async function settledByOtherOccurrences(
     ...new Set(settled.flatMap((purchase) => purchase.transactionIds)),
   ];
   if (!ids.length || !sourceRefs.length) return new Set<string>();
+  const provider = sqlEnumConstant(
+    sourceOccurrenceIdentityKind,
+    sourceOccurrenceIdentityKind.enum.provider,
+  );
+  const positioned = sqlEnumConstant(
+    sourceOccurrenceIdentityKind,
+    sourceOccurrenceIdentityKind.enum.positioned,
+  );
   const proven = await getDb(db).execute<{ id: string }>(sql`
-    SELECT DISTINCT o."acceptedTransactionId"::text AS id FROM "SourceOccurrence" o
+    SELECT DISTINCT o."acceptedTransactionId"::text AS id
+    FROM "SourceOccurrence" o
+    JOIN "SourceOccurrence" incoming ON incoming.source = o.source
+      AND incoming.id <> o.id AND ${notDeleted("incoming")}
+      AND (incoming.source, incoming.shortcode) IN (${sql.join(
+        sourceRefs.map((ref) => sql`(${ref.source}, ${ref.externalId})`),
+        sql`, `,
+      )})
     WHERE ${notDeleted("o")} AND o."supersededByOccurrenceId" IS NULL
       AND o.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
       AND o."acceptedTransactionId" IN (${sql.join(
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-      AND o.source IN (${sql.join(
-        [...new Set(sourceRefs.map((ref) => ref.source))].map(
-          (name) => sql`${name}`,
-        ),
-        sql`, `,
-      )})
-      AND o.shortcode NOT IN (${sql.join(
-        sourceRefs.map((ref) => sql`${ref.externalId}`),
-        sql`, `,
-      )})`);
+      AND ((o."identityKind" = ${provider} AND incoming."identityKind" = ${provider}
+          AND o."identityScope" = incoming."identityScope"
+          AND o."providerIdentity" <> incoming."providerIdentity")
+        OR (o."identityKind" = ${positioned} AND incoming."identityKind" = ${positioned}
+          AND o."physicalImportId" = incoming."physicalImportId"
+          AND o."physicalPosition" <> incoming."physicalPosition"))`);
   const accepted = new Set(proven.rows.map((entry) => String(entry.id)));
   return new Set(
     settled
@@ -1356,9 +1373,9 @@ async function discoverSpendingEvidence(
     candidateEvidence.map((candidate) => [candidate.id, candidate.graph]),
   );
   // Exhausted capacity alone never proves a different event: a nearby
-  // Purchase stops blocking only when every settlement is another proven
-  // occurrence of this charge's source, as an earlier booking of the same
-  // statement creates. Manual or unproven settlements may be this charge.
+  // Purchase stops blocking only when every settlement is provably another
+  // bank event of this charge's source, as an earlier booking from the same
+  // provider feed creates. Manual or unproven settlements may be this charge.
   const exhausted = unrejectedCandidates.filter((candidate) => {
     if (
       candidate.reviewOnly ||

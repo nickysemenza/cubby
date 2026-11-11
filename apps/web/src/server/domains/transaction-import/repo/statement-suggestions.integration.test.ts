@@ -3397,10 +3397,21 @@ describe("statement Transaction suggestions", () => {
   // the next charge as a possible existing Purchase.
   it("refreshes neighbouring suggestions after one is applied", async () => {
     await card(ctx);
-    await record(ctx, [rowInput({ rawDescription: "EXAMPLE MKTPLACE PMTS" })]);
+    // Provider IDs in one scope prove three distinct bank events.
+    await record(ctx, [
+      rowInput({
+        rawDescription: "EXAMPLE MKTPLACE PMTS",
+        providerTransactionId: "synthetic-mktpl-1",
+      }),
+    ]);
     await record(
       ctx,
-      [rowInput({ rawDescription: "EXAMPLE MKTPL*AB12CD34" })],
+      [
+        rowInput({
+          rawDescription: "EXAMPLE MKTPL*AB12CD34",
+          providerTransactionId: "synthetic-mktpl-2",
+        }),
+      ],
       { fingerprint: "fp-firmed" },
     );
     await record(
@@ -3410,6 +3421,7 @@ describe("statement Transaction suggestions", () => {
           rawDescription: "EXAMPLE MKTPL*EF56GH78",
           statementDate: "2026-05-05",
           providerAmount: -17.25,
+          providerTransactionId: "synthetic-mktpl-3",
         }),
       ],
       { fingerprint: "fp-neighbour" },

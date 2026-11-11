@@ -151,9 +151,11 @@ These additional candidates are review-only: even a complete retained payment
 set cannot make them automatic settlement targets. Only confidently zero
 remaining capacity excludes an additional candidate. A nearby candidate is
 excluded only when its capacity is confidently zero and every settling
-Transaction is another proven occurrence of the charge's source, such as the
-Purchase an earlier statement booking created; a manual or unproven settlement
-may be this same charge and keeps blocking. Complete settlement targets, the
+Transaction was accepted from a provably different bank event of the charge's
+source: another provider ID in the same provider scope, or another position in
+the same collection, as an earlier booking from the same feed creates. A
+manual, legacy, reviewed or cross-kind settlement may be this same charge and
+keeps blocking. Complete settlement targets, the
 explicitly chosen Purchase, refund originals and Purchases whose retained
 payment evidence names the charge's amount stay intact. Explicit member
 selection or rejection keeps its authority. A header total without actual vendor lines is outside this
