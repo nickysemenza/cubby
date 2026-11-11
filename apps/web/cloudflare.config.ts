@@ -157,6 +157,12 @@ export const productionWorker = defineWorker({
     BACKGROUND_QUEUE: bindings.queue({
       name: workerQueueNames.background,
     }),
+    // Placement applies to default fetch, not queue events or named entrypoints:
+    // https://developers.cloudflare.com/workers/configuration/placement/#placement-behavior
+    BACKGROUND_WORKER: bindings.worker({
+      worker: "cubby",
+      props: { backgroundQueue: true },
+    }),
     TELEMETRY_QUEUE: bindings.queue({
       name: workerQueueNames.telemetry,
     }),

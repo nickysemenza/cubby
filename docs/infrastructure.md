@@ -184,6 +184,14 @@ calls. One Worker serves all events.
 
 #### Background connection budget
 
+Background queue deliveries forward to the default fetch handler through a
+self service binding. [Placement](https://developers.cloudflare.com/workers/configuration/placement/#placement-behavior)
+applies to fetch, not queue events or named entrypoints; the binding's
+`ctx.props` marks requests that may invoke the internal endpoint. The caller
+applies returned message outcomes and throws on transport failure. Local dev and
+the workerd harness run directly when the binding is absent. Forwarded spans use
+`cubby.workload = queue.forwarded` and record the `cf-placement` header.
+
 Every background invocation — one queue permit, one telemetry batch, the hourly
 cron tick, or one Durable Object request — holds exactly one shared two-socket
 pool on `HYPERDRIVE_BACKGROUND` (`withInvocationDb`); both database roles
