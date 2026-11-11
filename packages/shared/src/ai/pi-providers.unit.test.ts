@@ -54,8 +54,8 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   expect(response.errorMessage).toBeUndefined();
   expect(response.model).toBe("gpt-6.1-sol");
   expect(attempts).toEqual([
-    "anthropic:subscriber_credit",
     "openai:openai_credit",
+    "anthropic:subscriber_credit",
     "openai:subscription",
   ]);
 });
@@ -94,8 +94,8 @@ it("advances past an OpenAI credit refusal that only carries the billing sentenc
   );
   expect(response.errorMessage).toBeUndefined();
   expect(attempts).toEqual([
-    "anthropic:subscriber_credit",
     "openai:openai_credit",
+    "anthropic:subscriber_credit",
     "openai:subscription",
   ]);
 });
@@ -137,8 +137,8 @@ it("advances past a credit attempt the egress object refuses from its recorded r
   expect(response.errorMessage).toBeUndefined();
   expect(response.model).toBe("gpt-6.1-sol");
   expect(attempts).toEqual([
-    "anthropic:subscriber_credit",
     "openai:openai_credit",
+    "anthropic:subscriber_credit",
     "openai:subscription",
   ]);
 });
@@ -183,12 +183,12 @@ describe("a ladder that keeps the requested tier on every source", () => {
     expect(response.errorMessage).toBeUndefined();
     expect(response.model).toBe(requested);
     expect(attempts).toEqual([
-      `anthropic:subscriber_credit:${credit}`,
       `openai:openai_credit:${requested}`,
+      `anthropic:subscriber_credit:${credit}`,
       `openai:subscription:${requested}`,
     ]);
-    // Cubby's own recorded refusal made no provider call; OpenAI's did.
-    expect(local).toEqual([true, false]);
+    // OpenAI's refusal made a provider call; Cubby's own recorded refusal did not.
+    expect(local).toEqual([false, true]);
   });
 
   // A harness override measures the model it names: never a tier substitute,
@@ -269,6 +269,11 @@ it("records subscriber-credit cost separately and skips later funding on success
   for (const provider of fundedCubbyPiProviders(
     (_route, _unbilled, funding) => async () => {
       attempts.push(String(funding));
+      if (funding === "openai_credit")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
       return anthropicStream(anthropicDone);
     },
   ))
@@ -277,7 +282,7 @@ it("records subscriber-credit cost separately and skips later funding on success
   if (!model) throw new Error("Missing Sol");
   const response = await models.completeSimple(model, { messages: [] });
   expect(response.errorMessage).toBeUndefined();
-  expect(attempts).toEqual(["subscriber_credit"]);
+  expect(attempts).toEqual(["openai_credit", "subscriber_credit"]);
   expect(piTokenUsage(response)).toMatchObject({
     chargedCost: 0,
     costEvidence: { billingReason: "subscriber_credit" },
@@ -346,12 +351,12 @@ it("discards a partial tool call before falling through both included funding ro
   const result = await stream.result();
   expect(result.errorMessage).toBeUndefined();
   expect(attempts).toEqual([
-    "subscriber_credit",
     "openai_credit",
+    "subscriber_credit",
     "subscription",
     "paid",
   ]);
-  expect(refused).toEqual(["claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6.1-sol"]);
+  expect(refused).toEqual(["gpt-6.1-sol", "claude-sonnet-5-5", "gpt-6.1-sol"]);
   expect(emitted).not.toContain("toolcall_start");
   expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
 });
@@ -407,8 +412,8 @@ it.each(["error", "response.failed", "named_error"])(
     const response = await models.completeSimple(model, { messages: [] });
     expect(response.errorMessage).toBeUndefined();
     expect(attempts).toEqual([
-      "subscriber_credit",
       "openai_credit",
+      "subscriber_credit",
       "subscription",
       "paid",
     ]);
@@ -417,8 +422,8 @@ it.each(["error", "response.failed", "named_error"])(
 
 // A request the plan cannot carry is a funding refusal, not a model error.
 it.each([
-  [true, ["subscriber_credit", "openai_credit", "subscription", "paid"]],
-  [false, ["subscriber_credit", "openai_credit", "subscription"]],
+  [true, ["openai_credit", "subscriber_credit", "subscription", "paid"]],
+  [false, ["openai_credit", "subscriber_credit", "subscription"]],
 ] as const)(
   "advances past an unsupported plan request only when paid is allowed (paid=%s)",
   async (paid, expected) => {
@@ -542,7 +547,12 @@ it("relaxes a forced tool call to auto on the credit attempt", async () => {
   let body: unknown;
   const models = createModels();
   for (const provider of fundedCubbyPiProviders(
-    () => async (_input, init) => {
+    (_route, _unbilled, funding) => async (_input, init) => {
+      if (funding === "openai_credit")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
       body = JSON.parse(String(init?.body));
       return new Response("synthetic stop", { status: 401 });
     },

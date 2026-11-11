@@ -331,9 +331,11 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
 }
 
 /**
- * The household's one funding order for frontier chat (ADR 0027): the Claude
- * subscriber credit, then OpenAI credits, then the ChatGPT plan, then paid only
- * where the caller allows it. Each source answers with its route's model of the
+ * The household's one funding order for frontier chat (ADR 0027): OpenAI
+ * credits, then the Claude subscriber credit, then the ChatGPT plan, then paid
+ * only where the caller allows it. Both credits are free and renew; OpenAI's
+ * tier models list at or below Claude's, tokenize the same work into fewer
+ * tokens and serve the half-price flex tier, so they answer first. Each source answers with its route's model of the
  * requested tier, and a step advances only on a funding refusal. A pinned
  * `model` (an explicit override or comparison) is never substituted: it runs
  * on its own route's sources only.
@@ -358,8 +360,8 @@ function fundedChatAttempts(
   }
   const { openai, anthropic } = CHAT_TIER_MODELS[policy.tier];
   return [
-    { model: anthropic, funding: "subscriber_credit" },
     { model: openai, funding: "openai_credit" },
+    { model: anthropic, funding: "subscriber_credit" },
     { model: openai, funding: "subscription" },
     ...(policy.paid ? [{ model: openai, funding: "paid" as const }] : []),
   ];
