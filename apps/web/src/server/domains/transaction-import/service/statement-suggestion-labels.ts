@@ -92,7 +92,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 // Keep its retry/checkpoint unit small enough to settle within a live Job claim.
 const STATEMENT_LABEL_BATCH = 32;
 // Admit one default page together so a slow merchant does not serialize four waves.
-// Larger explicit pages still retain a bounded wave and the cooperative deadline.
+// Larger explicit pages still retain a bounded wave and the cooperative budget.
 const STATEMENT_SPENDING_CONCURRENCY = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
@@ -492,6 +492,8 @@ async function completeNoActionTargets(
     scope?: StatementSuggestionScope;
   },
 ) {
+  // Import authority executes the import-only rules, so none is a no-action stamp.
+  const importAuthority = Boolean(input.scope?.importId);
   const window = [];
   const positions: number[] = [];
   for (const [index, next] of input.targets.entries()) {
@@ -507,7 +509,9 @@ async function completeNoActionTargets(
       !evidenceFingerprint ||
       // A nonempty hint only declines batching. Absence still needs locked proof.
       matchStatementRules(next.row.judgment).some(
-        (match) => !importOnlyStatementRuleStamps().includes(match.stamp),
+        (match) =>
+          importAuthority ||
+          !importOnlyStatementRuleStamps().includes(match.stamp),
       )
     )
       break;
@@ -537,7 +541,7 @@ async function applyPublishedStatementLabels(
     scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
-    deadline?: number;
+    budgetSpent: () => boolean;
   },
 ) {
   const {
@@ -551,6 +555,7 @@ async function applyPublishedStatementLabels(
     scope,
     reconsidered,
     fail,
+    budgetSpent,
   } = input;
   const importId = scope?.importId;
   // Model work may finish out of order; effects admit only the original
@@ -581,37 +586,35 @@ async function applyPublishedStatementLabels(
       continue;
     }
     // Checkpoint completed charges before regenerating the remaining suffix.
-    // A round that applied a rule retains its moved-evidence rebuild work.
-    if (
-      input.deadline !== undefined &&
-      Date.now() >= input.deadline &&
-      settlementTargets.length > 0 &&
-      applied.size === 0
-    )
+    // The budget bounds application too, since its per-charge cost is the
+    // page's largest; the blocked suffix regenerates below if a rule moved evidence.
+    if (budgetSpent() && (settlementTargets.length > 0 || completed.size > 0))
       applicationBlocked = true;
     if (applicationBlocked) {
       unfinished.add(target.row.cursorId);
       continue;
     }
     try {
-      // Import-scoped application regenerates first and may introduce rules.
-      // A freshly locked no-rule prefix can bypass rule admission without
-      // import authority; its receipt completion still enforces the full scope.
-      const settled = importId
-        ? 0
-        : await completeNoActionTargets(db, {
-            targets: targets.slice(
-              targetIndex,
-              targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
-            ),
-            receipts,
-            published,
-            skipped,
-            failedCharges,
-            completed,
-            unfinished,
-            scope,
-          });
+      // A freshly locked prefix with no matching rule needs no effect and no
+      // regeneration; its receipt completion still enforces the full scope.
+      // After an application in this call, ledger evidence may have moved under
+      // the remaining receipts, so import scope regenerates each from here on.
+      const settled =
+        importId && applied.size
+          ? 0
+          : await completeNoActionTargets(db, {
+              targets: targets.slice(
+                targetIndex,
+                targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
+              ),
+              receipts,
+              published,
+              skipped,
+              failedCharges,
+              completed,
+              unfinished,
+              scope,
+            });
       if (settled) {
         targetIndex += settled - 1;
         continue;
@@ -767,7 +770,12 @@ async function runStatementLabelBatch(
         : STATEMENT_LABEL_BATCH),
     JOB_PAGE_LIMITS.suggestionsPerPage,
   );
-  const prepareDeadline = Date.now() + 20_000;
+  // A page that stops early re-pays selection, admission and discovery for the
+  // same charges on the next page, so the budget only guards the Job lease.
+  const budgetEnds = input.cooperative
+    ? Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs
+    : null;
+  const budgetSpent = () => budgetEnds !== null && Date.now() >= budgetEnds;
   const rows = await time("statement_selection", () =>
     suggestionsNeedingLabels(
       db,
@@ -855,18 +863,28 @@ async function runStatementLabelBatch(
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: JobDeferredError[] = [];
+  // Admission resolves account-wide evidence, so each call is one preparation.
+  // A round admits twice: before model work, so nothing out of scope is paid
+  // for, and after it, because provider waits let account mappings move. The
+  // writes that follow (publication, application) enforce the scope in their
+  // own transactions, and a ledger write in this pass only happens in
+  // application, whose next round admits again.
   const admitTargets = async () => {
     const scope = input.scope;
     if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
       return;
+    const live = targets.filter(
+      (target) => !skipped.has(chargeId(target.charge)),
+    );
+    if (!live.length) return;
     const admitted = await statementLabelTargetsInScope(
       db,
       scope,
-      targets.map((target) => target.row.id),
+      live.map((target) => target.row.id),
     );
-    for (const target of targets) {
+    for (const target of live) {
       const key = chargeId(target.charge);
-      if (admitted.has(target.row.id) || skipped.has(key)) continue;
+      if (admitted.has(target.row.id)) continue;
       skipped.add(key);
       skippedIds.push(target.row.id);
       unfinished.delete(target.row.cursorId);
@@ -1035,7 +1053,7 @@ async function runStatementLabelBatch(
             async (result) => {
               if (result.status !== "fulfilled") return result;
               try {
-                if (input.cooperative && Date.now() >= prepareDeadline)
+                if (budgetSpent())
                   result.value.retainError(
                     new AiWorkDeferredError(Date.now() + 1_000),
                   );
@@ -1229,7 +1247,6 @@ async function runStatementLabelBatch(
         fail(current.charge, error);
       }
     }
-    await admitTargets();
     const { applied, rebuild, excluded } = await time(
       "statement_application",
       () =>
@@ -1246,7 +1263,7 @@ async function runStatementLabelBatch(
             ready.map(({ current }) => chargeId(current.charge)),
           ),
           fail,
-          deadline: input.cooperative ? prepareDeadline : undefined,
+          budgetSpent,
         }),
     );
     for (const target of targets) {

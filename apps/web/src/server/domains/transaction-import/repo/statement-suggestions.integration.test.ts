@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -2055,7 +2056,10 @@ describe("statement Transaction suggestions", () => {
         limit: 33,
         port: answering({ kind: "purchase", counterparty: "business" }),
         spendingAdvice: async () => {
-          if (++spendingCalls === 32) vi.setSystemTime(Date.now() + 21_000);
+          if (++spendingCalls === 32)
+            vi.setSystemTime(
+              Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs + 1_000,
+            );
           return financialSpendingAdvice.parse({});
         },
       });
@@ -2117,7 +2121,9 @@ describe("statement Transaction suggestions", () => {
           add() {},
           async time(phase, run) {
             if (phase === "statement_application")
-              vi.setSystemTime(Date.now() + 21_000);
+              vi.setSystemTime(
+                Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs + 1_000,
+              );
             return run();
           },
         },

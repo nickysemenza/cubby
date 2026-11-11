@@ -11,6 +11,7 @@ import {
   type JobPage,
 } from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import { JOB_LEASE_MS } from "@cubby/shared/job-page-limits";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
@@ -34,8 +35,6 @@ import {
   type JOB_KIND_POLICY,
 } from "../kind-policy";
 
-/** How long a claim holds a Job before another worker may take it over. */
-const JOB_LEASE_MS = 16 * 60_000;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;
