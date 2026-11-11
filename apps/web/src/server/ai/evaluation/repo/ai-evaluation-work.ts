@@ -308,7 +308,6 @@ export async function aiEvaluationAttemptHeld(
 
 /**
  * Whether this page can still write to at least one row under a live lease.
- * `leaseToken` has no index, so this scans: call it outside SERIALIZABLE transactions.
  */
 export async function aiEvaluationPageHeld(db: Database, token: string) {
   const [row] = await getDb(db)

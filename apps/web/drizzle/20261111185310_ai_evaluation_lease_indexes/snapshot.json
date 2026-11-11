@@ -1,0 +1,109 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "eabca027-8ecb-4b53-a454-f6a2285dda1f",
+  "prevIds": [
+    "ff484d67-3818-40f5-aeed-da5572042261"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AiEvaluation",
+        "AiEvaluation_live_lease_idx"
+      ],
+      "writes": [
+        "s|idx|public.AiEvaluation_live_lease_idx",
+        "n|idx|public.AiEvaluation_live_lease_idx",
+        "e|idx|public.AiEvaluation_live_lease_idx",
+        "n|rel|public.AiEvaluation_live_lease_idx"
+      ],
+      "reads": [
+        "n|tbl|public.AiEvaluation",
+        "n|sch|public",
+        "n|col|public.AiEvaluation.leaseUntil",
+        "n|col|public.AiEvaluation.feature"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AiEvaluation",
+        "AiEvaluation_lease_token_idx"
+      ],
+      "writes": [
+        "s|idx|public.AiEvaluation_lease_token_idx",
+        "n|idx|public.AiEvaluation_lease_token_idx",
+        "e|idx|public.AiEvaluation_lease_token_idx",
+        "n|rel|public.AiEvaluation_lease_token_idx"
+      ],
+      "reads": [
+        "n|tbl|public.AiEvaluation",
+        "n|sch|public",
+        "n|col|public.AiEvaluation.leaseToken"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AiEvaluation",
+        "name": "AiEvaluation_live_lease_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "leaseUntil",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "feature",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"leaseUntil\" IS NOT NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AiEvaluation",
+        "name": "AiEvaluation_lease_token_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "leaseToken",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"leaseToken\" IS NOT NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}
