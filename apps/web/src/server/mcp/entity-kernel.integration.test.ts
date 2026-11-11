@@ -214,10 +214,11 @@ describe("MCP entity kernel boundary", () => {
     await intake({
       fingerprint: "synthetic-filter-initial",
       rows: [
+        // A Monarch transaction id is one event; other accounts carry their own ids.
         observation(),
-        observation("synthetic-provider-1", "synthetic-account-2"),
+        observation("synthetic-provider-2", "synthetic-account-2"),
         observation("synthetic-provider-10"),
-        observation("synthetic-provider-1", "synthetic-account-10"),
+        observation("synthetic-provider-11", "synthetic-account-10"),
       ],
     });
     await intake({
@@ -296,7 +297,10 @@ describe("MCP entity kernel boundary", () => {
     );
     if (!otherAccount) throw new Error("Synthetic distinct account missing");
     expect(
-      await list({ ...identity, providerAccountId: ["synthetic-account-2"] }),
+      await list({
+        source: "monarch",
+        providerAccountId: ["synthetic-account-2"],
+      }),
     ).toMatchObject({
       items: [{ id: otherAccount.shortcode }],
       meta: { totalCount: 1 },

@@ -221,7 +221,7 @@ const record = async (
   return receipt;
 };
 
-const card = async (ctx: Ctx) => {
+const card = async (ctx: Ctx, sources: readonly string[] = ["monarch"]) => {
   const owner = await createRepoIdentity(ctx, "ledgerParty", {
     name: "Synthetic statement owner",
     kind: "member",
@@ -238,13 +238,12 @@ const card = async (ctx: Ctx) => {
     ledgerPartyId: owner.output.id,
 
     identity: { kind: "credit_card", network: "visa" },
-    sourceAliases: [
-      {
-        source: "monarch",
-        alias: "Synthetic Card (...4242)",
-        externalAccountId: "Synthetic Card (...4242)",
-      },
-    ],
+    sourceAliases: sources.map((source) => ({
+      source,
+      alias: "Synthetic Card (...4242)",
+      externalAccountId:
+        source === "monarch" ? "Synthetic Card (...4242)" : null,
+    })),
   });
   return { ...account, ledgerPartyId: owner.output.id };
 };
@@ -1090,7 +1089,7 @@ describe("statement Transaction suggestions", () => {
       await getSourceTransactionRecordSummary(ctx.db, {
         matchState: "unmatched",
       }),
-    ).toMatchObject({ unmatched: 2, unmatchedCharges: 2 });
+    ).toMatchObject({ unmatchedCharges: 2 });
 
     expect(await generate(ctx)).toBe(2);
     expect(await generate(ctx)).toBe(0);
@@ -1255,21 +1254,17 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([rows[2]!.chargeKey, rows[4]!.chargeKey].sort());
   });
 
-  it("holds overlapping unattested collections without creating member work or changing money", async () => {
+  it("joins a same-source re-export to its occurrence without changing money", async () => {
     await card(ctx);
     const observed = rowInput({ rowPosition: 1 });
     await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
     await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
     const retained = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(retained).toHaveLength(2);
-    expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(2);
+    expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(1);
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toHaveLength(1);
     expect(retained.every((row) => row.transactionId === null)).toBe(true);
-    expect(retained.map((row) => row.matchState).sort()).toEqual([
-      "held",
-      "unmatched",
-    ]);
     expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
   });
 
@@ -3417,6 +3412,83 @@ describe("statement Transaction suggestions", () => {
       ],
     });
     expect(twin!.rawDescription).not.toBe(first!.rawDescription);
+  });
+
+  it("books one Transaction for a charge several sources exported", async () => {
+    await card(ctx, ["monarch", "copilot"]);
+    await record(ctx, [rowInput({ rawDescription: "EXAMPLE GROCER 0001" })]);
+    await record(
+      ctx,
+      [rowInput({ statementDate: "2026-05-05", merchant: null })],
+      { source: "copilot", fingerprint: "fp-copilot" },
+    );
+    await generate(ctx);
+    const [primary, ...rest] = await readPendingStatements(ctx);
+    expect(rest).toEqual([]);
+    expect(primary).toMatchObject({ recommended: "create", siblings: 0 });
+    await accept(ctx, primary!);
+    const [copy] = await readPendingStatements(ctx);
+    expect(copy).toMatchObject({
+      recommended: "attach",
+      clean: true,
+      siblings: 0,
+      candidates: [
+        expect.objectContaining({
+          transactionId: expect.stringMatching(/^FTX-/),
+        }),
+      ],
+    });
+    await accept(ctx, copy!);
+    expect(await readPendingStatements(ctx)).toEqual([]);
+    const { rows } = await getDb(ctx.db).execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM "FinancialTransaction" WHERE "deletedAt" IS NULL`,
+    );
+    expect(rows[0]!.n).toBe(1);
+  });
+
+  // Failure mode: pairing by amount alone would fold two real visits into one
+  // Transaction once either source booked them.
+  it("keeps repeat charges apart and reviews unequal copies", async () => {
+    await card(ctx, ["monarch", "copilot"]);
+    const visits = [
+      { merchant: "Example Cafe", rawDescription: "EXAMPLE CAFE 0001" },
+      {
+        merchant: "Example Bakery",
+        rawDescription: "EXAMPLE BAKERY 0002",
+        statementDate: "2026-05-05",
+      },
+    ];
+    await record(
+      ctx,
+      visits.map((visit) => rowInput(visit)),
+    );
+    await record(
+      ctx,
+      visits.map((visit) => rowInput(visit)),
+      { source: "copilot", fingerprint: "fp-copilot" },
+    );
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toHaveLength(2);
+    for (const _ of [0, 1]) {
+      const [next] = (await readPendingStatements(ctx)).filter(
+        (row) => row.recommended === "create",
+      );
+      await accept(ctx, next!);
+    }
+    const copies = await readPendingStatements(ctx);
+    expect(copies).toHaveLength(2);
+    expect(
+      new Set(copies.map((copy) => copy.candidates[0]!.transactionId)).size,
+    ).toBe(2);
+    expect(copies.every((copy) => copy.clean)).toBe(true);
+    await record(ctx, [rowInput({ statementDate: "2026-05-06" })], {
+      source: "copilot",
+      fingerprint: "fp-copilot-extra",
+    });
+    await generate(ctx);
+    expect((await readPendingStatements(ctx)).every((row) => !row.clean)).toBe(
+      true,
+    );
   });
 
   // Failure mode: once one of two same-amount charges is attached, the other

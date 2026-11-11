@@ -153,8 +153,19 @@ export const statementTransactionJudgment = z.object({
   void: z
     .object({ transactionId: z.uuid(), coverageImportId: z.uuid() })
     .nullable(),
-  /** Other unmatched charges that could be the same money under a firmed-up descriptor. */
-  siblings: z.array(z.string()),
+  /** Older stored judgments use same-source charge keys. */
+  siblings: z.array(
+    z.union([
+      z.string(),
+      z.object({ source: z.string(), chargeKey: z.string() }),
+    ]),
+  ),
+  /** Charges sharing this bank event's account, amount and window in any source; refreshed once this charge books. */
+  copies: z
+    .array(z.object({ source: z.string(), chargeKey: z.string() }))
+    .default([]),
+  /** The Transaction another source's copy of this bank event is booked to. */
+  pairedTransactionId: z.uuid().nullable().default(null),
   transfer: statementOwnAccountMove.nullable().default(null),
   transferPair: statementTransferPairRef.nullable().default(null),
   matchedTransactionId: z.uuid().optional(),

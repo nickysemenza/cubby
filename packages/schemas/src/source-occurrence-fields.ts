@@ -6,13 +6,12 @@ import {
 import { shortcodeSchema } from "./identifier-fields";
 
 export const sourceOccurrenceIdentityKind = z.enum([
-  "unproven",
+  "legacy",
   "provider",
   "positioned",
   "reviewed",
 ]);
 export const sourceOccurrenceReviewState = z.enum([
-  "unproven",
   "ready",
   "identity_conflict",
   "judgment_conflict",

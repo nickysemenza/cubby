@@ -110,8 +110,8 @@ export async function lockSourceObservationRemoval(
     );
 }
 
-/** An unproven reservation survives deletion without keeping a current account assignment live. */
-export async function retireDeletedUnprovenOwners(
+/** A legacy reservation survives deletion without keeping a current account assignment live. */
+export async function retireDeletedLegacyOwners(
   db: Database,
   ids: readonly SourceTransactionRecordId[],
   actor: ActorContext,
@@ -120,7 +120,7 @@ export async function retireDeletedUnprovenOwners(
   const query = unwrapDb(db);
   if (!isTransaction(query))
     throw new Error(
-      "Unproven owner retirement must share the bank-record deletion transaction.",
+      "Legacy owner retirement must share the bank-record deletion transaction.",
     );
   const selected = await query
     .select({ id: sourceTransactionRecord.occurrenceId })
@@ -136,7 +136,7 @@ export async function retireDeletedUnprovenOwners(
           sourceOccurrence.id,
           selected.map((row) => row.id),
         ),
-        eq(sourceOccurrence.identityKind, "unproven"),
+        eq(sourceOccurrence.identityKind, "legacy"),
         notDeleted(sourceOccurrence),
       ),
     )

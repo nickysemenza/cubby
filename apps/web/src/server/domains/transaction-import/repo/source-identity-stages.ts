@@ -464,9 +464,6 @@ export async function applySourceIdentity(
       accountId: account.id,
       ...financialJudgment,
       acceptedTransactionId: target?.id ?? null,
-      ...(owner.identityKind === "unproven" && input.decision !== "assign"
-        ? { identityKind: "reviewed" as const }
-        : {}),
       // Consolidation does not waive other overlaps or unlock a conflicted provider.
       reviewState:
         input.decision === "assign" && overlaps[0]?.remaining

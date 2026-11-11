@@ -61,11 +61,12 @@ Keep existing actionable account/identity/correction review visible. Missing sou
    amounts, timestamps and IDs. Do not add derived keys such as description
    kind, date meaning, currency or pending flags. `providerData` is an
    annotation: a re-observation whose facts are unchanged keeps the first
-   stored annotation and records as `unchanged`. Pass attested `providerTransactionId` and
-   `providerAccountId` separately. Keep provider/account/connection scope with
-   them; an ID is not globally unique merely because it looks unique. Unknown
-   scope, reused IDs and conflicting revisions require review. Never replace a
-   missing provider ID with a hash or a Cubby ID.
+   stored annotation and records as `unchanged`. Pass `providerTransactionId` and, when known,
+   `providerAccountId` separately. A Monarch transaction ID identifies the
+   event on its own; the account is agreeing evidence, and a conflicting
+   account or reused ID holds for review. CSV exports (Monarch, Copilot, Mint,
+   Apple Card) carry no provider ID and need none. Never replace a missing
+   provider ID with a hash or a Cubby ID.
 
 ## Normalize and record
 
@@ -84,8 +85,11 @@ Keep existing actionable account/identity/correction review visible. Missing sou
 - Give each immutable collection a stable fingerprint of its exact retained
   source bytes, observation time and explicit account/date/visibility scope
   where proven. Keep new observations of changed provider facts; replay the
-  same bytes with their original fingerprint and attested original positions. A legacy collection with unpositioned retained rows must refuse a parser-supplied position rather than mint another event; preserve its rows and explicit ignores. Never backfill positions from a new parse or renumbering. Separate ID-less occurrences
-  remain independent until explicit reconciliation establishes identity. Provider revisions are
+  same bytes with their original fingerprint and attested original positions. A legacy collection with unpositioned retained rows must refuse a parser-supplied position rather than mint another event; preserve its rows and explicit ignores. Never backfill positions from a new parse or renumbering. A row from a different
+  export of the same source joins its existing occurrence only when its
+  original reference matches exactly one; otherwise it stays separate. Any mix
+  of sources may report one bank event: record every export as it is, and
+  statement booking books it once and attaches the other sources' copies. Provider revisions are
   evidence, not permission to overwrite accepted money by arrival order.
   The server derives observation and charge identities. Do not compute
   external IDs or collapse rows by equal date/amount/description.
@@ -193,4 +197,4 @@ reviews and failed durable work without claiming source capabilities from
 synthetic tests. Routine success needs no per-row approval; unresolved decisions
 remain in Suggestions and execution failures in existing Job/Run diagnostics.
 
-Re-recording attested Monarch rows adopts an unproven legacy owner automatically when the provider transaction ID, provider account and amount agree and no provider owner exists yet; an existing `identity_conflict` provider owner still needs the reviewed `assign`. Reviewed bulk identity resolution uses the existing `entity.commands` action (up to 50 independent update commands; items left `not_started` near the deadline are resubmitted). Each command is `action: update`, `entity: sourceTransactionRecord`, the reviewed STR shortcode and `data.identityResolution` with its own expectedDisposition, fact fingerprint, occurrence version, accepted owner and complete live historical set. The batch preserves per-row refusal; one stale review never supplies a judgment for another row. Re-read affected records immediately before each bounded batch and retain each result. Do not use one shared bulkUpdate judgment for unrelated evidence. Only explicitly authorized, evidence-backed decisions may be submitted; unresolved items remain held, visible, and money-unchanged. No web action or automatic identity guessing is required.
+Monarch rows with a provider transaction ID join that ID's one occurrence automatically, from any export. Rows held in `identity_conflict` (conflicting decisions, accounts or provider claims) still need reviewed resolution. Reviewed bulk identity resolution uses the existing `entity.commands` action (up to 50 independent update commands; items left `not_started` near the deadline are resubmitted). Each command is `action: update`, `entity: sourceTransactionRecord`, the reviewed STR shortcode and `data.identityResolution` with its own expectedDisposition, fact fingerprint, occurrence version, accepted owner and complete live historical set. The batch preserves per-row refusal; one stale review never supplies a judgment for another row. Re-read affected records immediately before each bounded batch and retain each result. Do not use one shared bulkUpdate judgment for unrelated evidence. Only explicitly authorized, evidence-backed decisions may be submitted; unresolved items remain held, visible, and money-unchanged. No web action or automatic identity guessing is required.

@@ -70,15 +70,12 @@ export function selectIdentityOwner(
       !owner ||
       owner.identityKind !== "provider" ||
       !owner.currentObservationId ||
-      !["unproven", "positioned", "reviewed"].includes(
+      !["legacy", "positioned", "reviewed"].includes(
         originalOwner.identityKind,
       ) ||
-      ![
-        "unproven",
-        "ready",
-        "identity_conflict",
-        "ownership_conflict",
-      ].includes(originalOwner.reviewState) ||
+      !["ready", "identity_conflict", "ownership_conflict"].includes(
+        originalOwner.reviewState,
+      ) ||
       owner.source !== observation.source ||
       owner.version !== input.expectedTargetVersion ||
       !["ready", "identity_conflict"].includes(owner.reviewState) ||
@@ -87,7 +84,7 @@ export function selectIdentityOwner(
       owner.supersededByOccurrenceId)
   )
     return constraintViolation(
-      "Consolidate only an unproven, positioned or reviewed owner into a current provider occurrence from the same source.",
+      "Consolidate only a legacy, positioned or reviewed owner into a current provider occurrence from the same source.",
     );
   return owner;
 }

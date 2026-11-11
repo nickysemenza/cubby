@@ -156,6 +156,9 @@ function decisiveJudgment(judgment: StatementTransactionJudgment) {
     // Any covering import proves the vanish; only the voided hold was reviewed.
     void: judgment.void?.transactionId ?? null,
     matchedTransactionId: judgment.matchedTransactionId ?? null,
+    // A copy booked since review turns a create into an attach to its Transaction.
+    pairedTransactionId: judgment.pairedTransactionId,
+    copies: judgment.copies.map((copy) => `${copy.source}:${copy.chargeKey}`),
     transfer: judgment.transfer,
     transferPair: judgment.transferPair
       ? { key: judgment.transferPair.key, clean: judgment.transferPair.clean }

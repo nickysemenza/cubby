@@ -3,7 +3,7 @@ import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-/** Frozen legacy aliases explain retained evidence; they never establish event identity or accepted ownership. */
+/** A unique legacy alias can join observations within the same source. */
 /**
  * Fold away the differences an export can introduce without the underlying
  * charge changing: unicode form, surrounding and repeated whitespace, case.
@@ -104,11 +104,10 @@ export function providerIdentityClaims(
     };
   return {
     malformed: false,
+    // A bare `account` string is Monarch's display label, not an account ID.
     accounts: [
       raw.data.account_id,
-      typeof raw.data.account === "string"
-        ? raw.data.account
-        : raw.data.account?.id,
+      typeof raw.data.account === "string" ? undefined : raw.data.account?.id,
       raw.data.transaction?.account_id,
     ].filter((id) => id !== undefined),
     providerIds: [raw.data.id, raw.data.transaction?.id].filter(

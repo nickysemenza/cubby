@@ -437,6 +437,16 @@ export function isClean(
       judgment.create !== null &&
       kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
     );
+  // Another source's copy of this bank event already booked it: attaching
+  // needs no model label, only an exact, unclaimed paired Transaction first.
+  if (judgment.recommended === "attach" && judgment.pairedTransactionId) {
+    const [paired] = judgment.candidates;
+    return (
+      paired?.transactionId === judgment.pairedTransactionId &&
+      cents(paired.amount) === cents(statementAmount) &&
+      !paired.claimed
+    );
+  }
   if (judgment.candidates.length !== 1) return false;
   const [only] = judgment.candidates;
   if (cents(only!.amount) !== cents(statementAmount)) return false;

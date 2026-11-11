@@ -39,10 +39,11 @@ resolves concepts whose names differ across layers.
   several same-day refunds.
 - A **Source occurrence** (`SourceOccurrence`, `SOC-`) groups bank records and owns
   their current account, ignore decision, selected record and accepted transaction
-  link. A proven group represents one **bank event** within its source/account
-  scope or one original collection position. An unproven group holds one retained
-  record pending identity review; it does not establish a real event or allow
-  automatic financial actions. Equal-looking records never prove one event.
+  link. Each group is one **bank event** within its source: a Monarch provider
+  transaction ID, one original collection position, or one legacy record from
+  before positions were retained. One Transaction may be backed by several
+  sources' occurrences of the same bank event. Equal-looking records never merge
+  two groups.
 - An **Evidence alias** retains an original external reference and its binding
   provenance. It explains history; it cannot establish current accepted ownership.
 - A **Source transaction record** (`SourceTransactionRecord`, `STR-`) is one
@@ -51,8 +52,7 @@ resolves concepts whose names differ across layers.
   FinancialTransaction and never adds spend. Equal-looking observations do not
   by themselves prove one charge. In plain language this is a **bank record**.
   Records keep original evidence and local notes; each belongs to one source
-  occurrence holding its current financial decisions. Unproven history stays held
-  with money unchanged.
+  occurrence holding its current financial decisions.
 - A **Transaction import** (`TransactionImport`, `TIM-`) is one immutable source
   collection: a file or bounded MCP snapshot, including resumed chunks. Membership
   does not establish complete account/window coverage or completed reconciliation.
