@@ -310,18 +310,22 @@ item locks, matching source producers.
 
 `JOB_PAGE_LIMITS` (`packages/shared/src/job-page-limits.ts`) owns application
 page sizes. Statement generation and labeling scoped to an import process at
-most 16 charges per page (`statementApplicationsPerPage`), because each
+most 64 charges per page (`statementApplicationsPerPage`), because each
 admits serial financial applications; unscoped generation selects at most 32
 (`statementGenerationPerPage`); explicit label limits remain available.
 Retained generation failures use the same limits. Both paths preserve the
 ordered population cursor and all remaining work; only a completed page
 publishes its checkpoint.
 
-Cooperative label application checks a 20-second deadline between charges
-while no financial rule has applied in that round. It settles at least one
-charge, then leaves the untouched suffix's receipts and inclusive cursor for
-the next page. After a rule applies, each later charge on the page regenerates
-current evidence before serial automatic-rule application, and interrupted
+Cooperative label pages stop starting model work and application after
+`cooperativePageBudgetMs` (a quarter of the Job lease); the rest of the lease
+covers work already started. A page settles at least one charge, then leaves
+the untouched suffix's receipts and inclusive cursor for the next page. Charges
+no automatic rule matches settle as one no-action batch until the first rule
+applies. After a rule applies, each later charge on the page regenerates
+current evidence before serial automatic-rule application. Each write's
+advisory refresh of pending charges near it on the account is queued and runs
+once at the end of the page or label round. Interrupted
 pages replay their existing
 publications and effects through the same guards. Automatic-rule refusals
 return and log scrubbed causal diagnostics (including nested database messages
