@@ -77,8 +77,9 @@ const reviewedLink = sql`EXISTS (SELECT 1 FROM "EmailPurchaseDecision" d
 /**
  * Accepted source facts mean imported. A holding Mail import Run without an
  * outcome for this checksum reads importing while active. A reviewed link at
- * this checksum then reads linked: it settles an earlier unresolved outcome
- * and an ended holder alike. An ended holder without an outcome reads failed.
+ * this checksum then reads linked, unless the newest outcome imported the
+ * Email (accepted facts may publish later): it settles an earlier unresolved
+ * outcome and an ended holder alike. An ended holder without an outcome reads failed.
  * Otherwise the newest retained outcome decides, an unresolved gap by who
  * settles it; with none, confirmed absent facts read not imported.
  */
@@ -93,7 +94,8 @@ export const emailImportOutcomeSql = (accepted: SQL): SQL<string | null> => {
   ELSE coalesce(
     (SELECT ${OUTCOME.importing}::text FROM "Run" h
       WHERE h.id = "Email"."runId" AND ${holderWithoutOutcome} AND ${activeHolder}),
-    CASE WHEN ${reviewedLink} THEN ${OUTCOME.linked}::text END,
+    CASE WHEN ${reviewedLink} AND ${judgment} ->> ${JUDGMENT_KIND}::text IS DISTINCT FROM ${"imported"}
+      THEN ${OUTCOME.linked}::text END,
     (SELECT ${OUTCOME.failed}::text FROM "Run" h
       WHERE h.id = "Email"."runId" AND ${holderWithoutOutcome} AND NOT (${activeHolder})),
     (SELECT CASE j->>${JUDGMENT_KIND}::text ${sql.join(
