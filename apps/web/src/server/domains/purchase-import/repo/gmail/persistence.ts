@@ -335,17 +335,27 @@ export async function saveEmail(
     if (created) return;
     // Re-observing unchanged content never reopens a settled Email or reads as
     // an edit: its import outcome still holds, and its holder still owns it.
-    const keepsSettlement =
-      input.status === "pending" &&
+    const unchanged =
       row.checksum === input.checksum &&
+      row.classification === fields.classification &&
+      row.classificationStage === fields.classificationStage &&
+      row.classificationReason === fields.classificationReason &&
+      row.classificationVersion === fields.classificationVersion &&
+      (fields.orderMailId === undefined ||
+        row.orderMailId === fields.orderMailId);
+    const keepsSettlement =
+      unchanged &&
+      input.status === "pending" &&
       (row.status === "unsettled" || row.status === "completed");
+    const status = keepsSettlement ? row.status : fields.status;
     // Routine routing and provider removal cannot resolve historical ownership.
     await tx
       .update(emailTable)
       .set({
         ...fields,
-        ...(keepsSettlement
-          ? { status: row.status }
+        status,
+        ...(unchanged && status === row.status
+          ? {}
           : { updatedAt: new Date() }),
       })
       .where(

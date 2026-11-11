@@ -554,10 +554,14 @@ describe("mail research admission", () => {
         .update(run)
         .set({ skillRevision: "purchase-import@0" })
         .where(eq(run.id, holder.row.id));
-      // A routine re-observation is not an edit: updatedAt stays put.
+      // A re-observation that reset the Email to pending also stamped it; that
+      // stamp is not an edit while its newest outcome stays unresolved.
       await getDb(ctx.db)
         .update(emailTable)
-        .set({ status: held, updatedAt: emailTable.updatedAt })
+        .set({
+          status: held,
+          updatedAt: held === "pending" ? new Date() : emailTable.updatedAt,
+        })
         .where(eq(emailTable.orderMailId, mail.id));
       const owner = async () =>
         (

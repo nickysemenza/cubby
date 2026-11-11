@@ -137,14 +137,19 @@ const ENDED_MAIL_IMPORT_STATUSES: (typeof run.$inferSelect.status)[] = [
   runStatus.enum.dispatch_failed,
 ];
 
-/**
- * An Email an ended holder left without settling. A held Email can also read
- * `pending`; its ended holder still owns it, so it is equally readmissible.
- */
+/** Statuses an ended holder can leave an Email in without settling it. */
 const HELD_UNSETTLED_STATUSES: (typeof emailTable.$inferSelect.status)[] = [
   "unsettled",
   "pending",
 ];
+
+/**
+ * An Email its ended holder left unsettled. A held Email reading `pending`
+ * counts only when that holder's newest outcome for its current checksum is
+ * unresolved; a paused or outcome-free holder keeps its pending Emails.
+ */
+const heldUnsettledSql = () =>
+  sql<boolean>`(${emailTable.status} = ${"unsettled"} OR (${emailTable.status} = ${"pending"} AND EXISTS (${newestUnresolvedOutcome})))`;
 
 /**
  * A controlled child skips Emails outside its parent's statuses; an excluded,
@@ -181,13 +186,31 @@ function skipsSource(
 async function endedHolderLeftUnsettled(
   tx: DrizzleTransaction,
   owner: typeof run.$inferSelect | undefined,
-  status: typeof emailTable.$inferSelect.status | undefined,
+  message: typeof emailTable.$inferSelect | undefined,
 ) {
+  if (
+    !message ||
+    owner?.purpose !== "mail_import" ||
+    owner.retiredAt ||
+    !ENDED_MAIL_IMPORT_STATUSES.includes(owner.status) ||
+    !readmissibleHeldStatus(message.status, false)
+  )
+    return false;
+  // Only a holder whose newest outcome left it unresolved is done with it.
+  const [held] = await tx
+    .select({ id: emailTable.id })
+    .from(emailTable)
+    .innerJoin(run, eq(run.id, emailTable.runId))
+    .where(
+      and(
+        eq(emailTable.id, message.id),
+        eq(run.id, owner.id),
+        sql`EXISTS (${newestUnresolvedOutcome})`,
+      ),
+    )
+    .limit(1);
   return (
-    owner?.purpose === "mail_import" &&
-    !owner.retiredAt &&
-    ENDED_MAIL_IMPORT_STATUSES.includes(owner.status) &&
-    readmissibleHeldStatus(status, false) &&
+    Boolean(held) &&
     !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
   );
 }
@@ -396,7 +419,7 @@ const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
         WHERE frozen->>'orderMailId' = ${emailTable.orderMailId}::text
         AND frozen->>'checksum' = outcome.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'targetFingerprint')`
         : sql`outcome.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'targetFingerprint' = ${emailTable.checksum}
-        AND outcome."completedAt" >= ${emailTable.updatedAt}`
+        AND (outcome."completedAt" >= ${emailTable.updatedAt} OR ${emailTable.status} = ${"pending"})`
     }
     AND NOT EXISTS (SELECT 1 FROM "RunOperation" newer
       WHERE newer."runId" = outcome."runId" AND newer.kind = outcome.kind
@@ -519,7 +542,8 @@ async function partitionOwnership(
       senderRevision &&
       owner?.purpose === "mail_import" &&
       (owner.retiredAt || ENDED_MAIL_IMPORT_STATUSES.includes(owner.status)) &&
-      readmissibleHeldStatus(message?.status, sourceChanged) &&
+      message &&
+      readmissibleHeldStatus(message.status, sourceChanged) &&
       mailResearchRunInput.safeParse(owner.input).data?.evidenceRevision !==
         senderRevision
     ) {
@@ -531,6 +555,7 @@ async function partitionOwnership(
           and(
             eq(emailTable.id, message.id),
             untouchedAutomaticUnresolved(sourceChanged, newEvidenceAt),
+            sourceChanged ? undefined : heldUnsettledSql(),
             unattemptedSenderMapping(sql`${senderRevision}`),
           ),
         );
@@ -555,7 +580,7 @@ async function partitionOwnership(
     if (
       owner &&
       memberSelection &&
-      (await endedHolderLeftUnsettled(tx, owner, message?.status))
+      (await endedHolderLeftUnsettled(tx, owner, message))
     ) {
       fresh.push(source);
       reopened.add(owner.id);
@@ -1252,7 +1277,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
+          heldUnsettledSql(),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1297,7 +1322,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
+          heldUnsettledSql(),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1374,7 +1399,7 @@ export async function importPendingEmails(db: Database) {
               parseEntityId("ledgerParty", target.ledgerPartyId),
             ),
             eq(emailTable.mailboxId, target.mailboxId),
-            inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
+            heldUnsettledSql(),
             eq(emailTable.classification, "related"),
             or(
               isNull(emailTable.classificationVersion),
