@@ -83,7 +83,7 @@ import {
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
 import { isAwaitingOrderDetails } from "./notice-purchase";
-import { canonicalOrderId } from "./order-identity";
+import { canonicalOrderId, reviewedVendorOrderOwner } from "./order-identity";
 import {
   acceptedSourceExtraction,
   recordSourceOrderObservation,
@@ -125,7 +125,6 @@ import {
   loadChosenPurchase,
   loadRetainedTender,
   loadClassifiedPurchaseLines,
-  loadOrderedPurchases,
   loadUnlinkedProducts,
   lockAndLoadSourceFamily,
   lockAndLoadSourceOrder,
@@ -154,7 +153,6 @@ import {
   planAcceptedPaymentReview,
   planPurchaseHeader,
   planPaymentEvidence,
-  planOrderedPurchase,
   planPurchaseTarget,
   planLockedPurchase,
   planSourceIdentity,
@@ -1116,8 +1114,11 @@ export async function importVendorOrder(
     }
     const vendorId = parseEntityId("vendor", input.vendorId);
     const orderId = canonicalOrderId(candidate.orderId);
-    const orderedFacts = await loadOrderedPurchases(tx, vendorId, orderId);
-    const ordered = planOrderedPurchase(orderedFacts, input.targetPurchaseId);
+    const ordered = await reviewedVendorOrderOwner(
+      tx,
+      { vendorId, orderId },
+      input.targetPurchaseId,
+    );
     const chosen = await loadChosenPurchase(tx, input.targetPurchaseId);
     let target = planPurchaseTarget(input, orderId, chosen, ordered);
     const created = target == null;

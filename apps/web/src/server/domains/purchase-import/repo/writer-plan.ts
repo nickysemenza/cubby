@@ -42,7 +42,6 @@ import type { LineMutation } from "./writer-lines";
 import type {
   loadAcceptedPaymentFacts,
   loadAcceptedProductChoices,
-  loadOrderedPurchases,
   loadOriginalLineBindings,
   loadRetainedTender,
   loadTargetReviewFacts,
@@ -248,21 +247,6 @@ export function planPurchaseHeader(
       statedTotal: target.statedTotal ?? total,
     },
   };
-}
-
-export function planOrderedPurchase(
-  { matches, lined }: Awaited<ReturnType<typeof loadOrderedPurchases>>,
-  targetPurchaseId: string | null | undefined,
-) {
-  if (matches.length > 1) {
-    const reviewed = matches.find((row) => row.id === targetPurchaseId);
-    if (reviewed && !lined.some((row) => row.purchaseId !== reviewed.id))
-      return reviewed;
-    throw new Error(
-      `Several Purchases of this Vendor carry this order id (${matches.map((row) => row.shortcode).join(", ")}). Name one as targetPurchaseId, or converge them with purchase_import.converge_duplicate_source_order.`,
-    );
-  }
-  return matches[0];
 }
 
 export function planPurchaseTarget(

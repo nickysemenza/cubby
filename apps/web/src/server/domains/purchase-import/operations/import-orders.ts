@@ -102,8 +102,9 @@ import {
 } from "../repo/import-vendor";
 import {
   canonicalOrderId,
-  normalizedOrderIdSql,
+  findVendorOrderOwner,
   normalizeOrderKey,
+  reviewedVendorOrderOwner,
 } from "../repo/order-identity";
 import { importVendorOrder, lineIdentifierRequests } from "../repo/writer";
 import { chooseLineStage } from "../service/line-stage";
@@ -282,23 +283,12 @@ async function assertExistingOrdersReviewed(
   const { mail } = input;
   if (!mail) return;
   const orderId = canonicalOrderId(input.orderId);
-  if (orderId) {
-    const [ordered] = await getDb(db)
-      .select({ id: purchase.id })
-      .from(purchase)
-      .where(
-        and(
-          eq(purchase.vendorId, input.vendorId),
-          eq(
-            normalizedOrderIdSql(purchase.orderId),
-            normalizeOrderKey(orderId),
-          ),
-          notDeleted(purchase),
-        ),
-      )
-      .limit(1);
-    if (ordered) return;
-  }
+  if (
+    orderId &&
+    (await findVendorOrderOwner(db, { vendorId: input.vendorId, orderId }))
+      .kind !== "none"
+  )
+    return;
   // Every candidate, not the claim's display: a hidden match must still block.
   const candidates = await readExistingOrderCandidates(
     db,
@@ -469,8 +459,8 @@ function assertReviewedTarget(
     chosen &&
     (chosen.vendorId !== input.vendorId ||
       (chosen.orderId !== null &&
-        chosen.orderId !== input.orderId &&
-        input.orderId !== null))
+        input.orderId !== null &&
+        normalizeOrderKey(chosen.orderId) !== normalizeOrderKey(input.orderId)))
   )
     throw new Error(
       "The reviewed Purchase target has a different vendor or order identity.",
@@ -506,19 +496,11 @@ async function computeTargetFingerprint(
     { lock: "share", writable: true },
   );
   const claim = retained?.association;
-  const [ordered] = input.orderId
-    ? await database
-        .select()
-        .from(purchase)
-        .where(
-          and(
-            eq(purchase.vendorId, input.vendorId),
-            eq(purchase.orderId, input.orderId),
-            notDeleted(purchase),
-          ),
-        )
-        .limit(1)
-    : [];
+  const ordered = await reviewedVendorOrderOwner(
+    db,
+    { vendorId: input.vendorId, orderId: input.orderId },
+    input.targetPurchaseId,
+  );
   const [chosen] = input.targetPurchaseId
     ? await database
         .select()

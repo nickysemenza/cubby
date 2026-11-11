@@ -13,7 +13,6 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -21,8 +20,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
-import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { expense, ledgerParty, purchase, runFinding } from "~/server/db/schema";
+import { expense, ledgerParty, runFinding } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { refreshAutomaticBookingFingerprint } from "~/server/domains/financial-transaction/repo/financial-convergence";
 import {
@@ -45,6 +43,7 @@ import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { redistributeReplacementAttributions } from "./aggregate-replacement";
+import { findVendorOrderOwner, vendorOrderOwners } from "./order-identity";
 import { prepareAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 import {
   newReconciliationExpenseContext,
@@ -150,25 +149,19 @@ export async function reviewResolution(
       "The proposed order identity differs from the accepted Purchase.",
     );
   const candidateOrderId = candidate.orderId;
-  if (candidateOrderId !== null && state.target.orderId === null) {
-    const owner = await tx.query.purchase.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(
-            table,
-            and(
-              eq(purchase.vendorId, state.target.vendorId),
-              eq(purchase.orderId, candidateOrderId),
-              notDeleted(purchase),
-            ),
-          ),
-      },
-    });
-    if (owner && owner.id !== state.target.id)
-      throw new Error(
-        "Another Purchase already owns this vendor order. Review the two Purchases before adopting the order identity.",
-      );
-  }
+  if (
+    candidateOrderId !== null &&
+    state.target.orderId === null &&
+    vendorOrderOwners(
+      await findVendorOrderOwner(tx, {
+        vendorId: state.target.vendorId,
+        orderId: candidateOrderId,
+      }),
+    ).some((row) => row.id !== state.target.id)
+  )
+    throw new Error(
+      "Another Purchase already owns this vendor order. Review the two Purchases before adopting the order identity.",
+    );
   const oldPayments = state.payments.filter(
     (row) => row.sourceClaimId === state.observation.sourceClaimId,
   );
