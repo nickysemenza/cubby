@@ -25,8 +25,7 @@ Reuse an operation ID only with the identical tool and arguments: a completed
 operation returns its saved result even after its Run stops. New writes remain
 fenced by the Run's current state. A delegated write that requires `_runExecution`
 and omits it returns `BAD_REQUEST` / `INVALID_INPUT` at the input stage, with
-the same `input_schema` recovery contract as other invalid arguments. Correct
-the envelope and retry the call.
+validation issues naming the invalid arguments. Correct the envelope and retry the call.
 
 Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own
@@ -54,9 +53,8 @@ decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_budget`, `ai_funding.reset_funding_refusal`,
 `activity.resolve_run_finding`, `run.approve_groups`,
-suggestion review (product merges included): `suggestions.review`,
-`suggestions.review_batch`, each batch returning a per-id `ok`/`error`
-result). An agent calls one only
+suggestion review (product merges included): `suggestions.review`, or with
+`items` for per-item results). An agent calls one only
 on the member's explicit instruction. An exact-checksum member-selected Email
 import using the declared coordinator models or its member-controlled retry is
 foreground work outside the AI budget. Explicit member selections of Vendor
@@ -132,18 +130,10 @@ published schemas, output projections, the error shape and the purchase-agent
 protocol. The runner validates a member's own output before a projection slims
 it.
 
-A tool failure comes back as an `isError` result whose text names the cause
-and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
-`diagnostics` (operation, stage, causes, `cfRayId`, Sentry link). An output
-that fails its own schema is `INVALID_OUTPUT` and names each failing path.
-A runner failure is rendered as the runner settled it; it is not normalized or
-reported a second time.
-Generated capability tools append `recovery: "input_schema"` to
-input-validation errors, pointing at `describe` for the allowed action's full
-contract; the validation causes name each failing path. Correct the payload
-from those causes or the described contract; missing evidence is never
-fabricated.
-Output validation and domain refusals do not advertise input-schema recovery.
+A tool failure is an `isError` result with an envelope containing `code`,
+`reason`, `message`, `issues` (paths and messages), `next`, and `requestId`
+when available. Cause messages and SQLSTATE remain visible; stacks and schemas
+do not. A runner failure is not normalized or reported a second time.
 
 Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 `apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s

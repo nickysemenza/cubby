@@ -46,7 +46,11 @@ import { touchingSuggestionFamilies } from "~/server/generic/suggestions/repo/su
 import { jsonCursor } from "~/server/lib/json-cursor";
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
-const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
+const ARRAY_COLUMNS = new Set(
+  suggestionFilterDeclaration.descriptors
+    .filter((descriptor) => descriptor.stored.array)
+    .map((descriptor) => descriptor.columnId),
+);
 const NUMBER_COLUMNS = new Set([
   "amount",
   "confidence",

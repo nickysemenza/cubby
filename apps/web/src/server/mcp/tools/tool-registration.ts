@@ -217,16 +217,34 @@ function renderToolError(
   detail: ToolErrorDetail,
   suffix?: (detail: ToolErrorDetail) => string,
 ): CallToolResult {
-  if (suffix) detail.message += suffix(detail);
+  const causes =
+    detail.diagnostics?.causes
+      .map((cause) =>
+        cause.code ? `${cause.message} (${cause.code})` : cause.message,
+      )
+      .filter(
+        (message) =>
+          message !== detail.message &&
+          !(
+            detail.validationIssues?.length &&
+            message.trimStart().startsWith("[")
+          ),
+      ) ?? [];
+  const envelope = {
+    code: detail.code,
+    reason: detail.reason,
+    message: [detail.message, ...causes].join(": "),
+    issues: detail.validationIssues?.map(({ path, message }) => ({
+      path,
+      message,
+    })),
+    next: suffix?.(detail).trim(),
+    requestId: detail.requestId,
+  };
   return {
-    content: [
-      {
-        type: "text",
-        text: `${formatToolError(detail)}\n\n${JSON.stringify(detail)}`,
-      },
-    ],
+    content: [{ type: "text", text: JSON.stringify(envelope) }],
     isError: true,
-    _meta: { "cubby/error": detail },
+    _meta: { "cubby/error": envelope },
   };
 }
 
@@ -251,11 +269,6 @@ function deadlineSuffix(write: boolean, elapsedMs: number) {
 
 const overran = (detail: ToolErrorDetail) =>
   detail.reason === "MCP_TOOL_DEADLINE_EXCEEDED";
-
-function formatToolError({ code, reason, message }: ToolErrorDetail): string {
-  if (!code) return message;
-  return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
-}
 
 /**
  * The object (or union of objects) an action's member input is published as,
@@ -287,15 +300,20 @@ function memberInput(name: string, schema: z.ZodType) {
   );
 }
 
-/** `strictFilterInput`'s rule for every `strict` action: name the valid keys. */
-function strictInput(name: string, object: z.ZodObject) {
-  const valid = Object.keys(object.shape).sort().join(", ");
-  return z.strictObject(object.shape, {
-    error: (issue) =>
-      issue.code === "unrecognized_keys"
-        ? `Unknown field ${issue.keys.map((key) => `"${key}"`).join(", ")} for ${name}. Valid fields: ${valid}.`
-        : undefined,
-  });
+/** Preserve member refinements while rejecting undeclared keys. */
+function strictInput(object: z.ZodObject) {
+  return object.strict();
+}
+
+/** Refuse unknown keys for each object variant of an action. */
+function strictSchema(name: string, schema: z.core.$ZodType): z.ZodType {
+  if (schema instanceof z.ZodObject) return strictInput(schema);
+  if (schema instanceof z.ZodUnion) {
+    const options = schema.options.map((option) => strictSchema(name, option));
+    return z.union([options[0]!, options[1]!, ...options.slice(2)]);
+  }
+  if (schema instanceof z.ZodType) return schema;
+  throw new Error(`MCP action ${name}: unsupported input schema`);
 }
 
 /**
@@ -403,7 +421,7 @@ function compileAction(
       spec,
       batch: false,
       keepsRunExecution: false,
-      input: kernel.input,
+      input: strictSchema(toolAction, kernel.input),
       prepareInput: (args) =>
         kernel.verb ? { ...args, action: kernel.verb } : args,
       output: kernel.output,
@@ -444,14 +462,7 @@ function compileAction(
   const operation = memberSchemas.parse(spec.op);
   const operationId = binding.operation;
   const { object, toMember } = memberInput(toolAction, operation.input);
-  let published = object;
-  if (spec.strict) {
-    if (!(object instanceof z.ZodObject))
-      throw new Error(
-        `MCP action ${toolAction}: only an object input can be strict`,
-      );
-    published = strictInput(toolAction, object);
-  }
+  const published = strictSchema(toolAction, object);
   const memberOutput = spec.output ?? operation.output;
   // The runner parses the member's own input and output from the raw tool
   // arguments; the published parse here only names fields, refuses unknown
@@ -730,10 +741,18 @@ function compileTools(
       (binding) => "kernel" in binding,
     );
     const actions = new Map(
-      Object.entries(tool.actions).map(([action, binding]) => [
-        action,
-        compileAction(`${name}.${action}`, binding),
-      ]),
+      Object.entries(tool.actions)
+        .filter(
+          ([, binding]) =>
+            !(
+              "operation" in binding &&
+              binding.operation === "suggestion.reviewBatch"
+            ),
+        )
+        .map(([action, binding]) => [
+          action,
+          compileAction(`${name}.${action}`, binding),
+        ]),
     );
     const withJson = [...actions.values()].map((action) => ({
       action,

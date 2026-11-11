@@ -623,6 +623,14 @@ describe("cross-family Suggestion list", () => {
       family: "statement_transaction",
     });
     expect(page.items).toHaveLength(2);
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          merchant: ["not a merchant", "Example"],
+        })
+      ).items,
+    ).toHaveLength(2);
     for (const row of page.items) {
       if (row.family !== "statement_transaction") throw new Error(row.family);
       expect(row.clean).toBe(row.evidence.clean);

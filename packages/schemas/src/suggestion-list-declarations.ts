@@ -49,18 +49,21 @@ const account = {
   label: "Account",
   kind: "multiselect",
   reference: "financialAccount",
+  array: true,
 } as const;
 const owner = {
   columnId: "owner",
   label: "Owner",
   kind: "multiselect",
   reference: "ledgerParty",
+  array: true,
   nullable: { label: "Owner" },
 } as const;
 const merchant = {
   columnId: "merchant",
   label: "Merchant",
   kind: "text",
+  array: true,
 } as const;
 
 const filters = {

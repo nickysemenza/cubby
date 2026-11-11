@@ -393,8 +393,7 @@ describe("MCP catalog schemas", () => {
       "cubby/error": {
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
-        message: "Invalid identifier",
-        diagnostics: { operation: "legacy_refusal.run", stage: "run" },
+        message: expect.stringContaining("Invalid identifier"),
       },
     });
     expect(capture).not.toHaveBeenCalled();

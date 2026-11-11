@@ -32,6 +32,29 @@ const imagePayloadFields = new Set([
   "vendorLogo",
 ]);
 
+/** Closest declared keys, ordered by edit distance and then name. */
+export function closestKeys(key: string, keys: readonly string[]): string[] {
+  const distance = (candidate: string) => {
+    let row = Array.from({ length: candidate.length + 1 }, (_, index) => index);
+    for (let i = 0; i < key.length; i++) {
+      const next = [i + 1];
+      for (let j = 0; j < candidate.length; j++)
+        next.push(
+          Math.min(
+            next[j]! + 1,
+            row[j + 1]! + 1,
+            row[j]! + (key[i] === candidate[j] ? 0 : 1),
+          ),
+        );
+      row = next;
+    }
+    return row[candidate.length]!;
+  };
+  return [...new Set(keys)]
+    .sort((a, b) => distance(a) - distance(b) || a.localeCompare(b))
+    .slice(0, 5);
+}
+
 const selectedItem = z.object({ id: z.string() }).passthrough();
 /** A get/list result narrowed by `fields` or the compact preset. */
 export const entitySelectedResultSchema = z
@@ -293,7 +316,7 @@ export function readSelection(command: {
           .map((miss) =>
             miss.enveloped
               ? `Unknown ${command.entity} field "${miss.path}"; select it as "fields.${miss.path}"`
-              : `Unknown ${command.entity} field "${miss.path}"; expected one of ${miss.expected.join(", ")}`,
+              : `Unknown ${command.entity} field "${miss.path}"; expected one of ${closestKeys(miss.path.split(".").at(-1) ?? miss.path, miss.expected).join(", ")}`,
           )
           .join("; "),
       );
