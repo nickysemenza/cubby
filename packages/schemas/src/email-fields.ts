@@ -105,13 +105,15 @@ export type EmailLinkProposer = z.infer<typeof emailLinkProposer>;
 export type EmailPurchaseDecisionValue = "linked" | "dismissed";
 
 /**
- * What a mail import did with the Email, from accepted source facts and the
- * newest retained outcome for its current checksum; the holding Run's status
- * only supplies `importing` (Run still running, no outcome yet) and `failed`
- * (Run ended without an outcome). Processing `status: completed` alone never
- * means imported.
+ * What a mail import did with the Email, from accepted source facts, a
+ * reviewed Purchase link and the newest retained outcome for its current
+ * checksum; the holding Run's status only supplies `importing` (Run still
+ * running, no outcome yet) and `failed` (Run ended without an outcome).
+ * Processing `status: completed` alone never means imported.
  * - `imported`: an import accepted it as a Purchase source.
- * - `linked`: associated with existing Purchases or a financial transaction.
+ * - `linked`: associated with existing Purchases or a financial transaction;
+ *   a reviewed link at the current checksum settles an earlier unresolved
+ *   outcome.
  * - `waiting`: unresolved, and Cubby re-runs it by itself (`automatic`).
  * - `needs_research`: unresolved; an agent researches it (`agent`).
  * - `needs_member`: unresolved; only the member can decide (`human`).

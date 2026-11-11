@@ -1215,8 +1215,8 @@ describe("Email Purchase links", () => {
       expect(row).toMatchObject({
         messageId: f.source.messageId,
         status,
-        // Its holder ended without an outcome for it.
-        importOutcome: "failed",
+        // Its holder ended without an outcome; the reviewed link settles it.
+        importOutcome: "linked",
         // A content-disposed Email keeps its retained order event's exact link.
         linkState: "linked",
       });
@@ -1246,6 +1246,12 @@ describe("Email Purchase links", () => {
       decidedByUserId: ctx.actor.userId,
       proposedBy: "agent",
     });
+    // A reviewed link settles an ended holder that recorded no outcome.
+    expect(
+      await list({
+        purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
+      }),
+    ).toEqual([expect.objectContaining({ importOutcome: "linked" })]);
     const [claim] = await getDb(ctx.db)
       .insert(importSourceClaim)
       .values({

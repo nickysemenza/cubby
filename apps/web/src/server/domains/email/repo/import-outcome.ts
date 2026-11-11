@@ -13,6 +13,7 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
@@ -64,21 +65,37 @@ const holderWithoutOutcome = sql`h.purpose = ${runPurpose.enum.mail_import} AND 
     AND o.result #>> '{mailOutcome,checksum}' = "Email".checksum)`;
 
 /**
+ * A reviewed link of the correlated `"Email"` at its current checksum: an
+ * active `linked` decision on a current order event, to a live Purchase.
+ */
+const reviewedLink = sql`EXISTS (SELECT 1 FROM "EmailPurchaseDecision" d
+  JOIN "OrderMailEvent" e ON e.id = d."eventId" AND e."supersededAt" IS NULL
+  JOIN "Purchase" p ON p.id = d."purchaseId" AND ${notDeleted("p")}
+  WHERE e."orderMailId" = "Email"."orderMailId" AND d.active
+    AND d.decision = ${"linked"} AND d."evidenceChecksum" = "Email".checksum)`;
+
+/**
  * Accepted source facts mean imported. A holding Mail import Run without an
- * outcome for this checksum reads importing while active and failed once it
- * ended. Otherwise the newest retained outcome decides, an unresolved gap by
- * who settles it; with none, confirmed absent facts read not imported.
+ * outcome for this checksum reads importing while active. A reviewed link at
+ * this checksum then reads linked: it settles an earlier unresolved outcome
+ * and an ended holder alike. An ended holder without an outcome reads failed.
+ * Otherwise the newest retained outcome decides, an unresolved gap by who
+ * settles it; with none, confirmed absent facts read not imported.
  */
 export const emailImportOutcomeSql = (accepted: SQL): SQL<string | null> => {
   const judgment = newestOutcome(sql`o.result #> '{mailOutcome,judgment}'`);
+  const activeHolder = sql`h.status IN (${sql.join(
+    ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
+    sql`, `,
+  )}, ${runStatus.enum.paused_offline})`;
   return sql`CASE
   WHEN ${accepted} IS TRUE THEN ${OUTCOME.imported}::text
   ELSE coalesce(
-    (SELECT CASE WHEN h.status IN (${sql.join(
-      ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-      sql`, `,
-    )}, ${runStatus.enum.paused_offline}) THEN ${OUTCOME.importing}::text ELSE ${OUTCOME.failed}::text END
-      FROM "Run" h WHERE h.id = "Email"."runId" AND ${holderWithoutOutcome}),
+    (SELECT ${OUTCOME.importing}::text FROM "Run" h
+      WHERE h.id = "Email"."runId" AND ${holderWithoutOutcome} AND ${activeHolder}),
+    CASE WHEN ${reviewedLink} THEN ${OUTCOME.linked}::text END,
+    (SELECT ${OUTCOME.failed}::text FROM "Run" h
+      WHERE h.id = "Email"."runId" AND ${holderWithoutOutcome} AND NOT (${activeHolder})),
     (SELECT CASE j->>${JUDGMENT_KIND}::text ${sql.join(
       Object.entries(SETTLED_JUDGMENT_OUTCOME).map(
         ([kind, outcome]) => sql`WHEN ${kind}::text THEN ${outcome}::text`,

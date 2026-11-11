@@ -228,7 +228,9 @@ dismissed candidates are excluded. Deleted Purchase identities remain readable
 as history, with disabled links in the Email report. Relevance, Purchase links
 and import outcome are separate facts: a linked Email can still be `uncertain`
 until a member links it, and processing `completed` never means imported —
-read `importOutcome` on the Email. Compare this readback with a multi-Purchase
+read `importOutcome` on the Email. A reviewed link at the current checksum
+reads `linked`, settling an earlier unresolved outcome or an ended import Run
+that recorded none; only an active holder or an accepted source reads first. Compare this readback with a multi-Purchase
 resolution; it creates no ledger or stock changes.
 
 The same read's `acceptedSourceOrders` separates accepted source orders from
