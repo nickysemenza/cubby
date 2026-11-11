@@ -19,7 +19,6 @@ CREATE INDEX IF NOT EXISTS "Suggestion_connection_target_ref_idx" ON "Suggestion
 export const statementSuggestionDdl = () => `
 CREATE UNIQUE INDEX IF NOT EXISTS "Suggestion_statement_charge_key" ON "Suggestion" ((data->>'source'),(data->>'chargeKey')) WHERE family='statement_transaction' AND active;
 CREATE INDEX IF NOT EXISTS "Suggestion_statement_charge_history_idx" ON "Suggestion" ((data->>'source'),(data->>'chargeKey'),"createdAt" DESC,id DESC) WHERE family='statement_transaction';
-CREATE INDEX IF NOT EXISTS "Suggestion_statement_refs_idx" ON "Suggestion" USING gin ((data->'refs')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "Suggestion_statement_account_idx" ON "Suggestion" ((data->>'accountId'),(data->>'month')) WHERE family='statement_transaction' AND active AND status='pending';
 -- These work rosters are disjoint. Native positions stream in cursor order;
 -- retained positions keep the component-wise JSON override and sort only receipts.
