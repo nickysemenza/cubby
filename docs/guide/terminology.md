@@ -910,7 +910,7 @@ Unattended interpretation of classified Emails into Purchases, Expenses and Prod
 _Avoid_: mail research, email processing
 
 **Import outcome**:
-What a Mail import did with one Email at its current checksum: Imported, Linked, Waiting, Needs research, Needs you, Unrelated or Not imported, plus Importing while a Run is still working on it and Failed when that Run ended without one. An unresolved Email's Import gap category decides which: Cubby settles Waiting by itself, an agent researches Needs research, and only Needs you reaches the member. A Mail import Run that records an outcome for every Email it admitted is completed, whatever those outcomes are.
+What a Mail import did with one Email at its current checksum: Imported, Linked, Waiting, Needs research, Needs you, Unrelated or Not imported, plus Importing while a Run is still working on it and Failed when that Run ended without one. A reviewed Purchase link at the current checksum reads Linked over an earlier unresolved outcome or a Run that ended without one; an import's Imported still wins. An unresolved Email's Import gap category decides which: Cubby settles Waiting by itself, an agent researches Needs research, and only Needs you reaches the member. A Mail import Run that records an outcome for every Email it admitted is completed, whatever those outcomes are.
 _Avoid_: import status, unsettled, stuck
 
 **Import gap**:
