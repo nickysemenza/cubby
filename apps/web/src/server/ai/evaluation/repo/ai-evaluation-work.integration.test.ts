@@ -58,7 +58,10 @@ describe("AI evaluation pages", () => {
     const due = async () =>
       z
         .array(z.object({ unit: z.string() }))
-        .parse((await getDb(ctx.db).execute(aiEvaluationDue("ai"))).rows)
+        .parse(
+          (await getDb(ctx.db).execute<{ unit: string }>(aiEvaluationDue("ai")))
+            .rows,
+        )
         .map((row) => row.unit);
     expect(await due()).toEqual(["ai:synthetic-other-field"]);
     expect(
@@ -77,7 +80,9 @@ describe("AI evaluation pages", () => {
     // wake is that lapse, not the unleased backlog behind it.
     const [next] = z
       .array(z.object({ min: z.coerce.date() }))
-      .parse((await getDb(ctx.db).execute(aiEvaluationNext())).rows);
+      .parse(
+        (await getDb(ctx.db).execute<{ min: string }>(aiEvaluationNext())).rows,
+      );
     expect(next!.min.getTime()).toBeGreaterThan(Date.now() + 15 * 60_000);
     await releaseAiEvaluationPage(ctx.db, page);
     expect(
