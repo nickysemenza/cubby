@@ -133,9 +133,13 @@ same-Vendor candidates within fourteen days, including tips, partial payments,
 splits and combined charges, need review; amount/date coincidence never proves
 identity.
 
-For positive charges, actual nonfuture vendor Expenses on same-Vendor Purchases
-outside that window or without dates also prevent automatic new spending while
-their complete graphs have open, unknown or overcovered settlement capacity.
+For positive charges, actual nonfuture vendor Expenses on partly paid
+same-Vendor Purchases outside that window or without dates also prevent
+automatic new spending while their complete graphs have open, unknown or
+overcovered settlement capacity. Partly paid means at least one live payment is
+allocated and the allocations differ from the vendor lines' cost or a line cost
+is unknown, as with installment plans and payment schedules. An older Purchase
+with no allocated payment does not block a later charge.
 These additional candidates are review-only: even a complete retained payment
 set cannot make them automatic settlement targets. Only confidently zero
 remaining capacity excludes an additional candidate; nearby, payment and

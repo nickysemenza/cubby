@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   FINANCIAL_SPENDING_POLICY,
@@ -148,7 +149,7 @@ type PaymentCandidate = SpendingCandidate & {
   amountKey: string;
   chargedDate: string;
 };
-type VendorCandidate = SpendingCandidate & { hasVendorSpending: boolean };
+type VendorCandidate = SpendingCandidate & { partlyPaid: boolean };
 const calendarGap = (left: string, right: string) =>
   Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
   86_400_000;
@@ -355,13 +356,13 @@ export async function prepareFinancialSpendingCandidates(
     >(
       sql`
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+        ${partlyPaidSpending} AS "partlyPaid" FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
         vendorIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${vendorSpendingExists}) ORDER BY p.id
+          OR ${partlyPaidSpending}) ORDER BY p.id
     `,
       "objects",
     );
@@ -921,11 +922,24 @@ type CandidateInput = {
 
 // A header total is not spending. Unknown costs on actual vendor lines still
 // require graph review; neither amount equality nor an order date is required.
-const vendorSpendingExists = sql`EXISTS (
-  SELECT 1 FROM "Expense" e WHERE e."purchaseId" = p.id
-    AND ${notDeleted("e")} AND NOT e.future
-    AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}
-)`;
+const vendorLines = sql`FROM "Expense" e WHERE e."purchaseId" = p.id
+  AND ${notDeleted("e")} AND NOT e.future
+  AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}`;
+const vendorSpendingExists = sql`EXISTS (SELECT 1 ${vendorLines})`;
+const livePayments = sql`FROM "FinancialTransactionAllocation" paid
+  JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId" AND ${notDeleted("pf")}
+  WHERE paid."purchaseId" = p.id AND ${notDeleted("paid")}`;
+// Outside the nearby window only partly paid spending blocks creation: an
+// installment plan or payment schedule has a linked payment and an open or
+// unknown balance. Never-paid older Purchases are left to settlement review;
+// loading every one of them per charge exhausts Worker memory. The graph
+// capacity check still decides each Purchase this selects.
+const partlyPaidSpending = sql`(${vendorSpendingExists}
+  AND EXISTS (SELECT 1 ${livePayments}) AND (
+  EXISTS (SELECT 1 ${vendorLines} AND (e.cost IS NULL
+    OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
+  OR (SELECT round(sum(e.cost) * 100) ${vendorLines})
+    IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${livePayments})))`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -954,7 +968,7 @@ async function spendingCandidates(
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
-        AND ${!input.refund} AND ${vendorSpendingExists}))
+        AND ${!input.refund} AND ${partlyPaidSpending}))
     ORDER BY p.id`)
     ).rows;
   }
@@ -974,20 +988,20 @@ async function spendingCandidates(
     if (!lookup) {
       lookup = getDb(db)
         .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+          ${partlyPaidSpending} AS "partlyPaid" FROM "Purchase" p
         WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
           AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-            OR ${vendorSpendingExists}) ORDER BY p.id`)
+            OR ${partlyPaidSpending}) ORDER BY p.id`)
         .then((result) => result.rows);
       page.vendorCandidates.set(input.vendorId, lookup);
     }
-    for (const { hasVendorSpending, ...candidate } of await lookup) {
+    for (const { partlyPaid, ...candidate } of await lookup) {
       const nearby = Boolean(
         candidate.date && calendarGap(candidate.date, input.date) <= 14,
       );
       // The page pool also contains date-window headers for other source dates.
-      // Only actual spending belongs to the additional review-only selector.
-      if (!nearby && !hasVendorSpending) continue;
+      // Only partly paid spending belongs to the additional review-only selector.
+      if (!nearby && !partlyPaid) continue;
       if (!candidates.has(candidate.id))
         candidates.set(candidate.id, { ...candidate, reviewOnly: !nearby });
     }

@@ -803,9 +803,10 @@ describe("shared spending booking", () => {
   );
   it("keeps complete spending previews identical with page-loaded receipt graphs", async () => {
     const { account, vendor, transaction, advice, category } = await fixture();
-    for (const [date, cost] of [
-      ["2026-05-04", 42.5],
-      ["2026-03-06", 19],
+    // The older receipt's first installment keeps it partly paid.
+    for (const [date, cost, paid] of [
+      ["2026-05-04", 42.5, 0],
+      ["2026-03-06", 19, 5],
     ] as const) {
       const receipt = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
@@ -820,6 +821,16 @@ describe("shared spending booking", () => {
         trade: "other",
         spendingCategoryId: category.id,
       });
+      if (paid)
+        await createRepoIdentity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: "posted",
+          amount: paid,
+          transactionDate: date,
+          postedDate: date,
+          allocations: [{ purchaseId: receipt.output.id, amount: paid }],
+        });
     }
     const page = await prepareFinancialSpendingPage(ctx.db, {
       accountIds: [
@@ -1281,8 +1292,8 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it("holds older and undated same-vendor spending until the member excludes it", async () => {
-    const { transaction, vendor, advice } = await fixture();
+  it("holds older and undated partly paid same-vendor spending until the member excludes it", async () => {
+    const { account, transaction, vendor, advice } = await fixture();
     const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-03-01",
@@ -1293,6 +1304,16 @@ describe("shared spending booking", () => {
       name: "Synthetic receipt",
       cost: 40,
       trade: "other",
+    });
+    // A first installment leaves the older receipt partly paid.
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 10,
+      transactionDate: "2026-03-01",
+      postedDate: "2026-03-01",
+      allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
     });
     const plan = await previewFinancialSpending(ctx.db, {
       transactionId: transaction.output.id,

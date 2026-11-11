@@ -804,8 +804,8 @@ describe("statement spending review and re-import", () => {
       ],
     });
   });
-  it("refuses a clean spending suggestion when older unsettled spending appears", async () => {
-    const { advice } = await fixture();
+  it("refuses a clean spending suggestion when older partly paid spending appears", async () => {
+    const { account, advice } = await fixture();
     await labelAndRefreshReads(advice);
     const page = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
@@ -831,6 +831,15 @@ describe("statement spending review and re-import", () => {
       cost: 40,
       trade: "other",
     });
+    // An installment-style first payment leaves the older receipt open.
+    const installment = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 10,
+      postedDate: "2026-03-01",
+      allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
+    });
     await expect(
       reviewSuggestion(ctx.db, kernelCtx(ctx), {
         suggestionId: suggestion!.id,
@@ -846,9 +855,11 @@ describe("statement spending review and re-import", () => {
       }),
     ).rejects.toThrow(/changed|review|stale/i);
     expect(await total()).toBe(40);
-    expect(await getDb(ctx.db).query.financialTransaction.findMany()).toEqual(
-      [],
-    );
+    expect(
+      (await getDb(ctx.db).query.financialTransaction.findMany()).map(
+        (row) => row.shortcode,
+      ),
+    ).toEqual([installment.output.id]);
   });
   it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
