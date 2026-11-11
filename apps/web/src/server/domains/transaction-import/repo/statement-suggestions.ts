@@ -4031,7 +4031,6 @@ export async function completeNoActionStatementPrefix(
   }[],
   scope?: StatementSuggestionScope,
 ) {
-  if (scope?.importId) return 0;
   const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
   if (!window.length) return 0;
   if (new Set(window.map((entry) => entry.suggestionId)).size !== window.length)
@@ -4040,10 +4039,11 @@ export async function completeNoActionStatementPrefix(
   // Positive results prove nothing until the whole prefix is locked and checked.
   // Import-only rules are inapplicable to this unscoped path regardless of their switch.
   // Unknown or obsolete stamps remain boundaries; only exact current stamps are excluded.
-  const excluded = importOnlyStatementRuleStamps();
+  // Import authority executes the import-only rules, so none is excluded.
+  const excluded = scope?.importId ? [] : importOnlyStatementRuleStamps();
   const hasApplicableRules = (data: SQL) => sql<boolean>`EXISTS (
     SELECT 1 FROM jsonb_array_elements_text(${matchedRulesOf(data)}) AS matched(value)
-    WHERE matched.value IS NULL OR NOT ${inArray(sql`matched.value`, excluded)})`;
+    WHERE matched.value IS NULL${excluded.length ? sql` OR NOT ${inArray(sql`matched.value`, excluded)}` : sql` OR true`})`;
   const first = window[0]!;
   const [candidate] = await getDb(db)
     .select({ id: suggestionTable.id })
