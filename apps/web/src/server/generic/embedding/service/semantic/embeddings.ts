@@ -1,3 +1,4 @@
+import type { OptionalAiUnavailable } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
   classifyFundingRefusal,
@@ -44,14 +45,9 @@ class AiUpstreamError extends Error {
 }
 
 const unparsedAiErrorSchema = z.unknown();
-type AiUnavailable = {
-  status: "unavailable";
-  reason: "quota" | "rate_limited" | "upstream_error";
-  detail: string;
-};
 export function optionalAiUnavailable(
   error: z.input<typeof unparsedAiErrorSchema>,
-): AiUnavailable {
+): OptionalAiUnavailable {
   const detail =
     error instanceof AiUpstreamError
       ? error.detail

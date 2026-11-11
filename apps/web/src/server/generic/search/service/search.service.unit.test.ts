@@ -1,6 +1,7 @@
-import { searchHitSchema } from "@cubby/schemas/search";
+import { relatedSearchOutSchema, searchHitSchema } from "@cubby/schemas/search";
 import { describe, expect, it } from "vitest";
 
+import { createDatabase } from "~/server/db/database-runtime";
 import type { VectorStorePort } from "~/server/generic/embedding/service/semantic/vector-store";
 import {
   buildPrefixTsQuery,
@@ -52,6 +53,27 @@ describe("search query preparation", () => {
 });
 
 describe("related search availability", () => {
+  it("preserves unavailable diagnostics on the wire", async () => {
+    const result = await findRelatedSearchHits(
+      createDatabase(() => {
+        throw new Error("Database should not be accessed");
+      }),
+      { query: "related pantry item", limit: 12 },
+      {
+        ...unavailableRelatedSearch,
+        configured: () => true,
+        embed: async () => {
+          throw new Error("Synthetic upstream failure");
+        },
+      },
+    );
+    expect(relatedSearchOutSchema.parse(result)).toEqual({
+      status: "unavailable",
+      reason: "upstream_error",
+      detail: "Synthetic upstream failure",
+      results: [],
+    });
+  });
   it("returns unavailable without touching the database when embeddings are off", async () => {
     await expect(
       findRelatedSearchHits(

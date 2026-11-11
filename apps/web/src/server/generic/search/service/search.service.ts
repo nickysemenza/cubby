@@ -73,7 +73,6 @@ export type InternalRelatedSearchCandidates =
   | {
       status: "unavailable";
       results: [];
-      error?: string;
       reason?: "quota" | "rate_limited" | "upstream_error";
       detail?: string;
     };

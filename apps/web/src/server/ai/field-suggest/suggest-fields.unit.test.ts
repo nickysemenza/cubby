@@ -1,3 +1,4 @@
+import { fieldSuggestionsOut } from "@cubby/schemas/ai";
 import type {
   FieldSuggestionsInput,
   FieldSuggestionsOut,
@@ -219,6 +220,41 @@ interface TableCase {
 }
 
 describe("suggestFields", () => {
+  it("retains semantic unavailability on the outcome while using lexical candidates", async () => {
+    const spec = fakeProjectSpec();
+    if (spec.kind !== "reference") throw new Error("Expected reference spec");
+    const semanticUnavailable = {
+      status: "unavailable",
+      reason: "rate_limited",
+      detail: "Synthetic upstream response",
+    } as const;
+    const out = await suggestFields(
+      fakeDb,
+      { runId: fixtureRunId },
+      {
+        entity: "task",
+        targets: ["projectId"],
+        basisMode: "provided",
+        basis: { name: "Synthetic shelf" },
+      },
+      {
+        decisionPort: decisionPortPicking("Kitchen Remodel"),
+        registry: {
+          "task.projectId": {
+            ...spec,
+            roster: async () => ({
+              candidates: FAKE_PROJECTS,
+              semanticUnavailable,
+            }),
+          },
+        },
+      },
+    );
+    expect(
+      fieldSuggestionsOut.parse(out).outcomes?.projectId?.semanticUnavailable,
+    ).toEqual(semanticUnavailable);
+    expect(out.suggestions.projectId?.value).toBe("PRJ-AAAA");
+  });
   it("lets the model decline a network with no explicit evidence while retaining the full enum", async () => {
     const decisionPort = decisionPortNone({
       none: 0.9,

@@ -1845,8 +1845,10 @@ an exhausted candidate budget keep distinct explanations; only pending work is d
 updating. Coverage checks eligible sources missing a search document and published documents missing
 a current embedding. Source edits may keep the prior published text until the next hourly pass while
 application gates validate current evidence. Completeness never promises exhaustive ANN recall.
-Provider and read failures keep scrubbed diagnostics and Retry without hiding lexical results; an
-unavailable provider with no diagnostic stays unavailable, with no invented cause.
+Provider and read failures keep scrubbed diagnostics without hiding lexical results; related search
+shows the unavailable reason and detail, and an unavailable provider with no diagnostic stays
+unavailable, with no invented cause. Optional semantic candidate failures retain the shared
+unavailable reason and scrubbed detail alongside the remaining results.
 
 Task effective due dates use the ordered parts in `apps/web/src/lib/task-dates.ts`; in-memory reads
 and SQL predicates compile the same precedence, while calendar overlap queries keep their start-date

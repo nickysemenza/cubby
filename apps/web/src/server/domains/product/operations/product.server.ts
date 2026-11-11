@@ -169,16 +169,19 @@ export async function searchProducts(
     0,
     pagination.pageSize,
   );
-  return buildPaginatedResponse(
-    pagination,
-    await publicFieldEnvelopeRows({
-      db: context.db,
-      entity: "product",
-      schema: productPickerItemOut,
-      rows: data,
-    }),
-    Math.max(lexical.count, lexical.data.length + semanticItems.length),
-  );
+  return {
+    ...buildPaginatedResponse(
+      pagination,
+      await publicFieldEnvelopeRows({
+        db: context.db,
+        entity: "product",
+        schema: productPickerItemOut,
+        rows: data,
+      }),
+      Math.max(lexical.count, lexical.data.length + semanticItems.length),
+    ),
+    ...(!Array.isArray(semantic) ? { semanticUnavailable: semantic } : {}),
+  };
 }
 
 async function applyProductUpcData(

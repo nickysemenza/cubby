@@ -504,77 +504,91 @@ async function resolveReferenceTarget(
   decisionPort: DecisionPort | undefined,
   decisionModel?: SupportedDecisionModel,
 ): Promise<TargetResolution> {
-  const candidates = await spec.roster(db, resolvedBasis, rawBasis);
-  const selectionSpec: AiSelectionSpec<unknown> = {
-    feature: FIELD_SUGGESTION_FEATURE,
-    rules: spec.rules,
-    idOf: spec.idOf,
-    renderLine: spec.renderLine,
-    maxCandidates: spec.maxCandidates,
-  };
-  const outcome = await runAiSelection(selectionSpec, {
-    subject,
-    candidates,
-    usage,
-    decisionPort,
-    decisionModel,
-  });
-  if (!outcome.evaluated) return skipped("no_candidates");
-  if (outcome.selected === null) {
-    return declined({
-      confidence: outcome.confidence,
-      probability: outcome.probability,
-      alternatives: mapAlternatives(
-        outcome.alternatives,
-        spec.idOf,
-        spec.labelOf,
-        spec.detailOf,
-      ),
+  const roster = await spec.roster(db, resolvedBasis, rawBasis);
+  const candidates = "candidates" in roster ? roster.candidates : roster;
+  const semanticUnavailable =
+    "candidates" in roster ? roster.semanticUnavailable : undefined;
+  const resolve = async (): Promise<TargetResolution> => {
+    const selectionSpec: AiSelectionSpec<unknown> = {
+      feature: FIELD_SUGGESTION_FEATURE,
+      rules: spec.rules,
+      idOf: spec.idOf,
+      renderLine: spec.renderLine,
+      maxCandidates: spec.maxCandidates,
+    };
+    const outcome = await runAiSelection(selectionSpec, {
+      subject,
+      candidates,
+      usage,
+      decisionPort,
+      decisionModel,
     });
-  }
-  const selected = outcome.selected;
-  const probability = outcome.probability;
-  const confidence = outcome.confidence;
-  const ancestorIds =
-    spec.parentIdOf && currentValue !== null
-      ? currentAncestorIds(candidates, currentValue, spec.idOf, spec.parentIdOf)
-      : new Set<string>();
-  const suppressed = ancestorIds.has(spec.idOf(selected));
-  // Ancestors of the current value are not useful correction offers.
-  const alternatives = mapAlternatives(
-    outcome.alternatives.filter(
-      (entry) => !ancestorIds.has(spec.idOf(entry.candidate)),
-    ),
-    spec.idOf,
-    spec.labelOf,
-    spec.detailOf,
-  );
-  if (suppressed) {
-    // The policy declined the pick; its probability cannot describe a decline.
-    return declined({ confidence: "low", probability: null, alternatives });
-  }
-  const value = spec.idOf(selected);
-  return {
-    suggestion: {
-      value,
-      label: spec.labelOf(selected),
-      detail: spec.detailOf?.(selected) ?? null,
-      confidence,
-      probability,
-      reasoning: outcome.reasoning,
-      alternatives,
-      operation: "set",
-      removals: [],
-    },
-    rawValue: value,
-    outcome: {
-      kind: "evaluated",
-      answer: "pick",
-      confidence,
-      probability,
-      alternatives,
-    },
+    if (!outcome.evaluated) return skipped("no_candidates");
+    if (outcome.selected === null) {
+      return declined({
+        confidence: outcome.confidence,
+        probability: outcome.probability,
+        alternatives: mapAlternatives(
+          outcome.alternatives,
+          spec.idOf,
+          spec.labelOf,
+          spec.detailOf,
+        ),
+      });
+    }
+    const selected = outcome.selected;
+    const probability = outcome.probability;
+    const confidence = outcome.confidence;
+    const ancestorIds =
+      spec.parentIdOf && currentValue !== null
+        ? currentAncestorIds(
+            candidates,
+            currentValue,
+            spec.idOf,
+            spec.parentIdOf,
+          )
+        : new Set<string>();
+    const suppressed = ancestorIds.has(spec.idOf(selected));
+    // Ancestors of the current value are not useful correction offers.
+    const alternatives = mapAlternatives(
+      outcome.alternatives.filter(
+        (entry) => !ancestorIds.has(spec.idOf(entry.candidate)),
+      ),
+      spec.idOf,
+      spec.labelOf,
+      spec.detailOf,
+    );
+    if (suppressed) {
+      // The policy declined the pick; its probability cannot describe a decline.
+      return declined({ confidence: "low", probability: null, alternatives });
+    }
+    const value = spec.idOf(selected);
+    return {
+      suggestion: {
+        value,
+        label: spec.labelOf(selected),
+        detail: spec.detailOf?.(selected) ?? null,
+        confidence,
+        probability,
+        reasoning: outcome.reasoning,
+        alternatives,
+        operation: "set",
+        removals: [],
+      },
+      rawValue: value,
+      outcome: {
+        kind: "evaluated",
+        answer: "pick",
+        confidence,
+        probability,
+        alternatives,
+      },
+    };
   };
+  const result = await resolve();
+  return semanticUnavailable
+    ? { ...result, outcome: { ...result.outcome, semanticUnavailable } }
+    : result;
 }
 
 /** IDs of the current reference's strict ancestors in this suggestion roster. */
@@ -1221,6 +1235,9 @@ export async function suggestFields(
           confidence: "low",
           probability: null,
           alternatives: suggestion.alternatives,
+          ...(outcome.semanticUnavailable
+            ? { semanticUnavailable: outcome.semanticUnavailable }
+            : {}),
         };
         resolvedRawByTarget.set(target, null);
         return;

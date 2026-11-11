@@ -1,3 +1,4 @@
+import { optionalAiUnavailableSchema } from "./ai";
 import { rawSearchInventoryPlacement } from "./inventory-raw-read";
 import { withFieldEnvelopes } from "./field-envelope";
 import {
@@ -223,7 +224,8 @@ export const relatedSearchOutSchema = z.object({
   status: z.enum(["ready", "unavailable"]),
   complete: z.boolean().optional(),
   gap: semanticCoverageGap.optional(),
-  error: z.string().optional(),
+  reason: optionalAiUnavailableSchema.shape.reason.optional(),
+  detail: optionalAiUnavailableSchema.shape.detail.optional(),
   results: z.array(searchHitSchema),
 });
 export type RelatedSearchOut = z.infer<typeof relatedSearchOutSchema>;

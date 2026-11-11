@@ -429,7 +429,13 @@ async function matchDetectedItems(
   locationId: LocationId,
   items: DetectedInventoryItem[],
   owner: AiCallOwner,
-): Promise<DetectedItem[]> {
+): Promise<{
+  items: DetectedItem[];
+  semanticUnavailable?: import("@cubby/schemas/ai").OptionalAiUnavailable;
+}> {
+  let semanticUnavailable:
+    | import("@cubby/schemas/ai").OptionalAiUnavailable
+    | undefined;
   const existingInventory = await getInventoryByLocationIds(db, [locationId]);
   const existingProductIds = new Set(
     existingInventory.map((entry) => entry.product.id),
@@ -493,6 +499,7 @@ async function matchDetectedItems(
             3,
             owner,
           );
+          if (!Array.isArray(semantic)) semanticUnavailable ??= semantic;
           const semanticMatch = Array.isArray(semantic)
             ? semantic[0]
             : undefined;
@@ -542,7 +549,10 @@ async function matchDetectedItems(
       ...matchedItems.filter((item): item is DetectedItem => item !== null),
     );
   }
-  return suggestions;
+  return {
+    items: suggestions,
+    ...(semanticUnavailable ? { semanticUnavailable } : {}),
+  };
 }
 
 /**
@@ -643,7 +653,7 @@ export async function detectInventoryItems(
 
   return {
     ...raw,
-    items: await matchDetectedItems(db, locationId, raw.items, owner),
+    ...(await matchDetectedItems(db, locationId, raw.items, owner)),
     cache,
     analyzedAt,
   };
