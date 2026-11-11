@@ -234,8 +234,10 @@ export function createCubbyGatewayFetch(
           options.cacheKey?.(),
         ),
       chatGpt: options.subscription,
-      // Coordinators run unattended: their OpenAI turns take the flex tier.
-      flex: true,
+      // Coordinators share a household turn cap, so their OpenAI turns stay
+      // on the standard tier: flex latency (p50 about 20 s under load, plus a
+      // refused attempt before each resend) starved the cap and Mail import
+      // Runs stopped settling.
       ...policy,
       onTransport: options.onTransport,
       onResponse: options.onResponse,
