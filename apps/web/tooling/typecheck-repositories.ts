@@ -187,6 +187,7 @@ export const repositoryOwners = [
   "src/server/domains/financial-transaction/repo/financial-allocation-integrity.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-preview.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-projection.ts",
+  "src/server/domains/financial-transaction/repo/settlement-window.ts",
   "src/server/domains/image/repo/image-displayability.ts",
   "src/server/domains/image/repo/image-identification.ts",
   "src/server/domains/image/repo/image-integrity.ts",

@@ -6,7 +6,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { householdDaySql } from "~/server/db/helpers/query";
+import { columnArrayParam, householdDaySql } from "~/server/db/helpers/query";
 
 /** Two complete Monday-Friday days after the evidence date. The second
  * following weekday ends the grace at the next household midnight. Resolve
@@ -34,8 +34,5 @@ export const purchasePostingStartSql = (alias: string): SQL => sql`coalesce((
   FROM "FinancialTransactionAllocation" allocation JOIN "FinancialTransaction" ft ON ft.id = allocation."transactionId"
   WHERE allocation."purchaseId" = ${sql.raw(`${alias}.id`)} AND ${notDeleted("allocation")}
     AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
-    AND ft.kind IN (${sql.join(
-      purchaseSettlementKinds.map((kind) => sql`${kind}`),
-      sql`, `,
-    )})
+    AND ft.kind = ANY(${columnArrayParam(purchaseSettlementKinds)})
 ), ${sql.raw(`${alias}.date`)}, ${householdDaySql(sql.raw(`${alias}."createdAt"`))})`;

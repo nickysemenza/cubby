@@ -6,7 +6,7 @@ import { sql, type SQL, type SQLWrapper } from "drizzle-orm";
  * instant, a statement row carries only a calendar date. Comparing them as one
  * moves matches near midnight.
  */
-export const POSTING_WINDOW_DAYS = 3;
+const POSTING_WINDOW_DAYS = 3;
 const DAY_MS = 86_400_000;
 
 /** Two instants within the window, to the millisecond. */

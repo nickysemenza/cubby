@@ -27,6 +27,7 @@ import type { DrizzleTransaction } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -470,10 +471,7 @@ async function competingClaimants(
           : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
         cards.length > 0
           ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
-              OR ${purchasePaymentEvidence.cardLastFour} IN (${sql.join(
-                cards.map((four) => sql`${four}`),
-                sql`, `,
-              )}))`
+              OR ${purchasePaymentEvidence.cardLastFour} = ANY(${columnArrayParam(cards)}))`
           : undefined,
         // A Purchase whose allocations already cover its payment lines makes
         // no further claim; a partly settled one still does.

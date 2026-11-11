@@ -79,13 +79,13 @@ type ObservationValues = Omit<
   "shortcode" | "batchId" | "occurrenceId"
 >;
 
-export type MintedOccurrence = {
+type MintedOccurrence = {
   key: string;
   /** A positioned occurrence is physically owned by the batch that carries it. */
   positionedInBatch: boolean;
   values: OccurrenceValues;
 };
-export type MintedObservation = {
+type MintedObservation = {
   owner: OwnerRef;
   factFingerprint: string;
   values: ObservationValues;
@@ -95,20 +95,20 @@ export type MintedObservation = {
     scopeEvidence: { identityKind: Identity["kind"]; scope: string };
   };
 };
-export type HeadChange = {
+type HeadChange = {
   owner: OwnerRef;
   head: ObservationRef | null;
   reviewState: Owner["reviewState"];
   lastObservedAt: Date;
   version: number;
 };
-export type PlannedMembership = {
+type PlannedMembership = {
   observation: ObservationRef;
   rowPosition: number | null;
   requestFingerprint: string;
 };
 
-export type SourceIntakeWrite =
+type SourceIntakeWrite =
   | { kind: "ensure_source"; source: string }
   | { kind: "insert_batch"; values: BatchValues }
   | { kind: "insert_occurrences"; rows: MintedOccurrence[] }
@@ -129,7 +129,7 @@ export type SourceIntakeWrite =
   /** A violated precondition the request reaches only after the writes before it. */
   | { kind: "refuse"; message: string };
 
-export type SourceIntakeReceipt = {
+type SourceIntakeReceipt = {
   batchId: Batch["id"] | null;
   batchCreated: boolean;
   dryRun: boolean;

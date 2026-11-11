@@ -119,7 +119,7 @@ export function selectIdentityOwner(
  * locked rows and the reviewed decision into this closed list of writes, and
  * `applySourceIdentity` executes it.
  */
-export type SourceIdentityWrite =
+type SourceIdentityWrite =
   | {
       kind: "release_accepted_owner";
       alias: typeof financialEvidenceAlias.$inferInsert;
