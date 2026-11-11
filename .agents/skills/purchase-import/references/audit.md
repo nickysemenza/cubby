@@ -10,6 +10,12 @@ have no Product. The rendered `costType: "services"` records that accounting
 role; a null Product on such a line is not a `product_unresolved` finding.
 Do not infer that every principal line requires a Product. File a missing
 Product finding only when the rendered evidence establishes tracked goods.
+A `lineBasis: "allocation"` line stands for item lines' money and never
+carries a Product. An order whose item lines have `amount: null` beside one
+allocation line for the stated total is an unpriced itemization by design:
+the items keep their Products unpriced and the allocation keeps the total.
+That shape is not a finding; never relink a Product onto the allocation or
+price an item from it.
 For each finding, proposedFixJson is either null or a JSON-encoded object for
 one safe fix: {"kind":"relink_product","expenseId":"uuid","productId":"uuid"}
 or {"kind":"replace_aggregate_line","purchaseId":"uuid","lines":[...]}

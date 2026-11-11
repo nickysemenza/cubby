@@ -591,6 +591,16 @@ export async function auditImportBatch(
       purchaseRow.expenses.map((expenseRow) => expenseRow.id),
     ),
   );
+  // An allocation never carries a Product (unpriced itemization keeps the
+  // total there by design), so a relink onto one is a false finding that
+  // would stop a finished Run for review.
+  const allocationExpenseIds = new Set(
+    renderedBatch.flatMap((purchaseRow) =>
+      purchaseRow.expenses
+        .filter((expenseRow) => expenseRow.lineBasis === "allocation")
+        .map((expenseRow) => expenseRow.id),
+    ),
+  );
   let stored = 0;
   // Retry lineage admits inspection, never a fix on predecessor-only writes.
   const findings = audit.findings
@@ -622,7 +632,8 @@ export async function auditImportBatch(
       proposedFix?.kind === "relink_product" ? proposedFix.expenseId : null;
     if (
       relinkExpenseId &&
-      !batchExpenseIds.has(parseEntityId("expense", relinkExpenseId))
+      (!batchExpenseIds.has(parseEntityId("expense", relinkExpenseId)) ||
+        allocationExpenseIds.has(parseEntityId("expense", relinkExpenseId)))
     )
       continue;
     const evidenceFingerprint = await sha256Hex(JSON.stringify(finding));
