@@ -1014,6 +1014,15 @@ source claims. Booking a primary refreshes every charge in its group. Unequal
 counts cannot tell repeat charges from copies: every member keeps the others
 as `siblings` and waits for review.
 
+Within one source, an export without provider IDs can re-record provider rows.
+Before a statement page publishes, a group of live charges with identical
+resolved account, descriptor, date, amounts, description and merchant is
+settled automatically when every member is ready and unbooked, its provider-ID
+rows and ID-less rows come from different imports, and the two counts are
+equal: each ID-less row is superseded by a provider row through the reviewed
+replacement writer, and its advice retires. Any other group keeps its
+`siblings`.
+
 ### Statement Sweeps
 
 Recording rows starts a routine statement Sweep; `run.sweep` reruns it. Default
@@ -1455,7 +1464,7 @@ group by group, filtering a group with
    application>}`.
 3. A charge with `siblings` has a same-amount charge from another export: the
    pair may be one charge whose descriptor firmed up. Within one source,
-   supersede the thinner row (generic `entity.update` on
+   when exact ID-less twins did not settle automatically, supersede the thinner row (generic `entity.update` on
    `sourceTransactionRecord`, setting `supersededByRowId` to the reviewed
    successor record ID) before creating either. Siblings from other sources
    mean their counts disagree (see [Matching](#matching)): book each real
