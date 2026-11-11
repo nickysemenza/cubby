@@ -133,6 +133,34 @@ function Track({
 }
 
 /**
+ * A `ProgressValue` for a plain counted operation: `done` of `total` (`null`
+ * when unknown) with `failed` among the settled and the rest queued.
+ */
+export function countedProgress({
+  done,
+  total,
+  unit,
+  failed = 0,
+  active = 0,
+}: {
+  done: number;
+  total: number | null;
+  unit: string;
+  failed?: number;
+  active?: number;
+}): ProgressValue {
+  return {
+    done,
+    failed,
+    active,
+    stalled: 0,
+    queued: total === null ? 0 : Math.max(0, total - done - failed - active),
+    total,
+    unit,
+  };
+}
+
+/**
  * How far work has come, drawn from the counts alone. A total of 12 or fewer
  * is one segment per unit (named when `value.parts` is given), a larger one is
  * a proportional bar, and a `null` total is an indeterminate dashed track with
@@ -150,7 +178,8 @@ export function ProgressMeter({
   className,
 }: {
   value: ProgressValue;
-  label?: ReactNode;
+  /** Replaces the default text; `null` draws the track alone. */
+  label?: ReactNode | null;
   note?: string;
   variant?: "row" | "block";
   paused?: boolean;
@@ -171,15 +200,17 @@ export function ProgressMeter({
       )}
     >
       <Track value={value} paused={paused} variant={variant} title={title} />
-      <span className="min-w-0 truncate text-sm text-muted-foreground">
-        {label ?? (
-          <>
-            <b className="font-medium text-foreground">{value.done}</b>
-            {text.slice(String(value.done).length)}
-          </>
-        )}
-        {note ? <> · {note}</> : null}
-      </span>
+      {label === null ? null : (
+        <span className="min-w-0 truncate text-sm text-muted-foreground">
+          {label ?? (
+            <>
+              <b className="font-medium text-foreground">{value.done}</b>
+              {text.slice(String(value.done).length)}
+            </>
+          )}
+          {note ? <> · {note}</> : null}
+        </span>
+      )}
     </span>
   );
 }

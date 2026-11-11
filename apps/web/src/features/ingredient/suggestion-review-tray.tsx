@@ -3,9 +3,9 @@ import { countLabel } from "@cubby/shared/pluralize";
 import type { IngredientEnrichmentRead } from "~/contracts/ingredient.contract";
 import { AiProvenance } from "~/entity/suggestions/ai-proposal-card";
 import { AiProposalList } from "~/entity/suggestions/ai-proposal-list";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Row, Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
-import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 
 import { UnitInput } from "./workbench-editor-core";
@@ -90,7 +90,15 @@ export function SuggestionReviewTray({
 
   return (
     <Stack gap="sm">
-      {progress && <Progress value={progress.done} max={progress.total} />}
+      {progress && (
+        <ProgressMeter
+          value={countedProgress({
+            done: progress.done,
+            total: progress.total,
+            unit: "suggestions",
+          })}
+        />
+      )}
       <AiProposalList
         heading="USDA suggestions"
         // The proposals arrive through the enrichment precompute cache, which

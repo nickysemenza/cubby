@@ -1,6 +1,8 @@
+import type { ProgressValue } from "@cubby/schemas/progress";
 import { cn } from "cn";
 
 import { formatCount } from "~/lib/number-format";
+import { ProgressMeter } from "~/ui/feedback/progress-meter";
 import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 
 import {
@@ -9,41 +11,16 @@ import {
   type StepSegment,
 } from "./run-view-model";
 
-const SEGMENT_TRACK = {
-  done: "bg-foreground/55",
-  running: "bg-info-surface",
-  waiting: "bg-info-surface",
-  paused: "bg-info-surface",
-  failed: "bg-destructive",
-  not_started: "bg-border",
-} as const satisfies Record<StepSegment["phase"], string>;
+type ProgressPart = NonNullable<ProgressValue["parts"]>[number];
 
-function Segment({ segment }: { segment: StepSegment }) {
-  const moving = segment.phase === "running" || segment.phase === "waiting";
-  return (
-    <span
-      title={segment.label}
-      data-step-segment={segment.phase}
-      className={cn(
-        "relative h-1.5 overflow-hidden rounded-[1px]",
-        SEGMENT_TRACK[segment.phase],
-      )}
-    >
-      {segment.tally ? (
-        <span className="progress-indeterminate absolute inset-y-0 left-0 w-[30%] bg-info" />
-      ) : (moving || segment.phase === "paused") &&
-        segment.fraction !== null ? (
-        <span
-          className={cn(
-            "absolute inset-y-0 left-0",
-            segment.phase === "running" ? "bg-info" : "bg-info/55",
-          )}
-          style={{ width: `${segment.fraction * 100}%` }}
-        />
-      ) : null}
-    </span>
-  );
-}
+const SEGMENT_STATE = {
+  done: "done",
+  running: "active",
+  waiting: "active",
+  paused: "queued",
+  failed: "failed",
+  not_started: "queued",
+} as const satisfies Record<StepSegment["phase"], ProgressPart["state"]>;
 
 /**
  * A Run's honest overall status: the current step's own count line and one
@@ -85,17 +62,33 @@ export function RunStepStrip({
           .map((step) => `${step.label}: ${STEP_PHASE_LABEL[step.phase]}`)
           .join(", ")}
       </p>
-      <div
-        aria-hidden
-        className="grid max-w-[32.5rem] gap-[3px]"
-        style={{
-          gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))`,
+      <ProgressMeter
+        className="max-w-[32.5rem]"
+        label={null}
+        value={{
+          done: overview.segments.filter((segment) => segment.phase === "done")
+            .length,
+          failed: overview.segments.filter(
+            (segment) => segment.phase === "failed",
+          ).length,
+          active: overview.segments.filter(
+            (segment) =>
+              segment.phase === "running" || segment.phase === "waiting",
+          ).length,
+          stalled: 0,
+          queued: overview.segments.filter(
+            (segment) =>
+              segment.phase === "paused" || segment.phase === "not_started",
+          ).length,
+          total: steps.length,
+          unit: "steps",
+          parts: overview.segments.map((segment) => ({
+            label: segment.label,
+            state: SEGMENT_STATE[segment.phase],
+          })),
         }}
-      >
-        {overview.segments.map((segment) => (
-          <Segment key={segment.key} segment={segment} />
-        ))}
-      </div>
+        paused={current?.phase === "paused"}
+      />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
         {figures?.length ? (
           <KeyNumbers layout="inline" label="Run figures" items={figures} />

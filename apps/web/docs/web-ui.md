@@ -14,6 +14,16 @@ heading for the surface you are changing.
   `positive`, red to `destructive`, amber to `warning`. Canvas paint,
   `theme-color` and chart-library fallbacks are the usual exceptions; this is a
   review rule, not a lint.
+- The web palette (Warm neutral, light only) overrides the shared colors in
+  `:root` of `styles.css`; native keeps `tokens.json`. Colour carries meaning
+  only. State tokens: `running` (the info hue), `done` and `failed` (the
+  `positive` and `destructive` hues), `stalled`, `stalled-surface`,
+  `stalled-mark`, `queued` and `paused`; `needs` and `needs-foreground` for the
+  needs-you pill; `progress-done` and `progress-track` for meters; `row-hover`
+  for the hover wash. Every text pair on the surface, sidebar and row hover
+  needs 4.5:1 and every mark 3:1; check a new pair numerically.
+- Type has no step under 11px: `text-2xs` and `text-3xs` are both 11px, and
+  desktop leading is at least 1.3x.
 - A new semantic color gets its primitive in `brand.css` and a `--color-*`
   mirror in `styles.css`'s `@theme inline` when Tailwind utilities need it.
   Composite shadow tokens (`--shadow-overlay`, `--shadow-pin-*`,
@@ -25,6 +35,13 @@ heading for the surface you are changing.
   Toggle) already size their icon slot to `size-3.5`.
 - `Badge` is the categorical chip, sentence case by default; don't hand-roll
   pill styling.
+- Work state, progress and kind have one component each, with no
+  entity-specific copy: `StateBadge` (`ui/records/state-badge.tsx`),
+  `ProgressMeter` (`ui/feedback/progress-meter.tsx`, fed a `ProgressValue`;
+  `countedProgress` builds one from a plain count) and `KindTag`
+  (`ui/records/kind-tag.tsx`). `StateBadge` draws needs-you, stalled and failed
+  as filled pills and the rest as a dot or glyph with a label; a wait adds its
+  queue position and estimate on the display clock.
 
 ## Spacing and layout primitives
 
@@ -276,16 +293,22 @@ Columns without a typed clipboard declaration copy as read-only text.
 
 ### Row height
 
-`RTable` rows have one fixed height (`--table-row-height`, read by `ROW_DENSITY`
-in `ui/data-table/density.ts`): 24px on a fine-pointer desktop, 32px on coarse
-pointers and hosted native workspaces. The virtualizer places rows at that
-height, so a taller painted row makes scrolling jump; section headers match it.
-`DesktopDataRow` clips every cell to the height.
+`RTable` rows have one fixed height per table (`--table-row-height`, written on
+the table container and read by `rowDensity({lines, embedded})` in
+`ui/data-table/density.ts`): on a fine-pointer desktop 28px single and 54px in
+two-line mode with a 30px header; on coarse pointers and hosted native
+workspaces 32px single and 54px double. Embedded tables are always single. The
+virtualizer places rows at that height, so a taller painted row makes scrolling
+jump; section headers match it. `DesktopDataRow` clips every cell to the height.
 
-- At 24px every cell is one line: `StackedValue` lays its parts on one line and
-  `ChipCluster` fits one line of chips and counts the rest as "+N" (at 32px both
-  keep two lines). The first named chip stays visible, truncating beside the
-  count; a populated cell never collapses to only "+1".
+- Two-line mode (`rows=2` in URL search state, offered when the entity has
+  subtitle-slot fields) draws the title and kind tag over the subtitle fields
+  joined by " · "; a column drawn on line 2 hides. It is never persisted to the
+  account.
+- In a single-line row every cell is one line: `StackedValue` lays its parts on
+  one line and `ChipCluster` fits one line of chips and counts the rest as "+N"
+  (at 32px both keep two lines). The first named chip stays visible, truncating
+  beside the count; a populated cell never collapses to only "+1".
 - A value in a desktop cell takes its dense form through `DenseCellContext`
   (set by `DesktopDataRow`; other surfaces pass `stacked`). Add dense forms to
   the shared component, not a table-only twin. Clipped codes use
@@ -293,6 +316,8 @@ height, so a taller painted row makes scrolling jump; section headers match it.
 - Enum values read as a dot and text at `md` and above (`table.css`, keyed off
   `data-enum-tone`); only `status`-role warning and destructive options keep a
   filled pill. The choice reads the declared role and tone, never the spelling.
+  An entity with `presentation.state` draws its state field with `StateBadge`
+  instead, and one with `presentation.progress` draws it with `ProgressMeter`.
 - Inventory relation cells keep location and quantity in the two-line dense
   budget; supplemental stock context moves to hover and accessible text. A third
   line never overlaps the next row.
@@ -336,6 +361,13 @@ height, so a taller painted row makes scrolling jump; section headers match it.
 - Widths are TanStack numeric `size`/`minSize`/`maxSize`; the platform publishes
   matching CSS variables on the colgroup, and only sticky offsets inherit into
   rows. Tailwind width classes on `meta.className` are normalized legacy input.
+- Widths belong to the column kind (`COLUMN_KIND_WIDTHS` in
+  `ui/data-table/column-kind-widths.ts`: a full width and a narrow one), never
+  the entity. A table pane of 1100px or wider draws the full width class; a
+  narrower one steps each kind to its narrow width and optional columns leave
+  the default visible set. `display.priority` (`essential`, `default`,
+  `optional`) decides which columns drop; essential never drop, and a column
+  the member shows in the session wins. Priority is not persisted.
 - An undeclared width comes from the cell kind (`defaultColumnSize`).
   Read-only enum, boolean, date and timestamp fields carry their own kind so
   they size like editable twins. A field declares `display.width` only when its
@@ -371,9 +403,11 @@ height, so a taller painted row makes scrolling jump; section headers match it.
   or automatic-value mark: a value looks the same whoever set it.
 - One-line chip lists use `ChipCluster lines={1}`; two-line content uses
   `StackedValue`, `ChipCluster` or a shared dense form.
-- Every identity cell holds one line of name text: no caption, subtitle or pill
-  beneath. `createNameColumn` has no caption option. Shelf cards keep declared
-  subtitles; `list.titleSubtitle` does not affect web tables.
+- In single-line mode an identity cell holds one line of name text, plus the
+  `KindTag` at full width: no caption or subtitle beneath. In two-line mode the
+  second line is the declared subtitle (`list.titleSubtitle` and the
+  subtitle-slot fields), muted and truncated. `createNameColumn` has no caption
+  option.
 - `display.columnBar` adds magnitude against the largest absolute loaded,
   filtered value (`CellMagnitudeBar`); loading more can rescale it. The signed
   value and clipboard stay authoritative; zero and unavailable values get no bar.
@@ -445,10 +479,26 @@ divided lists.
 Every list and detail page renders through `Page` (`~/entity/page/page`), whose
 props are a discriminated union: `variant="detail"` requires `entity`. Pages
 never call `PageWrapper` directly. Detail bodies use `DetailSections`
-(`~/entity/table/detail-page`) as children. Headings and disclosure follow
-[shared headings](../DESIGN.md#shared-headings-and-actions). An empty portaled
-table toolbar leaves no border or spacing. Run detail owns the shared agent
-controls, transcript and progress presentation.
+(`~/entity/table/detail-page`) as children.
+
+- The detail header draws breadcrumb, title, `KindTag`, `StateBadge`, commands,
+  then up to three declared `detail.lines` (64px label column) beside the
+  labelled AI summary from 1120px of pane width.
+- The workspace is a 272px side column (236px at 1000px or narrower) beside
+  declared section groups as 44px tabs with counts. Without `detail.groups` an
+  entity gets Overview, Work, Evidence, Relations and Activity. Every panel
+  stays mounted; inactive panels are `hidden="until-found"` and `beforematch`
+  selects the tab. The tab is the `#<group>` fragment and a section anchor
+  selects its group.
+- A fact appears once: header lines, state, kind, the AI summary, the side
+  column's needs field and its summary cells leave the field sections, and an
+  embedded table omits the parent-reference column.
+- A field section folds absent values into one "N fields not recorded: …"
+  `<details>` line (`FoldedFacts`) whose body keeps the Add controls; fields
+  with a quality check or required validation stay visible. Headings and disclosure follow
+  [shared headings](../DESIGN.md#shared-headings-and-actions). An empty portaled
+  table toolbar leaves no border or spacing. Run detail owns the shared agent
+  controls, transcript and progress presentation.
 
 ### Ordinary overlays
 

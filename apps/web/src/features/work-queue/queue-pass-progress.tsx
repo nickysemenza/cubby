@@ -2,9 +2,9 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { cn } from "cn";
 import type { ReactNode } from "react";
 
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Panel, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
@@ -41,7 +41,14 @@ export function QueuePassProgress({
           </Description>
           {trailing}
         </Row>
-        <Progress value={counts.settled} max={Math.max(counts.total, 1)} />
+        <ProgressMeter
+          value={countedProgress({
+            done: counts.settled,
+            total: counts.total,
+            unit: "stops",
+          })}
+          label={null}
+        />
       </Stack>
     </Panel>
   );
