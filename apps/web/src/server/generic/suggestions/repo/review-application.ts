@@ -6,7 +6,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { advisoryXactLock } from "~/server/db/advisory-lock";
+import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
 import {
   getDb,
   withTransactionDatabase,
@@ -67,18 +67,23 @@ export function executeReviewApplication(
       // domain's parent locks. Receipt and mutation commit in the same boundary.
       // The subject lock comes first: an apply supersedes the subject's other
       // live rows, so two of them applying at once would deadlock on each other.
-      // The id lock is the key mail decision review shares.
-      if (prediction.subject)
-        await advisoryXactLock(
-          getDb(transactionDb),
+      // The id lock is the key mail decision review shares. One statement
+      // takes both, left to right.
+      if (prediction.subject) {
+        const subject = advisoryLockKey(
           "suggestion-review",
           `${prediction.family}:${JSON.stringify(prediction.subject)}`,
         );
-      await advisoryXactLock(
-        getDb(transactionDb),
-        "suggestion-review",
-        prediction.id,
-      );
+        const own = advisoryLockKey("suggestion-review", prediction.id);
+        await getDb(transactionDb).execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${subject}, 0)), pg_advisory_xact_lock(hashtextextended(${own}, 0))`,
+        );
+      } else
+        await advisoryXactLock(
+          getDb(transactionDb),
+          "suggestion-review",
+          prediction.id,
+        );
       const [owner] = await getDb(transactionDb)
         .select({ decisions: suggestionTable.decisions })
         .from(suggestionTable)
