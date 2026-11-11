@@ -45,7 +45,7 @@ export const mailAttemptInput = z.object({
   stage: z.enum(["primary", "escalation"]),
   /**
    * `refused`: the harness refused this invocation before any writer ran. It
-   * settles only this invocation's own reservation, as a spent rejected attempt.
+   * releases only this invocation's own reservation, spending no attempt.
    */
   action: z.enum([
     "admit",

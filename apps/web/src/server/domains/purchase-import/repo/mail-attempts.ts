@@ -104,8 +104,9 @@ export async function recordMailAttempt(
               input.identity,
               ...(input.legacyIdentity ? [input.legacyIdentity] : []),
             ]),
-            // A refused call never reached a writer: it may clear only its own
-            // reservation, never an identical attempt whose outcome is uncertain.
+            // A refused call never reached a writer: it releases only its own
+            // reservation. Uncharged, it neither reconciles an identical
+            // uncertain attempt nor blocks that identity's later replay.
             input.action === "refused"
               ? sql`${runOperation.result}->>${"invocation"} = ${input.invocation}`
               : undefined,
@@ -118,9 +119,9 @@ export async function recordMailAttempt(
           {
             // Classification preserves the original stage when model recovery moved on.
             ...attemptReceipt.parse(alias.result),
-            charged: input.action !== "exempt",
+            charged: input.action !== "exempt" && input.action !== "refused",
             pending: input.action === "pending",
-            rejected: input.action === "invalid" || input.action === "refused",
+            rejected: input.action === "invalid",
           },
         );
       return mailAttemptResult.parse({ kind: "admitted" });

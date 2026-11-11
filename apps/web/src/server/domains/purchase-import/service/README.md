@@ -303,9 +303,9 @@ the original checksum, sender proof and accepted order-source context;
 display-name and Purchase-date edits do not reset it. Writer classification
 uses trusted MCP error metadata, never Email text. Held-source refusals are
 exempt. A call the harness refuses before any writer runs (invalid arguments,
-a host block) spends its primary attempt through malformed-call accounting and
-settles as rejected; that settlement touches only its own reservation, never an
-identical attempt whose outcome is uncertain. When the primary budget is spent before any
+a host block) releases its own accounting reservation and spends no attempt;
+it never reconciles or replaces an identical attempt whose outcome is
+uncertain. The per-Email request limit bounds repeated refusals. When the primary budget is spent before any
 escalation answer, the coordinator is offered its escalation question once; the
 next exhaustion settles. Ordinary-path calls on incomplete compact evidence are blocked before
 either malformed-call accounting or writer admission, preserving the
