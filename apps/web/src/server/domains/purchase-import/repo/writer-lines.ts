@@ -7,6 +7,7 @@ import type {
   ExtractedOrderCandidate,
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { importSourceProduct } from "~/server/db/schema";
@@ -110,9 +111,39 @@ export async function writePurchaseLines(
   };
   // An unpriced itemization books its printed total first, then its item
   // lines without cost; never price an item from the total.
-  if (mode.kind === "unpriced_itemization") await writeAggregate();
-  const lineMode =
-    mode.kind === "unpriced_itemization" ? mode.lines : mode.kind;
+  // Existing money (a statement booking on a notice Purchase, an earlier
+  // import) must already hold exactly the printed total: otherwise the items
+  // are not written as carried and the gap is reviewed.
+  let carriedTotalConflict = false;
+  if (mode.kind === "unpriced_itemization") {
+    const existing = await args.loadExpenses();
+    const printed =
+      candidate.printedGrandTotal === null
+        ? null
+        : cents(candidate.printedGrandTotal);
+    carriedTotalConflict =
+      existing.length > 0 &&
+      !existing.some(
+        (row) =>
+          row.lineBasis === "allocation" &&
+          row.amount !== null &&
+          cents(row.amount) === printed,
+      );
+    if (carriedTotalConflict)
+      await fileFindings([
+        {
+          kind: "sum_mismatch",
+          summary:
+            "The Purchase already holds Expenses that do not carry the printed total; its unpriced items were not written.",
+        },
+      ]);
+    else await writeAggregate();
+  }
+  const lineMode = carriedTotalConflict
+    ? ("none" as const)
+    : mode.kind === "unpriced_itemization"
+      ? mode.lines
+      : mode.kind;
   if (mode.kind === "aggregate") {
     await writeAggregate();
     await fileFindings([{ kind: "sum_mismatch", summary: mode.detail }]);

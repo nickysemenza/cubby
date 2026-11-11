@@ -219,6 +219,52 @@ describe("incomplete itemized purchase identity", () => {
     expect(allocations).toEqual([{ purchaseId: waiting.id }]);
   });
 
+  // Money already on the order that is not its printed total (a partial
+  // charge booked on a notice Purchase) never makes the items "carried".
+  it("reviews a total-only confirmation whose Purchase already holds a different amount", async () => {
+    const { input } = await scope();
+    const waiting = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: parseEntityId("vendor", input.vendorId),
+      orderId: "EXAMPLE-PARTIAL",
+      date: "2032-03-04",
+    });
+    await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: waiting.id,
+      name: "Synthetic partial charge",
+      cost: 3,
+      date: "2032-03-04",
+      costType: "materials",
+      lineKind: "principal",
+      lineBasis: "allocation",
+    });
+    input.extraction = {
+      status: "needs_review",
+      reason: "unpriced_itemization",
+      detail: "The confirmation prints its total but no item prices.",
+      candidate: {
+        ...input.extraction.candidate!,
+        orderId: "EXAMPLE-PARTIAL",
+        orderedAt: "2032-03-01",
+        printedGrandTotal: 5.52,
+        lines: [
+          {
+            title: "Synthetic soap",
+            amount: null,
+            quantity: 1,
+            lineKind: "principal",
+          },
+        ],
+      },
+    };
+    const result = await importVendorOrder(ctx.db, input, ctx.actor.userId);
+    expect(result.findingIds).toHaveLength(1);
+    const rows = await getDb(ctx.db)
+      .select({ cost: expense.cost, name: expense.name })
+      .from(expense)
+      .where(and(eq(expense.purchaseId, waiting.id), notDeleted(expense)));
+    expect(rows).toEqual([{ cost: 3, name: "Synthetic partial charge" }]);
+  });
+
   it.each(["same source", "separate source"] as const)(
     "retains foreign items as unpriced Expenses beside one USD aggregate through replay and equivalent evidence (%s)",
     async (sourceIdentity) => {

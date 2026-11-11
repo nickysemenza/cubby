@@ -270,7 +270,17 @@ export async function linkShipmentsByOrderId(
         scope.purchaseIds
           ? inArray(purchase.id, [...scope.purchaseIds])
           : undefined,
-        // A source Email's Vendor or member that disagrees never links.
+        // Order numbers are only unique per Vendor: a source Email must name
+        // the Purchase's Vendor, and any source Vendor or member that
+        // disagrees blocks the link.
+        sql`EXISTS (
+          SELECT 1 FROM ${shipmentObservation} observation
+          JOIN ${shipmentSourceCapture} capture ON capture.id = observation."sourceCaptureId"
+          JOIN ${email} source_email ON source_email.id = capture."emailId"
+          JOIN "OrderMail" original ON original.id = source_email."orderMailId"
+          WHERE observation."shipmentId" = ${shipment.id} AND ${notDeleted("source_email")}
+            AND original."vendorId" = ${purchase.vendorId}
+        )`,
         sql`NOT EXISTS (
           SELECT 1 FROM ${shipmentObservation} observation
           JOIN ${shipmentSourceCapture} capture ON capture.id = observation."sourceCaptureId"

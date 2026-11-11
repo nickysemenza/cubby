@@ -26,6 +26,7 @@ import {
   inventoryEntry,
   email,
   ledgerParty,
+  orderMail,
   purchase,
   user,
 } from "~/server/db/schema";
@@ -765,16 +766,18 @@ describe("Shipment retained evidence", () => {
       ).id,
       orderId: "SYN-SHIP-9",
     });
+    // Order numbers are unique only per Vendor: a notice naming no Vendor never links.
     expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(0);
     await getDb(ctx.db)
-      .update(purchase)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchase.id, other.id));
+      .update(orderMail)
+      .set({ vendorId: seller.id })
+      .where(eq(orderMail.id, message!.orderMailId!));
     expect(await linkShipmentsByOrderId(ctx.db, ctx.actor)).toBe(1);
     expect(await read()).toEqual({
       orderId: "SYN-SHIP-9",
       purchaseId: order.id,
     });
+    expect(other.id).not.toBe(order.id);
   });
 
   it("uses exact carrier tracking links only from the independently retained Email original", async () => {

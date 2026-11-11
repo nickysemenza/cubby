@@ -143,7 +143,7 @@ export const EMAIL_IMPORT_OUTCOME_LABEL = {
 } as const satisfies Record<EmailImportOutcome, string>;
 
 /** Who settles an unresolved import gap. Hands-off: automatic unless only an agent or the member can. */
-export const mailImportGapExecutor = z.enum(["automatic", "agent", "human"]);
+const mailImportGapExecutor = z.enum(["automatic", "agent", "human"]);
 export type MailImportGapExecutor = z.infer<typeof mailImportGapExecutor>;
 export const MAIL_IMPORT_GAP_EXECUTOR = {
   source_held: "automatic",
@@ -177,7 +177,6 @@ export const mailImportWaitingOn = z.discriminatedUnion("kind", [
     vendorId: entityIdSchema("vendor").nullable(),
   }),
 ]);
-export type MailImportWaitingOn = z.infer<typeof mailImportWaitingOn>;
 
 /** `mailImportWaitingOn` as a read shows it: public codes, never stored UUIDs. */
 export const mailImportWaitingOnOut = z.discriminatedUnion("kind", [

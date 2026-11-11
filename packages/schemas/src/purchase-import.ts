@@ -276,6 +276,16 @@ export const importExtractionOutcome = z
           message:
             "unpriced_itemization requires a USD order with its printed grand total.",
         });
+      // Printed item prices are itemization to reconcile, never carried by the total.
+      candidate.lines.forEach((line, index) => {
+        if (line.amount !== null)
+          context.addIssue({
+            code: "custom",
+            path: ["candidate", "lines", index, "amount"],
+            message:
+              "unpriced_itemization lines carry no printed price; priced lines that disagree with the total are sum_mismatch.",
+          });
+      });
       return;
     }
     if (value.status !== "unreadable")

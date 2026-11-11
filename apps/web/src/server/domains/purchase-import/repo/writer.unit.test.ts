@@ -1,5 +1,8 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { ExtractedPurchaseLine } from "@cubby/schemas/purchase-import";
+import {
+  importExtractionOutcome,
+  type ExtractedPurchaseLine,
+} from "@cubby/schemas/purchase-import";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionChoiceResult } from "~/server/ai/decision-model";
@@ -132,6 +135,22 @@ describe("purchase import semantic plan", () => {
         detail: "The confirmation prints its total but no item prices.",
       }).writeBlockReason,
     ).toBe("unpriced_itemization");
+  });
+
+  // A priced line under the total-only reason would skip the sum check.
+  it("rejects printed item prices under unpriced_itemization", () => {
+    expect(
+      importExtractionOutcome.safeParse({
+        status: "needs_review",
+        candidate: {
+          ...candidate,
+          printedGrandTotal: 10,
+          lines: [{ ...candidate.lines[0]!, amount: 40, quantity: 1 }],
+        },
+        reason: "unpriced_itemization",
+        detail: "Synthetic priced lines disagreeing with the total.",
+      }).success,
+    ).toBe(false);
   });
 });
 

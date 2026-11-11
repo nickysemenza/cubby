@@ -11,6 +11,7 @@ import {
   importSourceOrder,
   importSourceProduct,
 } from "~/server/db/generated/entity-table-definitions.gen";
+import { notDeleted } from "~/server/db/helpers";
 import { related } from "~/server/db/helpers/related";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
@@ -152,7 +153,13 @@ const unpricedItemizationExpenseSql = (row: {
       importSourceOrder,
       (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
   AND ${order.purchaseId} = ${row.purchaseId} AND ${unpricedItemizationSourceSql(order.originalOrder)}
-  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}`,
+  AND (${order.originalOrder} #> '{extraction,candidate,lines}') -> ${binding.lineIndex} ->> ${"lineKind"} = ${row.lineKind}
+  AND EXISTS (
+    SELECT 1 FROM "Expense" carried
+    WHERE carried."purchaseId" = ${row.purchaseId} AND ${notDeleted("carried")}
+      AND carried."lineBasis" = ${"allocation"}
+      AND carried.cost = (${order.originalOrder} #>> '{extraction,candidate,printedGrandTotal}')::numeric
+  )`,
     )
     .exists();
 
