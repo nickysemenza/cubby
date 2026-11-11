@@ -3,8 +3,7 @@ import { and, asc, eq, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { uuidArrayParam } from "~/server/db/helpers/query";
-import { textArrayParam } from "~/server/db/helpers/requested";
+import { textArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import { expense, purchase } from "~/server/db/schema";
 
 // A printed field label before the identifier: `Trip ID: X`, `Order number: X`,
