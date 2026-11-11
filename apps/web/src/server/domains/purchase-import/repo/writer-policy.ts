@@ -11,7 +11,7 @@ import {
   importSourceOrder,
   importSourceProduct,
 } from "~/server/db/generated/entity-table-definitions.gen";
-import { notDeleted } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { related } from "~/server/db/helpers/related";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
