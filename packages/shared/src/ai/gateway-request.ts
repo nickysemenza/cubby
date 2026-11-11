@@ -1162,30 +1162,127 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       endpoint === "responses" &&
       routes.funding !== "subscriber_credit"
     ) {
-      const flex = await routes.gateway({
-        ...request,
-        query: async () => ({
-          ...(await request.query()),
-          service_tier: "flex",
+      const flex = await flexAttempt(
+        await routes.gateway({
+          ...request,
+          query: async () => ({
+            ...(await request.query()),
+            service_tier: "flex",
+          }),
         }),
-      });
-      if (
-        flex.status !== 429 ||
-        !FLEX_CAPACITY_REFUSAL.test(await flex.clone().text())
-      )
-        return observe(flex);
+      );
+      if (flex) return observe(flex);
     }
     return observe(await routes.gateway(request));
   };
 }
 
 /**
- * OpenAI's "Resource Unavailable" 429 for flex is unbilled; resend at
- * standard. Its body names neither phrase reliably: production returned only
- * "Flex processing is temporarily unavailable".
+ * OpenAI's flex capacity refusal is unbilled; resend at standard. Its text
+ * names neither phrase reliably: production returned only "Flex processing is
+ * temporarily unavailable".
  */
 const FLEX_CAPACITY_REFUSAL =
   /resource[ _-]?unavailable|flex processing is temporarily unavailable/i;
+
+/**
+ * Stream events that precede any model output. Production flex refusals
+ * followed `response.created`, `response.in_progress` and sometimes a
+ * `keepalive`.
+ */
+const PRE_OUTPUT_EVENTS = new Set([
+  "response.created",
+  "response.in_progress",
+  "response.queued",
+  "keepalive",
+]);
+
+/**
+ * The flex attempt's response, or undefined when OpenAI refused flex
+ * capacity. The refusal arrives as a 429 or, on a stream, as a failure event
+ * after a 200: production streams failed about 13 s in, and every one ended
+ * its Mail import Run (2026-11-11). Only lifecycle events before the first
+ * output are held, at most 64 KiB; any other event releases them and the live
+ * stream unchanged, so no model output is retained or replayed.
+ */
+async function flexAttempt(response: Response): Promise<Response | undefined> {
+  if (response.status === 429)
+    return FLEX_CAPACITY_REFUSAL.test(await response.clone().text())
+      ? undefined
+      : response;
+  if (
+    !response.ok ||
+    !response.body ||
+    !response.headers.get("content-type")?.includes("text/event-stream")
+  )
+    return response;
+  const reader = response.body.getReader();
+  const held: Uint8Array[] = [];
+  let heldBytes = 0;
+  let verdict: "refused" | "released" | undefined;
+  const feed = sseEventFeed(
+    (event) => {
+      if (verdict) return;
+      const classified = classifyStreamEvent(event);
+      if ("error" in classified)
+        verdict = FLEX_CAPACITY_REFUSAL.test(JSON.stringify(classified.error))
+          ? "refused"
+          : "released";
+      else if (!PRE_OUTPUT_EVENTS.has(classified.type)) verdict = "released";
+    },
+    () => {
+      verdict ??= "released";
+    },
+  );
+  let ended = false;
+  while (!verdict) {
+    const part = await reader.read();
+    if (part.done) {
+      ended = true;
+      break;
+    }
+    held.push(part.value);
+    heldBytes += part.value.byteLength;
+    try {
+      feed(part.value);
+    } catch {
+      verdict = "released"; /* An unreadable prefix is the SDK's to report. */
+    }
+    if (heldBytes > 65_536) verdict ??= "released";
+  }
+  if (verdict === "refused") {
+    await reader.cancel();
+    return undefined;
+  }
+  const body = new ReadableStream<Uint8Array>(
+    {
+      async pull(controller) {
+        const next = held.shift();
+        if (next) {
+          controller.enqueue(next);
+          return;
+        }
+        const part = ended ? undefined : await reader.read();
+        if (!part || part.done) {
+          reader.releaseLock();
+          controller.close();
+          return;
+        }
+        controller.enqueue(part.value);
+      },
+      async cancel(reason) {
+        await reader.cancel(reason);
+        reader.releaseLock();
+      },
+    },
+    { highWaterMark: 0 },
+  );
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
 
 /** Cubby's AI Gateway as the Worker binding exposes it (`AiGateway.run`). */
 export interface UniversalGateway {

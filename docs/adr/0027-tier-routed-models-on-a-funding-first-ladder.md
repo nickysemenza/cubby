@@ -70,7 +70,7 @@ runs on `quality`; it has no escalation.
 **Unattended OpenAI calls use flex.** Work no member waits on (coordinators and
 automatic feature calls) asks OpenAI for the `flex` service tier on credit and
 paid gateway routes, and resends at the standard tier when OpenAI refuses for
-flex capacity. Flex publishes half of every standard rate, so its usage rows
+flex capacity, whether as a 429 or as a stream failure before any output. Flex publishes half of every standard rate, so its usage rows
 record flex rates as their standard cost. OpenAI credit through the native
 route serves flex; the paid Unified Billing `/ai/v1` route answers at the
 default tier, which its rows record. The ChatGPT plan and Claude credit are

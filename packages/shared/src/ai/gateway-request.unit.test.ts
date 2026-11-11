@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   gatewayControlHeaders,
@@ -1741,4 +1742,71 @@ describe("budgeted pre-output stream quota fallback", () => {
       expect(r.gateway).not.toHaveBeenCalled();
     },
   );
+});
+
+// OpenAI refuses flex capacity inside a 200 stream, and every refusal ended a
+// Mail import Run. An unbilled refusal before any output resends at standard;
+// a stream with output passes through byte for byte.
+describe("flex service tier", () => {
+  const sse = (...events: { type: string }[]) =>
+    new Response(
+      events
+        .map(
+          (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+        )
+        .join(""),
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  const send = (first: Response) => {
+    const tiers: string[] = [];
+    const fetcher = gatewayFetchThrough({
+      provider: "openai",
+      funding: "openai_credit",
+      flex: true,
+      gateway: async (request) => {
+        const body = z
+          .object({ service_tier: z.string().optional() })
+          .parse(await request.query());
+        tiers.push(body.service_tier ?? "standard");
+        return tiers.length === 1 ? first : sse({ type: "response.completed" });
+      },
+    });
+    const response = fetcher(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ stream: true }),
+    });
+    return { tiers, response };
+  };
+
+  it("resends a stream refused for flex capacity at standard", async () => {
+    // The shape production returned, after these lifecycle events.
+    const refused = {
+      type: "error",
+      error: {
+        type: "resource_unavailable",
+        code: "flex_unavailable",
+        message:
+          "Flex processing is temporarily unavailable. Please try again later or use standard processing.",
+      },
+    };
+    const { tiers, response } = send(
+      sse(
+        { type: "response.created" },
+        { type: "response.in_progress" },
+        { type: "keepalive" },
+        refused,
+      ),
+    );
+    expect(await (await response).text()).toContain("response.completed");
+    expect(tiers).toEqual(["flex", "standard"]);
+  });
+
+  it("passes a flex stream with output through unchanged", async () => {
+    const output = { type: "response.output_text.delta", delta: "Synthetic" };
+    const first = sse({ type: "response.created" }, output);
+    const expected = await first.clone().text();
+    const { tiers, response } = send(first);
+    expect(await (await response).text()).toBe(expected);
+    expect(tiers).toEqual(["flex"]);
+  });
 });
