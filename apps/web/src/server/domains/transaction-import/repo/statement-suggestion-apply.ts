@@ -10,10 +10,12 @@ import {
   type StatementTransactionApplication,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
+import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
-import { unwrapDb, withTransaction } from "~/server/db/helpers";
+import { runAfterCommit, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
@@ -49,6 +51,8 @@ import {
   statementApplicationSelection,
   statementTransactionPatch,
 } from "./statement-suggestion-application";
+
+const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);

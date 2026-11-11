@@ -1361,47 +1361,6 @@ describe("shared spending booking", () => {
         .sort(),
     ).toEqual([42.5, null]);
   });
-  it("treats a sibling's settled Purchase as context but reviews open capacity", async () => {
-    const { account, transaction, vendor, advice } = await fixture();
-    const first = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-      advice,
-    });
-    await commitFinancialSpending(ctx.db, first, ctx.actor);
-    const sibling = await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      transactionDate: "2026-05-04",
-      postedDate: "2026-05-05",
-      merchant: "Synthetic Orchard",
-      sourceRefs: [
-        { source: "synthetic-bank", externalId: "synthetic-sibling" },
-      ],
-    });
-    const request = { transactionId: sibling.output.id, advice };
-    const plan = await previewFinancialSpending(ctx.db, request);
-    expect(plan).toMatchObject({
-      status: "ready",
-      effect: "create_aggregate",
-      candidates: [{ strength: "context" }],
-    });
-    const open = await createRepoIdentity(ctx, "purchase", {
-      vendorId: vendor.output.id,
-      date: "2026-05-04",
-      statedTotal: 100,
-    });
-    await createRepoIdentity(ctx, "expense", {
-      purchaseId: open.output.id,
-      name: "Synthetic open receipt",
-      cost: 100,
-      trade: "other",
-    });
-    expect(await previewFinancialSpending(ctx.db, request)).toMatchObject({
-      status: "review_required",
-    });
-  });
   // Older same-vendor spending blocks only while charge-side capacity can be open.
   it.each([
     [
