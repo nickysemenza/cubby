@@ -1,4 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import { productId } from "@cubby/schemas/identifiers";
 import {
   suggestionFamily,
   suggestionJudgments,
@@ -164,7 +165,7 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   // Lock both Products before the engine compares their identity terms.
   lockForApply: async (db, prediction) => {
     const subject = z
-      .object({ recordId: z.uuid(), otherId: z.uuid() })
+      .object({ recordId: productId, otherId: productId })
       .parse(prediction.subject);
     await getDb(db)
       .select({ id: product.id })
