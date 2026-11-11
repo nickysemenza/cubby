@@ -56,9 +56,11 @@ import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transactio
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   assertFinancialSourceRefsAvailable,
+  assertFinancialSourceRefsAvailableFor,
   financialSourceRefsFor,
   financialSourceReferenceRows,
   replaceFinancialSourceRefs,
+  replaceFinancialSourceRefsFor,
   lockFinancialSourceOccurrences,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
@@ -83,7 +85,10 @@ import {
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
-import { auditEvidenceRows } from "~/server/domains/transaction-import/repo/intake-audit";
+import {
+  auditEvidenceRows,
+  evidenceAuditEntries,
+} from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   financialAllocationItems,
@@ -100,6 +105,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
+  logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -107,7 +113,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -351,19 +357,6 @@ const financialTransactionReader = createEntityReader({
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;
-async function resolveForeignKeys(
-  db: Database | DrizzleTransaction,
-  data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
-) {
-  const accountId = await resolveOrThrow(
-    db,
-    "financialAccount",
-    data.accountId,
-  );
-  return {
-    accountId,
-  };
-}
 
 export const createFinancialTransaction = defineMutationWriter({
   entity: "financialTransaction",
@@ -382,72 +375,111 @@ export const createFinancialTransaction = defineMutationWriter({
     data: FinancialTransactionCreateInput,
     actor: ActorContext,
   ) => {
-    const id = await withTransaction(db, async (tx) => {
-      const foreign = await resolveForeignKeys(tx, data);
-      await lockFinancialSourceOccurrences(tx, data.sourceRefs);
-      // One locked occurrence FK owns acceptance; retained aliases never grant it.
-      await assertFinancialSourceRefsAvailable(tx, data.sourceRefs);
-      const { allocations, sourceRefs, ...columns } = data;
-      const created = await insertWithShortcode(tx, "financialTransaction", {
-        ...columns,
-        ...foreign,
-        amount: moneyToMinor(data.amount),
-      });
-      const acceptedSourceChanges = await replaceFinancialSourceRefs(
-        tx,
-        created.id,
-        sourceRefs,
-      );
-      await auditEvidenceRows(
-        tx,
-        actor,
-        "sourceOccurrence",
-        acceptedSourceChanges.before,
-        acceptedSourceChanges.after,
-      );
-      await logAuditEntry(tx, actor, {
-        entityKind: "financialTransaction",
-        entityId: created.id,
-        action: "create",
-      });
-
-      // `purchaseId` is sugar for one allocation of the full amount; the zod
-      // refinement has already rejected a purchaseId/allocations pair that
-      // disagrees, so either source can be taken verbatim here.
-      const requested: AllocationInput[] =
-        allocations.length > 0
-          ? await resolveAllocationInputs(tx, allocations)
-          : data.purchaseId
-            ? await resolveAllocationInputs(tx, [
-                { purchaseId: data.purchaseId, amount: data.amount },
-              ])
-            : [];
-      if (requested.length > 0) {
-        await assertPurchasesLive(
-          tx,
-          requested.map((row) => row.purchaseId),
-        );
-        assertAllocationSetValid({
-          transactionAmount: data.amount,
-          kind: data.kind,
-          next: requested,
-        });
-        await refuseSettlementConflicts(tx, {
-          transactionId: created.id,
-          purchaseIds: requested.map((row) => row.purchaseId),
-        });
-        await writeAllocationSet(tx, created.id, requested, new Map(), actor);
-        await applyAllocationChanges(tx, {
-          transactionIds: [created.id],
-          before: new Map(),
-          actor,
-        });
-      }
-      return created.id;
-    });
-    return readOutput({ entityId: id });
+    const [id] = await withTransaction(db, (tx) =>
+      createFinancialTransactions(tx, [data], actor),
+    );
+    return readOutput({ entityId: id! });
   },
 });
+
+/**
+ * The create path for one or many transactions: one account resolution, one
+ * occurrence lock, one identity insert, one acceptance statement and one
+ * audit insert. Rows are created and returned in input order.
+ */
+export async function createFinancialTransactions(
+  tx: DrizzleTransaction,
+  inputs: readonly FinancialTransactionCreateInput[],
+  actor: ActorContext,
+): Promise<FinancialTransactionId[]> {
+  if (!inputs.length) return [];
+  const accountIds = await resolveAllOrThrow(
+    tx,
+    "financialAccount",
+    inputs.map((data) => data.accountId),
+  );
+  await lockFinancialSourceOccurrences(
+    tx,
+    inputs.flatMap((data) => data.sourceRefs),
+  );
+  // One locked occurrence FK owns acceptance; retained aliases never grant it.
+  await assertFinancialSourceRefsAvailableFor(
+    tx,
+    inputs.map((data) => ({ refs: data.sourceRefs })),
+  );
+  const created = await insertManyWithShortcode(
+    tx,
+    "financialTransaction",
+    inputs.map((data, index) => {
+      const {
+        allocations: _allocations,
+        sourceRefs: _sourceRefs,
+        ...columns
+      } = data;
+      return {
+        ...columns,
+        accountId: accountIds[index]!,
+        amount: moneyToMinor(data.amount),
+      };
+    }),
+  );
+  const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
+    tx,
+    created.map((row, index) => ({
+      transactionId: row.id,
+      refs: inputs[index]!.sourceRefs,
+    })),
+  );
+  await logAuditEntries(tx, actor, [
+    ...evidenceAuditEntries(
+      "sourceOccurrence",
+      acceptedSourceChanges.before,
+      acceptedSourceChanges.after,
+    ),
+    ...created.map((row) => ({
+      entityKind: "financialTransaction" as const,
+      entityId: row.id,
+      action: "create" as const,
+    })),
+  ]);
+
+  for (const [index, data] of inputs.entries()) {
+    const { id } = created[index]!;
+    // `purchaseId` is sugar for one allocation of the full amount; the zod
+    // refinement has already rejected a purchaseId/allocations pair that
+    // disagrees, so either source can be taken verbatim here.
+    const requested: AllocationInput[] =
+      data.allocations.length > 0
+        ? await resolveAllocationInputs(tx, data.allocations)
+        : data.purchaseId
+          ? await resolveAllocationInputs(tx, [
+              { purchaseId: data.purchaseId, amount: data.amount },
+            ])
+          : [];
+    if (requested.length > 0) {
+      await assertPurchasesLive(
+        tx,
+        requested.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: data.amount,
+        kind: data.kind,
+        next: requested,
+      });
+      await refuseSettlementConflicts(tx, {
+        transactionId: id,
+        purchaseIds: requested.map((row) => row.purchaseId),
+      });
+      await writeAllocationSet(tx, id, requested, new Map(), actor);
+      await applyAllocationChanges(tx, {
+        transactionIds: [id],
+        before: new Map(),
+        actor,
+      });
+    }
+  }
+  return created.map((row) => row.id);
+}
 
 const allocationStateFields = [
   "allocations",

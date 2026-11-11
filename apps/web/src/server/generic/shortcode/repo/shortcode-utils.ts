@@ -28,7 +28,7 @@ import type { RepositoryQueryInput } from "~/server/db/repository-access.boundar
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { repositorySavepoint } from "~/server/db/repository-access.boundary";
 import {
-  insertPayloadWithIdentity,
+  insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { findPgError } from "~/server/errors/db-errors";
@@ -178,6 +178,28 @@ export async function insertWithShortcode<T extends ShortcodeType>(
   values: ShortcodeInsertValues<T>,
   generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
 ): Promise<ShortcodeRowFor<T>> {
+  const [created] = await insertManyWithShortcode(
+    db,
+    entity,
+    [values],
+    generator,
+  );
+  if (!created) throw new Error("Failed to insert record");
+  return created;
+}
+
+/**
+ * Multi-row {@link insertWithShortcode}: one identity insert and one payload
+ * insert, returned in input order. A collision on any code retries the whole
+ * set with fresh codes inside a new savepoint.
+ */
+export async function insertManyWithShortcode<T extends ShortcodeType>(
+  db: RepositoryQueryInput,
+  entity: T,
+  values: readonly ShortcodeInsertValues<T>[],
+  generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
+): Promise<ShortcodeRowFor<T>[]> {
+  if (!values.length) return [];
   // SAFETY: Drizzle cannot retain the correlation between generic entity T and
   // the generated table map's indexed union, while every generated member is
   // checked against ShortcodeTable at the declaration above.
@@ -186,26 +208,30 @@ export async function insertWithShortcode<T extends ShortcodeType>(
 
   let lastError: unknown;
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    const shortcode = generator.generate(entity);
     // SAFETY: values is the insert model for this generic entity with only its
     // shortcode omitted; adding the schema-parsed branded shortcode completes it.
-    const row = { ...values, shortcode } as InferInsertModel<ShortcodeTable> & {
-      shortcode: ShortcodeFor<T>;
-      id?: string;
-      createdAt?: Date;
-      deletedAt?: Date | null;
-    };
+    const rows = values.map(
+      (value) =>
+        ({
+          ...value,
+          shortcode: generator.generate(entity),
+        }) as InferInsertModel<ShortcodeTable> & {
+          shortcode: ShortcodeFor<T>;
+          id?: string;
+          createdAt?: Date;
+          deletedAt?: Date | null;
+        },
+    );
     try {
       // Standalone writes also need a transaction: a rejected payload must
       // release its identity. Nested transactions isolate retries in savepoints.
       const created = await repositorySavepoint(db, (tx) =>
-        insertPayloadWithIdentity(tx, table, entity, row),
+        insertPayloadsWithIdentities(tx, table, entity, rows),
       );
       // SAFETY: The insert used SHORTCODE_TABLE[entity], so the selected
-      // row remains correlated with the same generic entity T.
-      return parseShortcodeRow(
-        entity,
-        created as InferSelectModel<ShortcodeTableFor<T>>,
+      // rows remain correlated with the same generic entity T.
+      return (created as InferSelectModel<ShortcodeTableFor<T>>[]).map((row) =>
+        parseShortcodeRow(entity, row),
       );
     } catch (error) {
       if (!isEntityShortcodeCollision(error, tableName)) throw error;
