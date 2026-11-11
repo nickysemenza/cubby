@@ -123,6 +123,31 @@ describe("field automation drain", () => {
     expect(causes.rows.map((row) => row.cause)).toContain("new_record");
   });
 
+  // Failure mode: a placeholder default reads as populated, or an exhaustive
+  // enum's preparation throws, so a new Vendor's spending profile is never asked.
+  it("schedules a new Vendor's undecided spending profile", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-field-automation", {
+      enabled: true,
+    });
+    const created = await executeEntity(
+      kernelCtx(ctx),
+      entityCommandSchema.parse({
+        action: "create",
+        entity: "vendor",
+        data: { name: "Synthetic hosting provider" },
+      }),
+    );
+    if (created.action !== "create" || created.entity !== "vendor")
+      throw new Error("Synthetic Vendor create returned no Vendor");
+    await drainEvents(ctx);
+    const fields = await getDb(ctx.db).execute<{ field: string }>(
+      sql`SELECT e.target->>${"field"} AS field FROM "AiEvaluation" e
+        JOIN "Vendor" v ON v.id::text = e.target->>${"recordId"}
+        WHERE v.shortcode = ${created.item.id}`,
+    );
+    expect(fields.rows.map((row) => row.field)).toContain("spendingProfile");
+  });
+
   // Failure mode: a model update re-asks an open guess, answers above the bar,
   // and leaves the field empty because the old guess still holds the slot.
   it("fills an empty field when a model update re-asks an open guess", async () => {

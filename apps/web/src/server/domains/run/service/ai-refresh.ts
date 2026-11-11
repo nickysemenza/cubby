@@ -13,6 +13,7 @@ import {
   fieldSuggestionContextKeys,
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
+import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef, runEntityId } from "@cubby/schemas/identifiers";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -349,8 +350,11 @@ export function fieldEvaluationScheduler(
     if (
       !prepared ||
       (!options.populated &&
-        prepared.snapshot.currentValue !== null &&
-        prepared.snapshot.currentValue !== "")
+        !undecidedFieldValue(
+          target.entity,
+          target.field,
+          prepared.snapshot.currentValue,
+        ))
     )
       return "unchanged";
     // Admission and field-specific fences remain independent, including capacity deferral.
