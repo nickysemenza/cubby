@@ -1133,7 +1133,6 @@ async function runStatementLabelBatch(
             evidenceFingerprint: target.expected,
             checkpoint: result.checkpoint,
             scope: input.scope,
-            admittedSuggestionId: input.scope ? target.row.id : undefined,
           };
           const retainProgress = async () => {
             // A deferred/zero-budget charge has no new answers to persist.

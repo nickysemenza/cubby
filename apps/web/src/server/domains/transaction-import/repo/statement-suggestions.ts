@@ -3868,7 +3868,6 @@ export async function recordStatementLabelCheckpoint(
     evidenceFingerprint: string;
     checkpoint: StatementLabelCheckpoint;
     scope?: StatementSuggestionScope;
-    admittedSuggestionId?: string;
   },
 ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
@@ -3877,35 +3876,26 @@ export async function recordStatementLabelCheckpoint(
   ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
     await assertWorkflowEffect(tx);
     if (input.scope) {
-      const rows = await unwrapDb(tx).execute<{ id: string; inScope: boolean }>(
+      const rows = await unwrapDb(tx).execute<{ id: string }>(
         sql`
-        SELECT s.id, ${labelIdentityScope(input.scope)} AS "inScope"
-        FROM "Suggestion" s WHERE ${pendingSuggestion()}
+        SELECT s.id FROM "Suggestion" s WHERE ${pendingSuggestion()}
           AND ${suggestionField("source")} = ${input.charge.source}
           AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
           AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
       `,
         "objects",
       );
-      if (rows.length) {
-        if (input.admittedSuggestionId) {
-          if (
-            !rows.some(
-              (row) => row.id === input.admittedSuggestionId && row.inScope,
-            )
+      if (
+        rows.length &&
+        !(
+          await statementLabelTargetsInScope(
+            tx,
+            input.scope,
+            rows.map((row) => row.id),
           )
-            return "out_of_scope";
-        } else if (
-          !(
-            await statementLabelTargetsInScope(
-              tx,
-              input.scope,
-              rows.map((row) => row.id),
-            )
-          ).size
-        )
-          return "out_of_scope";
-      }
+        ).size
+      )
+        return "out_of_scope";
     }
     let matched = 0;
     await transitionSuggestionStates(
