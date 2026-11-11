@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** What holds a Run back, in member words. */
-export const runWaitReason = z.enum([
+const runWaitReason = z.enum([
   "funding",
   "model_capacity",
   "rate_limit",

@@ -12,7 +12,7 @@ import { useDisplayNow } from "~/ui/hooks/use-display-now";
  * The wait line on the display clock, so "about 16 min" counts down between
  * reads. Before the clock mounts (SSR) it is the server-composed label.
  */
-export function useRunWaitText(wait: RunWaitingOn): string {
+function useRunWaitText(wait: RunWaitingOn): string {
   const now = useDisplayNow();
   return now === undefined
     ? wait.label

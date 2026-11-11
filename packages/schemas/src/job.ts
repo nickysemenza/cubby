@@ -577,12 +577,7 @@ export const workActivity = z.object({
 });
 export type WorkActivity = z.infer<typeof workActivity>;
 
-export {
-  runWaitingOn,
-  runWaitReason,
-  type RunWaitingOn,
-  type RunWaitReason,
-} from "./run-waiting-on";
+export { runWaitingOn, type RunWaitingOn } from "./run-waiting-on";
 
 /** Waiting Jobs of one kind and wait owned by one Run, placed in the kind's claim order. */
 export type RunWaitGroup = {
@@ -645,7 +640,7 @@ const PACED: ReadonlySet<RunWaitReason> = new Set([
 ]);
 
 /** When `position` Jobs drain at `perMinute`; null without a pace. */
-export function queueEtaAt(
+function queueEtaAt(
   position: number,
   perMinute: number | null,
   now: Date,
