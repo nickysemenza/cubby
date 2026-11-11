@@ -38,6 +38,10 @@ import {
   shiftPlainDate,
 } from "~/lib/household-date";
 import type { Database } from "~/server/db/database";
+import {
+  columnArrayParam,
+  textArrayParam,
+} from "~/server/db/helpers/array-param";
 import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as unwrapDb,
@@ -492,33 +496,10 @@ export async function assertNoDependents<TId extends string>(opts: {
  * 270 buffers against 3).
  */
 // Trusted correlated SQL arrays retain their column references instead of being bound as values.
+export { columnArrayParam, textArrayParam };
+
 export const uuidArrayParam = (ids: readonly string[] | SQL): SQL =>
   ids instanceof SQL ? ids : sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
-
-export const arrayElement = (value: string) =>
-  `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-
-const arrayLiteral = (values: readonly string[]) =>
-  `{${[...new Set(values)].map(arrayElement).join(",")}}`;
-
-/**
- * A Postgres `text[]` literal bound as ONE parameter. Every element is quoted,
- * so commas, braces, empty strings and the text `NULL` stay literal values.
- */
-export const textArrayParam = (values: readonly string[]): SQL =>
-  sql`${arrayLiteral(values)}::text[]`;
-
-/**
- * Values compared against a typed column as ONE untyped array literal, so
- * Postgres resolves the element type from the column (enum, uuid, integer,
- * date). Only for `column = ANY(...)`: a bare expression has no type to infer.
- */
-export const columnArrayParam = (values: readonly unknown[]): SQL =>
-  sql`${arrayLiteral(
-    values.map((value) =>
-      value instanceof Date ? value.toISOString() : String(value),
-    ),
-  )}`;
 
 /**
  * Equality against one value or any of a set — the server half of a

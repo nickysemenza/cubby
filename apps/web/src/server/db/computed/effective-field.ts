@@ -24,7 +24,7 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { columnArrayParam } from "~/server/db/helpers/query";
+import { columnArrayParam } from "~/server/db/helpers/array-param";
 
 /** The row an effective value reads: a table alias in scope, or its id. */
 export type InheritedRow = string | { readonly id: SQL };

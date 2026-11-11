@@ -119,6 +119,7 @@ export const repositoryOwners = [
   "src/server/db/helpers/relational-sql.ts",
   "src/server/db/generated/entity-table-definitions.gen.ts",
   "src/server/db/retained-tables.ts",
+  "src/server/db/helpers/array-param.ts",
   "src/server/db/helpers/query.ts",
   "src/server/db/helpers/requested.ts",
   "src/server/db/sql-enum.ts",
