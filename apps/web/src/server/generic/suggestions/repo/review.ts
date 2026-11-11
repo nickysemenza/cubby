@@ -202,7 +202,7 @@ async function settleReview(
       metadata: {
         kind: "assessment_review",
         application: input.application ?? null,
-        expectedFingerprint: input.expectedFingerprint,
+        expectedFingerprint: input.expectedFingerprint ?? null,
         ...(automatic && { rule: automatic.rule }),
       },
     });

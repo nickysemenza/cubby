@@ -18,7 +18,6 @@ import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fi
 import {
   suggestionFamily,
   suggestionSubjects,
-  type suggestionReviewInput,
   type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { transferPairSuggestionRow } from "@cubby/schemas/suggestion-list";
@@ -1340,7 +1339,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
       throw new Error(
         "Transfer pairing requires member acceptance of the current pair.",
       );
-    await applyTransferPairSuggestion(db, context, state, input);
+    await applyTransferPairSuggestion(db, context, state);
   },
 };
 
@@ -1634,7 +1633,6 @@ async function applyTransferPairSuggestion(
   db: Database,
   context: EntityKernelContext,
   state: SuggestionStateRow,
-  input: Pick<z.infer<typeof suggestionReviewInput>, "expectedFingerprint">,
 ) {
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
@@ -1653,7 +1651,7 @@ async function applyTransferPairSuggestion(
     await transitionSuggestionState(tx, state.id, { status: "applied" });
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
-      expectedFingerprint: input.expectedFingerprint,
+      expectedFingerprint: state.fingerprint,
       // Accepting a clean pair still holds it to today's clean rule.
       reviewed: !published.clean,
       stateId: state.id,

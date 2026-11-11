@@ -30,6 +30,7 @@ import {
 } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
+import { reviewKey } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { canAutomaticallyFillField } from "~/server/generic/suggestions/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");
@@ -194,7 +195,10 @@ export async function applyAutomaticRules(
           verdict: "correct",
           correction: { present: false },
           intent: "apply",
-          expectedFingerprint: row.fingerprint,
+          expectedFingerprint: reviewKey({
+            suggestionId: row.id,
+            fingerprint: row.fingerprint,
+          }),
           reason: null,
           evidence: null,
           ...(application && { application }),

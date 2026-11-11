@@ -3176,10 +3176,11 @@ async function prepareStatementGenerationPage(
  * charge once after its last write.
  */
 export async function regenerateChargesAfterCommit(
-  db: Database,
+  db: Parameters<typeof runAfterCommit>[0],
   charges: readonly ChargeRef[],
 ) {
-  for (const [source, items] of Map.groupBy(charges, (charge) => charge.source))
+  for (const source of new Set(charges.map((charge) => charge.source))) {
+    const items = charges.filter((charge) => charge.source === source);
     await runAfterCommit(db, {
       key: `statement-charges:${source}`,
       items,
@@ -3199,6 +3200,7 @@ export async function regenerateChargesAfterCommit(
         }
       },
     });
+  }
 }
 
 /** Recompute and publish named charges, e.g. the siblings of an applied one. */

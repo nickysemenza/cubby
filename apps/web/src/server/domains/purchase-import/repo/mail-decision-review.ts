@@ -482,7 +482,7 @@ export async function settleMailDecisionReview(
       metadata: {
         kind: "assessment_review",
         application: null,
-        expectedFingerprint: input.expectedFingerprint,
+        expectedFingerprint: input.expectedFingerprint ?? null,
       },
     });
   if (input.intent === "apply") {

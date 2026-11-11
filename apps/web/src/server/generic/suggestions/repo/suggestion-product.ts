@@ -110,7 +110,7 @@ export async function mergeReviewedProductPair(
         await executeEntity(txContext, {
           action: "update",
           entity: "product",
-          id: input.keepId,
+          id: parseShortcodeFor("product", input.keepId),
           data: {
             imageOrder: ordered.map((item) =>
               parseShortcodeFor("image", item.shortcode),

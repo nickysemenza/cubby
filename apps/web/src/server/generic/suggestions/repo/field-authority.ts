@@ -18,6 +18,7 @@ import type { RepositoryQueryInput } from "~/server/db/repository-access.boundar
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { fieldInputFingerprintIfLive } from "~/server/generic/suggestions/repo/field-input-fence";
+import { reviewKey } from "~/server/generic/suggestions/repo/suggestion-presentation";
 
 /**
  * Who holds a field. `open`: nothing decided it, so Cubby may fill it.
@@ -175,6 +176,7 @@ function decideAuthority(fact: z.infer<typeof row>): FieldAuthority {
 
 const guessRow = z.object({
   suggestionId: z.string(),
+  fingerprint: z.string().nullable(),
   value: z.json(),
   confidence: z.number(),
   runnerUpValue: z.json().nullable(),
@@ -199,7 +201,7 @@ export async function readFieldGuess(
   field: string,
 ): Promise<FieldGuess | null> {
   const result = await unwrapDb(db).execute<z.input<typeof guessRow>>(sql`
-    SELECT s.id::text AS "suggestionId", s."suggestedValue" AS value,
+    SELECT s.id::text AS "suggestionId", s.fingerprint, s."suggestedValue" AS value,
       s.confidence, s."runnerUpValue", s."runnerUpConfidence",
       s.data->>'liveInputFingerprint' AS fence
     FROM "Suggestion" s
@@ -218,6 +220,7 @@ export async function readFieldGuess(
     return null;
   return {
     suggestionId: found.suggestionId,
+    fingerprint: reviewKey(found),
     value: found.value,
     confidence: found.confidence,
     runnerUp:
