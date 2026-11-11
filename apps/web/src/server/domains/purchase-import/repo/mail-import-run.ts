@@ -137,6 +137,93 @@ const ENDED_MAIL_IMPORT_STATUSES: (typeof run.$inferSelect.status)[] = [
   runStatus.enum.dispatch_failed,
 ];
 
+/** Statuses an ended holder can leave an Email in without settling it. */
+const HELD_UNSETTLED_STATUSES: (typeof emailTable.$inferSelect.status)[] = [
+  "unsettled",
+  "pending",
+];
+
+/**
+ * An Email its ended holder left unsettled. A held Email reading `pending`
+ * counts only when that holder's newest outcome for its current checksum is
+ * unresolved; a paused or outcome-free holder keeps its pending Emails.
+ */
+const heldUnsettledSql = () =>
+  sql<boolean>`(${emailTable.status} = ${"unsettled"} OR (${emailTable.status} = ${"pending"} AND EXISTS (${newestUnresolvedOutcome})))`;
+
+/**
+ * A controlled child skips Emails outside its parent's statuses; an excluded,
+ * deleted or changed Email is refused.
+ */
+function skipsSource(
+  message: typeof emailTable.$inferSelect | undefined,
+  source: RetainedMail,
+  controlledParentRunId: RunId | undefined,
+) {
+  if (!message) return false;
+  if (
+    controlledParentRunId &&
+    !CONTROLLED_MAIL_SOURCE_STATUSES.some((status) => status === message.status)
+  )
+    return true;
+  if (["excluded", "deleted"].includes(message.status))
+    throw new Error(
+      "Mail source was excluded or deleted from the connected mailbox.",
+    );
+  if (
+    message.orderMailId !== source.id ||
+    message.checksum !== source.rawChecksum
+  )
+    throw new Error("Mail import ledger differs from its retained original.");
+  return false;
+}
+
+/**
+ * An ended Mail import holder that left this Email unsettled works on it no
+ * more; a member selecting the Email admits it afresh instead of being handed
+ * the ended Run back.
+ */
+async function endedHolderLeftUnsettled(
+  tx: DrizzleTransaction,
+  owner: typeof run.$inferSelect | undefined,
+  message: typeof emailTable.$inferSelect | undefined,
+) {
+  if (
+    !message ||
+    owner?.purpose !== "mail_import" ||
+    owner.retiredAt ||
+    !ENDED_MAIL_IMPORT_STATUSES.includes(owner.status) ||
+    !readmissibleHeldStatus(message.status, false)
+  )
+    return false;
+  // Only a holder whose newest outcome left it unresolved is done with it.
+  const [held] = await tx
+    .select({ id: emailTable.id })
+    .from(emailTable)
+    .innerJoin(run, eq(run.id, emailTable.runId))
+    .where(
+      and(
+        eq(emailTable.id, message.id),
+        eq(run.id, owner.id),
+        sql`EXISTS (${newestUnresolvedOutcome})`,
+      ),
+    )
+    .limit(1);
+  return (
+    Boolean(held) &&
+    !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
+  );
+}
+
+/** Changed bytes reopen a pending Email; unchanged ones need it still held unsettled. */
+const readmissibleHeldStatus = (
+  status: typeof emailTable.$inferSelect.status | undefined,
+  sourceChanged: boolean,
+) =>
+  sourceChanged
+    ? status === "pending"
+    : status !== undefined && HELD_UNSETTLED_STATUSES.includes(status);
+
 type MailImportAdmission = {
   ledgerPartyId: string;
   userId: string;
@@ -397,6 +484,8 @@ async function partitionOwnership(
   newEvidenceAt?: Date,
   /** Unattended admission of unchanged evidence honours the attempt bound. */
   bounded = false,
+  /** A member's own selection, which may reopen what an ended holder left. */
+  memberSelection = false,
 ) {
   const pairs = requestedRows(
     [
@@ -425,30 +514,14 @@ async function partitionOwnership(
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
   const transfers = new Map<RunId, RetainedMail[]>();
+  const reopened = new Set<RunId>();
   for (const source of sources) {
     const message = messages.find(
       (candidate) =>
         candidate.mailboxId === source.mailboxId &&
         candidate.messageId === source.messageId,
     );
-    if (
-      controlledParentRunId &&
-      message &&
-      !CONTROLLED_MAIL_SOURCE_STATUSES.some(
-        (status) => status === message.status,
-      )
-    )
-      continue;
-    if (message && ["excluded", "deleted"].includes(message.status))
-      throw new Error(
-        "Mail source was excluded or deleted from the connected mailbox.",
-      );
-    if (
-      message &&
-      (message.orderMailId !== source.id ||
-        message.checksum !== source.rawChecksum)
-    )
-      throw new Error("Mail import ledger differs from its retained original.");
+    if (skipsSource(message, source, controlledParentRunId)) continue;
     const [owner] = message?.runId
       ? await tx
           .select()
@@ -469,7 +542,8 @@ async function partitionOwnership(
       senderRevision &&
       owner?.purpose === "mail_import" &&
       (owner.retiredAt || ENDED_MAIL_IMPORT_STATUSES.includes(owner.status)) &&
-      message?.status === (sourceChanged ? "pending" : "unsettled") &&
+      message &&
+      readmissibleHeldStatus(message.status, sourceChanged) &&
       mailResearchRunInput.safeParse(owner.input).data?.evidenceRevision !==
         senderRevision
     ) {
@@ -481,6 +555,7 @@ async function partitionOwnership(
           and(
             eq(emailTable.id, message.id),
             untouchedAutomaticUnresolved(sourceChanged, newEvidenceAt),
+            sourceChanged ? undefined : heldUnsettledSql(),
             unattemptedSenderMapping(sql`${senderRevision}`),
           ),
         );
@@ -501,6 +576,15 @@ async function partitionOwnership(
         continue;
       }
       if (owner.retiredAt) continue;
+    }
+    if (
+      owner &&
+      memberSelection &&
+      (await endedHolderLeftUnsettled(tx, owner, message))
+    ) {
+      fresh.push(source);
+      reopened.add(owner.id);
+      continue;
     }
     if (sourceChanged && (!owner || owner.retiredAt)) continue;
     if (
@@ -530,7 +614,7 @@ async function partitionOwnership(
     } else if (!(bounded && message && importAttemptsExhausted(message)))
       fresh.push(source);
   }
-  return { owners, fresh, transfers };
+  return { owners, fresh, transfers, reopened };
 }
 
 export async function admitMailImport(
@@ -705,7 +789,7 @@ export async function admitMailImport(
           }
         }
       }
-      const { owners, fresh, transfers } = await partitionOwnership(
+      const { owners, fresh, transfers, reopened } = await partitionOwnership(
         tx,
         partyId,
         sources,
@@ -714,6 +798,7 @@ export async function admitMailImport(
         input.sourceRecheck,
         newEvidenceAt,
         Boolean(input.automatic && !controlled && !senderRevision),
+        !input.automatic && !controlled,
       );
       const existing = [...owners.values()].map((row) => ({
         created: false,
@@ -730,7 +815,12 @@ export async function admitMailImport(
             checksum: source.rawChecksum,
           })),
         });
-        const clientKey = `mail-research:${party.id}:${senderRevision ? `sender-proof:${senderRevision}:` : ""}${controlled ? `controlled:${input.parentRunId}:` : ""}${await sha256Hex(
+        // A reopened source is keyed by the holder it left, so it never
+        // replays that ended Run for the same source set.
+        const reopenedKey = reopened.size
+          ? `reopened:${[...reopened].sort().join(",")}:`
+          : "";
+        const clientKey = `mail-research:${party.id}:${senderRevision ? `sender-proof:${senderRevision}:` : ""}${controlled ? `controlled:${input.parentRunId}:` : ""}${reopenedKey}${await sha256Hex(
           JSON.stringify([MAILBOX_RESEARCH_VERSION, sourceSet]),
         )}`;
         const [replayed] = await tx
@@ -1187,7 +1277,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.status, "unsettled"),
+          heldUnsettledSql(),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1232,7 +1322,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.status, "unsettled"),
+          heldUnsettledSql(),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1309,7 +1399,7 @@ export async function importPendingEmails(db: Database) {
               parseEntityId("ledgerParty", target.ledgerPartyId),
             ),
             eq(emailTable.mailboxId, target.mailboxId),
-            eq(emailTable.status, "unsettled"),
+            heldUnsettledSql(),
             eq(emailTable.classification, "related"),
             or(
               isNull(emailTable.classificationVersion),

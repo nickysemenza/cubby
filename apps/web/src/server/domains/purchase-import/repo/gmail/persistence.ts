@@ -333,10 +333,31 @@ export async function saveEmail(
     await supersedeLegacyEmail(tx, input);
     await recordChange(tx, { kind: "source", categories: ["email"] });
     if (created) return;
+    // Re-observing unchanged content never reopens a settled Email or reads as
+    // an edit: its import outcome still holds, and its holder still owns it.
+    const unchanged =
+      row.checksum === input.checksum &&
+      row.classification === fields.classification &&
+      row.classificationStage === fields.classificationStage &&
+      row.classificationReason === fields.classificationReason &&
+      row.classificationVersion === fields.classificationVersion &&
+      (fields.orderMailId === undefined ||
+        row.orderMailId === fields.orderMailId);
+    const keepsSettlement =
+      unchanged &&
+      input.status === "pending" &&
+      (row.status === "unsettled" || row.status === "completed");
+    const status = keepsSettlement ? row.status : fields.status;
     // Routine routing and provider removal cannot resolve historical ownership.
     await tx
       .update(emailTable)
-      .set({ ...fields, updatedAt: new Date() })
+      .set({
+        ...fields,
+        status,
+        ...(unchanged && status === row.status
+          ? {}
+          : { updatedAt: new Date() }),
+      })
       .where(
         and(
           eq(emailTable.id, row.id),

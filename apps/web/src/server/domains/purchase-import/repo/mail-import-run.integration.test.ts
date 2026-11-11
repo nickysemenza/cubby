@@ -506,12 +506,14 @@ describe("mail research admission", () => {
   });
   // A newer importer may settle what an older one left to an agent, once per
   // revision; a gap only the member settles is never re-run.
+  // A held Email that reads pending is still its ended holder's to readmit.
   it.each([
-    { category: "missing_evidence", readmitted: true },
-    { category: "member_decision", readmitted: false },
+    { category: "missing_evidence", readmitted: true, held: "unsettled" },
+    { category: "missing_evidence", readmitted: true, held: "pending" },
+    { category: "member_decision", readmitted: false, held: "unsettled" },
   ] as const)(
-    "readmits a $category gap from an older importer revision: $readmitted",
-    async ({ category, readmitted }) => {
+    "readmits a $held $category gap from an older importer revision: $readmitted",
+    async ({ category, readmitted, held }) => {
       const { party, mail } = await source();
       await getDb(ctx.db).insert(account).values({
         id: crypto.randomUUID(),
@@ -552,6 +554,11 @@ describe("mail research admission", () => {
         .update(run)
         .set({ skillRevision: "purchase-import@0" })
         .where(eq(run.id, holder.row.id));
+      // A routine re-observation is not an edit: updatedAt stays put.
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({ status: held, updatedAt: emailTable.updatedAt })
+        .where(eq(emailTable.orderMailId, mail.id));
       const owner = async () =>
         (
           await getDb(ctx.db)
@@ -569,6 +576,53 @@ describe("mail research admission", () => {
       expect(await owner()).toBe(successor);
     },
   );
+  // A member selecting what an ended holder left unsettled gets a new Run, not
+  // the ended holder handed back.
+  it("admits a member-selected Email afresh from an ended holder", async () => {
+    const { party, mail } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const select = (automatic: boolean) =>
+      admitMailImport(ctx.db, {
+        ledgerPartyId: party.id,
+        userId: ctx.actor.userId,
+        mailboxId: mail.mailboxId,
+        messageIds: [mail.id],
+        automatic,
+      });
+    const [holder] = await select(true);
+    if (!holder) throw new Error("Synthetic holder missing");
+    await settleMail(ctx.db, {
+      mail,
+      importRunId: holder.row.id,
+      status: "unsettled",
+      detail: "Only a total is printed.",
+      judgment: {
+        kind: "unresolved",
+        reason: "Only a total is printed.",
+        category: "missing_evidence",
+        waitingOn: null,
+      },
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(run.id, holder.row.id));
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ status: "pending", updatedAt: new Date() })
+      .where(eq(emailTable.orderMailId, mail.id));
+    const [selected] = await select(false);
+    expect(selected?.row.id).toBeDefined();
+    expect(selected?.row.id).not.toBe(holder.row.id);
+  });
+
   // A member's cancel is a decision: a sender mapping that already existed
   // must not buy the cancelled Email another paid Run.
   it("keeps a member-cancelled Email from evidence recovery without new evidence", async () => {
