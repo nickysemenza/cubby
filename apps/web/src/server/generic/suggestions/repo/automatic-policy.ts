@@ -25,6 +25,16 @@ type FactsOf = {
   statement_transaction: StatementTransactionJudgment;
 };
 
+/**
+ * Clean kinds that settle without spending. Money moves are clean only with a
+ * clean opposite leg, which their create books as a pair.
+ */
+const SETTLEMENT_ONLY_KINDS: readonly string[] = [
+  "income",
+  "account_transfer",
+  "credit_card_payment",
+];
+
 /** What an automatic application does, before the family's review input. */
 type RuleApplication = { kind: "accept_as_is" };
 
@@ -65,7 +75,7 @@ export const AUTOMATIC_RULES = {
     family: "statement_transaction",
     execution: "import_clean",
     description:
-      "Book clean supported spending from imports automatically, and attach another source's copy of a booked bank event to its Transaction.",
+      "Book clean supported spending, create clean income, transfers and card payments from imports automatically, and attach another source's copy of a booked bank event to its Transaction.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
     match: (judgment) =>
       judgment.recommended === "attach"
@@ -74,7 +84,10 @@ export const AUTOMATIC_RULES = {
           judgment.pairedTransactionId !== null
         : !judgment.reviewReason &&
           judgment.clean &&
-          judgment.spending?.status === "ready",
+          (judgment.spending?.status === "ready" ||
+            (judgment.recommended === "create" &&
+              judgment.create !== null &&
+              SETTLEMENT_ONLY_KINDS.includes(judgment.create.kind))),
     application: () => ({ kind: "accept_as_is" }),
   },
 } satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };
