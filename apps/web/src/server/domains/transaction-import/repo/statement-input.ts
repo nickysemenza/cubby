@@ -15,6 +15,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -146,10 +147,7 @@ export const statementPendingInputTransactions = (
       AND ${notDeleted("sr")} AND sr."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}
     WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
       ${page?.after ? sql`AND ft.id > ${page.after}::uuid` : sql``}
-      AND ft."accountId" IN (${sql.join(
-        accountIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      AND ft."accountId" = ANY(${uuidArrayParam(accountIds)})
       -- includes-deleted: every reserved corroborating occurrence can block a pending transfer.
       AND NOT EXISTS (
         -- includes-deleted: every reserved corroborating occurrence can block a pending transfer.

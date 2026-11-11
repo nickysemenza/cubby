@@ -37,7 +37,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
-import { textArrayParam } from "~/server/db/helpers/requested";
+import { textArrayParam } from "~/server/db/helpers/query";
 import {
   purchase as purchaseTable,
   run as runTable,

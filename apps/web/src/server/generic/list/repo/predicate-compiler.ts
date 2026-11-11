@@ -37,6 +37,7 @@ import {
   householdDayRangeConditions,
   notDeleted,
 } from "~/server/db/helpers";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { storedFieldAvailableSql } from "~/server/generic/derived/repo/read";
 import { listTermExpanders } from "~/server/generic/list/repo/terms";
@@ -499,11 +500,7 @@ const derivedFilterPredicates = (
             list === undefined || list.length === 0
               ? undefined
               : test(
-                  (column) =>
-                    sql`${column} IN (${sql.join(
-                      list.map((item) => sql`${item}`),
-                      sql`, `,
-                    )})`,
+                  (column) => sql`${column} = ANY(${columnArrayParam(list)})`,
                 ),
             valuePresence(field.type, test, presence),
           ),
@@ -740,10 +737,7 @@ const rowSetPredicates = (
         const picked = nonEmpty(optionalTextList.parse(value));
         const matches = (items: readonly string[]) =>
           target === undefined
-            ? sql`${column} IN (${sql.join(
-                items.map((item) => sql`${item}`),
-                sql`, `,
-              )})`
+            ? sql`${column} = ANY(${columnArrayParam(items)})`
             : sql`${column} IN ${requestedIdsSql(
                 target,
                 items,
@@ -920,12 +914,7 @@ const suggestionPredicate = (
   return or(
     kinds.length === 0
       ? undefined
-      : pending(
-          sql`AND s."kind" IN (${sql.join(
-            kinds.map((kind) => sql`${kind}`),
-            sql`, `,
-          )})`,
-        ),
+      : pending(sql`AND s."kind" = ANY(${columnArrayParam(kinds)})`),
     presence === undefined
       ? undefined
       : presence === "has"

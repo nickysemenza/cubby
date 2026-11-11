@@ -244,10 +244,7 @@ export async function readStatementSuggestions(
       fa.shortcode AS "accountCode", account_owner.shortcode AS "ownerCode",
       r.merchant, r."rawDescription", r."sourceCategory"
     ${FROM}
-    WHERE ${inStatus(status)} AND s.id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE ${inStatus(status)} AND s.id = ANY(${uuidArrayParam(ids)})
   `);
   const judgments = page.rows.map((row) =>
     statementTransactionJudgment.parse(row.judgment),
@@ -314,10 +311,7 @@ export async function readStatementSuggestions(
     }>(
       sql`
       SELECT id, shortcode FROM "FinancialTransaction"
-      WHERE id IN (${sql.join(
-        transactionIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE id = ANY(${uuidArrayParam(transactionIds)})
     `,
       "objects",
     );
@@ -340,10 +334,7 @@ export async function readStatementSuggestions(
     }>(
       sql`
       SELECT id, shortcode FROM "FinancialAccount"
-      WHERE ${notDeleted("FinancialAccount")} AND id IN (${sql.join(
-        transferAccountIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE ${notDeleted("FinancialAccount")} AND id = ANY(${uuidArrayParam(transferAccountIds)})
     `,
       "objects",
     );

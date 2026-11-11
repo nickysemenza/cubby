@@ -35,6 +35,7 @@ import {
   getDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
@@ -485,10 +486,7 @@ export async function listProductMatchRows(
         eq(suggestionTable.active, true),
 
         options.suggestionIds
-          ? sql`${suggestionTable.id} IN (${sql.join(
-              options.suggestionIds.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
+          ? sql`${suggestionTable.id} = ANY(${uuidArrayParam(options.suggestionIds)})`
           : undefined,
         currentProductPairPolicySql(sql`${suggestionTable.producer}`),
         options.reviewableOnly

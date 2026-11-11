@@ -52,7 +52,7 @@ import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
-import { textArrayParam } from "~/server/db/helpers/requested";
+import { textArrayParam } from "~/server/db/helpers/query";
 import {
   describeUnresolvableCode,
   isShortcodeEntity,

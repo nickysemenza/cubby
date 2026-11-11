@@ -9,10 +9,11 @@ import {
   type SpendingClassificationReviewApplyInput,
   type SpendingClassificationReviewInput,
 } from "@cubby/schemas/spending-classification-review";
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
   notDeleted,
   unwrapDb,
@@ -35,7 +36,6 @@ import {
 import {
   assertValidParent,
   getCategoryFeature,
-  resolveProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
 import { externalIdsContainIsbn } from "~/server/domains/product/repo/update-helpers";
 import {
@@ -69,45 +69,64 @@ async function draftFor(
       request.productCategoryId,
     );
     const targetFeature = await getCategoryFeature(db, categoryId);
-    const products = [];
-    for (const code of request.productIds) {
-      const id = await resolveOrThrow(db, "product", code);
-      const [current] = await unwrapDb(db)
-        .select()
-        .from(product)
-        .where(and(eq(product.id, id), notDeleted(product)));
+    const ids = await resolveAllOrThrow(db, "product", request.productIds);
+    const currentRows = await unwrapDb(db)
+      .select({
+        product,
+        feature: effectiveFieldSql<string | null>(
+          "productCategory",
+          "feature",
+          { id: sql`${product.categoryId}` },
+        ),
+      })
+      .from(product)
+      .where(
+        and(
+          sql`${product.id} = ANY(${uuidArrayParam(ids)})`,
+          notDeleted(product),
+        ),
+      );
+    const externalIds = await unwrapDb(db)
+      .select()
+      .from(entityExternalId)
+      .where(
+        and(
+          sql`${entityExternalId.entityId} = ANY(${uuidArrayParam(ids)})`,
+          eq(entityExternalId.entityKind, "product"),
+          notDeleted(entityExternalId),
+        ),
+      );
+    const roots = await unwrapDb(db)
+      .select({ id: productCategory.id, feature: productCategory.feature })
+      .from(productCategory)
+      .where(notDeleted(productCategory))
+      .orderBy(asc(productCategory.sortOrder), asc(productCategory.name));
+    const byId = new Map(currentRows.map((row) => [row.product.id, row]));
+    const products = ids.map((id) => {
+      const current = byId.get(id);
       if (!current) return constraintViolation("Product is no longer live.");
-      if (
-        ((await getCategoryFeature(db, current.categoryId)) === "food") !==
-        (targetFeature === "food")
-      )
+      if ((current.feature === "food") !== (targetFeature === "food"))
         constraintViolation(
           "A reviewed spending reassignment cannot change the Food feature; Project and Trade impact require a separate review.",
         );
-      const externalIds = await unwrapDb(db)
-        .select()
-        .from(entityExternalId)
-        .where(
-          and(
-            eq(entityExternalId.entityId, id),
-            eq(entityExternalId.entityKind, "product"),
-            notDeleted(entityExternalId),
-          ),
-        );
       const requiredFeature = impliedProductFeature({
-        fdc_id: current.fdc_id,
-        ingredientId: current.ingredientId,
-        hasIsbn: externalIdsContainIsbn(externalIds),
+        fdc_id: current.product.fdc_id,
+        ingredientId: current.product.ingredientId,
+        hasIsbn: externalIdsContainIsbn(
+          externalIds.filter((entry) => entry.entityId === id),
+        ),
       });
-      if (
-        (await resolveProductCategory(db, categoryId, requiredFeature)) !==
-        categoryId
-      )
+      const resolved =
+        requiredFeature === null || targetFeature === requiredFeature
+          ? categoryId
+          : (roots.find((root) => root.feature === requiredFeature)?.id ??
+            null);
+      if (resolved !== categoryId)
         constraintViolation(
           "The reviewed category conflicts with the Product identity feature.",
         );
-      products.push({ id, categoryId });
-    }
+      return { id, categoryId };
+    });
     return { products };
   }
   if (request.action === "productCategory") {
@@ -196,20 +215,15 @@ async function draftFor(
     };
   if (request.action === "spendingCategoryMerge") {
     const keepId = await resolveOrThrow(db, "spendingCategory", request.keepId);
-    const categoryRedirects = [];
-    for (const code of request.mergeIds)
-      categoryRedirects.push({
-        id: await resolveOrThrow(db, "spendingCategory", code),
-        keepId,
-      });
+    const categoryRedirects = (
+      await resolveAllOrThrow(db, "spendingCategory", request.mergeIds)
+    ).map((id) => ({ id, keepId }));
     return { categoryRedirects };
   }
   const spendingCategoryId = request.spendingCategoryId
     ? await resolveOrThrow(db, "spendingCategory", request.spendingCategoryId)
     : null;
-  const ids = [];
-  for (const id of request.expenseIds)
-    ids.push(await resolveOrThrow(db, "expense", id));
+  const ids = await resolveAllOrThrow(db, "expense", request.expenseIds);
   return { expenses: ids.map((id) => ({ id, spendingCategoryId })) };
 }
 
@@ -416,10 +430,7 @@ async function buildPreview(
   // Selected Products without Expenses still need stale-review protection.
   const productFacts = draft.products?.length
     ? await unwrapDb(db).execute(
-        sql`SELECT to_jsonb(p) AS facts FROM "Product" p WHERE p.id IN (${sql.join(
-          draft.products.map((row) => sql`${row.id}::uuid`),
-          sql`, `,
-        )}) ORDER BY p.id`,
+        sql`SELECT to_jsonb(p) AS facts FROM "Product" p WHERE p.id = ANY(${uuidArrayParam(draft.products.map((row) => row.id))}) ORDER BY p.id`,
         "objects",
       )
     : [];
@@ -524,16 +535,20 @@ export async function applyReviewedSpendingClassificationPolicy(
         data: { categoryId: request.productCategoryId },
       });
     const admitted = await draftFor(ctx.db, request);
-    for (const selected of admitted.products ?? []) {
-      const [persisted] = await unwrapDb(ctx.db)
-        .select({ categoryId: product.categoryId })
-        .from(product)
-        .where(eq(product.id, selected.id));
-      if (persisted?.categoryId !== selected.categoryId)
-        constraintViolation(
-          "The applied Product category differs from the reviewed target.",
-        );
-    }
+    const selected = admitted.products ?? [];
+    const persisted = await unwrapDb(ctx.db)
+      .select({ id: product.id, categoryId: product.categoryId })
+      .from(product)
+      .where(
+        sql`${product.id} = ANY(${uuidArrayParam(selected.map((row) => row.id))})`,
+      );
+    const categories = new Map(
+      persisted.map((row) => [row.id, row.categoryId]),
+    );
+    if (selected.some((row) => categories.get(row.id) !== row.categoryId))
+      constraintViolation(
+        "The applied Product category differs from the reviewed target.",
+      );
   } else if (request.action === "productCategory") {
     await executeEntity(ctx, {
       action: "update",

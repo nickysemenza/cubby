@@ -1922,6 +1922,144 @@ export async function loadImageRepresentations(
   );
 }
 
+type DescriptionHistory = Pick<
+  typeof aiAnalysis.$inferSelect,
+  | "provider"
+  | "model"
+  | "promptVersion"
+  | "resultSchemaRevision"
+  | "inputFingerprint"
+  | "result"
+  | "runtime"
+  | "createdAt"
+>;
+
+function descriptionAnalyses(
+  history: readonly DescriptionHistory[],
+  sourceHash: string | null,
+) {
+  const toAnalysis = (entry: DescriptionHistory) => {
+    const result = imageDescriptionResult.safeParse(entry.result);
+    const promptRevision = Number(entry.promptVersion);
+    if (
+      !result.success ||
+      !Number.isInteger(promptRevision) ||
+      !entry.resultSchemaRevision
+    )
+      return null;
+    return {
+      provider: entry.provider ?? "legacy",
+      model: entry.model,
+      promptRevision,
+      resultSchemaRevision: entry.resultSchemaRevision,
+      inputFingerprint: entry.inputFingerprint,
+      result: result.data,
+      runtime: imageDescriptionAnalysis.shape.runtime.parse(entry.runtime),
+      createdAt: entry.createdAt.toISOString(),
+      preferred: false,
+    };
+  };
+  const candidates = history.flatMap((entry, rawIndex) => {
+    const analysis = toAnalysis(entry);
+    return analysis ? [{ rawIndex, analysis }] : [];
+  });
+  const analyses = candidates
+    .filter((entry) => entry.rawIndex < 20)
+    .map((entry) => entry.analysis);
+  const isPreferred = (entry: (typeof analyses)[number]) => {
+    const fingerprint = parseImageDescriptionInputFingerprint(
+      entry.inputFingerprint,
+    );
+    return (
+      fingerprint !== null &&
+      isCurrentPreferredImageDescription(fingerprint, {
+        sourceContentHash: sourceHash,
+        provider: entry.provider,
+        model: entry.model,
+        promptRevision: entry.promptRevision,
+        resultSchemaRevision: entry.resultSchemaRevision,
+      })
+    );
+  };
+  // Bounded history must not hide the preferred or available current-source result.
+  const available = candidates.map((entry) => entry.analysis);
+  const currentPreferred =
+    available.find(isPreferred) ??
+    available.find(
+      (entry) => selectImageDescription([entry], null, sourceHash) !== null,
+    );
+  if (
+    currentPreferred &&
+    !analyses.some(
+      (entry) =>
+        entry.createdAt === currentPreferred.createdAt &&
+        entry.inputFingerprint === currentPreferred.inputFingerprint,
+    )
+  ) {
+    if (analyses.length >= 20) analyses.pop();
+    analyses.push(currentPreferred);
+  }
+  const preferred = analyses.findIndex(isPreferred);
+  if (preferred >= 0) analyses[preferred]!.preferred = true;
+  return analyses;
+}
+
+/** Preferred descriptions for a set of live images, using the same history policy as the image read. */
+export async function getPreferredImageDescriptions(
+  db: Database,
+  ids: readonly ImageId[],
+) {
+  if (!ids.length)
+    return new Map<ImageId, ReturnType<typeof descriptionAnalyses>[number]>();
+  const sources = await getDb(db)
+    .select({ id: image.id, sha256: image.sha256 })
+    .from(image)
+    .where(
+      and(sql`${image.id} = ANY(${uuidArrayParam(ids)})`, notDeleted(image)),
+    );
+  if (sources.length !== new Set(ids).size) throw new Error("Image not found");
+  const history = await getDb(db)
+    .select({
+      entityId: aiAnalysis.entityId,
+      provider: aiAnalysis.provider,
+      model: aiAnalysis.model,
+      promptVersion: aiAnalysis.promptVersion,
+      resultSchemaRevision: aiAnalysis.resultSchemaRevision,
+      inputFingerprint: aiAnalysis.inputFingerprint,
+      result: aiAnalysis.result,
+      runtime: aiAnalysis.runtime,
+      createdAt: aiAnalysis.createdAt,
+    })
+    .from(aiAnalysis)
+    .where(
+      and(
+        eq(aiAnalysis.entityKind, "image"),
+        sql`${aiAnalysis.entityId} = ANY(${uuidArrayParam(ids)})`,
+        eq(aiAnalysis.feature, "image-description"),
+        notDeleted(aiAnalysis),
+      ),
+    )
+    .orderBy(desc(aiAnalysis.createdAt));
+  const grouped = new Map<string, DescriptionHistory[]>();
+  for (const row of history) {
+    const entries = grouped.get(row.entityId) ?? [];
+    entries.push(row);
+    grouped.set(row.entityId, entries);
+  }
+  const preferred = new Map<
+    ImageId,
+    ReturnType<typeof descriptionAnalyses>[number]
+  >();
+  for (const source of sources) {
+    const found = descriptionAnalyses(
+      grouped.get(source.id) ?? [],
+      source.sha256,
+    ).find((entry) => entry.preferred);
+    if (found) preferred.set(source.id, found);
+  }
+  return preferred;
+}
+
 export async function getImageProcessingReadProjection(
   db: Database,
   imageId: ImageId,
@@ -1991,69 +2129,7 @@ export async function getImageProcessingReadProjection(
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt));
-  const toAnalysis = (entry: (typeof history)[number]) => {
-    const result = imageDescriptionResult.safeParse(entry.result);
-    const promptRevision = Number(entry.promptVersion);
-    if (
-      !result.success ||
-      !Number.isInteger(promptRevision) ||
-      !entry.resultSchemaRevision
-    )
-      return null;
-    return {
-      provider: entry.provider ?? "legacy",
-      model: entry.model,
-      promptRevision,
-      resultSchemaRevision: entry.resultSchemaRevision,
-      inputFingerprint: entry.inputFingerprint,
-      result: result.data,
-      runtime: imageDescriptionAnalysis.shape.runtime.parse(entry.runtime),
-      createdAt: entry.createdAt.toISOString(),
-      preferred: false,
-    };
-  };
-  const candidates = history.flatMap((entry, rawIndex) => {
-    const analysis = toAnalysis(entry);
-    return analysis ? [{ rawIndex, analysis }] : [];
-  });
-  const analyses = candidates
-    .filter((entry) => entry.rawIndex < 20)
-    .map((entry) => entry.analysis);
-  const isPreferred = (entry: (typeof analyses)[number]) => {
-    const fingerprint = parseImageDescriptionInputFingerprint(
-      entry.inputFingerprint,
-    );
-    return (
-      fingerprint !== null &&
-      isCurrentPreferredImageDescription(fingerprint, {
-        sourceContentHash: source.sha256,
-        provider: entry.provider,
-        model: entry.model,
-        promptRevision: entry.promptRevision,
-        resultSchemaRevision: entry.resultSchemaRevision,
-      })
-    );
-  };
-  // Bounded history must not hide the preferred or available current-source result.
-  const available = candidates.map((entry) => entry.analysis);
-  const currentPreferred =
-    available.find(isPreferred) ??
-    available.find(
-      (entry) => selectImageDescription([entry], null, source.sha256) !== null,
-    );
-  if (
-    currentPreferred &&
-    !analyses.some(
-      (entry) =>
-        entry.createdAt === currentPreferred.createdAt &&
-        entry.inputFingerprint === currentPreferred.inputFingerprint,
-    )
-  ) {
-    if (analyses.length >= 20) analyses.pop();
-    analyses.push(currentPreferred);
-  }
-  const preferred = analyses.findIndex(isPreferred);
-  if (preferred >= 0) analyses[preferred]!.preferred = true;
+  const analyses = descriptionAnalyses(history, source.sha256);
   const correction = await readConfirmedDescription(db, imageId);
   return {
     representations,
