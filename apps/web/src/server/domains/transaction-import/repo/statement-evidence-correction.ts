@@ -1,22 +1,24 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   parseShortcodeFor,
+  type SourceTransactionRecordId,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { transactionImportInput } from "@cubby/schemas/source-transaction-record";
 import { moneyToMinor } from "@cubby/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { transactionImportRecord } from "~/server/db/retained-tables";
-import { transactionImport, sourceTransactionRecord } from "~/server/db/schema";
+import { transactionImport } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { reconcileFinancialEvidenceCorrection } from "~/server/domains/financial-transaction/repo/financial-evidence-correction";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
+  sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 /** A ready occurrence supplies current facts; all accepted occurrences corroborate independently. */
@@ -31,18 +33,21 @@ export async function reconcileRecordedFinancialEvidence(
     reason: string;
   }[] = [];
   if (!occurrenceCodes.length) return reviews;
-  const heads = await getDb(db)
-    .select(sourceObservationColumns)
-    .from(sourceObservationFrom)
-    .where(
-      and(
-        eq(sourceTransactionRecord.source, source),
-        inArray(sourceObservationColumns.chargeKey, [...occurrenceCodes]),
-        eq(sourceObservationColumns.current, true),
-        eq(sourceObservationColumns.reviewState, "ready"),
-        notDeleted(sourceTransactionRecord),
-      ),
-    );
+  const ids = await unwrapDb(db).execute<{ id: SourceTransactionRecordId }>(
+    sql`
+    SELECT r.id FROM "SourceOccurrence" o JOIN "SourceTransactionRecord" r ON r.id=o."currentObservationId"
+    WHERE o.source=${source} AND o.shortcode = ANY(${textArrayParam(occurrenceCodes)}) AND ${notDeleted("r")}
+  `,
+    "objects",
+  );
+  const heads = ids.length
+    ? await getDb(db)
+        .select(sourceObservationColumns)
+        .from(
+          sql`${sourceObservationsForPage(ids.map((row) => row.id))} "SourceTransactionRecord"`,
+        )
+        .where(eq(sourceObservationColumns.reviewState, "ready"))
+    : [];
   for (const head of heads) {
     if (
       head.acceptedTransactionId === null ||

@@ -5,6 +5,14 @@ import { sql, type SQL } from "drizzle-orm";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 
+const unresolvedOwnership = (
+  historicalId: SQL,
+  acceptedId: SQL,
+  proof: SQL,
+) => sql`
+  ${historicalId} IS DISTINCT FROM ${acceptedId}
+  AND NOT COALESCE(${proof}->'resolvedHistoricalTransactionIds' ? ${historicalId}::text,false)`;
+
 /** Historical bindings block automatic acceptance; they never establish the owner. */
 export const sourceOccurrenceHasUnresolvedHistory = (
   id: SQL,
@@ -17,8 +25,7 @@ export const sourceOccurrenceHasUnresolvedHistory = (
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
   JOIN "SourceOccurrence" owner ON owner.id=observed."occurrenceId"
   WHERE observed."occurrenceId"=${id} AND ${notDeleted("binding")}
-    AND binding."historicalTransactionId" IS DISTINCT FROM ${acceptedId}
-    AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? binding."historicalTransactionId"::text,false)
+    AND ${unresolvedOwnership(sql`binding."historicalTransactionId"`, acceptedId, sql`owner."identityProof"`)}
 )`;
 
 // occurrenceIds is already a SQL array expression, not an interpolated JavaScript array.
@@ -56,8 +63,7 @@ const unresolvedFrom = (evidence: SQL): SQL => sql`(
   FROM (${evidence}) evidence
   JOIN "SourceOccurrence" owner ON owner.id=evidence."occurrenceId"
   WHERE owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-    AND evidence."historicalTransactionId" IS DISTINCT FROM owner."acceptedTransactionId"
-    AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? evidence."historicalTransactionId"::text,false)
+    AND ${unresolvedOwnership(sql`evidence."historicalTransactionId"`, sql`owner."acceptedTransactionId"`, sql`owner."identityProof"`)}
 )`;
 
 /** Same negative ownership fence as the point check, evaluated once for a read. */

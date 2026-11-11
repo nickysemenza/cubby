@@ -14,6 +14,7 @@ import {
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type {
   EntityKernelContext,
@@ -216,9 +217,9 @@ export async function applyAutomaticRulesForCharge(
   const rows = await unwrapDb(db).execute<{ id: string }>(
     sql`
     SELECT id FROM "Suggestion"
-    WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
+    WHERE family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)} AND active
       AND status = ${suggestionStatus.enum.pending}
-      AND data->>${"source"} = ${charge.source} AND data->>${"chargeKey"} = ${charge.chargeKey}
+      AND data->>${sql.raw("'source'")} = ${charge.source} AND data->>${sql.raw("'chargeKey'")} = ${charge.chargeKey}
       AND jsonb_array_length(${matchedRulesOf(sql`data`)}) > 0
   `,
     "objects",
