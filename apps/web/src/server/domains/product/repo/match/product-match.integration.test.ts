@@ -299,7 +299,7 @@ describe("product match queue", () => {
           mergeId: bought.id,
         },
       }),
-    ).rejects.toThrow(/Immutable Feedback retry/);
+    ).rejects.toThrow(/already used for a different review/);
     expect(
       await mergeProductMatch(
         { ...base, actorContext: base.actorContext },

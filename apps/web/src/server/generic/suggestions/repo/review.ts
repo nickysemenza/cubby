@@ -68,7 +68,7 @@ export type Handler = {
   ) => Promise<string | null>;
   apply: (
     db: Database,
-    context: EntityKernelContext & { reviewFeedbackId: string },
+    context: EntityKernelContext,
     state: SuggestionStateRow,
     input: Review,
     automatic: AutomaticReview | null,
@@ -76,9 +76,9 @@ export type Handler = {
 };
 
 /**
- * History settles first. A stale or refused application cannot erase the
- * review. An automatic application is the exception: nobody reviewed it, so
- * a refusal leaves no Feedback at all.
+ * Draft and history verdicts settle on their own. An applying review commits
+ * with its application, so a stale or refused application records nothing and
+ * the same operation may retry with a corrected review.
  */
 export async function reviewSuggestion(
   db: Database,
@@ -201,21 +201,6 @@ async function settleReview(
         ...(automatic && { rule: automatic.rule }),
       },
     });
-  const publication = await withEmailReviewBoundary(
-    db,
-    prediction,
-    writeReview,
-    emailScope,
-  );
-  const event = publication.event;
-  if (input.intent === "draft") {
-    return {
-      suggestionId: prediction.id,
-      feedbackId: event.id,
-      status: "draft",
-      applied: false,
-    };
-  }
   if (input.intent === "apply") {
     return executeReviewApplication(
       db,
@@ -226,8 +211,22 @@ async function settleReview(
       prediction,
       name,
       family,
-      event,
+      writeReview,
     );
+  }
+  const { event } = await withEmailReviewBoundary(
+    db,
+    prediction,
+    writeReview,
+    emailScope,
+  );
+  if (input.intent === "draft") {
+    return {
+      suggestionId: prediction.id,
+      feedbackId: event.id,
+      status: "draft",
+      applied: false,
+    };
   }
   return settleReviewHistory(db, input, emailScope, prediction, event);
 }

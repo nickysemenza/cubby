@@ -118,7 +118,7 @@ describe("shared Suggestion history", () => {
         intent: "apply",
         application: { kind: "saved_field", recordId: changed.id },
       }),
-    ).rejects.toThrow(/Immutable Feedback retry/);
+    ).rejects.toThrow(/already used for a different review/);
     await expect(
       reviewSuggestion(ctx.db, context, {
         suggestionId: prediction.id,
@@ -210,7 +210,7 @@ describe("shared Suggestion history", () => {
           ...command,
           correction: { present: true, value: "Conflicting reuse" },
         }),
-      ).rejects.toThrow(/Immutable Feedback retry/);
+      ).rejects.toThrow(/already used for a different review/);
       await expect(
         reviewSuggestion(ctx.db, kernelCtx(ctx), {
           ...command,

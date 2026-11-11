@@ -297,7 +297,9 @@ export async function recordFeedbackWithInsertion(
         ...stored
       } = existing;
       if (!isEqual(event, stored))
-        throw new Error("Immutable Feedback retry changed its event");
+        throw new Error(
+          `Operation ${input.operationId} was already used for a different review; send a new operationId`,
+        );
       return { event: existing, inserted: false };
     }
     const row: StoredDecision = suggestionDecision
