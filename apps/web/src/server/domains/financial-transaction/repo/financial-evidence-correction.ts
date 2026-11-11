@@ -3,10 +3,11 @@ import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import {
   type ExpenseShortcode,
   type FinancialTransactionShortcode,
+  type SourceTransactionRecordId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -15,6 +16,7 @@ import {
   getDb,
   notDeleted,
   withSnapshotWrite,
+  unwrapDb,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -22,7 +24,6 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   purchase,
-  sourceTransactionRecord,
 } from "~/server/db/schema";
 import {
   deleteExpenses,
@@ -38,7 +39,7 @@ import type { FinancialTransactionDollars } from "~/server/domains/financial-tra
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
+  sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { isBlockedRefusal } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -54,8 +55,13 @@ import {
 } from "./financial-convergence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
-const correctionObservations = (db: Database) =>
-  getDb(db).select(sourceObservationColumns).from(sourceObservationFrom);
+const correctionObservations = (
+  db: Database,
+  ids: readonly SourceTransactionRecordId[],
+) =>
+  getDb(db)
+    .select(sourceObservationColumns)
+    .from(sql`${sourceObservationsForPage(ids)} "SourceTransactionRecord"`);
 type Observation = Awaited<ReturnType<typeof correctionObservations>>[number];
 type EvidenceVerification =
   | { status: "verified" }
@@ -99,16 +105,19 @@ async function loadCorrectionObservation(
   db: Database,
   input: FinancialEvidenceCorrectionInput,
 ): Promise<{ status: "verified"; observation: Observation } | Review> {
-  const [observation] = await correctionObservations(db)
-    .where(
-      and(
-        eq(sourceTransactionRecord.source, input.source),
-        eq(sourceObservationColumns.chargeKey, input.externalId),
-        eq(sourceObservationColumns.current, true),
-        notDeleted(sourceTransactionRecord),
-      ),
-    )
-    .limit(1);
+  const ids = await unwrapDb(db).execute<{ id: SourceTransactionRecordId }>(
+    sql`
+    SELECT r.id FROM "SourceOccurrence" o JOIN "SourceTransactionRecord" r ON r.id=o."currentObservationId"
+    WHERE o.source=${input.source} AND o.shortcode=${input.externalId} AND ${notDeleted("r")} LIMIT 1
+  `,
+    "objects",
+  );
+  const [observation] = ids.length
+    ? await correctionObservations(
+        db,
+        ids.map((row) => row.id),
+      ).limit(1)
+    : [];
   if (observation?.reviewState !== "ready" || observation.occurrenceId === null)
     return review(
       "The source occurrence has unresolved identity, revision order or ownership.",

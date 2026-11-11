@@ -5,8 +5,20 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import type { ChargeRef } from "~/server/domains/transaction-import/repo/statement-input";
+
+// Only the facts used by twin grouping and its ownership fence.
+const twinFacts = sql`(
+  -- includes-deleted: retained records and occurrence decisions participate in matching.
+  SELECT r.*, o.shortcode AS "chargeKey", o."accountId", o."withdrawnAt",
+    o."acceptedTransactionId", o.disposition, o."reviewState" AS "storedReviewState",
+    COALESCE(o."currentObservationId" = r.id, false) AS current,
+    CASE WHEN o."replacementObservationId" IS NOT NULL THEN o."replacementObservationId"
+      WHEN r.id <> o."currentObservationId" AND a."supersededByObservationId" = o."currentObservationId" THEN a."supersededByObservationId"
+      ELSE NULL END AS "supersededByRowId"
+  FROM "SourceTransactionRecord" r JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
+  LEFT JOIN "SourceObservationAnnotation" a ON a."observationId"=r.id
+)`;
 
 export type ExactTwin = {
   source: string;
@@ -30,7 +42,7 @@ export function exactTwinsSql(charges: SQL) {
     WITH seed AS MATERIALIZED (
       SELECT DISTINCT r.source, r."accountId", normalize(r."accountDescriptor", NFKC) AS descriptor,
         r."statementDate", r."amountMinor", r."providerAmountMinor", r."rawDescription", r.merchant
-      FROM ${sourceObservationFacts} r
+      FROM ${twinFacts} r
       WHERE (r.source, r."chargeKey") IN (${charges}) AND r.current AND ${notDeleted("r")}
         AND btrim(coalesce(r."rawDescription", '')) <> ''
     ),
@@ -46,7 +58,7 @@ export function exactTwinsSql(charges: SQL) {
           -- A replacement anyone already set or cleared is a decision, not a candidate.
           AND NOT EXISTS (SELECT 1 FROM "AuditLog" decided WHERE decided."entityKind" = 'sourceOccurrence'
             AND decided."entityId" = r."occurrenceId" AND decided.changes ? 'supersededByOccurrenceId')) AS open
-      FROM seed JOIN ${sourceObservationFacts} r ON r.source = seed.source AND r.current AND ${notDeleted("r")}
+      FROM seed JOIN ${twinFacts} r ON r.source = seed.source AND r.current AND ${notDeleted("r")}
         AND r."accountId" IS NOT DISTINCT FROM seed."accountId"
         AND normalize(r."accountDescriptor", NFKC) = seed.descriptor
         AND r."statementDate" = seed."statementDate" AND r."amountMinor" = seed."amountMinor"

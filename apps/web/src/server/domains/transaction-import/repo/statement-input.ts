@@ -9,19 +9,19 @@ import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-tra
 import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
-  CHARGE_STATE,
   chargeKeyOf,
   chargeStateOf,
 } from "~/server/domains/transaction-import/repo/statement-charge";
@@ -39,32 +39,28 @@ export type StatementSuggestionScope = {
   since?: string | null;
 };
 
-export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
+export const scopedStatementChargeKeys = (
+  scope: StatementSuggestionScope,
+  ownerFilter?: SQL,
+) => {
   const { importId, since } = scope;
   // A scope selects whole charges, so the charge's state still reads every
   // live observation of it.
-  const filters = [
-    ...(importId
-      ? [
-          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
-        ]
-      : []),
-    ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
-  ];
-
-  return sql`SELECT seen.source, ${chargeKeyOf("seen")} AS "chargeKey" FROM ${sourceObservations} seen
-    WHERE seen."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("seen")} ${filters.length ? sql`AND ${sql.join(filters, sql` AND `)}` : sql``}`;
+  const roots = importId
+    ? sql`(SELECT m."statementRowId" AS id FROM ${transactionImportRecord} m WHERE m."importId"=${importId}::uuid
+        UNION
+        SELECT r.id FROM "SourceOccurrence" o JOIN "SourceTransactionRecord" r ON r."occurrenceId"=o.id
+        WHERE o."withdrawalImportId"=${importId}::uuid)`
+    : sql`"SourceTransactionRecord"`;
+  return sql`SELECT r.source, o.shortcode AS "chargeKey"
+    FROM ${roots} roots JOIN "SourceTransactionRecord" r ON r.id=roots.id
+    JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
+    WHERE ${notDeleted("r")}
+      AND o."reviewState"=${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+      AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)}
+      ${since ? sql`AND r."statementDate" >= ${since}::date` : sql``}
+      ${ownerFilter ? sql`AND (${ownerFilter})` : sql``}`;
 };
-
-/** Bounded identities first; eligibility still aggregates every live observation of each key. */
-export const statementInputChargeKeys = (
-  scope: StatementSuggestionScope,
-  after: { source: string; chargeKey: string } | null,
-  limit: number,
-) => sql`
-  SELECT DISTINCT keys.source, keys."chargeKey" FROM (${scopedStatementChargeKeys(scope)}) keys
-  ${after ? sql`WHERE (keys.source,keys."chargeKey") > (${after.source},${after.chargeKey})` : sql``}
-  ORDER BY keys.source,keys."chargeKey" LIMIT ${limit}`;
 
 /** Current generation inputs; scope selects charge keys before aggregating all live observations. */
 export const statementInputCharges = (
@@ -94,16 +90,16 @@ export const statementInputCharges = (
   ];
   const state = chargeFilters.length
     ? chargeStateOf(sql.join(chargeFilters, sql` AND `))
-    : CHARGE_STATE;
+    : chargeStateOf(sql`true`);
   return sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
     WHERE cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND NOT cs.ignored AND NOT cs.superseded
       AND (cs."acceptedTransactionId" IS NULL OR cs.shortcode IS NOT NULL)
-      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM ${sourceObservations} head
+      AND ((cs.shortcode IS NULL AND EXISTS (SELECT 1 FROM ${sourceObservationFacts} head
         WHERE head.source=cs.source AND head."chargeKey"=cs."chargeKey" AND head.current
           AND head."withdrawnAt" IS NULL AND head.amount <> 0 AND ${notDeleted("head")}))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" changed
-          JOIN ${sourceObservations} head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
+          JOIN ${sourceObservationFacts} head ON head.source=cs.source AND head."chargeKey"=cs."chargeKey"
           WHERE changed.shortcode=cs.shortcode AND ${notDeleted("changed")}
             AND head.current AND ${notDeleted("head")}
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
@@ -117,10 +113,10 @@ export const statementInputCharges = (
           AND (NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" allocation
               WHERE allocation."transactionId" = ft.id AND ${notDeleted("allocation")})
             OR EXISTS (SELECT 1 FROM "Suggestion" existing
-              WHERE existing.family = ${suggestionFamily.enum.statement_transaction} AND existing.active
+              WHERE existing.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)} AND existing.active
                 AND existing.status = ${suggestionStatus.enum.pending}
-                AND existing.data->>${"source"} = cs.source AND existing.data->>${"chargeKey"} = cs."chargeKey"
-                AND existing.data->>${"recommended"} = ${statementTransactionAction.enum.book}))))
+                AND existing.data->>${sql.raw("'source'")} = cs.source AND existing.data->>${sql.raw("'chargeKey'")} = cs."chargeKey"
+                AND existing.data->>'recommended' = ${statementTransactionAction.enum.book}))))
   `;
 };
 
@@ -143,7 +139,7 @@ export const statementPendingInputTransactions = (
     JOIN "SourceOccurrence" occurrence ON occurrence."acceptedTransactionId" = ft.id
       AND occurrence."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND occurrence."supersededByOccurrenceId" IS NULL
       AND ${notDeleted("occurrence")}
-    JOIN ${sourceObservations} sr ON sr.id = occurrence."currentObservationId"
+    JOIN ${sourceObservationFacts} sr ON sr.id = occurrence."currentObservationId"
       AND ${notDeleted("sr")} AND sr."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending}
     WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
       ${page?.after ? sql`AND ft.id > ${page.after}::uuid` : sql``}
