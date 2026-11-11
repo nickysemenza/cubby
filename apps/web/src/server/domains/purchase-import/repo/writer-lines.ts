@@ -8,14 +8,14 @@ import type {
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { importSourceProduct } from "~/server/db/schema";
+import { expense, importSourceProduct } from "~/server/db/schema";
 import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { LineIdentityDecision, LineProducts } from "./writer";
-import { applyExpenseProductBinding } from "./writer-apply";
 import {
   planAggregateExpense,
   planLineAction,
@@ -192,7 +192,10 @@ export async function writePurchaseLines(
           lineMatch,
         );
         if (binding) {
-          await applyExpenseProductBinding(tx, binding);
+          await tx
+            .update(expense)
+            .set(binding.values)
+            .where(eq(expense.id, binding.id));
           rowMutations.push({
             targetKind: "expense",
             targetId: row.id,

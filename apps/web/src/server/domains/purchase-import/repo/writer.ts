@@ -38,14 +38,17 @@ import {
   uuidArrayParam,
 } from "~/server/db/helpers/query";
 import {
+  entityAttachment,
   entityExternalId,
   expense,
   importSourceClaim,
+  importSourceOrder,
   importSourceProduct,
   ledgerParty,
   ledgerSourceClaim,
   product,
   purchase,
+  purchasePaymentEvidence,
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
@@ -114,19 +117,6 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
-import {
-  applyPaymentEvidence,
-  applySourceAssociation,
-  applyOriginalBindings,
-  applyAcceptedObservation,
-  applyAttachments,
-  applyPurchaseHeader,
-  applyFallbackExpenses,
-  applyReplayClaim,
-  applyPurchaseNote,
-  applyRunCounter,
-  applyTenderUpdates,
-} from "./writer-apply";
 import { writePurchaseLines } from "./writer-lines";
 import {
   loadAcceptedProductChoices,
@@ -151,8 +141,6 @@ import {
 import {
   changedAcceptedProductChoice,
   planLineMatch,
-  planFinding,
-  planReconciliationFix,
   planSourceAssociation,
   planOriginalBindings,
   planAttachments,
@@ -161,7 +149,6 @@ import {
   planRunWrites,
   planFinancialProjection,
   planFallbackExpenses,
-  planReplayClaim,
   planPurchaseNote,
   planLineMode,
   planAcceptedPaymentReview,
@@ -294,8 +281,11 @@ async function recordLearnedTender(
     source.purchaseId,
     source.sourceClaimId,
   );
-  const plan = planTenderUpdates(learned, retained);
-  await applyTenderUpdates(tx, plan);
+  for (const row of planTenderUpdates(learned, retained))
+    await tx
+      .update(purchasePaymentEvidence)
+      .set({ tender: row.tender, updatedAt: new Date() })
+      .where(eq(purchasePaymentEvidence.id, row.id));
 }
 
 export async function existingExpenses(
@@ -996,15 +986,37 @@ export function lineProductResolver(
   };
 }
 
+async function recordReplayClaim(
+  tx: DrizzleTransaction,
+  input: Pick<ImportWriterInput, "source" | "runId">,
+  id: typeof importSourceClaim.$inferSelect.id,
+) {
+  await tx
+    .update(importSourceClaim)
+    .set({
+      checksum: input.source.checksum,
+      lastRunId: input.runId,
+      updatedAt: new Date(),
+    })
+    .where(eq(importSourceClaim.id, id));
+}
+
+async function attachSourceDocuments(
+  tx: DrizzleTransaction,
+  purchaseId: PurchaseId,
+  input: ImportWriterInput,
+) {
+  const attachments = planAttachments(purchaseId, input);
+  if (attachments.length)
+    await tx.insert(entityAttachment).values(attachments).onConflictDoNothing();
+}
+
 /** A reconciliation of a promoted historical observation has no Run. */
-export type FindingOrigin = Pick<
-  ImportWriterInput,
-  "ledgerPartyId" | "source"
-> & {
+type FindingOrigin = Pick<ImportWriterInput, "ledgerPartyId" | "source"> & {
   runId: ImportWriterInput["runId"] | null;
 };
 
-export type FindingKind =
+type FindingKind =
   | "duplicate_lines"
   | "sum_mismatch"
   | "foreign_currency"
@@ -1022,8 +1034,20 @@ async function fileFinding(
   summary: string,
   proposedFix: ProposedImportFix | null,
 ): Promise<string> {
-  const plan = await planFinding(input, purchaseId, kind, summary, proposedFix);
-  return (await publishRunFinding(tx, plan)).id;
+  const evidenceFingerprint = await sha256Hex(
+    JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
+  );
+  const finding = await publishRunFinding(tx, {
+    runId: input.runId,
+    ledgerPartyId: input.ledgerPartyId,
+    entityKind: "purchase",
+    entityId: purchaseId,
+    kind,
+    summary,
+    proposedFix,
+    evidenceFingerprint,
+  });
+  return finding.id;
 }
 
 async function fileSourceReconciliation(
@@ -1039,13 +1063,16 @@ async function fileSourceReconciliation(
     { sourceClaimId, orderKey, purchaseId },
     input,
   );
-  const fix = planReconciliationFix(
-    input,
+  const fix: Extract<ProposedImportFix, { kind: "reconcile_source_order" }> = {
+    kind: "reconcile_source_order",
     purchaseId,
+    source: input.source,
     orderKey,
-    accepted,
-    observation.id,
-  );
+    acceptedChecksum: accepted?.checksum ?? null,
+    proposedExtraction: input.extraction,
+    observationId: observation.id,
+    reviewedFingerprint: "0".repeat(64),
+  };
   const state = await loadSourceReconciliationState(
     tx,
     fix,
@@ -1148,10 +1175,19 @@ async function recordImportSourceAssociation(
   );
   const { ownerId } = associationPlan;
   orderKey = associationPlan.orderKey;
-  const association = await applySourceAssociation(tx, associationPlan);
+  const [association] = await tx
+    .insert(importSourceOrder)
+    .values(associationPlan.values)
+    .onConflictDoUpdate({
+      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
+      set: associationPlan.set,
+    })
+    .returning({ id: importSourceOrder.id });
+  if (!association) throw new Error("Import source order was not persisted");
   if (!existing && recordCanonicalProductBindings) {
     const bindings = planOriginalBindings(association.id, input);
-    await applyOriginalBindings(tx, bindings);
+    if (bindings.length) await tx.insert(importSourceProduct).values(bindings);
   }
   if (input.originalOrder) {
     const observation = await recordSourceOrderObservation(
@@ -1172,15 +1208,12 @@ async function recordImportSourceAssociation(
             ?.productId ?? null,
       })) ?? [],
     );
-    await applyAcceptedObservation(tx, {
-      associationId: association.id,
-      observationId: observation.id,
-    });
+    await tx
+      .update(importSourceOrder)
+      .set({ acceptedObservationId: observation.id })
+      .where(eq(importSourceOrder.id, association.id));
   }
-  await applyReplayClaim(
-    tx,
-    planReplayClaim(input, family.root.id, new Date()),
-  );
+  await recordReplayClaim(tx, input, family.root.id);
   return ownerId;
 }
 
@@ -1307,6 +1340,20 @@ export async function importVendorOrder(
     // The family command preserves accepted bytes before reconciliation.
     const family = await lockAndLoadSourceFamily(tx, sourceIdentity);
     const { candidate, orderKey: proposedOrderKey } = planSourceKey(input);
+    const recordShipments = (purchaseId: PurchaseId) =>
+      recordImportedShipmentEvidence(
+        databaseForTransaction(tx),
+        {
+          source: input.source,
+          runId: runEntityId.parse(input.runId),
+          ledgerPartyId: partyId,
+          purchaseId,
+          shipments: candidate.shipments ?? [],
+        },
+        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+          runId: runEntityId.parse(input.runId),
+        }),
+      );
     const existingOrder = await lockAndLoadSourceOrder(
       tx,
       family,
@@ -1360,21 +1407,8 @@ export async function importVendorOrder(
         },
         input.extraction.candidate?.payments ?? [],
       );
-      const replayClaim = planReplayClaim(input, family.root.id, new Date());
-      await applyReplayClaim(tx, replayClaim);
-      await recordImportedShipmentEvidence(
-        databaseForTransaction(tx),
-        {
-          source: input.source,
-          runId: runEntityId.parse(input.runId),
-          ledgerPartyId: partyId,
-          purchaseId: existingOrder.purchaseId,
-          shipments: candidate.shipments ?? [],
-        },
-        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-          runId: runEntityId.parse(input.runId),
-        }),
-      );
+      await recordReplayClaim(tx, input, family.root.id);
+      await recordShipments(existingOrder.purchaseId);
       return importWriterOutput.parse({
         outcome: "replayed",
         purchaseId: existingOrder.purchaseId,
@@ -1418,7 +1452,7 @@ export async function importVendorOrder(
         },
         candidate.payments,
       );
-      await applyAttachments(tx, planAttachments(purchaseId, input));
+      await attachSourceDocuments(tx, purchaseId, input);
       await recordImportSourceAssociation(
         tx,
         {
@@ -1432,19 +1466,7 @@ export async function importVendorOrder(
         purchaseId,
         existingOrder.outputFingerprint,
       );
-      await recordImportedShipmentEvidence(
-        databaseForTransaction(tx),
-        {
-          source: input.source,
-          runId: runEntityId.parse(input.runId),
-          ledgerPartyId: partyId,
-          purchaseId,
-          shipments: candidate.shipments ?? [],
-        },
-        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-          runId: runEntityId.parse(input.runId),
-        }),
-      );
+      await recordShipments(purchaseId);
       return importWriterOutput.parse({
         outcome: "updated",
         purchaseId,
@@ -1549,7 +1571,15 @@ export async function importVendorOrder(
       !!assignedLine,
       replacesNoticeDate,
     );
-    target = await applyPurchaseHeader(tx, header);
+    if (header.kind === "create")
+      target = await insertWithShortcode(tx, "purchase", header.values);
+    else {
+      await tx
+        .update(purchase)
+        .set(header.values)
+        .where(eq(purchase.id, header.target.id));
+      target = header.target;
+    }
     const purchaseId = parseEntityId("purchase", target.id);
     // A Shipment recorded before this Purchase held its order number links now.
     if (target.orderId)
@@ -1563,7 +1593,12 @@ export async function importVendorOrder(
       usedFallbackDate,
     );
     if (note) {
-      await applyPurchaseNote(tx, note);
+      await tx
+        .update(purchase)
+        .set({
+          notes: sql`concat_ws(E'\n\n', nullif(${purchase.notes}, ''), ${note.research}::text)`,
+        })
+        .where(eq(purchase.id, note.purchaseId));
       await recordChange(tx, { kind: "source", categories: ["purchase"] });
     }
 
@@ -1591,7 +1626,7 @@ export async function importVendorOrder(
         ),
       });
     }
-    await applyAttachments(tx, planAttachments(purchaseId, input));
+    await attachSourceDocuments(tx, purchaseId, input);
 
     const lineMode = planLineMode(
       input,
@@ -1632,7 +1667,11 @@ export async function importVendorOrder(
         const fallback = planFallbackExpenses(
           createdExpenses.map((mutation) => mutation.targetId),
         );
-        const filled = await applyFallbackExpenses(tx, fallback);
+        const filled = await tx
+          .update(expense)
+          .set({ trade: "other" })
+          .where(fallback.where)
+          .returning({ id: expense.id });
         for (const mutation of createdExpenses)
           if (filled.some((line) => line.id === mutation.targetId))
             mutation.fields.push("trade");
@@ -1666,19 +1705,7 @@ export async function importVendorOrder(
       claimFingerprint,
       recordCanonicalProductBindings,
     );
-    await recordImportedShipmentEvidence(
-      databaseForTransaction(tx),
-      {
-        source: input.source,
-        runId: runEntityId.parse(input.runId),
-        ledgerPartyId: partyId,
-        purchaseId,
-        shipments: candidate.shipments ?? [],
-      },
-      buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
-        runId: runEntityId.parse(input.runId),
-      }),
-    );
+    await recordShipments(purchaseId);
     // Publish after retained bindings and identifiers settle, so their invalidation triggers
     // cannot retire this import's fresh collision evidence before commit.
     for (const proposal of identityProposals)
@@ -1700,7 +1727,8 @@ export async function importVendorOrder(
         purchaseId,
         sourceClaimId,
       );
-      await applyPaymentEvidence(tx, payments);
+      if (payments.length)
+        await tx.insert(purchasePaymentEvidence).values(payments);
       // Settle from the payment lines this order retained, against charges
       // already on the member's statements. Later charges settle through the
       // same function before any hunt opens (retained-settlement.ts).
@@ -1725,7 +1753,9 @@ export async function importVendorOrder(
       }),
       runWrites,
     );
-    await applyRunCounter(tx, { runId: input.runId, created });
+    await tx.execute(
+      sql`UPDATE "Run" SET "ordersSeen" = "ordersSeen" + 1, ${created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`}, "updatedAt" = now() WHERE "id" = ${input.runId}`,
+    );
 
     // An order Email retained before this Purchase existed links by its exact order id.
     await linkExactOrderEmails(databaseForTransaction(tx), {

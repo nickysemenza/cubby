@@ -5,10 +5,8 @@ import type {
   ExtractedPurchaseLine,
   ImportWriterInput,
   PaymentTender,
-  ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney, moneyToMinor } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers";
@@ -33,8 +31,6 @@ import {
 
 import { normalizeOrderKey } from "./order-identity";
 import type {
-  FindingKind,
-  FindingOrigin,
   ImportSourceAssociationInput,
   LineIdentityDecision,
 } from "./writer";
@@ -442,7 +438,7 @@ export function planImportedExpense(
   };
 }
 
-export function planExpenseProductBinding(
+function planExpenseProductBinding(
   row: ExistingExpenseSnapshot,
   line: ExtractedPurchaseLine,
   identity: LineIdentityDecision,
@@ -595,21 +591,6 @@ export function planFallbackExpenses(expenseIds: readonly string[]) {
       isNull(effectiveExpenseTradeSql()),
       notDeleted(expense),
     ),
-  };
-}
-
-export function planReplayClaim(
-  input: Pick<ImportWriterInput, "source" | "runId">,
-  id: typeof importSourceClaim.$inferSelect.id,
-  updatedAt: Date,
-) {
-  return {
-    id,
-    values: {
-      checksum: input.source.checksum,
-      lastRunId: input.runId,
-      updatedAt,
-    },
   };
 }
 
@@ -851,45 +832,4 @@ export function planOriginalBindings(
     productId: binding.productId,
     expenseId: binding.expenseId,
   }));
-}
-
-export function planReconciliationFix(
-  input: ImportWriterInput,
-  purchaseId: typeof purchase.$inferSelect.id,
-  orderKey: string,
-  accepted: LiveSourceOrder | null,
-  observationId: string,
-): Extract<ProposedImportFix, { kind: "reconcile_source_order" }> {
-  return {
-    kind: "reconcile_source_order",
-    purchaseId,
-    source: input.source,
-    orderKey,
-    acceptedChecksum: accepted?.checksum ?? null,
-    proposedExtraction: input.extraction,
-    observationId,
-    reviewedFingerprint: "0".repeat(64),
-  };
-}
-
-export async function planFinding(
-  input: FindingOrigin,
-  purchaseId: typeof purchase.$inferSelect.id,
-  kind: FindingKind,
-  summary: string,
-  proposedFix: ProposedImportFix | null,
-) {
-  const evidenceFingerprint = await sha256Hex(
-    JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
-  );
-  return {
-    runId: input.runId,
-    ledgerPartyId: input.ledgerPartyId,
-    entityKind: "purchase" as const,
-    entityId: purchaseId,
-    kind,
-    summary,
-    proposedFix,
-    evidenceFingerprint,
-  };
 }

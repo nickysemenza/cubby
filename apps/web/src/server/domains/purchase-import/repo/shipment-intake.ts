@@ -1,7 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { entityRefKey } from "@cubby/schemas/entity";
 import {
-  parseEntityId,
   parseShortcodeFor,
   type PurchaseId,
   type RunId,
@@ -10,21 +8,19 @@ import {
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import type { RetainedShipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { shipmentPurpose } from "@cubby/schemas/shipment-fields";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { email } from "~/server/db/schema";
+import { email, purchase } from "~/server/db/schema";
 import {
   loadImportScope,
   readUnchangedMailSource,
   retainedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
-import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { recordRetainedShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
-import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** The order writer already owns the transaction; verify the original again inside it. */
 export async function recordImportedShipmentEvidence(
@@ -64,9 +60,14 @@ export async function recordImportedShipmentEvidence(
       "MAIL_EVIDENCE_STALE",
       "Shipment evidence requires a retained Email original.",
     );
-  await assertMailSourceIdentityReady(getDb(db), original);
+  // The evidence writer verifies source identity once it holds the original.
   const [message] = await getDb(db)
-    .select({ id: email.id })
+    .select({
+      shortcode: email.shortcode,
+      purchaseShortcode: sql<
+        string | null
+      >`(SELECT ${purchase.shortcode} FROM ${purchase} WHERE ${purchase.id} = ${input.purchaseId})`,
+    })
     .from(email)
     .where(
       and(
@@ -84,14 +85,7 @@ export async function recordImportedShipmentEvidence(
       "MAIL_EVIDENCE_STALE",
       "The Shipment Email is no longer available.",
     );
-  const emailId = parseEntityId("email", message.id);
-  const codes = await lookupShortcodes(db, [
-    { entity: "purchase", id: input.purchaseId },
-    { entity: "email", id: emailId },
-  ]);
-  const emailCode = codes.get(entityRefKey("email", emailId));
-  const purchaseCode = codes.get(entityRefKey("purchase", input.purchaseId));
-  if (!emailCode || !purchaseCode)
+  if (!message.purchaseShortcode)
     throw createAppError(
       "MAIL_EVIDENCE_STALE",
       "Shipment Email or Purchase is no longer available.",
@@ -101,10 +95,10 @@ export async function recordImportedShipmentEvidence(
     {
       source: {
         kind: "email",
-        emailId: parseShortcodeFor("email", emailCode),
+        emailId: parseShortcodeFor("email", message.shortcode),
         checksum: original.rawChecksum,
       },
-      purchaseId: parseShortcodeFor("purchase", purchaseCode),
+      purchaseId: parseShortcodeFor("purchase", message.purchaseShortcode),
       shipments: input.shipments.map((packet) => {
         const purpose = shipmentPurpose.safeParse(packet.purpose);
         return {

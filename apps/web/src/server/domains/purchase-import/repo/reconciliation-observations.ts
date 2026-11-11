@@ -103,6 +103,16 @@ export async function recordSourceOrderObservation(
     .select({
       observation: sourceOrderObservation,
       subjectDeletedAt: purchase.deletedAt,
+      samePurchase: sourceObservationIdentitySql(
+        "purchase",
+        sourceOrderObservation.purchaseId,
+        sql`${identity.purchaseId}`,
+      ),
+      sameVendor: sourceObservationIdentitySql(
+        "vendor",
+        sourceOrderObservation.vendorId,
+        sql`${values.vendorId}`,
+      ),
     })
     .from(sourceOrderObservation)
     .innerJoin(purchase, eq(purchase.id, sourceOrderObservation.purchaseId))
@@ -115,24 +125,9 @@ export async function recordSourceOrderObservation(
       ),
     )
     .orderBy(asc(sourceOrderObservation.createdAt));
-  for (const { observation } of observed)
-    if (
-      await sourceObservationIdentityMatches(
-        tx,
-        "purchase",
-        observation.purchaseId,
-        identity.purchaseId,
-      )
-    ) {
-      if (
-        await sourceObservationIdentityMatches(
-          tx,
-          "vendor",
-          observation.vendorId,
-          values.vendorId,
-        )
-      )
-        return observation;
+  for (const { observation, samePurchase, sameVendor } of observed)
+    if (samePurchase) {
+      if (sameVendor) return observation;
       throw new Error(
         "Source observation identity changed; review its ownership.",
       );

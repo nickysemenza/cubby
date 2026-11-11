@@ -1,9 +1,15 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { shipment, shipmentObservation, vendor } from "~/server/db/schema";
+import { requested } from "~/server/db/helpers/requested";
+import {
+  shipment,
+  shipmentObservation,
+  shipmentObservationCapture,
+  vendor,
+} from "~/server/db/schema";
 import {
   assessCarrierPacket,
   withoutDeliveryFieldCarrier,
@@ -16,7 +22,6 @@ import {
   carrierReference,
   assertShipmentAssociation,
 } from "./evidence-internal";
-import { loadCaptureObservationIds } from "./evidence-observation-load";
 import {
   planEffectiveObservations,
   planPacketObservationIdentities,
@@ -220,4 +225,28 @@ export async function prepareShipmentPacket(
     identified,
     effectiveObservations,
   };
+}
+
+async function loadCaptureObservationIds(
+  db: Database,
+  captureId: string,
+  history: readonly (typeof shipmentObservation.$inferSelect)[],
+) {
+  if (!history.length) return new Set<string>();
+  const ids = requested(
+    history.map((row) => ({ entity: "shipmentObservation", id: row.id })),
+  );
+  const rows = await getDb(db)
+    .select({ id: shipmentObservationCapture.observationId })
+    .from(shipmentObservationCapture)
+    .where(
+      and(
+        eq(shipmentObservationCapture.captureId, captureId),
+        ids.match({
+          entity: "shipmentObservation",
+          id: sql`${shipmentObservationCapture.observationId}`,
+        }),
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
 }
