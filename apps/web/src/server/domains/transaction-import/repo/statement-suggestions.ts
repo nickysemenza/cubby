@@ -1356,8 +1356,11 @@ async function assertProviderIdentityPublication(
 export async function buildChargeProposals(
   db: Database,
   charges: readonly ChargeRef[],
+  sharedPreparation?: Awaited<
+    ReturnType<typeof prepareFinancialStatementPreview>
+  >,
 ): Promise<ChargeProposal[]> {
-  const prepared = await prepareChargePreviews(db, charges);
+  const prepared = await prepareChargePreviews(db, charges, sharedPreparation);
   if (!prepared) return [];
   const {
     grouped,
@@ -4275,6 +4278,9 @@ async function statementLabelScope(
   db: Database,
   scope: StatementSuggestionScope,
   suggestionIds: readonly string[],
+  sharedPreparation?: Awaited<
+    ReturnType<typeof prepareFinancialStatementPreview>
+  >,
 ) {
   const identity = labelIdentityScope(scope);
   const selected = suggestionIds.length
@@ -4304,7 +4310,7 @@ async function statementLabelScope(
   );
   const admitted: string[] = [];
   const preparation = rows.length
-    ? await prepareFinancialStatementPreview(db)
+    ? (sharedPreparation ?? (await prepareFinancialStatementPreview(db)))
     : undefined;
   for (
     let offset = 0;
@@ -4339,8 +4345,14 @@ export async function statementLabelTargetsInScope(
   db: Database,
   scope: StatementSuggestionScope,
   suggestionIds: readonly string[],
+  preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
-  const scoped = await statementLabelScope(db, scope, suggestionIds);
+  const scoped = await statementLabelScope(
+    db,
+    scope,
+    suggestionIds,
+    preparation,
+  );
   const rows = await unwrapDb(db).execute<{ id: string }>(
     sql`
     SELECT s.id FROM "Suggestion" s
