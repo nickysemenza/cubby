@@ -99,6 +99,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## Server
 
+- Purchase and Transaction target eligibility: `server/generic/suggestions/repo/eligible-targets.ts`.
+
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`

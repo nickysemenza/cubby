@@ -110,9 +110,23 @@ export const emailPurchaseEvidenceSql = (
     ${exactOrderPurchasesSql(purchaseIds)}
     UNION ALL
     SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
+    CROSS JOIN LATERAL (SELECT "Email".id) original_email
     WHERE p."vendorId" = original."vendorId"
         ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
         AND (event."orderId" IS NULL OR p."orderId" IS NULL)
+        AND NOT EXISTS (
+          SELECT 1 FROM "EmailPurchaseDecision" other_decision
+          JOIN "OrderMailEvent" other_event ON other_event.id = other_decision."eventId"
+          JOIN "Email" other_email ON other_email."orderMailId" = other_event."orderMailId"
+          WHERE other_decision."purchaseId" = p.id AND other_decision.active
+            AND other_decision.decision = ${KIND.linked} AND other_event."supersededAt" IS NULL
+            AND other_email.id <> "Email".id AND ${notDeleted("other_email")}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM "Email" "Email"
+          WHERE "Email".id <> original_email.id AND ${notDeleted("Email")}
+            AND EXISTS (${emailAcceptedEvidenceSql(false, "ignore", sql`p.id`)})
+        )
         AND event."amount" IS NOT NULL AND (${minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric")}) IS NOT NULL
         AND abs(event."amount" - (${minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric")})) < 0.01
         AND "Email"."receivedAt" IS NOT NULL AND p."date" IS NOT NULL

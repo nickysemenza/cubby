@@ -846,7 +846,7 @@ describe("shared spending booking", () => {
       transactionId: transaction.output.id,
     });
     expect(blocked).toMatchObject({ status: "review_required" });
-    expect(blocked.candidates).toHaveLength(2);
+    expect(blocked.candidates).toHaveLength(1);
     const requests = [
       { transactionId: transaction.output.id, advice },
       {
@@ -1281,64 +1281,46 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it("holds older and undated same-vendor spending until the member excludes it", async () => {
-    const { transaction, vendor, advice } = await fixture();
-    const receipt = await createRepoIdentity(ctx, "purchase", {
-      vendorId: vendor.output.id,
-      date: "2026-03-01",
-      statedTotal: 40,
-    });
-    const line = await createRepoIdentity(ctx, "expense", {
-      purchaseId: receipt.output.id,
-      name: "Synthetic receipt",
-      cost: 40,
-      trade: "other",
-    });
-    const plan = await previewFinancialSpending(ctx.db, {
+  it("treats a sibling's settled Purchase as context but reviews open capacity", async () => {
+    const { account, transaction, vendor, advice } = await fixture();
+    const first = await previewFinancialSpending(ctx.db, {
       transactionId: transaction.output.id,
       advice,
     });
-    expect(plan.status).toBe("review_required");
-    await expect(
-      commitFinancialSpending(ctx.db, plan, ctx.actor),
-    ).rejects.toThrow(/review/i);
-    expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
-    ).toEqual([{ cost: 40 }]);
-    expect(
-      await getDb(ctx.db)
-        .select({ name: purchase.displayLabel })
-        .from(purchase),
-    ).toHaveLength(1);
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: null })
-      .where(eq(purchase.shortcode, receipt.output.id));
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: null })
-      .where(eq(expense.shortcode, line.output.id));
-    expect(
-      await previewFinancialSpending(ctx.db, {
-        transactionId: transaction.output.id,
-        advice,
-      }),
-    ).toMatchObject({ status: "review_required" });
-    const reviewed = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-      advice,
-      rejectedPurchaseIds: [receipt.output.id],
+    await commitFinancialSpending(ctx.db, first, ctx.actor);
+    const sibling = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      transactionDate: "2026-05-04",
+      postedDate: "2026-05-05",
+      merchant: "Synthetic Orchard",
+      sourceRefs: [
+        { source: "synthetic-bank", externalId: "synthetic-sibling" },
+      ],
     });
-    expect(reviewed).toMatchObject({
+    const request = { transactionId: sibling.output.id, advice };
+    const plan = await previewFinancialSpending(ctx.db, request);
+    expect(plan).toMatchObject({
       status: "ready",
       effect: "create_aggregate",
+      candidates: [{ strength: "context" }],
     });
-    await commitFinancialSpending(ctx.db, reviewed, ctx.actor);
-    expect(
-      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
-        .map((row) => row.cost)
-        .sort(),
-    ).toEqual([42.5, null]);
+    const open = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-04",
+      statedTotal: 100,
+    });
+    await createRepoIdentity(ctx, "expense", {
+      purchaseId: open.output.id,
+      name: "Synthetic open receipt",
+      cost: 100,
+      trade: "other",
+    });
+    expect(await previewFinancialSpending(ctx.db, request)).toMatchObject({
+      status: "review_required",
+    });
   });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {
@@ -1762,14 +1744,14 @@ describe("shared spending booking", () => {
       },
       ctx.actor,
     );
-    // Overcoverage is uncertainty, not proof that the old receipt is exhausted.
+    // Purchases outside the discovery window do not prevent creation.
     await getDb(ctx.db).update(expense).set({ cost: 40 });
     expect(
       await previewFinancialSpending(ctx.db, {
         transactionId: next.output.id,
         advice,
       }),
-    ).toMatchObject({ status: "review_required" });
+    ).toMatchObject({ status: "ready" });
     await getDb(ctx.db).update(expense).set({ cost: 42.5 });
     const independent = await previewFinancialSpending(ctx.db, {
       transactionId: next.output.id,

@@ -464,6 +464,7 @@ export function projectFinancialRows(
         : possibleExisting
       ).map((transaction) => ({
         id: parseShortcodeFor("financialTransaction", transaction.shortcode),
+        provider: providerMatches.some((match) => match.id === transaction.id),
         amount: Number(transaction.amount),
         status: financialTransactionStatus.parse(transaction.status),
         postedDate: transaction.postedDate,

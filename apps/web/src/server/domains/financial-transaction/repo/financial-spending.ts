@@ -65,6 +65,7 @@ import {
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
 import {
   canonicalJson,
   jsonSnapshot,
@@ -141,14 +142,13 @@ type SpendingCandidate = {
   shortcode: string;
   displayLabel: string | null;
   date: string | null;
-  // Additional older spending can stop creation, never authorize settlement.
-  reviewOnly?: boolean;
+  explicit?: boolean;
 };
 type PaymentCandidate = SpendingCandidate & {
   amountKey: string;
   chargedDate: string;
 };
-type VendorCandidate = SpendingCandidate & { hasVendorSpending: boolean };
+type VendorCandidate = SpendingCandidate;
 const calendarGap = (left: string, right: string) =>
   Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
   86_400_000;
@@ -354,14 +354,12 @@ export async function prepareFinancialSpendingCandidates(
       VendorCandidate & { vendorId: string }
     >(
       sql`
-      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId" FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
         vendorIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-        AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${vendorSpendingExists}) ORDER BY p.id
+        AND p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14 ORDER BY p.id
     `,
       "objects",
     );
@@ -919,13 +917,6 @@ type CandidateInput = {
   purchaseId?: string | null;
 };
 
-// A header total is not spending. Unknown costs on actual vendor lines still
-// require graph review; neither amount equality nor an order date is required.
-const vendorSpendingExists = sql`EXISTS (
-  SELECT 1 FROM "Expense" e WHERE e."purchaseId" = p.id
-    AND ${notDeleted("e")} AND NOT e.future
-    AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}
-)`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -951,10 +942,9 @@ async function spendingCandidates(
     return (
       await getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date,
-          NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
+          COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3)), false) AS "explicit" FROM "Purchase" p
     WHERE ${notDeleted("p")}
-      AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
-        AND ${!input.refund} AND ${vendorSpendingExists}))
+      AND ${original}
     ORDER BY p.id`)
     ).rows;
   }
@@ -966,30 +956,26 @@ async function spendingCandidates(
         shortcode: candidate.shortcode,
         displayLabel: candidate.displayLabel,
         date: candidate.date,
-        reviewOnly: false,
+        explicit: true,
       });
   }
   if (input.vendorId && !input.refund) {
     let lookup = page.vendorCandidates.get(input.vendorId);
     if (!lookup) {
       lookup = getDb(db)
-        .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+        .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
         WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
-          AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-            OR ${vendorSpendingExists}) ORDER BY p.id`)
+          AND p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14 ORDER BY p.id`)
         .then((result) => result.rows);
       page.vendorCandidates.set(input.vendorId, lookup);
     }
-    for (const { hasVendorSpending, ...candidate } of await lookup) {
-      const nearby = Boolean(
-        candidate.date && calendarGap(candidate.date, input.date) <= 14,
-      );
-      // The page pool also contains date-window headers for other source dates.
-      // Only actual spending belongs to the additional review-only selector.
-      if (!nearby && !hasVendorSpending) continue;
-      if (!candidates.has(candidate.id))
-        candidates.set(candidate.id, { ...candidate, reviewOnly: !nearby });
+    for (const candidate of await lookup) {
+      if (
+        candidate.date &&
+        calendarGap(candidate.date, input.date) <= 14 &&
+        !candidates.has(candidate.id)
+      )
+        candidates.set(candidate.id, { ...candidate, explicit: false });
     }
   }
   if (input.purchaseId) {
@@ -1002,7 +988,7 @@ async function spendingCandidates(
       page.explicitCandidates.set(input.purchaseId, lookup);
     }
     for (const candidate of await lookup)
-      candidates.set(candidate.id, { ...candidate, reviewOnly: false });
+      candidates.set(candidate.id, { ...candidate, explicit: true });
   }
   return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -1073,6 +1059,7 @@ function spendingCategoryForDiscovery(
 }
 
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
+// eslint-disable-next-line complexity -- Discovery combines booking evidence and candidate eligibility.
 async function discoverSpendingEvidence(
   db: Database,
   request: Request,
@@ -1140,6 +1127,24 @@ async function discoverSpendingEvidence(
         page,
       )
     : [];
+  const classifications =
+    (
+      await eligibleTargets(db, [
+        {
+          key: "spending",
+          kind: "purchase",
+          ids: candidates.map((candidate) => candidate.id),
+          explicitIds: candidates
+            .filter((candidate) => candidate.explicit)
+            .map((candidate) => candidate.id),
+          amountMinor: cents(source.amount),
+          currentTransactionId: row?.id,
+        },
+      ])
+    ).get("spending") ?? [];
+  const eligibility = new Map(
+    classifications.map((target) => [target.id, target.eligibility]),
+  );
   const rejected = new Set(request.rejectedPurchaseIds);
   const unrejectedCandidates = candidates.filter(
     (candidate) =>
@@ -1171,11 +1176,11 @@ async function discoverSpendingEvidence(
       (await prepareRetainedSettlementDiscovery(
         getDb(db),
         unrejectedCandidates
-          .filter((candidate) => !candidate.reviewOnly)
+          .filter((candidate) => eligibility.get(candidate.id) !== "context")
           .map((candidate) => parseEntityId("purchase", candidate.id)),
       ));
     for (const candidate of unrejectedCandidates) {
-      if (candidate.reviewOnly) continue;
+      if (eligibility.get(candidate.id) === "context") continue;
       const purchaseId = parseEntityId("purchase", candidate.id);
       const facts = retained.get(purchaseId);
       if (!retainedSettlementDiscoveryCouldMatch(facts, charge, Boolean(row)))
@@ -1223,7 +1228,7 @@ async function discoverSpendingEvidence(
   const payments = await prepareSpendingPayments(
     db,
     graphCandidates
-      .filter((candidate) => !candidate.reviewOnly)
+      .filter((candidate) => eligibility.get(candidate.id) !== "context")
       .map((candidate) => candidate.id),
     page,
   );
@@ -1237,23 +1242,13 @@ async function discoverSpendingEvidence(
           parseEntityId("purchase", candidate.id),
           page,
         )),
-      payments: candidate.reviewOnly
-        ? []
-        : (payments.get(candidate.id) ??
-          (await purchasePayments(db, [candidate.id]))),
+      payments: payments.get(candidate.id) ?? [],
       plan: strong.get(candidate.shortcode) ?? null,
     })),
   );
-  const candidateGraphs = new Map(
-    candidateEvidence.map((candidate) => [candidate.id, candidate.graph]),
+  const liveCandidates = unrejectedCandidates.filter(
+    (candidate) => eligibility.get(candidate.id) !== "context",
   );
-  const liveCandidates = unrejectedCandidates.filter((candidate) => {
-    if (!candidate.reviewOnly) return true;
-    const graph = candidateGraphs.get(candidate.id);
-    // Only confidently exhausted capacity removes an added-only blocker.
-    // Unknown and negative capacity cannot establish ordinary full settlement.
-    return availableCents(graph, source.amount, row?.id) !== 0;
-  });
   let categoryFromPurchase = false;
   if (source.kind === "refund" && !request.spendingCategoryId) {
     const original = request.purchaseId
@@ -1358,12 +1353,15 @@ async function discoverSpendingEvidence(
   const basis = {
     request,
     snapshot,
-    candidates: liveCandidates.map((candidate) => ({
+    candidates: unrejectedCandidates.map((candidate) => ({
       purchaseId: parseShortcodeFor("purchase", candidate.shortcode),
       name: candidate.displayLabel ?? candidate.shortcode,
-      strength: strong.has(candidate.shortcode)
-        ? ("strong" as const)
-        : ("weak" as const),
+      strength:
+        eligibility.get(candidate.id) === "context"
+          ? ("context" as const)
+          : strong.has(candidate.shortcode)
+            ? ("strong" as const)
+            : ("weak" as const),
     })),
   };
   return {
