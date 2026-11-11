@@ -113,7 +113,10 @@ describe("Worker event composition", () => {
   });
 
   it("rejects background requests without the derived key", async () => {
-    const attempts: HeadersInit[] = [{}, { "x-cubby-background": "forged" }];
+    const attempts: HeadersInit[] = [
+      {},
+      { "x-cubby-background-key": "forged" },
+    ];
     for (const headers of attempts) {
       const response = await handleHttpRequest(
         new Request("https://fixture.example/__internal/background", {

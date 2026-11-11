@@ -52,6 +52,7 @@ import {
   isPlacedRequest,
   PLACED_PATH,
   placedEventSchema,
+  withPlacement,
 } from "~/server/worker/placed";
 import { runPlacedQueue } from "~/server/worker/queue";
 import { runPlacedScheduled } from "~/server/worker/scheduled";
@@ -276,9 +277,12 @@ async function finishResponse(
 
 async function runPlacedEvent(request: Request, env: Env) {
   const event = placedEventSchema.parse(await request.json());
-  return event.event === "queue"
-    ? runPlacedQueue(event.queue, event.bodies, env)
-    : runPlacedScheduled(event, env);
+  return withPlacement(
+    request,
+    event.event === "queue"
+      ? await runPlacedQueue(event.queue, event.bodies, env)
+      : await runPlacedScheduled(event, env),
+  );
 }
 
 /** Owns HTTP routing and body lifetime; the platform entry only adapts events. */

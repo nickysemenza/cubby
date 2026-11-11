@@ -195,7 +195,9 @@ runs the event in place and records `cubby.forward = fallback`; any other
 failure throws, as the same failure in place would. The caller opens no pool
 while it forwards, so a forwarded event still holds one pool, in the callee.
 Placed spans use `cubby.workload = queue.placed` or `scheduled.placed`, and the
-caller records the callee's `cf-placement` as `cloudflare.forwarded_placement`.
+callee returns its request's `cf-placement`, which the caller records as
+`cloudflare.forwarded_placement`; span `cloudflare.colo` names the ingress colo,
+so placed latency shows in Postgres span durations, not colo.
 Local dev and the workerd harness have no binding and run events in place.
 
 Every background invocation — one queue permit, one telemetry batch, the hourly

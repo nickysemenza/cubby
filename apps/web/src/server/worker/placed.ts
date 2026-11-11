@@ -12,14 +12,17 @@ import { annotateActiveSpan } from "~/server/observability/tracing";
  * binding so their database round trips start next to Postgres.
  */
 export const PLACED_PATH = "/__internal/background";
-const KEY_HEADER = "x-cubby-background";
+// Sentry collects request headers; it always filters names containing "key".
+const KEY_HEADER = "x-cubby-background-key";
+// Cloudflare documents `cf-placement` on the callee's request; the callee echoes it.
+const PLACEMENT_HEADER = "x-cubby-placement";
 
 // Service binding requests carry no caller identity a public request cannot
 // forge, and the binding drops `props`, so the caller proves itself with a key
 // derived from a secret both sides already hold.
 const forwardKey = (env: Env) =>
   createHmac("sha256", env.BETTER_AUTH_SECRET)
-    .update("cubby.background-forward")
+    .update("cubby.background-forward.2")
     .digest("hex");
 
 export const placedEventSchema = z.discriminatedUnion("event", [
@@ -65,7 +68,10 @@ export async function forwardToPlaced(env: Env, event: PlacedEvent) {
       body: JSON.stringify(event),
     },
   );
-  const placement = response.headers.get("cf-placement") ?? undefined;
+  const placement =
+    response.headers.get(PLACEMENT_HEADER) ??
+    response.headers.get("cf-placement") ??
+    undefined;
   if (response.status === 404) {
     annotateActiveSpan({
       "cubby.forward": "fallback",
@@ -82,5 +88,12 @@ export async function forwardToPlaced(env: Env, event: PlacedEvent) {
   });
   if (!response.ok)
     throw new Error(`Background forwarding failed: ${response.status}`);
+  return response;
+}
+
+/** Reports where the placed callee ran back to its caller. */
+export function withPlacement(request: Request, response: Response) {
+  const placement = request.headers.get("cf-placement");
+  if (placement) response.headers.set(PLACEMENT_HEADER, placement);
   return response;
 }
