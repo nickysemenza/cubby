@@ -36,11 +36,20 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
   );
   const models = createModels();
   const requests: Request[] = [];
-  for (const provider of fundedCubbyPiProviders(() => async (input, init) => {
-    const request = new Request(input, init);
-    requests.push(request.clone());
-    return harness.fetch(request);
-  }))
+  // OpenAI credit answers first; refusing it reaches the Claude-credit
+  // Anthropic transport this test drives.
+  for (const provider of fundedCubbyPiProviders(
+    (route) => async (input, init) => {
+      if (route === "openai")
+        return Response.json(
+          { error: { code: "credit_balance_exhausted" } },
+          { status: 429 },
+        );
+      const request = new Request(input, init);
+      requests.push(request.clone());
+      return harness.fetch(request);
+    },
+  ))
     models.setProvider(provider);
   const model = models.getModel("openai", "gpt-6.1-sol");
   if (!model) throw new Error("Missing Anthropic model");
