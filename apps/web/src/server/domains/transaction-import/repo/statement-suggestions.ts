@@ -733,9 +733,6 @@ function copyPairing(charge: ChargeRef, fetched: readonly CopyMember[]) {
       member,
     ]);
   const counts = new Set([...bySource.values()].map((list) => list.length));
-  const others = members.filter(
-    (member) => chargeId(member.charge) !== chargeId(charge),
-  );
   if (counts.size !== 1 || unstable)
     return {
       kind: "ambiguous",
@@ -763,12 +760,13 @@ function copyPairing(charge: ChargeRef, fetched: readonly CopyMember[]) {
       a.canonical.createdAt.localeCompare(b.canonical.createdAt) ||
       chargeId(a.charge).localeCompare(chargeId(b.charge)),
   );
-  // Booking the primary changes every group member's candidates, so all of
-  // them refresh, not only this event's copies.
+  // Copies are this event's other exports only: publishing retires their
+  // advice, so another event's primary in the group must never be one. The
+  // account's other pending charges refresh through pendingChargesNear.
   return chargeId(primary!.charge) === chargeId(charge)
     ? ({
         kind: "primary",
-        copies: others.map((member) => member.charge),
+        copies: pair.map((member) => member.charge),
       } satisfies CopyPairing)
     : ({ kind: "copy", transactionId: null } satisfies CopyPairing);
 }

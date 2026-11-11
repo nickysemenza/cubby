@@ -3522,6 +3522,9 @@ describe("statement Transaction suggestions", () => {
     );
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toHaveLength(2);
+    // Each event's primary must not retire the other's advice on a rerun.
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toHaveLength(2);
     for (const _ of [0, 1]) {
       const [next] = (await readPendingStatements(ctx)).filter(
         (row) => row.recommended === "create",

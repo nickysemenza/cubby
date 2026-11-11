@@ -424,13 +424,16 @@ export async function publishProductPair(
  * them, so enrichment never retires it: it is fingerprinted live and a merge
  * pins what the member reviewed. Detector judgments keep their snapshot.
  */
-/** The pair fingerprint a list publishes: live for agent pairs, else stored. */
+/**
+ * The live pair fingerprint. A listed detector pair publishes its stored
+ * fingerprint only while it equals this, so changed identity facts refuse.
+ */
 export async function productPairApplicationKey(
   db: Database,
   state: { recordId: string | null; data: unknown; fingerprint: string | null },
 ) {
   const data = pairProjection.safeParse(state.data).data;
-  if (data?.source !== "agent") return state.fingerprint;
+  if (!data) return state.fingerprint;
   const { productPairFingerprint } =
     await import("./product-identity-snapshot");
   return productPairFingerprint(db, [
