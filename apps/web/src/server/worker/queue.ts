@@ -78,7 +78,10 @@ export async function handleForwardedQueue(request: Request, env: Env) {
     true,
     request.headers.get("cf-placement") ?? undefined,
   );
-  return Response.json(outcomes);
+  // A delivery that returns without settling a message acknowledges it.
+  return Response.json(
+    bodies.map((_, index) => outcomes[index] ?? { action: "ack" }),
+  );
 }
 
 // Each background delivery is one permit to run one unit; the unit's rows own
