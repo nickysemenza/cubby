@@ -7,10 +7,15 @@
 import {
   JOB_FAILING_LIMIT_MS,
   jobPage,
+  jobState,
   type JobExecution,
   type JobPage,
 } from "@cubby/schemas/job";
-import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
+import {
+  runPurpose,
+  runStatus,
+  VISIBLE_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
 import { JOB_LEASE_MS } from "@cubby/shared/job-page-limits";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 
@@ -67,6 +72,34 @@ export const jobDue = (now: Date) =>
       sql`${job.leaseExpiresAt} <= ${now.toISOString()}::timestamp`,
     ),
   );
+
+/**
+ * The import source a Sweep Run is scoped to, or NULL for any other Run: the
+ * `TransactionImport.source` slug of its statement family's `importId`, the
+ * same source key statement applications lock on. `run` names the Run alias.
+ */
+const sweepImportSource = (run: string) => {
+  const alias = sql.raw(`"${run}"`);
+  return sql`CASE WHEN ${alias}.purpose = ${runPurpose.enum.sweep} THEN (
+    -- includes-deleted: a retained scope still names the source its pages write.
+    SELECT ti.source FROM "TransactionImport" ti WHERE ti.id = (jsonb_path_query_first(
+      ${alias}.input, '$.families[*] ? (@.family == "statement_transaction").scope.importId'
+    ) #>> '{}')::uuid) END`;
+};
+
+/**
+ * Whether another Sweep on `source` holds a live `run.execute` lease. One page
+ * per source runs at a time: concurrent pages over one source's charges only
+ * contend on its evidence locks and serialization failures. A Sweep with no
+ * source (NULL) is never held, and nothing waits on a lapsed lease.
+ */
+const sweepSourceHeld = (source: SQL, jobId: SQL, now: Date) => sql`(
+  ${source} IS NOT NULL AND EXISTS (
+    SELECT 1 FROM "Job" held JOIN "Run" held_run ON held_run.id = held."runId"
+    WHERE held.kind = 'run.execute' AND held.state = ${jobState.enum.running}
+      AND held."leaseExpiresAt" > ${now.toISOString()}::timestamp
+      AND held.id <> ${jobId} AND ${notDeleted("held_run")}
+      AND ${sweepImportSource("held_run")} = ${source}))`;
 
 /** The record row a drain unit's executions write: rotation and outcome. */
 export const DRAIN_RECORD_KIND =
@@ -133,13 +166,14 @@ export async function dueUnits(
       SELECT id, purpose IN (${sql.join(
         VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
         sql`, `,
-      )}) AS visible
+      )}) AS visible, ${sweepImportSource("Run")} AS source
       FROM "Run" WHERE status = ${runStatus.enum.running} AND ${notDeleted(run)}
     ), jobs AS (
       SELECT "Job".id, "Job".kind, "Job".priority, "Job"."availableAt" AS since,
         ("Job".kind = 'run.execute' OR coalesce(active_runs.visible, false)) AS run_owned
       FROM "Job" LEFT JOIN active_runs ON active_runs.id = "Job"."runId"
-      WHERE ${jobDue(now)}
+      WHERE ${jobDue(now)} AND NOT (
+        "Job".kind = 'run.execute' AND ${sweepSourceHeld(sql`active_runs.source`, sql`"Job".id`, now)})
     ), ranked AS (
       SELECT jobs.*, row_number() OVER (
         PARTITION BY run_owned, kind
@@ -309,7 +343,17 @@ export async function claimJob(
     const [candidate] = await repositoryQueries(tx)
       .select({ row: job })
       .from(job)
-      .where(and(eq(job.id, recordId), jobDue(now)))
+      .where(
+        and(
+          eq(job.id, recordId),
+          jobDue(now),
+          sql`NOT (${job.kind} = 'run.execute' AND ${sweepSourceHeld(
+            sql`(SELECT ${sweepImportSource("own_run")} FROM "Run" own_run WHERE own_run.id = ${job.runId} AND ${notDeleted("own_run")})`,
+            sql`${job.id}`,
+            now,
+          )})`,
+        ),
+      )
       .for("update", { of: job, skipLocked: true });
     if (!candidate) return null;
     const { row } = candidate;
