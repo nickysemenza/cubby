@@ -150,8 +150,7 @@ explicit review before a standalone refund Purchase is booked.
 
 The clean import booking rule (clean spending creates, books and supersedes,
 clean income, transfer and card-payment creates, and paired copy attaches) is fixed code and always on; there is no member
-switch or audit sample. Each application still uses `suggestions.review` or
-`suggestions.review_batch` and records automatic authority and its policy
+switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
 Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
 transaction-only receipt into proof of spending; regenerate and revalidate the
@@ -1380,7 +1379,7 @@ group by group, filtering a group with
 `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
-   `suggestions.review_batch`: verdict `correct`, intent `apply`,
+   `suggestions.review`: verdict `correct`, intent `apply`,
    `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
    "statement_transaction", action: <recommended>}`; an attach also names
    `transactionId`, the first candidate. For transfer/card-payment creates use

@@ -116,26 +116,24 @@ export function executeReviewApplication(
           throw new Error(
             "An applying review needs expectedFingerprint; send the listed row's fingerprint",
           );
-        if (
-          input.expectedFingerprint !==
-          reviewKey({
-            suggestionId: applicableState.id,
-            fingerprint: applicableState.fingerprint,
-          })
-        )
+        const key = reviewKey({
+          suggestionId: applicableState.id,
+          fingerprint:
+            "applicationKey" in family && family.applicationKey
+              ? await family.applicationKey(transactionDb, applicableState)
+              : applicableState.fingerprint,
+        });
+        if (input.expectedFingerprint !== key) {
+          const changed =
+            "applicationTerms" in family && family.applicationTerms
+              ? changedTerms(
+                  await family.applicationTerms(transactionDb, applicableState),
+                )
+              : [];
           throw new Error(
-            "Suggestion was republished since review; list it again and review the current version",
+            `Suggestion changed since review${changed.length ? `: ${changed.join(", ")}` : ""}; list it again and review the current version`,
           );
-        const changed =
-          "applicationTerms" in family && family.applicationTerms
-            ? changedTerms(
-                await family.applicationTerms(transactionDb, applicableState),
-              )
-            : [];
-        if (changed.length)
-          throw new Error(
-            `Suggestion changed since review: ${changed.join(", ")}; list it again and review the current version`,
-          );
+        }
         (family.target ?? suggestionProjectionTargets[name]).parse(
           applicableState,
         );

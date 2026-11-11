@@ -3537,14 +3537,15 @@ older pending Suggestions ineligible on reads; a later sweep supersedes prior pe
 same record and field. Historical hashes, model versions, provenance and actor intent are never
 reconstructed.
 
-`suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` and
-`suggestions.review_batch`) record immutable review; each batch item has its own outcome. Draft and
+`suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` with `items`) record
+immutable review; each batch item has its own outcome. Draft and
 history verdicts settle on their own; an applying review commits with its application, so a stale
 or refused application records nothing and the same operation id may retry with a corrected review.
 Every applying review sends `expectedFingerprint`, the listed row's `fingerprint`, naming the
-version it reviewed. A family may declare `applicationTerms`, what its apply writes as reviewed and
-as it is now; the engine refuses naming each part that moved, so drift in evidence the application
-does not write never blocks. Statement applications compare the same way inside their apply.
+version it reviewed; a family whose list computes that fingerprint live declares `applicationKey`.
+A mismatch refuses, naming each part of the family's `applicationTerms` (what its apply writes) that
+moved. Statement applications compare only the chosen action's terms inside their apply, so drift in
+evidence the application does not write never blocks.
 A decision records correct, wrong, uncertain and presentation-only dismissal
 separately, with an explicit correction-presence discriminator so a corrected JSON null survives.
 Draft acceptance records history; saved application commits a separate immutable command-bound

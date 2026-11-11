@@ -136,6 +136,8 @@ function statementApplicationTerms(
     accountId: judgment.accountId,
     statementDate: judgment.statementDate,
     providerStatus: judgment.providerStatus,
+    // A charge booked since review must not be recorded again by any action.
+    matchedTransactionId: judgment.matchedTransactionId ?? null,
   };
   switch (action) {
     case "create": {

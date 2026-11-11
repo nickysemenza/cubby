@@ -26,7 +26,7 @@ export const suggestionsContract = defineContract(
     }),
     list: query({
       description:
-        "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, recordEntity, recordIds (every touched endpoint), runId and column filters. Declared filters accept include values, <column>Exclude values, <column>Presence and range <column>From/<column>To bounds; every supplied predicate must hold. Exclude keeps rows with no matching value, including null or absent values. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through suggestions.review or suggestions.review_batch, preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
+        "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, recordEntity, recordIds (every touched endpoint), runId and column filters. Declared filters accept include values, <column>Exclude values, <column>Presence and range <column>From/<column>To bounds; every supplied predicate must hold. Exclude keeps rows with no matching value, including null or absent values. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through suggestions.review (items, one or many), preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
       input: suggestionListInput,
       output: suggestionListOut,
       cache: {
@@ -44,7 +44,7 @@ export const suggestionsContract = defineContract(
     }),
     acceptClean: mutation({
       exposure: "view",
-      note: "Agents accept each clean row through suggestions.review_batch",
+      note: "Agents accept each clean row through suggestions.review",
       command: { label: "Accept clean suggestions", confirmation: null },
       input: acceptCleanSuggestionsInput,
       output: acceptCleanSuggestionsOut,

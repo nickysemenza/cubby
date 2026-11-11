@@ -63,9 +63,16 @@ export type Handler = {
     >,
   ) => Promise<void>;
   /**
-   * What applying writes, as reviewed and as it is now, by part name. The
-   * engine refuses naming each part that differs; evidence the application
-   * does not write never refuses.
+   * The fingerprint a list publishes for this row when it is computed live
+   * rather than stored; the review must name it. Defaults to the stored one.
+   */
+  applicationKey?: (
+    db: Database,
+    state: SuggestionStateRow,
+  ) => Promise<string | null>;
+  /**
+   * What applying writes, as published and as it is now, by part name; a
+   * refusal names each part that differs.
    */
   applicationTerms?: (
     db: Database,

@@ -5,14 +5,16 @@ import {
 } from "@cubby/schemas/suggestion";
 import { productPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { product } from "~/server/db/schema";
 import {
   currentProductPairPolicySql,
+  productPairApplicationKey,
   productPairApplicationTerms,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
@@ -164,12 +166,14 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
     const subject = z
       .object({ recordId: z.uuid(), otherId: z.uuid() })
       .parse(prediction.subject);
-    await unwrapDb(db).execute(sql`
-      SELECT 1 FROM product
-      WHERE id IN (${subject.recordId}::uuid, ${subject.otherId}::uuid)
-      ORDER BY id FOR UPDATE
-    `);
+    await getDb(db)
+      .select({ id: product.id })
+      .from(product)
+      .where(inArray(product.id, [subject.recordId, subject.otherId]))
+      .orderBy(product.id)
+      .for("update");
   },
+  applicationKey: productPairApplicationKey,
   applicationTerms: productPairApplicationTerms,
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
