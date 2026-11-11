@@ -2,7 +2,11 @@ import { LEGACY_SHORTCODE_PREFIX, parseShortcode } from "@cubby/shared";
 import { SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { textArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
+import {
+  arrayElement,
+  textArrayParam,
+  uuidArrayParam,
+} from "~/server/db/helpers/query";
 
 /**
  * The only way repository SQL binds a caller-supplied set of records.

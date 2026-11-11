@@ -495,7 +495,7 @@ export async function assertNoDependents<TId extends string>(opts: {
 export const uuidArrayParam = (ids: readonly string[] | SQL): SQL =>
   ids instanceof SQL ? ids : sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
 
-const arrayElement = (value: string) =>
+export const arrayElement = (value: string) =>
   `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
 const arrayLiteral = (values: readonly string[]) =>
@@ -513,7 +513,7 @@ export const textArrayParam = (values: readonly string[]): SQL =>
  * Postgres resolves the element type from the column (enum, uuid, integer,
  * date). Only for `column = ANY(...)`: a bare expression has no type to infer.
  */
-const columnArrayParam = (values: readonly unknown[]): SQL =>
+export const columnArrayParam = (values: readonly unknown[]): SQL =>
   sql`${arrayLiteral(
     values.map((value) =>
       value instanceof Date ? value.toISOString() : String(value),
