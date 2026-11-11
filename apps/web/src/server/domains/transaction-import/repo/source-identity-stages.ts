@@ -34,13 +34,13 @@ import { providerIdentityClaims } from "~/server/domains/transaction-import/repo
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
-import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
 import {
   checkLockedIdentity,
   selectIdentityOwner,
-  type planSourceIdentity,
+  type SourceIdentityLoaded,
+  type SourceIdentityPlan,
 } from "./source-identity-plan";
 
 const sameSet = (left: readonly string[], right: readonly string[]) =>
@@ -52,7 +52,7 @@ export async function lockAndLoadSourceIdentity(
   tx: DrizzleTransaction,
   observationId: SourceTransactionRecordId,
   input: SourceIdentityResolution,
-) {
+): Promise<SourceIdentityLoaded> {
   const db = unwrapDb(tx);
   const [initial] = await db
     .select()
@@ -312,17 +312,11 @@ export async function lockAndLoadSourceIdentity(
   };
 }
 
-export type SourceIdentityLoaded = Awaited<
-  ReturnType<typeof lockAndLoadSourceIdentity>
->;
-
 export async function loadSourceIdentityAliases(
   tx: DrizzleTransaction,
-  loaded: SourceIdentityLoaded,
+  { owners }: SourceIdentityLoaded,
 ) {
-  const db = unwrapDb(tx);
-  const { owners } = loaded;
-  const beforeAliases = await db
+  return unwrapDb(tx)
     .select()
     .from(financialEvidenceAlias)
     .where(
@@ -331,114 +325,66 @@ export async function loadSourceIdentityAliases(
         owners.map((item) => item.id),
       ),
     );
-  return beforeAliases;
 }
 
-type Aliases = Awaited<ReturnType<typeof loadSourceIdentityAliases>>;
+/** Execute the plan's writes in order; nothing here decides what to write. */
 export async function applySourceIdentity(
   tx: DrizzleTransaction,
-  input: SourceIdentityResolution,
   actor: ActorContext,
-  loaded: SourceIdentityLoaded,
-  planned: ReturnType<typeof planSourceIdentity>,
-  beforeAliases: Aliases,
+  plan: SourceIdentityPlan,
 ) {
   const db = unwrapDb(tx);
-  const {
-    owners,
-    observation,
-    originalOwner,
-    owner,
-    account,
-    financialJudgment,
-    closure,
-    target,
-  } = loaded;
-  const { proof, beforeOwners } = planned;
-  if (
-    originalOwner.acceptedTransactionId &&
-    (input.decision === "assign" ||
-      originalOwner.acceptedTransactionId !== (target?.id ?? null))
-  ) {
-    await db.insert(financialEvidenceAlias).values({
-      source: originalOwner.source,
-      kind: "transaction_ref",
-      value: originalOwner.shortcode,
-      observationId: originalOwner.currentObservationId,
-      occurrenceId: originalOwner.id,
-      historicalTransactionId: originalOwner.acceptedTransactionId,
-      provenanceKey: `reviewed-owner-release:${originalOwner.id}:${originalOwner.version}`,
-      provenance: jsonSnapshot.parse({
-        kind: "reviewed_owner_release",
-        note: input.note,
-        userId: actor.userId,
-        previousOwner: originalOwner,
-      }),
-      scopeEvidence: jsonSnapshot.parse({
-        identityKind: originalOwner.identityKind,
-        identityScope: originalOwner.identityScope,
-      }),
-      deletedAt: new Date(),
-    });
-  }
-  let retired = originalOwner;
-  if (input.decision === "assign") {
-    // Immediate membership FKs require clearing the old head before moving any record.
-    const [released] = await db
-      .update(sourceOccurrence)
-      .set({
-        currentObservationId: null,
-        accountId: null,
-        acceptedTransactionId: null,
-        supersededByOccurrenceId: owner.id,
-        replacementObservationId: null,
-        identityProof: jsonSnapshot.parse({
-          kind: "consolidated",
-          previousOwner: originalOwner,
-          survivorId: owner.id,
-          note: input.note,
-          userId: actor.userId,
-        }),
-        version: originalOwner.version + 1,
-        updatedAt: new Date(),
-      })
-      .where(eq(sourceOccurrence.id, originalOwner.id))
-      .returning();
-    if (!released) return constraintViolation("The retired owner disappeared.");
-    retired = released;
-    await db
-      .update(sourceTransactionRecord)
-      .set({ occurrenceId: owner.id })
-      .where(eq(sourceTransactionRecord.occurrenceId, originalOwner.id));
-    await db
-      .update(financialEvidenceAlias)
-      .set({ occurrenceId: owner.id })
-      .where(eq(financialEvidenceAlias.occurrenceId, originalOwner.id));
-    await transitionSuggestionStates(
-      databaseForTransaction(tx),
-      and(
-        eq(suggestionTable.family, "statement_transaction"),
-        eq(suggestionTable.status, "pending"),
-        suggestionTable.active,
-        inArray(
-          suggestionTable.recordId,
-          closure.map((record) => record.id),
-        ),
-        sql`${suggestionTable.data}->>'chargeKey'=${originalOwner.shortcode}`,
-      ),
-      { active: false, status: "superseded" },
-    );
-  }
-  const { rows: overlaps } =
-    input.decision === "assign"
-      ? await db.execute<{
-          remaining: boolean;
-        }>(sql`-- includes-deleted: retained legacy records and identity reservations still fence duplicate acceptance.
+  let retired: typeof sourceOccurrence.$inferSelect | undefined;
+  let updatedOwner: typeof sourceOccurrence.$inferSelect | undefined;
+  for (const write of plan.writes) {
+    switch (write.kind) {
+      case "release_accepted_owner":
+        await db.insert(financialEvidenceAlias).values(write.alias);
+        break;
+      case "retire_owner": {
+        [retired] = await db
+          .update(sourceOccurrence)
+          .set(write.set)
+          .where(eq(sourceOccurrence.id, write.id))
+          .returning();
+        if (!retired)
+          return constraintViolation("The retired owner disappeared.");
+        break;
+      }
+      case "move_evidence":
+        await db
+          .update(sourceTransactionRecord)
+          .set({ occurrenceId: write.to })
+          .where(eq(sourceTransactionRecord.occurrenceId, write.from));
+        await db
+          .update(financialEvidenceAlias)
+          .set({ occurrenceId: write.to })
+          .where(eq(financialEvidenceAlias.occurrenceId, write.from));
+        break;
+      case "supersede_suggestions":
+        await transitionSuggestionStates(
+          databaseForTransaction(tx),
+          and(
+            eq(suggestionTable.family, "statement_transaction"),
+            eq(suggestionTable.status, "pending"),
+            suggestionTable.active,
+            inArray(suggestionTable.recordId, write.recordIds),
+            sql`${suggestionTable.data}->>'chargeKey'=${write.chargeKey}`,
+          ),
+          { active: false, status: "superseded" },
+        );
+        break;
+      case "set_owner": {
+        const overlaps = write.overlap
+          ? (
+              await db.execute<{
+                remaining: boolean;
+              }>(sql`-- includes-deleted: retained legacy records and identity reservations still fence duplicate acceptance.
         SELECT EXISTS (
         SELECT 1 FROM "SourceTransactionRecord" record
         JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
-        WHERE record.source=${owner.source} AND record."providerTransactionId"=${owner.providerIdentity}
-          AND record."occurrenceId"<>${owner.id}::uuid AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
+        WHERE record.source=${write.overlap.source} AND record."providerTransactionId"=${write.overlap.providerIdentity}
+          AND record."occurrenceId"<>${write.id}::uuid AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
       ) OR
         -- includes-deleted: retained alias overlaps still fence unresolved identities after tombstoning.
       EXISTS (
@@ -446,91 +392,91 @@ export async function applySourceIdentity(
         JOIN "FinancialEvidenceAlias" sibling ON sibling.source=own.source AND sibling.value=own.value
         JOIN "SourceTransactionRecord" record ON record.id=sibling."observationId"
         JOIN "SourceOccurrence" other ON other.id=record."occurrenceId"
-        WHERE own."occurrenceId"=${owner.id}::uuid AND record."occurrenceId"<>${owner.id}::uuid
+        WHERE own."occurrenceId"=${write.id}::uuid AND record."occurrenceId"<>${write.id}::uuid
           AND other."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
       ) AS remaining`)
-      : { rows: [] };
-  const [updatedOwner] = await db
-    .update(sourceOccurrence)
-    .set({
-      lastObservedAt:
-        owner.lastObservedAt > originalOwner.lastObservedAt
-          ? owner.lastObservedAt
-          : originalOwner.lastObservedAt,
-      currentObservationId:
-        input.decision === "assign"
-          ? owner.currentObservationId
-          : observation.id,
-      accountId: account.id,
-      ...financialJudgment,
-      acceptedTransactionId: target?.id ?? null,
-      // Consolidation does not waive other overlaps or unlock a conflicted provider.
-      reviewState:
-        input.decision === "assign" && overlaps[0]?.remaining
-          ? "identity_conflict"
-          : "ready",
-      withdrawnAt: input.decision === "assign" ? owner.withdrawnAt : null,
-      withdrawalImportId:
-        input.decision === "assign" ? owner.withdrawalImportId : null,
-      identityProof: proof,
-      version: owner.version + 1,
-      updatedAt: new Date(),
-    })
-    .where(eq(sourceOccurrence.id, owner.id))
-    .returning();
-  const updatedObservations = await db
-    .select()
-    .from(sourceTransactionRecord)
-    .where(
-      inArray(
-        sourceTransactionRecord.id,
-        closure.map((record) => record.id),
-      ),
-    );
-  const afterAliases = await db
-    .select()
-    .from(financialEvidenceAlias)
-    .where(
-      inArray(
-        financialEvidenceAlias.occurrenceId,
-        owners.map((item) => item.id),
-      ),
-    );
-  if (!updatedOwner || updatedObservations.length !== closure.length)
-    return constraintViolation(
-      "Source resolution did not retain its evidence rows.",
-    );
-  const ownerSnapshot = (
-    item: typeof sourceOccurrence.$inferSelect,
-    aliases: typeof beforeAliases,
-  ) => ({
-    ...item,
-    aliases: aliases.filter((alias) => alias.occurrenceId === item.id),
-  });
-  await auditEvidenceRows(
-    tx,
-    actor,
-    "sourceOccurrence",
-    beforeOwners.map((item) => ownerSnapshot(item, beforeAliases)),
-    [...(input.decision === "assign" ? [retired] : []), updatedOwner].map(
-      (item) => ownerSnapshot(item, afterAliases),
-    ),
-  );
-  const recordSnapshot = (
-    record: typeof sourceTransactionRecord.$inferSelect,
-    aliases: typeof beforeAliases,
-  ) => ({
-    id: record.id,
-    occurrenceId: record.occurrenceId,
-    aliases: aliases.filter((alias) => alias.observationId === record.id),
-  });
-  await auditEvidenceRows(
-    tx,
-    actor,
-    "sourceTransactionRecord",
-    closure.map((record) => recordSnapshot(record, beforeAliases)),
-    updatedObservations.map((record) => recordSnapshot(record, afterAliases)),
-  );
-  await recordChange(tx, { kind: "source", categories: [] });
-  return { source: owner.source, chargeKey: owner.shortcode };
+            ).rows
+          : [];
+        [updatedOwner] = await db
+          .update(sourceOccurrence)
+          .set({
+            ...write.set,
+            reviewState: overlaps[0]?.remaining ? "identity_conflict" : "ready",
+          })
+          .where(eq(sourceOccurrence.id, write.id))
+          .returning();
+        break;
+      }
+      case "audit_resolution": {
+        const updatedObservations = await db
+          .select()
+          .from(sourceTransactionRecord)
+          .where(
+            inArray(
+              sourceTransactionRecord.id,
+              write.closure.map((record) => record.id),
+            ),
+          );
+        const afterAliases = await db
+          .select()
+          .from(financialEvidenceAlias)
+          .where(inArray(financialEvidenceAlias.occurrenceId, write.ownerIds));
+        if (
+          !updatedOwner ||
+          updatedObservations.length !== write.closure.length
+        )
+          return constraintViolation(
+            "Source resolution did not retain its evidence rows.",
+          );
+        const ownerSnapshot = (
+          item: typeof sourceOccurrence.$inferSelect,
+          aliases: typeof afterAliases,
+        ) => ({
+          ...item,
+          aliases: aliases.filter((alias) => alias.occurrenceId === item.id),
+        });
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceOccurrence",
+          write.beforeOwners.map((item) =>
+            ownerSnapshot(item, write.beforeAliases),
+          ),
+          [...(write.retired && retired ? [retired] : []), updatedOwner].map(
+            (item) => ownerSnapshot(item, afterAliases),
+          ),
+        );
+        const recordSnapshot = (
+          record: typeof sourceTransactionRecord.$inferSelect,
+          aliases: typeof afterAliases,
+        ) => ({
+          id: record.id,
+          occurrenceId: record.occurrenceId,
+          aliases: aliases.filter((alias) => alias.observationId === record.id),
+        });
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceTransactionRecord",
+          write.closure.map((record) =>
+            recordSnapshot(record, write.beforeAliases),
+          ),
+          updatedObservations.map((record) =>
+            recordSnapshot(record, afterAliases),
+          ),
+        );
+        break;
+      }
+      case "record_change":
+        await recordChange(tx, { kind: "source", categories: [] });
+        break;
+      default: {
+        const unreachable: never = write;
+        throw new Error(
+          `Unplanned identity write ${JSON.stringify(unreachable)}`,
+        );
+      }
+    }
+  }
+  return plan.result;
 }

@@ -4,6 +4,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/query";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -60,10 +61,7 @@ export async function deduplicateShipmentTrackingReferences(
 }
 
 const references = (codes: string[]) =>
-  sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${shipment.extraTrackingNumbers}) reference WHERE reference->>'carrierId' IN (${sql.join(
-    codes.map((code) => sql`${code}`),
-    sql`, `,
-  )}))`;
+  sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${shipment.extraTrackingNumbers}) reference WHERE reference->>'carrierId' = ANY(${textArrayParam(codes)}))`;
 
 export async function assertShipmentCarrierDeletionAllowed(
   tx: DrizzleTransaction,

@@ -118,7 +118,11 @@ import {
   readEmailMailKeys,
   readMailRuleCandidates,
 } from "./mail-rule-evidence";
-import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
+import {
+  normalizedOrderIdSql,
+  normalizeOrderKey,
+  vendorOrderIdsSql,
+} from "./order-identity";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
@@ -305,9 +309,7 @@ async function importedPurchaseRechecks(
         "purchaseId" in requested
           ? eq(purchase.shortcode, requested.purchaseId)
           : and(
-              inArray(normalizedOrderIdSql(purchase.orderId), [
-                ...new Set(requested.orderIds.map(normalizeOrderKey)),
-              ]),
+              vendorOrderIdsSql(purchase.orderId, requested.orderIds),
               inArray(vendor.shortcode, [...requested.vendorIds]),
             ),
       ),

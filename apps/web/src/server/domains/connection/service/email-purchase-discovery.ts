@@ -40,6 +40,8 @@ export async function discoverEmailPurchaseConnections(
 /** The routine pass over Emails whose retained evidence suggests a purchase link. */
 export const emailPurchaseDiscoveryDrain: BackgroundDrain = {
   name: "email-purchase-discovery",
+  label: (unit) =>
+    unit === "email-purchase-discovery" ? "Email purchase links" : undefined,
   due: () => emailPurchaseDiscoveryDue("email-purchase-discovery"),
   next: emailPurchaseDiscoveryNext,
   page: (db) =>

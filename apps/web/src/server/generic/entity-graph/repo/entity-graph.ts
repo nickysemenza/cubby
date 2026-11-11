@@ -22,6 +22,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
@@ -179,10 +180,7 @@ export async function readEntityGraph(
       SELECT "id" AS "dbId", "shortcode" AS "id", ${countOnly ? sql`''` : await labelSql(rootEntity, "")} AS "label",
         ${countOnly ? sql`'{}'::jsonb` : metadataFor(rootEntity, "")} AS "metadata"
       FROM ${sql.raw(`"${rootTable}"`)}
-      WHERE "shortcode" IN (${sql.join(
-        requestedRoots.map((root) => sql`${root.entityId}`),
-        sql`, `,
-      )})
+      WHERE "shortcode" = ANY(${textArrayParam(requestedRoots.map((root) => root.entityId))})
         ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted(rootTable)}` : sql``}
     `,
       "objects",
@@ -252,10 +250,7 @@ export async function readEntityGraph(
               ${countOnly ? sql`'{}'::jsonb` : metadataFor(relationship.target)} AS "metadata", ${source.key}::text AS "sourceKey"
             FROM ${sql.raw(`"${traversal.rootTable}"`)} s
             ${traversal.joins}
-            WHERE s."shortcode" IN (${sql.join(
-              liveRoots.map((root) => sql`${root.ref.entityId}`),
-              sql`, `,
-            )})
+            WHERE s."shortcode" = ANY(${textArrayParam(liveRoots.map((root) => root.ref.entityId))})
               ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted("s")}` : sql``}
         `;
       }),

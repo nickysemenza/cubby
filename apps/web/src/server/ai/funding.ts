@@ -1,6 +1,4 @@
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobWaitReason } from "@cubby/schemas/job";
 import type {
   AiBudgetStatus,
   AiFundingStatus,
@@ -8,34 +6,14 @@ import type {
   FundingAvailability,
   FundingRefusalSource,
 } from "@cubby/schemas/mail-import-settings";
-import { runStatus } from "@cubby/schemas/run-fields";
 import { classifyFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import {
-  and,
-  count as countRows,
-  desc,
-  eq,
-  gt,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  sql,
-  type SQL,
-} from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { and, desc, eq, gte } from "drizzle-orm";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  aiEvaluation,
-  aiUsage,
-  imageProcessingJob,
-  run,
-  searchDocument,
-} from "~/server/db/schema";
+import { getDb } from "~/server/db/helpers";
+import { aiUsage, run } from "~/server/db/schema";
 import { readPaidGrant } from "~/server/domains/run/repo/paid-grant";
 
 import { budgetUsd, readAiBudget } from "./budget";
@@ -198,54 +176,6 @@ const PLAN_BLOCKER = {
   FundingAvailability["blocker"]
 >;
 
-/** What the funding wake (`resumeFundingPausedRuns`) would bring back now. */
-async function readFundingWaits(db: Database) {
-  const funding = jobWaitReason.enum.ai_funding_window;
-  const count = async (table: PgTable, where: SQL | undefined) =>
-    (await getDb(db).select({ n: countRows() }).from(table).where(where))[0]
-      ?.n ?? 0;
-  const [runs, evaluations, embeddings, images] = await Promise.all([
-    count(
-      run,
-      and(
-        eq(run.status, runStatus.enum.paused_auth),
-        eq(run.failureCode, "execution_limit"),
-        notDeleted(run),
-        isNull(run.retiredAt),
-      ),
-    ),
-    count(
-      aiEvaluation,
-      and(
-        eq(aiEvaluation.waitCause, funding),
-        inArray(aiEvaluation.state, [
-          aiEvaluationState.enum.queued,
-          aiEvaluationState.enum.result_ready,
-        ]),
-        gt(aiEvaluation.runAt, sql`now()`),
-      ),
-    ),
-    count(
-      searchDocument,
-      and(
-        gt(searchDocument.embeddingDueAt, sql`now()`),
-        isNull(searchDocument.embeddingFailingSince),
-        isNotNull(searchDocument.embeddingError),
-        notDeleted(searchDocument),
-      ),
-    ),
-    count(
-      imageProcessingJob,
-      and(
-        eq(imageProcessingJob.state, "pending"),
-        eq(imageProcessingJob.waitReason, funding),
-        gt(imageProcessingJob.runAt, sql`now()`),
-      ),
-    ),
-  ]);
-  return { runs, work: evaluations + embeddings + images };
-}
-
 export async function readAiFundingStatus(
   db: Database,
   ports: FundingStatusPorts = {},
@@ -269,7 +199,7 @@ export async function readAiFundingStatus(
     creditRefusal(),
     openaiCreditRefusal(),
     paidRefusal(),
-    readFundingWaits(db),
+    (await import("~/server/ai/funding-wait")).readFundingWaits(db, ports.now),
   ]);
   const credit = refusalState(refusal);
   const openaiCredit = refusalState(openaiRefusal);

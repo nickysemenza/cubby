@@ -15,6 +15,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { possibleVendorLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -117,10 +118,7 @@ export async function vendorStatementLabels(
   }>(sql`
     SELECT "vendorId", array_agg(DISTINCT "merchantKey" ORDER BY "merchantKey") AS labels
     FROM (${merchantVendorCandidatesSql()}) history
-    WHERE "vendorId" IN (${sql.join(
-      ids.map((id) => sql`${id}`),
-      sql`, `,
-    )})
+    WHERE "vendorId" = ANY(${textArrayParam(ids)})
     GROUP BY "vendorId"
   `);
   return new Map(
@@ -156,10 +154,7 @@ export async function merchantVendorInferences(
   for (const key of merchantKeys) result.set(key, noInference());
   if (merchantKeys.length === 0) return result;
 
-  const keys = sql.join(
-    merchantKeys.map((key) => sql`${key}`),
-    sql`, `,
-  );
+  const keys = sql`SELECT unnest(${textArrayParam(merchantKeys)})`;
   const queried = await unwrapDb(db).execute<CandidateRow>(
     merchantVendorCandidatesSql(keys),
   );

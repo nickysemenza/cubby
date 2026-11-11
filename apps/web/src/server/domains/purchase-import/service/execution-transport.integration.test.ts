@@ -13,11 +13,11 @@ import {
   withPlanBudget,
 } from "~/server/ai/budget";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
+import { resumeFundingPausedRuns } from "~/server/ai/funding-wait";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";

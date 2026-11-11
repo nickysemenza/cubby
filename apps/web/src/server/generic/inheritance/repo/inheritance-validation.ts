@@ -5,6 +5,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   effectiveExpenseProjectSql,
@@ -177,10 +178,7 @@ async function validateLiveProductPolicy(
             ? sql`AND e."purchaseId" = ${scope.purchaseId}::uuid`
             : "vendorId" in scope
               ? sql`AND e."purchaseId" IN (SELECT p.id FROM "Purchase" p WHERE p."vendorId" = ${scope.vendorId}::uuid)`
-              : sql`AND e.id IN (${sql.join(
-                  scope.expenseIds.map((id) => sql`${id}::uuid`),
-                  sql`, `,
-                )})`
+              : sql`AND e.id = ANY(${uuidArrayParam(scope.expenseIds)})`
       }
     ORDER BY e."shortcode"
     LIMIT 51

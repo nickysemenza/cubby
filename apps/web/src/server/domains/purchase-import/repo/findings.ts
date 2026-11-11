@@ -73,7 +73,7 @@ import {
 } from "./aggregate-replacement";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockFindingSettlement } from "./reconciliation-state";
-import { existingExpenses, resolveLineProduct } from "./writer";
+import { existingExpenses, lineProductResolver } from "./writer";
 import { receiptProductQuantity } from "./writer-plan";
 
 /**
@@ -380,17 +380,19 @@ async function applyAggregateReplacement(
     );
   const aggregate = preview.row;
   const audit = [];
-  const productsByExternalIdentity = new Map<string, string>();
+  const { reviewedLineIdentities } = fix;
+  const products = lineProductResolver(
+    tx,
+    targetPurchase.vendorId,
+    fix.lines.map((line, lineIndex) => ({
+      line,
+      decision: reviewedLineIdentities[lineIndex]!,
+    })),
+    {},
+  );
   for (const [lineIndex, line] of fix.lines.entries()) {
     const identity = fix.reviewedLineIdentities[lineIndex]!;
-    const productId = await resolveLineProduct(
-      tx,
-      line,
-      identity,
-      targetPurchase.vendorId,
-      productsByExternalIdentity,
-      {},
-    );
+    const productId = await products.resolve(line, identity);
     const quantity = receiptProductQuantity(productId, line, identity);
     assertClassificationPolicies("expense", {
       lineKind: identity.lineKind,
@@ -461,6 +463,7 @@ async function applyAggregateReplacement(
       changes: { supersedesExpense: { from: aggregate.id, to: row.id } },
     });
   }
+  await products.flush();
   await validateProductPolicy(tx, { purchaseId });
   await tx
     .update(expense)

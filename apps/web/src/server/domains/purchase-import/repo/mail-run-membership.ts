@@ -11,7 +11,8 @@ import { and, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { runOperation } from "~/server/db/generated/entity-table-definitions.gen";
-import { requested, textArrayParam } from "~/server/db/helpers/requested";
+import { textArrayParam } from "~/server/db/helpers/query";
+import { requested } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,

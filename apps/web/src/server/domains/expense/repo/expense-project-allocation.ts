@@ -22,6 +22,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { dollarsToMinorSql } from "~/server/db/computed/money";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import {
   effectiveExpenseSpendingCategoriesSql,
   purchaseDefaultSpendingCategorySql,
@@ -405,10 +406,7 @@ export const expenseAllocationScopeConditionSql = (
       ? undefined
       : values.length === 0
         ? sql`false`
-        : sql`${allocation}.${sql.raw(`"${column}"`)} IN (${sql.join(
-            values.map((value) => sql`${value}`),
-            sql`, `,
-          )})`;
+        : sql`${allocation}.${sql.raw(`"${column}"`)} = ANY(${columnArrayParam(values)})`;
   // Picked values OR with the column's presence, as the list's filters do.
   const valuesOrPresence = (
     column: string,

@@ -16,6 +16,7 @@ import {
   unwrapDb,
   uuidArrayParam,
 } from "~/server/db/helpers";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, project } from "~/server/db/schema";
 import { projectNameOptionsExcluding } from "~/server/domains/project/repo/lookup";
@@ -175,10 +176,7 @@ const readHistory = async (
         ON assigned.id = ${inherited.projectId} AND ${notDeleted("assigned")}
       WHERE ${notDeleted("e")} AND e."lineKind" = ${expenseLineKindSchema.enum.principal}
     ) history
-    WHERE history.trade IN (${sql.join(
-      trades.map((trade) => sql`${trade}`),
-      sql`, `,
-    )})${
+    WHERE history.trade = ANY(${columnArrayParam(trades)})${
       products.length
         ? sql` OR history."productId" = ANY(${uuidArrayParam(products)})`
         : sql``

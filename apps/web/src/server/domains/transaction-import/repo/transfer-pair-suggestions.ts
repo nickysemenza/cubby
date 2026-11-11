@@ -15,6 +15,7 @@ import {
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
+import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import {
   suggestionFamily,
   suggestionSubjects,
@@ -41,6 +42,7 @@ import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import {
   unwrapDb,
   databaseForTransaction,
@@ -49,6 +51,8 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -65,16 +69,11 @@ import { createFinancialTransaction } from "~/server/domains/financial-transacti
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import {
-  sourceObservations,
+  sourceObservationFacts,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import {
-  CHARGE_STATE,
-  chargeKeyOf,
-  chargeStateOf,
-  hasStatementOccurrence,
-} from "~/server/domains/transaction-import/repo/statement-charge";
+import { hasStatementOccurrence } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   chargeId,
   previewRowFor,
@@ -269,10 +268,7 @@ type LegFilter = {
 };
 
 const amountIn = (column: SQL, amounts: readonly number[]) =>
-  sql`${transferPoolAmountSql(column)} IN (${sql.join(
-    amounts.map((amount) => sql`${amount}`),
-    sql`, `,
-  )})`;
+  sql`${transferPoolAmountSql(column)} = ANY(${textArrayParam(amounts.map(String))}::bigint[])`;
 
 /**
  * Supported observed transactions no LedgerTransfer, Purchase allocation or booked
@@ -290,10 +286,7 @@ async function loadTransactionLegs(
   const conditions = [
     ...(filter.seedOnly
       ? [
-          sql`(ft.kind IN (${sql.join(
-            [...MONEY_MOVES].map((kind) => sql`${kind}`),
-            sql`, `,
-          )}) OR ft."sourceCategory" IS NOT NULL)`,
+          sql`(ft.kind = ANY(${textArrayParam([...MONEY_MOVES])}) OR ft."sourceCategory" IS NOT NULL)`,
         ]
       : []),
     ...(filter.since ? [sql`${day} >= ${filter.since}::date`] : []),
@@ -308,12 +301,7 @@ async function loadTransactionLegs(
         ]
       : []),
     ...(filter.codes
-      ? [
-          sql`ft.shortcode IN (${sql.join(
-            filter.codes.map((code) => sql`${code}`),
-            sql`, `,
-          )})`,
-        ]
+      ? [sql`ft.shortcode = ANY(${textArrayParam(filter.codes)})`]
       : []),
   ];
   const rows = await unwrapDb(db).execute<{
@@ -332,10 +320,7 @@ async function loadTransactionLegs(
     SELECT ft.id, ft.shortcode, ft."accountId", (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount, ${day}::text AS date,
       ft.kind, ft.merchant, ft."rawDescription", ft."sourceCategory", ft.notes
     FROM "FinancialTransaction" ft
-    WHERE ${notDeleted("ft")} AND ft.status IN (${sql.join(
-      transferEvidenceStatuses.map((status) => sql`${status}`),
-      sql`, `,
-    )})
+    WHERE ${notDeleted("ft")} AND ft.status = ANY(${textArrayParam(transferEvidenceStatuses)})
       AND ft."ledgerTransferId" IS NULL AND ${day} IS NOT NULL
       AND NOT EXISTS (
         SELECT 1 FROM "FinancialTransactionAllocation" fta
@@ -430,6 +415,11 @@ async function loadStatementLegs(
     filter.codes
   )
     return [];
+  const requestedCharges = requestedRows(
+    filter.charges ?? [],
+    { source: "text", chargeKey: "text" },
+    "requested_charge",
+  );
   const conditions = [
     ...(filter.since
       ? [sql`seen."statementDate" >= ${filter.since}::date`]
@@ -437,41 +427,53 @@ async function loadStatementLegs(
     ...(filter.from ? [sql`seen."statementDate" >= ${filter.from}::date`] : []),
     ...(filter.to ? [sql`seen."statementDate" <= ${filter.to}::date`] : []),
     ...(filter.amountsCents
-      ? [amountIn(sql`seen.amount`, filter.amountsCents)]
+      ? [
+          amountIn(
+            minorToDollarsSql(sql`seen."amountMinor"`, "numeric"),
+            filter.amountsCents,
+          ),
+        ]
       : []),
     ...(filter.charges
       ? [
-          sql`(seen.source, ${chargeKeyOf("seen")}) IN (${sql.join(
-            filter.charges.map(
-              (charge) => sql`(${charge.source}, ${charge.chargeKey})`,
-            ),
-            sql`, `,
-          )})`,
+          sql`EXISTS (SELECT 1 FROM ${requestedCharges.from} WHERE ${requestedCharges.col("source")}=seen.source AND ${requestedCharges.col("chargeKey")}=owner.shortcode)`,
         ]
       : []),
   ];
-  // A scope selects whole charges; their state still reads every observation.
-  const state = conditions.length
-    ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM ${sourceObservations} seen
-        WHERE ${notDeleted("seen")} AND ${sql.join(conditions, sql` AND `)}
-      )`)
-    : CHARGE_STATE;
+  // Scope selects whole occurrences; every live observation remains in the cohort.
   const rows = await unwrapDb(db).execute<z.input<typeof observationRow>>(
     sql`
-    SELECT r."occurrenceId", r."reviewState", r.id::text AS id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
+    WITH candidate_occurrences AS MATERIALIZED (
+      SELECT DISTINCT owner.id
+      FROM "SourceTransactionRecord" seen
+      JOIN "SourceOccurrence" owner ON owner.id=seen."occurrenceId"
+      WHERE ${notDeleted("seen")} AND ${notDeleted("owner")}
+        ${conditions.length ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
+    ), eligible_occurrences AS MATERIALIZED (
+      SELECT candidate_owner.id, candidate_owner."reviewState"
+      FROM candidate_occurrences candidate JOIN "SourceOccurrence" candidate_owner ON candidate_owner.id=candidate.id
+      WHERE candidate_owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND candidate_owner."supersededByOccurrenceId" IS NULL
+        AND candidate_owner."replacementObservationId" IS NULL AND candidate_owner."acceptedTransactionId" IS NULL
+        AND candidate_owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`candidate_owner.id`, sql`candidate_owner."acceptedTransactionId"`)}
+    ), import_memberships AS MATERIALIZED (
+      SELECT m."statementRowId", array_agg(m."importId"::text) AS "importIds"
+      FROM ${transactionImportRecord} m
+      JOIN "SourceTransactionRecord" observed ON observed.id=m."statementRowId" AND ${notDeleted("observed")}
+      JOIN eligible_occurrences owner ON owner.id=observed."occurrenceId"
+      GROUP BY m."statementRowId"
+    )
+    SELECT r."occurrenceId", owner."reviewState", r.id::text AS id, r.source, r."externalId", r."chargeKey",
       r."legacyReference", r.current, r."withdrawnAt"::text AS "withdrawnAt",
       r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate"::text AS "statementDate", r."providerAmount", r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes",
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
-      ARRAY(SELECT m."importId"::text FROM ${transactionImportRecord} m WHERE m."statementRowId" = r.id) AS "importIds"
-    FROM ${state} cs
-    JOIN ${sourceObservations} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
-      AND ${notDeleted("r")}
-    JOIN "TransactionImport" si ON si.id = r."batchId"
-    WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
-      AND cs."acceptedTransactionId" IS NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+      COALESCE(m."importIds", ARRAY[]::text[]) AS "importIds"
+    FROM eligible_occurrences owner
+    JOIN ${sourceObservationFacts} r ON r."occurrenceId"=owner.id AND ${notDeleted("r")}
+    JOIN "TransactionImport" si ON si.id=r."batchId"
+    LEFT JOIN import_memberships m ON m."statementRowId"=r.id
     ORDER BY r."createdAt" DESC, r.id
   `,
     "objects",
@@ -1112,6 +1114,16 @@ export async function lockTransferPairLegs(db: Database, pairKey: string) {
 export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair"> &
   SuggestionFamily<Pair> = {
   family: suggestionFamily.enum.transfer_pair,
+  applicationKind: "transfer_pair",
+  applicationError:
+    "Transfer-pair application requires a transfer-pair Suggestion.",
+  financial: true,
+  suppressionKey: (subject) => ({
+    scope: "transfer_pair",
+    candidateKey: subject.pairKey,
+    error: "Suppression differs from the transfer pair",
+  }),
+  pairKey: (row) => row.evidence.key,
   slot: ({ judgment }) => ({
     lock: advisoryLockKey("transfer-pair", judgment.key),
     fields: { pairKey: judgment.key },

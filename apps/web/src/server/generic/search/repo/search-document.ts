@@ -24,6 +24,7 @@ import {
   withTransactionOn,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { requested as requestedRecords } from "~/server/db/helpers/requested";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -136,6 +137,13 @@ export async function countSearchCoverage(db: Database) {
     ]),
   );
 }
+
+/** `kinds` as one array parameter against an aliased SearchDocument's entity kind. */
+export const searchDocumentKindsSql = (
+  alias: string,
+  kinds: readonly string[],
+): SQL =>
+  sql`${sql.identifier(alias)}."entityKind" = ANY(${columnArrayParam(kinds)})`;
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
 export async function executeSearchDocumentSql<Schema extends z.ZodType>(
@@ -860,10 +868,7 @@ export async function searchCoverageIncomplete(
   const result = await unwrapDb(db).execute(
     sql`${sources?.sourcePrefix ?? sql``} SELECT ${missingSources} OR EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
-      AND sd."entityKind" IN (${sql.join(
-        kinds.map((kind) => sql`${kind}`),
-        sql`, `,
-      )}) LIMIT 1
+      AND sd."entityKind" = ANY(${columnArrayParam(kinds)}) LIMIT 1
   ) AS missing`,
     "objects",
   );

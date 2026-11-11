@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 
@@ -146,10 +147,7 @@ async function prepareConnectedPage(input: ConnectedRecordsInput) {
     ? sql`AND ${notDeleted("s")}`
     : sql``;
   const targetFilter = input.targetIds
-    ? sql`AND t."shortcode" IN (${sql.join(
-        input.targetIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`
+    ? sql`AND t."shortcode" = ANY(${textArrayParam(input.targetIds)})`
     : sql``;
   const routeQueries = await Promise.all(
     routes.map(

@@ -23,6 +23,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb, sqlEnumConstant } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   effectiveExpenseSpendingCategorySql,
   fallbackExpenseSpendingCategorySql,
@@ -574,52 +575,110 @@ export async function validateExpenseInheritance(
   tx: Database | DrizzleTransaction,
   tuple: ExpenseInheritanceTuple,
 ): Promise<ResolvedExpenseInheritance> {
-  assertClassificationPolicies("expense", tuple);
-  if (isPurchaseAdjustmentExpense({ lineKind: tuple.lineKind })) {
-    if (tuple.purchaseId === null) {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "A purchase adjustment must belong to a live Purchase.",
-      );
+  const [resolved] = await validateExpenseInheritances(tx, [tuple]);
+  if (!resolved)
+    throw createAppError(
+      "WRITE_COMMITTED_READBACK_FAILED",
+      "Expense validation failed.",
+    );
+  return resolved;
+}
+
+/**
+ * `validateExpenseInheritance` for several stored tuples in one statement.
+ */
+export async function validateExpenseInheritances(
+  tx: Database | DrizzleTransaction,
+  tuples: readonly ExpenseInheritanceTuple[],
+): Promise<ResolvedExpenseInheritance[]> {
+  // Sequential validation order: a stored-field policy failure surfaces only
+  // after every earlier tuple has passed its database checks.
+  let policyFailure: unknown;
+  let checked = tuples.length;
+  for (const [index, tuple] of tuples.entries()) {
+    try {
+      assertExpenseTuplePolicy(tuple);
+    } catch (error) {
+      policyFailure = error;
+      checked = index;
+      break;
     }
   }
+  const resolved = await resolveExpenseInheritances(
+    tx,
+    tuples.slice(0, checked),
+  );
+  if (checked < tuples.length) throw policyFailure;
+  return resolved;
+}
 
-  const result = await unwrapDb(tx).execute<ResolutionRow>(sql`
-    WITH candidate AS (
-      SELECT
-        ${tuple.lineKind}::text AS "lineKind",
-        ${tuple.projectId}::uuid AS "projectId",
-        ${tuple.productId}::uuid AS "productId",
-        ${tuple.purchaseId}::uuid AS "purchaseId",
-        ${tuple.trade}::text AS "trade"
-    )
+function assertExpenseTuplePolicy(tuple: ExpenseInheritanceTuple) {
+  assertClassificationPolicies("expense", tuple);
+  if (
+    isPurchaseAdjustmentExpense({ lineKind: tuple.lineKind }) &&
+    tuple.purchaseId === null
+  )
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "A purchase adjustment must belong to a live Purchase.",
+    );
+}
+
+async function resolveExpenseInheritances(
+  tx: Database | DrizzleTransaction,
+  tuples: readonly ExpenseInheritanceTuple[],
+): Promise<ResolvedExpenseInheritance[]> {
+  if (!tuples.length) return [];
+  const candidates = requestedRows(
+    tuples.map((tuple, ordinal) => ({
+      ordinal,
+      lineKind: tuple.lineKind,
+      projectId: tuple.projectId,
+      productId: tuple.productId,
+      purchaseId: tuple.purchaseId,
+      trade: tuple.trade,
+    })),
+    {
+      ordinal: "int",
+      lineKind: "text",
+      projectId: "uuid",
+      productId: "uuid",
+      purchaseId: "uuid",
+      trade: "text",
+    },
+    "candidate",
+  );
+  const result = await unwrapDb(tx).execute<
+    ResolutionRow & { ordinal: number }
+  >(sql`
     SELECT
+      candidate."ordinal" AS "ordinal",
       EXISTS (
         SELECT 1 FROM "Purchase" p
         WHERE p."id" = candidate."purchaseId" AND ${notDeleted("p")}
       ) AS "purchaseIsLive",
       ${effectiveExpenseProjectSql("candidate")} AS "effectiveProjectId",
       ${effectiveExpenseTradeSql("candidate")} AS "effectiveTrade"
-    FROM candidate
+    FROM ${candidates.from}
   `);
-  const row = result.rows[0];
-  if (!row) {
-    throw createAppError(
-      "WRITE_COMMITTED_READBACK_FAILED",
-      "Expense validation failed.",
-    );
-  }
-  if (tuple.purchaseId !== null && !row.purchaseIsLive) {
-    throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found.");
-  }
-  if (tuple.lineKind === "principal" && row.effectiveTrade === null) {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A principal Expense requires a trade from the Expense, its Purchase, or its effective Project.",
-    );
-  }
-  return {
-    effectiveProjectId: row.effectiveProjectId,
-    effectiveTrade: row.effectiveTrade,
-  };
+  const rows = new Map(result.rows.map((row) => [Number(row.ordinal), row]));
+  return tuples.map((tuple, ordinal) => {
+    const row = rows.get(ordinal);
+    if (!row)
+      throw createAppError(
+        "WRITE_COMMITTED_READBACK_FAILED",
+        "Expense validation failed.",
+      );
+    if (tuple.purchaseId !== null && !row.purchaseIsLive)
+      throw createAppError("PURCHASE_NOT_FOUND", "Purchase not found.");
+    if (tuple.lineKind === "principal" && row.effectiveTrade === null)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A principal Expense requires a trade from the Expense, its Purchase, or its effective Project.",
+      );
+    return {
+      effectiveProjectId: row.effectiveProjectId,
+      effectiveTrade: row.effectiveTrade,
+    };
+  });
 }

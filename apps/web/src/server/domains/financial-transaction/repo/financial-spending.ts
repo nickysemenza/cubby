@@ -34,7 +34,13 @@ import {
   notDeleted,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import {
+  columnArrayParam,
+  textArrayParam,
+  uuidArrayParam,
+} from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   financialAccount,
   financialTransaction,
@@ -289,10 +295,7 @@ export async function prepareFinancialSpendingPage(
         SELECT p.id,p.shortcode,p."displayLabel",p.date,
           payment."amountMinor"::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
         FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
-        WHERE payment."amountMinor" IN (${sql.join(
-          amounts.map((amount) => sql`${amount}`),
-          sql`, `,
-        )})
+        WHERE payment."amountMinor" = ANY(${columnArrayParam(amounts)})
           AND payment."chargedAt"::date BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
         ORDER BY p.id
       `)
@@ -368,10 +371,7 @@ export async function prepareFinancialSpendingCandidates(
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
         ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
       FROM "Purchase" p
-      WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
-        vendorIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(vendorIds)})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
           OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
       ORDER BY p.id
@@ -605,10 +605,7 @@ async function loadSpendingGraphBatch(
           category: string | null;
         }>(sql`
     SELECT e.id, e."purchaseId", ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e
-    WHERE e."purchaseId" IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("e")} ORDER BY e.id
+    WHERE e."purchaseId" = ANY(${uuidArrayParam(ids)}) AND ${notDeleted("e")} ORDER BY e.id
   `)
       ).rows
     : [];
@@ -638,10 +635,7 @@ async function loadSpendingGraphBatch(
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"
-    WHERE a."purchaseId" IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("a")} ORDER BY a."transactionId", a.id
+    WHERE a."purchaseId" = ANY(${uuidArrayParam(ids)}) AND ${notDeleted("a")} ORDER BY a."transactionId", a.id
   `)
       ).rows
     : [];
@@ -800,21 +794,24 @@ async function settledByOtherOccurrences(
     sourceOccurrenceIdentityKind,
     sourceOccurrenceIdentityKind.enum.positioned,
   );
+  const refs = requestedRows(
+    sourceRefs.map((ref) => ({
+      source: ref.source,
+      shortcode: ref.externalId,
+    })),
+    { source: "text", shortcode: "text" },
+    "ref",
+  );
   const proven = await getDb(db).execute<{ id: string }>(sql`
     SELECT DISTINCT o."acceptedTransactionId"::text AS id
     FROM "SourceOccurrence" o
     JOIN "SourceOccurrence" incoming ON incoming.source = o.source
       AND incoming.id <> o.id AND ${notDeleted("incoming")}
-      AND (incoming.source, incoming.shortcode) IN (${sql.join(
-        sourceRefs.map((ref) => sql`(${ref.source}, ${ref.externalId})`),
-        sql`, `,
-      )})
+      AND (incoming.source, incoming.shortcode) IN (
+        SELECT ${refs.col("source")}, ${refs.col("shortcode")} FROM ${refs.from})
     WHERE ${notDeleted("o")} AND o."supersededByOccurrenceId" IS NULL
       AND o.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
-      AND o."acceptedTransactionId" IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      AND o."acceptedTransactionId" = ANY(${uuidArrayParam(ids)})
       AND ((o."identityKind" = ${provider} AND incoming."identityKind" = ${provider}
           AND o."identityScope" = incoming."identityScope"
           AND o."providerIdentity" <> incoming."providerIdentity")
@@ -1033,10 +1030,7 @@ const undatedPayment = (amounts: readonly number[]) =>
     ? sql`(${vendorSpendingExists} AND EXISTS (
   SELECT 1 FROM "PurchasePaymentEvidence" undated
   WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
-    AND undated."amountMinor" IN (${sql.join(
-      amounts.map((amount) => sql`${amount}`),
-      sql`, `,
-    )})))`
+    AND undated."amountMinor" = ANY(${columnArrayParam(amounts)})))`
     : sql`false`;
 const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
   SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
@@ -1659,16 +1653,8 @@ async function exactReceiptTarget(
     JOIN "SourceTransactionRecord" r ON r.id = o."currentObservationId"
     WHERE ${notDeleted("o")} AND o."withdrawnAt" IS NULL
       AND o."acceptedTransactionId" IS NULL
-      AND o.source IN (${sql.join(
-        [...new Set(source.sourceRefs.map((ref) => ref.source)), ""].map(
-          (name) => sql`${name}`,
-        ),
-        sql`, `,
-      )})
-      AND o.shortcode NOT IN (${sql.join(
-        [...charges, ""].map((charge) => sql`${charge}`),
-        sql`, `,
-      )})
+      AND o.source = ANY(${textArrayParam([...new Set(source.sourceRefs.map((ref) => ref.source))])})
+      AND o.shortcode <> ALL(${textArrayParam([...charges])})
       AND r."amountMinor" = ${amount}
       AND abs(r."statementDate" - ${match!.date}::date) <= 3
     UNION ALL

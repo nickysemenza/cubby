@@ -63,6 +63,8 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
@@ -135,6 +137,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import { validateStatementCorrection } from "~/server/generic/suggestions/repo/family-correction";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
   publishSuggestion as publishStoredSuggestion,
@@ -271,11 +274,14 @@ const plainDateOf = (value: unknown) =>
     ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`
     : String(value).slice(0, 10);
 
-const tuples = (charges: readonly ChargeRef[]) =>
-  sql.join(
-    charges.map((charge) => sql`(${charge.source}, ${charge.chargeKey})`),
-    sql`, `,
+const tuples = (charges: readonly ChargeRef[]) => {
+  const rows = requestedRows(
+    charges,
+    { source: "text", chargeKey: "text" },
+    "requested_charges",
   );
+  return sql`SELECT ${rows.col("source")}, ${rows.col("chargeKey")} FROM ${rows.from}`;
+};
 
 export type { StatementSuggestionScope } from "./statement-input";
 
@@ -707,10 +713,7 @@ async function copyMembersFor(
   ].filter((code) => !page.ids.has(code));
   if (codes.length) {
     const found = await unwrapDb(db).execute<{ id: string; shortcode: string }>(
-      sql`SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode IN (${sql.join(
-        codes.map((code) => sql`${code}`),
-        sql`, `,
-      )})`,
+      sql`SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode = ANY(${textArrayParam(codes)})`,
       "objects",
     );
     for (const row of found) page.ids.set(row.shortcode, String(row.id));
@@ -1181,10 +1184,7 @@ async function prepareChargePreviews(
         postedDate: string | null;
       }>(sql`
     SELECT ft.shortcode, ft."accountId", (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
-    WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
-      [...matchedByCharge.values()].map((code) => sql`${code}`),
-      sql`,`,
-    )})
+    WHERE ${notDeleted("ft")} AND ft.shortcode = ANY(${textArrayParam([...matchedByCharge.values()])})
   `)
     : { rows: [] };
   const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
@@ -1281,10 +1281,7 @@ async function providerIdentityFacts(
         }>(sql`
     -- includes-deleted: reserved identities and financial judgments remain binding after tombstoning.
     SELECT owner.id,owner.version,owner."reviewState",owner."currentObservationId",owner."acceptedTransactionId" FROM "SourceOccurrence" owner
-    WHERE owner.id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})`)
+    WHERE owner.id = ANY(${uuidArrayParam(ids)})`)
       ).rows
     : [];
   for (const { charge, canonical } of inputs) {
@@ -1432,10 +1429,7 @@ export async function buildChargeProposals(
       shortcode: string;
     }>(
       sql`
-      SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode IN (${sql.join(
-        matchedCodes.map((code) => sql`${code}`),
-        sql`, `,
-      )})
+      SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode = ANY(${textArrayParam(matchedCodes)})
     `,
       "objects",
     );
@@ -1922,10 +1916,7 @@ async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   const rows = await unwrapDb(db).execute<ChargeRef>(
     sql`
     SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservationFacts} r
-    WHERE r.id IN (${sql.join(
-      rowIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("r")}
+    WHERE r.id = ANY(${uuidArrayParam(rowIds)}) AND ${notDeleted("r")}
   `,
     "objects",
   );
@@ -1952,10 +1943,7 @@ async function laterCoveringImport(
     WHERE ${notDeleted("si")} AND si.source=${input.source} AND si."completedAt" IS NOT NULL
       AND si.coverage->>${"visibility"}=${"all"} AND head.current AND head."withdrawnAt" IS NOT NULL
       AND ${notDeleted("head")} AND ${notDeleted("held")}
-      AND held.id IN (${sql.join(
-        input.rowIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      AND held.id = ANY(${uuidArrayParam(input.rowIds)})
     LIMIT 1
   `,
     "objects",
@@ -1981,10 +1969,7 @@ async function postedTwinExists(
       AND sign(r.amount) = sign(${hold.amount}::numeric)
       AND r."accountDescriptor" IN (
         SELECT held."accountDescriptor" FROM ${sourceObservationFacts} held
-        WHERE held.id IN (${sql.join(
-          hold.pendingRowIds.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})
+        WHERE held.id = ANY(${uuidArrayParam(hold.pendingRowIds)})
       )
   `,
     "objects",
@@ -2017,7 +2002,7 @@ async function publishableCharges(
 ): Promise<ChargeRef[]> {
   if (!charges.length) return [];
   const held = await unwrapDb(db).execute<ChargeRef>(
-    sql`SELECT c.source, c."chargeKey" FROM (VALUES ${tuples(charges)}) c(source, "chargeKey")
+    sql`SELECT c.source, c."chargeKey" FROM (${tuples(charges)}) c(source, "chargeKey")
       WHERE ${statementChargeSourceHeld(sql`c.source`, sql`c."chargeKey"`)}`,
     "objects",
   );
@@ -2029,10 +2014,7 @@ async function publishableCharges(
       AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(held)})
       ${
         accountIds?.length
-          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
-              accountIds.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid = ANY(${uuidArrayParam(accountIds)})`
           : sql``
       }`,
     { active: false, status: "superseded" },
@@ -2073,10 +2055,7 @@ async function retireUnproposedCharges(
       AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(unproposed)})
       ${
         accountIds?.length
-          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
-              accountIds.map((id) => sql`${id}::uuid`),
-              sql`, `,
-            )})`
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid = ANY(${uuidArrayParam(accountIds)})`
           : sql``
       }`,
     { active: false, status: "superseded" },
@@ -2393,6 +2372,31 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     }
   > = {
   family: suggestionFamily.enum.statement_transaction,
+  applicationKind: "statement_transaction",
+  applicationError:
+    "Statement application requires a Transaction suggestion Suggestion",
+  financial: true,
+  suppressionKey: (subject) => ({
+    scope: "statement_transaction",
+    candidateKey: `${subject.source}:${subject.chargeKey}`,
+    error: "Suppression differs from the statement charge",
+  }),
+  pairKey: (row) =>
+    row.evidence.transferPair?.clean ? row.evidence.transferPair.key : null,
+  validateCorrection: validateStatementCorrection,
+  automatic: {
+    requiresStamp: true,
+    match: (row) => {
+      const judgment = statementTransactionJudgment.safeParse(row.judgment);
+      return judgment.success ? matchStatementRules(judgment.data) : [];
+    },
+    application: (row) => ({
+      kind: "statement_transaction",
+      action: statementTransactionJudgment.parse(row.judgment).recommended,
+      fields: [],
+      rejectedCandidateIds: [],
+    }),
+  },
   slot: ({ proposal: { charge } }) => ({
     lock: `statement-suggestion:${chargeId(charge)}`,
     fields: { source: charge.source, chargeKey: charge.chargeKey },
@@ -2950,12 +2954,7 @@ export async function repairStatementApplicationReceipts(
   if (!receipts.length) return;
   await retireStatementPublications(db, {
     suggestionIds: receipts.map((receipt) => receipt.suggestionId),
-    charges: sql.join(
-      receipts.map(
-        ({ charge }) => sql`(${charge.source}, ${charge.chargeKey})`,
-      ),
-      sql`, `,
-    ),
+    charges: tuples(receipts.map(({ charge }) => charge)),
   });
 }
 
@@ -4272,10 +4271,7 @@ async function statementLabelScope(
 ) {
   const identity = labelIdentityScope(scope);
   const selected = suggestionIds.length
-    ? sql`s.id IN (${sql.join(
-        suggestionIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})`
+    ? sql`s.id = ANY(${uuidArrayParam(suggestionIds)})`
     : sql`false`;
   if (!scope.accountIds?.length) return sql`${identity} AND ${selected}`;
   // Re-admission checks scope alone. Replaced/completed rows still reach the
@@ -4327,10 +4323,7 @@ async function statementLabelScope(
     }
   }
   return admitted.length
-    ? sql`${identity} AND s.id IN (${sql.join(
-        admitted.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})`
+    ? sql`${identity} AND s.id = ANY(${uuidArrayParam(admitted)})`
     : sql`false`;
 }
 

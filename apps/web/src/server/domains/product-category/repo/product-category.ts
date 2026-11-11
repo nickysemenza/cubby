@@ -55,6 +55,7 @@ import {
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { product, productCategory } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
@@ -141,10 +142,7 @@ const inheritedFactsFor = async (
         WHERE s."id" = (${featureSource}->>'id')::uuid) AS "featureSource",
       ${categoryStockTrackingSql(sql`c."id"`, { inherited: true })} AS "stockFallback"
     FROM "ProductCategory" c
-    WHERE c."id" IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE c."id" = ANY(${uuidArrayParam(ids)})
   `);
   return new Map(rows.rows.map(({ id, ...facts }) => [id, facts]));
 };
@@ -159,10 +157,7 @@ const pathsFor = async (
       SELECT c."id" AS root, c."id", c."parentId", c."shortcode", c."name", 0 AS depth,
              ARRAY[c."id"] AS visited
       FROM "ProductCategory" c
-      WHERE c."id" IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE c."id" = ANY(${uuidArrayParam(ids)})
         AND ${notDeleted("c")}
       UNION ALL
       SELECT a.root, parent."id", parent."parentId", parent."shortcode", parent."name", a.depth + 1,
@@ -195,10 +190,7 @@ const productCountsFor = async (
     WITH RECURSIVE descendants AS (
       SELECT c."id" AS root, c."id", ARRAY[c."id"] AS visited
       FROM "ProductCategory" c
-      WHERE c."id" IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE c."id" = ANY(${uuidArrayParam(ids)})
         AND ${notDeleted("c")}
       UNION ALL
       SELECT d.root, child."id", d.visited || child."id"

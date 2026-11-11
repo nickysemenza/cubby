@@ -31,6 +31,7 @@ import {
 import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   expense,
@@ -148,10 +149,7 @@ export async function readEmailAssociations(
             otherOwnedEmails,
             sql`EXISTS (
       SELECT 1 FROM (${emailPurchaseAssociationsSql()}) association
-      WHERE association."purchaseId" IN (${sql.join(
-        purchaseIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})
+      WHERE association."purchaseId" = ANY(${columnArrayParam(purchaseIds)})
     )`,
           ),
         )

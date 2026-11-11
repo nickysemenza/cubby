@@ -1,5 +1,6 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -349,13 +350,17 @@ describe("shared Suggestion history", () => {
         application: { kind: "saved_field", recordId: record.id },
       }),
     ).rejects.toThrow(/receipt/);
-    const applied = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: prediction.id,
-      operationId: "synthetic-genuine-command",
-      verdict: "correct",
-      intent: "apply",
-      application: { kind: "saved_field", recordId: record.id },
-    });
+    const applied = await expectStatementBudget(
+      () =>
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
+          suggestionId: prediction.id,
+          operationId: "synthetic-genuine-command",
+          verdict: "correct",
+          intent: "apply",
+          application: { kind: "saved_field", recordId: record.id },
+        }),
+      { statements: 25, parameters: 7 },
+    );
     expect(applied.applied).toBe(true);
   });
 

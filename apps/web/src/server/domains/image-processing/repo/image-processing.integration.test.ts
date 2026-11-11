@@ -999,9 +999,13 @@ describe("durable image representations", () => {
         ),
       ).toBe(attention ? "failed" : null);
       expect(
-        (await readBackgroundWorkStatus(ctx.db)).stuck.some(
-          (item) => item.key === "image.device:failing",
-        ),
+        (
+          await readBackgroundWorkStatus(
+            ctx.db,
+            new Date(),
+            (await import("~/server/workflows/jobs")).productionDrainDues(),
+          )
+        ).stuck.some((item) => item.key === "image.device:failing"),
       ).toBe(attention);
       expect(
         (

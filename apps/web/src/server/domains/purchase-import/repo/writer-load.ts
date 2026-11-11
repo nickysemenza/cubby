@@ -33,7 +33,6 @@ import {
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import type { LiveSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 
-import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import {
   acceptedSourceExtraction,
   mergedVendorSourceOrder,
@@ -189,46 +188,6 @@ export async function loadAssignedPurchaseLine(
         .limit(1)
     : [];
   return assigned;
-}
-
-export async function loadOrderedPurchases(
-  tx: DrizzleTransaction,
-  vendorId: ReturnType<typeof parseEntityId<"vendor">>,
-  orderId: string | null,
-) {
-  if (!orderId) return { matches: [], lined: [] };
-  const matches = await tx.query.purchase.findMany({
-    where: {
-      RAW: (table: PgTable) =>
-        relationalSql(
-          table,
-          and(
-            eq(purchase.vendorId, vendorId),
-            eq(
-              normalizedOrderIdSql(purchase.orderId),
-              normalizeOrderKey(orderId),
-            ),
-            notDeleted(purchase),
-          ),
-        ),
-    },
-  });
-  const ids = requested(
-    matches.map((row) => ({ entity: "purchase", id: row.id })),
-  );
-  const lined =
-    matches.length > 1
-      ? await tx
-          .selectDistinct({ purchaseId: expense.purchaseId })
-          .from(expense)
-          .where(
-            and(
-              ids.match({ entity: "purchase", id: sql`${expense.purchaseId}` }),
-              notDeleted(expense),
-            ),
-          )
-      : [];
-  return { matches, lined };
 }
 
 export async function loadChosenPurchase(

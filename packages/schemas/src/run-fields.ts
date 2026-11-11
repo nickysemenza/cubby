@@ -15,6 +15,7 @@ import {
   runPurpose,
 } from "./activity-fields";
 export {
+  FUNDING_RECOVERABLE_PURPOSES,
   EXECUTED_RUN_PURPOSES,
   isExecutedRunPurpose,
   isStepRunPurpose,

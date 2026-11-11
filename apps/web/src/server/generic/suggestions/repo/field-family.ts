@@ -9,6 +9,8 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
+import { matchFieldRules } from "~/server/generic/suggestions/repo/automatic-policy";
+import { fieldAfterApply } from "~/server/generic/suggestions/repo/field-after-apply";
 import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
@@ -28,6 +30,7 @@ import {
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
+  canAutomaticallyFillField,
   fieldSuggestionKeys,
   readFieldSuggestions,
   suggestionCounts,
@@ -37,6 +40,28 @@ import {
 
 export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   family: "field",
+  applicationKind: "saved_field",
+  applicationError: "Saved-field receipts require a field Suggestion",
+  supportsDraft: true,
+  fieldHistory: true,
+  afterApply: fieldAfterApply,
+  automatic: {
+    requiresStamp: false,
+    authority: "automatic",
+    canApply: (db, context, id) => canAutomaticallyFillField(db, context, id),
+    match: (row) => {
+      const entity = shortcodeEntity.safeParse(row.entity);
+      return entity.success
+        ? matchFieldRules({
+            entity: entity.data,
+            field: row.field,
+            kind: row.kind,
+            confidence: row.confidence,
+            model: row.model,
+          })
+        : [];
+    },
+  },
   keys: async (db, query) => {
     const { filters } = query;
     const rows = await fieldSuggestionKeys(db, {

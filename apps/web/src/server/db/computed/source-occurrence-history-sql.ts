@@ -21,6 +21,8 @@ export const sourceOccurrenceHasUnresolvedHistory = (
     AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? binding."historicalTransactionId"::text,false)
 )`;
 
+// occurrenceIds is already a SQL array expression, not an interpolated JavaScript array.
+/* oxlint-disable anti-slop/no-unsafe-sql-array-interpolation */
 /** Presentation/review closure includes weakly related sibling history, never accepted ownership. */
 export const sourceHistoricalTransactionRows = (
   observationId: SQL,
@@ -29,10 +31,16 @@ export const sourceHistoricalTransactionRows = (
   SELECT DISTINCT historical.id, historical.shortcode AS code
   FROM "FinancialEvidenceAlias" observed
   JOIN "FinancialEvidenceAlias" sibling ON sibling.source=observed.source AND sibling.value=observed.value AND sibling."observationId" IS NOT NULL
-  JOIN "FinancialEvidenceAlias" evidence ON evidence."observationId"=sibling."observationId" OR (sibling."occurrenceId" IS NOT NULL AND evidence."occurrenceId"=sibling."occurrenceId")
+  JOIN LATERAL (
+    SELECT source, value FROM "FinancialEvidenceAlias" WHERE "observationId"=sibling."observationId"
+    UNION ALL
+    SELECT source, value FROM "FinancialEvidenceAlias" WHERE "occurrenceId"=sibling."occurrenceId"
+  ) evidence ON true
   JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
   JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
-  WHERE observed."observationId"=${observationId} OR observed."occurrenceId" IN (SELECT unnest(${occurrenceIds}))`;
+  WHERE observed."observationId"=${observationId} OR observed."occurrenceId" = ANY(${occurrenceIds})`;
+
+/* oxlint-enable anti-slop/no-unsafe-sql-array-interpolation */
 
 /** Live binding edges, materialized before sibling expansion by the read projection. */
 const directHistoricalEvidence = sql`
@@ -110,11 +118,6 @@ export const sourcePageHistory = (
     -- includes-deleted: requested roots and alias bridges preserve retained historical evidence.
     SELECT id, "occurrenceId" FROM "SourceTransactionRecord"
     WHERE id=ANY(${uuidArrayParam(observationIds)})
-  ), source_live_bindings AS MATERIALIZED (
-    SELECT DISTINCT binding.source, binding.value, binding."historicalTransactionId", historical.shortcode AS code
-    FROM "FinancialEvidenceAlias" binding
-    JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
-    WHERE ${notDeleted("binding")} AND binding."historicalTransactionId" IS NOT NULL
   ), source_page_keys AS MATERIALIZED (
     SELECT page.id AS root, observed.source, observed.value
     FROM source_page page JOIN "FinancialEvidenceAlias" observed ON observed."observationId"=page.id
@@ -134,6 +137,17 @@ export const sourcePageHistory = (
     SELECT evidence.source, evidence.value, evidence."observationId", evidence."occurrenceId"
     FROM "FinancialEvidenceAlias" evidence
     JOIN (SELECT DISTINCT "occurrenceId" FROM source_siblings WHERE "occurrenceId" IS NOT NULL) sibling ON evidence."occurrenceId"=sibling."occurrenceId"
+  ), source_live_bindings AS MATERIALIZED (
+    SELECT DISTINCT binding.source, binding.value, binding."historicalTransactionId", historical.shortcode AS code
+    FROM (
+      SELECT source, value FROM source_evidence
+      UNION
+      SELECT evidence.source, evidence.value FROM "FinancialEvidenceAlias" evidence
+      JOIN source_page page ON evidence."occurrenceId"=page."occurrenceId"
+    ) keys
+    JOIN "FinancialEvidenceAlias" binding ON binding.source=keys.source AND binding.value=keys.value
+    JOIN "FinancialTransaction" historical ON historical.id=binding."historicalTransactionId" AND ${notDeleted("historical")}
+    WHERE ${notDeleted("binding")} AND binding."historicalTransactionId" IS NOT NULL
   ), source_evidence_history AS MATERIALIZED (
     SELECT DISTINCT evidence."observationId", evidence."occurrenceId", binding."historicalTransactionId", binding.code
     FROM source_evidence evidence JOIN source_live_bindings binding ON binding.source=evidence.source AND binding.value=evidence.value

@@ -4,7 +4,17 @@
  */
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
-import { and, eq, gt, inArray, is, isNotNull, SQL, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  gt,
+  inArray,
+  is,
+  isNotNull,
+  SQL,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
@@ -150,16 +160,22 @@ export async function cancelRunJobs(db: RepositoryQueryInput, runId: string) {
 }
 
 /** A larger member budget may bring due work forward; stopped Jobs stay stopped. */
+const queuedJobsToBringForward = (now: Date) =>
+  and(inArray(job.state, ["queued", "retry_wait"]), gt(job.availableAt, now));
+
+export async function countQueuedJobsToBringForward(db: Database, now: Date) {
+  const [row] = await repositoryQueries(db)
+    .select({ n: count() })
+    .from(job)
+    .where(queuedJobsToBringForward(now));
+  return row?.n ?? 0;
+}
+
 export async function bringQueuedJobsForward(db: Database, now: Date) {
   return repositoryQueries(db)
     .update(job)
     .set({ availableAt: now, waitReason: null })
-    .where(
-      and(
-        inArray(job.state, ["queued", "retry_wait"]),
-        gt(job.availableAt, now),
-      ),
-    )
+    .where(queuedJobsToBringForward(now))
     .returning({ id: job.id });
 }
 

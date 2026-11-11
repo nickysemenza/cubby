@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 
@@ -195,10 +196,7 @@ export async function loadRecordEmojiReferences(
         .from(table)
         .where(
           and(
-            sql`${table.id}::text IN (${sql.join(
-              ids.map((id) => sql`${id}`),
-              sql`, `,
-            )})`,
+            sql`${table.id}::text = ANY(${textArrayParam(ids)})`,
             notDeleted(table),
           ),
         );

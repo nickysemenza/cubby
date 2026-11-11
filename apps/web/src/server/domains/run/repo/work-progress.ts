@@ -37,6 +37,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { run } from "~/server/db/schema";
 import type { readRunProgressTargets } from "~/server/domains/run/repo/run-detail";
 
@@ -371,13 +372,7 @@ export async function getRunWorkProgress(
       updated: run.updated,
       skipped: run.skipped,
       phase: sql<string | null>`${run.liveProgress}->>'phase'`,
-      photos: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*) FILTER (WHERE p.state IN (${sql.join(
-        processedTargetStates.map((state) => sql`${state}`),
-        sql`, `,
-      )}) OR p."deviceWorkState" IN (${deviceState.completed}, ${deviceState.failed})), ${photoCountKey.settled}::text, count(*) FILTER (WHERE p.state IN (${sql.join(
-        processedTargetStates.map((state) => sql`${state}`),
-        sql`, `,
-      )})), ${photoCountKey.preparing}::text, count(*) FILTER (WHERE p."deviceWorkState" IN (${deviceState.queued}, ${deviceState.running}, ${deviceState.paused}, ${deviceState.failed})) > 0, 'failures', count(*) FILTER (WHERE p."deviceWorkState" = ${deviceState.failed}), 'at', greatest(max(p."completedAt"), max(p."deviceWorkUpdatedAt"))) FROM "PhotoRunImage" p WHERE p."runId" = ${runOwnerId})`,
+      photos: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*) FILTER (WHERE p.state = ANY(${textArrayParam(processedTargetStates)}) OR p."deviceWorkState" IN (${deviceState.completed}, ${deviceState.failed})), ${photoCountKey.settled}::text, count(*) FILTER (WHERE p.state = ANY(${textArrayParam(processedTargetStates)})), ${photoCountKey.preparing}::text, count(*) FILTER (WHERE p."deviceWorkState" IN (${deviceState.queued}, ${deviceState.running}, ${deviceState.paused}, ${deviceState.failed})) > 0, 'failures', count(*) FILTER (WHERE p."deviceWorkState" = ${deviceState.failed}), 'at', greatest(max(p."completedAt"), max(p."deviceWorkUpdatedAt"))) FROM "PhotoRunImage" p WHERE p."runId" = ${runOwnerId})`,
       operations: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*) FILTER (WHERE o.state IN (${operationState.completed}, ${operationState.failed})), 'failures', count(*) FILTER (WHERE o.state = ${operationState.failed}), 'at', max(o."completedAt")) FROM "RunOperation" o WHERE o."runId" = ${runOwnerId})`,
       calls: sql<unknown>`(SELECT jsonb_build_object('total', count(*), 'processed', count(*), 'failures', count(*) FILTER (WHERE u.status = ${aiUsageStatus.enum.failed}), 'at', max(u."createdAt")) FROM "AiUsage" u WHERE u."runId" = ${runOwnerId})`,
     })

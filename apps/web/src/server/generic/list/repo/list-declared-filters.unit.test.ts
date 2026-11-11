@@ -23,7 +23,7 @@ describe("declaredFilterPredicates", () => {
     }).map(renderWhereSql);
     expect(both).toHaveLength(2);
     expect(
-      both.some((rendered) => rendered?.includes("effective_trade IN (")),
+      both.some((rendered) => rendered?.includes("effective_trade = ANY(")),
     ).toBe(true);
     expect(defined({ status: [] })).toHaveLength(0);
   });

@@ -5,7 +5,7 @@ import type {
   SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
 import { minorToMoney } from "@cubby/shared";
-import { and, asc, eq, inArray, or } from "drizzle-orm";
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
@@ -39,12 +39,12 @@ import {
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import { createAppError } from "~/server/errors/app-error";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   acceptedSourceExtraction,
   reconciliationFingerprint,
-  sourceObservationIdentityMatches,
+  sourceObservationIdentitySql,
 } from "./reconciliation-observations";
 import { lockPartySettlement } from "./retained-settlement";
 
@@ -82,14 +82,18 @@ async function reviewedProductIds(
   tx: DrizzleTransaction,
   resolution: SourceOrderReconciliationResolution | undefined,
 ) {
-  const ids = new Set<string>();
-  for (const binding of resolution?.lines ?? []) {
-    if (binding.productId)
-      ids.add(await resolveOrThrow(tx, "product", binding.productId));
-    for (const distinct of binding.newProduct?.distinctFrom ?? [])
-      ids.add(await resolveOrThrow(tx, "product", distinct.productId));
-  }
-  return ids;
+  return new Set<string>(
+    await resolveAllOrThrow(
+      tx,
+      "product",
+      (resolution?.lines ?? []).flatMap((binding) => [
+        ...(binding.productId ? [binding.productId] : []),
+        ...(binding.newProduct?.distinctFrom ?? []).map(
+          ({ productId }) => productId,
+        ),
+      ]),
+    ),
+  );
 }
 
 // One locked snapshot covers source ownership, ledger and Product dependencies.
@@ -160,27 +164,31 @@ export async function loadSourceReconciliationState(
     throw new Error(
       "Source account ownership changed; prepare reconciliation again.",
     );
-  const [observation] = fix.observationId
+  const [observed] = fix.observationId
     ? await tx
-        .select()
+        .select({
+          observation: sourceOrderObservation,
+          samePurchase: sourceObservationIdentitySql(
+            "purchase",
+            sourceOrderObservation.purchaseId,
+            sql`${target.id}`,
+          ),
+          sameVendor: sourceObservationIdentitySql(
+            "vendor",
+            sourceOrderObservation.vendorId,
+            sql`${target.vendorId}`,
+          ),
+        })
         .from(sourceOrderObservation)
         .where(eq(sourceOrderObservation.id, fix.observationId))
     : [];
+  const observation = observed?.observation;
   if (
+    !observed ||
     !observation ||
     !family.members.some((claim) => claim.id === observation.sourceClaimId) ||
-    !(await sourceObservationIdentityMatches(
-      tx,
-      "purchase",
-      observation.purchaseId,
-      target.id,
-    )) ||
-    !(await sourceObservationIdentityMatches(
-      tx,
-      "vendor",
-      observation.vendorId,
-      target.vendorId,
-    )) ||
+    !observed.samePurchase ||
+    !observed.sameVendor ||
     observation.orderKey !== fix.orderKey ||
     observation.checksum !== fix.source.checksum ||
     (await reconciliationFingerprint(observation.extraction)) !==
@@ -189,15 +197,12 @@ export async function loadSourceReconciliationState(
     throw new Error(
       "Reconciliation requires the unchanged immutable source observation.",
     );
-  const explicitExpenseIds = [];
-  for (const binding of resolution?.lines ?? [])
-    if (binding.expenseId)
-      explicitExpenseIds.push(
-        await resolveOrThrow(tx, "expense", binding.expenseId),
-      );
-  if (resolution?.kind === "replace_lines")
-    for (const code of resolution.expenseIds)
-      explicitExpenseIds.push(await resolveOrThrow(tx, "expense", code));
+  const explicitExpenseIds = await resolveAllOrThrow(tx, "expense", [
+    ...(resolution?.lines ?? []).flatMap((binding) =>
+      binding.expenseId ? [binding.expenseId] : [],
+    ),
+    ...(resolution?.kind === "replace_lines" ? resolution.expenseIds : []),
+  ]);
   const expenses = await tx
     .select()
     .from(expense)

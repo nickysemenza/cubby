@@ -3,6 +3,7 @@ import {
   financialSpendingSource,
 } from "@cubby/schemas/financial-booking";
 import {
+  parseEntityId,
   parseShortcodeFor,
   type FinancialAccountId,
   type PurchaseId,
@@ -15,7 +16,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, withTransaction } from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   financialTransactionAllocation,
   financialTransaction,
@@ -42,7 +43,7 @@ import { startImportRunFixture } from "../service/import-run.fixtures";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
-  settleRetainedPaymentEvidence,
+  settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 
 const checksum = (seed: number) => seed.toString(16).padStart(64, "0");
@@ -201,6 +202,49 @@ describe("settlement from retained order evidence", () => {
       .where(inArray(financialTransactionAllocation.purchaseId, purchaseIds));
   }
 
+  /**
+   * A charge that arrives after its order: visit every live Purchase with
+   * retained payment evidence through the production per-Purchase settlement,
+   * each in its own transaction, as the statement-booking and import paths do.
+   */
+  async function settleRetained() {
+    const visits = await getDb(ctx.db)
+      .selectDistinct({
+        purchaseId: purchasePaymentEvidence.purchaseId,
+        ledgerPartyId: importSourceClaim.ledgerPartyId,
+      })
+      .from(purchasePaymentEvidence)
+      .innerJoin(
+        importSourceClaim,
+        eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
+      )
+      .innerJoin(
+        purchase,
+        and(
+          eq(purchase.id, purchasePaymentEvidence.purchaseId),
+          notDeleted(purchase),
+        ),
+      );
+    const tally = { allocated: 0, reviewable: 0, failed: 0 };
+    for (const visit of visits) {
+      try {
+        const outcome = await withTransaction(ctx.db, (tx) =>
+          settlePurchaseFromRetainedPayments(tx, {
+            purchaseId: visit.purchaseId,
+            ledgerPartyId: parseEntityId("ledgerParty", visit.ledgerPartyId),
+            actor: ctx.actor,
+          }),
+        );
+        if (outcome === "allocated") tally.allocated += 1;
+        else if (outcome !== "already_allocated" && outcome !== "no_evidence")
+          tally.reviewable += 1;
+      } catch {
+        tally.failed += 1;
+      }
+    }
+    return tally;
+  }
+
   it("settles a statement charge that arrives after the order from the order's retained payment line", async () => {
     const { card, run } = await world();
     const purchaseId = await importOrder(run, {
@@ -215,7 +259,7 @@ describe("settlement from retained order evidence", () => {
       postedDate: "2026-09-03",
     });
     const inventoryBefore = await getDb(ctx.db).select().from(inventoryEntry);
-    await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
+    await expect(settleRetained()).resolves.toMatchObject({
       allocated: 1,
     });
     expect(await allocationsFor([purchaseId])).toEqual([
@@ -226,7 +270,7 @@ describe("settlement from retained order evidence", () => {
       inventoryBefore,
     );
     // Replaying the pass is a no-op.
-    await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
+    await expect(settleRetained()).resolves.toMatchObject({
       allocated: 0,
     });
   });
@@ -252,7 +296,7 @@ describe("settlement from retained order evidence", () => {
       .update(financialTransaction)
       .set({ status: "posted" })
       .where(eq(financialTransaction.id, pending.id));
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: pending.id, purchaseId, amount: 27 },
     ]);
@@ -266,7 +310,7 @@ describe("settlement from retained order evidence", () => {
       total: 40,
       payments: [{ amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
@@ -507,7 +551,7 @@ describe("settlement from retained order evidence", () => {
       payments: [{ amount: 80, chargedAt: "2026-02-02T12:00:00.000Z" }],
     });
     await charge(card.id, { amount: 80, postedDate: "2026-02-02" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     await getDb(ctx.db)
       .update(purchase)
       .set({ date: "2026-02-01" })
@@ -660,14 +704,14 @@ describe("settlement from retained order evidence", () => {
       ],
     });
     await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([]);
 
     const debit = await charge(giftCard.id, {
       amount: 13.59,
       postedDate: "2026-09-02",
     });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: debit.id, purchaseId, amount: 13.59 },
     ]);
@@ -699,7 +743,7 @@ describe("settlement from retained order evidence", () => {
     const [firstBalance] = balances;
     if (!firstBalance) throw new Error("Synthetic balance missing");
     await charge(firstBalance.id, { amount: 13.59, postedDate: "2026-09-02" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
@@ -719,7 +763,7 @@ describe("settlement from retained order evidence", () => {
       ],
     });
     await charge(card.id, { amount: 80, postedDate: "2026-02-02" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     const [order] = await getDb(ctx.db)
       .select({ shortcode: purchase.shortcode })
       .from(purchase)
@@ -882,7 +926,7 @@ describe("settlement from retained order evidence", () => {
         .where(eq(purchasePaymentEvidence.purchaseId, twins)),
     ).toEqual([{ tender: "unknown" }]);
     await charge(card.id, { amount: 13.59, postedDate: "2026-09-02" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
@@ -899,7 +943,7 @@ describe("settlement from retained order evidence", () => {
       payments: [{ amount: 25, chargedAt: "2026-09-03T12:00:00.000Z" }],
     });
     await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([first, second])).toEqual([]);
   });
 
@@ -1048,7 +1092,7 @@ describe("settlement from retained order evidence", () => {
         payments: [{ amount: 33, chargedAt: "2026-09-02T12:00:00.000Z" }],
       }),
     ];
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor(purchases)).toEqual([]);
   });
 
@@ -1090,7 +1134,7 @@ describe("settlement from retained order evidence", () => {
       unprintedTotal: true,
       payments: [{ amount: 50, chargedAt: "2026-09-03T12:00:00.000Z" }],
     });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
@@ -1109,7 +1153,7 @@ describe("settlement from retained order evidence", () => {
         payments: [],
       }),
     ];
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor(purchases)).toEqual([]);
   });
 
@@ -1129,7 +1173,7 @@ describe("settlement from retained order evidence", () => {
       total: 44,
       payments: [{ amount: 44, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    await expect(settleRetainedPaymentEvidence(ctx.db)).resolves.toMatchObject({
+    await expect(settleRetained()).resolves.toMatchObject({
       allocated: 0,
       failed: 0,
     });
@@ -1185,7 +1229,7 @@ describe("settlement from retained order evidence", () => {
       amount: 40,
       postedDate: "2026-09-03",
     });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: posted.id, purchaseId, amount: 40 },
     ]);
@@ -1226,7 +1270,7 @@ describe("settlement from retained order evidence", () => {
       total: 25,
       payments: [{ amount: 25, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    await settleRetainedPaymentEvidence(ctx.db);
+    await settleRetained();
     expect(await allocationsFor([other])).toEqual([]);
   });
 });

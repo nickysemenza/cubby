@@ -1,7 +1,7 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
 import { jobWaitReason, type JobWaitReason } from "@cubby/schemas/job";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -318,17 +318,26 @@ export async function deferImageProcessingJob(
  * A funding change ends image funding waits now; a source still without
  * funding defers the attempt again before spending.
  */
+const fundingWaitingImageJobs = () =>
+  and(
+    eq(imageProcessingJob.state, "pending"),
+    eq(imageProcessingJob.waitReason, jobWaitReason.enum.ai_funding_window),
+    sql`${imageProcessingJob.runAt} > now()`,
+  );
+
+export async function countFundingWaitingImageJobs(db: Database) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(imageProcessingJob)
+    .where(fundingWaitingImageJobs());
+  return row?.n ?? 0;
+}
+
 export async function wakeFundingWaitingImageJobs(db: Database) {
   const woken = await getDb(db)
     .update(imageProcessingJob)
     .set({ runAt: sql`now()` })
-    .where(
-      and(
-        eq(imageProcessingJob.state, "pending"),
-        eq(imageProcessingJob.waitReason, jobWaitReason.enum.ai_funding_window),
-        sql`${imageProcessingJob.runAt} > now()`,
-      ),
-    )
+    .where(fundingWaitingImageJobs())
     .returning({ id: imageProcessingJob.id });
   return woken.length;
 }

@@ -1,18 +1,15 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 
+import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 /**
  * The Run domain's side of the `ai.evaluation` drain: feature execution under
  * each requester Run's workflow context, and requester authority (pause,
  * status, funding resume). The drain itself lives in `ai/evaluation`.
  */
-import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-evaluation-drain";
+import { resumeFundingStoppedRuns } from "~/server/ai/funding-wait";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
-import {
-  pauseRunForAiWork,
-  readRunStatus,
-  resumeFundingStoppedRuns,
-} from "../repo/ai-work-state";
+import { pauseRunForAiWork, readRunStatus } from "../repo/ai-work-state";
 import { executeAiRefreshTarget, type AiRefreshPorts } from "./ai-refresh";
 import { executeAiWorkTarget, type AiWorkPorts } from "./ai-work";
 

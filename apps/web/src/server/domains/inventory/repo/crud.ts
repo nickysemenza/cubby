@@ -39,6 +39,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, ledgerParty, product } from "~/server/db/schema";
 import { inventorySearch } from "~/server/domains/inventory/repo/search-read-inventory";
@@ -183,10 +184,7 @@ export const inventoryScaffold = listScaffold<
     effectiveOwner: (value) =>
       value.values.length === 0
         ? sql`false`
-        : sql`${inventoryOwnerFilterSql()} IN (${sql.join(
-            value.values.map((owner) => sql`${owner}`),
-            sql`, `,
-          )})`,
+        : sql`${inventoryOwnerFilterSql()} = ANY(${textArrayParam(value.values)})`,
     locationRole: gapCondition(
       "inventory",
       "inventory_unknown_location",

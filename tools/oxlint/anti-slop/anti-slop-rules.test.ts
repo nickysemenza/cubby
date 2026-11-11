@@ -190,7 +190,7 @@ test("record-set query expansion is rejected in repositories", () => {
     );
     assert.deepEqual(
       diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-      [2, 3],
+      [2, 3, 6],
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });

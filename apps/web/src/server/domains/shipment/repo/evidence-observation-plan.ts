@@ -96,7 +96,6 @@ export function planObservationWrite(input: {
     observedAt: input.observedAt,
   };
 }
-export type ObservationWritePlan = ReturnType<typeof planObservationWrite>;
 
 async function observationIdentity(
   observation: ShipmentObservationInput,

@@ -115,11 +115,10 @@ describe("eqAnyOrPresence", () => {
       "none",
     );
     expect(result && dialect.sqlToQuery(result).sql).toBe(
-      `(("Product"."categoryId" in ($1, $2)) or (("Product"."categoryId" is null)))`,
+      `(("Product"."categoryId" = ANY($1)) or (("Product"."categoryId" is null)))`,
     );
     expect(result && dialect.sqlToQuery(result).params).toEqual([
-      "food",
-      "produce",
+      '{"food","produce"}',
     ]);
   });
 });

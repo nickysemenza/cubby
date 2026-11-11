@@ -271,7 +271,7 @@ describe("list field compiler", () => {
     expect(loads).toBe(1);
     expect(
       whereSql(and(...scaffold.filterPredicates(filters, context))),
-    ).toContain("prepared_status IN ($");
+    ).toContain("prepared_status = ANY($");
     expect(
       renderWhereSql(
         scaffold.derivedSort(

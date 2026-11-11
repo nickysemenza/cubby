@@ -244,7 +244,7 @@ describe("purchaseScaffold.where", () => {
     {
       name: "financialReconciliation",
       filters: { financialReconciliation: "mismatch" as const },
-      contains: "::text END IN (",
+      contains: "::text END = ANY(",
     },
   ])("compiles $name from its declaration", async ({ filters, contains }) => {
     expect(await where(filters)).toContain(contains);
@@ -707,7 +707,7 @@ describe("task prepareWhere", () => {
     {
       name: "completion",
       filters: { completion: "open" as const },
-      contains: "::text END IN (",
+      contains: "::text END = ANY(",
     },
     {
       name: "topLevelOnly",

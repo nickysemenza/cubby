@@ -8,14 +8,14 @@ import type {
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { importSourceProduct } from "~/server/db/schema";
+import { expense, importSourceProduct } from "~/server/db/schema";
 import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import type { LineIdentityDecision } from "./writer";
-import { applyExpenseProductBinding } from "./writer-apply";
+import type { LineIdentityDecision, LineProducts } from "./writer";
 import {
   planAggregateExpense,
   planLineAction,
@@ -51,12 +51,12 @@ export async function writePurchaseLines(
     /** Item lines carry no cost: a foreign receipt or an unpriced itemization. */
     unpriced: boolean;
     loadExpenses: () => Promise<ExistingExpenseSnapshot[]>;
-    resolveProduct: (
-      line: ExtractedPurchaseLine,
-      identity: LineIdentityDecision,
-      previous: Map<string, string>,
-      onCreated: (id: ProductId) => void,
-    ) => Promise<ProductId | null>;
+    lineProducts: (
+      requests: {
+        line: ExtractedPurchaseLine;
+        decision: LineIdentityDecision;
+      }[],
+    ) => LineProducts;
     fileFinding: (finding: Finding) => Promise<string>;
   },
 ) {
@@ -154,15 +154,18 @@ export async function writePurchaseLines(
     lineMode === "no_op" ||
     lineMode === "insert"
   ) {
-    const productsByExternalIdentity = new Map<string, string>();
+    const actions = candidate.lines.map((line, lineIndex) =>
+      planLineAction(lineMode, line, lineIndex, identityDecisions, lineMatch),
+    );
+    const products = args.lineProducts(
+      actions.flatMap((action, lineIndex) =>
+        action.kind === "resolve"
+          ? [{ line: candidate.lines[lineIndex]!, decision: action.identity }]
+          : [],
+      ),
+    );
     for (const [lineIndex, line] of candidate.lines.entries()) {
-      const action = planLineAction(
-        lineMode,
-        line,
-        lineIndex,
-        identityDecisions,
-        lineMatch,
-      );
+      const action = actions[lineIndex]!;
       if (action.kind === "skip") continue;
       if (action.kind === "unresolved") {
         if (action.expenseId)
@@ -175,12 +178,7 @@ export async function writePurchaseLines(
         continue;
       }
       const identity = action.identity;
-      const productId = await args.resolveProduct(
-        line,
-        identity,
-        productsByExternalIdentity,
-        onCreated,
-      );
+      const productId = await products.resolve(line, identity, onCreated);
       if (lineMode === "identity") {
         if (productId) productLines.push({ lineIndex, productId });
         await fileFindings(planIdentityFindings(line, identity));
@@ -194,7 +192,10 @@ export async function writePurchaseLines(
           lineMatch,
         );
         if (binding) {
-          await applyExpenseProductBinding(tx, binding);
+          await tx
+            .update(expense)
+            .set(binding.values)
+            .where(eq(expense.id, binding.id));
           rowMutations.push({
             targetKind: "expense",
             targetId: row.id,
@@ -227,6 +228,7 @@ export async function writePurchaseLines(
         await fileFindings(planInsertedFindings(line, identity));
       }
     }
+    await products.flush();
   }
   return { findingIds, productLines, rowMutations };
 }

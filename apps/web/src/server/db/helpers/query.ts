@@ -38,6 +38,10 @@ import {
   shiftPlainDate,
 } from "~/lib/household-date";
 import type { Database } from "~/server/db/database";
+import {
+  columnArrayParam,
+  textArrayParam,
+} from "~/server/db/helpers/array-param";
 import { ilikeContains, notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as unwrapDb,
@@ -470,21 +474,12 @@ export async function assertNoDependents<TId extends string>(opts: {
 }
 
 /**
- * Equality against one value or any of a set — the server half of a
- * multi-select column filter (see `oneOrMany`).
- *
- * An empty set means "no constraint", NOT "match nothing": it returns
- * undefined so the condition drops out rather than degenerating into an
- * `IN ()`, which is a syntax error. Every caller must go through here rather
- * than branching on Array.isArray itself, so that stays true everywhere.
- */
-/**
  * A `uuid[]` as ONE bound parameter, for raw `sql` templates that cannot use
- * `eqAny`/`inArray` — those emit `IN ($1, …, $n)`, which is the wrong shape
+ * `eqAny`. `inArray` emits `IN ($1, …, $n)`, which is the wrong shape
  * when the whole point is to avoid a parameter per id, and they cannot target
  * an aliased table inside a hand-written UNION.
  *
- * With `textArrayParam` (`requested.ts`), this is the only sanctioned way to
+ * With `textArrayParam` and `columnArrayParam`, this is the only sanctioned way to
  * write `= ANY(...)` in raw SQL; record sets bind through `requested()`. The small
  * SQL-safety check rejects direct JS-array interpolation elsewhere. The trap is
  * avoided by calling this helper directly at each interpolation boundary,
@@ -501,9 +496,20 @@ export async function assertNoDependents<TId extends string>(opts: {
  * 270 buffers against 3).
  */
 // Trusted correlated SQL arrays retain their column references instead of being bound as values.
+export { columnArrayParam, textArrayParam };
+
 export const uuidArrayParam = (ids: readonly string[] | SQL): SQL =>
   ids instanceof SQL ? ids : sql`${`{${[...new Set(ids)].join(",")}}`}::uuid[]`;
 
+/**
+ * Equality against one value or any of a set — the server half of a
+ * multi-select column filter (see `oneOrMany`).
+ *
+ * An empty set means "no constraint", NOT "match nothing": it returns
+ * undefined so the condition drops out rather than matching an empty
+ * array. A set binds as one array parameter, whatever its size. Every caller must go through here rather
+ * than branching on Array.isArray itself, so that stays true everywhere.
+ */
 export const eqAny = <TColumn extends AnyColumn, TValue>(
   column: TColumn,
   value: TValue | readonly TValue[] | null | undefined,
@@ -512,7 +518,7 @@ export const eqAny = <TColumn extends AnyColumn, TValue>(
   if (!Array.isArray(value)) return eq(column, value);
   if (value.length === 0) return undefined;
   if (value.length === 1) return eq(column, value[0]);
-  return inArray(column, value);
+  return sql`${column} = ANY(${columnArrayParam(value)})`;
 };
 
 /**
@@ -527,10 +533,7 @@ export const matchesStringValues = (
 ): SQL => {
   if (!values || values.length === 0) return sql`TRUE`;
   if (values.length === 1) return sql`${expression} = ${values[0]}`;
-  return sql`${expression} IN (${sql.join(
-    values.map((value) => sql`${value}`),
-    sql`, `,
-  )})`;
+  return sql`${expression} = ANY(${textArrayParam(values)})`;
 };
 
 /**
@@ -550,10 +553,7 @@ export const shortcodeSetCondition = (
     .flat()
     .map((code) => parseShortcode(code)?.shortcode ?? code);
   if (canonical.length === 0) return sql`false`;
-  return sql`${expression} IN (${sql.join(
-    canonical.map((code) => sql`${code}`),
-    sql`, `,
-  )})`;
+  return sql`${expression} = ANY(${textArrayParam(canonical)})`;
 };
 
 /**

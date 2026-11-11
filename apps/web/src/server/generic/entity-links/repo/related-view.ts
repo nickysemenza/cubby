@@ -32,6 +32,7 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { getDb, householdDaySqlText, ilikeContains } from "~/server/db/helpers";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -610,10 +611,7 @@ export async function loadRelatedOptions(
       WHERE ${notDeleted("s")} ${viewWhere(view)}
         ${
           selectedOnly
-            ? sql`AND t."shortcode" IN (${sql.join(
-                input.selectedIds.map((id) => sql`${id}`),
-                sql`, `,
-              )})`
+            ? sql`AND t."shortcode" = ANY(${textArrayParam(input.selectedIds)})`
             : search
               ? sql`AND (${sql.raw(view.label)} ILIKE ${ilikeContains(search)} OR t."shortcode" ILIKE ${ilikeContains(search)})`
               : sql``
@@ -1033,10 +1031,7 @@ export function relatedWhereConditions<TFilters extends object>(
           : exists(
               includeDescendants && isHierarchyEntity(definition.target)
                 ? sql`t."id" IN ${requestedIdsSql(definition.target, canonicalIds, true)}`
-                : sql`t."shortcode" IN (${sql.join(
-                    canonicalIds.map((id) => sql`${id}`),
-                    sql`, `,
-                  )})`,
+                : sql`t."shortcode" = ANY(${textArrayParam(canonicalIds)})`,
             )
         : undefined;
       const presencePredicate =

@@ -42,7 +42,7 @@ import {
 import { wasm } from "~/server/wasm";
 
 import { mailReadContent } from "./gmail/read-content";
-import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
+import { normalizeOrderKey, vendorOrderIdsSql } from "./order-identity";
 import { lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
@@ -371,7 +371,7 @@ export async function readMailRuleCandidates(
     .where(
       and(
         eq(purchase.vendorId, input.vendorId),
-        inArray(normalizedOrderIdSql(purchase.orderId), orderKeys),
+        vendorOrderIdsSql(purchase.orderId, orderKeys),
         notDeleted(purchase),
       ),
     );

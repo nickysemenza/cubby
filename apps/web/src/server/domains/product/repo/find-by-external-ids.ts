@@ -5,6 +5,7 @@ import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -33,6 +34,11 @@ export const findProductsByExternalIds = async (
 ): Promise<Map<string, ProductHit[]>> => {
   const byPair = new Map<string, ProductHit[]>();
   if (pairs.length === 0) return byPair;
+  const requested = requestedRows(
+    pairs,
+    { source: "text", externalId: "text" },
+    "requested_external_id",
+  );
   const rows = await repositoryQueries(db)
     .select({
       source: entityExternalId.source,
@@ -52,10 +58,7 @@ export const findProductsByExternalIds = async (
     .where(
       and(
         notDeleted(entityExternalId),
-        sql`(${entityExternalId.source}, ${entityExternalId.externalId}) IN (${sql.join(
-          pairs.map((pair) => sql`(${pair.source}, ${pair.externalId})`),
-          sql`, `,
-        )})`,
+        sql`EXISTS (SELECT 1 FROM ${requested.from} WHERE ${requested.col("source")}=${entityExternalId.source} AND ${requested.col("externalId")}=${entityExternalId.externalId})`,
       ),
     );
   for (const pair of pairs) {

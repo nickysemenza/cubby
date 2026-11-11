@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { isTransaction, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
@@ -19,34 +20,30 @@ export async function assertSourceTransactionRecordDeletionAllowed(
   ids: readonly string[],
 ): Promise<void> {
   if (!ids.length) return;
-  const selected = sql.join(
-    ids.map((id) => sql`${id}::uuid`),
-    sql`, `,
-  );
   const rows = await unwrapDb(db).execute<{ protected: boolean }>(
     sql`
     -- includes-deleted: retained source evidence protects its accepted and replacement history.
     SELECT EXISTS (
       SELECT 1 FROM "SourceOccurrence" owner
       WHERE ${notDeleted("owner")} AND (
-        owner."replacementObservationId" IN (${selected})
+        owner."replacementObservationId" = ANY(${uuidArrayParam(ids)})
         -- includes-deleted: an accepted reservation protects every retained observation.
         OR (owner."acceptedTransactionId" IS NOT NULL
           AND EXISTS(SELECT 1 FROM "FinancialTransaction" accepted WHERE accepted.id=owner."acceptedTransactionId" AND ${notDeleted("accepted")})
           -- includes-deleted: an accepted reservation protects the original retained observation.
           AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" observation
-          WHERE observation."occurrenceId" = owner.id AND observation.id IN (${selected}))))
+          WHERE observation."occurrenceId" = owner.id AND observation.id = ANY(${uuidArrayParam(ids)}))))
       UNION ALL
       SELECT 1 FROM "SourceObservationAnnotation" annotation
       JOIN "SourceTransactionRecord" predecessor ON predecessor.id = annotation."observationId"
-      WHERE annotation."supersededByObservationId" IN (${selected})
-        AND predecessor.id NOT IN (${selected}) AND ${notDeleted("predecessor")}
+      WHERE annotation."supersededByObservationId" = ANY(${uuidArrayParam(ids)})
+        AND predecessor.id <> ALL(${uuidArrayParam(ids)}) AND ${notDeleted("predecessor")}
       UNION ALL
       -- Historical bindings remain evidence blockers; they never choose a current owner.
       SELECT 1 FROM "FinancialEvidenceAlias" evidence
       JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
       JOIN "FinancialTransaction" target ON target.id=binding."historicalTransactionId" AND ${notDeleted("target")}
-      WHERE evidence."observationId" IN (${selected}) AND binding."historicalTransactionId" IS NOT NULL
+      WHERE evidence."observationId" = ANY(${uuidArrayParam(ids)}) AND binding."historicalTransactionId" IS NOT NULL
     ) AS protected`,
     "objects",
   );

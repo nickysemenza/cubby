@@ -12,6 +12,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   sourceOccurrence,
   sourceObservationAnnotation,
@@ -76,10 +77,7 @@ async function replacementDecisionClosure(
     sql`
     WITH RECURSIVE decisions AS (
       SELECT r.id, r."occurrenceId", r."supersededByRowId", ARRAY[r.id] AS visited FROM ${sourceObservations} r
-      WHERE r.id IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE r.id = ANY(${uuidArrayParam(ids)})
       UNION ALL
       SELECT r.id, r."occurrenceId", r."supersededByRowId", decisions.visited || r.id
       FROM decisions JOIN ${sourceObservations} r ON r.id = decisions."supersededByRowId"
@@ -137,10 +135,7 @@ export async function updateSourceObservationJudgments(
         .select()
         .from(sourceOccurrence)
         .where(
-          sql`${sourceOccurrence.id} IN (${sql.join(
-            occurrenceIds.map((id) => sql`${id}::uuid`),
-            sql`, `,
-          )})`,
+          sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(occurrenceIds)})`,
         )
     : [];
   await lockFinancialEvidenceKeys(
@@ -157,10 +152,7 @@ export async function updateSourceObservationJudgments(
         .select()
         .from(sourceOccurrence)
         .where(
-          sql`${sourceOccurrence.id} IN (${sql.join(
-            occurrenceIds.map((id) => sql`${id}::uuid`),
-            sql`, `,
-          )})`,
+          sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(occurrenceIds)})`,
         )
         .orderBy(sourceOccurrence.id)
         .for("update")

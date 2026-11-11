@@ -4,10 +4,21 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState, jobWaitReason } from "@cubby/schemas/job";
 import {
   runPurpose,
+  FUNDING_RECOVERABLE_PURPOSES,
   runStatus,
   STEP_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
-import { and, eq, isNull, lt, notExists, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  notExists,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -68,8 +79,8 @@ export async function pauseExecutionRun(
 ): Promise<boolean> {
   // Recovery resumes these purposes in a later window: AI work through
   // Job execution, agent imports and Mail discovery through
-  // `resumeFundingPausedRuns` (run/service/ai-work.ts).
-  const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory}, ${runPurpose.enum.mail_discovery})`;
+  // `resumeFundingPausedRuns`.
+  const recoverable = inArray(run.purpose, FUNDING_RECOVERABLE_PURPOSES);
   const paused = await unwrapDb(db)
     .update(run)
     .set({
@@ -108,30 +119,41 @@ export const fundingResumeInput = z.object({
 });
 
 /** Explicit budget raises release discovery without reopening member stops. */
-export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
+const fundingPausedDiscovery = (db: Database, now: Date) => {
   const successor = alias(run, "funding_successor");
+  return and(
+    eq(run.purpose, "mail_discovery"),
+    eq(run.status, "paused_auth"),
+    eq(run.failureCode, "execution_limit"),
+    isNull(sql`${run.progress}->>'fundingReleasedAt'`),
+    lt(run.updatedAt, now),
+    notDeleted(run),
+    isNull(run.retiredAt),
+    notExists(
+      unwrapDb(db)
+        .select({ id: successor.id })
+        .from(successor)
+        .where(eq(successor.predecessorRunId, run.id)),
+    ),
+  );
+};
+
+export async function countFundingPausedDiscovery(db: Database, now: Date) {
+  const [row] = await unwrapDb(db)
+    .select({ n: count() })
+    .from(run)
+    .where(fundingPausedDiscovery(db, now));
+  return row?.n ?? 0;
+}
+
+export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
   const resumed = await unwrapDb(db)
     .update(run)
     .set({
       progress: sql`coalesce(${run.progress}, '{}'::jsonb) || jsonb_build_object('fundingReleasedAt', ${now.toISOString()}::text)`,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(run.purpose, "mail_discovery"),
-        eq(run.status, "paused_auth"),
-        eq(run.failureCode, "execution_limit"),
-        lt(run.updatedAt, now),
-        notDeleted(run),
-        isNull(run.retiredAt),
-        notExists(
-          unwrapDb(db)
-            .select({ id: successor.id })
-            .from(successor)
-            .where(eq(successor.predecessorRunId, run.id)),
-        ),
-      ),
-    )
+    .where(fundingPausedDiscovery(db, now))
     .returning({ id: run.id });
   return resumed.length;
 }

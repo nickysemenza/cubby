@@ -13,6 +13,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { suggestionTable } from "~/server/db/schema";
 import {
   SOURCE_HELD_REASON,
@@ -293,10 +294,7 @@ export async function statementApplicationSelection(
     }>(
       sql`
       SELECT id, shortcode FROM "FinancialTransaction" WHERE ${notDeleted("FinancialTransaction")}
-      AND id IN (${sql.join(
-        ids.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      AND id = ANY(${uuidArrayParam(ids)})
     `,
       "objects",
     );

@@ -1,10 +1,16 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { expense, importSourceOrder, purchase } from "~/server/db/schema";
+import {
+  findOrCreatePurchase,
+  renameChargeOrderId,
+} from "~/server/domains/purchase/repo/purchase";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   mailSource,
@@ -275,5 +281,87 @@ describe("one order from two source documents", () => {
       ),
     ).rejects.toThrow(/may be two orders/);
     expect(await liveCents()).toBe(2500);
+  });
+
+  it("refuses case and whitespace variants of one Vendor order id that several Purchases carry", async () => {
+    const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
+    const stored = {
+      case: ["AMB-1", "amb-1"],
+      whitespace: ["WS-2", "WS-2 "],
+    } as const;
+    const owners: Record<string, string[]> = {};
+    for (const [variant, orderIds] of Object.entries(stored))
+      for (const orderId of orderIds)
+        (owners[variant] ??= []).push(
+          (
+            await insertWithShortcode(ctx.db, "purchase", {
+              vendorId: vendor.id,
+              orderId,
+            })
+          ).shortcode,
+        );
+    const order = (key: string, orderId: string, target?: string) => ({
+      stableOrderId: key,
+      vendorId: vendor.shortcode,
+      ...(target
+        ? { targetPurchaseId: parseShortcodeFor("purchase", target) }
+        : {}),
+      source: {
+        kind: "receipt_photo" as const,
+        externalKey: `synthetic:${key}`,
+        checksum: checksum("e"),
+      },
+      extraction: { status: "ready" as const, candidate: candidate(orderId) },
+    });
+    for (const [key, orderId] of [
+      ["case-variant", "AMB-1"],
+      ["whitespace-variant", "WS-2"],
+    ] as const)
+      await expect(
+        prepareMemberImport(ctx.db, ctx.actor, {
+          key,
+          orders: [order(key, orderId)],
+        }),
+      ).rejects.toThrow(/Several Purchases of this Vendor carry this order id/);
+    // A reviewed target settles the ambiguity while the other owner has no lines.
+    const reviewed = await memberImport(ctx.db, ctx.actor, {
+      key: "reviewed-variant",
+      defaultTrade: "other",
+      orders: [order("reviewed-variant", "amb-1", owners.case?.[0])],
+    });
+    expect(reviewed.committed.items[0]?.purchaseId).toBe(owners.case?.[0]);
+
+    await expect(
+      findOrCreatePurchase(ctx.db, {
+        vendorId: vendor.id,
+        orderId: "ws-2",
+        date: "2026-10-01",
+      }),
+    ).rejects.toThrow(/Several purchases for this vendor carry order id/);
+    const single = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "one-1",
+    });
+    expect(
+      await findOrCreatePurchase(ctx.db, {
+        vendorId: vendor.id,
+        orderId: " ONE-1",
+        date: "2026-10-01",
+      }),
+    ).toBe(single.id);
+    const other = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "two-2",
+    });
+    expect(
+      await withTransaction(ctx.db, (tx) =>
+        renameChargeOrderId(tx, other.id, "ONE-1", ctx.actor),
+      ),
+    ).toBe(false);
+    expect(
+      await withTransaction(ctx.db, (tx) =>
+        renameChargeOrderId(tx, other.id, "TWO-2", ctx.actor),
+      ),
+    ).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { fundingWaiters } from "~/server/ai/funding-wait";
 import { getDb } from "~/server/db/helpers";
 import {
   imageProcessingAttempt,
@@ -14,7 +15,11 @@ import { readImageExecutions } from "~/server/domains/image-processing/repo/imag
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
-import { imageJobDisplayStateSql, imageJobWaitingOn } from "./image-job-state";
+import {
+  imageJobDisplayStateSql,
+  imageJobWaitingOn,
+  imageJobWaitingOnReasonSql,
+} from "./image-job-state";
 import {
   claimImageProcessingJob,
   createTransparentDerivativeAndJob,
@@ -90,6 +95,56 @@ describe("device work waits parked and records no attempt", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
     expect(displayed?.state).toBe("waiting_for_device");
+  });
+
+  it("classifies the same image wait in SQL and in memory", async () => {
+    const jobId = await subjectLiftJob();
+    const now = new Date();
+    const future = new Date(now.getTime() + 60_000);
+    for (const fields of [
+      {
+        waitReason: "ai_funding_window" as const,
+        runAt: future,
+        leaseUntil: null,
+      },
+      { waitReason: "device" as const, runAt: future, leaseUntil: null },
+      { waitReason: null, runAt: future, leaseUntil: null },
+      { waitReason: null, runAt: now, leaseUntil: future },
+      { waitReason: null, runAt: now, leaseUntil: null },
+    ]) {
+      await getDb(ctx.db)
+        .update(imageProcessingJob)
+        .set(fields)
+        .where(eq(imageProcessingJob.id, jobId));
+      const [row] = await getDb(ctx.db)
+        .select({
+          reason: imageJobWaitingOnReasonSql("ImageProcessingJob", now),
+        })
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, jobId));
+      expect(row?.reason).toBe(
+        imageJobWaitingOn(await jobOf(jobId), now).reason,
+      );
+    }
+  });
+
+  it("counts and wakes image jobs waiting for funding", async () => {
+    const jobId = await subjectLiftJob();
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        runAt: new Date(Date.now() + 60_000),
+        waitReason: "ai_funding_window",
+      })
+      .where(eq(imageProcessingJob.id, jobId));
+    const waiter = fundingWaiters.find((entry) => entry.name === "images")!;
+    const now = new Date();
+    expect(await waiter.count(ctx.db, now)).toBe(1);
+    expect(await waiter.wake(ctx.db, now, true)).toBe(1);
+    expect(await waiter.count(ctx.db, now)).toBe(0);
+    expect((await jobOf(jobId)).runAt.getTime()).toBeLessThanOrEqual(
+      Date.now(),
+    );
   });
 
   it("creates exactly one attempt when a device takes the lease", async () => {

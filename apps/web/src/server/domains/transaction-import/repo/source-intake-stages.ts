@@ -35,29 +35,18 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
-import {
-  planSourceHeads,
-  planWithdrawals,
-  type planSourceIntake,
-  type planIntakeReceipt,
+import type {
+  Identity,
+  ObservationRef,
+  OwnerRef,
+  PreparedRow,
+  SourceIntakeLoaded,
+  SourceIntakePlan,
 } from "./source-intake-plan";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
 const OBSERVED_AT_SKEW_MS = 5 * 60_000;
 
-type Identity = {
-  kind: "provider" | "positioned";
-  scope: string;
-  providerId: string | null;
-  position: number | null;
-};
-const requiredIdentity = (identity: Identity | null): Identity => {
-  if (identity === null)
-    return constraintViolation(
-      "A new observation requires proven source identity.",
-    );
-  return identity;
-};
 const identityKey = (identity: {
   kind: z.infer<typeof sourceOccurrenceIdentityKind>;
   scope: string;
@@ -118,7 +107,9 @@ const factTuple = (
   row.providerNotes,
 ];
 
-export async function prepareRows(input: RecordSourceTransactionRecordsInput) {
+export async function prepareRows(
+  input: RecordSourceTransactionRecordsInput,
+): Promise<PreparedRow[]> {
   const { source, fingerprint, coverage } = input.import;
   if (
     coverage &&
@@ -166,8 +157,6 @@ export async function prepareRows(input: RecordSourceTransactionRecordsInput) {
     );
   return rows;
 }
-
-export type SourceIntakePrepared = Awaited<ReturnType<typeof prepareRows>>;
 
 async function insertOccurrences(
   tx: DrizzleTransaction,
@@ -230,8 +219,8 @@ async function insertObservations(
 export async function lockAndLoadSourceIntake(
   tx: DrizzleTransaction,
   input: RecordSourceTransactionRecordsInput,
-  prepared: SourceIntakePrepared,
-) {
+  prepared: PreparedRow[],
+): Promise<SourceIntakeLoaded> {
   const query = unwrapDb(tx);
   const { source } = input.import;
   await lockFinancialEvidenceKeys(tx, "source", [`intake:${source}`]);
@@ -490,276 +479,247 @@ export async function lockAndLoadSourceIntake(
   };
 }
 
-export type SourceIntakeLoaded = Awaited<
-  ReturnType<typeof lockAndLoadSourceIntake>
->;
+/** Execute the plan's writes in order; nothing here decides what to write. */
 export async function applySourceIntake(
   tx: DrizzleTransaction,
-  input: RecordSourceTransactionRecordsInput,
   actor: ActorContext,
-  prepared: SourceIntakePrepared,
-  loaded: SourceIntakeLoaded,
-  plan: ReturnType<typeof planSourceIntake>,
-  base: ReturnType<typeof planIntakeReceipt>,
+  plan: SourceIntakePlan,
 ) {
   const query = unwrapDb(tx);
-  const {
-    source,
-    existingBatch,
-    observedAt,
-    members,
-    byKey,
-    locked,
-    retained,
-  } = loaded;
-  const { chosen, novel } = plan;
-  await ensureExternalSources(tx, [source]);
-  const batch =
-    existingBatch ??
-    (await insertWithShortcode(tx, "transactionImport", {
-      ...input.import,
-      observedAt,
-      coverage: input.import.coverage ?? null,
-    }));
-  const fresh = chosen.filter(
-    (row) => !row.owner && row.incoming.identity !== null,
-  );
-  const createdOwners = await insertOccurrences(
-    tx,
-    fresh.map(({ incoming }) => ({
-      source,
-      identityKind: requiredIdentity(incoming.identity).kind,
-      identityScope: requiredIdentity(incoming.identity).scope,
-      providerIdentity: requiredIdentity(incoming.identity).providerId,
-      physicalImportId:
-        requiredIdentity(incoming.identity).kind === "positioned"
-          ? batch.id
-          : null,
-      physicalPosition: requiredIdentity(incoming.identity).position,
-      identityProof:
-        requiredIdentity(incoming.identity).kind === "provider"
-          ? {
-              kind: "raw_provider_ids",
-              source,
-              account: incoming.row.providerAccountId ?? null,
-              provider: requiredIdentity(incoming.identity).providerId!,
-            }
-          : {
-              kind: "original_collection_position",
-              source,
-              fingerprint: input.import.fingerprint,
-              position: requiredIdentity(incoming.identity).position!,
-            },
-      lastObservedAt: observedAt,
-    })),
-  );
-  createdOwners.forEach((owner) =>
-    byKey.set(identityKey(storedIdentity(owner)), owner),
-  );
-  const createdObservations = await insertObservations(
-    tx,
-    novel.map(({ incoming }) => ({
-      ...incoming.row,
-      batchId: batch.id,
-      source,
-      occurrenceId: byKey.get(incoming.key)!.id,
-      factFingerprint: incoming.factFingerprint,
-      providerTransactionId: incoming.row.providerTransactionId ?? null,
-      providerAccountId: incoming.row.providerAccountId ?? null,
-      providerData: incoming.row.providerData ?? null,
-      amount: moneyToMinor(-incoming.row.providerAmount),
-      providerAmount: moneyToMinor(incoming.row.providerAmount),
-    })),
-  );
-  if (createdObservations.length)
-    await query.insert(financialEvidenceAlias).values(
-      createdObservations.flatMap((observation) => {
-        const incoming = prepared.find(
-          (row) =>
-            byKey.get(row.key)?.id === observation.occurrenceId &&
-            row.factFingerprint === observation.factFingerprint,
-        )!;
-        return [
-          { kind: "externalId", value: incoming.externalId },
-          { kind: "legacyExternalId", value: incoming.legacyExternalId },
-        ].map((alias) => ({
-          ...alias,
-          source,
-          observationId: observation.id,
-          occurrenceId: observation.occurrenceId,
-          provenanceKey: `observation:${observation.id}:${alias.kind}`,
-          provenance: { kind: "source_observation" },
-          scopeEvidence: {
-            identityKind: requiredIdentity(incoming.identity).kind,
-            scope: requiredIdentity(incoming.identity).scope,
+  let batchId = plan.receipt.batchId;
+  const mintedOwners = new Map<string, typeof sourceOccurrence.$inferSelect>();
+  let createdObservations: (typeof sourceTransactionRecord.$inferSelect)[] = [];
+  let afterOwners: (typeof sourceOccurrence.$inferSelect)[] = [];
+  let memberships: (typeof transactionImportRecord.$inferInsert)[] = [];
+  const requireBatch = () =>
+    batchId ?? constraintViolation("The collection batch is missing.");
+  const owner = (ref: OwnerRef) =>
+    "minted" in ref ? mintedOwners.get(ref.minted)! : ref;
+  const observationId = (ref: ObservationRef) =>
+    "id" in ref
+      ? ref.id
+      : createdObservations.find(
+          (saved) =>
+            saved.occurrenceId === owner(ref.minted.owner).id &&
+            saved.factFingerprint === ref.minted.factFingerprint,
+        )!.id;
+  for (const write of plan.writes) {
+    switch (write.kind) {
+      case "ensure_source":
+        await ensureExternalSources(tx, [write.source]);
+        break;
+      case "insert_batch":
+        batchId = (
+          await insertWithShortcode(tx, "transactionImport", write.values)
+        ).id;
+        break;
+      case "insert_occurrences": {
+        const created = await insertOccurrences(
+          tx,
+          write.rows.map(({ values, positionedInBatch }) => ({
+            ...values,
+            physicalImportId: positionedInBatch ? requireBatch() : null,
+          })),
+        );
+        created.forEach((minted) =>
+          mintedOwners.set(identityKey(storedIdentity(minted)), minted),
+        );
+        break;
+      }
+      case "insert_observations": {
+        createdObservations = await insertObservations(
+          tx,
+          write.rows.map(({ owner: ref, values }) => ({
+            ...values,
+            batchId: requireBatch(),
+            occurrenceId: owner(ref).id,
+          })),
+        );
+        if (createdObservations.length)
+          await query.insert(financialEvidenceAlias).values(
+            createdObservations.flatMap((observation) => {
+              const planned = write.rows.find(
+                (row) =>
+                  owner(row.owner).id === observation.occurrenceId &&
+                  row.factFingerprint === observation.factFingerprint,
+              )!;
+              return [
+                { kind: "externalId", value: planned.aliases.externalId },
+                {
+                  kind: "legacyExternalId",
+                  value: planned.aliases.legacyExternalId,
+                },
+              ].map((alias) => ({
+                ...alias,
+                source: planned.values.source,
+                observationId: observation.id,
+                occurrenceId: observation.occurrenceId,
+                provenanceKey: `observation:${observation.id}:${alias.kind}`,
+                provenance: { kind: "source_observation" },
+                scopeEvidence: planned.aliases.scopeEvidence,
+              }));
+            }),
+          );
+        break;
+      }
+      case "update_heads": {
+        const requestedChanges = requestedRows(
+          write.changes.map((change) => ({
+            id: owner(change.owner).id,
+            head: change.head ? observationId(change.head) : null,
+            state: change.reviewState,
+            observed: change.lastObservedAt.toISOString(),
+            version: change.version,
+          })),
+          {
+            id: "uuid",
+            head: "uuid",
+            state: "text",
+            observed: "text",
+            version: "int",
           },
+          "change",
+        );
+        afterOwners = await query
+          .update(sourceOccurrence)
+          .set({
+            currentObservationId: sql`change.head`,
+            reviewState: sql`change.state`,
+            lastObservedAt: sql`change.observed::timestamp`,
+            version: sql`change.version`,
+          })
+          .from(requestedChanges.from)
+          .where(eq(sourceOccurrence.id, sql`change.id`))
+          .returning();
+        break;
+      }
+      case "upsert_memberships": {
+        memberships = write.rows.map((row) => ({
+          importId: requireBatch(),
+          statementRowId: observationId(row.observation),
+          rowPosition: row.rowPosition,
+          requestFingerprint: row.requestFingerprint,
         }));
-      }),
-    );
-  const headChanges = planSourceHeads({
-    chosen,
-    byKey,
-    createdObservations,
-    retained,
-    observedAt,
-  });
-  const requestedChanges = requestedRows(
-    headChanges.map((row) => ({
-      id: row.id,
-      head: row.currentObservationId,
-      state: row.reviewState,
-      observed: row.lastObservedAt.toISOString(),
-      version: row.version,
-    })),
-    {
-      id: "uuid",
-      head: "uuid",
-      state: "text",
-      observed: "text",
-      version: "int",
-    },
-    "change",
-  );
-  const afterOwners = headChanges.length
-    ? await query
-        .update(sourceOccurrence)
-        .set({
-          currentObservationId: sql`change.head`,
-          reviewState: sql`change.state`,
-          lastObservedAt: sql`change.observed::timestamp`,
-          version: sql`change.version`,
-        })
-        .from(requestedChanges.from)
-        .where(eq(sourceOccurrence.id, sql`change.id`))
-        .returning()
-    : [];
-  const memberships = chosen.map((row) => ({
-    importId: batch.id,
-    statementRowId: (
-      row.observation ??
-      createdObservations.find(
-        (saved) =>
-          saved.occurrenceId === byKey.get(row.incoming.key)?.id &&
-          saved.factFingerprint === row.incoming.factFingerprint,
-      )!
-    ).id,
-    rowPosition: row.incoming.row.rowPosition ?? null,
-    requestFingerprint: row.incoming.requestFingerprint,
-  }));
-  if (memberships.length)
-    await query
-      .insert(transactionImportRecord)
-      .values(memberships)
-      .onConflictDoUpdate({
-        target: [
-          transactionImportRecord.importId,
-          transactionImportRecord.statementRowId,
-        ],
-        set: {
-          rowPosition: sql`COALESCE(${transactionImportRecord.rowPosition},excluded."rowPosition")`,
-        },
-        setWhere: sql`${transactionImportRecord.rowPosition} IS NULL AND excluded."rowPosition" IS NOT NULL`,
-      });
-  await auditEvidenceRows(tx, actor, "sourceOccurrence", locked, afterOwners);
-  const newIds = createdObservations.map((row) => row.id);
-  if (newIds.length)
-    await auditEvidenceRows(
-      tx,
-      actor,
-      "sourceTransactionRecord",
-      [],
-      await query
-        .select(sourceObservationColumns)
-        .from(sourceObservationFrom)
-        .where(inArray(sourceTransactionRecord.id, newIds)),
-    );
-  const rowCountStored = (
-    await query
-      .select({ id: transactionImportRecord.statementRowId })
-      .from(transactionImportRecord)
-      .where(eq(transactionImportRecord.importId, batch.id))
-  ).length;
-  let completed = batch.completedAt !== null;
-  if (input.complete && !completed) {
-    if (
-      !input.import.coverage ||
-      input.import.rowCountDeclared === null ||
-      input.import.rowCountDeclared !== rowCountStored
-    )
-      constraintViolation(
-        "Completion requires explicit coverage and every declared occurrence, including zero values.",
-      );
-    await query
-      .update(transactionImport)
-      .set({ completedAt: new Date() })
-      .where(eq(transactionImport.id, batch.id));
-    completed = true;
+        await query
+          .insert(transactionImportRecord)
+          .values(memberships)
+          .onConflictDoUpdate({
+            target: [
+              transactionImportRecord.importId,
+              transactionImportRecord.statementRowId,
+            ],
+            set: {
+              rowPosition: sql`COALESCE(${transactionImportRecord.rowPosition},excluded."rowPosition")`,
+            },
+            setWhere: sql`${transactionImportRecord.rowPosition} IS NULL AND excluded."rowPosition" IS NOT NULL`,
+          });
+        break;
+      }
+      case "audit_occurrences":
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceOccurrence",
+          write.before,
+          afterOwners,
+        );
+        break;
+      case "audit_new_observations": {
+        const newIds = createdObservations.map((row) => row.id);
+        if (newIds.length)
+          await auditEvidenceRows(
+            tx,
+            actor,
+            "sourceTransactionRecord",
+            [],
+            await query
+              .select(sourceObservationColumns)
+              .from(sourceObservationFrom)
+              .where(inArray(sourceTransactionRecord.id, newIds)),
+          );
+        break;
+      }
+      case "complete_batch":
+        await query
+          .update(transactionImport)
+          .set({ completedAt: new Date() })
+          .where(eq(transactionImport.id, requireBatch()));
+        break;
+      case "withdraw_occurrence": {
+        const updated = await query
+          .update(sourceOccurrence)
+          .set({
+            withdrawnAt: write.at,
+            withdrawalImportId: requireBatch(),
+            lastObservedAt: write.at,
+            version: sql`${sourceOccurrence.version} + 1`,
+          })
+          .where(eq(sourceOccurrence.id, write.owner.id))
+          .returning();
+        await auditEvidenceRows(
+          tx,
+          actor,
+          "sourceOccurrence",
+          [write.owner],
+          updated,
+        );
+        break;
+      }
+      case "record_change":
+        await recordChange(tx, { kind: "source", categories: [] });
+        break;
+      case "audit_batch": {
+        const [afterBatch] = await query
+          .select()
+          .from(transactionImport)
+          .where(eq(transactionImport.id, requireBatch()));
+        const received = memberships
+          .filter(
+            (member) => !write.priorMemberIds.includes(member.statementRowId),
+          )
+          .map((member) => member.statementRowId);
+        if (afterBatch)
+          await auditEvidenceRows(
+            tx,
+            actor,
+            "transactionImport",
+            write.before
+              ? [
+                  received.length
+                    ? { ...write.before, records: [] }
+                    : write.before,
+                ]
+              : [],
+            [
+              received.length
+                ? { ...afterBatch, records: received }
+                : afterBatch,
+            ],
+          );
+        break;
+      }
+      case "refuse":
+        return constraintViolation(write.message);
+      default: {
+        const unreachable: never = write;
+        throw new Error(
+          `Unplanned intake write ${JSON.stringify(unreachable)}`,
+        );
+      }
+    }
   }
-  const withdrawals = planWithdrawals(
-    input,
-    loaded,
-    plan,
-    completed,
-    rowCountStored,
-  );
-  let withdrawn = 0;
-  for (const owner of withdrawals) {
-    const updated = await query
-      .update(sourceOccurrence)
-      .set({
-        withdrawnAt: observedAt,
-        withdrawalImportId: batch.id,
-        lastObservedAt: observedAt,
-        version: sql`${sourceOccurrence.version} + 1`,
-      })
-      .where(eq(sourceOccurrence.id, owner.id))
-      .returning();
-    await auditEvidenceRows(tx, actor, "sourceOccurrence", [owner], updated);
-    withdrawn++;
-  }
-  if (novel.length || afterOwners.length || withdrawn)
-    await recordChange(tx, { kind: "source", categories: [] });
-  const [afterBatch] = await query
-    .select()
-    .from(transactionImport)
-    .where(eq(transactionImport.id, batch.id));
-  const received = memberships
-    .filter(
-      (member) =>
-        !members.some(
-          (retained) =>
-            retained.membership.statementRowId === member.statementRowId,
-        ),
-    )
-    .map((member) => member.statementRowId);
-  if (afterBatch)
-    await auditEvidenceRows(
-      tx,
-      actor,
-      "transactionImport",
-      existingBatch
-        ? [received.length ? { ...existingBatch, records: [] } : existingBatch]
-        : [],
-      [received.length ? { ...afterBatch, records: received } : afterBatch],
-    );
+  const { outcome } = plan;
   return {
-    ...base,
-    batchId: batch.id,
-    batchCreated: !existingBatch,
-    rowCountStored,
-    completed,
-    withdrawn,
+    ...plan.receipt,
+    batchId: requireBatch(),
+    batchCreated: outcome.batchCreated,
+    rowCountStored: outcome.rowCountStored,
+    completed: outcome.completed,
+    withdrawn: outcome.withdrawn,
     occurrenceCodes: [
       ...new Set([
-        ...chosen.flatMap((row) => {
-          const owner = byKey.get(row.incoming.key);
-          return owner ? [owner.shortcode] : [];
-        }),
-        ...locked
-          .filter((owner) =>
-            input.confirmedWithdrawals.includes(owner.providerIdentity ?? ""),
-          )
-          .map((owner) => owner.shortcode),
+        ...outcome.chosenOwners.map((ref) => owner(ref).shortcode),
+        ...outcome.withdrawalCodes,
       ]),
     ],
   };

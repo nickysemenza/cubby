@@ -7,15 +7,21 @@ import { getDb } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import { aiEvaluation, aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { readAiBudget, setAiBudget } from "./budget";
-import { wakeFundingWaitingEvaluations } from "./evaluation/repo/ai-evaluation-work";
 import {
   isBackgroundRun,
   readAiFundingStatus,
   readChatGptPlanAvailability,
 } from "./funding";
+import {
+  fundingWaiters,
+  readFundingWaits,
+  resumeFundingPausedRuns,
+} from "./funding-wait";
 
 describe("AI budget admission", () => {
   const ctx = withTestDb();
@@ -222,7 +228,13 @@ describe("AI funding availability", () => {
       runs: 0,
       work: 1,
     });
-    expect(await wakeFundingWaitingEvaluations(ctx.db)).toBe(1);
+    const waiter = fundingWaiters.find(
+      (entry) => entry.name === "evaluations",
+    )!;
+    const now = new Date();
+    expect(await waiter.count(ctx.db, now)).toBe(1);
+    expect(await waiter.wake(ctx.db, now, true)).toBe(1);
+    expect(await waiter.count(ctx.db, now)).toBe(0);
     const read = async (id: string) =>
       (
         await getDb(ctx.db)
@@ -237,5 +249,116 @@ describe("AI funding availability", () => {
     expect(woken?.waitCause).toBeNull();
     expect(woken?.runAt?.getTime()).toBeLessThanOrEqual(Date.now());
     expect((await read(provider!.id))?.waitCause).toBe("provider_capacity");
+  });
+
+  it("counts and releases eligible Run and Job rows in a funding wake", async () => {
+    const queue = captureBackgroundQueue();
+    try {
+      await insertWithShortcode(ctx.db, "ledgerParty", {
+        name: "Synthetic funding member",
+        kind: "member",
+        userId: ctx.actor.userId,
+      });
+      const discovery = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "running",
+        input: {
+          emailAuditVersion: 1,
+          mailboxId: "synthetic-funding-mailbox",
+          scopedQueries: [],
+          executionPolicy: "import",
+        },
+      });
+      const imported = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_import",
+        trigger: "scheduled",
+        status: "running",
+      });
+      const unrelated = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+      });
+      const predecessor = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_import",
+        trigger: "scheduled",
+        execution: false,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ predecessorRunId: predecessor })
+        .where(eq(run.id, unrelated));
+      const past = new Date(Date.now() - 60_000);
+      for (const [id, status] of [
+        [discovery, "paused_auth"],
+        [imported, "needs_review"],
+        [unrelated, "paused_auth"],
+        [predecessor, "paused_auth"],
+      ] as const)
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status, failureCode: "execution_limit", updatedAt: past })
+          .where(eq(run.id, id));
+      await seedJobs(ctx.db, [
+        {
+          key: "synthetic.funding.future",
+          kind: "synthetic.funding",
+          input: {},
+        },
+      ]);
+      await updateJobs(
+        ctx.db,
+        { key: "synthetic.funding.future" },
+        {
+          availableAt: new Date(Date.now() + 60_000),
+          waitReason: "provider_capacity",
+        },
+      );
+      const now = new Date(Date.now() + 1000);
+      const runs = fundingWaiters.find((entry) => entry.name === "runs")!;
+      const jobs = fundingWaiters.find((entry) => entry.name === "jobs")!;
+      expect(await readFundingWaits(ctx.db, now)).toEqual({ runs: 2, work: 1 });
+      expect(await runs.count(ctx.db, now)).toBe(2);
+      expect(await runs.wake(ctx.db, now, true)).toBe(2);
+      expect(await runs.count(ctx.db, new Date(now.getTime() + 10_000))).toBe(
+        0,
+      );
+      expect(await jobs.count(ctx.db, now)).toBe(1);
+      expect(await jobs.wake(ctx.db, now, true)).toBe(1);
+      expect(await jobs.count(ctx.db, now)).toBe(0);
+      expect(await readFundingWaits(ctx.db, now)).toEqual({ runs: 0, work: 0 });
+      const [untouched] = await getDb(ctx.db)
+        .select({ status: run.status })
+        .from(run)
+        .where(eq(run.id, unrelated));
+      expect(untouched?.status).toBe("paused_auth");
+      const [superseded] = await getDb(ctx.db)
+        .select({ status: run.status })
+        .from(run)
+        .where(eq(run.id, predecessor));
+      expect(superseded?.status).toBe("paused_auth");
+      // Re-arm the same synthetic work for the production wake journey.
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "paused_auth",
+          failureCode: "execution_limit",
+          progress: null,
+          updatedAt: past,
+        })
+        .where(eq(run.id, discovery));
+      await updateJobs(
+        ctx.db,
+        { key: "synthetic.funding.future" },
+        {
+          availableAt: new Date(Date.now() + 60_000),
+          waitReason: "provider_capacity",
+        },
+      );
+      expect(
+        await resumeFundingPausedRuns(ctx.db, { now, anyWindow: true }),
+      ).toBe(2);
+    } finally {
+      queue.restore();
+    }
   });
 });

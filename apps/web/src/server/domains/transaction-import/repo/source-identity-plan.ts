@@ -2,14 +2,39 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceIdentityResolution } from "@cubby/schemas/source-occurrence-fields";
 import { z } from "zod";
 
-import { sourceOccurrence, sourceTransactionRecord } from "~/server/db/schema";
+import {
+  financialAccount,
+  financialEvidenceAlias,
+  financialTransaction,
+  sourceOccurrence,
+  sourceTransactionRecord,
+} from "~/server/db/schema";
 import { constraintViolation } from "~/server/errors/app-error";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
-import type { SourceIdentityLoaded } from "./source-identity-stages";
-
 type Owner = typeof sourceOccurrence.$inferSelect;
 type Observation = typeof sourceTransactionRecord.$inferSelect;
+type Alias = typeof financialEvidenceAlias.$inferSelect;
+
+/** The rows `lockAndLoadSourceIdentity` holds locks on for one reviewed resolution. */
+export type SourceIdentityLoaded = {
+  owners: Owner[];
+  observation: Observation;
+  originalOwner: Owner;
+  owner: Owner;
+  account: typeof financialAccount.$inferSelect;
+  financialJudgment:
+    | SourceIdentityResolution["judgment"]
+    | {
+        disposition: "open";
+        dispositionReason: null;
+        dispositionNote: null;
+      };
+  closure: Observation[];
+  head: Observation | undefined;
+  history: { id: string; code: string }[];
+  target: { id: typeof financialTransaction.$inferSelect.id } | undefined;
+};
 export function checkLockedIdentity(
   input: SourceIdentityResolution,
   initial: Observation,
@@ -89,14 +114,74 @@ export function selectIdentityOwner(
   return owner;
 }
 
+/**
+ * Source identity resolution is two steps: `planSourceIdentity` turns the
+ * locked rows and the reviewed decision into this closed list of writes, and
+ * `applySourceIdentity` executes it.
+ */
+type SourceIdentityWrite =
+  | {
+      kind: "release_accepted_owner";
+      alias: typeof financialEvidenceAlias.$inferInsert;
+    }
+  | {
+      kind: "retire_owner";
+      id: Owner["id"];
+      set: Partial<typeof sourceOccurrence.$inferInsert>;
+    }
+  | { kind: "move_evidence"; from: Owner["id"]; to: Owner["id"] }
+  | {
+      kind: "supersede_suggestions";
+      recordIds: Observation["id"][];
+      chargeKey: string;
+    }
+  | {
+      kind: "set_owner";
+      id: Owner["id"];
+      set: Partial<typeof sourceOccurrence.$inferInsert>;
+      /**
+       * A consolidation does not waive other overlaps or unlock a conflicted
+       * provider. The overlap is read after the evidence moved, so the write
+       * carries the check: a remaining overlap sets `identity_conflict`,
+       * otherwise `ready`. Absent, the state is `ready`.
+       */
+      overlap?: { source: string; providerIdentity: string | null };
+    }
+  | {
+      kind: "audit_resolution";
+      ownerIds: Owner["id"][];
+      beforeOwners: Owner[];
+      beforeAliases: Alias[];
+      closure: Observation[];
+      /** The retired owner joins the after-state of a consolidation. */
+      retired: boolean;
+    }
+  | { kind: "record_change" };
+
+export type SourceIdentityPlan = {
+  writes: SourceIdentityWrite[];
+  result: { source: string; chargeKey: string };
+};
+
 export function planSourceIdentity(
   input: SourceIdentityResolution,
   actor: ActorContext,
   loaded: SourceIdentityLoaded,
+  beforeAliases: Alias[],
   now: Date,
-) {
-  const { owner, originalOwner, observation, account, target, history } =
-    loaded;
+): SourceIdentityPlan {
+  const {
+    owners,
+    observation,
+    originalOwner,
+    owner,
+    account,
+    financialJudgment,
+    closure,
+    history,
+    target,
+  } = loaded;
+  const assign = input.decision === "assign";
   const priorProof = z
     .object({ originalIdentityProof: z.json() })
     .passthrough()
@@ -123,7 +208,102 @@ export function planSourceIdentity(
       at: now.toISOString(),
     },
   });
-  const beforeOwners =
-    input.decision === "assign" ? [originalOwner, owner] : [owner];
-  return { proof, beforeOwners };
+  const writes: SourceIdentityWrite[] = [];
+  if (
+    originalOwner.acceptedTransactionId &&
+    (assign || originalOwner.acceptedTransactionId !== (target?.id ?? null))
+  )
+    writes.push({
+      kind: "release_accepted_owner",
+      alias: {
+        source: originalOwner.source,
+        kind: "transaction_ref",
+        value: originalOwner.shortcode,
+        observationId: originalOwner.currentObservationId,
+        occurrenceId: originalOwner.id,
+        historicalTransactionId: originalOwner.acceptedTransactionId,
+        provenanceKey: `reviewed-owner-release:${originalOwner.id}:${originalOwner.version}`,
+        provenance: jsonSnapshot.parse({
+          kind: "reviewed_owner_release",
+          note: input.note,
+          userId: actor.userId,
+          previousOwner: originalOwner,
+        }),
+        scopeEvidence: jsonSnapshot.parse({
+          identityKind: originalOwner.identityKind,
+          identityScope: originalOwner.identityScope,
+        }),
+        deletedAt: now,
+      },
+    });
+  if (assign) {
+    // Immediate membership FKs require clearing the old head before moving any record.
+    writes.push(
+      {
+        kind: "retire_owner",
+        id: originalOwner.id,
+        set: {
+          currentObservationId: null,
+          accountId: null,
+          acceptedTransactionId: null,
+          supersededByOccurrenceId: owner.id,
+          replacementObservationId: null,
+          identityProof: jsonSnapshot.parse({
+            kind: "consolidated",
+            previousOwner: originalOwner,
+            survivorId: owner.id,
+            note: input.note,
+            userId: actor.userId,
+          }),
+          version: originalOwner.version + 1,
+          updatedAt: now,
+        },
+      },
+      { kind: "move_evidence", from: originalOwner.id, to: owner.id },
+      {
+        kind: "supersede_suggestions",
+        recordIds: closure.map((record) => record.id),
+        chargeKey: originalOwner.shortcode,
+      },
+    );
+  }
+  writes.push({
+    kind: "set_owner",
+    id: owner.id,
+    set: {
+      lastObservedAt:
+        owner.lastObservedAt > originalOwner.lastObservedAt
+          ? owner.lastObservedAt
+          : originalOwner.lastObservedAt,
+      currentObservationId: assign
+        ? owner.currentObservationId
+        : observation.id,
+      accountId: account.id,
+      ...financialJudgment,
+      acceptedTransactionId: target?.id ?? null,
+      withdrawnAt: assign ? owner.withdrawnAt : null,
+      withdrawalImportId: assign ? owner.withdrawalImportId : null,
+      identityProof: proof,
+      version: owner.version + 1,
+      updatedAt: now,
+    },
+    overlap: assign
+      ? { source: owner.source, providerIdentity: owner.providerIdentity }
+      : undefined,
+  });
+  writes.push(
+    {
+      kind: "audit_resolution",
+      ownerIds: owners.map((item) => item.id),
+      beforeOwners: assign ? [originalOwner, owner] : [owner],
+      beforeAliases,
+      closure,
+      retired: assign,
+    },
+    { kind: "record_change" },
+  );
+  return {
+    writes,
+    result: { source: owner.source, chargeKey: owner.shortcode },
+  };
 }

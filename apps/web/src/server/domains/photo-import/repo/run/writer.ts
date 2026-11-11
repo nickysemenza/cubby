@@ -61,7 +61,10 @@ import { loadRunScopeByShortcode } from "~/server/domains/run/repo/run-control";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { nameOrAliasSql } from "~/server/lib/name-alias-match";
 
@@ -184,33 +187,6 @@ function isReplayMatch(
   return isSkip
     ? target.state === "skipped"
     : target.state === "completed" && target.outcome === "attached";
-}
-
-/** Resolve every image shortcode to its live `ImageId`, tagged with its role in this call. */
-async function resolveAttaches(
-  txDb: Database,
-  images: CommitPhotoGroupInput["images"],
-): Promise<ResolvedAttach[]> {
-  return Promise.all(
-    images.map(async (image) => ({
-      code: image.id,
-      imageId: await resolveOrThrow(txDb, "image", image.id),
-      purpose: image.purpose,
-    })),
-  );
-}
-
-async function resolveSkips(
-  txDb: Database,
-  skip: NonNullable<CommitPhotoGroupInput["skip"]>,
-): Promise<ResolvedSkip[]> {
-  return Promise.all(
-    skip.map(async (image) => ({
-      code: image.id,
-      imageId: await resolveOrThrow(txDb, "image", image.id),
-      reason: image.reason,
-    })),
-  );
 }
 
 type LockedTargets = {
@@ -673,8 +649,21 @@ async function doCommit(
     "id" | "updatedAt"
   >,
 ): Promise<CommitPhotoGroupOutput> {
-  const attaches = await resolveAttaches(txDb, input.images);
-  const skips = await resolveSkips(txDb, input.skip ?? []);
+  const skip = input.skip ?? [];
+  const imageIds = await resolveAllOrThrow(txDb, "image", [
+    ...input.images.map((image) => image.id),
+    ...skip.map((image) => image.id),
+  ]);
+  const attaches: ResolvedAttach[] = input.images.map((image, index) => ({
+    code: image.id,
+    imageId: imageIds[index]!,
+    purpose: image.purpose,
+  }));
+  const skips: ResolvedSkip[] = skip.map((image, index) => ({
+    code: image.id,
+    imageId: imageIds[input.images.length + index]!,
+    reason: image.reason,
+  }));
 
   // Run row first, then targets: `proposePhotoGroups` takes the same run lock
   // before it validates that proposed images are still reviewable, so a proposal

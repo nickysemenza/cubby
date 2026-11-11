@@ -15,6 +15,7 @@ import {
 import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
@@ -1458,15 +1459,19 @@ describe("statement row ledger", () => {
       row.id,
       { notes: "Reviewed local note" },
     );
-    const projection = await sourceTransactionRecordScaffold.read(ctx.db, {
-      filters: {},
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 10 },
-      projection: selectedListProjection(
-        sourceTransactionRecordRepositoryReadSchema,
-        ["id", "source", "matchState"],
-      ),
-    });
+    const projection = await expectStatementBudget(
+      () =>
+        sourceTransactionRecordScaffold.read(ctx.db, {
+          filters: {},
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 10 },
+          projection: selectedListProjection(
+            sourceTransactionRecordRepositoryReadSchema,
+            ["id", "source", "matchState"],
+          ),
+        }),
+      { statements: 3, parameters: 10 },
+    );
     expect(projection.data[0]).not.toHaveProperty("providerData");
     // Saved views, facets and import reports must agree with the visible state.
     for (const state of sourceTransactionRecordMatchState.options) {

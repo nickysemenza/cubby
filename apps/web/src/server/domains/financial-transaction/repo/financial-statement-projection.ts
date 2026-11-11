@@ -21,6 +21,7 @@ import type {
   FinancialPreviewLoaded,
   FinancialStatementPreviewOptions,
 } from "./financial-statement-preview";
+import { withinPostingDateWindow } from "./settlement-window";
 
 /**
  * Deliberately *not* the identity module's canonicalizer, despite being the
@@ -292,9 +293,7 @@ export function projectFinancialCandidates(
             transaction.transactionDate,
             transaction.postedDate,
           ].some(
-            (date) =>
-              date !== null &&
-              Math.abs(Date.parse(date) - Date.parse(row.date)) <= 3 * 86400000,
+            (date) => date !== null && withinPostingDateWindow(date, row.date),
           );
           if (!nearbyDate) return false;
           if (suggestionPolicy && transaction.status === "void") return false;

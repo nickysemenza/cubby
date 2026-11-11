@@ -538,6 +538,16 @@ export function aiEvaluationDrain(
   const name = "ai-evaluation";
   return {
     name,
+    stream: {
+      forUnit: (unit) =>
+        unit.startsWith(`${name}:`)
+          ? `ai.evaluation:${unit.slice(name.length + 1)}`
+          : undefined,
+      forKind: (kind) =>
+        kind.startsWith("ai.evaluation:")
+          ? `${name}:${kind.slice("ai.evaluation:".length)}`
+          : undefined,
+    },
     due: () => aiEvaluationDue(name),
     next: aiEvaluationNext,
     async page(db, unit) {

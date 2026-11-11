@@ -34,7 +34,10 @@ import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
-import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
+import {
+  executeSearchDocumentSql,
+  searchDocumentKindsSql,
+} from "~/server/generic/search/repo/search-document";
 import {
   buildPrefixTsQuery,
   exactCodeMatch,
@@ -227,10 +230,7 @@ export async function findLexicalSearchCandidates(
       FROM "SearchDocument" sd
       WHERE ${liveAliasSql("sd")}
         AND char_length(${normalized}) >= 3
-        AND sd."entityKind" IN (${sql.join(
-          entityKinds.map((type) => sql`${type}`),
-          sql`, `,
-        )})
+        AND ${searchDocumentKindsSql("sd", entityKinds)}
         AND sd."normalizedText" % ${normalized}
       ORDER BY sd."normalizedText" <-> ${normalized}
       ${
@@ -245,10 +245,7 @@ export async function findLexicalSearchCandidates(
       SELECT sd.id
       FROM "SearchDocument" sd CROSS JOIN q
       WHERE ${liveAliasSql("sd")}
-        AND sd."entityKind" IN (${sql.join(
-          entityKinds.map((type) => sql`${type}`),
-          sql`, `,
-        )})
+        AND ${searchDocumentKindsSql("sd", entityKinds)}
         AND (
           ${exactCodeMatch(normalized)}
           OR lower(sd.title) = ${normalized}
@@ -258,10 +255,7 @@ export async function findLexicalSearchCandidates(
       UNION
       SELECT sd.id FROM "SearchDocument" sd
       WHERE ${liveAliasSql("sd")}
-        AND sd."entityKind" IN (${sql.join(
-          entityKinds.map((type) => sql`${type}`),
-          sql`, `,
-        )})
+        AND ${searchDocumentKindsSql("sd", entityKinds)}
         AND ${indexedSearchArrayMatch(sql`sd.aliases || sd.keywords`, normalized)}
       UNION
       SELECT id FROM fuzzy

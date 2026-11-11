@@ -41,6 +41,8 @@ import { entityAttachment, image } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
+import { columnArrayParam } from "./query";
+
 /**
  * Insert a single record and return it.
  * Cleaner than manually destructuring the returning() array.
@@ -645,10 +647,7 @@ export async function batchUpdateWithCaseWhen<TUpdate extends { id: string }>(
       await dbOrTx.execute(sql`
         UPDATE ${table}
         SET ${sql.join(caseStatements, sql`, `)}
-        WHERE ${sql.identifier("id")} IN (${sql.join(
-          ids.map((id) => sql`${id}`),
-          sql`, `,
-        )})
+        WHERE ${sql.identifier("id")} = ANY(${columnArrayParam(ids)})
       `);
 
       totalUpdated += batch.length;

@@ -1,7 +1,7 @@
 import { aiFundingContract } from "~/contracts/ai.contract";
 import { setAiBudget } from "~/server/ai/budget";
 import { readAiFundingStatus, resetFundingRefusal } from "~/server/ai/funding";
-import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
+import { resumeFundingPausedRuns } from "~/server/ai/funding-wait";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 

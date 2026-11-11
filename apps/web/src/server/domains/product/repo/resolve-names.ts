@@ -19,6 +19,7 @@ import {
 } from "~/server/db/computed/product-brand-sql";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { textArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import { product } from "~/server/db/schema";
 import {
   externalIdKey,
@@ -183,23 +184,60 @@ export const findProductNameCandidates = async (db: Database, name: string) => {
 export const findExactProductNameMatches = async (
   db: Database | DrizzleTransaction,
   name: string,
+) => (await findExactProductNameMatchesByName(db, [name])).get(name) ?? [];
+
+/** `findExactProductNameMatches` for several names, keyed by each name as given. */
+export const findExactProductNameMatchesByName = async (
+  db: Database | DrizzleTransaction,
+  names: readonly string[],
 ) => {
-  const [resolved] = await resolveNames(db, "product", [{ name }], {
-    create: false,
-  });
-  if (!resolved?.row) return [];
-  const ids = [resolved.row.id, ...resolved.candidates.map(({ id }) => id)];
-  const rows = await unwrapDb(db)
-    .select({
-      id: product.id,
-      shortcode: product.shortcode,
-      name: product.name,
-      brandCode: productBrandCodeSql(product.brandId),
-      brandName: productBrandNameSql(product.brandId),
-    })
-    .from(product)
-    .where(and(notDeleted(product), inArray(product.id, ids)));
-  return ids.flatMap((id) => rows.filter((row) => row.id === id));
+  const queried = [...new Set(names)].filter((name) => name.trim());
+  // resolveNames answers each non-blank request in order.
+  const resolved = queried.length
+    ? await resolveNames(
+        db,
+        "product",
+        queried.map((name) => ({ name })),
+        { create: false },
+      )
+    : [];
+  const idsByName = new Map(
+    queried.map((name, index) => {
+      const match = resolved[index];
+      return [
+        name,
+        match?.row
+          ? [match.row.id, ...match.candidates.map(({ id }) => id)]
+          : [],
+      ];
+    }),
+  );
+  const ids = [...new Set([...idsByName.values()].flat())];
+  const rows = ids.length
+    ? await unwrapDb(db)
+        .select({
+          id: product.id,
+          shortcode: product.shortcode,
+          name: product.name,
+          brandCode: productBrandCodeSql(product.brandId),
+          brandName: productBrandNameSql(product.brandId),
+        })
+        .from(product)
+        .where(
+          and(
+            notDeleted(product),
+            sql`${product.id} = ANY(${uuidArrayParam(ids)})`,
+          ),
+        )
+    : [];
+  return new Map(
+    names.map((name) => [
+      name,
+      (idsByName.get(name) ?? []).flatMap((id) =>
+        rows.filter((row) => row.id === id),
+      ),
+    ]),
+  );
 };
 
 /** Live lexical review fence: independent of embeddings and background indexing.
@@ -208,54 +246,77 @@ export async function findProductIdentityReviewCandidates(
   db: Database | DrizzleTransaction,
   name: string,
 ) {
+  return (
+    (await findProductIdentityReviewCandidatesByName(db, [name])).get(name) ??
+    []
+  );
+}
+
+/** `findProductIdentityReviewCandidates` for several names in one statement. */
+export async function findProductIdentityReviewCandidatesByName(
+  db: Database | DrizzleTransaction,
+  names: readonly string[],
+) {
   const normalize = (value: string) =>
     value
       .toLowerCase()
       .replace(/[^a-z0-9]+/gu, " ")
       .trim();
-  const title = normalize(name);
-  const rows = await unwrapDb(db)
-    .select({
-      id: product.id,
-      shortcode: product.shortcode,
-      name: product.name,
-      brandCode: productBrandCodeSql(product.brandId),
-      brandName: productBrandNameSql(product.brandId),
-      model: product.model,
-      aliases: product.aliases,
-    })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        hasTextSql(productBrandNameSql(product.brandId)),
-        sql`strpos(${" " + title + " "}, ' ' || trim(regexp_replace(lower(${productBrandNameSql(product.brandId)}), '[^a-z0-9]+', ' ', 'g')) || ' ') > 0`,
-      ),
-    );
-  return rows
-    .filter((row) => {
-      const brand = new Set(normalize(row.brandName ?? "").split(" "));
-      const words = (value: string) =>
-        new Set(
-          normalize(value)
-            .split(" ")
-            .filter(
-              (word) =>
-                word.length > 2 &&
-                !brand.has(word) &&
-                !["with", "the", "for", "size", "style"].includes(word),
-            ),
-        );
-      const wanted = words(name);
-      return [row.name, ...row.aliases].some((value) => {
-        const candidate = words(value);
-        const shared = [...candidate].filter((word) => wanted.has(word)).length;
-        return (
-          shared >= 2 && shared / Math.min(candidate.size, wanted.size) >= 0.6
-        );
-      });
-    })
-    .map(({ aliases: _aliases, ...row }) => row);
+  const titles = [...new Set(names.map(normalize))];
+  const brandToken = sql<string>`trim(regexp_replace(lower(${productBrandNameSql(product.brandId)}), '[^a-z0-9]+', ' ', 'g'))`;
+  const rows = titles.length
+    ? await unwrapDb(db)
+        .select({
+          id: product.id,
+          shortcode: product.shortcode,
+          name: product.name,
+          brandCode: productBrandCodeSql(product.brandId),
+          brandName: productBrandNameSql(product.brandId),
+          model: product.model,
+          aliases: product.aliases,
+          brandToken,
+        })
+        .from(product)
+        .where(
+          and(
+            notDeleted(product),
+            hasTextSql(productBrandNameSql(product.brandId)),
+            sql`EXISTS (SELECT 1 FROM unnest(${textArrayParam(titles)}) AS review_title(title)
+              WHERE strpos(' ' || review_title.title || ' ', ' ' || ${brandToken} || ' ') > 0)`,
+          ),
+        )
+    : [];
+  const candidatesFor = (name: string) => {
+    const title = ` ${normalize(name)} `;
+    return rows
+      .filter((row) => {
+        if (!title.includes(` ${row.brandToken} `)) return false;
+        const brand = new Set(normalize(row.brandName ?? "").split(" "));
+        const words = (value: string) =>
+          new Set(
+            normalize(value)
+              .split(" ")
+              .filter(
+                (word) =>
+                  word.length > 2 &&
+                  !brand.has(word) &&
+                  !["with", "the", "for", "size", "style"].includes(word),
+              ),
+          );
+        const wanted = words(name);
+        return [row.name, ...row.aliases].some((value) => {
+          const candidate = words(value);
+          const shared = [...candidate].filter((word) =>
+            wanted.has(word),
+          ).length;
+          return (
+            shared >= 2 && shared / Math.min(candidate.size, wanted.size) >= 0.6
+          );
+        });
+      })
+      .map(({ aliases: _aliases, brandToken: _brandToken, ...row }) => row);
+  };
+  return new Map(names.map((name) => [name, candidatesFor(name)]));
 }
 
 export const PRODUCT_IDENTITY_REVIEW_REASON =

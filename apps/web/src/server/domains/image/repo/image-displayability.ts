@@ -5,6 +5,7 @@ import {
 import { and, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { columnArrayParam } from "~/server/db/helpers/query";
 import { image } from "~/server/db/retained-tables";
 
 /** Keep typed columns for Drizzle's relational-query alias rewriting. */
@@ -14,10 +15,7 @@ const displayableImagePredicate = (
   and(
     ...imageDisplayabilityExclusions.map(({ field, values }) => {
       const value = column(field);
-      return sql`(${value} IS NULL OR ${value} NOT IN (${sql.join(
-        values.map((excluded) => sql`${excluded}`),
-        sql`, `,
-      )}))`;
+      return sql`(${value} IS NULL OR NOT (${value} = ANY(${columnArrayParam(values)})))`;
     }),
   )!;
 

@@ -47,7 +47,7 @@ import {
   moneyToMinor,
   minorToMoney,
 } from "@cubby/shared";
-import { and, asc, eq, inArray, isNull, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -126,7 +126,9 @@ import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/emai
 import { awaitingOrderDetailsSql } from "~/server/domains/purchase-import/repo/notice-purchase";
 import {
   canonicalOrderId,
+  findVendorOrderOwner,
   normalizeOrderKey,
+  vendorOrderOwners,
 } from "~/server/domains/purchase-import/repo/order-identity";
 import {
   purchaseCoverageSql,
@@ -844,6 +846,16 @@ export const findOrCreatePurchase = async (
     return created.id;
   }
 
+  const owner = await findVendorOrderOwner(db, {
+    vendorId: input.vendorId,
+    orderId,
+  });
+  if (owner.kind === "one") return owner.purchase.id;
+  if (owner.kind === "ambiguous")
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Several purchases for this vendor carry order id ${orderId} (${owner.purchases.map((row) => row.shortcode).join(", ")}). Merge them before adding another charge.`,
+    );
   const { row } = await findOrCreateWithShortcode(db, "purchase", {
     where: and(
       eq(purchase.vendorId, input.vendorId),
@@ -1020,18 +1032,12 @@ export const updatePurchase = defineMutationWriter({
         nextOrderId !== null &&
         (nextVendorId !== before.vendorId || nextOrderId !== before.orderId)
       ) {
-        const [clash] = await tx
-          .select({ id: purchase.id })
-          .from(purchase)
-          .where(
-            and(
-              eq(purchase.vendorId, nextVendorId),
-              eq(purchase.orderId, nextOrderId),
-              ne(purchase.id, id),
-              notDeleted(purchase),
-            ),
-          )
-          .limit(1);
+        const clash = vendorOrderOwners(
+          await findVendorOrderOwner(tx, {
+            vendorId: nextVendorId,
+            orderId: nextOrderId,
+          }),
+        ).some((row) => row.id !== id);
         if (clash) {
           throw createAppError(
             "PURCHASE_MERGE_ORDER_COLLISION",
@@ -1643,18 +1649,9 @@ export const renameChargeOrderId = async (
   if (!self) return false;
 
   if (orderId !== null) {
-    const [clash] = await tx
-      .select({ id: purchase.id })
-      .from(purchase)
-      .where(
-        and(
-          eq(purchase.vendorId, self.vendorId),
-          eq(purchase.orderId, orderId),
-          ne(purchase.id, id),
-          notDeleted(purchase),
-        ),
-      )
-      .limit(1);
+    const clash = vendorOrderOwners(
+      await findVendorOrderOwner(tx, { vendorId: self.vendorId, orderId }),
+    ).some((row) => row.id !== id);
     if (clash) return false;
   }
 

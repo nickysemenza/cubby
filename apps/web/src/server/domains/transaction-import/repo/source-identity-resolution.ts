@@ -18,7 +18,7 @@ export async function resolveSourceIdentity(
   actor: ActorContext,
 ): Promise<{ source: string; chargeKey: string }> {
   const loaded = await lockAndLoadSourceIdentity(tx, observationId, input);
-  const plan = planSourceIdentity(input, actor, loaded, new Date());
   const aliases = await loadSourceIdentityAliases(tx, loaded);
-  return applySourceIdentity(tx, input, actor, loaded, plan, aliases);
+  const plan = planSourceIdentity(input, actor, loaded, aliases, new Date());
+  return applySourceIdentity(tx, actor, plan);
 }

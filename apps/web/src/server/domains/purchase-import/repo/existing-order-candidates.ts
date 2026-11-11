@@ -24,6 +24,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   email as emailTable,
   expense,
@@ -123,10 +124,7 @@ export async function readExistingOrderCandidates(
             sql`${purchase.id} IN (
               SELECT association."purchaseId" FROM "Email"
               CROSS JOIN LATERAL (${emailPurchaseAssociationsSql()}) association
-              WHERE "Email"."id" IN (${sql.join(
-                siblings.map((row) => sql`${row.id}`),
-                sql`, `,
-              )})
+              WHERE "Email"."id" = ANY(${uuidArrayParam(siblings.map((row) => row.id))})
             )`,
           ),
         )
