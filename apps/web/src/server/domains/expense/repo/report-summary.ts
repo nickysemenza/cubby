@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { readExpense } from "~/server/domains/expense/repo/crud";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -28,10 +29,7 @@ export async function expenseAttributionSummary(
     const result = await unwrapDb(db).execute(
       sql`
       SELECT "shortcode" AS id, name FROM "LedgerParty"
-      WHERE "shortcode" IN (${sql.join(
-        codes.map((id) => sql`${id}`),
-        sql`, `,
-      )}) AND ${notDeleted("LedgerParty")}
+      WHERE "shortcode" = ANY(${textArrayParam(codes)}) AND ${notDeleted("LedgerParty")}
     `,
       "objects",
     );

@@ -19,6 +19,7 @@ import {
 } from "~/entity/generated/entity-schema-bindings.imageJob.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { device, imageProcessingJob } from "~/server/db/schema";
 import {
@@ -95,10 +96,7 @@ const loadFacts = async (
           WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text
       ) u
     ) cost
-    WHERE j.id IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE j.id = ANY(${uuidArrayParam(ids)})
   `);
   return new Map(
     result.rows.map((row) => [

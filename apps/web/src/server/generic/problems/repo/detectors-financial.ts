@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 
@@ -162,10 +163,7 @@ async function queryAllocationDefects(
   const allocationSignMismatch = sql`COALESCE(bool_or(sign(a."amountMinor") <> sign(ft."amountMinor")), false)`;
 
   const shortcodeWhere = options.shortcodes
-    ? sql` AND ft.shortcode IN (${sql.join(
-        options.shortcodes.map((shortcode) => sql`${shortcode}`),
-        sql`, `,
-      )})`
+    ? sql` AND ft.shortcode = ANY(${textArrayParam(options.shortcodes)})`
     : sql``;
   // Live, not the published check: a raw allocation edit must surface without a refresh.
   const diagnosticWhere = options.defectsOnly

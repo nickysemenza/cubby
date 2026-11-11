@@ -31,6 +31,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import type { WorkPublicationMeta } from "~/server/db/work-item-schema";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
@@ -389,10 +390,7 @@ async function queryWorkQueue(
     ownerCodes?.length && input.ownerPresence === undefined
       ? sql`(shared OR exclusive_owner IS NULL OR exclusive_owner = ANY(ARRAY(
           SELECT member.id FROM members member
-          WHERE member.shortcode IN (${sql.join(
-            ownerCodes.map((code) => sql`${code}`),
-            sql`, `,
-          )}))))`
+          WHERE member.shortcode = ANY(${textArrayParam(ownerCodes)}))))`
       : undefined,
     read.memberOnly && read.memberPartyId !== null
       ? sql`(shared OR exclusive_owner IS NULL OR exclusive_owner = ${read.memberPartyId}::uuid)`
@@ -562,10 +560,7 @@ async function queryWorkQueue(
           FROM eligible CROSS JOIN LATERAL unnest(reason_keys) AS reasons(reason)
           ${
             scope.reasons?.length
-              ? sql`WHERE reasons.reason IN (${sql.join(
-                  scope.reasons.map((key) => sql`${key}`),
-                  sql`, `,
-                )})`
+              ? sql`WHERE reasons.reason = ANY(${textArrayParam(scope.reasons)})`
               : sql``
           }
           GROUP BY reasons.reason, entity

@@ -43,6 +43,7 @@ import { eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import type {
   RepositoryQueryClient as DrizzleClient,
   RepositoryQueryTransaction as DrizzleTransaction,
@@ -319,10 +320,7 @@ export async function findSettlementConflicts(
     FROM "Purchase" candidate_purchase
     CROSS JOIN charge
     JOIN "FinancialAccount" charge_account ON charge_account.id = ${input.accountId}::uuid
-    WHERE candidate_purchase.id IN (${sql.join(
-      input.purchaseIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE candidate_purchase.id = ANY(${uuidArrayParam(input.purchaseIds)})
   `);
   for (const row of rows.rows) {
     const kinds = settlementConflictKinds.filter((kind) => row[kind]);

@@ -34,6 +34,7 @@ import {
   notDeleted,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import { uuidArrayParam, columnArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialAccount,
@@ -289,10 +290,7 @@ export async function prepareFinancialSpendingPage(
         SELECT p.id,p.shortcode,p."displayLabel",p.date,
           payment."amountMinor"::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
         FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
-        WHERE payment."amountMinor" IN (${sql.join(
-          amounts.map((amount) => sql`${amount}`),
-          sql`, `,
-        )})
+        WHERE payment."amountMinor" = ANY(${columnArrayParam(amounts)})
           AND payment."chargedAt"::date BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
         ORDER BY p.id
       `)
@@ -368,10 +366,7 @@ export async function prepareFinancialSpendingCandidates(
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
         ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
       FROM "Purchase" p
-      WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
-        vendorIds.map((id) => sql`${id}::uuid`),
-        sql`, `,
-      )})
+      WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(vendorIds)})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
           OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
       ORDER BY p.id
@@ -605,10 +600,7 @@ async function loadSpendingGraphBatch(
           category: string | null;
         }>(sql`
     SELECT e.id, e."purchaseId", ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e
-    WHERE e."purchaseId" IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("e")} ORDER BY e.id
+    WHERE e."purchaseId" = ANY(${uuidArrayParam(ids)}) AND ${notDeleted("e")} ORDER BY e.id
   `)
       ).rows
     : [];
@@ -638,10 +630,7 @@ async function loadSpendingGraphBatch(
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"
-    WHERE a."purchaseId" IN (${sql.join(
-      ids.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )}) AND ${notDeleted("a")} ORDER BY a."transactionId", a.id
+    WHERE a."purchaseId" = ANY(${uuidArrayParam(ids)}) AND ${notDeleted("a")} ORDER BY a."transactionId", a.id
   `)
       ).rows
     : [];

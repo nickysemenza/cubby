@@ -324,10 +324,7 @@ export async function readEmailPurchaseEvidence(
     FROM "Email"
     CROSS JOIN LATERAL (${emailPurchaseEvidenceSql(accountOwnerScope)}) evidence
     INNER JOIN "Purchase" p ON p."id" = evidence."purchaseId"
-    WHERE "Email"."id" IN (${sql.join(
-      emailIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE "Email"."id" = ANY(${uuidArrayParam(emailIds)})
       ${scope ? sql`AND ${inScope(scope, sql`evidence."purchaseId"`)}` : sql``}
   `,
     "objects",

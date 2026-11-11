@@ -11,6 +11,7 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import {
   repositoryQueries as unwrapDb,
@@ -95,10 +96,7 @@ const markRecipeTotalsFresh = async (
     WITH previous AS MATERIALIZED (
       SELECT ${recipe.id} AS id, ${recipe.totalsComputedAt} IS NULL AS stale
       FROM ${recipe}
-      WHERE ${recipe.id} IN (${sql.join(
-        ids.map((id) => sql`${id}`),
-        sql`, `,
-      )})
+      WHERE ${recipe.id} = ANY(${uuidArrayParam(ids)})
       FOR NO KEY UPDATE OF ${recipe}
     )
     UPDATE ${recipe}
