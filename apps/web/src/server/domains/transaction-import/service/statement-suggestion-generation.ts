@@ -17,6 +17,8 @@ export async function scheduleStatementSuggestions(
     { ...actor, runId: null },
     {
       trigger: "scheduled",
+      // The import is a TransactionImport, not a Run; Why reads `scope.importId`.
+      cause: "import_completed",
       families: [{ family: "statement_transaction", scope: { importId } }],
     },
   );

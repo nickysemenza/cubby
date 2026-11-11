@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { product, productCategory, run } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   categoryPorts,
   kernelCtx,
@@ -89,6 +90,12 @@ describe("post-commit category suggestions", () => {
       ],
     });
     const context = kernelCtx(ctx);
+    // The sweep nests under the import Run without joining it.
+    const importRunId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "file_import",
+      trigger: "manual",
+      status: "running",
+    });
     const sweepPorts = {
       ...categoryPorts(),
       decisionModel: () => PRIMARY_MODEL,
@@ -101,7 +108,13 @@ describe("post-commit category suggestions", () => {
       undefined,
       {
         onProductsCreated: (ids) =>
-          sweepImportedProductCategories(context, ids),
+          sweepImportedProductCategories(
+            {
+              ...context,
+              actorContext: { ...context.actorContext, runId: importRunId },
+            },
+            ids,
+          ),
       },
     );
     // A replay reads the ledger's original result: the sweep changed nothing.
@@ -118,7 +131,11 @@ describe("post-commit category suggestions", () => {
       .select()
       .from(run)
       .where(eq(run.purpose, "sweep"));
-    expect(sweep?.trigger).toBe("scheduled");
+    expect(sweep).toMatchObject({
+      trigger: "scheduled",
+      cause: "import_completed",
+      parentRunId: importRunId,
+    });
     const family = sweepRunInput
       .parse(sweep?.input)
       .families.find((entry) => entry.family === "field");

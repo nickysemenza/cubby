@@ -192,6 +192,7 @@ export async function startPhotoInventoryRun(
       purpose: runPurpose.enum.photo_inventory,
       coordinatorModel: coordinatorModelFor("photo_inventory"),
       trigger: runTrigger.enum.manual,
+      cause: "member_request",
       notes: input.notes ?? null,
       agentSessionId: importRunAgentIdentity(id, "photo_inventory"),
       deviceId: input.deviceId ?? null,

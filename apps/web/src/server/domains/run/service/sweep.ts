@@ -2,9 +2,11 @@ import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import type { RunId } from "@cubby/schemas/identifiers";
 import {
   sweepFamilyScope,
   sweepRunInput,
+  type RunCause,
   type SweepFamily,
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
@@ -49,12 +51,19 @@ export async function startSweep(
   input: {
     trigger: "manual" | "scheduled";
     families: readonly SweepFamilyScope[];
+    /** The Run whose completion started this Sweep, nested under it. */
+    parentRunId?: RunId;
+    cause?: RunCause;
   },
 ) {
+  // `actor.runId` must stay null: `ensureRun` returns an inherited Run, so the
+  // parent travels as `parentRunId` and the Sweep gets a Run of its own.
   const runId = await ensureRun(db, actor, {
     purpose: "sweep",
     trigger: input.trigger,
     status: "running",
+    parentRunId: input.parentRunId,
+    cause: input.cause,
     input: sweepRunInput.parse({ kind: "sweep", families: input.families }),
   });
   await launchWorkflowRun(db, { runId, purpose: "sweep" });

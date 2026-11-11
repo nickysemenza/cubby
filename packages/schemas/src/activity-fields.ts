@@ -132,8 +132,8 @@ export const RUN_KINDS = {
         "Inspect each target and its evidence; continue or retry through the owning purchase workflow.",
     },
     importReport: true,
-    label: "Purchase research",
-    description: "An agent researching purchases from Email and accounts.",
+    label: "Email import",
+    description: "An agent importing purchases from retained Emails.",
     trigger: "agent",
     progress: "targets",
   },
@@ -276,7 +276,7 @@ export const RUN_KINDS = {
       effects: "Retains search operations and research evidence.",
       dependencies: "Original Gmail access and agent session.",
       cost: "See the retained Run’s recorded usage.",
-      recovery: "Use current mail discovery or purchase research for new work.",
+      recovery: "Use a current inbox scan or Email import for new work.",
     },
     label: "Mail search",
     description: "A Gmail search for purchase evidence.",
@@ -298,7 +298,7 @@ export const RUN_KINDS = {
       recovery:
         "Inspect the mailbox checkpoint and failed evaluations; use supported Run controls or repair the connection.",
     },
-    label: "Mail discovery",
+    label: "Inbox scan",
     description: "One mailbox's pass over new purchase mail.",
     trigger: "scheduled",
     execution: "mail_discovery",
@@ -353,7 +353,7 @@ export const RUN_KINDS = {
       exclusions:
         "Each step applies its own eligibility and cutoff. Later arrivals may wait for the next pass. Internal queue upkeep is admitted by the same daily recovery.",
       effects:
-        "Repairs missing image executors, extracts metadata, deletes abandoned uploads and disposable Email originals, reconciles Runs, cleans search artifacts, refreshes the calendar, starts mail discovery and admits paid image work.",
+        "Repairs missing image executors, extracts metadata, deletes abandoned uploads and disposable Email originals, reconciles Runs, cleans search artifacts, refreshes the calendar, starts inbox scans and admits paid image work.",
       dependencies:
         "Original image storage, connected mailboxes, calendar configuration, AI funding and Apple devices for device work.",
       cost: "Image admission can incur AI charges; funding pauses happen after the other maintenance steps.",
@@ -461,9 +461,9 @@ export const RUN_KINDS = {
         key: "mail-discovery",
         scope:
           "Starts discovery for connected mailboxes; those Runs own subsequent classification and purchase work.",
-        label: "Mail discovery",
-        purpose: "Starts each connected mailbox's discovery Run.",
-        action: "Starting mail discovery",
+        label: "Inbox scans",
+        purpose: "Starts each connected mailbox's inbox scan Run.",
+        action: "Starting inbox scans",
         unit: "mailboxes",
         input: once,
       },
