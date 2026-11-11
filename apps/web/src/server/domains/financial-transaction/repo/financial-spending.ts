@@ -153,7 +153,10 @@ type PaymentCandidate = SpendingCandidate & {
   amountKey: string;
   chargedDate: string;
 };
-type VendorCandidate = SpendingCandidate & { partlyPaid: boolean };
+type VendorCandidate = SpendingCandidate & {
+  partlyPaid: boolean;
+  undatedAmounts: string[];
+};
 const calendarGap = (left: string, right: string) =>
   Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
   86_400_000;
@@ -360,13 +363,15 @@ export async function prepareFinancialSpendingCandidates(
     >(
       sql`
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${partlyPaidSpending} AS "partlyPaid" FROM "Purchase" p
+        ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
+      FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
         vendorIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${partlyPaidSpending}) ORDER BY p.id
+          OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
+      ORDER BY p.id
     `,
       "objects",
     );
@@ -961,6 +966,22 @@ const partlyPaidSpending = sql`(${vendorSpendingExists}
   OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
   OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
     IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${chargePayments})))`;
+// Undated retained payment evidence cannot use the posting window; an exact
+// amount keeps the older Purchase as a review-only blocker.
+const undatedPayment = (amounts: readonly number[]) =>
+  amounts.length
+    ? sql`(${vendorSpendingExists} AND EXISTS (
+  SELECT 1 FROM "PurchasePaymentEvidence" undated
+  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+    AND undated."amountMinor" IN (${sql.join(
+      amounts.map((amount) => sql`${amount}`),
+      sql`, `,
+    )})))`
+    : sql`false`;
+const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
+  SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
+  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+) ELSE ARRAY[]::text[] END`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -989,7 +1010,8 @@ async function spendingCandidates(
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
-        AND ${!input.refund} AND ${partlyPaidSpending}))
+        AND ${!input.refund}
+        AND (${partlyPaidSpending} OR ${undatedPayment([input.amount])})))
     ORDER BY p.id`)
     ).rows;
   }
@@ -1009,20 +1031,28 @@ async function spendingCandidates(
     if (!lookup) {
       lookup = getDb(db)
         .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          ${partlyPaidSpending} AS "partlyPaid" FROM "Purchase" p
+          ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
+        FROM "Purchase" p
         WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
           AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-            OR ${partlyPaidSpending}) ORDER BY p.id`)
+            OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
+        ORDER BY p.id`)
         .then((result) => result.rows);
       page.vendorCandidates.set(input.vendorId, lookup);
     }
-    for (const { partlyPaid, ...candidate } of await lookup) {
+    for (const { partlyPaid, undatedAmounts, ...candidate } of await lookup) {
       const nearby = Boolean(
         candidate.date && calendarGap(candidate.date, input.date) <= 14,
       );
       // The page pool also contains date-window headers for other source dates.
-      // Only partly paid spending belongs to the additional review-only selector.
-      if (!nearby && !partlyPaid) continue;
+      // Only partly paid spending or an undated exact-amount payment belongs
+      // to the additional review-only selector.
+      if (
+        !nearby &&
+        !partlyPaid &&
+        !undatedAmounts.includes(String(input.amount))
+      )
+        continue;
       if (!candidates.has(candidate.id))
         candidates.set(candidate.id, { ...candidate, reviewOnly: !nearby });
     }
