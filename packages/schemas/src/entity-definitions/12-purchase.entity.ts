@@ -45,6 +45,7 @@ export const { definition, readSchemas } = defineEntityModel({
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
     searchFacts: ["date", "expenseTotal"],
+    state: { field: "reconciliation" },
     edit: {
       // Vendor, date, and total lead (the untitled remainder); how the
       // order is classified follows.
@@ -146,11 +147,6 @@ export const { definition, readSchemas } = defineEntityModel({
       hero: {
         when: { field: "date", label: "Ordered" },
       },
-      lead: ["overview", "order"],
-      pairs: [
-        ["overview", "order"],
-        ["financial-settlement", "reconciliation"],
-      ],
       sections: [
         {
           kind: "relation",
@@ -983,21 +979,25 @@ export const { definition, readSchemas } = defineEntityModel({
               value: "match",
               quiet: true,
               label: "Reconciles",
+              phase: "finished",
               color: "positive",
             },
             {
               value: "refund_adjusted",
               label: "Refund-adjusted",
+              phase: "finished",
               color: "neutral-status",
             },
             {
               value: "mismatch",
               label: "Needs review",
+              phase: "needs",
               color: "warning",
             },
             {
               value: "unknown",
               label: "No stated total",
+              phase: "active",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",

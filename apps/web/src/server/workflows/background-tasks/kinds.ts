@@ -6,6 +6,8 @@ import {
   locationAiInventoryRefreshTaskSchema,
   locationAiJobKey,
   maintenancePurchaseDiscoveryTaskSchema,
+  runAiSummaryJobKey,
+  runAiSummaryWriteTaskSchema,
   type BackgroundTask,
 } from "@cubby/schemas/background-tasks";
 import { runEntityId } from "@cubby/schemas/identifiers";
@@ -95,6 +97,16 @@ const BACKGROUND_TASK_KINDS = {
           fenced,
         ),
       ),
+  },
+  "run-ai.summary.write": {
+    schema: runAiSummaryWriteTaskSchema,
+    key: (task) => runAiSummaryJobKey(task.subjectRunId, task.endedAt),
+    providerFenced: true,
+    run: async (db, task, fenced) => {
+      const { writeRunSummary } =
+        await import("~/server/domains/run/service/run-summary");
+      return writeRunSummary(db, task, fenced);
+    },
   },
   "image-metadata.extract": {
     schema: imageMetadataExtractTaskSchema,

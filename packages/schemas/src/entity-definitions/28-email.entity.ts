@@ -188,7 +188,6 @@ export const { definition, readSchemas } = defineEntityModel({
 
         when: { field: "receivedAt" },
       },
-      lead: ["overview"],
       sections: [
         {
           kind: "fields",

@@ -12,9 +12,10 @@ import {
   vendorShortcode,
 } from "../identifier-fields.js";
 import {
+  RUN_KINDS,
   RUN_PURPOSE_LABEL,
-  ATTENTION_RUN_PURPOSES,
   VISIBLE_RUN_PURPOSES,
+  runAiSummary,
   runCause,
   runDisplayStatus,
   runPurpose,
@@ -23,10 +24,15 @@ import {
   runTrigger,
 } from "../run-fields.js";
 import { runWorkProgress } from "../run-work-progress.js";
+import { progressValueSchema } from "../progress.js";
 import { runWaitingOn } from "../run-waiting-on.js";
 import { mailRunOutcomeCounts } from "../email-fields.js";
-import { defineEntity, defineEntityModel } from "./definition.js";
-import { labelField } from "./label-field.js";
+import {
+  defineEntity,
+  defineEntityModel,
+  type EntityPhase,
+} from "./definition.js";
+import { displayItem, displayItemsField, labelField } from "./label-field.js";
 
 const RUN_PURPOSE_GLYPH = {
   account_sync: { phosphor: "Bank", sfSymbol: "building.columns" },
@@ -58,46 +64,55 @@ const RUN_STATUS_OPTIONS = [
     value: "running",
     label: "Running",
     color: "info",
+    phase: "active",
   },
   {
     value: "paused",
     label: "Paused",
     color: "warning",
+    phase: "active",
   },
   {
     value: "paused_auth",
     label: "Agent authorization needed",
     color: "warning",
+    phase: "needs",
   },
   {
     value: "paused_offline",
     label: "Paused offline (historical)",
     color: "warning",
+    phase: "active",
   },
   {
     value: "needs_review",
     label: "Needs review",
     color: "warning",
+    phase: "needs",
   },
   {
     value: "completed",
     label: "Completed",
     color: "positive",
+    phase: "finished",
   },
   {
     value: "failed",
     label: "Failed",
     color: "destructive",
+    phase: "needs",
   },
   {
     value: "dispatch_failed",
     label: "Dispatch failed",
     color: "destructive",
+    phase: "needs",
   },
 ] satisfies {
   value: z.infer<typeof runStatus>;
   label: string;
   color: ColorToken;
+  phase: EntityPhase;
 }[];
 
 /**
@@ -133,19 +148,37 @@ export const { definition, readSchemas } = defineEntityModel({
       sfSymbol: "arrow.triangle.2.circlepath",
       emoji: "🤖",
     },
+    kind: { field: "purpose" },
+    state: {
+      field: "displayStatus",
+      reason: "stateReason",
+      wait: "waitingOn",
+      stalled: "stalled",
+      recentBy: "endedAt",
+      recentDays: 7,
+    },
+    progress: { field: "progressMeter", note: "outcomeLine" },
     detail: {
+      lines: [
+        { label: "Why", field: "whyLine" },
+        { label: "What", field: "whatLine" },
+        { label: "Outcome", field: "outcomeLine" },
+      ],
+      aiSummary: "aiSummary",
+      side: { needs: "openItems" },
+      // The side column's key facts.
       summary: [
         {
           kind: "fields",
-          id: "purpose-scope",
-          title: "Purpose & scope",
-          fields: ["purpose", "vendorAccountLabel"],
+          id: "execution",
+          title: "Key facts",
+          fields: ["startedAt", "endedAt", "wallTime", "attempt"],
         },
         {
           kind: "fields",
-          id: "failure",
-          title: "Needs attention",
-          fields: ["failureCode", "dispatchError"],
+          id: "scope",
+          title: "Cost and scope",
+          fields: ["chargedCost", "ledgerPartyId", "vendorAccountId"],
         },
         {
           // Both directions of a retry: "Retried as" on the earlier Run,
@@ -155,18 +188,12 @@ export const { definition, readSchemas } = defineEntityModel({
           title: "Retries",
           fields: ["successorRunId", "predecessorRunId"],
         },
-        {
-          kind: "fields",
-          id: "progress",
-          title: "Processing",
-          fields: ["workProgress", "outcomeCounts", "waitingOn", "stalled"],
-        },
-        {
-          kind: "fields",
-          id: "execution",
-          title: "Execution",
-          fields: ["status", "attempt", "startedAt", "endedAt"],
-        },
+      ],
+      groups: [
+        { id: "timeline", title: "Timeline" },
+        { id: "results", title: "Results" },
+        { id: "evidence", title: "Evidence" },
+        { id: "technical", title: "Technical" },
       ],
 
       activityRelations: [
@@ -178,40 +205,167 @@ export const { definition, readSchemas } = defineEntityModel({
           "The Changes slot's audit log lists every record the run wrote, purchases included; Purchase stores no run reference to filter by.",
       },
       hero: {
-        chip: "displayStatus",
-        // Import-only order counts stay in the `import-stats` slot.
-
         breadcrumb: "vendorAccountId",
       },
-      // The summary carries purpose/results; raw record facts must not precede review.
-      lead: ["overview", "runtime"],
-      pairs: [["overview", "runtime"]],
       sections: [
+        // What the run did, newest state first.
+        {
+          kind: "slot",
+          id: "import-controls",
+          group: "timeline",
+          title: "Run controls",
+        },
+        {
+          kind: "slot",
+          id: "live-progress",
+          group: "timeline",
+          title: "Processing",
+        },
+        {
+          kind: "slot",
+          id: "steps",
+          group: "timeline",
+          title: "What the run did",
+        },
+        {
+          kind: "slot",
+          id: "import-progress-live",
+          group: "timeline",
+          title: "Run progress",
+        },
+        {
+          kind: "slot",
+          id: "import-agent-live",
+          group: "timeline",
+          title: "Live agent",
+        },
+        {
+          kind: "slot",
+          id: "import-progress-stopped",
+          group: "timeline",
+          title: "Run progress",
+        },
+        {
+          kind: "slot",
+          id: "import-agent-stopped",
+          group: "timeline",
+          title: "Agent history",
+        },
+        {
+          kind: "slot",
+          id: "import-timeline",
+          group: "timeline",
+          title: "Durable transcript",
+        },
+        // Review tools: what the run produced for a member.
+        {
+          kind: "slot",
+          id: "evaluations",
+          group: "results",
+          title: "Evaluation progress",
+        },
+        {
+          kind: "slot",
+          id: "photo-batch",
+          group: "results",
+          title: "Photos",
+          placement: "full",
+        },
+        {
+          kind: "slot",
+          id: "results",
+          group: "results",
+          title: "Results",
+        },
+        {
+          kind: "slot",
+          id: "decisions",
+          group: "results",
+          title: "Decisions",
+        },
+        {
+          kind: "slot",
+          id: "import-findings",
+          group: "results",
+          title: "Findings",
+        },
+        {
+          kind: "slot",
+          id: "import-prepared-orders",
+          group: "results",
+          title: "Prepared orders",
+        },
+        {
+          kind: "slot",
+          id: "suggestions",
+          group: "results",
+          title: "Suggestions",
+        },
+        {
+          kind: "slot",
+          id: "import-targets",
+          group: "results",
+          title: "Items and outcomes",
+        },
+        {
+          kind: "slot",
+          id: "import-purchases",
+          group: "results",
+          title: "Purchases changed",
+        },
+        {
+          kind: "slot",
+          id: "import-stats",
+          group: "results",
+          title: "Import counts",
+        },
+        // What the run read and wrote, for checking it.
+        {
+          kind: "slot",
+          id: "diagnostics",
+          group: "evidence",
+          title: "Diagnostics",
+        },
+        {
+          kind: "slot",
+          id: "changes",
+          group: "evidence",
+          title: "Changes",
+        },
+        {
+          kind: "slot",
+          id: "ai-usage",
+          group: "evidence",
+          title: "AI usage",
+        },
+        {
+          kind: "slot",
+          id: "import-debug-log",
+          group: "evidence",
+          title: "System and agent log",
+        },
+        // Raw record facts and runtime identity.
         {
           kind: "fields",
           id: "overview",
           title: "Record facts",
-          workspace: "evidence",
+          group: "technical",
           fields: [
             "activityAt",
             "status",
             "displayStatus",
+            "stateReason",
             "waitingOn",
             "stalled",
-            "chargedCost",
+            "progressMeter",
             "chargedUnpricedCount",
             "purpose",
             "trigger",
             "routine",
-            "vendorAccountId",
             "vendorId",
-            "ledgerPartyId",
             "actorName",
-            "startedAt",
-            "endedAt",
             "retiredAt",
             "retirementReason",
-            "wallTime",
             "failureCode",
             "notes",
             "dispatchError",
@@ -224,166 +378,45 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           kind: "fields",
           id: "runtime",
-          workspace: "evidence",
+          group: "technical",
           title: "Runtime",
           fields: [
             "coordinatorModel",
             "skillRevision",
             "runtimeRevision",
             "decisionRevision",
-            "predecessorRunId",
-            "successorRunId",
             "parentRunId",
             "cause",
-            "attempt",
           ],
-        },
-        // Workspaces put review tools before execution evidence.
-        {
-          kind: "slot",
-          id: "evaluations",
-          workspace: "work",
-          title: "Evaluation progress",
-        },
-        {
-          kind: "slot",
-          id: "photo-batch",
-          workspace: "work",
-          title: "Photos",
-          placement: "full",
-        },
-        {
-          kind: "slot",
-          id: "results",
-          workspace: "work",
-          title: "Results",
-        },
-        {
-          kind: "slot",
-          id: "decisions",
-          workspace: "work",
-          title: "Decisions",
-        },
-        {
-          kind: "slot",
-          id: "import-findings",
-          workspace: "work",
-          title: "Findings",
-        },
-        {
-          kind: "slot",
-          id: "import-prepared-orders",
-          workspace: "work",
-          title: "Prepared orders",
-        },
-        {
-          kind: "slot",
-          id: "suggestions",
-          workspace: "work",
-          title: "Suggestions",
-        },
-        {
-          kind: "slot",
-          id: "import-targets",
-          workspace: "work",
-          title: "Items and outcomes",
-        },
-        {
-          kind: "slot",
-          id: "import-purchases",
-          workspace: "work",
-          title: "Purchases changed",
-        },
-        {
-          kind: "slot",
-          id: "import-controls",
-          workspace: "work",
-          title: "Run controls",
-        },
-        {
-          kind: "slot",
-          id: "import-stats",
-          workspace: "evidence",
-          title: "Import counts",
-        },
-        {
-          kind: "slot",
-          id: "live-progress",
-          workspace: "evidence",
-          title: "Processing",
-        },
-        {
-          kind: "slot",
-          id: "steps",
-          workspace: "evidence",
-          title: "Execution steps",
-        },
-        {
-          kind: "slot",
-          id: "diagnostics",
-          workspace: "evidence",
-          title: "Diagnostics",
-        },
-        {
-          kind: "slot",
-          id: "import-progress-live",
-          workspace: "evidence",
-          title: "Run progress",
-        },
-        {
-          kind: "slot",
-          id: "import-agent-live",
-          workspace: "evidence",
-          title: "Live agent",
-        },
-        {
-          kind: "slot",
-          id: "import-progress-stopped",
-          workspace: "evidence",
-          title: "Run progress",
-        },
-        {
-          kind: "slot",
-          id: "import-agent-stopped",
-          workspace: "evidence",
-          title: "Agent history",
-        },
-        {
-          kind: "slot",
-          id: "import-timeline",
-          workspace: "evidence",
-          title: "Durable transcript",
-        },
-        {
-          kind: "slot",
-          id: "import-debug-log",
-          workspace: "evidence",
-          title: "System and agent log",
-        },
-        {
-          kind: "slot",
-          id: "ai-usage",
-          workspace: "evidence",
-          title: "AI usage",
-        },
-        {
-          kind: "slot",
-          id: "changes",
-          workspace: "evidence",
-          title: "Changes",
         },
       ],
     },
     list: {
+      layoutRevision: 2,
+      titleSubtitle: true,
       rail: [{ field: "startedAt" }, { field: "chargedCost" }],
       // Display images borrow from the vendor; they load as list media.
-      tree: { toggle: true, defaultNested: false },
+      // Automatic children of one kind fold into a batch row; member-started
+      // and needs-you children always list on their own.
+      tree: {
+        toggle: true,
+        defaultNested: true,
+        batch: {
+          by: "purpose",
+          when: [
+            {
+              id: "trigger",
+              value: ["scheduled", "discovery", "backfill", "ephemeral"],
+            },
+          ],
+        },
+      },
       savedViews: [
         {
           id: "imports",
           label: "Imports",
           description:
-            "Account syncs, mail imports, validations, enrichments, photo batches, Gmail searches and mailbox discovery",
+            "Account syncs, Email imports, validations, enrichments, photo batches, Gmail searches and inbox scans",
           filters: [
             {
               id: "purpose",
@@ -397,31 +430,6 @@ export const { definition, readSchemas } = defineEntityModel({
                 "mail_discovery",
               ],
             },
-          ],
-        },
-        {
-          id: "in-progress",
-          label: "In progress",
-          description:
-            "Running Runs a member started or reviews; AI refresh and background passes are left out",
-          filters: [
-            { id: "purpose", value: [...ATTENTION_RUN_PURPOSES] },
-            { id: "status", value: ["running"] },
-          ],
-          sort: [{ id: "startedAt", desc: true }],
-        },
-        {
-          id: "attention",
-          label: "Needs attention",
-          description:
-            "Paused Runs, Runs needing review, and failed Runs a member started or reviews; AI refresh and background passes retry on their own",
-          filters: [
-            { id: "purpose", value: [...ATTENTION_RUN_PURPOSES] },
-            { id: "needsAttention", value: "true" },
-          ],
-          sort: [
-            { id: "stalled", desc: true },
-            { id: "startedAt", desc: true },
           ],
         },
         {
@@ -458,28 +466,108 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "json",
         label: "Work",
+        // Installed native builds read `workProgress.current` through this
+        // path; `progressMeter` is the record's progress everywhere else.
         display: {
           columnGroup: "Results",
           detail: false,
+          listHidden: true,
           labelPath: "workProgress.current.label",
-          renderer: { list: "run-throughput" },
         },
         validation: readOnly(runWorkProgress.nullable().default(null)),
       },
       {
-        key: "activityAt",
+        key: "whyLine",
+        kind: "json",
+        label: "Why",
+        nullable: true,
         provenance: {
           kind: "derived",
-          sources: [{ label: "Latest progress, step update, or heartbeat" }],
+          sources: [
+            { label: "Cause" },
+            { label: "Parent Run" },
+            { label: "Retry of" },
+            { label: "Input scope" },
+          ],
         },
-        kind: "timestamp",
-        label: "Activity",
+        explanation: {
+          ruleId: "run.why",
+          description:
+            "Why the Run exists: who started it (You when that is the reader), the Run or import it followed, the Run that found its source, its retry predecessor, or its schedule. Runs whose cause was never recorded show Cause not recorded.",
+        },
         display: {
-          columnGroup: "Execution",
-          labelPath: "activityAt",
-          renderer: { list: "run-activity" },
+          mobile: { slot: "subtitle", priority: 10 },
+          priority: "essential",
+          labelPath: "whyLine.title",
+          detailLabelPath: "whyLine.title",
         },
-        validation: readOnly(z.iso.datetime().nullable().default(null)),
+        validation: readOnly(displayItem.nullable().default(null)),
+      },
+      {
+        key: "progressMeter",
+        kind: "json",
+        label: "Progress",
+        provenance: {
+          kind: "derived",
+          sources: [
+            { label: "Recorded work samples and step counters" },
+            { label: "Email outcomes" },
+          ],
+        },
+        explanation: {
+          ruleId: "run.progress",
+          description:
+            "Counts of the Run's work unit: every recorded work phase when they share a unit, else the current phase; a Mail import without work samples counts its Emails by outcome. Remaining items are active while the Run runs, failed once it failed, and queued otherwise.",
+        },
+        display: {
+          columnGroup: "Results",
+          priority: "essential",
+          renderer: { list: "progress" },
+        },
+        validation: readOnly(progressValueSchema.nullable().default(null)),
+      },
+      {
+        ...labelField("whatLine", "Run kind and input scope"),
+        label: "What",
+        display: { list: false },
+      },
+      {
+        ...labelField("outcomeLine", "Recorded counts and end state"),
+        label: "Outcome",
+        display: {
+          mobile: { slot: "subtitle", priority: 20 },
+          listHidden: true,
+        },
+      },
+      {
+        ...labelField("stateReason", "Status, failure and current work"),
+        display: { listHidden: true },
+      },
+      {
+        ...displayItemsField("openItems", "Review stops, failures and waits"),
+        label: "Needs you",
+        display: { list: false, itemsPath: "openItems" },
+      },
+      {
+        key: "aiSummary",
+        kind: "json",
+        label: "AI-written summary",
+        nullable: true,
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The AI summary written when the Run ended" }],
+        },
+        explanation: {
+          ruleId: "run.ai-summary",
+          description:
+            "Written once by the fast AI tier after the Run reaches its end state: what it did and what is left for a member. A restarted Run gets a new summary only after it ends again.",
+        },
+        display: {
+          list: false,
+          labelPath: "aiSummary.text",
+          detailLabelPath: "aiSummary.text",
+        },
+        validation: readOnly(runAiSummary.nullable().default(null)),
       },
       {
         display: { detail: false, list: false },
@@ -503,6 +591,8 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Execution",
           width: "sm",
+          listHidden: true,
+          priority: "optional",
           optionRole: "status",
           optionColor: "neutral-status",
         },
@@ -532,20 +622,42 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "select",
           options: [
             ...withQuiet(RUN_STATUS_OPTIONS, "completed"),
-            { value: "retried", label: "Retried", color: "neutral-status" },
+            {
+              value: "retried",
+              label: "Retried",
+              color: "neutral-status",
+              phase: "finished",
+            },
             {
               value: "waiting_for_funding",
               label: "Paused: waiting for AI funding",
               color: "warning",
+              phase: "needs",
             },
           ],
         },
         display: {
-          list: false,
+          columnGroup: "Execution",
+          priority: "essential",
+          renderer: { list: "state" },
           optionRole: "status",
           optionColor: "neutral-status",
         },
         validation: readOnly(runDisplayStatus),
+      },
+      {
+        key: "activityAt",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Latest progress, step update, or heartbeat" }],
+        },
+        kind: "timestamp",
+        label: "Activity",
+        display: {
+          columnGroup: "Execution",
+          labelPath: "activityAt",
+        },
+        validation: readOnly(z.iso.datetime().nullable().default(null)),
       },
       {
         key: "waitingOn",
@@ -565,12 +677,13 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among every due Job of that kind in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or when a Job not yet due (a retry or a deferral) falls due.",
         },
+        // Drawn inside the State badge; the column stays available.
         display: {
           mobile: { slot: "meta", priority: 30 },
           columnGroup: "Execution",
+          listHidden: true,
           labelPath: "waitingOn.label",
           detailLabelPath: "waitingOn.label",
-          renderer: { list: "run-waiting-on", detail: "run-waiting-on" },
         },
         validation: readOnly(runWaitingOn.nullable().default(null)),
       },
@@ -586,7 +699,7 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "Live Jobs remain but none was claimed or finished for 15 minutes.",
         },
-        display: { columnGroup: "Execution", width: "sm" },
+        display: { columnGroup: "Execution", width: "sm", listHidden: true },
         validation: readOnly(z.boolean().default(false)),
       },
       {
@@ -594,6 +707,8 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         display: {
           columnLabel: "AI cost",
+          listHidden: true,
+          priority: "optional",
           format: "currency",
           labelPath: "chargedCostLabel",
           detailLabelPath: "chargedCostLabel",
@@ -625,10 +740,8 @@ export const { definition, readSchemas } = defineEntityModel({
           description:
             "A Mail import counts each Email by its newest outcome in this Run: imported, linked, unrelated, or an unresolved gap by who settles it (waiting for Cubby, needs research by an agent, needs the member). Other Runs have none.",
         },
-        display: {
-          list: false,
-          renderer: { detail: "run-outcome-counts" },
-        },
+        // `outcomeLine` words these; the counts stay on the record for agents.
+        display: { list: false, detail: false },
         validation: readOnly(mailRunOutcomeCounts.nullable().default(null)),
       },
       {
@@ -640,12 +753,14 @@ export const { definition, readSchemas } = defineEntityModel({
             value,
             label: RUN_PURPOSE_LABEL[value],
             glyph: RUN_PURPOSE_GLYPH[value],
+            explanation: RUN_KINDS[value].explanation,
           })),
         },
         display: {
-          mobile: { slot: "subtitle", priority: 10 },
           columnGroup: "Execution",
           width: "sm",
+          listHidden: true,
+          priority: "optional",
           optionRole: "category",
           optionColor: "domain-finance",
         },
@@ -697,6 +812,8 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         display: {
           columnGroup: "Execution",
+          listHidden: true,
+          priority: "optional",
           optionRole: "category",
           optionColor: "domain-finance",
         },
@@ -720,6 +837,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Scope",
           columnLabel: "Account",
+          listHidden: true,
           labelPath: "vendorAccountLabel",
         },
         validation: readOnly(vendorAccountShortcode.nullable()),
@@ -732,6 +850,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           mobile: { slot: "meta", priority: 20 },
           columnGroup: "Scope",
+          listHidden: true,
           labelPath: "vendorName",
         },
         validation: readOnly(vendorShortcode.nullable()),
@@ -743,7 +862,11 @@ export const { definition, readSchemas } = defineEntityModel({
         // purposes always carry the member scope (`Run_import_party_check`).
         nullable: true,
         reference: { entity: "ledgerParty" },
-        display: { columnGroup: "Scope", labelPath: "ledgerPartyName" },
+        display: {
+          columnGroup: "Scope",
+          listHidden: true,
+          labelPath: "ledgerPartyName",
+        },
         validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
@@ -755,14 +878,22 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "startedAt",
         kind: "timestamp",
-        display: { columnGroup: "Execution", format: "timestamp" },
+        display: {
+          columnGroup: "Execution",
+          listHidden: true,
+          format: "timestamp",
+        },
         validation: readOnly(dateTime),
       },
       {
         key: "endedAt",
         kind: "timestamp",
         nullable: true,
-        display: { columnGroup: "Execution", format: "timestamp" },
+        display: {
+          columnGroup: "Execution",
+          listHidden: true,
+          format: "timestamp",
+        },
         validation: readOnly(dateTime.nullable()),
       },
       {
@@ -822,8 +953,9 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         display: {
           columnGroup: "Results",
-          columnBar: true,
           detail: false,
+          listHidden: true,
+          priority: "optional",
           width: "sm",
         },
         validation: readOnly(z.number().int().nonnegative()),
@@ -833,8 +965,9 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         display: {
           columnGroup: "Results",
-          columnBar: true,
           detail: false,
+          listHidden: true,
+          priority: "optional",
           width: "sm",
         },
         validation: readOnly(z.number().int().nonnegative()),
@@ -844,8 +977,9 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         display: {
           columnGroup: "Results",
-          columnBar: true,
           detail: false,
+          listHidden: true,
+          priority: "optional",
           width: "sm",
         },
         validation: readOnly(z.number().int().nonnegative()),
@@ -855,8 +989,9 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "number",
         display: {
           columnGroup: "Results",
-          columnBar: true,
           detail: false,
+          listHidden: true,
+          priority: "optional",
           width: "sm",
         },
         validation: readOnly(z.number().int().nonnegative()),
@@ -1072,6 +1207,7 @@ export const { definition, readSchemas } = defineEntityModel({
     derived: {
       stalled: { type: "boolean" },
       needsAttention: { type: "boolean" },
+      displayStatus: { type: "enum", options: [...runDisplayStatus.options] },
     },
     sort: {
       fields: [
@@ -1184,6 +1320,13 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       { name: "Run_parent_started_idx", on: ["parentRunId", "startedAt"] },
       {
+        // The AI summary admission scans ended non-ephemeral Runs by end time.
+        name: "Run_ended_summary_idx",
+        on: [{ column: "endedAt", desc: true }],
+        where:
+          "{endedAt} IS NOT NULL AND {trigger} <> 'ephemeral' AND {purpose} NOT IN ('ai_suggest', 'background')",
+      },
+      {
         // Mail import's attempted-revision probes otherwise read every Run input.
         name: "Run_party_evidenceRevision_idx",
         on: ["ledgerPartyId", { sql: "({input}->>'evidenceRevision')" }],
@@ -1260,7 +1403,6 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
     unindexedReferences: {
       vendorId: "runs are listed by vendor account, never by vendor alone",
-      predecessorRunId: "lineage is walked forward from a known run only",
       actorUserId: "runs are listed by ledger party; the user is a snapshot",
     },
   },

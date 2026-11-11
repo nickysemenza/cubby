@@ -138,11 +138,6 @@ export const { definition, readSchemas } = defineEntityModel({
         transactions:
           "The settlement slot renders the transactions that settle this expense.",
       },
-      lead: ["overview"],
-      pairs: [
-        ["details", "schedule"],
-        ["purchase", "settlement"],
-      ],
       sections: [
         {
           kind: "fields",

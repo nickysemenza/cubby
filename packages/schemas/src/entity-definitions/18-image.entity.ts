@@ -103,7 +103,6 @@ export const { definition, readSchemas } = defineEntityModel(
         hero: {
           when: { field: "capturedAt", label: "Taken" },
         },
-        lead: ["overview"],
         sections: [
           {
             kind: "fields",

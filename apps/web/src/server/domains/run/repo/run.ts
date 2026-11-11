@@ -1,12 +1,18 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
 import { runRawOut as rawRunOut } from "@cubby/schemas/entity-contracts/run";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
+import {
+  mailResearchRunInput,
+  runPurpose,
+  runStatus,
+  sweepRunInput,
+  VISIBLE_RUN_PURPOSES,
+} from "@cubby/schemas/run-fields";
 import {
   runWorkSamples,
   readRunWorkPhase,
 } from "@cubby/schemas/run-work-progress";
-import { and, desc, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -16,6 +22,8 @@ import {
 import { formatDuration } from "~/lib/format-duration";
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
+import { readRunAiSummaries } from "~/server/db/computed/run-ai-summary";
+import { runDisplayStatusSql } from "~/server/db/computed/run-display-status";
 import {
   databaseForTransaction,
   isTransaction,
@@ -23,7 +31,7 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { aiUsage } from "~/server/db/schema";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
@@ -41,6 +49,16 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import {
+  runOpenItems,
+  runOutcomeLine,
+  runProgressMeter,
+  runStateReason,
+  runTitle,
+  runWhatLine,
+  runWhyLine,
+  type RunPhraseContext,
+} from "../run-phrases";
 import { listRunStepsForRuns } from "./run-step";
 import {
   emptyMailRunOutcomeCounts,
@@ -168,7 +186,181 @@ const runRead = {
         rollupOf: new Map(rollups.map((rollup) => [rollup.runId, rollup])),
       };
     });
+    // Linked records and Email subjects the phrases name: one query each.
+    const links = bind.batch(async ({ db, rows }) => {
+      const subjectIds = new Map<string, string[]>();
+      for (const row of rows) {
+        const sources = mailResearchRunInput.safeParse(row.input).data?.sources;
+        if (sources)
+          subjectIds.set(
+            row.id,
+            sources.map((source) => source.orderMailId),
+          );
+      }
+      const importIds = rows.flatMap((row) => {
+        const families = sweepRunInput.safeParse(row.input).data?.families;
+        const statement = families?.find(
+          (entry) => entry.family === "statement_transaction",
+        );
+        const importId =
+          statement?.family === "statement_transaction"
+            ? statement.scope.importId
+            : undefined;
+        return importId ? [importId] : [];
+      });
+      const orderMailIds = [...new Set([...subjectIds.values()].flat())];
+      const [runs, imports, subjects] = await Promise.all([
+        lookupEntityReferences(
+          db,
+          "run",
+          rows.flatMap((row) => [row.parentRunId, row.predecessorRunId]),
+          { includeDeleted: true },
+        ),
+        lookupEntityReferences(db, "transactionImport", importIds, {
+          includeDeleted: true,
+        }),
+        orderMailIds.length
+          ? unwrapDb(db)
+              .select({
+                orderMailId: emailTable.orderMailId,
+                subject: emailTable.subject,
+              })
+              .from(emailTable)
+              .where(
+                and(
+                  inArray(emailTable.orderMailId, orderMailIds),
+                  isNull(emailTable.deletedAt),
+                ),
+              )
+          : Promise.resolve([]),
+      ]);
+      const subjectOf = new Map(
+        subjects.flatMap((entry) =>
+          entry.orderMailId && entry.subject?.trim()
+            ? [[entry.orderMailId, entry.subject.trim()] as const]
+            : [],
+        ),
+      );
+      return {
+        runs,
+        importCodeOf: new Map(
+          [...imports].map(([id, entry]) => [id, String(entry.id)]),
+        ),
+        subjectsOf: new Map(
+          [...subjectIds].map(([runId, ids]) => [
+            runId,
+            ids.flatMap((id) => {
+              const subject = subjectOf.get(id);
+              return subject ? [subject] : [];
+            }),
+          ]),
+        ),
+      };
+    });
+    const phrases = bind.batch(async (page) => {
+      const [actor, outcome, step, line, link] = await Promise.all([
+        actors.load(page),
+        outcomes.load(page),
+        steps.load(page),
+        lineage.load(page),
+        links.load(page),
+      ]);
+      return { actor, outcome, step, line, link };
+    });
+    const summaries = bind.batch(async ({ db, rows }) =>
+      readRunAiSummaries(db, rows),
+    );
+    const phraseContext = (
+      row: RunRow,
+      loaded: Awaited<ReturnType<typeof phrases.load>>,
+      viewerUserId: string | null,
+    ): RunPhraseContext => {
+      const { actor, outcome, step, line, link } = loaded;
+      const successor = line.successorOf.get(row.id) ?? null;
+      const rollup = line.rollupOf.get(parseShortcodeFor("run", row.shortcode));
+      const linked = (id: string | null) => {
+        const found = id ? link.runs.get(id) : undefined;
+        return found
+          ? { entity: "run", code: found.id, label: found.name }
+          : null;
+      };
+      const importId = sweepRunInput
+        .safeParse(row.input)
+        .data?.families.flatMap((entry) =>
+          entry.family === "statement_transaction" && entry.scope.importId
+            ? [entry.scope.importId]
+            : [],
+        )[0];
+      const importCode = importId ? link.importCodeOf.get(importId) : undefined;
+      return {
+        viewerUserId,
+        vendorName: row.vendorId
+          ? (actor.vendors.get(row.vendorId)?.name ?? null)
+          : null,
+        partyName: row.ledgerPartyId
+          ? (actor.parties.get(row.ledgerPartyId)?.name ?? null)
+          : null,
+        parent: linked(row.parentRunId),
+        predecessor: linked(row.predecessorRunId),
+        importRecord: importCode
+          ? { entity: "transactionImport", code: importCode, label: null }
+          : null,
+        emailSubjects: link.subjectsOf.get(row.id) ?? [],
+        successorCode: successor,
+        displayStatus: runDisplayStatusOf(row, successor !== null),
+        stalled: rollup?.stalled ?? false,
+        outcomeCounts:
+          row.purpose === runPurpose.enum.mail_import
+            ? (outcome.get(row.id) ?? emptyMailRunOutcomeCounts())
+            : null,
+        workProgress: runWorkProgressOf(row, step.byRun, step.now),
+        wallTime: runWallTime(row),
+      };
+    };
     return [
+      phrases.fields(
+        rawRunOut.pick({
+          displayName: true,
+          whyLine: true,
+          outcomeLine: true,
+          stateReason: true,
+          progressMeter: true,
+        }),
+        (row, loaded, { context }) => {
+          const phrase = phraseContext(
+            row,
+            loaded,
+            context.actor?.userId ?? null,
+          );
+          return {
+            displayName: runTitle(row, phrase),
+            whyLine: runWhyLine(row, phrase),
+            outcomeLine: runOutcomeLine(row, phrase),
+            stateReason: runStateReason(row, phrase),
+            progressMeter: runProgressMeter(row, phrase),
+          };
+        },
+      ),
+      phrases.fields(
+        rawRunOut.pick({ whatLine: true, openItems: true }),
+        (row, loaded, { context }) => {
+          const phrase = phraseContext(
+            row,
+            loaded,
+            context.actor?.userId ?? null,
+          );
+          return {
+            whatLine: runWhatLine(row, phrase),
+            openItems: runOpenItems(row, phrase),
+          };
+        },
+        { scope: "detail" },
+      ),
+      summaries.fields(
+        rawRunOut.pick({ aiSummary: true }),
+        (row, loaded) => ({ aiSummary: loaded.get(row.id) ?? null }),
+        { scope: "detail" },
+      ),
       costs.fields(
         rawRunOut.pick({
           chargedCost: true,
@@ -216,14 +408,13 @@ const runRead = {
         },
       ),
       actors.fields(
-        rawRunOut.pick({ displayName: true, iconEntity: true }),
+        rawRunOut.pick({ iconEntity: true }),
         (row, { vendors, parties }) => {
           const vendor = row.vendorId ? vendors.get(row.vendorId) : undefined;
           const party = row.ledgerPartyId
             ? parties.get(row.ledgerPartyId)
             : undefined;
           return {
-            displayName: `${vendor?.name ?? party?.name ?? row.actorName} · ${runWorkLabel(row)}`,
             iconEntity: activityIconEntity({
               kind: runPurpose.parse(row.purpose),
               subjectId: vendor?.id ?? null,
@@ -233,27 +424,13 @@ const runRead = {
         },
       ),
       bind(rawRunOut.pick({ wallTime: true }), (row) => ({
-        wallTime: row.endedAt
-          ? formatDuration(
-              Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
-            )
-          : "In progress",
+        wallTime: runWallTime(row),
       })),
       steps.fields(
         rawRunOut.pick({ workProgress: true, activityAt: true }),
         (row, { byRun, now }) => {
           const runSteps = byRun.get(row.id) ?? [];
-          const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
-          const workProgress =
-            readRunStepWorkProgress(runSteps, row.status, row.startedAt, now) ??
-            (samples
-              ? {
-                  current: readRunWorkPhase(samples.current, row.status, now),
-                  completed: samples.completed.map((sample) =>
-                    readRunWorkPhase(sample, "completed", now),
-                  ),
-                }
-              : null);
+          const workProgress = runWorkProgressOf(row, byRun, now);
           const activityAt =
             [
               row.heartbeatAt?.toISOString(),
@@ -269,6 +446,34 @@ const runRead = {
     ];
   },
 } satisfies ListReadOptions<RunRow>;
+
+const runWallTime = (row: Pick<RunRow, "startedAt" | "endedAt">) =>
+  row.endedAt
+    ? formatDuration(
+        Math.max(0, row.endedAt.getTime() - row.startedAt.getTime()),
+      )
+    : "In progress";
+
+/** The step ledger's phases, else the live work samples, else none. */
+function runWorkProgressOf(
+  row: RunRow,
+  byRun: ReadonlyMap<string, Awaited<ReturnType<typeof listRunStepsForRuns>>>,
+  now: Date,
+) {
+  const runSteps = byRun.get(row.id) ?? [];
+  const samples = runWorkSamples.safeParse(row.liveProgress?.work).data;
+  return (
+    readRunStepWorkProgress(runSteps, row.status, row.startedAt, now) ??
+    (samples
+      ? {
+          current: readRunWorkPhase(samples.current, row.status, now),
+          completed: samples.completed.map((sample) =>
+            readRunWorkPhase(sample, "completed", now),
+          ),
+        }
+      : null)
+  );
+}
 
 /**
  * What a Run reads as. A review stop or failure whose open work a retry
@@ -305,26 +510,42 @@ const runPurposeSelection = z
   })
   .passthrough();
 
+/**
+ * Automatic work nobody opens: old grouping Runs always, routine passes once they ended,
+ * and mail discovery once it completed, since its failures need a member.
+ */
+const runOpenedPopulationSql = () =>
+  sql`${notInArray(runTable.purpose, ["ai_suggest", "background"])} AND (
+    ${notInArray(runTable.purpose, ["ai_refresh", "connection_discovery", "derived_refresh"])}
+    OR ${inArray(runTable.status, ["running", "paused", "paused_auth"])}
+  ) AND (
+    ${runTable.purpose} <> ${"mail_discovery"}
+    OR ${runTable.status} <> ${"completed"}
+  )`;
+
+/**
+ * The Runs a fresh Runs list shows: the opened population under the list's
+ * `initialFilter` (no ephemeral grouping Runs, no routine kinds or passes).
+ * The AI summary admission covers exactly these.
+ */
+export const runDefaultPopulationSql = () =>
+  sql`${runOpenedPopulationSql()} AND ${runTable.trigger} <> ${"ephemeral"}
+    AND ${inArray(runTable.purpose, [...VISIBLE_RUN_PURPOSES])}
+    AND ${eq(runTable.routine, false)}`;
+
 export const runScaffold = listScaffold("run", runTable, {
   readSchema: runRepositoryReadSchema,
-  // Automatic work nobody opens: old grouping Runs always, routine passes once they ended,
-  // and mail discovery once it completed, since its failures need a member. An explicit
-  // purpose or identity filter keeps their history directly accessible.
+  // An explicit purpose or identity filter keeps hidden history directly accessible.
   population: (filters) => {
     const { purpose, ids } = runPurposeSelection.parse(filters);
     return purpose === undefined && ids === undefined
-      ? sql`${notInArray(runTable.purpose, ["ai_suggest", "background"])} AND (
-          ${notInArray(runTable.purpose, ["ai_refresh", "connection_discovery", "derived_refresh"])}
-          OR ${inArray(runTable.status, ["running", "paused", "paused_auth"])}
-        ) AND (
-          ${runTable.purpose} <> ${"mail_discovery"}
-          OR ${runTable.status} <> ${"completed"}
-        )`
+      ? runOpenedPopulationSql()
       : sql`true`;
   },
   derived: {
     stalled: listReadValue(() => runStalledSql()),
     needsAttention: listReadValue(() => runNeedsAttentionSql()),
+    displayStatus: listReadValue(() => runDisplayStatusSql()),
   },
   read: { ...runRead, title: sql`${runTable.purpose}` },
 });

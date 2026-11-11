@@ -122,7 +122,6 @@ export const { definition, readSchemas } = defineEntityModel(
         hero: {
           breadcrumb: "parentId",
         },
-        lead: ["children", "overview"],
         sections: [
           {
             kind: "relation",

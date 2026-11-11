@@ -92,7 +92,6 @@ export const { definition, readSchemas } = defineEntityModel({
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",
       },
-      lead: ["overview"],
       sections: [
         {
           kind: "fields",

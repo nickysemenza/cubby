@@ -49,9 +49,16 @@ import {
   type RecipeFlowArtifact,
   recipeFlowArtifactSchema,
 } from "@cubby/schemas/recipe-flow";
+import {
+  RUN_SUMMARY_FEATURE_ID,
+  runSummaryAnalysis,
+  type RunSummaryAnalysis,
+} from "@cubby/schemas/run-fields";
 import { STATEMENT_LABEL_REVISION } from "@cubby/schemas/statement-suggestion";
+import { z } from "zod";
 
 import {
+  type AiChatRequest,
   defineFeature,
   IMAGE_DESCRIPTION_IDENTITY,
   PRODUCT_IDENTITY_FEATURE,
@@ -534,6 +541,39 @@ export const LOCATION_DESCRIPTION_FEATURE = defineFeature({
   analysisSchema: locationDescriptionSchema,
 }) satisfies AiStructuredFeature<LocationDescription> &
   AiAnalysisFeature<LocationDescription>;
+
+// ---------------------------------------------------------------------------
+// Run summaries. One short summary per ended Run, written by an automatic
+// Job; the input is the Run's own composed phrases and step counts, never raw
+// Email bodies.
+// ---------------------------------------------------------------------------
+
+const runSummaryModelOutput = z.object({
+  /** Two to four plain sentences: what the Run did, then what is left. */
+  text: z.string().min(1).max(1200),
+});
+
+function runSummaryRequest(input: unknown): AiChatRequest {
+  return {
+    systemPrompts: [
+      "Summarize one finished household automation Run for the member who owns it. Write two to four plain sentences: first what the Run did and changed, then what is left for the member to do, if anything. Use only the facts given; never invent counts, names or causes. No headings, lists or markdown.",
+    ],
+    messages: [{ role: "user", content: JSON.stringify(input) }],
+  };
+}
+
+export const RUN_SUMMARY_FEATURE = defineFeature({
+  request: runSummaryRequest,
+  feature: RUN_SUMMARY_FEATURE_ID,
+  tier: "fast",
+  maxTokens: 400,
+  effort: "low",
+  cache: true,
+  promptVersion: "2026-11-11.1",
+  schema: runSummaryModelOutput,
+  analysisSchema: runSummaryAnalysis,
+}) satisfies AiStructuredFeature<z.infer<typeof runSummaryModelOutput>> &
+  AiAnalysisFeature<RunSummaryAnalysis>;
 
 /** Cloud is the preferred image-description provider until an explicit policy changes it. */
 export const IMAGE_DESCRIPTION_FEATURE = defineFeature({

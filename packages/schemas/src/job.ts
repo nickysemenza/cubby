@@ -387,6 +387,22 @@ export const JOB_KIND_POLICY = {
     cost: "AI funding policy applies.",
     exclusions: "Analysis alone does not receive or deduct stock.",
   },
+  "run-ai.summary.write": {
+    ...SERVER,
+    maxAttempts: 6,
+    backoff: RECOVERABLE_BACKOFF,
+    label: "Summarize an ended Run",
+    activityLabel: "Run summaries",
+    purpose: "Writes the AI summary shown in an ended Run's header.",
+    trigger: "A Run in the default Runs list reaching its end state.",
+    targets: "One ended Run and its recorded title, cause, outcome and steps.",
+    effects:
+      "Records one AI summary for that end; the Run's status, cost and progress are unchanged.",
+    dependencies: "The fast AI tier and the AI funding window.",
+    cost: "One short fast-tier call per ended Run, recorded as automatic AI usage.",
+    exclusions:
+      "Runs that ended before summaries existed, hidden automatic Runs, and Runs that changed again before the summary was written.",
+  },
   "image-metadata.extract": {
     ...SERVER,
     label: "Extract image metadata",

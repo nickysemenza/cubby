@@ -87,7 +87,6 @@ export const { definition, readSchemas } = defineEntityModel({
         { relation: "purchases", dateField: "date" },
         { relation: "expenses", dateField: "date" },
       ],
-      lead: ["overview"],
       sections: [
         {
           kind: "fields",

@@ -138,8 +138,6 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       quickActions: ["complete"],
       quickFields: ["status", "assigneeId"],
-      lead: ["overview"],
-      pairs: [["schedule", "dependencies"]],
       sections: [
         {
           kind: "fields",

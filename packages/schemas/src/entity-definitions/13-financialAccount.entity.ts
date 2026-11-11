@@ -116,7 +116,6 @@ export const { definition, readSchemas } = defineEntityModel({
         purchases:
           "Two joins through transactions; the Transactions table links each transaction's purchase.",
       },
-      lead: ["overview"],
       sections: [
         {
           kind: "fields",

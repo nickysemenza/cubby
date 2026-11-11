@@ -66,10 +66,20 @@ export const runTrigger = z.enum([
   "ephemeral",
 ]);
 const MEMBER_FACING_PURPOSES = new Set<string>(ATTENTION_RUN_PURPOSES);
-/** A Run a member or their agent started; its transitions ring open tabs. */
-export const isMemberStartedRun = (run: { purpose: string; trigger: string }) =>
+/**
+ * A Run a member or their agent started; its transitions ring open tabs. Only
+ * member-facing kinds qualify: `ensureRun` defaults every unscheduled Run's
+ * cause to `member_request`, including grouped AI and background work.
+ */
+export const isMemberStartedRun = (run: {
+  purpose: string;
+  trigger: string;
+  cause?: string | null;
+}) =>
   MEMBER_FACING_PURPOSES.has(run.purpose) &&
-  (run.trigger === "foreground" || run.trigger === "manual");
+  (run.cause === "member_request" ||
+    run.trigger === "foreground" ||
+    run.trigger === "manual");
 export const runStatus = z.enum([
   "running",
   "paused",
@@ -131,6 +141,31 @@ export const runCause = z.enum([
   "retry",
 ]);
 export type RunCause = z.infer<typeof runCause>;
+
+/**
+ * The AI-written summary of a Run that ended: what it did and what is left
+ * for a member, the model that wrote it, and when.
+ * @public Names a generated native model.
+ */
+export const runAiSummary = z
+  .object({
+    text: z.string().min(1),
+    model: z.string().min(1),
+    writtenAt: z.iso.datetime(),
+  })
+  .meta({ id: "RunAiSummary" });
+export type RunAiSummary = z.infer<typeof runAiSummary>;
+
+/** The AiAnalysis feature id a Run summary is written under. */
+export const RUN_SUMMARY_FEATURE_ID = "run-summary";
+
+/** The stored summary analysis: the text and the Run end it describes. */
+export const runSummaryAnalysis = z.object({
+  text: z.string().min(1),
+  /** The summarized Run's `endedAt`, as ISO-8601. */
+  generation: z.iso.datetime(),
+});
+export type RunSummaryAnalysis = z.infer<typeof runSummaryAnalysis>;
 
 /** Bounded acquisition and independent full/scoped mailbox coverage. */
 const mailDiscoveryRunInput = mailboxDiscoveryInput;
@@ -546,7 +581,7 @@ export function runWorkLabel(run: {
         : "Order history sync";
     }
     case "mail_research":
-      return "Purchase research";
+      return "Email import";
     case "order_mail_import":
       return "Order mail import";
     case "charge_hunts":
