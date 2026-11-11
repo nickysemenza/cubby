@@ -578,6 +578,11 @@ async function applyPublishedStatementLabels(
       return;
     }
     try {
+      // Rule selection reads the stored suggestion. A charge the page declined
+      // can have gained a live candidate since publication (for example a
+      // member-recorded transaction), and create terms ignore candidates, so
+      // regenerate first or the clean-create rule would duplicate it.
+      if (importClean) await regenerateCharges(db, [target.charge], scope);
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
