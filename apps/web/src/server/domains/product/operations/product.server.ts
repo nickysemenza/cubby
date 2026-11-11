@@ -155,7 +155,7 @@ export async function searchProducts(
     );
   }
   const semantic = await semanticProductCandidates(context.db, nameQuery, 5);
-  const semanticIds = semantic
+  const semanticIds = (Array.isArray(semantic) ? semantic : [])
     .filter(
       (candidate) => candidate.similarity >= SEMANTIC_MATCH_MIN_SIMILARITY,
     )

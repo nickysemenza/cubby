@@ -9,6 +9,8 @@ import { setCfEnv } from "~/server/cf-env";
 import { withMemberFreshness } from "~/server/db/freshness/member-marker";
 import {
   recordCommittedChanges,
+  runAfterCommit,
+  withAfterCommitScope,
   withTransactionDatabase,
 } from "~/server/db/helpers/core";
 import {
@@ -85,6 +87,44 @@ describe("repository writes publish after their commit", () => {
     expect(messages).toEqual([
       { task: ["TSK-A3F2", "TSK-B4G3"], project: null },
     ]);
+  });
+
+  it("coalesces keyed effects across commits and released savepoints", async () => {
+    const flushed: string[][] = [];
+    const flush = async (_db: typeof ctx.db, items: string[]) => {
+      flushed.push(items);
+    };
+    await withAfterCommitScope(async () => {
+      await withTransactionDatabase(ctx.db, async (outer) => {
+        await runAfterCommit(outer, {
+          key: "example",
+          items: ["outer"],
+          flush,
+        });
+        await withTransactionDatabase(outer, async (inner) => {
+          await runAfterCommit(inner, {
+            key: "example",
+            items: ["released"],
+            flush,
+          });
+        });
+        await expect(
+          withTransactionDatabase(outer, async (inner) => {
+            await runAfterCommit(inner, {
+              key: "example",
+              items: ["rolled back"],
+              flush,
+            });
+            throw new Error("rollback");
+          }),
+        ).rejects.toThrow("rollback");
+      });
+      await withTransactionDatabase(ctx.db, async (db) => {
+        await runAfterCommit(db, { key: "example", items: ["second"], flush });
+      });
+      expect(flushed).toEqual([]);
+    });
+    expect(flushed).toEqual([["outer", "released", "second"]]);
   });
 
   it("rings for requests and for background commits a member waits on", async () => {

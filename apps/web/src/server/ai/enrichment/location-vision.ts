@@ -22,11 +22,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { rawProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import {
-  getMiscDisplayName,
-  isMiscProduct,
-  getErrorMessage,
-} from "@cubby/shared";
+import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
@@ -491,11 +487,15 @@ async function matchDetectedItems(
               }
             : null;
         if (!matched) {
-          const [semanticMatch] = await semanticProductCandidatesBestEffort(
+          const semantic = await semanticProductCandidates(
             db,
             productName,
+            3,
             owner,
           );
+          const semanticMatch = Array.isArray(semantic)
+            ? semantic[0]
+            : undefined;
           const semanticShortcode =
             semanticMatch?.item.entityKind === "product"
               ? parseShortcodeFor("product", semanticMatch.item.id)
@@ -543,24 +543,6 @@ async function matchDetectedItems(
     );
   }
   return suggestions;
-}
-
-async function semanticProductCandidatesBestEffort(
-  db: Database,
-  query: string,
-  owner: AiCallOwner,
-): ReturnType<typeof semanticProductCandidates> {
-  try {
-    return await semanticProductCandidates(db, query, 3, owner);
-  } catch (error) {
-    const parsedError = error instanceof Error ? error : null;
-    log.warn("inventory semantic-product-match failed", {
-      query,
-      errorName: parsedError?.name ?? "UnparsedError",
-      message: getErrorMessage(error),
-    });
-    return [];
-  }
 }
 
 /**

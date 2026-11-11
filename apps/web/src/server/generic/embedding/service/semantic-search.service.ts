@@ -16,6 +16,7 @@ import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/s
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {
   embedQuery,
+  optionalAiUnavailable,
   semanticEmbeddingsConfigured,
 } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -108,7 +109,9 @@ export async function semanticEntityCandidates(
   limit: number,
   entityKind: SearchableEntity,
   owner?: AiCallOwner,
-): Promise<SemanticProductCandidate[]> {
+): Promise<
+  SemanticProductCandidate[] | ReturnType<typeof optionalAiUnavailable>
+> {
   try {
     const { candidates: refs } = await scanSemanticRefs(
       db,
@@ -129,7 +132,7 @@ export async function semanticEntityCandidates(
       query,
       message: getErrorMessage(error),
     });
-    return [];
+    return optionalAiUnavailable(error);
   }
 }
 
@@ -138,5 +141,6 @@ export const semanticProductCandidates = (
   query: string,
   limit: number,
   owner?: AiCallOwner,
-): Promise<SemanticProductCandidate[]> =>
-  semanticEntityCandidates(db, query, limit, "product", owner);
+): Promise<
+  SemanticProductCandidate[] | ReturnType<typeof optionalAiUnavailable>
+> => semanticEntityCandidates(db, query, limit, "product", owner);

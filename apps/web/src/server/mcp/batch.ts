@@ -2,6 +2,7 @@ import { mcpResultDetail } from "@cubby/schemas/mcp-detail";
 import type { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
+import { withAfterCommitScope } from "~/server/db/helpers/core";
 import {
   MCP_TOOL_DEADLINE_MS,
   type Principal,
@@ -182,74 +183,76 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
   const startedAt = Date.now();
   const budgetMs = MCP_TOOL_DEADLINE_MS[config.mutation ? "write" : "read"];
   let slowestMs = 0;
-  for (const [index, item] of input.items.entries()) {
-    const elapsed = Date.now() - startedAt;
-    if (
-      index > 0 &&
-      budgetMs - elapsed <
-        Math.max(Math.min(BATCH_START_MARGIN_MS, budgetMs / 4), 2 * slowestMs)
-    ) {
-      results.push({ index, status: "not_started" });
-      continue;
-    }
-    const itemStartedAt = Date.now();
-    let stage: "run" | "output" = "run";
-    try {
-      const produced = trusted
-        ? await executePurchaseAgentMutation({
-            principal,
-            delegation: trusted,
-            toolName: config.name,
-            args: { index, item },
-            execution: {
-              // SAFETY: `trusted` implies the envelope checks above passed.
-              runId: execution!.runId,
-              operationId: execution!.itemOperationIds![index]!,
-            },
-            run: (transactional) =>
-              config.run(item, transactional, input.resultDetail, index),
-          })
-        : await config.run(item, principal, input.resultDetail, index);
-      stage = "output";
-      if (input.resultDetail === "summary" && config.summaryOutput) {
-        results.push({
-          index,
-          status: "succeeded",
-          reference: config.summaryOutput.parse(produced).reference,
-        });
+  await withAfterCommitScope(async () => {
+    for (const [index, item] of input.items.entries()) {
+      const elapsed = Date.now() - startedAt;
+      if (
+        index > 0 &&
+        budgetMs - elapsed <
+          Math.max(Math.min(BATCH_START_MARGIN_MS, budgetMs / 4), 2 * slowestMs)
+      ) {
+        results.push({ index, status: "not_started" });
         continue;
       }
-      const completed =
-        input.resultDetail === "full" && config.completeOutput
-          ? await config.completeOutput(produced, item, principal)
-          : produced;
-      const parsed = config.itemOutput.parse(completed);
-      const success: BatchSuccess<TItemOutput> = {
-        index,
-        status: "succeeded",
-        reference: config.reference(parsed),
-      };
-      if (input.resultDetail === "full") success.item = parsed;
-      results.push(success);
-    } catch (error) {
-      results.push({
-        index,
-        status: "failed",
-        error: describeToolError(
-          error,
-          {
-            operation: config.name,
-            authenticated: true,
-            entity: config.telemetryEntity?.(input.items),
-            batchIndex: index,
-          },
-          stage,
-        ),
-      });
-    } finally {
-      slowestMs = Math.max(slowestMs, Date.now() - itemStartedAt);
+      const itemStartedAt = Date.now();
+      let stage: "run" | "output" = "run";
+      try {
+        const produced = trusted
+          ? await executePurchaseAgentMutation({
+              principal,
+              delegation: trusted,
+              toolName: config.name,
+              args: { index, item },
+              execution: {
+                // SAFETY: `trusted` implies the envelope checks above passed.
+                runId: execution!.runId,
+                operationId: execution!.itemOperationIds![index]!,
+              },
+              run: (transactional) =>
+                config.run(item, transactional, input.resultDetail, index),
+            })
+          : await config.run(item, principal, input.resultDetail, index);
+        stage = "output";
+        if (input.resultDetail === "summary" && config.summaryOutput) {
+          results.push({
+            index,
+            status: "succeeded",
+            reference: config.summaryOutput.parse(produced).reference,
+          });
+          continue;
+        }
+        const completed =
+          input.resultDetail === "full" && config.completeOutput
+            ? await config.completeOutput(produced, item, principal)
+            : produced;
+        const parsed = config.itemOutput.parse(completed);
+        const success: BatchSuccess<TItemOutput> = {
+          index,
+          status: "succeeded",
+          reference: config.reference(parsed),
+        };
+        if (input.resultDetail === "full") success.item = parsed;
+        results.push(success);
+      } catch (error) {
+        results.push({
+          index,
+          status: "failed",
+          error: describeToolError(
+            error,
+            {
+              operation: config.name,
+              authenticated: true,
+              entity: config.telemetryEntity?.(input.items),
+              batchIndex: index,
+            },
+            stage,
+          ),
+        });
+      } finally {
+        slowestMs = Math.max(slowestMs, Date.now() - itemStartedAt);
+      }
     }
-  }
+  });
   const count = (status: BatchResult<TItemOutput>["status"]) =>
     results.filter((result) => result.status === status).length;
   return {

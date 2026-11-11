@@ -2,9 +2,12 @@ import { moneyToMinor } from "@cubby/shared";
 import { uniq } from "es-toolkit";
 
 import { advisoryXactLock } from "~/server/db/advisory-lock";
+import { parentTransactionDatabase } from "~/server/db/helpers/core";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
+
+const heldEvidenceKeys = new WeakMap<object, Set<string>>();
 
 /**
  * Serialize source-owned financial identities before checking their JSONB
@@ -34,7 +37,22 @@ export async function lockFinancialEvidenceKeys(
         ? 1
         : 0,
   )) {
+    const token = JSON.stringify([namespace, key]);
+    let ancestor = parentTransactionDatabase(tx);
+    let held = heldEvidenceKeys.get(tx)?.has(token) ?? false;
+    while (!held && ancestor) {
+      const client = unwrapDb(ancestor);
+      held = heldEvidenceKeys.get(client)?.has(token) ?? false;
+      ancestor = parentTransactionDatabase(ancestor);
+    }
+    if (held) continue;
     await advisoryXactLock(unwrapDb(tx), namespace, key);
+    let own = heldEvidenceKeys.get(tx);
+    if (!own) {
+      own = new Set();
+      heldEvidenceKeys.set(tx, own);
+    }
+    own.add(token);
   }
 }
 

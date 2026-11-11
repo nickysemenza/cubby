@@ -28,7 +28,10 @@ import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
-import { constraintViolation } from "~/server/errors/app-error";
+import {
+  assertNotFuture,
+  constraintViolation,
+} from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -43,7 +46,6 @@ import {
 } from "./source-intake-plan";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
-const OBSERVED_AT_SKEW_MS = 5 * 60_000;
 
 type Identity = {
   kind: "provider" | "positioned";
@@ -254,11 +256,7 @@ export async function lockAndLoadSourceIntake(
     : (existingBatch?.observedAt ?? new Date());
   // A future observation time would make every later real observation
   // compare as older. Retained collections replay their stored time.
-  const now = Date.now();
-  if (!existingBatch && observedAt.getTime() > now + OBSERVED_AT_SKEW_MS)
-    constraintViolation(
-      `observedAt ${observedAt.toISOString()} is later than server time ${new Date(now).toISOString()}; send when the evidence was observed.`,
-    );
+  if (!existingBatch) assertNotFuture("observedAt", observedAt);
   if (
     existingBatch &&
     (existingBatch.observedAt.getTime() !== observedAt.getTime() ||
