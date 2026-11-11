@@ -92,7 +92,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 // Keep its retry/checkpoint unit small enough to settle within a live Job claim.
 const STATEMENT_LABEL_BATCH = 32;
 // Admit one default page together so a slow merchant does not serialize four waves.
-// Larger explicit pages still retain a bounded wave and the cooperative deadline.
+// Larger explicit pages still retain a bounded wave and the cooperative budget.
 const STATEMENT_SPENDING_CONCURRENCY = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
@@ -537,7 +537,7 @@ async function applyPublishedStatementLabels(
     scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
-    deadline?: number;
+    budgetSpent: () => boolean;
   },
 ) {
   const {
@@ -551,6 +551,7 @@ async function applyPublishedStatementLabels(
     scope,
     reconsidered,
     fail,
+    budgetSpent,
   } = input;
   const importId = scope?.importId;
   // Model work may finish out of order; effects admit only the original
@@ -582,12 +583,7 @@ async function applyPublishedStatementLabels(
     }
     // Checkpoint completed charges before regenerating the remaining suffix.
     // A round that applied a rule retains its moved-evidence rebuild work.
-    if (
-      input.deadline !== undefined &&
-      Date.now() >= input.deadline &&
-      settlementTargets.length > 0 &&
-      applied.size === 0
-    )
+    if (budgetSpent() && settlementTargets.length > 0 && applied.size === 0)
       applicationBlocked = true;
     if (applicationBlocked) {
       unfinished.add(target.row.cursorId);
@@ -767,7 +763,12 @@ async function runStatementLabelBatch(
         : STATEMENT_LABEL_BATCH),
     JOB_PAGE_LIMITS.suggestionsPerPage,
   );
-  const prepareDeadline = Date.now() + 20_000;
+  // A page that stops early re-pays selection, admission and discovery for the
+  // same charges on the next page, so the budget only guards the Job lease.
+  const budgetEnds = input.cooperative
+    ? Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs
+    : null;
+  const budgetSpent = () => budgetEnds !== null && Date.now() >= budgetEnds;
   const rows = await time("statement_selection", () =>
     suggestionsNeedingLabels(
       db,
@@ -1035,7 +1036,7 @@ async function runStatementLabelBatch(
             async (result) => {
               if (result.status !== "fulfilled") return result;
               try {
-                if (input.cooperative && Date.now() >= prepareDeadline)
+                if (budgetSpent())
                   result.value.retainError(
                     new AiWorkDeferredError(Date.now() + 1_000),
                   );
@@ -1246,7 +1247,7 @@ async function runStatementLabelBatch(
             ready.map(({ current }) => chargeId(current.charge)),
           ),
           fail,
-          deadline: input.cooperative ? prepareDeadline : undefined,
+          budgetSpent,
         }),
     );
     for (const target of targets) {
