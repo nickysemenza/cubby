@@ -137,6 +137,70 @@ const ENDED_MAIL_IMPORT_STATUSES: (typeof run.$inferSelect.status)[] = [
   runStatus.enum.dispatch_failed,
 ];
 
+/**
+ * An Email an ended holder left without settling. A held Email can also read
+ * `pending`; its ended holder still owns it, so it is equally readmissible.
+ */
+const HELD_UNSETTLED_STATUSES: (typeof emailTable.$inferSelect.status)[] = [
+  "unsettled",
+  "pending",
+];
+
+/**
+ * A controlled child skips Emails outside its parent's statuses; an excluded,
+ * deleted or changed Email is refused.
+ */
+function skipsSource(
+  message: typeof emailTable.$inferSelect | undefined,
+  source: RetainedMail,
+  controlledParentRunId: RunId | undefined,
+) {
+  if (!message) return false;
+  if (
+    controlledParentRunId &&
+    !CONTROLLED_MAIL_SOURCE_STATUSES.some((status) => status === message.status)
+  )
+    return true;
+  if (["excluded", "deleted"].includes(message.status))
+    throw new Error(
+      "Mail source was excluded or deleted from the connected mailbox.",
+    );
+  if (
+    message.orderMailId !== source.id ||
+    message.checksum !== source.rawChecksum
+  )
+    throw new Error("Mail import ledger differs from its retained original.");
+  return false;
+}
+
+/**
+ * An ended Mail import holder that left this Email unsettled works on it no
+ * more; a member selecting the Email admits it afresh instead of being handed
+ * the ended Run back.
+ */
+async function endedHolderLeftUnsettled(
+  tx: DrizzleTransaction,
+  owner: typeof run.$inferSelect | undefined,
+  status: typeof emailTable.$inferSelect.status | undefined,
+) {
+  return (
+    owner?.purpose === "mail_import" &&
+    !owner.retiredAt &&
+    ENDED_MAIL_IMPORT_STATUSES.includes(owner.status) &&
+    readmissibleHeldStatus(status, false) &&
+    !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
+  );
+}
+
+/** Changed bytes reopen a pending Email; unchanged ones need it still held unsettled. */
+const readmissibleHeldStatus = (
+  status: typeof emailTable.$inferSelect.status | undefined,
+  sourceChanged: boolean,
+) =>
+  sourceChanged
+    ? status === "pending"
+    : status !== undefined && HELD_UNSETTLED_STATUSES.includes(status);
+
 type MailImportAdmission = {
   ledgerPartyId: string;
   userId: string;
@@ -397,6 +461,8 @@ async function partitionOwnership(
   newEvidenceAt?: Date,
   /** Unattended admission of unchanged evidence honours the attempt bound. */
   bounded = false,
+  /** A member's own selection, which may reopen what an ended holder left. */
+  memberSelection = false,
 ) {
   const pairs = requestedRows(
     [
@@ -425,30 +491,14 @@ async function partitionOwnership(
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
   const transfers = new Map<RunId, RetainedMail[]>();
+  const reopened = new Set<RunId>();
   for (const source of sources) {
     const message = messages.find(
       (candidate) =>
         candidate.mailboxId === source.mailboxId &&
         candidate.messageId === source.messageId,
     );
-    if (
-      controlledParentRunId &&
-      message &&
-      !CONTROLLED_MAIL_SOURCE_STATUSES.some(
-        (status) => status === message.status,
-      )
-    )
-      continue;
-    if (message && ["excluded", "deleted"].includes(message.status))
-      throw new Error(
-        "Mail source was excluded or deleted from the connected mailbox.",
-      );
-    if (
-      message &&
-      (message.orderMailId !== source.id ||
-        message.checksum !== source.rawChecksum)
-    )
-      throw new Error("Mail import ledger differs from its retained original.");
+    if (skipsSource(message, source, controlledParentRunId)) continue;
     const [owner] = message?.runId
       ? await tx
           .select()
@@ -469,7 +519,7 @@ async function partitionOwnership(
       senderRevision &&
       owner?.purpose === "mail_import" &&
       (owner.retiredAt || ENDED_MAIL_IMPORT_STATUSES.includes(owner.status)) &&
-      message?.status === (sourceChanged ? "pending" : "unsettled") &&
+      readmissibleHeldStatus(message?.status, sourceChanged) &&
       mailResearchRunInput.safeParse(owner.input).data?.evidenceRevision !==
         senderRevision
     ) {
@@ -502,6 +552,15 @@ async function partitionOwnership(
       }
       if (owner.retiredAt) continue;
     }
+    if (
+      owner &&
+      memberSelection &&
+      (await endedHolderLeftUnsettled(tx, owner, message?.status))
+    ) {
+      fresh.push(source);
+      reopened.add(owner.id);
+      continue;
+    }
     if (sourceChanged && (!owner || owner.retiredAt)) continue;
     if (
       owner &&
@@ -530,7 +589,7 @@ async function partitionOwnership(
     } else if (!(bounded && message && importAttemptsExhausted(message)))
       fresh.push(source);
   }
-  return { owners, fresh, transfers };
+  return { owners, fresh, transfers, reopened };
 }
 
 export async function admitMailImport(
@@ -705,7 +764,7 @@ export async function admitMailImport(
           }
         }
       }
-      const { owners, fresh, transfers } = await partitionOwnership(
+      const { owners, fresh, transfers, reopened } = await partitionOwnership(
         tx,
         partyId,
         sources,
@@ -714,6 +773,7 @@ export async function admitMailImport(
         input.sourceRecheck,
         newEvidenceAt,
         Boolean(input.automatic && !controlled && !senderRevision),
+        !input.automatic && !controlled,
       );
       const existing = [...owners.values()].map((row) => ({
         created: false,
@@ -730,7 +790,12 @@ export async function admitMailImport(
             checksum: source.rawChecksum,
           })),
         });
-        const clientKey = `mail-research:${party.id}:${senderRevision ? `sender-proof:${senderRevision}:` : ""}${controlled ? `controlled:${input.parentRunId}:` : ""}${await sha256Hex(
+        // A reopened source is keyed by the holder it left, so it never
+        // replays that ended Run for the same source set.
+        const reopenedKey = reopened.size
+          ? `reopened:${[...reopened].sort().join(",")}:`
+          : "";
+        const clientKey = `mail-research:${party.id}:${senderRevision ? `sender-proof:${senderRevision}:` : ""}${controlled ? `controlled:${input.parentRunId}:` : ""}${reopenedKey}${await sha256Hex(
           JSON.stringify([MAILBOX_RESEARCH_VERSION, sourceSet]),
         )}`;
         const [replayed] = await tx
@@ -1187,7 +1252,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.status, "unsettled"),
+          inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1232,7 +1297,7 @@ export async function importPendingEmails(db: Database) {
             parseEntityId("ledgerParty", target.ledgerPartyId),
           ),
           eq(emailTable.mailboxId, target.mailboxId),
-          eq(emailTable.status, "unsettled"),
+          inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
           inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
@@ -1309,7 +1374,7 @@ export async function importPendingEmails(db: Database) {
               parseEntityId("ledgerParty", target.ledgerPartyId),
             ),
             eq(emailTable.mailboxId, target.mailboxId),
-            eq(emailTable.status, "unsettled"),
+            inArray(emailTable.status, HELD_UNSETTLED_STATUSES),
             eq(emailTable.classification, "related"),
             or(
               isNull(emailTable.classificationVersion),
