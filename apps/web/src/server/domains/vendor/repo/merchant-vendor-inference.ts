@@ -154,10 +154,7 @@ export async function merchantVendorInferences(
   for (const key of merchantKeys) result.set(key, noInference());
   if (merchantKeys.length === 0) return result;
 
-  const keys = sql.join(
-    merchantKeys.map((key) => sql`${key}`),
-    sql`, `,
-  );
+  const keys = sql`SELECT unnest(${textArrayParam(merchantKeys)})`;
   const queried = await unwrapDb(db).execute<CandidateRow>(
     merchantVendorCandidatesSql(keys),
   );

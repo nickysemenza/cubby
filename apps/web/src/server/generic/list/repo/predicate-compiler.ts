@@ -606,7 +606,7 @@ const derivedFilterPredicates = (
                   inherited,
                   sql`${leaf}."id"`,
                   list,
-                )) ?? sql`${column} IN (${list})`
+                )) ?? sql`${column} = ANY(${columnArrayParam(items)})`
           );
         }),
       ];

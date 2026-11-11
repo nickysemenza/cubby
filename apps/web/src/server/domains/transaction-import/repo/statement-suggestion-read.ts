@@ -16,6 +16,7 @@ import { sql, type SQL } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   SOURCE_HELD_REASON,
@@ -64,15 +65,11 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
       sql`s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runCode})`,
     );
   if (filters.recordUuids) {
-    const ids = sql.join(
-      filters.recordUuids.map((id) => sql`${id}`),
-      sql`, `,
-    );
-    where.push(sql`(fa.id::text IN (${ids})
-      OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
-      OR s.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
-      OR s.judgment->${"void"}->>'transactionId' IN (${ids})
-      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${statementRecords()}) ref WHERE ref->>'id' IN (${ids})))`);
+    where.push(sql`(fa.id::text = ANY(${textArrayParam(filters.recordUuids)})
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.judgment->'candidates') candidate WHERE candidate->>'transactionId' = ANY(${textArrayParam(filters.recordUuids)}))
+      OR s.judgment->${"supersede"}->>'pendingTransactionId' = ANY(${textArrayParam(filters.recordUuids)})
+      OR s.judgment->${"void"}->>'transactionId' = ANY(${textArrayParam(filters.recordUuids)})
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${statementRecords()}) ref WHERE ref->>'id' = ANY(${textArrayParam(filters.recordUuids)})))`);
   }
   return sql.join(where, sql` AND `);
 };

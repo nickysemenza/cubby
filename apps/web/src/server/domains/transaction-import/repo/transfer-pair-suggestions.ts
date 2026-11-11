@@ -450,12 +450,12 @@ async function loadStatementLegs(
       WHERE ${notDeleted("seen")} AND ${notDeleted("owner")}
         ${conditions.length ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
     ), eligible_occurrences AS MATERIALIZED (
-      SELECT owner.id, owner."reviewState"
-      FROM candidate_occurrences candidate JOIN "SourceOccurrence" owner ON owner.id=candidate.id
-      WHERE owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND owner."supersededByOccurrenceId" IS NULL
-        AND owner."replacementObservationId" IS NULL AND owner."acceptedTransactionId" IS NULL
-        AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
-        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`owner.id`, sql`owner."acceptedTransactionId"`)}
+      SELECT candidate_owner.id, candidate_owner."reviewState"
+      FROM candidate_occurrences candidate JOIN "SourceOccurrence" candidate_owner ON candidate_owner.id=candidate.id
+      WHERE candidate_owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND candidate_owner."supersededByOccurrenceId" IS NULL
+        AND candidate_owner."replacementObservationId" IS NULL AND candidate_owner."acceptedTransactionId" IS NULL
+        AND candidate_owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
+        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`candidate_owner.id`, sql`candidate_owner."acceptedTransactionId"`)}
     ), import_memberships AS MATERIALIZED (
       SELECT m."statementRowId", array_agg(m."importId"::text) AS "importIds"
       FROM ${transactionImportRecord} m
