@@ -34,6 +34,56 @@ const canonical = (value: string) =>
 const pairKey = (source: string, identity: string) =>
   JSON.stringify([source, identity]);
 
+/**
+ * Whether a Transaction on the statement row's account is a nearby candidate
+ * for it: the same direction within the posting window, and the same amount,
+ * statement description or merchant. `amount` uses the Transaction sign.
+ */
+export function nearbyStatementCandidate(
+  transaction: {
+    amount: number | string;
+    transactionDate: string | null;
+    postedDate: string | null;
+    status: string;
+    rawDescription: string | null;
+    merchant: string | null;
+  },
+  row: {
+    amount: number;
+    date: string;
+    description: string | null;
+    merchant: string | null;
+  },
+  policy: { sameAmountMatches: boolean; suggestionPolicy: boolean },
+) {
+  const sameAmount = cents(Number(transaction.amount)) === cents(row.amount);
+  if (
+    !sameAmount &&
+    Math.sign(cents(Number(transaction.amount))) !==
+      Math.sign(cents(row.amount))
+  )
+    return false;
+  const nearbyDate = [transaction.transactionDate, transaction.postedDate].some(
+    (date) => date !== null && withinPostingDateWindow(date, row.date),
+  );
+  if (!nearbyDate) return false;
+  if (policy.suggestionPolicy && transaction.status === "void") return false;
+  // Providers such as Monarch MCP supply no statement text or merchant;
+  // two empty values are absent evidence, not a match (#3396).
+  const description = canonical(row.description ?? "");
+  const merchant = row.merchant ? normalizeMerchant(row.merchant) : "";
+  return (
+    // A settled tip or other amount correction without a provider ID
+    // is a review candidate only with matching source description.
+    (policy.sameAmountMatches && sameAmount) ||
+    (description !== "" &&
+      canonical(transaction.rawDescription ?? "") === description) ||
+    (merchant !== "" &&
+      transaction.merchant !== null &&
+      normalizeMerchant(transaction.merchant) === merchant)
+  );
+}
+
 const networkFromDescriptor = (descriptor: string) => {
   const normalized = canonical(descriptor);
   if (normalized.includes("visa")) return "visa" as const;
@@ -279,39 +329,23 @@ export function projectFinancialCandidates(
       transactionsByAlias.get(pairKey(row.source, legacyIds[index]!)) ?? []
     ).filter((transaction) => account && transaction.accountId === account.id);
     const nearbyMatches = account
-      ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) => {
-          const sameAmount =
-            cents(Number(transaction.amount)) === cents(normalizedAmount);
-          if (
-            transaction.accountId !== account.id ||
-            (!sameAmount &&
-              Math.sign(cents(Number(transaction.amount))) !==
-                Math.sign(cents(normalizedAmount)))
-          )
-            return false;
-          const nearbyDate = [
-            transaction.transactionDate,
-            transaction.postedDate,
-          ].some(
-            (date) => date !== null && withinPostingDateWindow(date, row.date),
-          );
-          if (!nearbyDate) return false;
-          if (suggestionPolicy && transaction.status === "void") return false;
-          // Providers such as Monarch MCP supply no statement text or merchant;
-          // two empty values are absent evidence, not a match (#3396).
-          const description = canonical(row.originalStatement);
-          const merchant = row.merchant ? normalizeMerchant(row.merchant) : "";
-          return (
-            // A settled tip or other amount correction without a provider ID
-            // is a review candidate only with matching source description.
-            ((!row.importFingerprint || suggestionPolicy) && sameAmount) ||
-            (description !== "" &&
-              canonical(transaction.rawDescription ?? "") === description) ||
-            (merchant !== "" &&
-              transaction.merchant !== null &&
-              normalizeMerchant(transaction.merchant) === merchant)
-          );
-        })
+      ? (transactionsByAccount.get(account.id) ?? []).filter(
+          (transaction) =>
+            transaction.accountId === account.id &&
+            nearbyStatementCandidate(
+              transaction,
+              {
+                amount: normalizedAmount,
+                date: row.date,
+                description: row.originalStatement,
+                merchant: row.merchant,
+              },
+              {
+                sameAmountMatches: !row.importFingerprint || suggestionPolicy,
+                suggestionPolicy,
+              },
+            ),
+        )
       : [];
     return {
       account,

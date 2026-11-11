@@ -311,7 +311,7 @@ item locks, matching source producers.
 `JOB_PAGE_LIMITS` (`packages/shared/src/job-page-limits.ts`) owns application
 page sizes. Statement generation and labeling scoped to an import process at
 most 64 charges per page (`statementApplicationsPerPage`), because each
-admits serial financial applications; unscoped generation selects at most 32
+page applies money under one set of locks; unscoped generation selects at most 32
 (`statementGenerationPerPage`); explicit label limits remain available.
 Retained generation failures use the same limits. Both paths preserve the
 ordered population cursor and all remaining work; only a completed page
@@ -320,13 +320,26 @@ publishes its checkpoint.
 Cooperative label pages stop starting model work and application after
 `cooperativePageBudgetMs` (a quarter of the Job lease); the rest of the lease
 covers work already started. A page settles at least one charge, then leaves
-the untouched suffix's receipts and inclusive cursor for the next page. Charges
-no automatic rule matches settle as one no-action batch until the first rule
-applies. After a rule applies, each later charge on the page regenerates
-current evidence before serial automatic-rule application. Each write's
-advisory refresh of pending charges near it on the account is queued and runs
-once at the end of the page or label round. Interrupted
-pages replay their existing
+the untouched suffix's receipts and inclusive cursor for the next page.
+
+Application walks the page's published receipts in page order. Each run of
+consecutive receipts that no automatic rule matches, or whose rule applies an
+as-is `create` the family can batch, settles in one SERIALIZABLE transaction:
+it fences the Job once, rechecks statement scope once, takes every review,
+transfer-leg, evidence-source and occurrence lock in the single-review
+namespace order (sorted within each namespace), rebuilds the run's proposals
+and spending once, and writes the creates, bookings, Feedback and no-action
+receipt completions together; the Job lock stays at commit. A charge that is
+not a batch candidate, moved since publication, or whose footprint (nearby
+candidate, copy or hold, Purchase, Vendor nearby spending or category, or a
+Vendor name another charge creates) meets an earlier charge's applies alone
+through its own review, in page order, right after its run. A write error
+rolls the run's applications back to a savepoint and applies each alone; a
+serialization failure or deadlock replays the run up to three times before
+that. Operation ids are fixed per rule revision and Suggestion, so a replayed
+run is idempotent. Each write's advisory refresh of pending charges near it on
+the account skips charges the same import observes, and runs once at the end
+of the page or label round. Interrupted pages replay their existing
 publications and effects through the same guards. Automatic-rule refusals
 return and log scrubbed causal diagnostics (including nested database messages
 and SQLSTATE codes) and leave the suggestion pending.
