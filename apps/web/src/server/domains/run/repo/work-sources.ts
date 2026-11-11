@@ -10,7 +10,7 @@ import { and, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { householdDaySql } from "~/server/db/helpers/query";
+import { textArrayParam, householdDaySql } from "~/server/db/helpers/query";
 import { related, outer } from "~/server/db/helpers/related";
 import { run, run as runTable } from "~/server/db/schema";
 import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
@@ -57,14 +57,7 @@ const execution: WorkSource = {
       .from(workRunReviewRead().table)
       .where(
         and(
-          sql`${notDeleted(alias(run, "Run"))} AND NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose IN (${sql.join(
-            // A running maintenance pass or Sweep is not member work; its failed
-            // or stalled outcomes still surface through the failure paths.
-            EXECUTED_RUN_PURPOSES.filter(
-              (purpose) => !isStepRunPurpose(purpose),
-            ).map((purpose) => sql`${purpose}`),
-            sql`, `,
-          )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
+          sql`${notDeleted(alias(run, "Run"))} AND NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose = ANY(${textArrayParam(EXECUTED_RUN_PURPOSES.filter((purpose) => !isStepRunPurpose(purpose)))} ) OR "Run"."dispatchEventId" IS NOT NULL)) OR ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
             runTable,
             (successor) =>
               sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,

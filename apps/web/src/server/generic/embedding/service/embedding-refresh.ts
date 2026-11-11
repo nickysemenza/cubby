@@ -226,6 +226,10 @@ export function embeddingRefreshDrain(
   const name = "embedding.refresh";
   return {
     name,
+    stream: {
+      forUnit: (unit) => (unit === name ? name : undefined),
+      forKind: (kind) => (kind === name ? name : undefined),
+    },
     due: () => (port.configured() ? embeddingRefreshDue(name) : null),
     next: () => (port.configured() ? embeddingRefreshNext() : null),
     async page(db) {

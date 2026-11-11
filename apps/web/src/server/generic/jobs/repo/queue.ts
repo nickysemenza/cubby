@@ -80,7 +80,16 @@ export type DueUnit =
   | { type: "drain"; unit: string; drain: string; runOwned: boolean };
 
 /** A registered drain's name and its `due` rows `(unit, demand, since)`. */
-export type DrainDue = { name: string; due: SQL };
+export type DrainDue = {
+  name: string;
+  due: SQL;
+  label?: (unit: string) => string | undefined;
+  stream?: {
+    forUnit(unit: string): string | undefined;
+    forKind(kind: string): string | undefined;
+  };
+  covers?: (unit: string, key: string) => boolean;
+};
 
 /** Candidate Jobs per kind, so a busy head never empties a permit's choice. */
 const PER_KIND = 4;

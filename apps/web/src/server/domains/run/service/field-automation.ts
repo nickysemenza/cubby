@@ -198,6 +198,12 @@ const POLICY_UNIT = "field-automation:policy";
 
 export const fieldAutomationDrain: BackgroundDrain = {
   name: "field-automation",
+  label: (unit) =>
+    unit === EVENTS_UNIT
+      ? "Field suggestions after changes"
+      : unit === POLICY_UNIT
+        ? "Field suggestions after a policy update"
+        : undefined,
   due: () => sql`
     SELECT ${EVENTS_UNIT}::text AS unit, false AS demand, min("createdAt")::timestamp AS since
     FROM "AuditLog" WHERE "automationPending"

@@ -26,6 +26,7 @@ import { isMemberStartedRun } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import {
   and,
+  count,
   desc,
   eq,
   inArray,
@@ -313,6 +314,32 @@ const isFundingStoppedForReview = (row: {
 
 /** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 
+const fundingStoppedImports = (pausedBefore: Date) =>
+  and(
+    inArray(runTable.status, ["paused_auth", "needs_review"]),
+    eq(runTable.failureCode, "execution_limit"),
+    inArray(runTable.purpose, [...agentImportRunPurpose.options]),
+    lt(runTable.updatedAt, pausedBefore),
+    notDeleted(runTable),
+    isNull(runTable.retiredAt),
+    // The work moved even if the successor was deleted.
+    not(
+      related(
+        runTable,
+        (successor) => eq(successor.predecessorRunId, outer(runTable.id)),
+        { includeDeleted: true },
+      ).exists(),
+    ),
+  );
+
+export async function countFundingStoppedImports(db: Database, now: Date) {
+  const [row] = await getDb(db)
+    .select({ n: count() })
+    .from(runTable)
+    .where(fundingStoppedImports(now));
+  return row?.n ?? 0;
+}
+
 export async function redispatchBudgetPausedImports(
   db: Database,
   now = new Date(),
@@ -330,24 +357,7 @@ export async function redispatchBudgetPausedImports(
         coordinatorStartedAt: null,
         updatedAt: now,
       })
-      .where(
-        and(
-          inArray(runTable.status, ["paused_auth", "needs_review"]),
-          eq(runTable.failureCode, "execution_limit"),
-          inArray(runTable.purpose, [...agentImportRunPurpose.options]),
-          lt(runTable.updatedAt, pausedBefore),
-          notDeleted(runTable),
-          isNull(runTable.retiredAt),
-          // The work moved even if the successor was deleted.
-          not(
-            related(
-              runTable,
-              (successor) => eq(successor.predecessorRunId, outer(runTable.id)),
-              { includeDeleted: true },
-            ).exists(),
-          ),
-        ),
-      )
+      .where(fundingStoppedImports(pausedBefore))
       .returning({
         id: runTable.id,
         purpose: runTable.purpose,

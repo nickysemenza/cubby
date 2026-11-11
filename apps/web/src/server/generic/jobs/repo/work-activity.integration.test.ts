@@ -1,9 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { imageProcessingJob, job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -12,8 +13,32 @@ import {
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 
-import { readBackgroundWorkStatus, readWorkActivity } from "./observation";
+import {
+  readBackgroundWorkStatus as readStatus,
+  readWorkActivity as readActivity,
+  type DrainDue,
+} from "./observation";
 import { enqueueJob } from "./producer";
+
+const declarations = async (extra: readonly DrainDue[] = []) => [
+  ...(await import("~/server/workflows/jobs"))
+    .productionDrainDues()
+    .map((drain) => ({
+      ...drain,
+      due: sql`SELECT NULL::text AS unit, NULL::timestamp AS since WHERE false`,
+    })),
+  ...extra,
+];
+const readBackgroundWorkStatus = async (
+  db: Database,
+  now = new Date(),
+  extra: readonly DrainDue[] = [],
+) => readStatus(db, now, await declarations(extra));
+const readWorkActivity = async (
+  db: Database,
+  now = new Date(),
+  extra: readonly DrainDue[] = [],
+) => readActivity(db, now, await declarations(extra));
 
 describe("work activity", () => {
   const ctx = withTestDb();

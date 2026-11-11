@@ -35,6 +35,7 @@ import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/rep
 import type { Database } from "~/server/db/database";
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { job, run } from "~/server/db/retained-tables";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
@@ -118,10 +119,7 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
         SELECT r.shortcode FROM "ImageProcessingJob" stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.lane = p.lane AND stream.state = ${pending} AND ${notDeleted("r")}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM "ImageProcessingJob" p
@@ -227,10 +225,7 @@ async function readAiEvaluationStreams(
         SELECT r.shortcode FROM "AiEvaluation" stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.feature = e.feature AND stream."runAt" IS NOT NULL AND ${notDeleted("r")}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM "AiEvaluation" e
@@ -241,30 +236,27 @@ async function readAiEvaluationStreams(
   return rows;
 }
 
-/** Member wording for drain units that have no stream of their own. */
-const DRAIN_UNIT_LABEL = new Map<string, string>([
-  ["derived-rebuild", "Totals and search rebuild"],
-  ["email-purchase-discovery", "Email purchase links"],
-  ["field-automation:events", "Field suggestions after changes"],
-  ["field-automation:policy", "Field suggestions after a policy update"],
-  ["reconcile", "Stopped Run cleanup"],
-]);
+/** Map stream identities through the owning drain declaration. */
+const drainStreamKind = (unit: string, declarations: readonly DrainDue[]) =>
+  declarations
+    .map((drain) => drain.stream?.forUnit(unit))
+    .find((kind) => kind !== undefined) ?? unit;
+const streamDrainUnit = (kind: string, declarations: readonly DrainDue[]) =>
+  declarations
+    .map((drain) => drain.stream?.forKind(kind))
+    .find((unit) => unit !== undefined) ?? null;
+const drainCovers = (
+  unit: string,
+  key: string,
+  declarations: readonly DrainDue[],
+) => declarations.some((drain) => drain.covers?.(unit, key));
 
-/** The stream that counts a drain unit's items, when it has one. */
-const drainStreamKind = (unit: string) =>
-  unit.startsWith("ai-evaluation:")
-    ? `ai.evaluation:${unit.slice("ai-evaluation:".length)}`
-    : unit;
-const streamDrainUnit = (kind: string) =>
-  kind.startsWith("ai.evaluation:")
-    ? `ai-evaluation:${kind.slice("ai.evaluation:".length)}`
-    : kind.startsWith("embedding.") || kind === "image.cloud"
-      ? kind
-      : null;
-
-/** A drain unit in member words: its own label, else its stream's, else its stored name. */
-const drainUnitLabel = (unit: string) =>
-  DRAIN_UNIT_LABEL.get(unit) ?? kindLabel(drainStreamKind(unit));
+/** A drain unit in member words: its declaration, stream, or stored name. */
+const drainUnitLabel = (unit: string, declarations: readonly DrainDue[]) =>
+  declarations
+    .map((drain) => drain.label?.(unit))
+    .find((label) => label !== undefined) ??
+  kindLabel(drainStreamKind(unit, declarations));
 
 /** A drain unit's record row: its rotation stamp, latest page and failing streak. */
 type DrainRecord = {
@@ -402,10 +394,7 @@ async function readAiEvaluationBacklog(db: Database, now: Date) {
         FILTER (WHERE ${unpublished}) AS "unpublishedSince"
     FROM "AiEvaluation" e
     -- Every execution kind, spelled out so the (executionKind, state) index serves the read.
-    WHERE e."executionKind" IN (${sql.join(
-      aiExecutionKind.options.map((kind) => sql`${kind}`),
-      sql`, `,
-    )})
+    WHERE e."executionKind" = ANY(${textArrayParam(aiExecutionKind.options)})
       AND (e.state IN (${queued}, ${result_ready})
         OR (e.state = ${blocked} AND e."updatedAt" > ${at} - ${BLOCKED_DAYS} * interval '1 day'))
     GROUP BY e.feature, e.state
@@ -497,8 +486,8 @@ function describeQueue(activity: WorkActivity): string {
  */
 export async function readWorkActivity(
   db: Database,
-  now = new Date(),
-  drains: readonly DrainDue[] = [],
+  now: Date,
+  drains: readonly DrainDue[],
 ): Promise<WorkActivity> {
   return (await observeWork(db, now, drains)).activity;
 }
@@ -524,10 +513,7 @@ async function observeWork(
       WHERE (${live} OR "Job"."updatedAt" > ${since(RECENT_MINUTES.failed)})
         ${
           INTERNAL_JOB_KINDS.length
-            ? sql`AND "Job".kind NOT IN (${sql.join(
-                INTERNAL_JOB_KINDS.map((kind) => sql`${kind}`),
-                sql`, `,
-              )})`
+            ? sql`AND "Job".kind <> ALL(${textArrayParam(INTERNAL_JOB_KINDS)})`
             : sql``
         }
     )
@@ -553,10 +539,7 @@ async function observeWork(
         SELECT r.shortcode FROM activity_jobs stream
         JOIN "Run" r ON r.id = stream."runId"
         WHERE stream.kind = "Job".kind AND ${notDeleted(requester)}
-          AND r.status IN (${sql.join(
-            ACTIVE_RUN_STATUSES.map((status) => sql`${status}`),
-            sql`, `,
-          )})
+          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
         GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
       ) AS "runs"
     FROM activity_jobs "Job"
@@ -614,7 +597,7 @@ async function observeWork(
   const drainUnits = new Set([
     ...recordOf.keys(),
     ...queue.owed.keys(),
-    ...streams.flatMap((stream) => streamDrainUnit(stream.kind) ?? []),
+    ...streams.flatMap((stream) => streamDrainUnit(stream.kind, drains) ?? []),
   ]);
   const activity: WorkActivity = {
     rebuild: await readRebuildObservation(db),
@@ -649,7 +632,7 @@ async function observeWork(
       })),
       ...[...drainUnits].flatMap((unit): WorkQueueUnit[] => {
         const record = recordOf.get(unit);
-        const stream = streamOf.get(drainStreamKind(unit));
+        const stream = streamOf.get(drainStreamKind(unit, drains));
         const page = record?.lastExecution ?? null;
         const claimed = Boolean(
           record?.lastClaimedAt && record.lastClaimedAt > windowStart,
@@ -664,7 +647,7 @@ async function observeWork(
           {
             unit,
             type: "drain",
-            label: drainUnitLabel(unit),
+            label: drainUnitLabel(unit, drains),
             claimed: claimed ? 1 : 0,
             succeeded: finished("succeeded"),
             deferred: finished("deferred"),
@@ -909,7 +892,9 @@ function drainUnitItems({
   owed,
   stuck,
   queueDiagnostic,
+  declarations,
 }: {
+  declarations: readonly DrainDue[];
   now: Date;
   activity: WorkActivity;
   drains: readonly DrainRecord[];
@@ -927,10 +912,10 @@ function drainUnitItems({
   const covered = (unit: string) =>
     [...stuck, ...items].some(
       (item) =>
-        item.key === drainStreamKind(unit) ||
-        item.key === `${drainStreamKind(unit)}:failing` ||
+        item.key === drainStreamKind(unit, declarations) ||
+        item.key === `${drainStreamKind(unit, declarations)}:failing` ||
         item.key.startsWith(`drain:${unit}:`) ||
-        (unit === "derived-rebuild" && item.key.startsWith("derived-rebuild")),
+        drainCovers(unit, item.key, declarations),
     );
   for (const record of drains) {
     const page = record.lastExecution;
@@ -951,15 +936,15 @@ function drainUnitItems({
         : null;
     const since = failingSince ?? deferringSince;
     // A failing unit is named beside its stream; the rebuild has its own row.
-    const rebuildShown =
-      record.unit === "derived-rebuild" &&
-      stuck.some((item) => item.key.startsWith("derived-rebuild"));
+    const rebuildShown = stuck.some((item) =>
+      drainCovers(record.unit, item.key, declarations),
+    );
     if (!since || rebuildShown || (!failingSince && covered(record.unit)))
       continue;
     const age = formatStuckAge(now.getTime() - since.getTime());
     items.push({
       key: `drain:${record.unit}:${failingSince ? "failing" : "deferring"}`,
-      title: `${drainUnitLabel(record.unit)} keeps ${failingSince ? "failing" : "waiting"}`,
+      title: `${drainUnitLabel(record.unit, declarations)} keeps ${failingSince ? "failing" : "waiting"}`,
       body: failingSince
         ? `Every pass has failed for ${age}, so this work isn't running.`
         : `Every pass has deferred for ${age}, so this work isn't finishing.`,
@@ -981,7 +966,7 @@ function drainUnitItems({
     if (
       since > stuckWindow ||
       activity.streams.some(
-        (stream) => stream.kind === drainStreamKind(unit),
+        (stream) => stream.kind === drainStreamKind(unit, declarations),
       ) ||
       (page?.outcome === "succeeded" &&
         new Date(page.finishedAt) > stuckWindow) ||
@@ -991,7 +976,7 @@ function drainUnitItems({
     const queued = unitOf.get(unit);
     items.push({
       key: `drain:${unit}`,
-      title: `${drainUnitLabel(unit)} stopped`,
+      title: `${drainUnitLabel(unit, declarations)} stopped`,
       body: [
         queued ? stoppedCause(queued, now) : null,
         `Its work has waited ${formatStuckAge(now.getTime() - since.getTime())}.`,
@@ -1008,8 +993,8 @@ function drainUnitItems({
 
 export async function readBackgroundWorkStatus(
   db: Database,
-  now = new Date(),
-  drainDues: readonly DrainDue[] = [],
+  now: Date,
+  drainDues: readonly DrainDue[],
 ) {
   const [{ activity, drains, owed, deferring, unpublished }, failures] =
     await Promise.all([
@@ -1065,7 +1050,9 @@ export async function readBackgroundWorkStatus(
       owedSince <= stuckWindow &&
       (!completed || completed <= stuckWindow)
     ) {
-      const unit = unitOf.get(streamDrainUnit(stream.kind) ?? stream.kind);
+      const unit = unitOf.get(
+        streamDrainUnit(stream.kind, drainDues) ?? stream.kind,
+      );
       stuck.push(
         stoppedItem(
           stream.kind,
@@ -1085,6 +1072,7 @@ export async function readBackgroundWorkStatus(
       owed,
       stuck,
       queueDiagnostic,
+      declarations: drainDues,
     }),
   );
   for (const pile of unpublished) {

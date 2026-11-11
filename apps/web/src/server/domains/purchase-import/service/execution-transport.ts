@@ -7,26 +7,16 @@ import {
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
-import {
-  AiBudgetExhaustedError,
-  aiBudgetCovers,
-  assertAiBudget,
-} from "~/server/ai/budget";
-import {
-  planBudgetRefusal,
-  isBackgroundRun,
-  readPaidAllowance,
-} from "~/server/ai/funding";
+import { aiBudgetCovers } from "~/server/ai/budget";
+import { planBudgetRefusal, isBackgroundRun } from "~/server/ai/funding";
+import { admitPaid } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import {
   assertSelectedMailSources,
   readMailImportLineage,
   type RunExecutionIdentity,
 } from "~/server/domains/purchase-import/repo/execution-lineage";
-import {
-  assertRunExecutable,
-  pauseForFunding,
-} from "~/server/domains/run/repo/execution-context";
+import { assertRunExecutable } from "~/server/domains/run/repo/execution-context";
 
 function runningOwnerMatches(
   live: RunExecutionIdentity | undefined,
@@ -133,13 +123,7 @@ export function paidRunPreflight(
     if (await selectedCoordinatorExecution(db, runId, request)) return;
     await assertRunExecutable(db, runId);
     if (!(await budgetedModel(request))) return;
-    try {
-      await assertAiBudget(db, (await readPaidAllowance(db, runId)) ?? 0);
-    } catch (error) {
-      if (error instanceof AiBudgetExhaustedError)
-        await pauseForFunding(db, runId, error);
-      throw error;
-    }
+    await admitPaid(db, { runId });
     // The final admission read is the cancellation boundary.
     await assertRunExecutable(db, runId);
   };

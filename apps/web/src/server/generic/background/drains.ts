@@ -40,6 +40,15 @@ export type ArmDrainRecovery = (claim: {
  */
 export type BackgroundDrain = {
   name: string;
+  /** Member-facing wording for units owned by this drain. */
+  label?(unit: string): string | undefined;
+  /** Bidirectional mapping between this drain's units and their item streams. */
+  stream?: {
+    forUnit(unit: string): string | undefined;
+    forKind(kind: string): string | undefined;
+  };
+  /** An independently reported item already represents this unit. */
+  covers?(unit: string, key: string): boolean;
   /**
    * Rows `(unit text, demand boolean, since timestamp)` for units claimable
    * now; `demand` is member-visible Run work. Null when this drain cannot run

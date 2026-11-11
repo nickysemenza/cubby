@@ -18,6 +18,7 @@ import {
   markAiEvaluationWork,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluation-tally";
+import { grantPaid } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
@@ -27,7 +28,6 @@ import {
   runStep,
   run as runTable,
 } from "~/server/db/schema";
-import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
@@ -121,13 +121,7 @@ export async function controlWorkflowRun(
         "RUN_CONTROL_REFUSED",
         `Only a funding-paused Run can run now with paid models (${purpose}, ${row.status}, ${row.failureCode})`,
       );
-    await recordPaidGrant(db, actor, {
-      runId: row.id,
-      paidOverBudgetUsd: input.paidOverBudgetUsd,
-    });
-    // The member chose to pay now: probe the gateway instead of replaying
-    // its recorded refusal.
-    await (await import("~/server/ai/funding")).resetFundingRefusal("paid");
+    await grantPaid(db, actor, row.id, input.paidOverBudgetUsd);
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }

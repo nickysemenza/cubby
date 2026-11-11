@@ -30,10 +30,7 @@ import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedd
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
-import {
-  dueDrains,
-  type PermitRuntime,
-} from "~/server/generic/jobs/service/permits";
+import { type PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
@@ -109,7 +106,7 @@ export const productionJobHandlers: JobHandlers = {
           },
         };
       await (
-        await import("~/server/domains/run/service/ai-work")
+        await import("~/server/ai/funding-wait")
       ).resumeFundingPausedRuns(db);
       return { page: { done: true } };
     },
@@ -123,6 +120,10 @@ export const productionJobHandlers: JobHandlers = {
 /** Derived values keep one resumable hourly pass; a permit commits one page of it. */
 const derivedRebuildDrain: BackgroundDrain = {
   name: "derived-rebuild",
+  covers: (unit, key) =>
+    unit === "derived-rebuild" && key.startsWith("derived-rebuild"),
+  label: (unit) =>
+    unit === "derived-rebuild" ? "Totals and search rebuild" : undefined,
   due: () => derivedRebuildDue("derived-rebuild"),
   next: derivedRebuildNext,
   async page(db) {
@@ -143,6 +144,7 @@ const derivedRebuildDrain: BackgroundDrain = {
  */
 const reconcileDrain: BackgroundDrain = {
   name: "reconcile",
+  label: (unit) => (unit === "reconcile" ? "Stopped Run cleanup" : undefined),
   due: () =>
     sql`SELECT 'reconcile'::text AS unit, false AS demand, owed.since
       FROM (SELECT least(${failedCoordinatorDispatchesSince()}, ${workflowRunsToReconcileSince()})::timestamp AS since) owed
@@ -175,7 +177,16 @@ const productionDrains = (): readonly BackgroundDrain[] => [
 ];
 
 /** Every production drain's `due` rows, for reads that report owed drain units. */
-export const productionDrainDues = () => dueDrains(productionDrains());
+export const productionDrainDues = () =>
+  productionDrains().map((drain) => ({
+    name: drain.name,
+    due:
+      drain.due() ??
+      sql`SELECT NULL::text AS unit, false AS demand, NULL::timestamp AS since WHERE false`,
+    label: drain.label,
+    stream: drain.stream,
+    covers: drain.covers,
+  }));
 
 /** The production permit runtime: these handlers and drains, waking through the background queue. */
 export function productionPermitRuntime(

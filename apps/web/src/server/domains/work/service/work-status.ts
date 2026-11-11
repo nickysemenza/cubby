@@ -13,8 +13,8 @@ import {
 /** The one server rule for what is stuck: the sidebar and the Work page share it. */
 export async function readWorkStatus(
   db: Database,
-  now = new Date(),
-  drains: readonly DrainDue[] = [],
+  now: Date,
+  drains: readonly DrainDue[],
 ): Promise<WorkStatus> {
   const [background, device, runs] = await Promise.all([
     readBackgroundWorkStatus(db, now, drains),

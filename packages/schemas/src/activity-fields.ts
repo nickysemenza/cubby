@@ -68,6 +68,8 @@ export type RunKindDeclaration = {
    * (an agent, an import, an inline call).
    */
   execution?: "steps" | "ai_work" | "mail_discovery";
+  /** A funding stop can resume this Run automatically. */
+  fundingRecoverable?: true;
   /** AI work the Run owns directly (`AiEvaluation.runId`) or requested by reference. */
   aiWork?: "owned" | "requested";
   /**
@@ -118,6 +120,7 @@ export const RUN_KINDS = {
     progress: "targets",
   },
   mail_import: {
+    fundingRecoverable: true,
     explanation: {
       targets: "Purchase evidence selected from Emails and vendor accounts.",
       exclusions: "Unrelated mail is not retained as purchase content.",
@@ -169,6 +172,7 @@ export const RUN_KINDS = {
     progress: "targets",
   },
   photo_inventory: {
+    fundingRecoverable: true,
     explanation: {
       targets:
         "Photos uploaded to one photo inventory batch and its proposed belongings.",
@@ -281,6 +285,7 @@ export const RUN_KINDS = {
     progress: "operations",
   },
   mail_discovery: {
+    fundingRecoverable: true,
     explanation: {
       targets: "New mail in one connected mailbox within its discovery cursor.",
       exclusions:
@@ -300,6 +305,7 @@ export const RUN_KINDS = {
     progress: "checkpoint",
   },
   mail_reclassify: {
+    fundingRecoverable: true,
     explanation: {
       targets: "The Emails explicitly selected for reclassification.",
       exclusions:
@@ -658,6 +664,10 @@ export const isExecutedRunPurpose = (
   purpose: RunPurpose | string,
 ): purpose is ExecutedRunPurpose =>
   EXECUTED_RUN_PURPOSES.some((candidate) => candidate === purpose);
+
+export const FUNDING_RECOVERABLE_PURPOSES = purposesWhere((kind) =>
+  Boolean(kind.fundingRecoverable),
+);
 
 export const VISIBLE_RUN_PURPOSES = purposesWhere((kind) => !kind.routine);
 

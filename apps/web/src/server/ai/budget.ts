@@ -159,24 +159,6 @@ export function paidFundingStopMessage(raw: string, status: AiBudgetStatus) {
   return `Paid models unavailable: ${why} (${raw.trim()}); retrying at ${status.windowEnd}.`;
 }
 
-/** The paid rung cannot answer at all: its Run, if any, pauses for the next window. */
-export async function paidFundingStop(
-  db: Database,
-  runId: RunId | undefined,
-  raw: string,
-) {
-  const status = await readAiBudget(db);
-  const stop = new AiBudgetExhaustedError(
-    status,
-    paidFundingStopMessage(raw, status),
-  );
-  if (runId)
-    await (
-      await import("~/server/domains/run/repo/execution-context")
-    ).pauseForFunding(db, runId, stop);
-  return stop;
-}
-
 /**
  * Paid admission for a frontier call that has no Run-bound preflight: every
  * call, background included, spends within the paid budget, or past it by a
@@ -189,24 +171,8 @@ export function withAiBudget<R>(
   preflight: ((request: R) => Promise<void>) | undefined,
 ): ((request: R) => Promise<void>) | undefined {
   if (preflight || !db || !aiBudgetCovers(call.model)) return preflight;
-  const { runId } = call;
-  return async () => {
-    try {
-      const allowanceUsd = runId
-        ? ((await (await import("./funding")).readPaidAllowance(db, runId)) ??
-          0)
-        : 0;
-      await assertAiBudget(db, allowanceUsd);
-    } catch (error) {
-      // A Run-bound stop pauses the Run for the next window, as the agent's
-      // `paidRunPreflight` does, instead of failing it.
-      if (runId && error instanceof AiBudgetExhaustedError)
-        await (
-          await import("~/server/domains/run/repo/execution-context")
-        ).pauseForFunding(db, runId, error);
-      throw error;
-    }
-  };
+  return async () =>
+    (await import("~/server/ai/funding-wait")).admitPaid(db, call);
 }
 
 /** Plan admission: background work stops drawing the ChatGPT plan once its window budget is spent. */
