@@ -78,6 +78,8 @@ export const suggestionContract = defineContract(
       ],
     }),
     reviewBatch: mutation({
+      exposure: "view",
+      note: "Agents review one or many Suggestions through suggestions.review items",
       description:
         "Review Suggestions independently; each item returns its own outcome.",
       command: { label: "Review suggestions", confirmation: null },

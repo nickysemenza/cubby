@@ -231,7 +231,7 @@ before its entrance opacity transition finishes.
   `operationResult` in `apps/web/tests/e2e/support/dispatch-wire.ts`: single
   responses need `ok === true`; streamed NDJSON items need both settlement
   `r.ok` and operation `r.value.ok`. Decode the write's success (for example an
-  `assessment.reviewBatch` applied item) before storage read-back; events such
+  `suggestion.reviewBatch` applied item) before storage read-back; events such
   as member Feedback persist before the application transaction commits.
 - After a browser write, use `performOperation` from the same module when
   direct read-back needs the commit. Poll only genuinely eventual work.

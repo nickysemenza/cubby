@@ -3450,7 +3450,7 @@ same transaction (ADR 0005 owns precedence).
 Suggestion families are `field`, `recommendation`, `statement_transaction`, `transfer_pair` and
 `product_pair` (`server/generic/suggestions/repo/suggestion-family-declarations.ts`). The generic
 owner is `generic/suggestions`; field-resolution evidence belongs to `generic/field-explanation`.
-Product-match review commands belong to the `productMatch` contract.
+Product pairs merge only through `suggestions.review` with a `product_merge` application.
 
 ### Field suggestions
 
@@ -3770,7 +3770,7 @@ before publication. Pause and resume use Run status; transient failures retry wi
 terminal failures stay visible. Paired trials and finance acceptance rules stay part of the workload.
 Identical pending targets can share execution while each requesting Run inspects the published
 Suggestions and keeps its own receipt. No-proposal evaluations count as completed work without
-increasing the queued count. Field publication builds an entry for `publishSuggestions`, whose
+increasing the queued count. Field publication builds an entry for `publishSuggestionSet`, whose
 immutable-key replay check also owns the field Sweep write.
 
 ### AI field refresh

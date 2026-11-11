@@ -153,7 +153,7 @@ describe("atomic split classification intent", () => {
         }),
         ctx.actor,
       ),
-    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    ).rejects.toMatchObject({ reason: "CLASSIFICATION_POLICY_REFUSED" });
     const live = await getDb(ctx.db)
       .select({ id: expense.id, cost: expense.cost })
       .from(expense)

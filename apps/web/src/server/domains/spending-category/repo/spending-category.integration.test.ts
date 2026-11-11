@@ -219,7 +219,7 @@ describe("spending category merge", () => {
     const pet = await category("Synthetic pet");
     await referencesTo(pet.id);
     await expect(merge(pets.shortcode, [pet.shortcode])).rejects.toThrow(
-      /reviewed spending classification/i,
+      /spendingClassification\.preview/,
     );
   });
 

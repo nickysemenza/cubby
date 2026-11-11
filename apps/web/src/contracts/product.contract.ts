@@ -18,7 +18,7 @@ import {
   productWorkflowSchemas,
 } from "@cubby/schemas/product-workflow";
 import {
-  mergeProductMatchInput,
+  productMergePairInput,
   productMergePreview,
 } from "@cubby/schemas/recommendations";
 import { upc } from "@cubby/shared/upc";
@@ -101,7 +101,7 @@ export const productContract = defineContract(
       note: "Keeper and incoming field winners and blockers; entity_graph_read.connections reports only edge dispositions",
       description:
         "Preview Product merge winners, conflicts, and blockers for the selected keeper and incoming Product. This is read-only; review it before entity.merge.",
-      input: mergeProductMatchInput.pick({ keepId: true, mergeId: true }),
+      input: productMergePairInput,
       output: productMergePreview,
       cache: { tags: [] },
     }),

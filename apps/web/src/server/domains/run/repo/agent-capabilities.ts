@@ -43,7 +43,6 @@ const actionCapability = {
   "ai.resume_automatic_work": "member_decision",
   "image.confirm_description": "member_decision",
   "suggestions.review": "member_decision",
-  "suggestions.review_batch": "member_decision",
   "suggestions.field_authority": "member_decision",
   "finance.commit_booking": "member_decision",
   "finance.commit_booking_correction": "member_decision",

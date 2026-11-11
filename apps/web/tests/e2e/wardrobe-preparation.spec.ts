@@ -6,10 +6,7 @@ import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
 } from "./fixtures/photos";
-import {
-  gotoAuthenticatedPage,
-  selectComboboxItem,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 test("taxonomy edits keep product classification paths and labels separate from covers", async ({
@@ -17,20 +14,16 @@ test("taxonomy edits keep product classification paths and labels separate from 
   e2eRuntime,
 }) => {
   const suffix = Date.now();
-  const originalRoot = `Wardrobe taxonomy root ${suffix}`;
   const destinationRoot = `Wardrobe taxonomy destination ${suffix}`;
   const originalType = `Wardrobe taxonomy type ${suffix}`;
   const renamedType = `Wardrobe taxonomy renamed ${suffix}`;
   const productName = `Wardrobe classified product ${suffix}`;
-  const original = await seedProductCategoryPrerequisite(page, {
-    name: originalRoot,
-  });
-  await seedProductCategoryPrerequisite(page, {
+  const destination = await seedProductCategoryPrerequisite(page, {
     name: destinationRoot,
   });
   const type = await seedProductCategoryPrerequisite(page, {
     name: originalType,
-    parentId: original.id,
+    parentId: destination.id,
   });
 
   await gotoAuthenticatedPage(
@@ -45,11 +38,10 @@ test("taxonomy edits keep product classification paths and labels separate from 
   await editor
     .getByRole("textbox", { name: "Name", exact: true })
     .fill(renamedType);
-  await selectComboboxItem(
-    page,
+  // A parent move reclassifies spending, so only the reviewed flow offers it.
+  await expect(
     editor.getByRole("combobox", { name: "Parent", exact: true }),
-    destinationRoot,
-  );
+  ).toHaveCount(0);
   await editor
     .getByRole("button", { name: "Save changes", exact: true })
     .click();
