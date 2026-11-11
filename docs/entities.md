@@ -78,6 +78,7 @@ repository's transactions, locking, SQL or workflow rules.
 
 The model owns scalar validation, physical column factories and presentation. A concrete
 `validation.create` or `validation.update` grants that write mode; null or omission excludes it.
+A create-only field submitted to `entity.update` is refused with its field description.
 Fields enter the raw base read by default; `output: false` excludes storage-only and write-only
 fields. Writable fields audit by default; `audit: false` records an intentional exclusion and
 `audit: true` retains read-only evidence. The compiler derives the create/update/output/audit
@@ -3287,7 +3288,7 @@ whether it is allowed, in one vocabulary (`fieldPolicyValues`: `required` gaps a
 `not_expected` and `unknown` raise no gap, `not_allowed` also refuses a value). A fixed classification
 declares it under `capabilities.classificationPolicies`: the classifier enum, optionally the
 classified entity and its reference field (omit `target` when the classifier is on the governed
-record), and per target field a `byValue` map plus an `otherwise` policy. The generator checks every
+record), and per target field a `byValue` map plus an `otherwise` policy. Same-record `not_allowed` and enforced `required` policies declare an actionable refusal. The generator checks every
 name and value, requires a field refused by default to have exactly one admitting value, and emits
 `classification-field-policies.gen.ts`. A household-editable classification keeps its policy per row
 (SpendingCategory `productExpectation`), and `@cubby/schemas/classification-field-policy` registers
@@ -3500,7 +3501,7 @@ value, never treated as empty.
 Saved-record spending review is declared per field as `control.suggest.financeReview.context`:
 `finance` for the Purchase fallback and Expense category, `vendor` for the Vendor default category and
 spending profile. The context selects the saved evidence the server reads, the fingerprint-fenced
-writer (`finance` books `spendingCategoryId`; `vendor` patches the declared Vendor fields) and the
+writer (`finance` books `spendingCategoryId`; `vendor` patches the declared create-only Vendor fields) and the
 saved-record gating web and native read from the manifest. FinancialTransaction's read-only
 `spendingCategoryId` declares no review. The `financeCategoryReview` wire enums keep their literal
 order; a type check requires them to list every declared entity and field.

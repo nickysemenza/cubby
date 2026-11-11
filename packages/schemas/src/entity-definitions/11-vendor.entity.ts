@@ -291,6 +291,8 @@ export const { definition, readSchemas } = defineEntityModel({
 
       {
         key: "spendingProfile",
+        description:
+          'Preview with spendingClassification.preview (action "vendor"), then apply with spendingClassification.apply and the preview fingerprint. On the web, use Spending classification.',
         kind: "enum",
         control: {
           kind: "select",
@@ -345,11 +347,12 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: vendorSpendingProfile.default("unspecified"),
           create: vendorSpendingProfile.default("unspecified"),
-          update: vendorSpendingProfile.optional(),
         },
       },
       {
         key: "defaultSpendingCategoryId",
+        description:
+          'Preview with spendingClassification.preview (action "vendor"), then apply with spendingClassification.apply and the preview fingerprint. On the web, use Spending classification.',
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
@@ -370,7 +373,6 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
-          update: spendingCategoryShortcode.nullable().optional(),
         },
       },
       {

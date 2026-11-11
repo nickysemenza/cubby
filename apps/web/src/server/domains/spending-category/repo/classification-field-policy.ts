@@ -188,17 +188,19 @@ export function assertClassificationPolicies(
               ([value]) => value === String(classifier),
             )?.[1]) ?? declaration.otherwise;
       if (status === "not_allowed" && value !== null && value !== undefined) {
+        if (!("refusal" in declaration) || !declaration.refusal)
+          throw new Error(`Missing classification refusal for ${id}`);
         throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          ("refusal" in declaration ? declaration.refusal : undefined) ??
-            `${String(classifier)} may not set ${declaration.field} (${id}).`,
+          "CLASSIFICATION_POLICY_REFUSED",
+          declaration.refusal,
         );
       }
       if (status === "required" && (value === null || value === undefined)) {
+        if (!("refusal" in declaration) || !declaration.refusal)
+          throw new Error(`Missing classification refusal for ${id}`);
         throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          ("refusal" in declaration ? declaration.refusal : undefined) ??
-            `${String(classifier)} requires ${declaration.field} (${id}).`,
+          "CLASSIFICATION_POLICY_REFUSED",
+          declaration.refusal,
         );
       }
     }

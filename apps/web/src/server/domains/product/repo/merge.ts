@@ -1293,7 +1293,7 @@ const validateProductMergePlan = async (
   ) {
     throw createAppError(
       "PRODUCT_CATEGORY_INELIGIBLE",
-      `A Product used as a project resource must be in a category that allows project resources (${projectResourceFeatureLabels}).`,
+      `A Product used as a project resource must be in a category that allows project resources (${projectResourceFeatureLabels}). Choose an eligible category or remove the project resource links before merging.`,
     );
   }
   if (
@@ -1302,7 +1302,7 @@ const validateProductMergePlan = async (
   ) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "A planting source Product must be a garden product, not a food Product.",
+      "A planting source Product must be a garden product, not a food Product. Choose a garden Product or change the Product category before using it as a planting source.",
     );
   }
   return admission;
@@ -2068,7 +2068,7 @@ const previewMergeProductsFromPlan = async (
         code: "block-garden-source-food-category",
         effect: "block",
         description:
-          "A planting source Product cannot be classified as Food. The keeper remains the source after merging.",
+          "A planting source Product cannot be classified as Food. The keeper remains the source after merging. Choose a garden category or change the planting source before merging.",
       },
       edgeKey: "Planting.sourceProductId",
       label: "planting source that cannot become Food",

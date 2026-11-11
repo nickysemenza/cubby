@@ -9,6 +9,7 @@ import {
   isFinanceReviewEntity,
 } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { mutationSideEffectsWithWarnings } from "@cubby/schemas/mutation-side-effects";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -22,6 +23,7 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import { loadExpenseSpendingAllocations } from "~/server/domains/expense/repo/expense-spending-allocation";
 import { withReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import { updateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import {
   executeEntityAs,
@@ -29,6 +31,7 @@ import {
 } from "~/server/entity-kernel";
 import { createAppError } from "~/server/errors/app-error";
 import { generatedEntityUpdateCommandSchema } from "~/server/generated/entity-bindings.gen";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const evidenceRow = z.record(z.string(), z.json());
@@ -283,14 +286,14 @@ export async function applyFinanceCategorySuggestion(
             "Vendor purchase evidence or saved defaults changed; request a fresh suggestion before applying.",
           );
         const vendorFields: readonly string[] = financeReviewFields("vendor");
-        const patch = Object.fromEntries(
-          vendorFields
-            .filter((key) => Object.hasOwn(input, key))
-            .map((key) => [
-              key,
-              z.record(z.string(), z.unknown()).parse(input)[key],
-            ]),
-        );
+        const patch = {
+          ...(input.spendingProfile === undefined
+            ? {}
+            : { spendingProfile: input.spendingProfile }),
+          ...(input.defaultSpendingCategoryId === undefined
+            ? {}
+            : { defaultSpendingCategoryId: input.defaultSpendingCategoryId }),
+        };
         if (
           Object.keys(patch).length === 0 ||
           suppliedFields.some((key) => !vendorFields.includes(key))
@@ -299,19 +302,19 @@ export async function applyFinanceCategorySuggestion(
             "CONSTRAINT_VIOLATION",
             "Review a vendor default category or spending profile.",
           );
-        const result = await withReviewedSpendingClassification(db, () =>
-          executeEntityAs(
-            { ...context, db },
-            "update",
-            generatedEntityUpdateCommandSchema.parse({
-              action: "update",
-              entity: "vendor",
-              id: review.entityId,
-              data: patch,
-            }),
+        await withReviewedSpendingClassification(db, () =>
+          updateVendor(
+            db,
+            parseShortcodeFor("vendor", review.entityId),
+            patch,
+            context.actorContext,
           ),
         );
-        return { ...input, sideEffects: result.sideEffects };
+        await recordChange(db, { kind: "source", categories: ["vendor"] });
+        return {
+          ...input,
+          sideEffects: mutationSideEffectsWithWarnings(undefined),
+        };
       },
       { isolationLevel: "repeatable read" },
     );

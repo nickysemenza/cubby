@@ -274,7 +274,7 @@ describe("expense repository — CRUD", () => {
         expenseLineRoleClassifier(decisionPort("none")),
       ),
     ).rejects.toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
+      reason: "CLASSIFICATION_POLICY_REFUSED",
       message: expect.stringContaining("receipt role first"),
     });
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
@@ -544,7 +544,7 @@ describe("expense repository — CRUD", () => {
         ctx.actor,
       ),
     ).rejects.toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
+      reason: "CLASSIFICATION_POLICY_REFUSED",
     });
     expect((await readExpense(ctx.db, inferredTax.id))?.productId).toBeNull();
 
@@ -677,7 +677,7 @@ describe("expense repository — CRUD", () => {
           spendingCategoryId: category.id,
         }),
       ),
-    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    ).rejects.toMatchObject({ reason: "CLASSIFICATION_POLICY_REFUSED" });
 
     const product = await createProduct(
       ctx.db,
@@ -695,7 +695,12 @@ describe("expense repository — CRUD", () => {
           productId: product.id,
         }),
       ),
-    ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
+    ).rejects.toMatchObject({
+      reason: "CLASSIFICATION_POLICY_REFUSED",
+      message: expect.stringContaining(
+        "entity.link on the Purchase's products relation",
+      ),
+    });
   });
 
   it("drops the stored category when a principal line becomes an adjustment", async () => {

@@ -2555,22 +2555,40 @@ const buildMetadataSchemas = () => {
    * allowed. `fields` order is precedence: when evidence in two fields implies
    * different classifications, the earlier field wins.
    */
-  const classificationPolicyMetadataSchema = z.strictObject({
-    /** This entity's enum field whose (effective) value classifies. */
-    classifier: nonEmptyString(),
-    /** Omit target to classify fields on this same record. */
-    target: z
-      .object({ entity: nonEmptyString(), reference: nonEmptyString() })
-      .strict()
-      .optional(),
-    /**
-     * Same-record policies only: generate a CHECK so every write path
-     * refuses `not_allowed` and enforces `required`. Enabling it on existing
-     * data needs a migration that first resolves violators.
-     */
-    enforced: flag(false),
-    fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
-  });
+  const classificationPolicyMetadataSchema = z
+    .strictObject({
+      /** This entity's enum field whose (effective) value classifies. */
+      classifier: nonEmptyString(),
+      /** Omit target to classify fields on this same record. */
+      target: z
+        .object({ entity: nonEmptyString(), reference: nonEmptyString() })
+        .strict()
+        .optional(),
+      /**
+       * Same-record policies only: generate a CHECK so every write path
+       * refuses `not_allowed` and enforces `required`. Enabling it on existing
+       * data needs a migration that first resolves violators.
+       */
+      enforced: flag(false),
+      fields: z.array(classificationFieldPolicyMetadataSchema).min(1),
+    })
+    .superRefine((policy, ctx) => {
+      if (policy.target) return;
+      policy.fields.forEach((field, index) => {
+        const statuses = [field.otherwise, ...Object.values(field.byValue)];
+        if (
+          !field.relation &&
+          !field.refusal &&
+          (statuses.includes("not_allowed") ||
+            (policy.enforced && statuses.includes("required")))
+        )
+          ctx.addIssue({
+            code: "custom",
+            path: ["fields", index, "refusal"],
+            message: "A refusal is required for this classification policy.",
+          });
+      });
+    });
 
   const entityCapabilitiesMetadataSchema = z
     .strictObject({

@@ -246,7 +246,9 @@ describe("reviewed spending classification", () => {
         id: branch.output.id,
         data: { parentId: newRoot.output.id },
       });
-    await expect(ordinaryMove()).rejects.toThrow(/Preview and apply/);
+    await expect(ordinaryMove()).rejects.toThrow(
+      /spendingClassification.preview/,
+    );
     const preview = await previewSpendingClassificationReview(ctx.db, move);
     expect(preview.changedExpenseCount).toBe(1);
     expect(preview.categoryDeltas).toEqual(
@@ -270,18 +272,27 @@ describe("reviewed spending classification", () => {
       )[0];
     expect(await readBranch()).toMatchObject({ parentId: oldRoot.entityId });
 
-    // Unused categories retain ordinary CRUD, and a topology change invalidates
+    // A reviewed topology change invalidates
     // a pending review even when its immediate allocation totals stay equal.
     const unused = await createRepoIdentity(ctx, "productCategory", {
       name: "Fixture unused branch",
       parentId: oldRoot.output.id,
     });
     const current = await previewSpendingClassificationReview(ctx.db, move);
-    await executeEntity(context(), {
-      action: "update",
-      entity: "productCategory",
-      id: unused.output.id,
-      data: { parentId: null },
+    const unusedMove = {
+      action: "productCategory" as const,
+      productCategoryId: unused.output.id,
+      parentId: null,
+      spendingCategoryMode: "inherit" as const,
+      spendingCategoryId: null,
+    };
+    const unusedPreview = await previewSpendingClassificationReview(
+      ctx.db,
+      unusedMove,
+    );
+    await applySpendingClassificationReview(context(), {
+      request: unusedMove,
+      fingerprint: unusedPreview.fingerprint,
     });
     await expect(
       applySpendingClassificationReview(context(), {
@@ -484,10 +495,12 @@ describe("reviewed spending classification", () => {
                 defaultSpendingCategoryId: null,
               },
             });
-      await expect(unreviewed()).rejects.toThrow(/Preview and apply/);
+      await expect(unreviewed()).rejects.toThrow(
+        /spendingClassification.preview/,
+      );
       await expect(
         applyReviewedSpendingClassificationPolicy(context(), request),
-      ).rejects.toThrow(/Preview and apply/);
+      ).rejects.toThrow(/spendingClassification.preview/);
       const preview = await previewSpendingClassificationReview(
         ctx.db,
         request,
@@ -505,10 +518,12 @@ describe("reviewed spending classification", () => {
       );
       expect(resolved[0]?.category).toBe(category.id);
       // A completed review cannot authorize a later unrelated request.
-      await expect(unreviewed()).rejects.toThrow(/Preview and apply/);
+      await expect(unreviewed()).rejects.toThrow(
+        /spendingClassification.preview/,
+      );
       await expect(
         applyReviewedSpendingClassificationPolicy(context(), request),
-      ).rejects.toThrow(/Preview and apply/);
+      ).rejects.toThrow(/spendingClassification.preview/);
     },
   );
 
