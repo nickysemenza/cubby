@@ -362,6 +362,13 @@ export const entityBulkUpdateResultSchema = z.object({
   updatedReferences: z.array(
     z.object({ entity: entityKernelEntitySchema, id: z.string().min(1) }),
   ),
+  skipped: z.array(
+    z.object({
+      entity: entityKernelEntitySchema,
+      id: z.string().min(1),
+      message: z.string().min(1),
+    }),
+  ),
   sideEffects: mutationSideEffectsSchema,
 });
 export const entityRelationMutationResultSchema =

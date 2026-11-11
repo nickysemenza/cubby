@@ -2,6 +2,7 @@ import { mcpResultDetail } from "@cubby/schemas/mcp-detail";
 import type { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
+import { afterResponse } from "~/server/cf-env";
 import { withAfterCommitScope } from "~/server/db/helpers/core";
 import {
   MCP_TOOL_DEADLINE_MS,
@@ -252,7 +253,7 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
         slowestMs = Math.max(slowestMs, Date.now() - itemStartedAt);
       }
     }
-  });
+  }, afterResponse);
   const count = (status: BatchResult<TItemOutput>["status"]) =>
     results.filter((result) => result.status === status).length;
   return {

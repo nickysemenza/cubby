@@ -772,23 +772,13 @@ const buildEntityOperations = <
           }
         })
         .output(({ updated }) =>
-          entityBulkUpdateResultSchema
-            .extend({
-              skipped: z.array(
-                z.object({
-                  entity: z.string(),
-                  id: z.string(),
-                  message: z.string(),
-                }),
-              ),
-            })
-            .parse({
-              action: "bulkUpdate",
-              entity: binding.entity,
-              updatedReferences: updated.updatedReferences,
-              skipped: updated.skipped,
-              sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
-            }),
+          entityBulkUpdateResultSchema.parse({
+            action: "bulkUpdate",
+            entity: binding.entity,
+            updatedReferences: updated.updatedReferences,
+            skipped: updated.skipped,
+            sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
+          }),
         ),
     ),
   };

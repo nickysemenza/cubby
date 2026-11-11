@@ -1093,14 +1093,14 @@ multi-references; a keyed structured collection opens web's bulk edit. Structure
 editor's wire normalization; empty optional lists are omitted. The dialog sends removals before
 additions so a held keyed item changes atomically, and labels removal controls visibly.
 
-Execution is atomic across the selection (1–500 unique public ids). Ordinary stored scalar columns
+Execution covers 1–500 unique public ids in one transaction. Policy refusals skip the affected row and return its reference and next step; unexpected failures roll back the selection. Ordinary stored scalar columns
 use one set-based UPDATE when the writer's `updatePolicy.recordFields` dependencies permit;
 reference resolution, collections, compound values and opaque/domain writers run the normal
 single-record update for every row in the same transaction. Shared CRUD updates read the live row
 for before-state and audit diffs; relation hooks own collection snapshots; full detail hydration
 runs only when the requested output needs it. Per-row audit, CalDAV guards, assignment and dependency
 resolution, recipe costing, search projections and suggestion supersession follow the normal
-mutation contract. A failure rolls back every row and pending publication; diagnostics keep the
+mutation contract. An unexpected failure rolls back every row and pending publication; diagnostics keep the
 failing rows and raw database details (SQLSTATE 23505 on a unique collision). Location reparenting
 keeps Home and cycle checks; the arrange workflow delegates to the same runtime. Native has no bulk
 update route or multi-select delete UI.

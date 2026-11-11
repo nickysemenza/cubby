@@ -5,7 +5,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
-import { setCfEnv } from "~/server/cf-env";
+import { afterResponse, runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { withMemberFreshness } from "~/server/db/freshness/member-marker";
 import {
   recordCommittedChanges,
@@ -125,6 +125,31 @@ describe("repository writes publish after their commit", () => {
       expect(flushed).toEqual([]);
     });
     expect(flushed).toEqual([["outer", "released", "second"]]);
+
+    const tasks: Promise<unknown>[] = [];
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await runWithExecutionCtx({ waitUntil: (task) => tasks.push(task) }, () =>
+      withAfterCommitScope(async () => {
+        await withTransactionDatabase(ctx.db, async (db) => {
+          await runAfterCommit(db, {
+            key: "deferred",
+            items: ["later"],
+            flush: async (_db, items) => {
+              await gate;
+              flushed.push(items);
+            },
+          });
+        });
+      }, afterResponse),
+    );
+    expect(flushed).toEqual([["outer", "released", "second"]]);
+    expect(tasks).toHaveLength(1);
+    release();
+    await Promise.all(tasks);
+    expect(flushed).toEqual([["outer", "released", "second"], ["later"]]);
   });
 
   it("rings for requests and for background commits a member waits on", async () => {
