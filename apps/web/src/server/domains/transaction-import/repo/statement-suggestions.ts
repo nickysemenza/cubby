@@ -53,6 +53,7 @@ import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
+import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import {
   databaseForTransaction,
   getDb,
@@ -78,7 +79,6 @@ import {
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
   sourceObservationFacts,
-  sourceObservations,
   sourceObservationsForPage,
   sourceObservationIdentities,
   statementChargeSourceHeld,
@@ -3465,8 +3465,9 @@ export async function retryStatementGenerationRefs(
       }>(
         sql`
         SELECT DISTINCT observation.source,observation."chargeKey",
-          (observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
-        FROM ${sourceObservations} observation
+          (observation."storedReviewState"<>${sourceOccurrenceReviewState.enum.ready}
+            OR ${sourceOccurrenceHasUnresolvedHistory(sql`observation."occurrenceId"`, sql`observation."acceptedTransactionId"`)}) AS held
+        FROM ${sourceObservationFacts} observation
         WHERE observation.source=${original.source} AND ${notDeleted("observation")}
           AND (observation."chargeKey"=${original.chargeKey} OR
             -- includes-deleted: retained aliases rebind original work references without accepting ownership.
