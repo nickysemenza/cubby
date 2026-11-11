@@ -955,6 +955,14 @@ async function merchantHistory(
       SELECT v.key, v.account, ${merchantKey(sql`v.merchant`)} AS merchant, v.day, v.direction
       FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
     ),
+    candidates AS MATERIALIZED (
+      SELECT p.key, ft.id, ft.shortcode, ft.kind
+      FROM p JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
+        AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
+        AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
+        AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
+        AND sign(ft."amountMinor")::int = p.direction
+    ),
     -- Transactions clean creates on these accounts made when accepted as is,
     -- derived once from retained accept decisions and their historical evidence. Ref keys split at the first ':', the
     -- separator suggestionRefKey writes after the source.
@@ -965,7 +973,8 @@ async function merchantHistory(
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
       JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
-      WHERE s.family = ${suggestionFamily.enum.statement_transaction}
+      WHERE fx.owner IN (SELECT id FROM candidates)
+        AND s.family = ${suggestionFamily.enum.statement_transaction}
         AND (s.judgment->>'clean')::boolean
         AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
         AND s.status = ${suggestionStatus.enum.applied}
@@ -974,7 +983,7 @@ async function merchantHistory(
         AND f.event->>'verdict' = ${feedbackVerdict.enum.correct}
         AND f.event @> ${JSON.stringify({ correction: { present: false } })}::jsonb
     )
-    SELECT p.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
+    SELECT ft.key, array_agg(DISTINCT ft.kind) AS kinds, count(*)::int AS count,
       bool_or(EXISTS (
         SELECT 1 FROM "Expense" e
         WHERE e."bookingTransactionCode" = ft.shortcode AND ${notDeleted("e")}
@@ -986,14 +995,9 @@ async function merchantHistory(
           AND pu."vendorId" IS NOT NULL
         WHERE fta."transactionId" = ft.id AND ${notDeleted("fta")}
       )) AS purchased
-    FROM p
-    JOIN "FinancialTransaction" ft ON ft."accountId" = p.account
-      AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
-      AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
-      AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
-      AND sign((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}))::int = p.direction
+    FROM candidates ft
     WHERE ft.id NOT IN (SELECT id FROM ruled)
-    GROUP BY p.key
+    GROUP BY ft.key
   `,
     "objects",
   );
