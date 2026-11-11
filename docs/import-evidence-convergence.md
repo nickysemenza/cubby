@@ -1333,15 +1333,22 @@ effects; it is optional, never acceptance authority or a prerequisite to a
 supported `suggestions.review`. The write always validates the current
 Suggestion, application and spending. Preview and acceptance rebuild the charge
 from retained evidence, carry the reviewed model labels onto it, and refuse,
-naming each field, only when what was reviewed changed: the recommended action,
-the account, statement date and provider status, the created transaction's kind,
-amount, status, dates, merchant, descriptor and source reference, the candidate
-set (id, amount, differing fields, claimed by another charge), the superseded,
-voided or matched transaction, or the transfer. Accepting the recommendation as
-reviewed also refuses when a ready booking's effect, purchaser, Vendor,
-category or Purchase moved (`spending.<field>`). Merchant history, sibling and
-snapshot drift that leave those unchanged do not refuse; a correction's own
-action, kind or booking is replanned at acceptance.
+naming each part, only when what the chosen action writes changed: the
+account, statement date and provider status, plus a create's transaction fields,
+paired transaction and transfer, an attach's target (its amount, differing
+fields and eligibility), or the superseded, voided or matched transaction.
+Accepting the recommendation as reviewed also refuses when a ready booking's
+effect, purchaser, Vendor, category or Purchase moved (`spending.<field>`).
+Other candidates, merchant history, sibling and snapshot drift do not refuse; a
+correction's own action, kind or booking is replanned at acceptance.
+
+Candidates share the generic eligible-target predicate. A transaction another
+charge already settles or claims, or one of the wrong sign, amount or kind,
+stays listed as `eligibility: "context"` with its `contextReason`; it never
+blocks a create, never earns an attach recommendation, and attaching to it
+refuses with the next step. Evidence that names a transaction (a provider match,
+an identity hold, or the booked copy of the same bank event) marks it
+`explicit`.
 
 Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
 nonrecommended action, uses `verdict: "wrong"` with
@@ -1403,9 +1410,9 @@ group by group, filtering a group with
    `sourceTransactionRecord`, setting `supersededByRowId` to the reviewed
    successor record ID) before creating either. Siblings from other sources
    mean their counts disagree (see [Matching](#matching)): book each real
-   charge once and attach the other sources' copies to it. A `claimed` candidate already settles another charge from the same
-   source, so it is never clean: attach only when this row is that charge
-   re-exported under a new descriptor; two visits for the same amount are two
+   charge once and attach the other sources' copies to it. A `context`
+   candidate with `contextReason: "claimed"` already settles another charge,
+   so the recommendation is `create`; two visits for the same amount are two
    creates.
 4. A person counterparty is never clean. An outgoing payment to a person is
    your share of a shared cost: create it as `purchase` and set the merchant.
