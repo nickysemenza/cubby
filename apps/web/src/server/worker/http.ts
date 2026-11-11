@@ -48,6 +48,13 @@ import {
   withTrace,
 } from "~/server/observability/tracing";
 import { testDurationOverrideMs } from "~/server/testing/test-duration-override";
+import {
+  isPlacedRequest,
+  PLACED_PATH,
+  placedEventSchema,
+} from "~/server/worker/placed";
+import { runPlacedQueue } from "~/server/worker/queue";
+import { runPlacedScheduled } from "~/server/worker/scheduled";
 
 // A selected protocol's first evaluation is caught by the invocation failure
 // policy. A rejected ESM evaluation stays failed; clearing a promise is not recovery.
@@ -267,12 +274,23 @@ async function finishResponse(
   });
 }
 
+async function runPlacedEvent(request: Request, env: Env) {
+  const event = placedEventSchema.parse(await request.json());
+  return event.event === "queue"
+    ? runPlacedQueue(event.queue, event.bodies, env)
+    : runPlacedScheduled(event, env);
+}
+
 /** Owns HTTP routing and body lifetime; the platform entry only adapts events. */
 export async function handleHttpRequest(
   request: Request,
   env: Env,
   ctx: HttpContext,
 ): Promise<Response> {
+  if (new URL(request.url).pathname === PLACED_PATH)
+    return isPlacedRequest(request, env)
+      ? runPlacedEvent(request, env)
+      : new Response("Not found", { status: 404 });
   const startedAt = performance.now();
   const invocationOrdinal = ++fetchInvocationOrdinal;
   const url = new URL(request.url);

@@ -9,6 +9,9 @@ import { db, withInvocationDb } from "~/server/db";
 import { isMaintenanceMode } from "~/server/http/maintenance";
 import { withInvocationTrace, withTrace } from "~/server/observability/tracing";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
+
+import { forwardToPlaced } from "./placed";
+
 const cronLog = createLogger("cron");
 
 /** Units the cron runs itself before handing the rest to queue permits. */
@@ -93,9 +96,28 @@ const householdDateOf = (instant: Date) =>
     day: "2-digit",
   }).format(instant);
 
+type ScheduledController = { scheduledTime: number; cron: string };
+
 export async function handleScheduledInvocation(
-  controller: { scheduledTime: number; cron: string },
+  controller: ScheduledController,
   env: Env,
+) {
+  return runScheduledInvocation(controller, env, false);
+}
+
+/** The placed side of a forwarded tick; a failure answers 500 to the caller. */
+export async function runPlacedScheduled(
+  controller: ScheduledController,
+  env: Env,
+) {
+  await runScheduledInvocation(controller, env, true);
+  return new Response(null, { status: 204 });
+}
+
+async function runScheduledInvocation(
+  controller: ScheduledController,
+  env: Env,
+  placed: boolean,
 ) {
   return withCfEnv(env, () =>
     withInvocationTrace(
@@ -107,6 +129,15 @@ export async function handleScheduledInvocation(
         }
         if (controller.cron !== CRON_SCHEDULES.hourly)
           throw new Error(`Unexpected cron trigger: ${controller.cron}`);
+        if (
+          !placed &&
+          (await forwardToPlaced(env, {
+            event: "scheduled",
+            cron: controller.cron,
+            scheduledTime: controller.scheduledTime,
+          }))
+        )
+          return;
         const backstop = await runHourlyBackstop(env);
         const instant = new Date(controller.scheduledTime);
         const hour = new Intl.DateTimeFormat("en-US", {
@@ -178,7 +209,7 @@ export async function handleScheduledInvocation(
         if (backstop.failed) throw backstop.error;
       },
       {
-        "cubby.workload": "scheduled",
+        "cubby.workload": placed ? "scheduled.placed" : "scheduled",
         "cloudflare.cron": controller.cron,
         "cloudflare.scheduled_time": controller.scheduledTime,
         "service.version": env.CF_VERSION_METADATA.id,
