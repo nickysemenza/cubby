@@ -897,7 +897,15 @@ export async function bookFinancialTransaction(
   return saved!;
 }
 
-/** Preview every booking, then commit them together in input order. */
+/**
+ * Preview every booking, then commit them together in input order.
+ *
+ * Every preview runs before any write, so the caller must exclude bookings
+ * that share state within one batch: bookings that settle or link the same
+ * existing Purchase (an earlier booking changes the later preview's capacity
+ * and graph) and bookings that need the same not-yet-existing Vendor. Either
+ * case refuses the whole batch.
+ */
 export async function bookFinancialTransactions(
   db: Database,
   raws: readonly FinancialBookingInput[],

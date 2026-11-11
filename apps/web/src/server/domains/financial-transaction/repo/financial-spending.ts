@@ -32,6 +32,7 @@ import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { advisoryXactLocks } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
@@ -2054,6 +2055,12 @@ type FinancialSpendingResult = { purchaseIds: string[]; replayed: boolean };
  * namespace across every transaction, each plan rechecked in input order, and
  * every resulting booking committed together. Deferred plans return null; an
  * omitted transactionId means the plan's own.
+ *
+ * Every plan was previewed before the batch wrote anything, so the caller must
+ * exclude plans that share state within one batch: plans that settle or link
+ * the same existing Purchase, and plans that resolve the same Vendor that does
+ * not exist yet (an earlier recheck creates it and the later plan's evidence
+ * changes). Either case refuses the whole batch.
  */
 export async function commitFinancialSpendings(
   db: Database,
@@ -2100,6 +2107,42 @@ export async function commitFinancialSpendings(
         tx,
         committed.map((entry) => entry.transactionId),
       );
+      // Retained settlement takes one per-party lock and holds it to commit.
+      // Several in one batch would follow input order and could deadlock a
+      // concurrent batch, so take them all first in sorted order. A single
+      // settlement keeps its own lock inside the settlement writer.
+      const settling = committed.filter(
+        ({ plan }) =>
+          plan.status === "ready" && plan.effect === "settle_existing",
+      );
+      if (settling.length > 1) {
+        const parties = await getDb(txDb)
+          .select({ ledgerPartyId: financialAccount.ledgerPartyId })
+          .from(financialTransaction)
+          .innerJoin(
+            financialAccount,
+            and(
+              eq(financialAccount.id, financialTransaction.accountId),
+              notDeleted(financialAccount),
+            ),
+          )
+          .where(
+            and(
+              inArray(
+                financialTransaction.shortcode,
+                settling.map((entry) => entry.transactionId),
+              ),
+              notDeleted(financialTransaction),
+            ),
+          );
+        await advisoryXactLocks(
+          getDb(txDb),
+          "purchase-settlement",
+          parties.flatMap((row) =>
+            row.ledgerPartyId ? [row.ledgerPartyId] : [],
+          ),
+        );
+      }
       const bookings: { index: number; input: FinancialBookingInput }[] = [];
       for (const { index, plan, transactionId } of committed) {
         const outcome = await recheckFinancialSpending(
