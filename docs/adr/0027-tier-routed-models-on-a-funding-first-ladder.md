@@ -32,15 +32,18 @@ upper tiers on Claude credit. Opus leaves routing.
 
 The **funding ladder** is source-first, model-second (`fundedChatAttempts`):
 
-1. Claude subscriber credit, with the tier's Anthropic model.
-2. OpenAI API credits, with the tier's OpenAI model.
+1. OpenAI API credits, with the tier's OpenAI model.
+2. Claude subscriber credit, with the tier's Anthropic model.
 3. The ChatGPT plan, with the tier's OpenAI model.
 4. Paid Unified Billing, with the tier's OpenAI model, where the caller allows it.
 
 A step advances only on a funding refusal. A paid fallback therefore buys the
 tier's model — Terra or Luna where that is the tier — never Sol by default.
 Both provider credits are free and renew monthly, so the order between them
-only decides which lapses unspent; Claude credit stays first. When no source
+decides which work each credit buys. OpenAI answers first: its tier models list
+at or below Claude's, they tokenize the coordinator's tools into fewer than
+half Haiku's tokens, and its credit serves the half-price flex tier. Measured
+on Haiku, the Mail coordinator averaged about $0.006 standard cost per Email. When no source
 can fund a call, background work pauses and interactive work fails with the
 provider's raw diagnostics, as before. Tiers are chosen by judgment and move
 when production evidence — audit findings, corrections, member reports —

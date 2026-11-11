@@ -111,6 +111,8 @@ describe("createCubbyGatewayFetch", () => {
             path,
             credit: request.headers.get("cf-aig-byok-alias"),
           });
+          if (request.headers.get("cf-aig-byok-alias") !== "subscriber-credit")
+            return completedResponse();
           return path.startsWith("/anthropic/")
             ? Response.json(
                 {
@@ -121,7 +123,10 @@ describe("createCubbyGatewayFetch", () => {
                 },
                 { status: 400 },
               )
-            : completedResponse();
+            : Response.json(
+                { error: { code: "credit_balance_exhausted" } },
+                { status: 429 },
+              );
         },
       },
     }))
@@ -136,8 +141,9 @@ describe("createCubbyGatewayFetch", () => {
     );
     expect(result.stopReason).not.toBe("error");
     expect(requests).toEqual([
-      { path: "/anthropic/v1/messages", credit: "subscriber-credit" },
       { path: "/openai/responses", credit: "subscriber-credit" },
+      { path: "/anthropic/v1/messages", credit: "subscriber-credit" },
+      { path: "/openai/responses", credit: null },
     ]);
   });
 

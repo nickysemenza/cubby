@@ -241,7 +241,7 @@ export function AiFundingSettings() {
   return (
     <div className="space-y-3">
       <Description size="xs">
-        Every feature’s frontier AI calls use Claude credit first, then OpenAI
+        Every feature’s frontier AI calls use OpenAI credit first, then Claude
         credit, then the ChatGPT plan, then paid models. Credits run until the
         provider refuses. Background work stops drawing the plan at its window
         budget (its quota is shared with your own use), then pays within the
