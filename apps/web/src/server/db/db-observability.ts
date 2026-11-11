@@ -16,6 +16,10 @@ export type DatabaseOperationMetrics = {
    * starts while an unrelated one still runs joins the open interval.
    */
   queryBusyIntervals: number;
+  /** Bound parameters across every statement. */
+  queryParameterCount: number;
+  /** Most bound parameters in one statement; request-sized lists show here. */
+  queryMaxParameterCount: number;
   clientQueueCount: number;
   clientQueueDurationSumMs: number;
   clientQueueActiveWallMs: number;
@@ -66,6 +70,8 @@ const emptyMetrics = (): StoredDatabaseOperationMetrics => {
     queryMaxDurationMs: 0,
     queryMaxConcurrency: 0,
     queryBusyIntervals: 0,
+    queryParameterCount: 0,
+    queryMaxParameterCount: 0,
     clientQueueCount: 0,
     clientQueueDurationSumMs: 0,
     clientQueueActiveWallMs: 0,
@@ -154,7 +160,17 @@ const beginDatabaseActivity = (
 /** Start one query interval. The returned idempotent callback closes it. */
 export const beginDatabaseQuery = (
   startedAt = performance.now(),
-): FinishActivity => beginDatabaseActivity("query", startedAt);
+  parameterCount = 0,
+): FinishActivity => {
+  for (const metrics of operationMetricsStore.getStore() ?? []) {
+    metrics.queryParameterCount += parameterCount;
+    metrics.queryMaxParameterCount = Math.max(
+      metrics.queryMaxParameterCount,
+      parameterCount,
+    );
+  }
+  return beginDatabaseActivity("query", startedAt);
+};
 
 /** Start one pool-acquisition interval. The returned callback closes it. */
 export const beginDatabaseAcquire = (
@@ -175,6 +191,8 @@ export const databaseMetricAttributes = (
   "db.query.max_duration_ms": Math.round(metrics.queryMaxDurationMs),
   "db.query.max_concurrency": metrics.queryMaxConcurrency,
   "db.query.busy_intervals": metrics.queryBusyIntervals,
+  "db.query.parameter_count_sum": metrics.queryParameterCount,
+  "db.query.max_parameter_count": metrics.queryMaxParameterCount,
   "db.client_queue.count": metrics.clientQueueCount,
   "db.client_queue.duration_sum_ms": Math.round(
     metrics.clientQueueDurationSumMs,

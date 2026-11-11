@@ -236,6 +236,9 @@ const traceQuery = (
     const caller = job
       ? ["job", job.claim.kind, job.details.stepKey].filter(Boolean).join(".")
       : databaseTraceCaller();
+    const parameterCount =
+      (args[1] ?? (typeof args[0] === "string" ? undefined : args[0].values))
+        ?.length ?? 0;
     const execute = () =>
       withTrace(TraceNames.db(operation ?? "query"), async (span) => {
         if (span.isRecording) {
@@ -244,17 +247,13 @@ const traceQuery = (
             "db.namespace": DB_NAMESPACE,
             "db.operation.name": operation,
             "db.query.text": sql,
-            "db.query.parameter_count":
-              (
-                args[1] ??
-                (typeof args[0] === "string" ? undefined : args[0].values)
-              )?.length ?? 0,
+            "db.query.parameter_count": parameterCount,
             "db.query.transaction": getTransaction(),
             "cubby.db.binding_role": role,
             "cubby.db.caller": caller,
           });
         }
-        const finishQuery = beginDatabaseQuery();
+        const finishQuery = beginDatabaseQuery(undefined, parameterCount);
         try {
           const response = await run(...args);
           span.setAttribute(

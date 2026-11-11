@@ -16,7 +16,8 @@ function isUuidArrayParam(expression: ESTree.Expression): boolean {
     expression.type === "CallExpression" &&
     expression.callee.type === "Identifier" &&
     (expression.callee.name === "uuidArrayParam" ||
-      expression.callee.name === "textArrayParam")
+      expression.callee.name === "textArrayParam" ||
+      expression.callee.name === "columnArrayParam")
   );
 }
 
@@ -34,7 +35,7 @@ export const noUnsafeSqlArrayInterpolationRule = defineRule({
     },
     messages: {
       unsafeAny:
-        "Unsafe `ANY(${array})` interpolation; use `uuidArrayParam`/`textArrayParam` or `requested()`.",
+        "Unsafe `ANY(${array})` interpolation; use `uuidArrayParam`/`textArrayParam`/`columnArrayParam` or `requested()`.",
       unsafeOverlap:
         "Unsafe `&& ${array}` interpolation; use a typed query helper.",
     },

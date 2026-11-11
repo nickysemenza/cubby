@@ -2,7 +2,7 @@ import { LEGACY_SHORTCODE_PREFIX, parseShortcode } from "@cubby/shared";
 import { SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { uuidArrayParam } from "~/server/db/helpers/query";
+import { textArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 
 /**
  * The only way repository SQL binds a caller-supplied set of records.
@@ -45,16 +45,6 @@ export interface Requested {
 }
 
 const uuid = z.uuid();
-
-const arrayElement = (value: string) =>
-  `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
-
-/**
- * A Postgres `text[]` literal bound as ONE parameter. Every element is quoted,
- * so commas, braces, empty strings and the text `NULL` stay literal values.
- */
-export const textArrayParam = (values: readonly string[]): SQL =>
-  sql`${`{${[...new Set(values)].map(arrayElement).join(",")}}`}::text[]`;
 
 /**
  * The keys a stored reference may name a record by, as `parseShortcode` and

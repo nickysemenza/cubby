@@ -11,12 +11,9 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { textArrayParam } from "~/server/db/helpers/query";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
-import {
-  requested,
-  textArrayParam,
-  type Requested,
-} from "~/server/db/helpers/requested";
+import { requested, type Requested } from "~/server/db/helpers/requested";
 import { suggestionTable, run } from "~/server/db/schema";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { type SuggestionRecordSelection } from "~/server/generic/suggestions/repo/pending-admission";
