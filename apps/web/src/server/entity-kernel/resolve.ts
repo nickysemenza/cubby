@@ -19,6 +19,7 @@ import {
   and,
   getTableColumns,
   getTableName,
+  inArray,
   type InferInsertModel,
   isNull,
   or,
@@ -30,15 +31,22 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ilikeContains, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { findPgError } from "~/server/errors/db-errors";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
-import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import {
+  logAuditEntries,
+  logAuditEntry,
+} from "~/server/generic/audit-log/repo/audit-log";
 import { buildAnyPrefixTsQuery } from "~/server/generic/search/repo/search-lexical";
 import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
   type ShortcodeTableFor,
 } from "~/server/generic/shortcode/repo/shortcode-tables";
-import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  findOrCreateWithShortcode,
+  insertManyWithShortcode,
+} from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   matchesNameOrAlias,
   nameMatchesAnySql,
@@ -267,6 +275,99 @@ const createMiss = async <E extends ResolvableEntity>(
 };
 
 /**
+ * Create several misses with one insert, one audit insert and one read-back.
+ * A miss whose name another miss's new row would store as a match value, a
+ * scoped miss, or a lost name race takes the one-at-a-time find-or-create,
+ * so the outcome matches creating each miss in request order.
+ */
+const createMisses = async <E extends ResolvableEntity>(
+  db: Db,
+  plan: ResolvePlan & { entity: E },
+  misses: readonly ResolveRequest<E>[],
+  actor: ActorContext,
+): Promise<ResolvedRow<E>[]> => {
+  const extras: Partial<InferInsertModel<ShortcodeTableFor<E>>>[] = [];
+  for (const miss of misses) extras.push((await miss.values?.()) ?? {});
+  const values = misses.map((miss, index) => ({
+    ...Object.fromEntries(
+      plan.match.map(({ key, array }) => [key, array ? [] : miss.name]),
+    ),
+    ...extras[index],
+  }));
+  const one = async () => {
+    const rows: ResolvedRow<E>[] = [];
+    for (const [index, miss] of misses.entries())
+      rows.push(
+        await createMiss(
+          db,
+          plan,
+          { ...miss, values: async () => extras[index] ?? {} },
+          actor,
+        ),
+      );
+    return rows;
+  };
+  const keys = new Set(plan.match.map(({ key }) => key));
+  const stored = values.map((row) =>
+    Object.entries(row).flatMap(([key, value]) =>
+      keys.has(key)
+        ? [value]
+            .flat()
+            .flatMap((entry) =>
+              typeof entry === "string" ? [entry.toLowerCase()] : [],
+            )
+        : [],
+    ),
+  );
+  if (
+    misses.length < 2 ||
+    misses.some((miss) => Object.keys(miss.where ?? {}).length) ||
+    misses.some((miss, index) =>
+      stored.some(
+        (matches, other) =>
+          other !== index && matches.includes(miss.name.toLowerCase()),
+      ),
+    )
+  )
+    return one();
+  let created;
+  try {
+    created = await insertManyWithShortcode(
+      db,
+      plan.entity,
+      // SAFETY: as in `createMiss`, the name plus empty declared `text[]`
+      // match columns are the entity's required inserts beyond the minted
+      // shortcode, and each miss's values are typed by its insert model.
+      values as never,
+    );
+  } catch (error) {
+    if (findPgError(error)?.code !== "23505") throw error;
+    return one();
+  }
+  const ids = created.map((row) => z.object({ id: z.string() }).parse(row).id);
+  if (isAuditableEntity(plan.entity))
+    await logAuditEntries(
+      db,
+      actor,
+      ids.map((id) => ({
+        entityKind: plan.entity,
+        entityId: id,
+        action: "create" as const,
+      })),
+    );
+  const rows = new Map(
+    (await selectMatches(db, plan, inArray(plan.table.id, ids), [])).map(
+      (row) => [row.id, row],
+    ),
+  );
+  return ids.map((id) => {
+    const row = rows.get(id);
+    if (!row) throw new Error(`${plan.entity} ${id} vanished after create`);
+    return resolvedRow(plan.entity, row, true);
+  });
+};
+
+/**
  * One batched candidate pass for every miss — not a round trip per name.
  * Best tier first: the stored name/aliases contain the request, the request
  * contains the stored name ("Organic Example Fruit" finds "Example Fruit"),
@@ -433,10 +534,11 @@ export async function resolveNames<E extends ResolvableEntity>(
   }
 
   if (options.create) {
-    for (const miss of misses)
+    const created = await createMisses(db, plan, misses, options.actor);
+    for (const [index, miss] of misses.entries())
       resolved.set(keyOf(miss.name, miss.where), {
         name: miss.name,
-        row: await createMiss(db, plan, miss, options.actor),
+        row: created[index]!,
         candidates: [],
       });
   } else if (misses.length > 0 && plan.capability.candidates !== undefined) {

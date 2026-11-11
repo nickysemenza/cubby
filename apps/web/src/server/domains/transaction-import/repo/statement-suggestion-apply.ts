@@ -37,6 +37,8 @@ import {
   previewFinancialSpending,
   commitFinancialSpending,
   commitFinancialSpendings,
+  prepareFinancialSpendingCandidates,
+  prepareFinancialSpendingPage,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { nearbyStatementCandidate } from "~/server/domains/financial-transaction/repo/financial-statement-projection";
 import {
@@ -730,16 +732,26 @@ export async function applyStatementTransactionSuggestions(
         )
       ).map((row) => [String(row.id), row.shortcode]),
     );
+    // One read-only page serves every new charge's preview before the commit
+    // takes its locks and prepares its own.
+    const createdPage = await prepareFinancialSpendingPage(txDb, {
+      accountIds: [],
+      transactionIds: created,
+      sources: [],
+    });
+    await prepareFinancialSpendingCandidates(txDb, createdPage);
     const plans = [];
     for (const [position, { judgment, published }] of applied.entries()) {
       const transactionId = parseShortcodeFor(
         "financialTransaction",
         codes.get(created[position]!)!,
       );
-      const plan = await previewFinancialSpending(txDb, {
-        transactionId,
-        advice: published.spending?.request.advice ?? null,
-      });
+      const plan = await previewFinancialSpending(
+        txDb,
+        { transactionId, advice: published.spending?.request.advice ?? null },
+        undefined,
+        createdPage,
+      );
       if (plan.status === "deferred") {
         if (
           judgment.providerStatus === "posted" &&

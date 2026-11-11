@@ -119,7 +119,10 @@ import {
   transactionIdsAllocatedTo,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
-import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
+import {
+  resolveMemberAssignee,
+  resolveMemberAssignees,
+} from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
@@ -196,6 +199,7 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   findOrCreateWithShortcode,
+  insertManyWithShortcode,
   insertWithShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -888,63 +892,113 @@ export const createPurchase = defineMutationWriter({
     data: PurchaseCreateInput,
     actor: ActorContext,
   ) => {
-    const id = await withTransaction(db, async (tx) => {
-      const vendorId = await resolveOrThrow(tx, "vendor", data.vendorId);
-      const vendorAccountId = data.vendorAccountId
-        ? await resolveOrThrow(tx, "vendorAccount", data.vendorAccountId)
-        : null;
-      const created = await insertWithShortcode(tx, "purchase", {
-        defaultProjectId: data.defaultProjectId
-          ? await resolveOrThrow(tx, "project", data.defaultProjectId)
-          : null,
-        spendingCategoryId: data.spendingCategoryId
-          ? await resolveOrThrow(
-              tx,
-              "spendingCategory",
-              data.spendingCategoryId,
-            )
-          : null,
-        spendingCategoryOrigin: data.spendingCategoryId ? "manual" : "legacy",
-        itemizationExpectation: data.itemizationExpectation,
-        defaultTrade: data.defaultTrade,
-        vendorId,
-        vendorAccountId,
-        purchaserOverrideId: await resolveMemberAssignee(
-          tx,
-          data.purchaserOverrideId,
-        ),
-        orderId: data.orderId?.trim() || null,
-        displayLabel: data.displayLabel?.trim() || null,
-        date: data.date,
-        statedTotal:
-          data.statedTotal == null
-            ? data.statedTotal
-            : moneyToMinor(data.statedTotal),
-        notes: data.notes,
-      });
-      // Claim uploaded documents in the insert transaction so failure leaves no pending files.
+    const [created] = await withTransaction(db, (tx) =>
+      createPurchases(tx, [data], actor),
+    );
+    return readOutput({ entityId: created!.id, shortcode: created!.shortcode });
+  },
+});
+
+/** Optional shortcodes resolved in one statement, in input order. */
+const resolveOptional = async <
+  E extends "project" | "spendingCategory" | "vendorAccount",
+>(
+  tx: DrizzleTransaction,
+  entity: E,
+  codes: readonly (string | null | undefined)[],
+) => {
+  const present = codes.filter((code): code is string => Boolean(code));
+  const ids = await resolveAllOrThrow(tx, entity, present);
+  let index = 0;
+  return codes.map((code) => (code ? ids[index++]! : null));
+};
+
+/**
+ * The create path for one or many Purchases: each reference kind resolves in
+ * one statement, then one identity insert and one audit insert. Rows are
+ * created and returned in input order.
+ */
+export async function createPurchases(
+  tx: DrizzleTransaction,
+  inputs: readonly PurchaseCreateInput[],
+  actor: ActorContext,
+) {
+  if (!inputs.length) return [];
+  const vendorIds = await resolveAllOrThrow(
+    tx,
+    "vendor",
+    inputs.map((data) => data.vendorId),
+  );
+  const vendorAccountIds = await resolveOptional(
+    tx,
+    "vendorAccount",
+    inputs.map((data) => data.vendorAccountId),
+  );
+  const projectIds = await resolveOptional(
+    tx,
+    "project",
+    inputs.map((data) => data.defaultProjectId),
+  );
+  const categoryIds = await resolveOptional(
+    tx,
+    "spendingCategory",
+    inputs.map((data) => data.spendingCategoryId),
+  );
+  const purchaserIds = await resolveMemberAssignees(
+    tx,
+    inputs.map((data) => data.purchaserOverrideId),
+  );
+  const created = await insertManyWithShortcode(
+    tx,
+    "purchase",
+    inputs.map((data, index) => ({
+      defaultProjectId: projectIds[index]!,
+      spendingCategoryId: categoryIds[index]!,
+      spendingCategoryOrigin: data.spendingCategoryId
+        ? ("manual" as const)
+        : ("legacy" as const),
+      itemizationExpectation: data.itemizationExpectation,
+      defaultTrade: data.defaultTrade,
+      vendorId: vendorIds[index]!,
+      vendorAccountId: vendorAccountIds[index]!,
+      purchaserOverrideId: purchaserIds[index],
+      orderId: data.orderId?.trim() || null,
+      displayLabel: data.displayLabel?.trim() || null,
+      date: data.date,
+      statedTotal:
+        data.statedTotal == null
+          ? data.statedTotal
+          : moneyToMinor(data.statedTotal),
+      notes: data.notes,
+    })),
+  );
+  // Claim uploaded documents in the insert transaction so failure leaves no pending files.
+  for (const [index, row] of created.entries())
+    if (inputs[index]!.pendingImageIds !== undefined)
       await syncPurchaseImages(
         tx,
-        created.id,
-        data.pendingImageIds,
+        row.id,
+        inputs[index]!.pendingImageIds,
         undefined,
         undefined,
       );
-      await logAuditEntry(tx, actor, {
-        entityKind: "purchase",
-        entityId: created.id,
-        action: "create",
-      });
-      // An order Email can arrive before its Purchase exists.
-      if (created.orderId)
-        await linkExactOrderEmails(databaseForTransaction(tx), {
-          purchaseIds: [created.id],
-        });
-      return created.id;
+  await logAuditEntries(
+    tx,
+    actor,
+    created.map((row) => ({
+      entityKind: "purchase" as const,
+      entityId: row.id,
+      action: "create" as const,
+    })),
+  );
+  // An order Email can arrive before its Purchase exists.
+  const ordered = created.filter((row) => row.orderId);
+  if (ordered.length)
+    await linkExactOrderEmails(databaseForTransaction(tx), {
+      purchaseIds: ordered.map((row) => row.id),
     });
-    return readOutput({ entityId: id });
-  },
-});
+  return created;
+}
 
 const resolvePurchaseDefaultProjectUpdate = async (
   tx: DrizzleTransaction,

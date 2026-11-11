@@ -19,7 +19,10 @@ import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, touchUpdatedAt } from "~/server/db/helpers";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import {
+  type AuditEntryInput,
+  logAuditEntries,
+} from "~/server/generic/audit-log/repo/audit-log";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
@@ -129,6 +132,7 @@ export async function applyAllocationChanges(
   const after = await readAllocations(tx, ids);
 
   const changedTransactionIds: FinancialTransactionId[] = [];
+  const audits: AuditEntryInput[] = [];
   for (const id of ids) {
     const from = allocationAuditRows(opts.before.get(id) ?? []);
     const to = allocationAuditRows(after.get(id) ?? []);
@@ -147,7 +151,7 @@ export async function applyAllocationChanges(
     )
       continue;
     changedTransactionIds.push(id);
-    await logAuditEntry(tx, opts.actor, {
+    audits.push({
       entityKind: "financialTransaction",
       entityId: id,
       action: "update",
@@ -157,6 +161,7 @@ export async function applyAllocationChanges(
       },
     });
   }
+  await logAuditEntries(tx, opts.actor, audits);
 
   const affectedPurchaseIds = uniq(
     ids.flatMap((id) => [
@@ -256,6 +261,43 @@ export async function writeAllocationSet(
   before: AllocationSnapshot,
   actor: ActorContext,
 ): Promise<void> {
+  await writeAllocationSets(tx, [{ transactionId, next }], before, actor);
+}
+
+/** `writeAllocationSet` for several transactions; new slices share one insert. */
+export async function writeAllocationSets(
+  tx: DrizzleTransaction,
+  sets: readonly {
+    transactionId: FinancialTransactionId;
+    next: readonly AllocationInput[];
+  }[],
+  before: AllocationSnapshot,
+  actor: ActorContext,
+): Promise<void> {
+  const inserts: (typeof financialTransactionAllocation.$inferInsert)[] = [];
+  for (const { transactionId, next } of sets)
+    inserts.push(
+      ...(await writeChangedAllocations(
+        tx,
+        transactionId,
+        next,
+        before,
+        actor,
+      )),
+    );
+  if (inserts.length)
+    await tx.insert(financialTransactionAllocation).values(inserts);
+}
+
+/** Applies removals and changed slices; returns the new slices to insert. */
+async function writeChangedAllocations(
+  tx: DrizzleTransaction,
+  transactionId: FinancialTransactionId,
+  next: readonly AllocationInput[],
+  before: AllocationSnapshot,
+  actor: ActorContext,
+) {
+  const inserts: (typeof financialTransactionAllocation.$inferInsert)[] = [];
   const existing = before.get(transactionId) ?? [];
   const nextByPurchase = new Map(next.map((row) => [row.purchaseId, row]));
   const removed = existing.filter((row) => !nextByPurchase.has(row.purchaseId));
@@ -285,7 +327,7 @@ export async function writeAllocationSet(
     const confirmsMerchant =
       prior?.confirmsMerchant || (row.confirmsMerchant ?? memberDecision);
     if (!prior) {
-      await tx.insert(financialTransactionAllocation).values({
+      inserts.push({
         transactionId,
         purchaseId: row.purchaseId,
         amountMinor: moneyToMinor(row.amount),
@@ -312,6 +354,7 @@ export async function writeAllocationSet(
           ),
         );
   }
+  return inserts;
 }
 
 /** Resolve caller-supplied `PUR-` codes to ids, preserving order. */
@@ -340,18 +383,25 @@ export async function resolveAllocationInputs(
 /** Live allocation count per transaction — the "is this split?" question. */
 export async function countLiveAllocations(
   tx: DrizzleTransaction,
-  transactionId: FinancialTransactionId,
-): Promise<number> {
-  const [row] = await tx
-    .select({ count: sql<number>`count(*)::int` })
+  transactionIds: readonly FinancialTransactionId[],
+): Promise<Map<FinancialTransactionId, number>> {
+  if (!transactionIds.length) return new Map();
+  const rows = await tx
+    .select({
+      transactionId: financialTransactionAllocation.transactionId,
+      count: sql<number>`count(*)::int`,
+    })
     .from(financialTransactionAllocation)
     .where(
       and(
-        eq(financialTransactionAllocation.transactionId, transactionId),
+        inArray(financialTransactionAllocation.transactionId, [
+          ...transactionIds,
+        ]),
         notDeleted(financialTransactionAllocation),
       ),
-    );
-  return Number(row?.count ?? 0);
+    )
+    .groupBy(financialTransactionAllocation.transactionId);
+  return new Map(rows.map((row) => [row.transactionId, Number(row.count)]));
 }
 
 /** Transactions holding a live allocation against any of these purchases. */

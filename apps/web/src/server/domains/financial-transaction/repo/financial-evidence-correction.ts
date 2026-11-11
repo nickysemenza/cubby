@@ -289,7 +289,7 @@ export async function reconcileFinancialEvidenceCorrection(
       await lockFinancialSourceOccurrences(
         tx,
         [{ source: input.source, externalId: input.externalId }],
-        row.id,
+        [row.id],
       );
       const source = await loadCorrectionObservation(txDb, input);
       if (source.status === "review") return source;
