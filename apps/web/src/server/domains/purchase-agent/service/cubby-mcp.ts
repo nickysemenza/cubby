@@ -259,6 +259,24 @@ export function photoCoordinatorToolResult(
 
 type WriterResult = Pick<ToolExecutionResult, "isError" | "diagnostics">;
 
+/**
+ * The harness refused the call before any writer ran: invalid arguments, a
+ * `beforeTool` block or an unknown tool. Such a call has no write outcome;
+ * settling it as an uncertain commit left a pending attempt with no replayable
+ * proposal, which blocked every later extraction of its Email until the
+ * per-Email request limit (2026-11-11).
+ */
+export function harnessRejected(result: WriterResult): boolean {
+  return (
+    result.diagnostics?.some(
+      (item) =>
+        item.code === "invalid_arguments" ||
+        item.code === "blocked" ||
+        item.code === "tool_unavailable",
+    ) ?? false
+  );
+}
+
 /** Only the MCP adapter emits this prefix; source text cannot supply a verdict. */
 export function hasWriterVerdict(result: WriterResult): boolean {
   return (

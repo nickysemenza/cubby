@@ -302,7 +302,12 @@ attempt; repeated claims and successor Runs keep the budget. The claim binds
 the original checksum, sender proof and accepted order-source context;
 display-name and Purchase-date edits do not reset it. Writer classification
 uses trusted MCP error metadata, never Email text. Held-source refusals are
-exempt. Ordinary-path calls on incomplete compact evidence are blocked before
+exempt. A call the harness refuses before any writer runs (invalid arguments,
+a host block) releases its own accounting reservation and spends no attempt;
+it never reconciles or replaces an identical attempt whose outcome is
+uncertain. The per-Email request limit bounds repeated refusals. When the primary budget is spent before any
+escalation answer, the coordinator is offered its escalation question once; the
+next exhaustion settles. Ordinary-path calls on incomplete compact evidence are blocked before
 either malformed-call accounting or writer admission, preserving the
 exception-flow budget. A source that consumes more than 16 model requests in one
 Run settles the same way, whatever its attempt count. Exhaustion uses

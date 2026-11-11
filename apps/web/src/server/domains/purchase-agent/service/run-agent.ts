@@ -69,6 +69,7 @@ import {
 import {
   cubbyMcpExtension,
   settleMailAttemptLimit,
+  harnessRejected,
   mailWriterOutcome,
 } from "./cubby-mcp";
 import type {
@@ -544,6 +545,20 @@ export class PurchaseImportRunAgent
           block:
             "An earlier write outcome is pending. Claim the Email to recover its retained proposal, then replay its exact tool and arguments before changing extraction.",
         };
+      // A Luna coordinator settled exhausted Emails without ever asking its
+      // escalation question (2026-11-11). Offer that question once per Email
+      // before settling; a later exhaustion settles whether or not it asked.
+      if (escalation.active && !escalation.escalated()) {
+        const offered = `mail-attempt-escalation-offered:${source.mailboxId}:${source.messageId}:${source.checksum}`;
+        if (!this.readState(offered)) {
+          if (accountingOnly) return;
+          this.writeState(offered, "1");
+          return {
+            block:
+              "This Email's primary extraction attempts are spent. If one specific fact blocks a safe import, ask it with escalate_import_work; its answer allows one more submission. Otherwise resolve this Email unresolved with the exact gap.",
+          };
+        }
+      }
       if (accountingOnly) {
         this.writeState("mail-attempt-limit-pending", JSON.stringify(source));
         return;
@@ -639,7 +654,9 @@ export class PurchaseImportRunAgent
                           call.name === EXTRACT_ORDER_TOOL
                             ? (failure.data?.stage ?? "commit")
                             : "prepare";
-                        const action = mailWriterOutcome({ result, stage });
+                        const action = harnessRejected(result)
+                          ? "refused"
+                          : mailWriterOutcome({ result, stage });
                         await this.services().mailAttempt({
                           source: {
                             ...source,
