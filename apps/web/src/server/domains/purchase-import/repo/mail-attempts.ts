@@ -104,6 +104,11 @@ export async function recordMailAttempt(
               input.identity,
               ...(input.legacyIdentity ? [input.legacyIdentity] : []),
             ]),
+            // A refused call never reached a writer: it may clear only its own
+            // reservation, never an identical attempt whose outcome is uncertain.
+            input.action === "refused"
+              ? sql`${runOperation.result}->>${"invocation"} = ${input.invocation}`
+              : undefined,
           ),
         );
       for (const alias of aliases)
@@ -115,7 +120,7 @@ export async function recordMailAttempt(
             ...attemptReceipt.parse(alias.result),
             charged: input.action !== "exempt",
             pending: input.action === "pending",
-            rejected: input.action === "invalid",
+            rejected: input.action === "invalid" || input.action === "refused",
           },
         );
       return mailAttemptResult.parse({ kind: "admitted" });

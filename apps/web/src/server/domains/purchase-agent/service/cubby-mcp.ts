@@ -261,10 +261,10 @@ type WriterResult = Pick<ToolExecutionResult, "isError" | "diagnostics">;
 
 /**
  * The harness refused the call before any writer ran: invalid arguments, a
- * `beforeTool` block or an unknown tool. Such a call has no write outcome to
- * record; settling it as an uncertain commit left a pending attempt with no
- * replayable proposal, which blocked every later extraction of its Email until
- * the per-Email request limit (2026-11-11).
+ * `beforeTool` block or an unknown tool. Such a call has no write outcome;
+ * settling it as an uncertain commit left a pending attempt with no replayable
+ * proposal, which blocked every later extraction of its Email until the
+ * per-Email request limit (2026-11-11).
  */
 export function harnessRejected(result: WriterResult): boolean {
   return (

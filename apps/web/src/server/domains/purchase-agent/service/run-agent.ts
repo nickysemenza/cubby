@@ -627,8 +627,7 @@ export class PurchaseImportRunAgent
                     if (
                       attempts &&
                       !call.parent &&
-                      isMailExtractionCall(call) &&
-                      !harnessRejected(result)
+                      isMailExtractionCall(call)
                     ) {
                       const savedSource = this.readState(
                         `mail-attempt-source:${call.id}`,
@@ -655,7 +654,9 @@ export class PurchaseImportRunAgent
                           call.name === EXTRACT_ORDER_TOOL
                             ? (failure.data?.stage ?? "commit")
                             : "prepare";
-                        const action = mailWriterOutcome({ result, stage });
+                        const action = harnessRejected(result)
+                          ? "refused"
+                          : mailWriterOutcome({ result, stage });
                         await this.services().mailAttempt({
                           source: {
                             ...source,

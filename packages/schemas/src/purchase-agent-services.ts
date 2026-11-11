@@ -43,7 +43,18 @@ export const mailAttemptInput = z.object({
   publicationPossible: z.boolean(),
   proposal: z.record(z.string(), z.json()).optional(),
   stage: z.enum(["primary", "escalation"]),
-  action: z.enum(["admit", "exempt", "pending", "complete", "invalid"]),
+  /**
+   * `refused`: the harness refused this invocation before any writer ran. It
+   * settles only this invocation's own reservation, as a spent rejected attempt.
+   */
+  action: z.enum([
+    "admit",
+    "exempt",
+    "pending",
+    "complete",
+    "invalid",
+    "refused",
+  ]),
 });
 export const mailAttemptResult = z.object({
   kind: z.enum(["admitted", "exhausted", "pending"]),
