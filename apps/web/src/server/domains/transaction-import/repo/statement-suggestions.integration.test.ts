@@ -21,6 +21,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -3911,7 +3912,11 @@ describe("statement Transaction suggestions", () => {
         providerAmount: 60,
       }),
     ]);
-    await generate(ctx);
+    // Statement generation runs the transfer-pair lookup for every charge.
+    await expectStatementBudget(() => generate(ctx), {
+      statements: 36,
+      parameters: 39,
+    });
     await label(
       ctx,
       answering({ kind: "account_transfer", counterparty: "business" }),
