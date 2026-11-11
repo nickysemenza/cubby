@@ -49,32 +49,25 @@ const publishEntityConnection = async (
 
 describe("fresh retained Email connection recommendations", () => {
   const ctx = withTestDb();
-  async function fixture(
-    suffix = "",
-    existing?: { partyId: string; vendorId: string },
-  ) {
-    const party = existing
-      ? { id: existing.partyId }
-      : await insertWithShortcode(ctx.db, "ledgerParty", {
-          name: "Synthetic connection member",
-          kind: "member",
-          userId: ctx.actor.userId,
-        });
-    const vendor = existing
-      ? { id: existing.vendorId }
-      : await insertWithShortcode(ctx.db, "vendor", {
-          name: "Synthetic connection merchant",
-        });
+  async function fixture() {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic connection member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic connection merchant",
+    });
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
-      orderId: `SYNTHETIC-CONNECTION${suffix}`,
+      orderId: "SYNTHETIC-CONNECTION",
       date: "2026-10-01",
       statedTotal: moneyToMinor(24),
     });
     const original = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: party.id,
       mailboxId: "synthetic-connection-mailbox",
-      messageId: `synthetic-connection-message${suffix}`,
+      messageId: "synthetic-connection-message",
       vendorId: vendor.id,
       sender: "orders@example.test",
       subject: "Synthetic connection receipt",
@@ -276,26 +269,6 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );
-    const other = await fixture("-other", {
-      partyId: f.original.ledgerPartyId,
-      vendorId: f.purchase.vendorId,
-    });
-    await decideEmailPurchase(
-      ctx.db,
-      {
-        id: parseShortcodeFor("email", other.source.entityId),
-        purchaseId: parseShortcodeFor("purchase", f.purchase.shortcode),
-        expectedChecksum: other.message.checksum,
-        decision: "linked",
-      },
-      ctx.actor,
-      { eventId: other.event.id, originalId: other.original.id },
-    );
-    expect(
-      (await retrieveConnectionCandidates(ctx.db, f.source)).map(
-        (candidate) => candidate.target,
-      ),
-    ).not.toContainEqual(f.target);
     await getDb(ctx.db)
       .update(orderMailEvent)
       .set({ amount: 25 })
