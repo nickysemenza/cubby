@@ -34,11 +34,7 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  AiBudgetExhaustedError,
-  paidFundingStopMessage,
-  readAiBudget,
-} from "~/server/ai/budget";
+import { stopForFunding } from "~/server/ai/funding-wait";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -55,7 +51,6 @@ import {
   photoRunImage,
 } from "~/server/db/schema";
 import { releaseUnsettledMailRunSources } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { pauseForFunding } from "~/server/domains/run/repo/execution-context";
 import {
   loadRunScope,
   STALE_RUN_MS,
@@ -172,14 +167,10 @@ async function reconcileSettledRunOnce(
       // The agent's last turn found no funding — an empty paid gateway or an
       // exhausted provider credit balance. The window budget was not reached,
       // so the pause names the refusal it carries.
-      const status = await readAiBudget(db);
-      await pauseForFunding(
+      await stopForFunding(
         db,
         input.runId,
-        new AiBudgetExhaustedError(
-          status,
-          paidFundingStopMessage(input.failure.detail ?? "", status),
-        ),
+        input.failure.detail ?? "",
         input.generation,
       );
       return {

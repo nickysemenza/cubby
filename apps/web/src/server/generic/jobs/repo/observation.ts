@@ -241,15 +241,6 @@ async function readAiEvaluationStreams(
   return rows;
 }
 
-/** Member wording for drain units that have no stream of their own. */
-const DRAIN_UNIT_LABEL = new Map<string, string>([
-  ["derived-rebuild", "Totals and search rebuild"],
-  ["email-purchase-discovery", "Email purchase links"],
-  ["field-automation:events", "Field suggestions after changes"],
-  ["field-automation:policy", "Field suggestions after a policy update"],
-  ["reconcile", "Stopped Run cleanup"],
-]);
-
 /** The stream that counts a drain unit's items, when it has one. */
 const drainStreamKind = (unit: string) =>
   unit.startsWith("ai-evaluation:")
@@ -262,9 +253,11 @@ const streamDrainUnit = (kind: string) =>
       ? kind
       : null;
 
-/** A drain unit in member words: its own label, else its stream's, else its stored name. */
-const drainUnitLabel = (unit: string) =>
-  DRAIN_UNIT_LABEL.get(unit) ?? kindLabel(drainStreamKind(unit));
+/** A drain unit in member words: its declaration, stream, or stored name. */
+const drainUnitLabel = (unit: string, declarations: readonly DrainDue[]) =>
+  declarations
+    .map((drain) => drain.label?.(unit))
+    .find((label) => label !== undefined) ?? kindLabel(drainStreamKind(unit));
 
 /** A drain unit's record row: its rotation stamp, latest page and failing streak. */
 type DrainRecord = {
@@ -664,7 +657,7 @@ async function observeWork(
           {
             unit,
             type: "drain",
-            label: drainUnitLabel(unit),
+            label: drainUnitLabel(unit, drains),
             claimed: claimed ? 1 : 0,
             succeeded: finished("succeeded"),
             deferred: finished("deferred"),
@@ -909,7 +902,9 @@ function drainUnitItems({
   owed,
   stuck,
   queueDiagnostic,
+  declarations,
 }: {
+  declarations: readonly DrainDue[];
   now: Date;
   activity: WorkActivity;
   drains: readonly DrainRecord[];
@@ -959,7 +954,7 @@ function drainUnitItems({
     const age = formatStuckAge(now.getTime() - since.getTime());
     items.push({
       key: `drain:${record.unit}:${failingSince ? "failing" : "deferring"}`,
-      title: `${drainUnitLabel(record.unit)} keeps ${failingSince ? "failing" : "waiting"}`,
+      title: `${drainUnitLabel(record.unit, declarations)} keeps ${failingSince ? "failing" : "waiting"}`,
       body: failingSince
         ? `Every pass has failed for ${age}, so this work isn't running.`
         : `Every pass has deferred for ${age}, so this work isn't finishing.`,
@@ -991,7 +986,7 @@ function drainUnitItems({
     const queued = unitOf.get(unit);
     items.push({
       key: `drain:${unit}`,
-      title: `${drainUnitLabel(unit)} stopped`,
+      title: `${drainUnitLabel(unit, declarations)} stopped`,
       body: [
         queued ? stoppedCause(queued, now) : null,
         `Its work has waited ${formatStuckAge(now.getTime() - since.getTime())}.`,
@@ -1085,6 +1080,7 @@ export async function readBackgroundWorkStatus(
       owed,
       stuck,
       queueDiagnostic,
+      declarations: drainDues,
     }),
   );
   for (const pile of unpublished) {

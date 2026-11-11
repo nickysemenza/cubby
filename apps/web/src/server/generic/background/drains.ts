@@ -40,6 +40,8 @@ export type ArmDrainRecovery = (claim: {
  */
 export type BackgroundDrain = {
   name: string;
+  /** Member-facing wording for units owned by this drain. */
+  label?(unit: string): string | undefined;
   /**
    * Rows `(unit text, demand boolean, since timestamp)` for units claimable
    * now; `demand` is member-visible Run work. Null when this drain cannot run

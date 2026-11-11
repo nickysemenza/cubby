@@ -1,6 +1,5 @@
 import {
   jobState,
-  jobWaitingOnReason,
   jobWaitReason,
   type JobLane,
   type JobWaitingOn,
@@ -13,6 +12,10 @@ import {
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
 import { type JobRow } from "~/server/generic/jobs/repo/queue";
+import {
+  classifyWaiting,
+  classifyWaitingSql,
+} from "~/server/generic/jobs/repo/waiting-classifier";
 
 type WaitingFacts = Pick<
   JobRow,
@@ -49,7 +52,15 @@ function deriveJobWaitingOn(
       return null;
     case jobState.enum.paused:
       return { reason: "paused", lane, by: job.runId ? "run" : "member" };
-    case jobState.enum.running:
+  }
+  const reason = classifyWaiting({
+    leased: job.state === jobState.enum.running,
+    waitReason: job.waitReason,
+    later: job.availableAt.getTime() > context.now.getTime(),
+    deviceLane: lane === "apple_device",
+  });
+  switch (reason) {
+    case "leased":
       return {
         reason: "leased",
         lane,
@@ -61,33 +72,28 @@ function deriveJobWaitingOn(
           !job.leaseExpiresAt ||
           job.leaseExpiresAt.getTime() <= context.now.getTime(),
       };
+    case "waiting_funding":
+      return { reason, lane, until: at(job.availableAt) };
+    case "waiting_device":
+      return waitingForDevice();
+    case "blocked":
+      return { reason, lane, by: "An Apple device preparing its input" };
+    case "backing_off":
+      return {
+        reason,
+        lane,
+        until: at(job.availableAt),
+        attempts: job.attempts,
+        lastError: job.error,
+        cause:
+          job.waitReason === jobWaitReason.enum.rate_limit ||
+          job.waitReason === jobWaitReason.enum.provider_capacity
+            ? job.waitReason
+            : null,
+      };
+    default:
+      return { reason: "due", lane };
   }
-  if (job.waitReason === jobWaitReason.enum.ai_funding_window)
-    return {
-      reason: "waiting_funding",
-      lane,
-      until: at(job.availableAt),
-    };
-  const later = job.availableAt.getTime() > context.now.getTime();
-  if (job.waitReason === jobWaitReason.enum.device && later)
-    return lane === "apple_device"
-      ? waitingForDevice()
-      : { reason: "blocked", lane, by: "An Apple device preparing its input" };
-  if (later)
-    return {
-      reason: "backing_off",
-      lane,
-      until: at(job.availableAt),
-      attempts: job.attempts,
-      lastError: job.error,
-      cause:
-        job.waitReason === jobWaitReason.enum.rate_limit ||
-        job.waitReason === jobWaitReason.enum.provider_capacity
-          ? job.waitReason
-          : null,
-    };
-  if (lane === "apple_device") return waitingForDevice();
-  return { reason: "due", lane };
 }
 
 const waitingForDevice = (): JobWaitingOn => ({
@@ -126,17 +132,16 @@ export const jobWaitingOnReasonSql = (
   const device = inKinds(table.kind, kindsOfLane("apple_device"));
   // Job timestamps are UTC without a zone; compare them to a UTC instant.
   const at = sql`${now.toISOString()}::timestamp`;
-  const R = jobWaitingOnReason.enum;
+  const reason = classifyWaitingSql({
+    leased: sql`${table.state} = ${jobState.enum.running}`,
+    waitReason: table.waitReason,
+    later: sql`${table.availableAt} > ${at}`,
+    deviceLane: device,
+  });
   return sql<JobWaitingOnReason | null>`(CASE
     WHEN ${table.state} IN (${jobState.enum.completed}, ${jobState.enum.failed}, ${jobState.enum.cancelled}) THEN NULL
-    WHEN ${table.state} = ${jobState.enum.paused} THEN ${R.paused}
-    WHEN ${table.state} = ${jobState.enum.running} THEN ${R.leased}
-    WHEN ${table.waitReason} = ${jobWaitReason.enum.ai_funding_window} THEN ${R.waiting_funding}
-    WHEN ${table.waitReason} = ${jobWaitReason.enum.device} AND ${table.availableAt} > ${at}
-      THEN CASE WHEN ${device} THEN ${R.waiting_device} ELSE ${R.blocked} END
-    WHEN ${table.availableAt} > ${at} THEN ${R.backing_off}
-    WHEN ${device} THEN ${R.waiting_device}
-    ELSE ${R.due} END)::text`;
+    WHEN ${table.state} = ${jobState.enum.paused} THEN ${"paused"}
+    ELSE ${reason} END)::text`;
 };
 
 /**

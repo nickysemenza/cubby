@@ -64,11 +64,8 @@ import {
   type PiCallTarget,
   type SharedEffort,
 } from "~/server/ai/adapters";
-import {
-  paidFundingStop,
-  withAiBudget,
-  withPlanBudget,
-} from "~/server/ai/budget";
+import { withAiBudget, withPlanBudget } from "~/server/ai/budget";
+import { stopForFunding } from "~/server/ai/funding-wait";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import {
@@ -1033,7 +1030,7 @@ export async function runStructuredFeature<T>(
       // ADR 0027: a paid rung with no balance or no key waits for the next
       // window. Failing would release the Run's Emails to a pass that fails too.
       if (ctx.db && paidFundingRefusal(failure.message))
-        throw await paidFundingStop(ctx.db, ctx.runId, failure.message);
+        throw await stopForFunding(ctx.db, ctx.runId, failure.message);
       if (
         error instanceof z.ZodError ||
         getErrorMessage(error).startsWith("Expected a forced")

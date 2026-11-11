@@ -5,16 +5,18 @@ import {
 } from "@cubby/schemas/image-processing";
 import {
   JOB_NEEDS_ATTENTION_ATTEMPTS,
-  jobWaitingOnReason,
   jobWaitReason,
   type JobWaitingOn,
-  type JobWaitingOnReason,
 } from "@cubby/schemas/job";
 import { and, eq, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
+import {
+  classifyWaiting,
+  classifyWaitingSql,
+} from "~/server/generic/jobs/repo/waiting-classifier";
 
 const STATE = imageProcessingJobState.enum;
 
@@ -63,15 +65,12 @@ export const imageJobClaimable = (now: Date) =>
 /** Open rows by what they wait on, for Run rollups over many rows. */
 export const imageJobWaitingOnReasonSql = (alias: string, now: Date) => {
   const c = (name: string) => column(alias, name);
-  const R = jobWaitingOnReason.enum;
-  return sql<JobWaitingOnReason>`(CASE
-    WHEN ${c("leaseUntil")} IS NOT NULL THEN ${R.leased}
-    WHEN ${c("waitReason")} = ${jobWaitReason.enum.ai_funding_window} THEN ${R.waiting_funding}
-    WHEN ${c("waitReason")} = ${jobWaitReason.enum.device} AND ${c("runAt")} > ${at(now)}
-      THEN CASE WHEN ${c("lane")} = ${"device"} THEN ${R.waiting_device} ELSE ${R.blocked} END
-    WHEN ${c("runAt")} > ${at(now)} THEN ${R.backing_off}
-    WHEN ${c("lane")} = ${"device"} THEN ${R.waiting_device}
-    ELSE ${R.due} END)::text`;
+  return classifyWaitingSql({
+    leased: sql`${c("leaseUntil")} IS NOT NULL`,
+    waitReason: c("waitReason"),
+    later: sql`${c("runAt")} > ${at(now)}`,
+    deviceLane: sql`${c("lane")} = ${"device"}`,
+  });
 };
 
 /** What one open row waits on, in the shape every waiting-on surface reads. */
@@ -85,42 +84,48 @@ export function imageJobWaitingOn(
 ): JobWaitingOn {
   const lane = row.lane === "device" ? "apple_device" : "frontier_ai";
   const device = { reason: "waiting_device", lane: "apple_device" } as const;
-  if (row.leaseUntil)
-    return {
-      reason: "leased",
-      lane,
-      executor:
-        executor?.name ?? (row.lane === "cloud" ? "Cubby server" : null),
-      executorDeviceId: executor?.deviceId ?? null,
-      leasedAt: null,
-      leaseExpiresAt: row.leaseUntil.toISOString(),
-      expired: row.leaseUntil.getTime() <= now.getTime(),
-    };
-  if (row.waitReason === jobWaitReason.enum.ai_funding_window)
-    return {
-      reason: "waiting_funding",
-      lane,
-      until: row.runAt.toISOString(),
-    };
-  const later = row.runAt.getTime() > now.getTime();
-  if (row.waitReason === jobWaitReason.enum.device && later)
-    return row.lane === "device"
-      ? device
-      : { reason: "blocked", lane, by: "An Apple device preparing its input" };
-  if (later)
-    return {
-      reason: "backing_off",
-      lane,
-      until: row.runAt.toISOString(),
-      attempts: row.failures,
-      lastError: row.lastError,
-      cause:
-        row.waitReason === jobWaitReason.enum.rate_limit ||
-        row.waitReason === jobWaitReason.enum.provider_capacity
-          ? row.waitReason
-          : null,
-    };
-  return row.lane === "device" ? device : { reason: "due", lane };
+  const reason = classifyWaiting({
+    leased: row.leaseUntil !== null,
+    waitReason: row.waitReason,
+    later: row.runAt.getTime() > now.getTime(),
+    deviceLane: row.lane === "device",
+  });
+  switch (reason) {
+    case "leased": {
+      const leaseUntil = row.leaseUntil ?? now;
+      return {
+        reason: "leased",
+        lane,
+        executor:
+          executor?.name ?? (row.lane === "cloud" ? "Cubby server" : null),
+        executorDeviceId: executor?.deviceId ?? null,
+        leasedAt: null,
+        leaseExpiresAt: leaseUntil.toISOString(),
+        expired: leaseUntil.getTime() <= now.getTime(),
+      };
+    }
+    case "waiting_funding":
+      return { reason, lane, until: row.runAt.toISOString() };
+    case "waiting_device":
+      return device;
+    case "blocked":
+      return { reason, lane, by: "An Apple device preparing its input" };
+    case "backing_off":
+      return {
+        reason,
+        lane,
+        until: row.runAt.toISOString(),
+        attempts: row.failures,
+        lastError: row.lastError,
+        cause:
+          row.waitReason === jobWaitReason.enum.rate_limit ||
+          row.waitReason === jobWaitReason.enum.provider_capacity
+            ? row.waitReason
+            : null,
+      };
+    default:
+      return { reason: "due", lane };
+  }
 }
 
 /** Read-only actionability; the stored job and every attempt retain their outcome. */

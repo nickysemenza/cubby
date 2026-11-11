@@ -14,7 +14,11 @@ import { readImageExecutions } from "~/server/domains/image-processing/repo/imag
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
-import { imageJobDisplayStateSql, imageJobWaitingOn } from "./image-job-state";
+import {
+  imageJobDisplayStateSql,
+  imageJobWaitingOn,
+  imageJobWaitingOnReasonSql,
+} from "./image-job-state";
 import {
   claimImageProcessingJob,
   createTransparentDerivativeAndJob,
@@ -90,6 +94,37 @@ describe("device work waits parked and records no attempt", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
     expect(displayed?.state).toBe("waiting_for_device");
+  });
+
+  it("classifies the same image wait in SQL and in memory", async () => {
+    const jobId = await subjectLiftJob();
+    const now = new Date();
+    const future = new Date(now.getTime() + 60_000);
+    for (const fields of [
+      {
+        waitReason: "ai_funding_window" as const,
+        runAt: future,
+        leaseUntil: null,
+      },
+      { waitReason: "device" as const, runAt: future, leaseUntil: null },
+      { waitReason: null, runAt: future, leaseUntil: null },
+      { waitReason: null, runAt: now, leaseUntil: future },
+      { waitReason: null, runAt: now, leaseUntil: null },
+    ]) {
+      await getDb(ctx.db)
+        .update(imageProcessingJob)
+        .set(fields)
+        .where(eq(imageProcessingJob.id, jobId));
+      const [row] = await getDb(ctx.db)
+        .select({
+          reason: imageJobWaitingOnReasonSql("ImageProcessingJob", now),
+        })
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, jobId));
+      expect(row?.reason).toBe(
+        imageJobWaitingOn(await jobOf(jobId), now).reason,
+      );
+    }
   });
 
   it("creates exactly one attempt when a device takes the lease", async () => {

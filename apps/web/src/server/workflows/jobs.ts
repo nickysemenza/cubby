@@ -123,6 +123,8 @@ export const productionJobHandlers: JobHandlers = {
 /** Derived values keep one resumable hourly pass; a permit commits one page of it. */
 const derivedRebuildDrain: BackgroundDrain = {
   name: "derived-rebuild",
+  label: (unit) =>
+    unit === "derived-rebuild" ? "Totals and search rebuild" : undefined,
   due: () => derivedRebuildDue("derived-rebuild"),
   next: derivedRebuildNext,
   async page(db) {
@@ -143,6 +145,7 @@ const derivedRebuildDrain: BackgroundDrain = {
  */
 const reconcileDrain: BackgroundDrain = {
   name: "reconcile",
+  label: (unit) => (unit === "reconcile" ? "Stopped Run cleanup" : undefined),
   due: () =>
     sql`SELECT 'reconcile'::text AS unit, false AS demand, owed.since
       FROM (SELECT least(${failedCoordinatorDispatchesSince()}, ${workflowRunsToReconcileSince()})::timestamp AS since) owed
