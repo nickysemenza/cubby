@@ -21,7 +21,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
-import { mergeReviewedProductPair } from "~/server/generic/suggestions/repo/suggestion-product";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -197,13 +197,19 @@ describe("retained Product identity conflict guards", () => {
         fingerprint: prepared!.fingerprint,
       });
       await expect(
-        mergeReviewedProductPair(kernelCtx(ctx), {
-          keepId: first.id,
-          mergeId: second.id,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
           suggestionId: proposal.id,
-          expectedFingerprint: proposal.fingerprint!,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+          expectedFingerprint: proposal.fingerprint ?? proposal.id,
+          application: {
+            kind: "product_merge",
+            keepId: first.id,
+            mergeId: second.id,
+          },
         }),
-      ).rejects.toThrow(/identity conflict|evidence changed/);
+      ).rejects.toThrow(/identity conflict|changed since review/);
       expect(
         (
           await getDb(ctx.db)
@@ -323,13 +329,19 @@ describe("retained Product identity conflict guards", () => {
         sourceUrls: [],
       });
       await expect(
-        mergeReviewedProductPair(kernelCtx(ctx), {
-          keepId: keeper.id,
-          mergeId: second.id,
+        reviewSuggestion(ctx.db, kernelCtx(ctx), {
           suggestionId: proposal.id,
-          expectedFingerprint: proposal.fingerprint!,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          intent: "apply",
+          expectedFingerprint: proposal.fingerprint ?? proposal.id,
+          application: {
+            kind: "product_merge",
+            keepId: keeper.id,
+            mergeId: second.id,
+          },
         }),
-      ).rejects.toThrow(/identity conflict|evidence changed/);
+      ).rejects.toThrow(/identity conflict|changed since review/);
       previous = keeper;
     }
     expect(

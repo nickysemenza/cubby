@@ -189,13 +189,18 @@ export function statementRecords(requested?: readonly string[]) {
 
 export function statementSettlementMatch(scope: SuggestionRecordScope) {
   const set = scope.records && requested(scope.records);
-  const settled = statementSettlementRefs.flatMap(({ entity, id }) => {
-    if (scope.entity && scope.entity !== entity) return [];
-    if (set && !set.entities.has(entity)) return [];
-    // Resolved UUIDs keep the relation's primary-key lookup available. Display
-    // JSON instead casts every linked id to text before applying the scope.
-    return [set ? set.match({ entity, id }) : isNotNull(id)];
-  });
+  const settled = statementSettlementRefs
+    .filter(
+      ({ entity }) =>
+        scope.includeRelated || entity === entities.financialTransaction,
+    )
+    .flatMap(({ entity, id }) => {
+      if (scope.entity && scope.entity !== entity) return [];
+      if (set && !set.entities.has(entity)) return [];
+      // Resolved UUIDs keep the relation's primary-key lookup available. Display
+      // JSON instead casts every linked id to text before applying the scope.
+      return [set ? set.match({ entity, id }) : isNotNull(id)];
+    });
   return or(...settled);
 }
 
@@ -257,7 +262,7 @@ type ReferenceGuard = {
   scope?: string;
   negate?: boolean;
 };
-export type Reference =
+export type Reference = { subject?: boolean } & (
   | { kind: "primary"; guard?: ReferenceGuard }
   | {
       kind: "value";
@@ -275,7 +280,8 @@ export type Reference =
       resolve?: boolean;
       guard?: ReferenceGuard;
     }
-  | { kind: "contains"; at: JsonPath; guard?: ReferenceGuard };
+  | { kind: "contains"; at: JsonPath; guard?: ReferenceGuard }
+);
 
 export type AffectedRecordsSpec = {
   roles: readonly string[];

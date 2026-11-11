@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import type { PgTransactionConfig } from "drizzle-orm/pg-core";
@@ -50,7 +52,60 @@ export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
  * rollback restores. A transaction opened with a raw `.transaction()` instead
  * of `withTransaction` has no commit boundary and rejects deferred effects.
  */
-const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
+type KeyedAfterCommit = {
+  key: string;
+  items: unknown[];
+  flush: (db: Database, items: unknown[]) => Promise<void>;
+};
+type AfterCommitEntry = AfterCommitEffect | KeyedAfterCommit;
+const afterCommitQueues = new WeakMap<object, AfterCommitEntry[]>();
+const afterCommitScope = new AsyncLocalStorage<AfterCommitEntry[]>();
+
+const enrollAfterCommit = (
+  queue: AfterCommitEntry[],
+  entry: AfterCommitEntry,
+) => {
+  if (typeof entry !== "function") {
+    const existing = queue.find(
+      (item) => typeof item !== "function" && item.key === entry.key,
+    );
+    if (existing && typeof existing !== "function") {
+      existing.items.push(...entry.items);
+      return;
+    }
+  }
+  queue.push(entry);
+};
+
+/** Coalesce keyed effects across commits in one request scope. */
+export async function withAfterCommitScope<T>(
+  fn: () => Promise<T>,
+  finish: (flush: Promise<void>) => Promise<void> = (flush) => flush,
+): Promise<T> {
+  if (afterCommitScope.getStore()) return fn();
+  const pending: AfterCommitEntry[] = [];
+  return afterCommitScope.run(pending, async () => {
+    try {
+      return await fn();
+    } finally {
+      await finish(
+        (async () => {
+          for (const entry of pending) {
+            if (typeof entry === "function") continue;
+            try {
+              await entry.flush(scopeDatabases.get(entry)!, entry.items);
+            } catch (error) {
+              transactionLog.error("After-commit scoped effect failed", {
+                error: String(error),
+              });
+            }
+          }
+        })(),
+      );
+    }
+  });
+}
+const scopeDatabases = new WeakMap<KeyedAfterCommit, Database>();
 const committedChanges = new WeakMap<object, DatabaseChanges>();
 
 /** Changes follow savepoint ownership; only a successful outer commit publishes. */
@@ -132,35 +187,77 @@ export const runBeforeCommitDatabase = (
  * Run `effect` now on a pool-bound handle; on a handle inside a
  * {@link withTransaction}, hold it until the outermost commit.
  */
-export const runAfterCommit = async (
+export function runAfterCommit<T>(
+  db: Database | RepositoryQueryTransaction,
+  effect: {
+    key: string;
+    items: T[];
+    flush: (db: Database, items: T[]) => Promise<void>;
+  },
+): Promise<void>;
+export function runAfterCommit(
   db: Database | RepositoryQueryTransaction,
   effect: AfterCommitEffect,
-): Promise<void> => {
+): Promise<void>;
+export async function runAfterCommit<T>(
+  db: Database | RepositoryQueryTransaction,
+  effect:
+    | AfterCommitEffect
+    | {
+        key: string;
+        items: T[];
+        flush: (db: Database, items: T[]) => Promise<void>;
+      },
+): Promise<void> {
+  const entry: AfterCommitEntry =
+    typeof effect === "function"
+      ? effect
+      : {
+          key: effect.key,
+          items: [...effect.items],
+          flush: (committedDb, items) => {
+            // SAFETY: Each key identifies one item type, preserved when its entries merge.
+            return effect.flush(committedDb, items as T[]);
+          },
+        };
   const pending = afterCommitQueues.get(db);
   if (pending) {
-    pending.push(effect);
+    enrollAfterCommit(pending, entry);
     return;
   }
-  if (!("rollback" in db)) await effect(db);
-  else {
+  if (!("rollback" in db)) {
+    if (typeof entry === "function") await entry(db);
+    else await entry.flush(db, entry.items);
+  } else {
     const parent = transactionParents.get(db);
     if (!parent)
       throw new Error(
         "After-commit work requires a transaction opened with withTransaction",
       );
-    await effect(parent);
+    if (typeof entry === "function") await entry(parent);
+    else await entry.flush(parent, entry.items);
   }
-};
+}
 
 /** Every effect is attempted; the transaction already committed either way. */
 const flushAfterCommit = async (
   db: Database,
-  effects: readonly AfterCommitEffect[],
+  effects: readonly AfterCommitEntry[],
 ): Promise<void> => {
   const failures: unknown[] = [];
   for (const effect of effects) {
     try {
-      await effect(db);
+      if (typeof effect === "function") await effect(db);
+      else {
+        const scope = afterCommitScope.getStore();
+        if (scope) {
+          const existing = scope.find(
+            (item) => typeof item !== "function" && item.key === effect.key,
+          );
+          if (!existing) scopeDatabases.set(effect, db);
+          enrollAfterCommit(scope, effect);
+        } else await effect.flush(db, effect.items);
+      }
     } catch (error) {
       failures.push(error);
     }
@@ -264,7 +361,7 @@ const withTransactionAttempts = async <T>(
       durationMs: Math.round(performance.now() - started),
       boundaryDurationMs: Math.round(performance.now() - boundaryStarted),
     });
-    const pending: AfterCommitEffect[] = [];
+    const pending: AfterCommitEntry[] = [];
     const changes: DatabaseChanges = {};
     const before: BeforeCommitEntry[] = [];
     let result: T;
@@ -335,7 +432,7 @@ const withTransactionAttempts = async <T>(
     } else if (Object.keys(changes).length) {
       await notifyDatabaseChanges(changes);
     }
-    if (parent) parent.push(...pending);
+    if (parent) for (const entry of pending) enrollAfterCommit(parent, entry);
     else await flushAfterCommit(db, pending);
     return result;
   }

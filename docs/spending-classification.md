@@ -108,7 +108,7 @@ adjustment with unknown principal weights can remain partially classified.
 
 ## Reviewed changes
 
-Product Category mappings, parent moves, and merchant policies affecting existing Expenses use
+Product Category mappings, parent moves, and Vendor spending defaults use
 `spendingClassification.preview` and `spendingClassification.apply`. The preview
 reports classification counts and signed category deltas; apply rechecks its
 fingerprint inside a serializable transaction before audited entity writes.
@@ -122,8 +122,9 @@ aggregated allocation pass. Classification review is web-only; native hands
 the vendor and category sections off to web.
 
 Parent previews include the moved subtree and reject changes to live Products'
-effective Food behavior. Ordinary writes cannot move or remap categories with
-Expense history around review. The web **Use item detail** action previews and
+effective Food behavior. These fields are create-only in the generic entity API;
+all subsequent changes use review, including when no Expense history exists.
+The web **Use item detail** action previews and
 clears only selected Expenses' saved category overrides, then resolves them from
 item detail and eligible fallbacks; it never changes their money or clears
 Purchase defaults. A stale preview and a forbidden feature or category change

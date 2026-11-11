@@ -22,11 +22,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { rawProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import {
-  getMiscDisplayName,
-  isMiscProduct,
-  getErrorMessage,
-} from "@cubby/shared";
+import { getMiscDisplayName, isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
@@ -433,7 +429,13 @@ async function matchDetectedItems(
   locationId: LocationId,
   items: DetectedInventoryItem[],
   owner: AiCallOwner,
-): Promise<DetectedItem[]> {
+): Promise<{
+  items: DetectedItem[];
+  semanticUnavailable?: import("@cubby/schemas/ai").OptionalAiUnavailable;
+}> {
+  let semanticUnavailable:
+    | import("@cubby/schemas/ai").OptionalAiUnavailable
+    | undefined;
   const existingInventory = await getInventoryByLocationIds(db, [locationId]);
   const existingProductIds = new Set(
     existingInventory.map((entry) => entry.product.id),
@@ -491,11 +493,16 @@ async function matchDetectedItems(
               }
             : null;
         if (!matched) {
-          const [semanticMatch] = await semanticProductCandidatesBestEffort(
+          const semantic = await semanticProductCandidates(
             db,
             productName,
+            3,
             owner,
           );
+          if (!Array.isArray(semantic)) semanticUnavailable ??= semantic;
+          const semanticMatch = Array.isArray(semantic)
+            ? semantic[0]
+            : undefined;
           const semanticShortcode =
             semanticMatch?.item.entityKind === "product"
               ? parseShortcodeFor("product", semanticMatch.item.id)
@@ -542,25 +549,10 @@ async function matchDetectedItems(
       ...matchedItems.filter((item): item is DetectedItem => item !== null),
     );
   }
-  return suggestions;
-}
-
-async function semanticProductCandidatesBestEffort(
-  db: Database,
-  query: string,
-  owner: AiCallOwner,
-): ReturnType<typeof semanticProductCandidates> {
-  try {
-    return await semanticProductCandidates(db, query, 3, owner);
-  } catch (error) {
-    const parsedError = error instanceof Error ? error : null;
-    log.warn("inventory semantic-product-match failed", {
-      query,
-      errorName: parsedError?.name ?? "UnparsedError",
-      message: getErrorMessage(error),
-    });
-    return [];
-  }
+  return {
+    items: suggestions,
+    ...(semanticUnavailable ? { semanticUnavailable } : {}),
+  };
 }
 
 /**
@@ -661,7 +653,7 @@ export async function detectInventoryItems(
 
   return {
     ...raw,
-    items: await matchDetectedItems(db, locationId, raw.items, owner),
+    ...(await matchDetectedItems(db, locationId, raw.items, owner)),
     cache,
     analyzedAt,
   };

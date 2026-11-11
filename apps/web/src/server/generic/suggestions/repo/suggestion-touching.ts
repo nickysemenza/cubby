@@ -43,6 +43,8 @@ type SuggestionEligibility =
     };
 
 export type SuggestionRecordScope = SuggestionRecordSelection & {
+  /** Work queue record discovery uses the forward related-record projection. */
+  includeRelated?: boolean;
   eligibility: SuggestionEligibility;
 };
 
@@ -248,9 +250,12 @@ export function touchingSuggestionQuery(
     const graph = declaration.graph?.(db, scope, admission);
     const settlement = graph?.query;
     const matches = [
-      ...declaration.references.map((ref) =>
-        referenceMatches(ref, scope, family, admission, set),
-      ),
+      ...declaration.references
+        .filter(
+          (ref: Reference) =>
+            scope.includeRelated || ref.kind === "primary" || ref.subject,
+        )
+        .map((ref) => referenceMatches(ref, scope, family, admission, set)),
       ...(graph?.matches ?? []),
     ];
     const direct = matches.flatMap((match) =>

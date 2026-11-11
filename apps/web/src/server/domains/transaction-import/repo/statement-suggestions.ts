@@ -18,7 +18,6 @@ import {
 import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
-import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import {
   type StatementCounterparty,
   type StatementKindVotes,
@@ -50,6 +49,7 @@ import { sql, and, eq, inArray, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
@@ -68,7 +68,6 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
-import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
@@ -90,7 +89,7 @@ import {
   chargeStateOf,
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
-  recommendedWithLabels,
+  statementRecommendation,
   pendingSuggestion,
   sourceSuggestionAutomaticEligible,
   suggestionField,
@@ -137,12 +136,15 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import {
+  eligibleTargets,
+  type ClassifiedTarget,
+} from "~/server/generic/suggestions/repo/eligible-targets";
 import { validateStatementCorrection } from "~/server/generic/suggestions/repo/family-correction";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
-  publishSuggestion as publishStoredSuggestion,
-  publishSuggestions,
   matchedRulesOf,
+  type SuggestionPublication,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
@@ -161,9 +163,10 @@ import {
   countSuggestionLabelBacklog,
   inSuggestionBatches,
   lockSuggestionSlots,
+  publishReplacements,
   publishSuggestion,
   publishSuggestionBatches,
-  retireSupersededSuggestions,
+  revisionSuppresses,
   type SuggestionFamily,
   type SuggestionOutcome,
   type SuggestionRow,
@@ -807,9 +810,6 @@ function copyPairing(charge: ChargeRef, fetched: readonly CopyMember[]) {
       member,
     ]);
   const counts = new Set([...bySource.values()].map((list) => list.length));
-  const others = members.filter(
-    (member) => chargeId(member.charge) !== chargeId(charge),
-  );
   if (counts.size !== 1 || unstable)
     return {
       kind: "ambiguous",
@@ -837,12 +837,13 @@ function copyPairing(charge: ChargeRef, fetched: readonly CopyMember[]) {
       a.canonical.createdAt.localeCompare(b.canonical.createdAt) ||
       chargeId(a.charge).localeCompare(chargeId(b.charge)),
   );
-  // Booking the primary changes every group member's candidates, so all of
-  // them refresh, not only this event's copies.
+  // Copies are this event's other exports only: publishing retires their
+  // advice, so another event's primary in the group must never be one. The
+  // account's other pending charges refresh through pendingChargesNear.
   return chargeId(primary!.charge) === chargeId(charge)
     ? ({
         kind: "primary",
-        copies: others.map((member) => member.charge),
+        copies: pair.map((member) => member.charge),
       } satisfies CopyPairing)
     : ({ kind: "copy", transactionId: null } satisfies CopyPairing);
 }
@@ -852,6 +853,20 @@ const uniqueCharges = (charges: readonly ChargeRef[]) =>
     (charge, index, all) =>
       all.findIndex((other) => chargeId(other) === chargeId(charge)) === index,
   );
+
+const EXPLICIT = { eligibility: "explicit", contextReason: null } as const;
+
+function candidateEligibility(
+  classified: readonly ClassifiedTarget[] | undefined,
+  transactionId: string,
+): Pick<StatementTransactionCandidate, "eligibility" | "contextReason"> {
+  const target = classified?.find(
+    (candidate) => candidate.id === transactionId,
+  );
+  return target
+    ? { eligibility: target.eligibility, contextReason: target.reason }
+    : { eligibility: "eligible", contextReason: null };
+}
 
 type CopyOutcome = {
   /** A copy whose event has no booked Transaction yet publishes nothing. */
@@ -886,15 +901,7 @@ function pairCopies(
     return { ...none, waiting: true };
   if (pairing.kind === "ambiguous")
     return { ...none, siblings: pairing.others };
-  if (pairing.kind === "primary") {
-    if (!state.hold)
-      candidates.splice(
-        0,
-        candidates.length,
-        ...candidates.filter((candidate) => !candidate.claimed),
-      );
-    return { ...none, copies: pairing.copies };
-  }
+  if (pairing.kind === "primary") return { ...none, copies: pairing.copies };
   const pairedIndex = candidates.findIndex(
     (candidate) => candidate.transactionId === pairing.transactionId,
   );
@@ -906,58 +913,10 @@ function pairCopies(
         .filter((member) => member.charge.source !== charge.source)
         .map((member) => member.charge),
     };
-  candidates.unshift(...candidates.splice(pairedIndex, 1));
+  const [paired] = candidates.splice(pairedIndex, 1);
+  // Its primary from another source owns it at equal cents: evidence names it.
+  candidates.unshift({ ...paired!, ...EXPLICIT });
   return { ...none, pairedTransactionId: pairing.transactionId };
-}
-
-/**
- * Candidates per charge that already hold a settlement ref of another live
- * charge from the same source. Siblings only count unmatched charges, so once
- * one of two same-amount charges is attached, this is what still tells the
- * other one apart from a re-export of the same money.
- */
-async function claimedCandidates(
-  db: Database,
-  pairs: readonly { charge: ChargeRef; transactionId: string }[],
-): Promise<Map<string, Set<string>>> {
-  const result = new Map<string, Set<string>>();
-  if (!pairs.length) return result;
-  const values = sql.join(
-    pairs.map(
-      ({ charge, transactionId }) =>
-        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${transactionId}::uuid)`,
-    ),
-    sql`, `,
-  );
-  const rows = await unwrapDb(db).execute<{
-    key: string;
-    transactionId: string;
-  }>(
-    sql`
-    WITH p AS MATERIALIZED (
-      SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", "transactionId")
-    ),
-    owners AS MATERIALIZED (
-      SELECT p.key, p."transactionId" FROM p
-      JOIN "SourceOccurrence" owner ON owner."acceptedTransactionId" = p."transactionId"
-        AND owner.source = p.source AND owner.shortcode <> p."chargeKey"
-        AND owner.disposition <> ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} AND owner."supersededByOccurrenceId" IS NULL
-      UNION
-      SELECT p.key, p."transactionId" FROM p
-      JOIN "FinancialEvidenceAlias" unresolved ON unresolved."historicalTransactionId" = p."transactionId"
-        AND unresolved.source = p.source
-      LEFT JOIN "SourceOccurrence" retained ON retained.id=unresolved."occurrenceId"
-      WHERE retained.id IS NULL OR retained."acceptedTransactionId" IS DISTINCT FROM unresolved."historicalTransactionId"
-    ) SELECT DISTINCT key, "transactionId" FROM owners
-  `,
-    "objects",
-  );
-  for (const row of rows) {
-    const set = result.get(row.key) ?? new Set<string>();
-    set.add(String(row.transactionId));
-    result.set(row.key, set);
-  }
-  return result;
 }
 
 type MerchantHistory = {
@@ -1452,20 +1411,34 @@ export async function buildChargeProposals(
     ),
     ledgerPartyId: account.ledgerPartyId,
   }));
-  const [pendingTransactions, siblings, claimed, history, copies] =
+  const [pendingTransactions, siblings, eligibility, history, copies] =
     await Promise.all([
       statementPendingTransactions(db, accountIds),
       siblingsFor(db, grouped),
-      claimedCandidates(
+      eligibleTargets(
         db,
-        grouped.flatMap(({ charge }) =>
-          (
-            previewByKey.get(chargeId(charge))?.existingTransactions ?? []
-          ).flatMap((existing) => {
-            const transactionId = ids.get(existing.id);
-            return transactionId ? [{ charge, transactionId }] : [];
-          }),
-        ),
+        grouped.flatMap(({ charge }) => {
+          const row = previewByKey.get(chargeId(charge));
+          if (!row) return [];
+          const existing = row.existingTransactions.flatMap((candidate) => {
+            const transactionId = ids.get(candidate.id);
+            return transactionId
+              ? [{ transactionId, provider: candidate.provider === true }]
+              : [];
+          });
+          return [
+            {
+              key: chargeId(charge),
+              kind: "financialTransaction" as const,
+              ids: existing.map((candidate) => candidate.transactionId),
+              explicitIds: existing
+                .filter((candidate) => candidate.provider)
+                .map((candidate) => candidate.transactionId),
+              amountMinor: cents(row.proposed.amount),
+              owner: { source: charge.source, chargeKey: charge.chargeKey },
+            },
+          ];
+        }),
       ),
       merchantHistory(
         db,
@@ -1547,8 +1520,10 @@ export async function buildChargeProposals(
                   date: canonical.statementDate,
                 }),
                 label: null,
-                claimed:
-                  claimed.get(chargeId(charge))?.has(transactionId) ?? false,
+                ...candidateEligibility(
+                  eligibility.get(chargeId(charge)),
+                  transactionId,
+                ),
               },
             ]
           : [];
@@ -1572,7 +1547,7 @@ export async function buildChargeProposals(
     for (const hold of holds) {
       const listed = candidates.find((c) => c.transactionId === hold.id);
       // The hold carries its own pending rows' refs; that is what supersede settles.
-      if (listed) listed.claimed = false;
+      if (listed) Object.assign(listed, EXPLICIT);
       else
         candidates.push({
           transactionId: hold.id,
@@ -1595,7 +1570,7 @@ export async function buildChargeProposals(
             },
           ),
           label: null,
-          claimed: false,
+          ...EXPLICIT,
         });
     }
     candidates.sort(
@@ -1645,17 +1620,8 @@ export async function buildChargeProposals(
       ...(siblings.get(chargeId(charge)) ?? []),
       ...copy.siblings,
     ]);
-    // A claimed candidate already carries another charge; attaching by default
-    // would merge two charges, so it stays a candidate the create must reject.
-    const recommended = matchedCode
-      ? "book"
-      : hold
-        ? "supersede"
-        : candidates.some((candidate) => !candidate.claimed)
-          ? "attach"
-          : "create";
     const judgment: StatementTransactionJudgment = {
-      recommended,
+      recommended: "create",
       reviewReason,
       accountId,
       statementDate: canonical.statementDate,
@@ -1694,6 +1660,7 @@ export async function buildChargeProposals(
       clean: false,
       ...(matchedCode && { matchedTransactionId: ids.get(matchedCode) }),
     };
+    judgment.recommended = statementRecommendation(judgment);
     pending.push({ charge, canonical, rows, judgment });
   }
   await prepareStatementSpendingPage(
@@ -1782,7 +1749,7 @@ export async function labelledProposal(
 ): Promise<ChargeProposal> {
   const judgment = {
     ...labelled,
-    recommended: recommendedWithLabels(labelled),
+    recommended: statementRecommendation(labelled),
   };
   suggestionJudgments.statement_transaction.parse(judgment);
   return {
@@ -1982,7 +1949,16 @@ async function postedTwinExists(
   );
 }
 
-type PublishOutcome = "published" | "unchanged" | "suppressed" | "settled";
+type PublishOutcome =
+  | "published"
+  | "unchanged"
+  | "suppressed"
+  | "settled"
+  | "held";
+
+const isIdentityHold = (judgment: StatementTransactionJudgment) =>
+  judgment.reviewReason === PROVIDER_IDENTITY_REVIEW ||
+  judgment.reviewReason === OCCURRENCE_IDENTITY_REVIEW;
 
 const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   !judgment.reviewReason &&
@@ -2200,10 +2176,7 @@ function chargePublication(
         ),
       },
     },
-  } satisfies {
-    input: Parameters<typeof publishStoredSuggestion>[1];
-    projection: Parameters<typeof publishStoredSuggestion>[2];
-  };
+  } satisfies SuggestionPublication;
 }
 
 /** A statement slot's locked row in the family's own shape. */
@@ -2365,7 +2338,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   SuggestionFamily<
     StatementCandidate,
     ChargePublicationHistory,
-    "settled",
+    "settled" | "held",
     {
       states: Map<string, ChargeState> | null;
       history: Map<string, ChargePublicationHistory[]>;
@@ -2403,6 +2376,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   }),
   fingerprint: ({ proposal }) => proposal.fingerprint,
   evidenceFingerprint: ({ proposal }) => proposal.evidenceFingerprint,
+  suppresses: revisionSuppresses,
   row: (row) => ({
     ...row,
     producer: suggestionProducer.nullable().parse(row.producer),
@@ -2433,6 +2407,23 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     !isSettledBooking(proposal.judgment),
   async precheck(tx, { proposal, labelPublication }, rows, _producer, context) {
     const { charge, judgment } = proposal;
+    // Source identity review owns an unproven occurrence; a Suggestion that can
+    // only be dismissed would duplicate that queue.
+    if (isIdentityHold(judgment)) return { kind: "retire", reason: "held" };
+    // One bank event is one Suggestion: its copies wait for this primary, so
+    // advice they published before the pairing retires with this publication.
+    if (judgment.copies.length)
+      await transitionSuggestionStates(
+        tx,
+        sql`${pendingStatementState} AND (${sql.join(
+          judgment.copies.map(
+            (copy) =>
+              sql`(${suggestionField("source", STATE)}=${copy.source} AND ${suggestionField("chargeKey", STATE)}=${copy.chargeKey})`,
+          ),
+          sql` OR `,
+        )})`,
+        { active: false, status: "superseded" },
+      );
     if (
       rows.some(
         (row) => row.active && row.status === suggestionStatus.enum.pending,
@@ -2536,7 +2527,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       entry.label = previous.candidates.find(
         (saved) => saved.transactionId === entry.transactionId,
       )!.label;
-    judgment.recommended = recommendedWithLabels(judgment);
+    judgment.recommended = statementRecommendation(judgment);
     judgment.spending = await prepareStatementSpending(
       tx,
       judgment,
@@ -2678,6 +2669,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         date: row.statementDate,
         month: row.statementDate.slice(0, 7),
         account: row.accountCode,
+        vendor: row.vendorCode,
         owner: row.ownerCode,
         merchant: [row.merchant, row.rawDescription].filter(Boolean).join(" "),
         amount: row.amount,
@@ -2777,6 +2769,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         ["matchedTransactionId"],
       ].map((path) => ({
         kind: "value" as const,
+        subject: true,
         at: { column: "judgment" as const, path },
         entity: "financialTransaction",
       })),
@@ -2854,7 +2847,7 @@ function statementOutcome(
   published: SuggestionOutcome<
     StatementCandidate,
     ChargePublicationHistory,
-    "settled"
+    "settled" | "held"
   >,
   requested: SuggestionProducer,
 ): StatementPublishResult {
@@ -3194,24 +3187,21 @@ async function publishCompleteLabelBatch(
         applicationOrder,
       });
     }
-    await retireSupersededSuggestions(
-      tx,
-      publications.flatMap(({ history }) =>
-        history.filter((row) => row.active).map((row) => row.id),
-      ),
-    );
     if (publications.length) {
-      const published = await publishSuggestions(
+      // A label round keeps the rule row it replaces as history.
+      const published = await publishReplacements(
         tx,
-        publications.map(({ entry, history, applicationOrder }) =>
-          chargePublication(
+        { replaced: "deactivate" },
+        publications.map(({ entry, history, applicationOrder }) => ({
+          rows: history,
+          publication: chargePublication(
             entry.proposal,
             entry.producer,
             history.length,
             applicationOrder,
             entry.checkpoint,
           ),
-        ),
+        })),
       );
       for (const [index, publication] of publications.entries()) {
         const suggestion = published[index];
@@ -3325,6 +3315,39 @@ async function prepareStatementGenerationPage(
     return charges.flatMap((charge) => {
       const proposal = prepared.get(chargeId(charge));
       return proposal ? [proposal] : [];
+    });
+  }
+}
+
+/**
+ * Refresh named charges once the writing transaction commits. Calls in one
+ * transaction or MCP batch coalesce per source, so a batch regenerates each
+ * charge once after its last write.
+ */
+export async function regenerateChargesAfterCommit(
+  db: Parameters<typeof runAfterCommit>[0],
+  charges: readonly ChargeRef[],
+) {
+  for (const source of new Set(charges.map((charge) => charge.source))) {
+    const items = charges.filter((charge) => charge.source === source);
+    await runAfterCommit(db, {
+      key: `statement-charges:${source}`,
+      items: [...items],
+      flush: async (committed, queued: readonly ChargeRef[]) => {
+        try {
+          await regenerateCharges(committed, [
+            ...new Map(
+              queued.map((charge) => [chargeId(charge), charge]),
+            ).values(),
+          ]);
+        } catch (error) {
+          // SILENT: advisory refresh only; the write committed and each
+          // charge's own accept rechecks evidence, so the next Sweep repairs it.
+          log.error("Charge suggestion refresh failed", {
+            error: scrubErrorMessage(String(error)),
+          });
+        }
+      },
     });
   }
 }

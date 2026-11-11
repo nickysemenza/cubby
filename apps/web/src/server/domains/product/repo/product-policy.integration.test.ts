@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -11,10 +12,15 @@ import {
   linkExpensesToPurchase,
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
-import { withReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
+import {
+  applySpendingClassificationReview,
+  previewSpendingClassificationReview,
+} from "~/server/domains/spending-category/repo/spending-classification-review";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
+import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { updateThroughKernel } from "~/server/testing/entity-kernel";
+import { createTestRequestContext } from "~/server/testing/request-context";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 // A spending category with productExpectation "not_allowed" (a restaurant
@@ -162,13 +168,24 @@ describe("not_allowed product expectation", () => {
 
   it("refuses turning a Vendor with food lines into a restaurant that forbids Products", async () => {
     const { restaurants, grocer } = await foodLineAt("Example grocer");
-    await expect(
-      withReviewedSpendingClassification(ctx.db, () =>
-        updateThroughKernel(ctx.db, ctx.actor, "vendor", grocer.shortcode, {
-          spendingProfile: "restaurant",
-          defaultSpendingCategoryId: restaurants.shortcode,
-        }),
+    const request = {
+      action: "vendor" as const,
+      vendorId: parseShortcodeFor("vendor", grocer.shortcode),
+      spendingProfile: "restaurant" as const,
+      defaultSpendingCategoryId: parseShortcodeFor(
+        "spendingCategory",
+        restaurants.shortcode,
       ),
+    };
+    const preview = await previewSpendingClassificationReview(ctx.db, request);
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    await expect(
+      applySpendingClassificationReview(context, {
+        request,
+        fingerprint: preview.fingerprint,
+      }),
     ).rejects.toThrow(/does not allow/i);
   });
 

@@ -29,7 +29,7 @@ import { MobileCard } from "~/ui/data-table/mobile-card";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { MobileCardSkeletonList } from "~/ui/feedback/mobile-card-skeleton";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { Row, Stack } from "~/ui/layout";
+import { Disclosure, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -256,16 +256,29 @@ export function SearchPage({ query = "", type }: SearchPageProps) {
             </section>
           )}
           {relatedDraft === draft && !related.isPlaceholderData ? (
-            related.error || related.data?.error ? (
+            related.error ? (
               <ErrorDisplay
-                error={related.error ?? new Error(related.data?.error)}
+                error={related.error}
                 title="Related matches"
                 onRetry={() => void related.refetch()}
               />
             ) : related.data?.status === "unavailable" ? (
-              <Description size="xs">
-                Related matches are temporarily unavailable.
-              </Description>
+              <div>
+                <Description size="xs">
+                  Related matches are temporarily unavailable
+                  {related.data.reason ? ` (${related.data.reason})` : ""}.
+                </Description>
+                {related.data.detail ? (
+                  <Disclosure
+                    summary="Technical details"
+                    className="text-xs text-muted-foreground"
+                  >
+                    <pre className="break-words whitespace-pre-wrap">
+                      {related.data.detail}
+                    </pre>
+                  </Disclosure>
+                ) : null}
+              </div>
             ) : related.data?.complete === false ? (
               <p className="text-xs text-muted-foreground">
                 {related.data.gap === "pending"

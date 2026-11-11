@@ -184,6 +184,7 @@ function decideAuthority(
 
 const guessRow = z.object({
   suggestionId: z.string(),
+  fingerprint: z.string().nullable(),
   value: z.json(),
   confidence: z.number(),
   runnerUpValue: z.json().nullable(),
@@ -208,7 +209,7 @@ export async function readFieldGuess(
   field: string,
 ): Promise<FieldGuess | null> {
   const result = await unwrapDb(db).execute<z.input<typeof guessRow>>(sql`
-    SELECT s.id::text AS "suggestionId", s."suggestedValue" AS value,
+    SELECT s.id::text AS "suggestionId", s.fingerprint, s."suggestedValue" AS value,
       s.confidence, s."runnerUpValue", s."runnerUpConfidence",
       s.data->>'liveInputFingerprint' AS fence
     FROM "Suggestion" s
@@ -227,6 +228,8 @@ export async function readFieldGuess(
     return null;
   return {
     suggestionId: found.suggestionId,
+    // reviewKey; this repository program cannot import suggestion-presentation.
+    fingerprint: found.fingerprint ?? found.suggestionId,
     value: found.value,
     confidence: found.confidence,
     runnerUp:

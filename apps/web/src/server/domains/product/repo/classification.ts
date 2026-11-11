@@ -98,7 +98,7 @@ export async function assertProductCategoryChange(
   if (gardenSource && !isPlantingSourceFeature(feature)) {
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "A planting source Product must be a garden product, not a food Product.",
+      "A planting source Product must be a garden product, not a food Product. Choose a garden Product or change the Product category before using it as a planting source.",
     );
   }
   return categoryId;

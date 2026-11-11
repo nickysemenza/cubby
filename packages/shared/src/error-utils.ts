@@ -247,6 +247,7 @@ export const AppErrors = {
   DUPLICATE_RECORD: "CONFLICT",
   REFERENCED_RECORD_MISSING: "BAD_REQUEST",
   REQUIRED_FIELD_MISSING: "BAD_REQUEST",
+  CLASSIFICATION_POLICY_REFUSED: "BAD_REQUEST",
   CONSTRAINT_VIOLATION: "BAD_REQUEST",
 
   // AI suggestions: the model answered, but with an id that names no live

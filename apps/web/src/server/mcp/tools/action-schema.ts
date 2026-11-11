@@ -158,23 +158,35 @@ function mergeProperty(
     if (isText(described)) base.description = described;
     return scope ? withNote(base, scope) : base;
   }
-  const unique = new Map<string, { schema: JsonObject; labels: string[] }>();
+  const unique = new Map<
+    string,
+    { schema: JsonObject; members: typeof variants }
+  >();
   for (const variant of variants) {
     const key = canonical(variant.schema);
     const existing = unique.get(key);
-    if (existing) existing.labels.push(variant.label);
-    else unique.set(key, { schema: variant.schema, labels: [variant.label] });
+    if (existing) existing.members.push(variant);
+    else unique.set(key, { schema: variant.schema, members: [variant] });
   }
   if (unique.size === 1) {
     const [only] = unique.values();
     return scope ? withNote(only!.schema, scope) : only!.schema;
   }
+  // An alternative every leaf of an action shares names the action once.
+  const labelsOf = (members: typeof variants) =>
+    [...new Set(members.map((member) => member.action))].flatMap((action) => {
+      const own = members.filter((member) => member.action === action);
+      return own.length ===
+        variants.filter((variant) => variant.action === action).length
+        ? [action]
+        : own.map((member) => member.label);
+    });
   // The label wraps the alternative instead of editing it, so an alternative
   // repeated elsewhere (a kind's `data` inside `commands[]`) stays identical
   // and is hoisted once.
   return {
-    anyOf: [...unique.values()].map(({ schema, labels }) => ({
-      description: `for ${[...new Set(labels)].join("; ")}`,
+    anyOf: [...unique.values()].map(({ schema, members }) => ({
+      description: `for ${[...new Set(labelsOf(members))].join("; ")}`,
       allOf: [schema],
     })),
   };

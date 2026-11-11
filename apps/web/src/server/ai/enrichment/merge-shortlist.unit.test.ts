@@ -45,7 +45,7 @@ describe("buildMergeShortlist", () => {
     const green = entry("green-onion", "green onion");
     const scallionAlt = entry("scallion-alt", "scallion (bunched)");
 
-    const shortlist = await buildMergeShortlist(
+    const { candidates: shortlist } = await buildMergeShortlist(
       db,
       source,
       { runId },
@@ -63,7 +63,7 @@ describe("buildMergeShortlist", () => {
     const shared = entry("shared", "shared candidate", 1);
     const sharedFromSemantic = { ...shared, productCount: 99 };
 
-    const shortlist = await buildMergeShortlist(
+    const { candidates: shortlist } = await buildMergeShortlist(
       db,
       source,
       { runId },
@@ -84,7 +84,7 @@ describe("buildMergeShortlist", () => {
     };
     const other = entry("other", "green onion");
 
-    const shortlist = await buildMergeShortlist(
+    const { candidates: shortlist } = await buildMergeShortlist(
       db,
       source,
       { runId },
@@ -100,7 +100,7 @@ describe("buildMergeShortlist", () => {
       entry(`c${i}`, `candidate ${i}`),
     );
 
-    const shortlist = await buildMergeShortlist(
+    const { candidates: shortlist } = await buildMergeShortlist(
       db,
       source,
       { runId },
@@ -111,10 +111,28 @@ describe("buildMergeShortlist", () => {
     expect(shortlist).toHaveLength(20);
   });
 
+  it("retains lexical candidates and unavailable diagnostics when semantic lookup fails", async () => {
+    const green = entry("green-onion", "green onion");
+    const result = await buildMergeShortlist(db, source, { runId }, 20, {
+      lexical: async () => [green],
+      semantic: async () => {
+        throw new Error("Synthetic upstream failure");
+      },
+    });
+    expect(result).toEqual({
+      candidates: [green],
+      semanticUnavailable: {
+        status: "unavailable",
+        reason: "upstream_error",
+        detail: "Synthetic upstream failure",
+      },
+    });
+  });
+
   it("degrades to the lexical leg alone when the semantic port returns nothing", async () => {
     const green = entry("green-onion", "green onion");
 
-    const shortlist = await buildMergeShortlist(
+    const { candidates: shortlist } = await buildMergeShortlist(
       db,
       source,
       { runId },

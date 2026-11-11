@@ -11,6 +11,7 @@ import {
   publishSuggestion,
   publishSuggestionBatches,
   type SuggestionFamily,
+  type SuggestionRow,
 } from "~/server/generic/suggestions/repo/suggestion-publication";
 
 type Candidate = {
@@ -18,6 +19,7 @@ type Candidate = {
   evidence: string;
   label?: string;
   fail?: boolean;
+  unapplicable?: boolean;
 };
 
 const recordId = parseEntityId(
@@ -26,7 +28,7 @@ const recordId = parseEntityId(
 );
 
 /** A synthetic family over `recommendation` rows; only the declaration is fake. */
-const synthetic: SuggestionFamily<Candidate> = {
+const synthetic: SuggestionFamily<Candidate, SuggestionRow, "unapplicable"> = {
   family: "recommendation",
   slot: ({ key }) => ({
     lock: `synthetic-suggestion:${key}`,
@@ -35,6 +37,7 @@ const synthetic: SuggestionFamily<Candidate> = {
   fingerprint: ({ key, evidence, label }) =>
     `${key}:${evidence}:${label ?? ""}`,
   evidenceFingerprint: ({ key, evidence }) => `${key}:${evidence}`,
+  unapplicable: ({ unapplicable }) => (unapplicable ? "unapplicable" : null),
   onUnchanged: { reconfirm: "synthetic_reconfirmed" },
   publication: (candidate, prior, producer, fingerprints) => {
     if (candidate.fail) throw new Error("Synthetic publication failure");
@@ -76,7 +79,8 @@ const rule = (runId: RunId | null): SuggestionProducer => ({
 
 // Failure modes: a dismissal returns on the next pass; unchanged evidence is
 // replaced (dropping labels) or stays on its old Run; changed evidence leaves
-// two active rows; one bad candidate fails its whole batch.
+// two active rows; a candidate no review could apply queues; one bad candidate
+// fails its whole batch.
 describe("Suggestion publication", () => {
   const ctx = withTestDb();
   const rows = (key: string) =>
@@ -145,6 +149,21 @@ describe("Suggestion publication", () => {
       ),
     ).toEqual({ outcome: "suppressed" });
     expect(await rows("synthetic-a")).toHaveLength(1);
+
+    // An unapplicable candidate retires its slot's pending row instead of queueing.
+    const stale = { key: "synthetic-e", evidence: "one" };
+    await publishSuggestion(ctx.db, synthetic, stale, rule(null));
+    expect(
+      await publishSuggestion(
+        ctx.db,
+        synthetic,
+        { ...stale, evidence: "two", unapplicable: true },
+        rule(null),
+      ),
+    ).toEqual({ outcome: "resolved", reason: "unapplicable" });
+    expect(await rows("synthetic-e")).toMatchObject([
+      { active: false, status: "superseded" },
+    ]);
   });
 
   it("isolates one failing candidate when its batch falls back", async () => {

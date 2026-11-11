@@ -70,7 +70,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -782,7 +782,7 @@ const SOURCE_FACTORIES = {
 
   "Suggestion.ledgerPartyId": async (db, targetId) => {
     const run = await mkRun(db);
-    return publishSuggestion(
+    return publishExactSuggestion(
       db,
       {
         publicationKey: uniq("ledger-party-recommendation"),
@@ -1909,7 +1909,7 @@ describe("findReferentialLivenessViolations", () => {
   it("retains historical Suggestion execution provenance when its Run is soft-deleted", async () => {
     const target = await mkRun(ctx.db);
     const product = await mkProduct(ctx.db);
-    const prediction = await publishSuggestion(
+    const prediction = await publishExactSuggestion(
       ctx.db,
       {
         publicationKey: uniq("historical-field"),

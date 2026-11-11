@@ -237,9 +237,8 @@ describe("cross-family Suggestion list", () => {
     ).toEqual([]);
   });
 
-  // Reference proposals touch both the old and proposed records, even when
-  // neither is the field's primary subject or entity kind.
-  it("scopes reference-valued field proposals to both referenced records", async () => {
+  // Referenced values remain presentation context, not field subjects.
+  it("scopes reference-valued field proposals to their subject", async () => {
     const item = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic reference drill" }),
@@ -259,19 +258,26 @@ describe("cross-family Suggestion list", () => {
         suggestedValue: proposed.output.id,
       })
       .where(eq(suggestionTable.id, id));
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "field",
+          recordIds: [item.id],
+        })
+      ).items.map((row) => row.suggestionId),
+    ).toEqual([id]);
     for (const record of [current.output.id, proposed.output.id]) {
       const page = await listSuggestionPage(ctx.db, {
         family: "field",
         recordEntity: "productCategory",
         recordIds: [record],
       });
-      expect(page.items.map((row) => row.suggestionId)).toEqual([id]);
+      expect(page.items.map((row) => row.suggestionId)).toEqual([]);
     }
   });
 
-  // A row can offer several existing Transactions; every candidate must expose
-  // review, rather than only the preferred candidate or owning account.
-  it("scopes a statement proposal to its account and every candidate", async () => {
+  // Accounts and candidate lists are context, not subjects.
+  it("filters a statement proposal by account rather than record scope", async () => {
     const account = (await card(ctx)).output;
     const candidates = await Promise.all(
       ["2026-05-04", "2026-05-05"].map(
@@ -307,11 +313,19 @@ describe("cross-family Suggestion list", () => {
             recordIds: [id],
           })
         ).items.map((row) => row.suggestionId),
-      ).toEqual(unscoped.items.map((row) => row.suggestionId));
+      ).toEqual([]);
     }
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          account: account.id,
+        })
+      ).items.map((row) => row.suggestionId),
+    ).toEqual(unscoped.items.map((row) => row.suggestionId));
   });
 
-  it("scopes statement history through settlement allocations to Expenses", async () => {
+  it("scopes statement history to its settled transaction", async () => {
     const account = (await card(ctx)).output;
     await record(ctx, [
       rowInput({ providerTransactionId: "synthetic-scope-charge" }),
@@ -418,14 +432,14 @@ describe("cross-family Suggestion list", () => {
         records,
         eligibility,
       });
-    expect(await scoped([expenseRef])).toContain(proposal.suggestionId);
+    expect(await scoped([expenseRef])).not.toContain(proposal.suggestionId);
     expect(await scoped([unrelatedRef])).not.toContain(proposal.suggestionId);
-    expect(await scoped([unrelatedRef, accountRef])).toContain(
+    expect(await scoped([unrelatedRef, accountRef])).not.toContain(
       proposal.suggestionId,
     );
     expect(
       await touchingSuggestionIds(ctx.db, { entity: "expense", eligibility }),
-    ).toContain(proposal.suggestionId);
+    ).not.toContain(proposal.suggestionId);
 
     // Retained advice keeps its old SOC handle after the primary record moves to a survivor.
     await record(
@@ -478,7 +492,7 @@ describe("cross-family Suggestion list", () => {
       },
       expenseRef,
     ];
-    for (const ref of settlementRefs) {
+    for (const ref of settlementRefs.slice(0, 1)) {
       expect(await scoped([ref])).toContain(proposal.suggestionId);
       expect(await scoped([ref, unrelatedRef])).toContain(
         proposal.suggestionId,
@@ -532,17 +546,20 @@ describe("cross-family Suggestion list", () => {
           recordIds,
         })
       ).items.map((row) => row.id);
-    expect(await history([expense.output.id])).toContain(proposal.suggestionId);
+    expect(await history([settled.output.id])).toContain(proposal.suggestionId);
+    expect(await history([expense.output.id])).not.toContain(
+      proposal.suggestionId,
+    );
     // The panel's default view has no family, so it unions the mail branches.
     expect(
       (
         await listAutomaticDecisions(ctx.db, { recordIds: [expense.output.id] })
       ).items.map((row) => row.id),
-    ).toContain(proposal.suggestionId);
+    ).not.toContain(proposal.suggestionId);
     expect(await history([unrelated.output.id])).not.toContain(
       proposal.suggestionId,
     );
-    expect(await history([unrelated.output.id, account.id])).toContain(
+    expect(await history([unrelated.output.id, account.id])).not.toContain(
       proposal.suggestionId,
     );
     expect(
@@ -553,7 +570,7 @@ describe("cross-family Suggestion list", () => {
           appliedRule: automaticApplicationRule,
         },
       }),
-    ).toContain(proposal.suggestionId);
+    ).not.toContain(proposal.suggestionId);
 
     await getDb(ctx.db)
       .update(financialTransactionAllocation)
@@ -623,6 +640,14 @@ describe("cross-family Suggestion list", () => {
       family: "statement_transaction",
     });
     expect(page.items).toHaveLength(2);
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          merchant: ["not a merchant", "Example"],
+        })
+      ).items,
+    ).toHaveLength(2);
     for (const row of page.items) {
       if (row.family !== "statement_transaction") throw new Error(row.family);
       expect(row.clean).toBe(row.evidence.clean);
@@ -667,6 +692,9 @@ describe("cross-family Suggestion list", () => {
       "spendingCategory",
       { name: "Synthetic suggestion list groceries" },
     );
+    const vendor = (
+      await createRepoEntity(ctx, "vendor", { name: "Synthetic list grocer" })
+    ).output;
     const advice = financialSpendingAdvice.parse({
       spendingCategoryId: category.id,
       categoryConfidence: "high",
@@ -685,6 +713,22 @@ describe("cross-family Suggestion list", () => {
     const listed = await listSuggestionPage(ctx.db, {
       family: "statement_transaction",
     });
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          vendor: [vendor.id],
+        })
+      ).items.map((row) => row.suggestionId),
+    ).toEqual(listed.items.map((row) => row.suggestionId));
+    expect(
+      (
+        await listSuggestionPage(ctx.db, {
+          family: "statement_transaction",
+          recordIds: [vendor.id],
+        })
+      ).items,
+    ).toEqual([]);
     // A later export observes the same money under a firmed-up descriptor;
     // the first charge republishes with a sibling and is no longer clean.
     await record(

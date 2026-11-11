@@ -12,6 +12,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   suggestionReviewInput,
   suggestionSubjects,
+  type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -30,14 +31,17 @@ import {
   resolveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import {
+  publishSuggestionSet,
+  type SuggestionFamily,
+  type SuggestionRow,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
+import { recommendationSlot } from "~/server/generic/suggestions/repo/suggestion-recommendation";
+import {
+  suggestionCandidateKey,
   suggestionStateColumns,
-  pruneReplacedSuggestions,
-  transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { suggestionCandidateKey } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   canonicalJson,
   sha256CanonicalJson,
@@ -69,6 +73,92 @@ const keyFor = (candidate: ConnectionCandidate) =>
 export type PreparedEntityConnection = z.infer<
   typeof connectionSuggestionEvidence
 >;
+
+// Only the retained event link is written; discovery evidence remains independent.
+function connectionApplicationParts(
+  candidate: ConnectionCandidate,
+  basis: unknown,
+) {
+  const parsed = z
+    .object({
+      dependencies: z
+        .object({
+          originalId: z.string(),
+          eventId: z.string(),
+          expectedChecksum: z.string(),
+          evidence: z.array(
+            z
+              .object({
+                eventId: z.string().nullable(),
+                kind: z.string(),
+                purchaseId: z.string().nullable(),
+              })
+              .passthrough(),
+          ),
+        })
+        .nullable(),
+    })
+    .safeParse(basis);
+  const dependency = parsed.success ? parsed.data.dependencies : null;
+  return {
+    email: candidate.source.entityId,
+    purchase: candidate.target.entityId,
+    original: dependency?.originalId ?? null,
+    event: dependency?.eventId ?? null,
+    checksum: dependency?.expectedChecksum ?? null,
+    links:
+      dependency?.evidence
+        .filter(
+          (row) => row.eventId === dependency.eventId && row.kind === "linked",
+        )
+        .map((row) => row.purchaseId)
+        .sort() ?? [],
+  };
+}
+
+async function connectionApplicationKeyFor(
+  candidate: ConnectionCandidate,
+  basis: unknown,
+) {
+  return sha256CanonicalJson(connectionApplicationParts(candidate, basis));
+}
+
+async function applicationCandidate(db: Database, id: string) {
+  const [row] = await getDb(db)
+    .select({
+      evidence: connectionReadEvidenceSql(sql`${suggestionTable.evidence}`),
+    })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, id))
+    .limit(1);
+  return connectionReadEvidence.parse(row?.evidence).candidate;
+}
+
+export async function connectionApplicationKey(
+  db: Database,
+  state: { id: string },
+) {
+  const candidate = await applicationCandidate(db, state.id);
+  const basis = await captureConnectionBasis(db, candidate);
+  return connectionApplicationKeyFor(candidate, basis);
+}
+
+export async function connectionApplicationTerms(
+  db: Database,
+  state: { id: string; data: unknown },
+) {
+  const candidate = await applicationCandidate(db, state.id);
+  const data = z
+    .object({ applicationTerms: z.record(z.string(), z.json()).optional() })
+    .parse(state.data);
+  return {
+    reviewed: data.applicationTerms ?? {},
+    current: connectionApplicationParts(
+      candidate,
+      await captureConnectionBasis(db, candidate),
+    ),
+  };
+}
 
 /** Capture immutable retrieval evidence before any subsequent provider wait. */
 export async function prepareEntityConnectionEvidence(
@@ -105,7 +195,7 @@ export async function publishPreparedEntityConnections(
       undefined,
       true,
     );
-    const entries = [];
+    const entries: ConnectionEntry[] = [];
     for (const original of prepared) {
       const { candidate } = original;
       const { basis, sourceId } = await captureConnectionEvidence(
@@ -149,96 +239,123 @@ export async function publishPreparedEntityConnections(
         entity,
         recordId,
         evidence,
+        applicationTerms: connectionApplicationParts(candidate, basis),
       });
     }
-    const predictions = await publishSuggestions(
-      db,
-      entries.map((entry) => ({
-        input: {
-          publicationKey: `connection:${entry.recordId}:${entry.candidateKey}:${entry.fingerprint}`,
-          family: "recommendation",
-          subject: {
-            kind: "recommendation",
-            entity: entry.entity,
-            recordId: entry.recordId,
-            scope: entry.scope,
-            candidateKey: entry.candidateKey,
-          },
-          judgment: { candidateKey: entry.candidateKey },
-          fingerprint: entry.fingerprint,
-          producer: null,
-          evidence: entry.evidence,
-        },
-        // Queue counts need only this reference, not the full immutable basis.
-        projection: {
-          data: { connection: true, connectionTarget: entry.candidate.target },
-        },
-      })),
-    );
     // Several page owners may retrieve the same edge. Sequential publication
-    // leaves the last fingerprint active; the set write must do the same.
-    const latest = new Map(
-      entries.map((entry, index) => [
-        `${entry.entity}:${entry.recordId}:${entry.scope}:${entry.candidateKey}`,
-        { entry, index },
-      ]),
-    );
-    const slots = [...latest.values()];
-    const wanted = sql.join(
-      slots.map(
-        ({ entry, index }) =>
-          sql`(${entry.entity}::text, ${entry.recordId}::uuid, ${entry.scope}::text, ${entry.candidateKey}::text, ${predictions[index]!.id}::uuid)`,
-      ),
-      sql`, `,
-    );
-    const replaced = await transitionSuggestionStates(
+    // leaves the last fingerprint active, so the last candidate per slot wins.
+    const slotOf = (entry: ConnectionEntry) =>
+      connectionSuggestions.slot(entry).lock;
+    const winners = [
+      ...new Map(entries.map((entry) => [slotOf(entry), entry])).values(),
+    ];
+    const outcomes = await publishSuggestionSet(
       db,
-      and(
-        eq(suggestionTable.family, "recommendation"),
-        eq(suggestionTable.active, true),
-        isNull(suggestionTable.suppression),
-        inArray(suggestionTable.entity, [
-          ...new Set(entries.map((entry) => entry.entity)),
-        ]),
-        inArray(suggestionTable.recordId, [
-          ...new Set(entries.map((entry) => entry.recordId)),
-        ]),
-        // Scope the indexed live subjects first, then join immutable evidence
-        // once. An OR of per-slot Suggestion subqueries replans/scans history
-        // for every candidate and dominated production-copy publication time.
-        sql`EXISTS (
-          SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
-          JOIN "Suggestion" prior ON prior.id = ${suggestionTable.id}
-          WHERE wanted.entity = ${suggestionTable.entity}
-            AND wanted.record_id = ${suggestionTable.recordId}
-            AND prior.id <> wanted.current_id
-            AND prior.subject->>'scope' = wanted.scope
-            AND prior.subject->>'candidateKey' = wanted.candidate_key
-        )`,
-      ),
-      { active: false, status: "superseded" },
+      connectionSuggestions,
+      winners,
+      connectionProducer,
     );
-    await pruneReplacedSuggestions(
-      db,
-      replaced.map((row) => row.id),
-    );
-    return entries.map((entry, index) =>
-      connectionProposal.parse({
-        ...entry.candidate,
-        fingerprint: entry.fingerprint,
-        review: {
-          suggestionId: predictions[index]!.id,
-          suppression: {
-            scope: entry.scope,
-            candidateKey: entry.candidateKey,
-            fingerprint: null,
-          },
-        },
-        integration: { kind: "connection-review" },
+    const ids = new Map(
+      winners.flatMap((entry, index) => {
+        const outcome = outcomes[index];
+        const id =
+          outcome?.outcome === "published"
+            ? outcome.suggestionId
+            : outcome?.outcome === "unchanged"
+              ? outcome.rows[0]?.id
+              : undefined;
+        return id ? [[slotOf(entry), id] as const] : [];
       }),
     );
+    return (
+      await Promise.all(
+        entries.map(async (entry) => {
+          const suggestionId = ids.get(slotOf(entry));
+          if (!suggestionId) return [];
+          return [
+            connectionProposal.parse({
+              ...entry.candidate,
+              fingerprint: await sha256CanonicalJson(entry.applicationTerms),
+              review: {
+                suggestionId,
+                suppression: {
+                  scope: entry.scope,
+                  candidateKey: entry.candidateKey,
+                  fingerprint: null,
+                },
+              },
+              integration: { kind: "connection-review" },
+            }),
+          ];
+        }),
+      )
+    ).flat();
   });
 }
+
+type ConnectionEntry = {
+  candidate: ConnectionCandidate;
+  fingerprint: string;
+  candidateKey: string;
+  scope: string;
+  entity: (typeof shortcodeEntities)[number];
+  recordId: string;
+  evidence: { version: number; candidate: ConnectionCandidate };
+  applicationTerms: ReturnType<typeof connectionApplicationParts>;
+};
+
+/** Deterministic discovery: rows carry no producer. */
+const connectionProducer: SuggestionProducer = {
+  kind: "rule",
+  model: null,
+  revision: null,
+  runId: null,
+  evaluationId: null,
+};
+
+/**
+ * Connection recommendations: one slot per source record and candidate edge.
+ * Only an Email purchase link has an apply path.
+ */
+const connectionSuggestions: SuggestionFamily<
+  ConnectionEntry,
+  SuggestionRow,
+  "unsupported_relation"
+> = {
+  family: "recommendation",
+  slot: (entry) => recommendationSlot(entry),
+  fingerprint: (entry) => entry.fingerprint,
+  evidenceFingerprint: (entry) => entry.fingerprint,
+  unapplicable: ({ candidate }) =>
+    candidate.relation === "email-purchase" ? null : "unsupported_relation",
+  onUnchanged: "none",
+  publication: (entry) => ({
+    input: {
+      publicationKey: `connection:${entry.recordId}:${entry.candidateKey}:${entry.fingerprint}`,
+      family: "recommendation",
+      subject: {
+        kind: "recommendation",
+        entity: entry.entity,
+        recordId: entry.recordId,
+        scope: entry.scope,
+        candidateKey: entry.candidateKey,
+      },
+      judgment: { candidateKey: entry.candidateKey },
+      fingerprint: entry.fingerprint,
+      producer: null,
+      evidence: entry.evidence,
+    },
+    // Queue counts need only this reference, not the full immutable basis.
+    projection: {
+      data: {
+        connection: true,
+        connectionTarget: entry.candidate.target,
+        applicationTerms: entry.applicationTerms,
+      },
+    },
+  }),
+  labelBacklog: sql`false`,
+};
 
 const connectionReadSelection = {
   id: suggestionTable.id,
@@ -385,7 +502,16 @@ async function readEntityConnectionsBatch(
     undefined,
     decidedEdges && (({ candidate }) => decidedEdges.has(edgeKey(candidate))),
   );
-  const fresh = liveProposals.filter((proposal) => admitted.has(proposal));
+  const fresh = await Promise.all(
+    liveProposals
+      .filter((proposal) => admitted.has(proposal))
+      .map(async (proposal) => ({
+        ...proposal,
+        fingerprint: await connectionApplicationKey(db, {
+          id: proposal.review.suggestionId,
+        }),
+      })),
+  );
   // Unbounded callers retain the original freshness-before-existing read order.
   const existing =
     selectedExisting ?? (await readExistingConnectionSuggestions(db, sources));
@@ -460,17 +586,29 @@ export async function readStoredConnectionProposals(
     const ref = refs.get(code);
     return ref ? names.get(`${ref.entity}:${ref.id}`) : undefined;
   };
-  return proposals.flatMap((proposal) =>
-    refs.has(proposal.source.entityId) && refs.has(proposal.target.entityId)
-      ? [
-          {
-            ...proposal,
-            sourceName: name(proposal.source.entityId),
-            targetName: name(proposal.target.entityId),
-          },
-        ]
-      : [],
+  const live = proposals.filter(
+    (proposal) =>
+      refs.has(proposal.source.entityId) && refs.has(proposal.target.entityId),
   );
+  const keyed = await Promise.all(
+    live.map(async (proposal) => {
+      const basis = await captureConnectionBasis(db, proposal);
+      if (
+        proposal.relation === "email-purchase" &&
+        connectionApplicationParts(proposal, basis).event === null
+      )
+        return [];
+      return [
+        {
+          ...proposal,
+          fingerprint: await connectionApplicationKeyFor(proposal, basis),
+          sourceName: name(proposal.source.entityId),
+          targetName: name(proposal.target.entityId),
+        },
+      ];
+    }),
+  );
+  return keyed.flat();
 }
 
 /** Stored-only, including inverse endpoint lookup; never calls discovery or models. */
@@ -530,15 +668,6 @@ export async function applyEntityConnection(
       .for("update");
     if (!freshState?.active || freshState.status !== "pending")
       throw new Error("Connection Suggestion is no longer pending");
-    if (
-      !input.expectedFingerprint ||
-      input.expectedFingerprint !== prediction.fingerprint ||
-      (await sha256CanonicalJson({ ...evidence, basis })) !==
-        prediction.fingerprint
-    )
-      throw new Error(
-        "Connection evidence changed; discover again before applying",
-      );
     const actor = context.actorContext;
     switch (candidate.relation) {
       case "email-purchase":

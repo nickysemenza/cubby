@@ -16,7 +16,43 @@ shape. The `entity` and `entity_read` kernel tools keep `{action, ...fields}`;
 `entities://catalog` publishes their precise schemas. Generated tools publish a
 compact schema per action; `describe` with `input.actions` returns the selected
 actions' full input/output JSON Schema, and the server validates each request
-against the action's full Zod schema.
+against the action's full Zod schema. Every input object refuses undeclared
+keys at any depth (`strictSchema` in `tools/tool-registration.ts`); an explicit
+catchall (`z.looseObject`) stays open, and a discriminated union keeps its
+per-variant issues. A read's top-level list of scalars (filters, `fields`)
+also takes one value, published as `T | T[]` and wrapped before any schema
+parses it; entity list `filters.ids` does the same.
+
+## Paged reads
+
+Every MCP read that pages takes `cursor` (opaque) and `pageSize`, and returns
+`pageSize`, `nextCursor` (null on the last page), `totalCount` when the member
+counts, and `truncated` when the page is incomplete. No MCP input publishes
+`pageIndex`, `offset`, `limit` or `page`. Member contracts keep their own
+paging (pageIndex/pageSize, offset/limit, a keyset or numeric cursor, or a
+first-N limit); `server/mcp/tools/list-page.ts` reads it from the member's
+input fields, publishes the cursor fields in its place with the member's
+page-size bounds and default, and translates each call. A cursor encodes an
+absolute row offset, or a member keyset cursor plus the rows of that page
+already returned, and a digest of the read's other inputs except `fields` and
+`resultDetail`; a cursor sent with different filters, sort or scope is refused
+as invalid input on `cursor`. An output whose rows are not under `items` names its array
+with `page.items` in `contracts/mcp-tools.ts`; compilation fails otherwise.
+
+Each paged read accepts `fields` (dot paths, `id` always kept, unknown fields
+refused with the closest keys) and `resultDetail`: compact by default (scalar
+fields and nested objects reduced to their scalars, without child collections
+or image payloads) or `full`. A read whose rows are their child collections
+(`run_read.transcript` message parts) declares `page.fullRows` and defaults to
+`full`. `entity_read` keeps its own entity selection
+(`summary` default, `compact`, `full`, `fields`) from
+`server/mcp/entity-field-selection.ts`, which owns both selections. A page
+whose serialized response exceeds `MCP_PAGE_MAX_BYTES` ends at the longest
+prefix that fits, at least one row, with `truncated: true` and a `nextCursor`
+for the next row. Rows that depend on each other (`entity_graph_read.graph`
+nodes and edges) declare `page.refetch`: the page is the member's whole result,
+never cut to `pageSize`, read again at half the page size when oversized, and
+continued only while a branch reports a `nextOffset`.
 
 ## Runs and Burn-down
 
@@ -25,8 +61,7 @@ Reuse an operation ID only with the identical tool and arguments: a completed
 operation returns its saved result even after its Run stops. New writes remain
 fenced by the Run's current state. A delegated write that requires `_runExecution`
 and omits it returns `BAD_REQUEST` / `INVALID_INPUT` at the input stage, with
-the same `input_schema` recovery contract as other invalid arguments. Correct
-the envelope and retry the call.
+validation issues naming the invalid arguments. Correct the envelope and retry the call.
 
 Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own
@@ -54,9 +89,8 @@ decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_budget`, `ai_funding.reset_funding_refusal`,
 `activity.resolve_run_finding`, `run.approve_groups`,
-`product_enrichment.merge_product_match`, suggestion review: `suggestions.review`,
-`suggestions.review_batch`, each batch returning a per-id `ok`/`error`
-result). An agent calls one only
+suggestion review (product merges included): `suggestions.review`, or with
+`items` for per-item results). An agent calls one only
 on the member's explicit instruction. An exact-checksum member-selected Email
 import using the declared coordinator models or its member-controlled retry is
 foreground work outside the AI budget. Explicit member selections of Vendor
@@ -132,18 +166,13 @@ published schemas, output projections, the error shape and the purchase-agent
 protocol. The runner validates a member's own output before a projection slims
 it.
 
-A tool failure comes back as an `isError` result whose text names the cause
-and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
-`diagnostics` (operation, stage, causes, `cfRayId`, Sentry link). An output
-that fails its own schema is `INVALID_OUTPUT` and names each failing path.
-A runner failure is rendered as the runner settled it; it is not normalized or
-reported a second time.
-Generated capability tools append `recovery: "input_schema"` to
-input-validation errors, pointing at `describe` for the allowed action's full
-contract; the validation causes name each failing path. Correct the payload
-from those causes or the described contract; missing evidence is never
-fabricated.
-Output validation and domain refusals do not advertise input-schema recovery.
+A tool failure is an `isError` result with an envelope containing `code`,
+`reason`, `message`, `issues` (paths and messages), `next`, and `requestId`
+when available. Cause messages and SQLSTATE remain visible; stacks and schemas
+do not. A validation failure's `message` names at most three issue paths and
+leaves the detail in `issues`. A refused input's `next` says to correct it
+from `issues`; on a compact tool it names `describe` with that action. A
+runner failure is not normalized or reported a second time.
 
 Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 `apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s

@@ -123,7 +123,8 @@ async function callWrites(
 const jsonString = z.string();
 const scrubStrings = <T>(value: T): JSONType =>
   z.json().parse(
-    JSON.parse(JSON.stringify(value), (_key, entry) => {
+    JSON.parse(JSON.stringify(value), (key, entry) => {
+      if (key === "stack") return undefined;
       const text = jsonString.safeParse(entry);
       return text.success ? scrubErrorMessage(text.data) : entry;
     }),

@@ -45,9 +45,9 @@ export async function previewStatementSuggestion(
     throw refuseStatementApplication(
       "This Transaction suggestion is no longer available.",
     );
-  if (!state.fingerprint || state.fingerprint !== input.expectedFingerprint)
+  if (state.fingerprint !== input.expectedFingerprint)
     throw refuseStatementApplication(
-      "Suggestion evidence fingerprint changed. Refresh suggestions and review again.",
+      "Suggestion changed since review; list it again and review the current version.",
     );
   const loaded = await loadStatementApplication(db, state);
   const current = await currentStatementApplication(

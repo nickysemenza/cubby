@@ -1,7 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { publicOperationErrorSchema } from "~/lib/operation-result";
 import { safeToJsonSchema } from "~/server/mcp/tools/tool-json-schema";
 import type {
   CompiledTool,
@@ -41,9 +40,9 @@ export function describeMcpActions(
     actions: names.map((name) => {
       const action = tool.actions.get(name);
       if (!action || !shown(action.name)) {
-        const available = [...tool.actions.keys()]
-          .filter(shown)
-          .map((key) => key.split(".")[1]!)
+        const available = [...tool.actions.values()]
+          .filter((candidate) => shown(candidate.name))
+          .map(shortName)
           .join(", ");
         throw new Error(
           `Unknown action ${JSON.stringify(name)}. Available actions: ${available}.`,
@@ -91,20 +90,24 @@ export function withProgressiveDisclosure(
           structuredContent: output,
         };
       } catch (error) {
+        const issues =
+          error instanceof z.ZodError
+            ? error.issues.map(({ path, message }) => ({ path, message }))
+            : undefined;
+        const envelope = {
+          code: "BAD_REQUEST",
+          reason: "INVALID_INPUT",
+          message:
+            issues || !(error instanceof Error)
+              ? "Invalid input at actions; see issues"
+              : error.message,
+          issues,
+          next: "Call describe with input.actions naming one or more available actions.",
+        };
         return {
-          content: [
-            {
-              type: "text",
-              text:
-                error instanceof Error
-                  ? error.message
-                  : "describe needs input.actions with one or more available action names",
-            },
-          ],
+          content: [{ type: "text", text: JSON.stringify(envelope) }],
           isError: true,
-          _meta: {
-            "cubby/error": { code: "BAD_REQUEST", reason: "INVALID_INPUT" },
-          },
+          _meta: { "cubby/error": envelope },
         };
       }
     }
@@ -125,34 +128,6 @@ export function withProgressiveDisclosure(
       },
       extra,
     );
-    // Compact tools hide action fields until describe. An input refusal points
-    // at describe; the validation causes already name the failing paths, and
-    // inlining the whole input schema buried them.
-    if (!result.isError || !action || !tool.actions.has(action)) return result;
-    const error = publicOperationErrorSchema.safeParse(
-      result._meta?.["cubby/error"],
-    );
-    if (
-      !error.success ||
-      error.data.reason !== "INVALID_INPUT" ||
-      error.data.diagnostics?.stage !== "input"
-    )
-      return result;
-    const visible = await visibleActions?.(extra);
-    if (visible && !visible.has(tool.actions.get(action)!.name)) return result;
-    return {
-      ...result,
-      content: [
-        ...result.content,
-        {
-          type: "text",
-          text: JSON.stringify({
-            recovery: "input_schema",
-            instruction: `Correct the input from the validation causes, or call describe with input.actions ["${action}"] for the full contract, then retry. Missing source facts stay unknown; do not invent them or escalate a schema error.`,
-            action,
-          }),
-        },
-      ],
-    };
+    return result;
   };
 }

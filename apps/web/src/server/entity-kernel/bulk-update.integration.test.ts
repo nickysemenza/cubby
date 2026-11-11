@@ -26,6 +26,7 @@ import {
 } from "~/server/entity-kernel";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
+import { createAppError } from "~/server/errors/app-error";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -42,6 +43,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   entityBulkUpdateCommandSchema,
+  entityBulkUpdateResultSchema,
   type EntityKernelEntity,
 } from "./contracts";
 
@@ -330,6 +332,44 @@ describe("generic bulk updates", () => {
     expect(matching.ids.sort()).toEqual(
       [first.output.id, second.output.id].sort(),
     );
+    const result = await executeEntityAs(
+      {
+        ...base,
+        caldavHooks: {
+          task: {
+            beforeUpdate: async (_tx, id) => {
+              if (id === second.entityId)
+                throw createAppError(
+                  "CLASSIFICATION_POLICY_REFUSED",
+                  "Choose a different status.",
+                );
+            },
+          },
+        },
+      },
+      "bulkUpdate",
+      {
+        entity: "task",
+        ids: [first.output.id, second.output.id],
+        data: { status: "done" },
+      },
+    );
+    expect(entityBulkUpdateResultSchema.parse(result)).toMatchObject({
+      updatedReferences: [{ entity: "task", id: first.output.id }],
+      skipped: [
+        {
+          entity: "task",
+          id: second.output.id,
+          message: "Choose a different status.",
+        },
+      ],
+    });
+    expect(await read("task", first.output.id)).toMatchObject({
+      status: "done",
+    });
+    expect(await read("task", second.output.id)).toMatchObject({
+      status: "not_started",
+    });
     await bulk("task", matching.ids, { status: "done" });
     for (const selected of [first, second])
       expect(await read("task", selected.output.id)).toMatchObject({
@@ -440,7 +480,7 @@ describe("generic bulk updates", () => {
         ).id,
       }),
     ).rejects.toThrow(
-      `selected rows: ${[first.id, second.id, bystander.id].join(", ")}`,
+      /Bulk product update failed at row PRD-\w+; 3 selected rows/,
     );
     expect(await read("product", first.id)).toMatchObject({
       fields: {

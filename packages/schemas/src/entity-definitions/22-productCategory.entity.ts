@@ -207,6 +207,8 @@ export const { definition, readSchemas } = defineEntityModel({
 
       {
         key: "spendingCategoryMode",
+        description:
+          'Preview with spendingClassification.preview (action "productCategory"), then apply with spendingClassification.apply and the preview fingerprint. On the web, use Spending classification.',
         kind: "enum",
         control: {
           kind: "select",
@@ -243,11 +245,12 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: spendingCategoryMappingMode.default("inherit"),
           create: spendingCategoryMappingMode.default("inherit"),
-          update: spendingCategoryMappingMode.optional(),
         },
       },
       {
         key: "spendingCategoryId",
+        description:
+          'Preview with spendingClassification.preview (action "productCategory"), then apply with spendingClassification.apply and the preview fingerprint. On the web, use Spending classification.',
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
@@ -271,7 +274,6 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
-          update: spendingCategoryShortcode.nullable().optional(),
         },
       },
       {
@@ -311,6 +313,8 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         key: "parentId",
+        description:
+          'Preview with spendingClassification.preview (action "productCategory"), then apply with spendingClassification.apply and the preview fingerprint. On the web, use Spending classification.',
         kind: "identifier",
         nullable: true,
         reference: { entity: "productCategory" },
@@ -323,7 +327,6 @@ export const { definition, readSchemas } = defineEntityModel({
         validation: {
           read: productCategoryShortcode.nullable(),
           create: productCategoryShortcode.nullable().default(null),
-          update: productCategoryShortcode.nullable().optional(),
         },
       },
       {
@@ -703,20 +706,19 @@ Rules:
     intents: {
       fields: {
         capture: ["emoji", "name", "parentId"],
-        // The spending-classification workspace owns spendingCategoryMode
-        // and spendingCategoryId: a change on a category with spending must
-        // be previewed and applied there.
+        // The spending-classification workspace owns parentId,
+        // spendingCategoryMode and spendingCategoryId after creation: a change
+        // is previewed and applied there. Create takes parentId from capture.
         full: [
           "emoji",
           "name",
           "aliases",
           "description",
-          "parentId",
           "sortOrder",
           "feature",
           "stockTracked",
         ],
-        identity: ["emoji", "name", "parentId"],
+        identity: ["emoji", "name"],
       },
       create: ["capture", "full"],
       update: ["full", "identity"],
@@ -863,7 +865,7 @@ Rules:
             byValue: { food: "not_allowed" },
             otherwise: "unknown",
             refusal:
-              "A planting source Product must be a garden product, not a food Product.",
+              "A planting source Product must be a garden product, not a food Product. Choose a garden Product or change the Product category before using it as a planting source.",
           },
         ],
       },

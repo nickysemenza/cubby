@@ -108,7 +108,7 @@ export function statementApplyItem(
       ? { present: false }
       : { present: true, value: application },
     intent: "apply",
-    expectedFingerprint: suggestion.fingerprint,
+    expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
     reason: null,
     evidence: null,
     application,
@@ -125,7 +125,7 @@ export function statementDismissItem(
     verdict: "dismissed",
     correction: { present: false },
     intent: "history",
-    expectedFingerprint: suggestion.fingerprint,
+    expectedFingerprint: suggestion.fingerprint ?? undefined,
     reason: null,
     evidence: null,
     suppression: {
@@ -140,7 +140,7 @@ const base = (row: SuggestionListRow) => ({
   suggestionId: row.suggestionId,
   operationId: crypto.randomUUID(),
   correction: { present: false as const },
-  ...(row.fingerprint ? { expectedFingerprint: row.fingerprint } : {}),
+  expectedFingerprint: row.fingerprint,
   reason: null,
   evidence: null,
 });

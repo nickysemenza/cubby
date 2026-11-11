@@ -1,18 +1,22 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import { productId } from "@cubby/schemas/identifiers";
 import {
   suggestionFamily,
   suggestionJudgments,
 } from "@cubby/schemas/suggestion";
 import { productPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { product } from "~/server/db/schema";
 import {
   currentProductPairPolicySql,
-  reviewedProductPairFingerprint,
+  productPairApplicationKey,
+  productPairApplicationTerms,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
@@ -159,6 +163,7 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
       { kind: "primary" },
       {
         kind: "value",
+        subject: true,
         at: { column: "data", path: ["otherId"] },
         entity: entities.product,
       },
@@ -166,26 +171,33 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   }),
   actionable,
   transactionBound: false,
-  currentFingerprint: reviewedProductPairFingerprint,
+  // Lock both Products before the engine compares their identity terms.
+  lockForApply: async (db, prediction) => {
+    const subject = z
+      .object({ recordId: productId, otherId: productId })
+      .parse(prediction.subject);
+    await getDb(db)
+      .select({ id: product.id })
+      .from(product)
+      .where(inArray(product.id, [subject.recordId, subject.otherId]))
+      .orderBy(product.id)
+      .for("update");
+  },
+  applicationKey: productPairApplicationKey,
+  applicationTerms: productPairApplicationTerms,
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
       throw new Error("Product merging requires an accepted pair");
-    if (
-      input.application?.kind !== "product_merge" ||
-      !input.expectedFingerprint
-    )
-      throw new Error(
-        "Product merging requires a survivor and the current pair fingerprint",
-      );
-    const { mergeProductMatch } =
-      await import("~/server/domains/product/repo/match/product-match-review");
-    await mergeProductMatch(
+    if (input.application?.kind !== "product_merge")
+      throw new Error("Product merging requires a survivor");
+    const { mergeReviewedProductPair } =
+      await import("~/server/generic/suggestions/repo/suggestion-product");
+    await mergeReviewedProductPair(
       { ...context, db },
       {
         keepId: input.application.keepId,
         mergeId: input.application.mergeId,
         suggestionId: state.id,
-        expectedFingerprint: input.expectedFingerprint,
       },
     );
   },

@@ -165,6 +165,71 @@ describe("fresh retained Email connection recommendations", () => {
     expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
   });
 
+  it("accepts the reviewed link when unrelated event context changes", async () => {
+    const f = await fixture();
+    const [candidate] = await retrieveConnectionCandidates(ctx.db, f.source);
+    if (!candidate) throw new Error("Missing synthetic candidate");
+    const proposal = await publishEntityConnection(ctx.db, candidate);
+    await getDb(ctx.db)
+      .update(orderMailEvent)
+      .set({ sourceKey: "synthetic-revised-context" })
+      .where(eq(orderMailEvent.id, f.event.id));
+    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: proposal.review.suggestionId,
+      operationId: "synthetic-context-review",
+      intent: "apply",
+      verdict: "correct",
+      expectedFingerprint: proposal.fingerprint,
+    });
+    expect(receipt.applied).toBe(true);
+  });
+
+  it("keeps a Purchase eligible for another Email after a link", async () => {
+    const f = await fixture();
+    const original = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: f.message.ledgerPartyId,
+      mailboxId: "synthetic-second-mailbox",
+      messageId: "synthetic-second-message",
+      vendorId: f.purchase.vendorId,
+      sender: "orders@example.test",
+      subject: "Synthetic delivery",
+      receivedAt: new Date("2026-10-02T12:00:00Z"),
+      rawChecksum: "d".repeat(64),
+      content: {
+        bodyText: "Synthetic delivery",
+        bodyHtml: null,
+        snippet: null,
+      },
+    });
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: original.id,
+      event: "placed",
+      orderId: f.purchase.orderId,
+      sourceKey: "synthetic-second-event",
+    });
+    const [second] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.orderMailId, original.id));
+    if (!second) throw new Error("Missing synthetic delivery Email");
+    const [candidate] = await retrieveConnectionCandidates(ctx.db, f.source);
+    if (!candidate) throw new Error("Missing synthetic candidate");
+    const proposal = await publishEntityConnection(ctx.db, candidate);
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: proposal.review.suggestionId,
+      operationId: "synthetic-first-link",
+      intent: "apply",
+      verdict: "correct",
+      expectedFingerprint: proposal.fingerprint,
+    });
+    expect(
+      await retrieveConnectionCandidates(ctx.db, {
+        entityKind: "email",
+        entityId: second.shortcode,
+      }),
+    ).toHaveLength(1);
+  });
+
   it("ignores another vendor's purchases and retained mail", async () => {
     const f = await fixture();
     // The derived pass links an exact order id automatically; an amount match

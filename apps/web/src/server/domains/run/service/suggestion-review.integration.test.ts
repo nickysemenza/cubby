@@ -31,8 +31,8 @@ import {
   reviewSuggestion,
   reviewSuggestionBatch,
 } from "~/server/generic/suggestions/repo/review";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   acceptSuggestion,
   applyFieldCorrection,
@@ -561,6 +561,10 @@ describe("Suggestion review", () => {
     });
     const idFor = (recordId: string) =>
       pending.find((row) => row.recordId === recordId)?.id ?? "";
+    const [listed] = await getDb(ctx.db)
+      .select({ fingerprint: suggestionTable.fingerprint })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, idFor(accepted.id)));
     const accept = await reviewSuggestionBatch(ctx.db, context, {
       items: [
         {
@@ -568,6 +572,7 @@ describe("Suggestion review", () => {
           operationId: crypto.randomUUID(),
           verdict: "correct",
           intent: "apply",
+          expectedFingerprint: listed?.fingerprint ?? idFor(accepted.id),
         },
       ],
     });
@@ -644,7 +649,7 @@ describe("Suggestion review", () => {
       purpose: "ai_suggest",
       clientKey: crypto.randomUUID(),
     });
-    const prediction = await publishSuggestion(
+    const prediction = await publishExactSuggestion(
       ctx.db,
       {
         publicationKey: "synthetic:live-field-miss",

@@ -1,8 +1,6 @@
 import {
-  mergeProductMatchInput,
   proposeProductMatchInput,
   proposeProductMatchOut,
-  recommendationOkSchema,
 } from "@cubby/schemas/recommendations";
 
 import { defineContract, mutation } from "~/contracts/define";
@@ -16,14 +14,6 @@ export const productMatchContract = defineContract(
       input: proposeProductMatchInput,
       output: proposeProductMatchOut,
       invalidates: ["recommendations"],
-    }),
-    mergeProductMatch: mutation({
-      description:
-        "Merge a queued match: mergeId folds into keepId, whose covers then lead with its own photos. Only for a pair the member agreed is one item.",
-      destructive: true,
-      input: mergeProductMatchInput,
-      output: recommendationOkSchema,
-      invalidates: ["productMerge"],
     }),
   },
   { exposure: "capability", mcpToolGroup: "product_enrichment" },

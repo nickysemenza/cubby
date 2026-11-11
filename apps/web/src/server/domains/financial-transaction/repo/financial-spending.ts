@@ -79,6 +79,7 @@ import {
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
 import {
   canonicalJson,
   jsonSnapshot,
@@ -155,6 +156,7 @@ type SpendingCandidate = {
   shortcode: string;
   displayLabel: string | null;
   date: string | null;
+  explicit?: boolean;
   // Additional older spending can stop creation, never authorize settlement.
   reviewOnly?: boolean;
 };
@@ -1061,6 +1063,7 @@ async function spendingCandidates(
     return (
       await getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date,
+          COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3)), false) AS "explicit",
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
@@ -1077,6 +1080,7 @@ async function spendingCandidates(
         shortcode: candidate.shortcode,
         displayLabel: candidate.displayLabel,
         date: candidate.date,
+        explicit: true,
         reviewOnly: false,
       });
   }
@@ -1108,7 +1112,11 @@ async function spendingCandidates(
       )
         continue;
       if (!candidates.has(candidate.id))
-        candidates.set(candidate.id, { ...candidate, reviewOnly: !nearby });
+        candidates.set(candidate.id, {
+          ...candidate,
+          explicit: false,
+          reviewOnly: !nearby,
+        });
     }
   }
   if (input.purchaseId) {
@@ -1121,7 +1129,11 @@ async function spendingCandidates(
       page.explicitCandidates.set(input.purchaseId, lookup);
     }
     for (const candidate of await lookup)
-      candidates.set(candidate.id, { ...candidate, reviewOnly: false });
+      candidates.set(candidate.id, {
+        ...candidate,
+        explicit: true,
+        reviewOnly: false,
+      });
   }
   return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -1192,6 +1204,7 @@ function spendingCategoryForDiscovery(
 }
 
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
+// eslint-disable-next-line complexity -- Discovery combines booking evidence and candidate eligibility.
 async function discoverSpendingEvidence(
   db: Database,
   request: Request,
@@ -1259,6 +1272,33 @@ async function discoverSpendingEvidence(
         page,
       )
     : [];
+  const classifications =
+    (
+      await eligibleTargets(db, [
+        {
+          key: "spending",
+          kind: "purchase",
+          ids: candidates.map((candidate) => candidate.id),
+          explicitIds: candidates
+            .filter((candidate) => candidate.explicit)
+            .map((candidate) => candidate.id),
+          amountMinor: cents(source.amount),
+          currentTransactionId: row?.id,
+        },
+      ])
+    ).get("spending") ?? [];
+  const eligibility = new Map(
+    classifications.map((target) => [target.id, target.eligibility]),
+  );
+  const contextReasons = new Map(
+    classifications.map((target) => [
+      target.id,
+      target.eligibility === "context" ? target.reason : null,
+    ]),
+  );
+  // Older review-only spending never settles; the rest follows shared eligibility.
+  const settles = (candidate: SpendingCandidate) =>
+    !candidate.reviewOnly && eligibility.get(candidate.id) !== "context";
   const rejected = new Set(request.rejectedPurchaseIds);
   const unrejectedCandidates = candidates.filter(
     (candidate) =>
@@ -1290,11 +1330,11 @@ async function discoverSpendingEvidence(
       (await prepareRetainedSettlementDiscovery(
         getDb(db),
         unrejectedCandidates
-          .filter((candidate) => !candidate.reviewOnly)
+          .filter(settles)
           .map((candidate) => parseEntityId("purchase", candidate.id)),
       ));
     for (const candidate of unrejectedCandidates) {
-      if (candidate.reviewOnly) continue;
+      if (!settles(candidate)) continue;
       const purchaseId = parseEntityId("purchase", candidate.id);
       const facts = retained.get(purchaseId);
       if (!retainedSettlementDiscoveryCouldMatch(facts, charge, Boolean(row)))
@@ -1341,9 +1381,7 @@ async function discoverSpendingEvidence(
   const loadedGraphs = await prepareSpendingGraphs(db, uncachedIds, page);
   const payments = await prepareSpendingPayments(
     db,
-    graphCandidates
-      .filter((candidate) => !candidate.reviewOnly)
-      .map((candidate) => candidate.id),
+    graphCandidates.filter(settles).map((candidate) => candidate.id),
     page,
   );
   const candidateEvidence = await Promise.all(
@@ -1356,10 +1394,10 @@ async function discoverSpendingEvidence(
           parseEntityId("purchase", candidate.id),
           page,
         )),
-      payments: candidate.reviewOnly
-        ? []
-        : (payments.get(candidate.id) ??
-          (await purchasePayments(db, [candidate.id]))),
+      payments: settles(candidate)
+        ? (payments.get(candidate.id) ??
+          (await purchasePayments(db, [candidate.id])))
+        : [],
       plan: strong.get(candidate.shortcode) ?? null,
     })),
   );
@@ -1404,12 +1442,20 @@ async function discoverSpendingEvidence(
     source.sourceRefs,
   );
   const liveCandidates = unrejectedCandidates.filter((candidate) => {
-    if (!candidate.reviewOnly) return !distinctlySettled.has(candidate.id);
+    if (!candidate.reviewOnly) {
+      // Spent capacity does not prove a different bank event: a settled or
+      // short Purchase blocks unless another occurrence provably settled it.
+      const reason = contextReasons.get(candidate.id);
+      if (reason === "settled" || reason === "amount")
+        return !distinctlySettled.has(candidate.id);
+      return !reason;
+    }
     const graph = candidateGraphs.get(candidate.id);
     // Only confidently exhausted capacity removes an added-only blocker.
     // Unknown and negative capacity cannot establish ordinary full settlement.
     return availableCents(graph, source.amount, row?.id) !== 0;
   });
+  const live = new Set(liveCandidates);
   let categoryFromPurchase = false;
   if (source.kind === "refund" && !request.spendingCategoryId) {
     const original = request.purchaseId
@@ -1514,12 +1560,14 @@ async function discoverSpendingEvidence(
   const basis = {
     request,
     snapshot,
-    candidates: liveCandidates.map((candidate) => ({
+    candidates: unrejectedCandidates.map((candidate) => ({
       purchaseId: parseShortcodeFor("purchase", candidate.shortcode),
       name: candidate.displayLabel ?? candidate.shortcode,
-      strength: strong.has(candidate.shortcode)
-        ? ("strong" as const)
-        : ("weak" as const),
+      strength: !live.has(candidate)
+        ? ("context" as const)
+        : strong.has(candidate.shortcode)
+          ? ("strong" as const)
+          : ("weak" as const),
     })),
   };
   return {

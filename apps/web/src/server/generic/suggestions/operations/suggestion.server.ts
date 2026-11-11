@@ -1,4 +1,5 @@
 import { suggestionContract } from "~/contracts/suggestion.contract";
+import { withAfterCommitScope } from "~/server/db/helpers/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   fieldAuthority,
@@ -36,5 +37,7 @@ export const suggestionHandlers = implementOperationDomain(suggestionContract, {
   fieldAuthority: (context, input) =>
     applyFieldAuthorityAction(context.db, context, input),
   reviewBatch: (context, input) =>
-    reviewSuggestionBatch(context.db, context, input),
+    withAfterCommitScope(() =>
+      reviewSuggestionBatch(context.db, context, input),
+    ),
 });

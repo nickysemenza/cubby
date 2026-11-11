@@ -57,10 +57,8 @@ import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { imageJobChecks } from "~/server/generic/data-quality/repo/checks/image-job";
 import { readBackgroundWorkStatus } from "~/server/generic/jobs/repo/observation";
-import {
-  publishSuggestion,
-  recordFeedback,
-} from "~/server/generic/suggestions/repo/suggestion";
+import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
@@ -745,7 +743,7 @@ describe("durable image representations", () => {
       imageId,
       sortOrder: 0,
     });
-    const unrelated = await publishSuggestion(ctx.db, {
+    const unrelated = await publishExactSuggestion(ctx.db, {
       publicationKey: "synthetic:image-search-capture:unrelated",
       family: "recommendation",
       subject: {

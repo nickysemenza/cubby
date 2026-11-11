@@ -637,7 +637,7 @@ async function settleByRule(
   });
   // A later page or omitted evidence may reverse an apparent lifecycle notice.
   // The coordinator can page the read; a deterministic link cannot assume it.
-  if (content.truncated || content.nextOffset !== null)
+  if (content.truncated || content.nextByteOffset !== null)
     return {
       known: await knownForCoordinator(),
       attemptContext,

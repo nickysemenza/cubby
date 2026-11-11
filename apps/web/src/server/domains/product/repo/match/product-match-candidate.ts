@@ -36,16 +36,16 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
-import { requestedRows } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
 import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
-import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
+import {
+  publishSuggestionSet,
+  type SuggestionFamily,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   suggestionRecordId,
   transitionSuggestionState,
-  transitionSuggestionStateBatch,
-  type SuggestionStatePatch,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 
 import { productIdentityEvidenceFences } from "./product-identity-fence";
@@ -122,6 +122,104 @@ type ProductPairPublicationResult =
       valid: true;
       row: ProductMatchCandidateRow & { created: boolean };
     };
+
+type ProductPairEntry = {
+  key: string;
+  input: ProductPairPublicationInput;
+  pair: { productAId: ProductId; productBId: ProductId };
+  data: z.infer<typeof pairProjection>;
+  prior: typeof suggestionTable.$inferSelect | undefined;
+  distinct: boolean;
+  publicationKey: string;
+  /** The pair's earlier open projection, set under the slot lock. */
+  open?: { dismissed: boolean };
+};
+
+/** Each entry stores its own producer; this one only steers matching. */
+const pairPublisher: SuggestionProducer = {
+  kind: "agent",
+  model: null,
+  revision: null,
+  runId: null,
+  evaluationId: null,
+};
+
+const pairSuppression = (key: string) => ({
+  scope: "product_pair",
+  candidateKey: key,
+  fingerprint: null,
+});
+
+/**
+ * The `product_pair` family: one slot per unordered Product pair. A key names
+ * exact evidence, so a replay keeps its row; a member's dismissal carries to
+ * the replacement, and earlier rows stay as history. A non-actionable distinct
+ * verdict publishes resolved, never pending.
+ */
+const productPairSuggestions: SuggestionFamily<ProductPairEntry> = {
+  family: "product_pair",
+  slot: ({ key, pair }) => ({
+    lock: `product-pair-state:${key}`,
+    fields: { recordId: pair.productAId, otherId: pair.productBId },
+  }),
+  fingerprint: ({ publicationKey }) => publicationKey,
+  evidenceFingerprint: ({ publicationKey }) => publicationKey,
+  suppresses: () => false,
+  obsolete: () => true,
+  onUnchanged: "none",
+  replaced: "deactivate",
+  prepare: async (_tx, entry, rows, producer) => {
+    const open = rows.filter(
+      (row) =>
+        row.active &&
+        (row.status === suggestionStatus.enum.pending ||
+          row.suppression !== null),
+    );
+    return {
+      candidate: {
+        ...entry,
+        ...(open.length && {
+          open: { dismissed: open.some((row) => row.suppression !== null) },
+        }),
+      },
+      producer,
+    };
+  },
+  publication: ({ input, pair, data, prior, distinct, publicationKey }) => ({
+    input: {
+      publicationKey,
+      family: "product_pair",
+      subject: {
+        kind: "product_pair",
+        entity: "product",
+        recordId: pair.productAId,
+        otherId: pair.productBId,
+      },
+      judgment: { actionable: data.actionable, conflict: data.conflict },
+      producer:
+        prior?.producer ??
+        input.producer ??
+        (input.source === "agent" ? { ...pairPublisher } : null),
+      evidence: data,
+      fingerprint: input.fingerprint ?? null,
+    },
+    projection: {
+      data,
+      ...(distinct ? { status: "resolved" as const } : {}),
+    },
+  }),
+  afterPublish: async (tx, published) => {
+    for (const { suggestionId, candidate } of published)
+      await transitionSuggestionState(tx, suggestionId, {
+        active: true,
+        ...(candidate.open?.dismissed && {
+          suppression: pairSuppression(candidate.key),
+          status: "resolved",
+        }),
+      });
+  },
+  labelBacklog: sql`false`,
+};
 
 /** Caller owns the short SERIALIZABLE transaction and its Job/request guards.
  * One pair lock order, immutable publication and locked state read serve the
@@ -238,7 +336,7 @@ async function publishProductPairPublications(
   const publishedByKey = new Map(
     published.map((row) => [row.publicationKey, row]),
   );
-  const entries = prepared.map((entry) => {
+  const entries: ProductPairEntry[] = prepared.map((entry) => {
     const prior = publishedByKey.get(entry.publicationKey);
     const data = prior ? pairProjection.parse(prior.evidence) : entry.data;
     const distinct =
@@ -250,126 +348,29 @@ async function publishProductPairPublications(
         .safeParse(data.signals).data?.decision.selectedIndex === 1;
     return { ...entry, data, prior, distinct };
   });
-  const predictions = await publishSuggestions(
+  const outcomesByEntry = await publishSuggestionSet(
     tx,
-    entries.map(({ input, pair, data, prior, distinct, publicationKey }) => ({
-      input: {
-        publicationKey,
-        family: "product_pair",
-        subject: {
-          kind: "product_pair",
-          entity: "product",
-          recordId: pair.productAId,
-          otherId: pair.productBId,
-        },
-        judgment: { actionable: data.actionable, conflict: data.conflict },
-        producer:
-          prior?.producer ??
-          input.producer ??
-          (input.source === "agent"
-            ? {
-                kind: "agent",
-                model: null,
-                revision: null,
-                runId: null,
-                evaluationId: null,
-              }
-            : null),
-        evidence: data,
-        fingerprint: input.fingerprint ?? null,
-      },
-      projection: {
-        data,
-        ...(distinct ? { status: "resolved" as const } : {}),
-      },
-    })),
+    productPairSuggestions,
+    entries,
+    pairPublisher,
   );
   const byPair = new Map(
     entries.map((entry, index) => {
-      const prediction = predictions[index];
-      if (!prediction)
+      const outcome = outcomesByEntry[index];
+      if (outcome?.outcome !== "published")
         throw new Error("Product pair publication returned no row");
-      return [entry.key, { ...entry, prediction }];
+      return [
+        entry.key,
+        { ...entry, prediction: outcome.row, open: outcome.candidate.open },
+      ];
     }),
-  );
-  const priorByPair = new Map<string, { dismissed: boolean }>();
-  const pairs = requestedRows(
-    [...byPair.keys()].map((key) => {
-      const [recordId, otherId] = key.split("|");
-      return { recordId: recordId!, otherId: otherId! };
-    }),
-    { recordId: "uuid", otherId: "text" },
-    "requested_pair",
-  );
-  await transitionSuggestionStateBatch(
-    tx,
-    and(
-      eq(suggestionTable.family, "product_pair"),
-      sql`EXISTS (SELECT 1 FROM ${pairs.from} WHERE ${pairs.col("recordId")} = ${suggestionTable.recordId} AND ${pairs.col("otherId")} = ${suggestionTable.data}->>'otherId')`,
-    ),
-    (rows) => {
-      for (const row of rows) {
-        const key = productPairKey(
-          suggestionRecordId(row),
-          pairProjection.parse(row.data).otherId,
-        );
-        const current = byPair.get(key);
-        // A just-inserted state is not the earlier open projection. A replay is.
-        if (
-          current &&
-          (current.prior || row.id !== current.prediction.id) &&
-          row.active &&
-          (row.status === "pending" || row.suppression)
-        ) {
-          const previous = priorByPair.get(key);
-          priorByPair.set(key, {
-            dismissed: Boolean(previous?.dismissed || row.suppression),
-          });
-        }
-      }
-      return rows.flatMap((row) => {
-        const key = productPairKey(
-          suggestionRecordId(row),
-          pairProjection.parse(row.data).otherId,
-        );
-        const current = byPair.get(key);
-        if (!current) return [];
-        const patch: SuggestionStatePatch =
-          row.id === current.prediction.id
-            ? {
-                active: true,
-                ...(priorByPair.get(key)?.dismissed
-                  ? {
-                      suppression: {
-                        scope: "product_pair",
-                        candidateKey: key,
-                        fingerprint: null,
-                      },
-                      status: "resolved",
-                    }
-                  : {}),
-              }
-            : {
-                active: false,
-                ...(row.status === suggestionStatus.enum.pending
-                  ? { status: suggestionStatus.enum.superseded }
-                  : {}),
-              };
-        return [
-          {
-            id: row.id,
-            patch,
-          },
-        ];
-      });
-    },
   );
   const validKeys = new Set(valid.map((outcome) => outcome.key));
   return outcomes.map(({ key, input }) => {
     const entry = byPair.get(productPairKey(...input.productIds));
     if (!validKeys.has(key) || !entry) return { key, valid: false, row: null };
     const { data, pair, prediction } = entry;
-    const prior = priorByPair.get(entry.key);
+    const prior = entry.open;
     return {
       key,
       valid: true,
@@ -424,18 +425,78 @@ export async function publishProductPair(
  * them, so enrichment never retires it: it is fingerprinted live and a merge
  * pins what the member reviewed. Detector judgments keep their snapshot.
  */
-export async function reviewedProductPairFingerprint(
+/**
+ * The live pair fingerprint, or null when the pair cannot apply. A detector
+ * judgment holds only while its stored snapshot equals the live one, so
+ * changed identity facts hide and refuse it on every surface.
+ */
+export async function productPairApplicationKey(
   db: Database,
   state: { recordId: string | null; data: unknown; fingerprint: string | null },
 ) {
   const data = pairProjection.safeParse(state.data).data;
-  if (data?.source !== "agent") return state.fingerprint;
+  if (!data) return state.fingerprint;
   const { productPairFingerprint } =
     await import("./product-identity-snapshot");
-  return productPairFingerprint(db, [
+  const live = await productPairFingerprint(db, [
     parseEntityId("product", suggestionRecordId(state)),
     data.otherId,
   ]);
+  return data.source === "agent" || live === state.fingerprint ? live : null;
+}
+
+/**
+ * A pair's identity facts as reviewed beside the current ones, per Product
+ * field. Pairs published without snapshots compare the pair fingerprint.
+ */
+export async function productPairApplicationTerms(
+  db: Database,
+  state: { recordId: string | null; data: unknown; fingerprint: string | null },
+) {
+  const data = pairProjection.parse(state.data);
+  const sides = [
+    ["product", parseEntityId("product", suggestionRecordId(state))],
+    ["otherProduct", data.otherId],
+  ] as const;
+  const { pairFingerprint, productIdentitySnapshots } =
+    await import("./product-identity-snapshot");
+  const current = await productIdentitySnapshots(
+    db,
+    sides.map(([, id]) => id),
+  );
+  const reviewed = z
+    .object({ snapshots: z.array(z.record(z.string(), z.json())) })
+    .safeParse(data.signals).data?.snapshots;
+  if (!reviewed) {
+    const [first, second] = sides.map(([, id]) => current.get(id)?.fingerprint);
+    return {
+      reviewed: { identity: state.fingerprint },
+      current: {
+        identity:
+          first && second ? await pairFingerprint([first, second]) : null,
+      },
+    };
+  }
+  const terms = (
+    snapshot: (id: ProductId) => z.infer<ReturnType<typeof z.json>> | undefined,
+  ) =>
+    Object.fromEntries(
+      sides.flatMap(([side, id]) => {
+        const facts = z
+          .record(z.string(), z.json())
+          .safeParse(snapshot(id)).data;
+        return facts
+          ? Object.entries(facts).map(([field, value]) => [
+              `${side}.${field}`,
+              value,
+            ])
+          : [[side, null]];
+      }),
+    );
+  return {
+    reviewed: terms((id) => reviewed.find((snapshot) => snapshot.id === id)),
+    current: terms((id) => current.get(id)?.snapshot),
+  };
 }
 export async function upsertAgentProductMatch(
   db: Database | DrizzleTransaction,

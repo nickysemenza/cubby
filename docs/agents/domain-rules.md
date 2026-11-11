@@ -339,12 +339,12 @@ subscriber accumulates in reused isolates.
 
 ## Error diagnostics
 
-The trusted household sees raw diagnostics in toasts, Technical details and
-HTTP/MCP error bodies: SQL text and parameters, Postgres SQLSTATE codes and
-upstream response bodies. Preserve these rather than replacing them with generic
-messages. Only credential-shaped values are redacted (`scrubErrorMessage`).
-This governs error surfaces; repository and outward-facing
-content still uses synthetic evidence under the root agent rules.
+The trusted household sees diagnostic cause messages and SQLSTATE codes. Scrub
+credential-shaped values with `scrubErrorMessage`. Optional AI enrichment
+failures return status `unavailable` with a reason; a scrubbed upstream body
+belongs in `detail`, never the headline. MCP error bodies retain cause messages
+and SQLSTATE but never stacks, schemas or ID lists. Repository and outward-facing
+content uses synthetic evidence under the root agent rules.
 
 ## MCP and observability traps
 

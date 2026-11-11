@@ -1,3 +1,7 @@
+import {
+  declaredClassificationPolicies,
+  columnClassificationPolicy,
+} from "@cubby/schemas/classification-field-policy";
 import { entityMutationItem } from "@cubby/schemas/entity-mutation";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import {
@@ -35,8 +39,12 @@ import {
   auditRecordEmoji,
   normalizeSavedRecordEmoji,
 } from "~/server/entity-kernel/repo/entity-emoji";
-import { AppError, createAppError } from "~/server/errors/app-error";
-import { findPgError } from "~/server/errors/db-errors";
+import {
+  AppError,
+  createAppError,
+  isPolicyRefusal,
+} from "~/server/errors/app-error";
+import { findPgError, translateDatabaseError } from "~/server/errors/db-errors";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
@@ -650,7 +658,29 @@ const buildEntityOperations = <
                     recipeCosting: context.services.recipeCosting.bindTo(db),
                   },
                 };
+                const updatedReferences: { entity: E; id: string }[] = [];
+                const skipped: { entity: E; id: string; message: string }[] =
+                  [];
+                const fields = Object.keys(
+                  z.record(z.string(), z.unknown()).parse(validated.data),
+                );
+                const governed = fields.some(
+                  (field) =>
+                    Object.values(declaredClassificationPolicies).some(
+                      (policy) =>
+                        policy.target.entity === binding.entity &&
+                        policy.fields.some((item) => item.field === field),
+                    ) ||
+                    (columnClassificationPolicy(
+                      "spendingCategory.productExpectation",
+                    ).target.entity === binding.entity &&
+                      field ===
+                        columnClassificationPolicy(
+                          "spendingCategory.productExpectation",
+                        ).target.field),
+                );
                 if (
+                  !governed &&
                   canUpdateColumns(
                     binding.entity,
                     validated.data,
@@ -663,46 +693,72 @@ const buildEntityOperations = <
                     validated.ids,
                     validated.data,
                   );
+                  updatedReferences.push(
+                    ...validated.ids.map((id) => ({
+                      entity: binding.entity,
+                      id,
+                    })),
+                  );
                 } else {
                   for (const id of validated.ids) {
                     offending = id;
-                    const parsedId = parseSchema<S["id"], string>(
-                      binding.schemas.id,
-                      id,
-                    );
-                    const data = Object.assign(
-                      {},
-                      validated.data,
-                      Object.fromEntries(
-                        await resolveCollectionPatches(
-                          writeContext,
-                          binding,
-                          parsedId,
+                    try {
+                      await withTransactionDatabase(db, async (rowDb) => {
+                        const rowContext = {
+                          ...writeContext,
+                          db: rowDb,
+                          services: {
+                            ...writeContext.services,
+                            recipeCosting:
+                              context.services.recipeCosting.bindTo(rowDb),
+                          },
+                        };
+                        const parsedId = parseSchema<S["id"], string>(
+                          binding.schemas.id,
+                          id,
+                        );
+                        const data = Object.assign(
+                          {},
                           validated.data,
-                          { bulk: true },
-                        ),
-                      ),
-                    );
-                    await updateRow(writeContext, { id, data });
+                          Object.fromEntries(
+                            await resolveCollectionPatches(
+                              rowContext,
+                              binding,
+                              parsedId,
+                              validated.data,
+                              { bulk: true },
+                            ),
+                          ),
+                        );
+                        await updateRow(rowContext, { id, data });
+                      });
+                      updatedReferences.push({ entity: binding.entity, id });
+                    } catch (error) {
+                      const refusal = isPolicyRefusal(error)
+                        ? error
+                        : translateDatabaseError(error);
+                      if (!isPolicyRefusal(refusal)) throw error;
+                      skipped.push({
+                        entity: binding.entity,
+                        id,
+                        message: refusal.message,
+                      });
+                    }
                   }
                 }
-                await recordChange(db, {
-                  kind: "source",
-                  categories: [binding.entity],
-                });
-                return {
-                  updatedReferences: validated.ids.map((id) => ({
-                    entity: binding.entity,
-                    id,
-                  })),
-                };
+                if (updatedReferences.length)
+                  await recordChange(db, {
+                    kind: "source",
+                    categories: [binding.entity],
+                  });
+                return { updatedReferences, skipped };
               },
             );
 
             return updated;
           } catch (error) {
             const pg = findPgError(error);
-            const message = `Bulk ${binding.entity} update failed${offending ? ` at row ${offending}` : ""}; selected rows: ${validated.ids.join(", ")}. ${pg ? `SQLSTATE ${pg.code}: ${pg.message ?? ""} ${pg.detail ?? ""}. ` : ""}${getErrorMessage(error)}`;
+            const message = `Bulk ${binding.entity} update failed${offending ? ` at row ${offending}` : ""}; ${validated.ids.length} selected rows. ${pg ? `SQLSTATE ${pg.code}: ${pg.message ?? ""} ${pg.detail ?? ""}. ` : ""}${getErrorMessage(error)}`;
             if (error instanceof AppError)
               throw new AppError({
                 code: error.code,
@@ -720,6 +776,7 @@ const buildEntityOperations = <
             action: "bulkUpdate",
             entity: binding.entity,
             updatedReferences: updated.updatedReferences,
+            skipped: updated.skipped,
             sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,
           }),
         ),

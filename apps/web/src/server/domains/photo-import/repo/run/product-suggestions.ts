@@ -14,7 +14,7 @@ import { product, suggestionTable } from "~/server/db/schema";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 async function photoReviewEvidence(db: Database, imageIds: string[]) {
@@ -99,7 +99,9 @@ export async function photoProductSuggestions(
       }),
     );
     const currentValue = z.json().parse(currentFields[field] ?? null);
-    const saved = await publishSuggestion(
+    // Run-scoped drafts stay inactive and keyed by their Run evidence, so they
+    // never settle the field's queue rows.
+    const saved = await publishExactSuggestion(
       db,
       {
         publicationKey: `photo-field:${key}`,

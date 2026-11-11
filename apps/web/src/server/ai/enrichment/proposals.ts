@@ -3,7 +3,7 @@
 // The workflow owns resolution, bounded concurrency, streaming, and failure
 // handling. This module retains the shared output type used by that workflow.
 
-import type { Confidence } from "@cubby/schemas/ai";
+import type { Confidence, OptionalAiUnavailable } from "@cubby/schemas/ai";
 import type {
   IngredientId,
   IngredientShortcode,
@@ -11,6 +11,7 @@ import type {
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 
 export interface IngredientMergeSuggestion {
+  semanticUnavailable?: OptionalAiUnavailable;
   target: {
     id: IngredientId;
     shortcode: IngredientShortcode;

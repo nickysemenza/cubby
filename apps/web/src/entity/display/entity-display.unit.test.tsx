@@ -1533,7 +1533,7 @@ it.each(["network", "primaryCardholderId"])(
       </>,
     );
     const dash = screen.getByRole("note", {
-      name: "Not applicable. Only applies to credit-card accounts.",
+      name: "Not applicable. Only applies to credit-card accounts. Leave this field out of the update for other accounts.",
     });
     expect(dash).toHaveAttribute("tabindex", "0");
     expect(screen.queryByRole("button")).toBeNull();

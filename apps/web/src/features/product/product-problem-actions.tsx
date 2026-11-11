@@ -5,7 +5,7 @@ import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import type { WorkActionProps } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
-import { productMatch } from "~/integrations/tanstack-query/generated/domains/productMatch.gen";
+import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
@@ -76,7 +76,7 @@ export function DuplicateProductMergeFix({
   close: () => void;
 }) {
   const mutation = useActionMutation({
-    mutationFn: () => productMatch.mergeProductMatch.mutationOptions(),
+    mutationFn: () => suggestionApi.review.mutationOptions(),
     success: "Merged Product identity",
     onSuccess: close,
   });
@@ -106,10 +106,13 @@ export function DuplicateProductMergeFix({
             "Choose one independently assessed pair with current identity evidence",
           );
         mutation.mutate({
-          keepId,
-          mergeId,
           suggestionId: pair.suggestionId,
+          operationId: crypto.randomUUID(),
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
           expectedFingerprint: pair.fingerprint,
+          application: { kind: "product_merge", keepId, mergeId },
         });
       }}
       isPending={mutation.isPending}

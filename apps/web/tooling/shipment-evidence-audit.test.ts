@@ -14,21 +14,21 @@ import {
 const emailId = "EML-2ABC4";
 const checksum = "a".repeat(64);
 const page = ({
-  offset = 0,
+  byteOffset = 0,
   body = "Parcel update",
-  nextOffset = null,
+  nextByteOffset = null,
   mode = "text",
   total = new TextEncoder().encode(body).length,
   truncated = false,
 }: {
-  offset?: number;
+  byteOffset?: number;
   body?: string;
-  nextOffset?: number | null;
+  nextByteOffset?: number | null;
   mode?: "text" | "html";
   total?: number;
   truncated?: boolean;
 } = {}) => ({
-  offset,
+  byteOffset,
   response: {
     id: emailId,
     mailboxId: "synthetic-mailbox",
@@ -40,7 +40,7 @@ const page = ({
       bodyHtml: mode === "html" ? body : null,
       textBytes: mode === "text" ? total : null,
       htmlBytes: mode === "html" ? total : null,
-      nextOffset,
+      nextByteOffset,
       compacted: false,
       truncated,
     },
@@ -61,8 +61,8 @@ describe("retained shipment evidence audit", () => {
       checksum,
       htmlPages: [],
       textPages: [
-        page({ body: "📦", nextOffset: 4, total: 6, truncated: true }),
-        page({ offset: 4, body: "ok", total: 6 }),
+        page({ body: "📦", nextByteOffset: 4, total: 6, truncated: true }),
+        page({ byteOffset: 4, body: "ok", total: 6 }),
       ],
     });
     expect(completeRetainedMail(input)).toMatchObject({
@@ -70,7 +70,8 @@ describe("retained shipment evidence audit", () => {
       mode: "text",
       text: "📦ok",
     });
-    for (const item of input.textPages) if (item.offset === 4) item.offset = 3;
+    for (const item of input.textPages)
+      if (item.byteOffset === 4) item.byteOffset = 3;
     expect(completeRetainedMail(input).complete).toBe(false);
   });
 
@@ -84,12 +85,12 @@ describe("retained shipment evidence audit", () => {
           mode: "html",
           body: "<p>",
           total: 9,
-          nextOffset: 3,
+          nextByteOffset: 3,
           truncated: true,
         }),
         page({
           mode: "html",
-          offset: 3,
+          byteOffset: 3,
           body: "ok</p>",
           total: 9,
           truncated: true,

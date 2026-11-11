@@ -200,10 +200,11 @@ export function classificationFieldRefusal<TRecord extends object>(
     if (
       ((classifier === null ? undefined : byValue[classifier]) ??
         declaration.otherwise) === "not_allowed"
-    )
-      return "refusal" in declaration && typeof declaration.refusal === "string"
-        ? declaration.refusal
-        : "This field does not apply to this record.";
+    ) {
+      if ("refusal" in declaration && typeof declaration.refusal === "string")
+        return declaration.refusal;
+      throw new Error(`Missing classification refusal for ${entity}.${field}`);
+    }
   }
   return null;
 }

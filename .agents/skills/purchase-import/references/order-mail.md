@@ -131,7 +131,7 @@ replay needs actual package facts from the original.
 
 Freeze the expected Email and batch populations before writing. Preserve each
 original read's requested byte offset, source/checksum and representation.
-Earlier compact pages can legitimately report `truncated` while `nextOffset`
+Earlier compact pages can legitimately report `truncated` while `nextByteOffset`
 continues; assess the completed sequence, not every page independently. If its
 final compact page still lost evidence, recover all HTML pages interactively.
 HTML fragments can remain marked truncated even when their combined byte
@@ -147,7 +147,7 @@ pnpm --dir apps/web exec tsx tooling/shipment-evidence-audit.ts /absolute/privat
 ```
 
 `shipmentEvidenceAuditInput` beside that entrypoint owns the manifest: expected
-batch/Email IDs, original pages with requested offsets, per-batch write receipts,
+batch/Email IDs, original pages with requested byte offsets, per-batch write receipts,
 source dispositions (with resolution receipts for linked outcomes), verified carrier-name resolutions and before/after timelines. Missing originals, batches,
 readbacks or dispositions fail the audit. An unresolved disposition retains its
 concrete evidence gap. The audit verifies byte coverage and observation-level
@@ -214,7 +214,7 @@ specific lines even if they remain visible on the original order-detail page
 and the email reports a real total for other retained items.
 
 Its `content.bodyText` is compact text converted from the HTML body; follow
-`content.nextOffset` as the next `offset` until it is null, and check
+`content.nextByteOffset` as the next `byteOffset` until it is null, and check
 `content.truncated` before trusting a total. Interactive sessions may page raw
 HTML with `includeHtml` when the text lost a needed detail (an HTML read
 replaces the text); a Run's coordinator is refused HTML and resolves a

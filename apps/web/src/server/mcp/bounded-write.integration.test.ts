@@ -90,7 +90,6 @@ describe("bounded MCP writes", () => {
                 entity: "product",
                 ids: selected.map((subject) => subject.id),
                 data,
-                resultDetail: "full",
               }
             : {
                 action: mode,

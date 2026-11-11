@@ -9,26 +9,28 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
+import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { getContext } from "~/integrations/tanstack-query/root-provider";
 import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/workflow-commands";
 
 import { useWorkflowCommand } from "./use-workflow-command";
 
-afterEach(() => vi.unstubAllGlobals());
+let restoreDispatch = () => {};
+afterEach(() => restoreDispatch());
 
 // Losing catalog metadata bypasses invalidation; losing scope overlaps Run writes.
 it("serializes scoped operations while publishing their exact bodies and metadata", async () => {
   // Load the real command before timing scope scheduling, independently of cold imports.
   await loadWorkflowCommandOptions("suggestion.reviewBatch");
   const gate = Promise.withResolvers<void>();
-  const fetchResponse = vi.fn(async () => {
+  const dispatch = vi.fn(async () => {
     await gate.promise;
-    return Response.json({
-      ok: true,
+    return {
+      ok: true as const,
       data: [{ suggestionId: null, ok: false, error: "Synthetic refusal" }],
-    });
+    };
   });
-  vi.stubGlobal("fetch", fetchResponse);
+  restoreDispatch = overrideOperationDispatch(dispatch);
   const observed = vi.fn();
   const client = new QueryClient({
     mutationCache: new MutationCache({
@@ -83,12 +85,12 @@ it("serializes scoped operations while publishing their exact bodies and metadat
         ),
     ).toHaveLength(2),
   );
-  expect(fetchResponse).toHaveBeenCalledTimes(1);
+  expect(dispatch).toHaveBeenCalledTimes(1);
   await act(async () => {
     gate.resolve();
     await Promise.all(pending);
   });
-  expect(fetchResponse).toHaveBeenCalledTimes(2);
+  expect(dispatch).toHaveBeenCalledTimes(2);
   expect(observed.mock.calls).toEqual([[body], [body]]);
   client.clear();
 });
@@ -97,15 +99,10 @@ it("serializes scoped operations while publishing their exact bodies and metadat
 it("patches before catalog invalidation and finishes while refresh is pending", async () => {
   const gate = Promise.withResolvers<void>();
   const events: string[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async () =>
-      Response.json({
-        ok: true,
-        data: [{ suggestionId: null, ok: false, error: "Synthetic refusal" }],
-      }),
-    ),
-  );
+  restoreDispatch = overrideOperationDispatch(async () => ({
+    ok: true,
+    data: [{ suggestionId: null, ok: false, error: "Synthetic refusal" }],
+  }));
   const { queryClient: client } = getContext();
   const activeKey = ["synthetic-active-review"];
   const inactiveKey = ["synthetic-inactive-review"];

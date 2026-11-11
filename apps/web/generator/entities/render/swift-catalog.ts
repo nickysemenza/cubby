@@ -445,7 +445,7 @@ const fieldJSON = (
       const subject = policy.fields.find(
         (candidate) => candidate.field === field.key && !candidate.relation,
       );
-      if (!subject) return [];
+      if (!subject || !subject.refusal) return [];
       const classifier = fieldModel.fields.find(
         (candidate) => candidate.key === policy.classifier,
       );
@@ -459,8 +459,7 @@ const fieldJSON = (
             ]),
           ),
           otherwise: subject.otherwise !== "not_allowed",
-          reason:
-            subject.refusal ?? "This field does not apply to this record.",
+          reason: subject.refusal,
         },
       ];
     }),

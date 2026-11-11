@@ -1,5 +1,6 @@
 import { productOut as productTopLevelOut } from "@cubby/schemas/entities/product";
 import { z } from "zod";
+import { optionalAiUnavailableSchema } from "./ai";
 import { batchProgressEvent } from "./batch";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedEntitySort } from "./generated/entity-sort.gen";
@@ -61,7 +62,7 @@ export const productSearchInput = z.object({
 const productSearchOut = createPaginatedResponseSchemaWithContext(
   productPickerItemOut,
   "product",
-);
+).extend({ semanticUnavailable: optionalAiUnavailableSchema.optional() });
 const productCreateManyResult = z.object({
   created: z.number().int().nonnegative(),
   sideEffects: mutationSideEffectsSchema,

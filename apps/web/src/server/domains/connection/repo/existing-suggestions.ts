@@ -19,7 +19,10 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import { suggestionTable, entityIdentity } from "~/server/db/schema";
-import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
+import {
+  currentProductPairPolicy,
+  productPairApplicationKey,
+} from "~/server/domains/product/repo/match/product-match-candidate";
 import { readStoredProductPair } from "~/server/domains/product/repo/match/product-pair-signals";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 
@@ -254,7 +257,12 @@ export async function readExistingConnectionSuggestions(
               "evidence",
             ),
         },
-        state: { entity: suggestionTable.entity, field: suggestionTable.field },
+        state: {
+          entity: suggestionTable.entity,
+          field: suggestionTable.field,
+          recordId: suggestionTable.recordId,
+          data: suggestionTable.data,
+        },
         connectionEvidence: connectionReadEvidenceSql(
           sql`${suggestionTable.data}->'connectionEvidence'`,
         ).as("connectionEvidence"),
@@ -312,74 +320,88 @@ export async function readExistingConnectionSuggestions(
       sql`${sql.identifier("connectionOrderCreatedAt")}`,
       sql`${sql.identifier("id")}`,
     );
-  const proposals = rows.flatMap((row) => {
-    const { prediction, state } = row;
-    let relation: ConnectionRelation | undefined;
-    let integration: ConnectionProposal["integration"];
-    let suppression: ConnectionProposal["review"]["suppression"] = null;
-    let evidence: ConnectionProposal["evidence"] = {
-      reasons: ["Existing domain Suggestion"],
-      contradictions: [],
-      unknowns: ["Review the original Suggestion evidence before accepting"],
-    };
-    if (prediction.family === "field") {
-      relation = fieldRelations.get(`${state.entity}.${state.field}`);
-      integration = { kind: "field-review", field: state.field };
-    } else if (isEntityPairSuggestionFamily(prediction.family)) {
-      const family = pairFamilies[prediction.family];
-      const judgment = z
-        .object({ actionable: z.boolean(), conflict: z.boolean() })
-        .safeParse(prediction.judgment);
-      if (!judgment.success || !family.current(prediction.producer)) return [];
-      relation = family.relation;
-      integration = family.integration;
-      const subject = z
-        .object({ recordId: z.string(), otherId: z.string() })
-        .parse(prediction.subject);
-      suppression = {
-        scope: prediction.family,
-        candidateKey: `${subject.recordId}|${subject.otherId}`,
-        fingerprint: null,
-      };
-      const { reason, conflicts, notActionable } = family.explain(
-        prediction.evidence,
-      );
-      evidence = {
-        reasons: [reason ?? "Existing domain Suggestion"],
-        contradictions: judgment.data.conflict
-          ? conflicts.length
-            ? conflicts
-            : [reason ?? "Identity conflict"]
-          : [],
-        unknowns: judgment.data.actionable ? [] : [notActionable],
-      };
-    } else {
-      // email_link records are operational decisions, never pending suggestions.
-      return [];
-    }
-    if (!relation || !prediction.fingerprint) return [];
-    const result = connectionProposal.safeParse({
-      relation,
-      source:
-        relation === "product-expense"
-          ? { entityKind: row.targetKind, entityId: row.targetCode }
-          : { entityKind: row.sourceKind, entityId: row.sourceCode },
-      target:
-        relation === "product-expense"
-          ? { entityKind: row.sourceKind, entityId: row.sourceCode }
-          : { entityKind: row.targetKind, entityId: row.targetCode },
-      label: `Review ${relation.replaceAll("-", " ")}`,
-      evidence,
-      fingerprint: prediction.fingerprint,
-      review: {
-        suggestionId: prediction.id,
-        suppression,
-        family: prediction.family,
-      },
-      integration,
-    });
-    return result.success ? [result.data] : [];
-  });
+  const proposals = (
+    await Promise.all(
+      rows.map(async (row) => {
+        const { prediction, state } = row;
+        let relation: ConnectionRelation | undefined;
+        let integration: ConnectionProposal["integration"];
+        let suppression: ConnectionProposal["review"]["suppression"] = null;
+        let evidence: ConnectionProposal["evidence"] = {
+          reasons: ["Existing domain Suggestion"],
+          contradictions: [],
+          unknowns: [
+            "Review the original Suggestion evidence before accepting",
+          ],
+        };
+        if (prediction.family === "field") {
+          relation = fieldRelations.get(`${state.entity}.${state.field}`);
+          integration = { kind: "field-review", field: state.field };
+        } else if (isEntityPairSuggestionFamily(prediction.family)) {
+          const family = pairFamilies[prediction.family];
+          const judgment = z
+            .object({ actionable: z.boolean(), conflict: z.boolean() })
+            .safeParse(prediction.judgment);
+          if (!judgment.success || !family.current(prediction.producer))
+            return [];
+          relation = family.relation;
+          integration = family.integration;
+          const subject = z
+            .object({ recordId: z.string(), otherId: z.string() })
+            .parse(prediction.subject);
+          suppression = {
+            scope: prediction.family,
+            candidateKey: `${subject.recordId}|${subject.otherId}`,
+            fingerprint: null,
+          };
+          const { reason, conflicts, notActionable } = family.explain(
+            prediction.evidence,
+          );
+          evidence = {
+            reasons: [reason ?? "Existing domain Suggestion"],
+            contradictions: judgment.data.conflict
+              ? conflicts.length
+                ? conflicts
+                : [reason ?? "Identity conflict"]
+              : [],
+            unknowns: judgment.data.actionable ? [] : [notActionable],
+          };
+        } else {
+          // email_link records are operational decisions, never pending suggestions.
+          return [];
+        }
+        const fingerprint =
+          prediction.family === "product_pair"
+            ? await productPairApplicationKey(db, {
+                ...state,
+                fingerprint: prediction.fingerprint,
+              })
+            : prediction.fingerprint;
+        if (!relation || !fingerprint) return [];
+        const result = connectionProposal.safeParse({
+          relation,
+          source:
+            relation === "product-expense"
+              ? { entityKind: row.targetKind, entityId: row.targetCode }
+              : { entityKind: row.sourceKind, entityId: row.sourceCode },
+          target:
+            relation === "product-expense"
+              ? { entityKind: row.sourceKind, entityId: row.sourceCode }
+              : { entityKind: row.targetKind, entityId: row.targetCode },
+          label: `Review ${relation.replaceAll("-", " ")}`,
+          evidence,
+          fingerprint,
+          review: {
+            suggestionId: prediction.id,
+            suppression,
+            family: prediction.family,
+          },
+          integration,
+        });
+        return result.success ? [result.data] : [];
+      }),
+    )
+  ).flat();
   const guards = new Map(
     proposals.map((proposal) => [
       proposal,

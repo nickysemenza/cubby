@@ -12,7 +12,6 @@ import {
 } from "@cubby/schemas/search";
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { type SQL, sql, isNull } from "drizzle-orm";
 import { z } from "zod";
 
@@ -28,6 +27,7 @@ import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/s
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {
   embedQuery,
+  optionalAiUnavailable,
   semanticEmbeddingsConfigured,
 } from "~/server/generic/embedding/service/semantic/embeddings";
 import {
@@ -73,7 +73,12 @@ export type InternalRelatedSearchCandidates =
       complete: boolean;
       gap?: SemanticCoverageGap;
     }
-  | { status: "unavailable"; results: []; error?: string };
+  | {
+      status: "unavailable";
+      results: [];
+      reason?: "quota" | "rate_limited" | "upstream_error";
+      detail?: string;
+    };
 
 const productionRelatedSearchPort: RelatedSearchPort = {
   configured: semanticEmbeddingsConfigured,
@@ -387,9 +392,8 @@ export async function findRelatedSearchCandidates(
   } catch (error) {
     log.warn("related failed", { message: getErrorMessage(error) });
     return {
-      status: "unavailable",
+      ...optionalAiUnavailable(error),
       results: [],
-      error: scrubErrorMessage(getErrorMessage(error)),
     };
   }
 }

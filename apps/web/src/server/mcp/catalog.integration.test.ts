@@ -24,7 +24,12 @@ import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createImageFixture,
+  createInventoryFixture,
+  createLocationFixture,
+  createProductFixture,
   makeExpenseInput,
+  makeLocationInput,
+  makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import {
@@ -122,6 +127,74 @@ describe("MCP catalog", () => {
       description: "Synthetic red boot",
     });
     expect(JSON.stringify(result)).not.toContain(analysis!.id);
+  });
+
+  // Graph nodes span the root and every branch while pageSize pages each
+  // branch, so cutting nodes to pageSize dropped referenced records.
+  it("pages a graph branch by cursor without dropping the nodes it references", async () => {
+    const product = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic graph pantry staple" }),
+      ctx.actor,
+    );
+    for (const index of [1, 2, 3]) {
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: `Synthetic graph shelf ${index}` }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: product.id,
+          locationId: location.id,
+          amount: { value: index, unit: "each" },
+        },
+        ctx.actor,
+      );
+    }
+    const page = z.object({
+      nodes: z.array(z.object({ entityId: z.string() })),
+      branches: z.array(
+        z.object({ items: z.array(z.object({ entityId: z.string() })) }),
+      ),
+      nextCursor: z.string().nullable(),
+    });
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const read = async (cursor?: string) => {
+      const result = await callMcpTool(
+        createMcpServer(),
+        "entity_graph_read",
+        {
+          action: "graph",
+          input: {
+            roots: [{ entityKind: "product", entityId: product.id }],
+            relationshipKeys: ["inventory"],
+            pageSize: 2,
+            ...(cursor && { cursor }),
+          },
+        },
+        kernelRequestContext(kernel),
+        { entityKernel: kernel },
+      );
+      expect(result.isError).not.toBe(true);
+      return page.parse(result.structuredContent);
+    };
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    for (const expected of [2, 1]) {
+      const current = await read(cursor);
+      const items = current.branches.flatMap((branch) => branch.items);
+      expect(items).toHaveLength(expected);
+      const nodes = new Set(current.nodes.map((node) => node.entityId));
+      for (const item of items) expect(nodes).toContain(item.entityId);
+      seen.push(...items.map((item) => item.entityId));
+      cursor = current.nextCursor ?? undefined;
+    }
+    expect(cursor).toBeUndefined();
+    expect(new Set(seen).size).toBe(3);
   });
 
   // A dry run of an existing collection once scheduled automatic financial work.
@@ -270,8 +343,7 @@ describe("MCP catalog", () => {
       "cubby/error": {
         code: "BAD_REQUEST",
         reason: "INVALID_INPUT",
-        diagnostics: { stage: "input" },
-        validationIssues: [{ code: "invalid_type", path: ["_runExecution"] }],
+        issues: [{ path: ["_runExecution"] }],
       },
     });
     const refusal = z
@@ -282,28 +354,7 @@ describe("MCP catalog", () => {
       })
       .parse(result._meta)["cubby/error"];
     expect(StatusCodes[refusal.code]).toBe(400);
-    const recoverySchema = z.object({
-      recovery: z.literal("input_schema"),
-      action: z.string(),
-      instruction: z.string(),
-    });
-    const recovery = result.content
-      .filter((block) => block.type === "text")
-      .flatMap((block) => {
-        try {
-          const parsed = recoverySchema.safeParse(JSON.parse(block.text));
-          return parsed.success ? [parsed.data] : [];
-        } catch {
-          return [];
-        }
-      })[0];
-    expect(recovery).toMatchObject({
-      recovery: "input_schema",
-      action: "record",
-      instruction: expect.stringContaining(
-        'call describe with input.actions ["record"]',
-      ),
-    });
+    expect(JSON.stringify(result.content)).not.toContain("input_schema");
   });
 
   it("refuses purchase_import mutations for a run purpose that does not mount them", async () => {
@@ -350,16 +401,7 @@ describe("MCP catalog", () => {
     );
     expect(malformed.isError).toBe(true);
     expect(JSON.stringify(malformed.content)).not.toContain("inputSchema");
-    // The purpose gate refuses before the writer runs.
-    expect(
-      z
-        .object({
-          "cubby/error": z.object({
-            diagnostics: z.object({ stage: z.string() }),
-          }),
-        })
-        .parse(commit._meta)["cubby/error"].diagnostics.stage,
-    ).toBe("context");
+    expect(commit.isError).toBe(true);
     // describe hides unmounted actions too, including from the available list.
     const described = await callMcpTool(
       createMcpServer(),

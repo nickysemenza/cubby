@@ -761,7 +761,16 @@ it("bulk-edits all matching identities including an unloaded record", async () =
           data: {
             action: "bulkUpdate",
             entity: "task",
-            updatedReferences: ids.map((id) => ({ entity: "task", id })),
+            updatedReferences: ids
+              .slice(0, 2)
+              .map((id) => ({ entity: "task", id })),
+            skipped: [
+              {
+                entity: "task",
+                id: unloaded.id,
+                message: "Choose a different status.",
+              },
+            ],
             sideEffects: {},
           },
         };
@@ -809,7 +818,11 @@ it("bulk-edits all matching identities including an unloaded record", async () =
         },
       ]),
     );
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(
+      await within(dialog).findByText(
+        /Example unloaded task.*Choose a different status/,
+      ),
+    ).toBeVisible();
   } finally {
     releaseNextPage();
     restore();

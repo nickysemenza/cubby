@@ -112,7 +112,8 @@ const rowBase = {
   id: suggestionChildHandle,
   suggestionId: suggestionChildHandle,
   /** Pass as `expectedFingerprint` when reviewing. */
-  fingerprint: z.string().nullable(),
+  /** Pass as `expectedFingerprint` when reviewing this row. */
+  fingerprint: z.string(),
   record: suggestionRecordRef,
   other: suggestionRecordRef.optional(),
   review: z
@@ -202,7 +203,7 @@ const suggestionScope = z.object({
   family: suggestionListFamily.optional(),
   /** The record's kind (either endpoint for a connection). */
   recordEntity: shortcodeEntity.optional(),
-  /** Records of any kind by shortcode; a connection lists under both endpoints. */
+  /** Subject records by shortcode; a connection lists under both endpoints. */
   recordIds: z
     .array(z.string().min(1))
     .max(SUGGESTION_RECORD_IDS_MAX)
