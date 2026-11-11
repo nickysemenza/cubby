@@ -1748,15 +1748,28 @@ describe("budgeted pre-output stream quota fallback", () => {
 // Mail import Run. An unbilled refusal before any output resends at standard;
 // a stream with output passes through byte for byte.
 describe("flex service tier", () => {
-  const sse = (...events: { type: string }[]) =>
-    new Response(
+  // Delivered in 16 KiB reads, as a provider stream arrives.
+  const sse = (...events: object[]) => {
+    const bytes = new TextEncoder().encode(
       events
         .map(
-          (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+          (event) =>
+            `event: ${"type" in event ? String(event.type) : "message"}\ndata: ${JSON.stringify(event)}\n\n`,
         )
         .join(""),
+    );
+    let offset = 0;
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (offset >= bytes.length) return controller.close();
+          controller.enqueue(bytes.slice(offset, offset + 16_384));
+          offset += 16_384;
+        },
+      }),
       { headers: { "content-type": "text/event-stream" } },
     );
+  };
   const send = (first: Response) => {
     const tiers: string[] = [];
     const fetcher = gatewayFetchThrough({
@@ -1789,10 +1802,12 @@ describe("flex service tier", () => {
           "Flex processing is temporarily unavailable. Please try again later or use standard processing.",
       },
     };
+    // Lifecycle events echo the request; a coordinator's passed 64 KiB.
+    const echo = { instructions: "Synthetic instructions. ".repeat(4_000) };
     const { tiers, response } = send(
       sse(
-        { type: "response.created" },
-        { type: "response.in_progress" },
+        { type: "response.created", response: echo },
+        { type: "response.in_progress", response: echo },
         { type: "keepalive" },
         refused,
       ),
