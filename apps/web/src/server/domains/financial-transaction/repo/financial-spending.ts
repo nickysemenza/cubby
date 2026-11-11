@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   FINANCIAL_SPENDING_POLICY,
@@ -11,7 +12,11 @@ import {
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
-import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
+import {
+  financialTransactionKind,
+  financialTransactionStatus,
+  type FinancialTransactionSourceRef,
+} from "@cubby/schemas/financial-transaction-fields";
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -148,7 +153,10 @@ type PaymentCandidate = SpendingCandidate & {
   amountKey: string;
   chargedDate: string;
 };
-type VendorCandidate = SpendingCandidate & { hasVendorSpending: boolean };
+type VendorCandidate = SpendingCandidate & {
+  partlyPaid: boolean;
+  undatedAmounts: string[];
+};
 const calendarGap = (left: string, right: string) =>
   Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
   86_400_000;
@@ -355,13 +363,15 @@ export async function prepareFinancialSpendingCandidates(
     >(
       sql`
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+        ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
+      FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
         vendorIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${vendorSpendingExists}) ORDER BY p.id
+          OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
+      ORDER BY p.id
     `,
       "objects",
     );
@@ -921,11 +931,57 @@ type CandidateInput = {
 
 // A header total is not spending. Unknown costs on actual vendor lines still
 // require graph review; neither amount equality nor an order date is required.
-const vendorSpendingExists = sql`EXISTS (
-  SELECT 1 FROM "Expense" e WHERE e."purchaseId" = p.id
-    AND ${notDeleted("e")} AND NOT e.future
-    AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}
-)`;
+const vendorLines = sql`FROM "Expense" e WHERE e."purchaseId" = p.id
+  AND ${notDeleted("e")} AND NOT e.future
+  AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}`;
+const vendorSpendingExists = sql`EXISTS (SELECT 1 ${vendorLines})`;
+// Positive charges compare with charge-side lines and payments, as in
+// availableCents; returned principal and refund allocations are excluded there.
+const chargeSideLine = sql`(e.cost >= 0 OR e."lineKind" <> ${expenseLineKindSchema.enum.principal})`;
+const chargePayments = sql`FROM "FinancialTransactionAllocation" paid
+  JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId"
+  JOIN "FinancialAccount" pa ON pa.id = pf."accountId"
+  WHERE paid."purchaseId" = p.id AND ${notDeleted("paid")} AND paid."amountMinor" > 0`;
+// Settlement evidence the graph capacity check cannot treat as plain payment.
+const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NOT NULL
+  OR pf.status IN (${financialTransactionStatus.enum.void}, ${financialTransactionStatus.enum.expected})
+  OR pf."ledgerTransferId" IS NOT NULL OR pf."amountMinor" <= 0
+  OR EXISTS (SELECT 1 FROM "Expense" r WHERE r."purchaseId" = p.id
+    AND ${notDeleted("r")} AND r."bookingTransactionCode" = pf.shortcode
+    AND r."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement})
+  OR pf.kind NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.fee}, ${financialTransactionKind.enum.refund})
+  OR pf."amountMinor" IS DISTINCT FROM (SELECT sum(coverage."amountMinor")
+    FROM "FinancialTransactionAllocation" coverage
+    WHERE coverage."transactionId" = pf.id AND ${notDeleted("coverage")}))`;
+// Outside the nearby window only partly paid spending blocks creation: an
+// installment plan or payment schedule has a linked payment and an open or
+// unknown balance. Never-paid older Purchases are left to settlement review;
+// loading every one of them per charge exhausts Worker memory. This prefilter
+// keeps every unknown or uncertain case; the graph capacity check still
+// decides each Purchase it selects.
+const partlyPaidSpending = sql`(${vendorSpendingExists}
+  AND EXISTS (SELECT 1 ${chargePayments}) AND (
+  EXISTS (SELECT 1 ${vendorLines} AND (e.cost IS NULL
+    OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
+  OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
+  OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
+    IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${chargePayments})))`;
+// Undated retained payment evidence cannot use the posting window; an exact
+// amount keeps the older Purchase as a review-only blocker.
+const undatedPayment = (amounts: readonly number[]) =>
+  amounts.length
+    ? sql`(${vendorSpendingExists} AND EXISTS (
+  SELECT 1 FROM "PurchasePaymentEvidence" undated
+  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+    AND undated."amountMinor" IN (${sql.join(
+      amounts.map((amount) => sql`${amount}`),
+      sql`, `,
+    )})))`
+    : sql`false`;
+const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
+  SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
+  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+) ELSE ARRAY[]::text[] END`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -954,7 +1010,8 @@ async function spendingCandidates(
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
-        AND ${!input.refund} AND ${vendorSpendingExists}))
+        AND ${!input.refund}
+        AND (${partlyPaidSpending} OR ${undatedPayment([input.amount])})))
     ORDER BY p.id`)
     ).rows;
   }
@@ -974,20 +1031,28 @@ async function spendingCandidates(
     if (!lookup) {
       lookup = getDb(db)
         .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
+          ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
+        FROM "Purchase" p
         WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
           AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-            OR ${vendorSpendingExists}) ORDER BY p.id`)
+            OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
+        ORDER BY p.id`)
         .then((result) => result.rows);
       page.vendorCandidates.set(input.vendorId, lookup);
     }
-    for (const { hasVendorSpending, ...candidate } of await lookup) {
+    for (const { partlyPaid, undatedAmounts, ...candidate } of await lookup) {
       const nearby = Boolean(
         candidate.date && calendarGap(candidate.date, input.date) <= 14,
       );
       // The page pool also contains date-window headers for other source dates.
-      // Only actual spending belongs to the additional review-only selector.
-      if (!nearby && !hasVendorSpending) continue;
+      // Only partly paid spending or an undated exact-amount payment belongs
+      // to the additional review-only selector.
+      if (
+        !nearby &&
+        !partlyPaid &&
+        !undatedAmounts.includes(String(input.amount))
+      )
+        continue;
       if (!candidates.has(candidate.id))
         candidates.set(candidate.id, { ...candidate, reviewOnly: !nearby });
     }

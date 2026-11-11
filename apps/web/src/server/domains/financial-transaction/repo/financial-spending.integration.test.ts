@@ -803,9 +803,10 @@ describe("shared spending booking", () => {
   );
   it("keeps complete spending previews identical with page-loaded receipt graphs", async () => {
     const { account, vendor, transaction, advice, category } = await fixture();
-    for (const [date, cost] of [
-      ["2026-05-04", 42.5],
-      ["2026-03-06", 19],
+    // The older receipt's first installment keeps it partly paid.
+    for (const [date, cost, paid] of [
+      ["2026-05-04", 42.5, 0],
+      ["2026-03-06", 19, 5],
     ] as const) {
       const receipt = await createRepoIdentity(ctx, "purchase", {
         vendorId: vendor.output.id,
@@ -820,6 +821,16 @@ describe("shared spending booking", () => {
         trade: "other",
         spendingCategoryId: category.id,
       });
+      if (paid)
+        await createRepoIdentity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: "posted",
+          amount: paid,
+          transactionDate: date,
+          postedDate: date,
+          allocations: [{ purchaseId: receipt.output.id, amount: paid }],
+        });
     }
     const page = await prepareFinancialSpendingPage(ctx.db, {
       accountIds: [
@@ -1281,8 +1292,8 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it("holds older and undated same-vendor spending until the member excludes it", async () => {
-    const { transaction, vendor, advice } = await fixture();
+  it("holds older and undated partly paid same-vendor spending until the member excludes it", async () => {
+    const { account, transaction, vendor, advice } = await fixture();
     const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-03-01",
@@ -1293,6 +1304,16 @@ describe("shared spending booking", () => {
       name: "Synthetic receipt",
       cost: 40,
       trade: "other",
+    });
+    // A first installment leaves the older receipt partly paid.
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 10,
+      transactionDate: "2026-03-01",
+      postedDate: "2026-03-01",
+      allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
     });
     const plan = await previewFinancialSpending(ctx.db, {
       transactionId: transaction.output.id,
@@ -1339,6 +1360,82 @@ describe("shared spending booking", () => {
         .map((row) => row.cost)
         .sort(),
     ).toEqual([42.5, null]);
+  });
+  // Older same-vendor spending blocks only while charge-side capacity can be open.
+  it.each([
+    [
+      "never paid",
+      "ready",
+      { posted: 0, expected: 0, returned: 0, reimbursed: false },
+    ],
+    [
+      "an expected installment",
+      "review_required",
+      { posted: 10, expected: 30, returned: 0, reimbursed: false },
+    ],
+    [
+      "returned principal",
+      "review_required",
+      { posted: 30, expected: 0, returned: 10, reimbursed: false },
+    ],
+    [
+      "a reimbursement-linked payment",
+      "review_required",
+      { posted: 40, expected: 0, returned: 0, reimbursed: true },
+    ],
+  ] as const)("older spending %s previews %s", async (_case, status, setup) => {
+    const { account, transaction, vendor, advice } = await fixture();
+    const receipt = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-03-01",
+      statedTotal: 40,
+    });
+    for (const [name, cost] of [
+      ["Synthetic receipt", 40],
+      ["Synthetic return", -setup.returned],
+    ] as const)
+      if (cost)
+        await createRepoIdentity(ctx, "expense", {
+          purchaseId: receipt.output.id,
+          name,
+          cost,
+          trade: "other",
+        });
+    for (const [state, amount] of [
+      ["posted", setup.posted],
+      ["expected", setup.expected],
+    ] as const)
+      if (amount) {
+        const payment = await createRepoIdentity(ctx, "financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: state,
+          amount,
+          transactionDate: "2026-03-01",
+          postedDate: state === "posted" ? "2026-03-01" : null,
+          allocations: [{ purchaseId: receipt.output.id, amount }],
+        });
+        if (!setup.reimbursed) continue;
+        const reimbursement = await createRepoIdentity(ctx, "expense", {
+          purchaseId: receipt.output.id,
+          name: "Synthetic reimbursement",
+          cost: amount,
+          trade: "other",
+        });
+        await getDb(ctx.db)
+          .update(expense)
+          .set({
+            economicRole: "reimbursement",
+            bookingTransactionCode: payment.output.id,
+          })
+          .where(eq(expense.shortcode, reimbursement.output.id));
+      }
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status });
   });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {
