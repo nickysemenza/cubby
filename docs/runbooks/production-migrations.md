@@ -107,7 +107,9 @@ so a copy and its retirement stay atomic.
 - `-- cubby:repeat-batch` repeats a statement whose result is
   `{ remaining: boolean }`.
 - `-- cubby:outside-transaction` is reserved for concurrent index creation or
-  drop.
+  drop. The runner first drops any invalid index the statement names (left by
+  an interrupted concurrent build), and stops the deployment if one remains
+  invalid afterwards.
 
 The same migration name and hash checks and deployment serialization apply.
 
