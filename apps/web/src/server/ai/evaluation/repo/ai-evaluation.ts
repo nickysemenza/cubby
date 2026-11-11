@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import {
   aiExecutionOwner,
-  liveAiRequestRun,
+  liveAiRequestRunIds,
   PENDING_AI_STATES,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
@@ -122,6 +122,9 @@ export async function guardAiEvaluation(
   tx: Database,
   id: string,
   token: string,
+  // A caller that later locks the Run itself must hold it exclusively here:
+  // two shared holders that both upgrade deadlock.
+  runLock: "share" | "no key update" = "share",
 ) {
   await (
     await import("~/server/workflows/runs/execution")
@@ -137,6 +140,8 @@ export async function guardAiEvaluation(
       : null;
   // Match cancellation's Run-before-item lock order. A shared item's original
   // requester may stop while another live requester still wants publication.
+  // A share lock still blocks that stop, but lets sibling items of one Run
+  // publish concurrently instead of queueing behind each other's transaction.
   const owners = await getDb(tx)
     .select({
       id: run.id,
@@ -150,10 +155,10 @@ export async function guardAiEvaluation(
         ? sql`false`
         : read.executionKind === "ai_refresh"
           ? eq(run.id, read.runId)
-          : or(eq(run.id, read.runId), liveAiRequestRun(id)),
+          : liveAiRequestRunIds(read.runId, id),
     )
     .orderBy(run.id)
-    .for("no key update");
+    .for(runLock);
   const [row] = await getDb(tx)
     .select()
     .from(aiEvaluation)
@@ -276,12 +281,17 @@ export async function settleAiEvaluations(
         sql`${aiEvaluationRequest.receipt}->>'retryEvaluationId' IS NULL`,
       ),
     );
-  await (
-    await import("~/server/workflows/runs/wake")
-  ).wakeAiEvaluationRequesters(
-    tx,
-    publications.map((entry) => entry.evaluationId),
-  );
+  // Item locks precede the requester's Job, which every item of one Run
+  // shares: writing it inside each SERIALIZABLE publication makes concurrent
+  // items abort each other, so the wake runs after commit.
+  await runAfterCommit(tx, async (committed) => {
+    await (
+      await import("~/server/workflows/runs/wake")
+    ).wakeAiEvaluationRequesters(
+      committed,
+      publications.map((entry) => entry.evaluationId),
+    );
+  });
 }
 
 /** DB-only publication replays its guards and receipt together; paid inference stays outside. */

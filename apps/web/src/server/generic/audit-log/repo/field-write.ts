@@ -81,3 +81,37 @@ export async function latestFieldWrite(
     .limit(1);
   return row ?? null;
 }
+
+/** `latestFieldWrite` for many records of one entity field in one read. */
+export async function latestFieldWrites(
+  db: RepositoryQueryInput,
+  entity: string,
+  field: string,
+  recordIds: readonly string[],
+): Promise<Map<string, { id: string; createdAt: Date }>> {
+  const writes = new Map<string, { id: string; createdAt: Date }>();
+  const kind = auditEntitySchema.safeParse(entity);
+  if (!kind.success || !recordIds.length) return writes;
+  const result = await unwrapDb(db).execute<{
+    recordId: string;
+    id: string;
+    createdAt: string | Date;
+  }>(sql`
+    SELECT requested."recordId", latest.id, latest."createdAt"
+    FROM unnest(ARRAY[${sql.join(
+      recordIds.map((id) => sql`${id}`),
+      sql`, `,
+    )}]::uuid[]) AS requested("recordId")
+    CROSS JOIN LATERAL (
+      SELECT ${auditLog.id} AS id, ${auditLog.createdAt} AS "createdAt" FROM ${auditLog}
+      WHERE ${revisionMatch(sql`${kind.data}`, sql`requested."recordId"`, sql`${field}`)}
+      ORDER BY ${auditLog.createdAt} DESC, ${auditLog.id} DESC
+      LIMIT 1
+    ) latest`);
+  for (const row of result.rows)
+    writes.set(row.recordId, {
+      id: row.id,
+      createdAt: new Date(row.createdAt),
+    });
+  return writes;
+}

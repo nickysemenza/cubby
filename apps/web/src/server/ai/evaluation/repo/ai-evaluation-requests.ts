@@ -266,6 +266,15 @@ export async function requestedAiEvaluations(
     );
 }
 
+/**
+ * The owner and live requesters of one evaluation as an index probe: an `OR`
+ * with a correlated `EXISTS` scans every Run instead.
+ */
+export const liveAiRequestRunIds = (ownerRunId: string, evaluationId: string) =>
+  sql`"Run"."id" IN (SELECT ${ownerRunId}::uuid UNION SELECT request."runId"
+    FROM "AiEvaluationRequest" AS request
+    WHERE request."evaluationId" = ${evaluationId}::uuid AND request."cancelledAt" IS NULL)`;
+
 export const liveAiRequestRun = (evaluationId: string) => sql`EXISTS (
   SELECT 1 FROM "AiEvaluationRequest" AS request
   WHERE request."evaluationId" = ${evaluationId} AND request."runId" = "Run"."id"

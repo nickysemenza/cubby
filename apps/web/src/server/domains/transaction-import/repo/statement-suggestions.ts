@@ -1,4 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import { actorInRun, systemActor } from "@cubby/schemas/context";
 import { financialAccountSourceAliases } from "@cubby/schemas/financial-account";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import {
@@ -53,9 +54,11 @@ import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
+  databaseForTransaction,
   getDb,
   runAfterCommit,
   unwrapDb,
+  withTransaction,
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
@@ -66,6 +69,7 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialTransactionImport,
@@ -79,6 +83,7 @@ import {
   sourceObservationIdentities,
   statementChargeSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { updateSourceObservationJudgments } from "~/server/domains/transaction-import/repo/source-occurrence";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
@@ -115,6 +120,11 @@ import {
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import {
+  chargeValues,
+  exactTwinsSql,
+  type ExactTwin,
+} from "~/server/domains/transaction-import/repo/statement-twins";
 import {
   findTransferPairsForCharges,
   transferPairSourceCharges,
@@ -460,6 +470,70 @@ export function pendingPostedMatch(
     Math.abs(plainDateDaysBetween(pending.date, posted.date)) <=
       PENDING_POST_WINDOW_DAYS
   );
+}
+
+/**
+ * Supersedes the ID-less member of each exact same-source twin with its
+ * provider row before the page publishes, under the reviewed replacement
+ * writer, then retires the thinner charge's advice. Returns the page charges
+ * that were superseded.
+ */
+async function supersedeExactTwins(
+  db: Database,
+  charges: readonly ChargeRef[],
+  runId: RunId | null,
+): Promise<Set<string>> {
+  const superseded = new Set<string>();
+  if (!charges.length) return superseded;
+  const found = await unwrapDb(db).execute<ExactTwin>(
+    exactTwinsSql(chargeValues(charges)),
+    "objects",
+  );
+  if (!found.length) return superseded;
+  const actor = runId ? actorInRun(systemActor(), runId) : systemActor();
+  const sources = [...new Set(found.map((twin) => twin.source))].sort();
+  const thinner = await withTransaction(db, async (tx) => {
+    await assertWorkflowEffect(databaseForTransaction(tx));
+    // Intake's lock first, so no new matching charge commits between the
+    // recheck and the supersession; then the replacement writer's own key.
+    await lockFinancialEvidenceKeys(tx, "source", [
+      ...sources.map((source) => `intake:${source}`),
+      ...sources,
+    ]);
+    // Recheck under the source lock; a concurrent booking or import changes the group.
+    const current = await unwrapDb(tx).execute<ExactTwin>(
+      exactTwinsSql(chargeValues(charges)),
+      "objects",
+    );
+    for (const twin of current) {
+      await updateSourceObservationJudgments(
+        tx,
+        [twin.thinner],
+        { supersededByRowId: twin.successor },
+        actor,
+      );
+      await retireSettledChargeAdvice(databaseForTransaction(tx), {
+        source: twin.source,
+        chargeKey: twin.thinnerChargeKey,
+      });
+    }
+    return current;
+  });
+  for (const twin of thinner)
+    superseded.add(
+      chargeId({ source: twin.source, chargeKey: twin.thinnerChargeKey }),
+    );
+  // Provider rows outside this page still list the thinner rows as siblings.
+  const onPage = new Set(charges.map(chargeId));
+  const successors = uniqueCharges(
+    thinner.map((twin) => ({
+      source: twin.source,
+      chargeKey: twin.successorChargeKey,
+    })),
+  ).filter((charge) => !onPage.has(chargeId(charge)));
+  if (successors.length) await regenerateCharges(db, successors);
+  log.info("Statement exact twins superseded", { count: thinner.length });
+  return superseded;
 }
 
 async function siblingsFor(
@@ -3580,6 +3654,7 @@ export async function generateStatementSuggestionPage(
         limit,
         scope: input.scope ?? {},
       });
+  const twins = await supersedeExactTwins(db, charges, input.runId);
   const failed: RunStepError[] = [];
   const selectedAt = performance.now();
   const {
@@ -3592,7 +3667,7 @@ export async function generateStatementSuggestionPage(
     publishedAt,
   } = await publishStatementGenerationPage(
     db,
-    charges,
+    charges.filter((charge) => !twins.has(chargeId(charge))),
     input.scope,
     input.runId,
     failed,

@@ -46,10 +46,12 @@ describe("Workflow effect admission", () => {
     });
     const claim = await claimJob(ctx.db, saved.id);
     if (!claim) throw new Error("Synthetic Workflow Job was not claimed");
-    const publish = () =>
+    const publish = (notes = "published") =>
       withTransactionDatabase(ctx.db, async (tx) => {
         await assertWorkflowEffect(tx);
-        await getDb(tx).execute(sql`SELECT 1`);
+        await getDb(tx).execute(
+          sql`UPDATE "Run" SET notes = ${notes} WHERE id = ${runId}`,
+        );
       });
     await withJobExecution(ctx.db, claim, () =>
       withWorkflowExecution(
@@ -57,7 +59,11 @@ describe("Workflow effect admission", () => {
         async () => {
           await expect(publish()).resolves.toBeUndefined();
           await cancelJob(ctx.db, saved.id);
-          await expect(publish()).rejects.toThrow(/obsolete/);
+          await expect(publish("stale")).rejects.toThrow(/obsolete/);
+          const savedRun = await getDb(ctx.db).execute<{ notes: string }>(
+            sql`SELECT notes FROM "Run" WHERE id = ${runId}`,
+          );
+          expect(savedRun.rows[0]?.notes).toBe("published");
           await retryJob(ctx.db, saved.id);
           await expect(publish()).rejects.toThrow(/obsolete/);
         },
