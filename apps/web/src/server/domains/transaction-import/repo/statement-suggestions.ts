@@ -3183,7 +3183,7 @@ export async function regenerateChargesAfterCommit(
     const items = charges.filter((charge) => charge.source === source);
     await runAfterCommit(db, {
       key: `statement-charges:${source}`,
-      items,
+      items: [...items],
       flush: async (committed, queued: readonly ChargeRef[]) => {
         try {
           await regenerateCharges(committed, [
