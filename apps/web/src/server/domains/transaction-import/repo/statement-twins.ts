@@ -21,7 +21,9 @@ export type ExactTwin = {
  * amounts, description and merchant is unbooked and ready, and provider-ID
  * rows and ID-less rows from other imports are equal in number: an export
  * without provider IDs re-recorded those provider rows. Pairing within a
- * group is arbitrary because the members' facts are identical.
+ * group is arbitrary because the members' facts are identical. An occurrence
+ * whose replacement was ever decided, including a cleared automatic one, is
+ * never a candidate again.
  */
 export function exactTwinsSql(charges: SQL) {
   return sql`
@@ -40,7 +42,10 @@ export function exactTwinsSql(charges: SQL) {
           AND r."storedReviewState" = ${sourceOccurrenceReviewState.enum.ready}
           AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`r."occurrenceId"`, sql`r."acceptedTransactionId"`)}
           AND EXISTS (SELECT 1 FROM "SourceOccurrence" owner WHERE owner.id = r."occurrenceId" AND ${notDeleted("owner")}
-            AND owner."supersededByOccurrenceId" IS NULL AND owner."replacementObservationId" IS NULL)) AS open
+            AND owner."supersededByOccurrenceId" IS NULL AND owner."replacementObservationId" IS NULL)
+          -- A replacement anyone already set or cleared is a decision, not a candidate.
+          AND NOT EXISTS (SELECT 1 FROM "AuditLog" decided WHERE decided."entityKind" = 'sourceOccurrence'
+            AND decided."entityId" = r."occurrenceId" AND decided.changes ? 'supersededByOccurrenceId')) AS open
       FROM seed JOIN ${sourceObservationFacts} r ON r.source = seed.source AND r.current AND ${notDeleted("r")}
         AND r."accountId" IS NOT DISTINCT FROM seed."accountId"
         AND normalize(r."accountDescriptor", NFKC) = seed.descriptor

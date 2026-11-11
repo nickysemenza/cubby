@@ -488,26 +488,35 @@ async function supersedeExactTwins(
   const sources = [...new Set(found.map((twin) => twin.source))].sort();
   const thinner = await withTransaction(db, async (tx) => {
     await assertWorkflowEffect(databaseForTransaction(tx));
-    await lockFinancialEvidenceKeys(tx, "source", sources);
+    // Intake's lock first, so no new matching charge commits between the
+    // recheck and the supersession; then the replacement writer's own key.
+    await lockFinancialEvidenceKeys(tx, "source", [
+      ...sources.map((source) => `intake:${source}`),
+      ...sources,
+    ]);
     // Recheck under the source lock; a concurrent booking or import changes the group.
     const current = await unwrapDb(tx).execute<ExactTwin>(
       exactTwinsSql(chargeValues(charges)),
       "objects",
     );
-    for (const twin of current)
+    for (const twin of current) {
       await updateSourceObservationJudgments(
         tx,
         [twin.thinner],
         { supersededByRowId: twin.successor },
         actor,
       );
+      await retireSettledChargeAdvice(databaseForTransaction(tx), {
+        source: twin.source,
+        chargeKey: twin.thinnerChargeKey,
+      });
+    }
     return current;
   });
-  for (const twin of thinner) {
-    const charge = { source: twin.source, chargeKey: twin.thinnerChargeKey };
-    await retireSettledChargeAdvice(db, charge);
-    superseded.add(chargeId(charge));
-  }
+  for (const twin of thinner)
+    superseded.add(
+      chargeId({ source: twin.source, chargeKey: twin.thinnerChargeKey }),
+    );
   // Provider rows outside this page still list the thinner rows as siblings.
   const onPage = new Set(charges.map(chargeId));
   const successors = uniqueCharges(

@@ -1020,7 +1020,9 @@ resolved account, descriptor, date, amounts, description and merchant is
 settled automatically when every member is ready and unbooked, its provider-ID
 rows and ID-less rows come from different imports, and the two counts are
 equal: each ID-less row is superseded by a provider row through the reviewed
-replacement writer, and its advice retires. Any other group keeps its
+replacement writer under intake's source lock, and its advice retires in the
+same transaction. An occurrence whose replacement anyone already set or
+cleared is never superseded automatically. Any other group keeps its
 `siblings`.
 
 ### Statement Sweeps

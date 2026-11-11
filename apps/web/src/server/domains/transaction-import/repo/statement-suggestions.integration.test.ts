@@ -1310,6 +1310,32 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
+  it("leaves a cleared twin supersession to the member", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()], { fingerprint: "synthetic-idless-export" });
+    await record(
+      ctx,
+      [rowInput({ providerTransactionId: "synthetic-provider-1" })],
+      { fingerprint: "synthetic-provider-export" },
+    );
+    await generate(ctx);
+    const superseded = async () =>
+      (await listSourceTransactionRecords(ctx.db, {})).data.filter(
+        (row) => row.matchState === "superseded",
+      );
+    const [thin] = await superseded();
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: thin!.source, externalIds: [thin!.externalId] },
+        data: { supersededByExternalId: null },
+      },
+      ctx.actor,
+    );
+    await generate(ctx);
+    expect(await superseded()).toEqual([]);
+  });
+
   // Failure modes: the settlement-ref trigger supersedes the suggestion being
   // applied; a second accept creates a twin; the row stays unmatched.
   it("creates the transaction, ends applied, and refuses a replay", async () => {
