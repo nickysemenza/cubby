@@ -539,8 +539,7 @@ const byStatementOrder = (a: CopyMember, b: CopyMember) =>
  * Every ready, unwithdrawn charge from any source on the same resolved account,
  * at the exact amount and within twice the sibling window, booked or not: the
  * copies several exports may hold of one bank event. The wider window lets
- * every member see the same group; pairing refuses a group wider than one
- * window. Accounts resolve through the same preview as the page, because
+ * pairing check that every member sees the same group. Accounts resolve through the same preview as the page, because
  * intake leaves the owner's account unset.
  */
 async function copyMembersFor(
@@ -689,7 +688,26 @@ type CopyPairing =
  * two events. One primary per event books; the others attach to its
  * Transaction once it exists.
  */
-function copyPairing(charge: ChargeRef, members: readonly CopyMember[]) {
+function copyPairing(charge: ChargeRef, fetched: readonly CopyMember[]) {
+  // The group is the charges within one window of this one. Any fetched charge
+  // within a window of a group member, or a group wider than one window, means
+  // another member could see a different group.
+  const self = fetched.find(
+    (member) => chargeId(member.charge) === chargeId(charge),
+  )!;
+  const near = (a: CopyMember, b: CopyMember) =>
+    Math.abs(
+      plainDateDaysBetween(
+        a.canonical.statementDate,
+        b.canonical.statementDate,
+      ),
+    ) <= SIBLING_WINDOW_DAYS;
+  const members = fetched.filter((member) => near(member, self));
+  const outside = fetched.filter((member) => !near(member, self));
+  const dates = members.map((member) => member.canonical.statementDate).sort();
+  const unstable =
+    plainDateDaysBetween(dates[0]!, dates.at(-1)!) > SIBLING_WINDOW_DAYS ||
+    outside.some((other) => members.some((member) => near(member, other)));
   const bySource = new Map<string, CopyMember[]>();
   for (const member of members)
     bySource.set(member.charge.source, [
@@ -700,15 +718,14 @@ function copyPairing(charge: ChargeRef, members: readonly CopyMember[]) {
   const others = members.filter(
     (member) => chargeId(member.charge) !== chargeId(charge),
   );
-  const dates = members.map((member) => member.canonical.statementDate).sort();
-  const spread = plainDateDaysBetween(dates[0]!, dates.at(-1)!);
-  if (counts.size !== 1 || spread > SIBLING_WINDOW_DAYS)
+  if (counts.size !== 1 || unstable)
     return {
       kind: "ambiguous",
-      others: others
+      others: fetched
         .filter((member) => member.charge.source !== charge.source)
         .map((member) => member.charge),
     } satisfies CopyPairing;
+  if (bySource.size === 1) return { kind: "none" } satisfies CopyPairing;
   const own = [...bySource.get(charge.source)!].sort(byStatementOrder);
   const index = own.findIndex(
     (member) => chargeId(member.charge) === chargeId(charge),
@@ -772,6 +789,7 @@ function pairCopies(
   // A booked charge is its event's Transaction already.
   if (!members || state.matched) return none;
   const pairing = copyPairing(charge, members);
+  if (pairing.kind === "none") return none;
   if (pairing.kind === "copy" && !pairing.transactionId)
     return { ...none, waiting: true };
   if (pairing.kind === "ambiguous")

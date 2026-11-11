@@ -85,7 +85,7 @@ CREATE INDEX ON monarch_resolved (occurrence_id);
 -- A bare string `account` is a display label; only IDs are account claims.
 -- A missing account or note is absent evidence, never a contradiction.
 DO $migration$
-DECLARE grp record; survivor uuid; survivor_code text; template uuid; attempt int; members int;
+DECLARE grp record; survivor uuid; survivor_code text; template uuid; attempt int;
   account_count int; disposition_count int; agreed_account uuid; agreed_disposition text; agreed_reason text; agreed_note text;
   transaction_count int; fact_count int; latest uuid; latest_time timestamp; accepted uuid; had_accepted boolean;
   kept_accepted uuid; resolved jsonb; evidence_conflict boolean; decision_conflict boolean;
@@ -95,18 +95,18 @@ BEGIN
   END IF;
   CREATE TEMP TABLE monarch_upstream (id uuid, replacement uuid) ON COMMIT DROP;
   FOR grp IN SELECT provider_id FROM monarch_owner_ids GROUP BY provider_id ORDER BY provider_id LOOP
-    SELECT (array_agg(o.id ORDER BY o."createdAt",o.id))[1], count(*) INTO template, members
+    SELECT (array_agg(o.id ORDER BY o."createdAt",o.id))[1] INTO template
       FROM "SourceOccurrence" o JOIN monarch_owner_ids m ON m.id=o.id WHERE m.provider_id=grp.provider_id;
     SELECT CASE WHEN count(*)=1 THEN (array_agg(o.id))[1] END INTO survivor
       FROM "SourceOccurrence" o JOIN monarch_owner_ids m ON m.id=o.id
       WHERE m.provider_id=grp.provider_id AND o."identityKind"='provider';
     SELECT count(DISTINCT o."accountId"), (array_agg(DISTINCT o."accountId") FILTER (WHERE o."accountId" IS NOT NULL))[1],
-        count(DISTINCT o.disposition), (array_agg(DISTINCT o.disposition))[1],
-        (array_agg(o."dispositionReason" ORDER BY o."createdAt",o.id) FILTER (WHERE o."dispositionReason" IS NOT NULL))[1],
-        (array_agg(o."dispositionNote" ORDER BY o."createdAt",o.id) FILTER (WHERE o."dispositionNote" IS NOT NULL))[1]
+        count(DISTINCT o.disposition) FILTER (WHERE o.disposition<>'open'),
+        coalesce((array_agg(DISTINCT o.disposition) FILTER (WHERE o.disposition<>'open'))[1],'open'),
+        (array_agg(o."dispositionReason" ORDER BY o."createdAt",o.id) FILTER (WHERE o.disposition<>'open' AND o."dispositionReason" IS NOT NULL))[1],
+        (array_agg(o."dispositionNote" ORDER BY o."createdAt",o.id) FILTER (WHERE o.disposition<>'open' AND o."dispositionNote" IS NOT NULL))[1]
       INTO account_count, agreed_account, disposition_count, agreed_disposition, agreed_reason, agreed_note
       FROM "SourceOccurrence" o JOIN monarch_owner_ids m ON m.id=o.id WHERE m.provider_id=grp.provider_id;
-    decision_conflict := account_count>1 OR disposition_count>1;
     SELECT coalesce(jsonb_agg(DISTINCT r.transaction_id),'[]'::jsonb) INTO resolved
       FROM monarch_resolved r JOIN monarch_owner_ids m ON m.id=r.occurrence_id WHERE m.provider_id=grp.provider_id;
     SELECT count(DISTINCT links.id), (array_agg(DISTINCT links.id))[1] INTO transaction_count, accepted FROM (
@@ -118,6 +118,8 @@ BEGIN
     ) links;
     SELECT EXISTS(SELECT 1 FROM "SourceOccurrence" prior JOIN monarch_owner_ids m ON m.id=prior.id
       WHERE m.provider_id=grp.provider_id AND prior."acceptedTransactionId"=accepted) INTO had_accepted;
+    -- An unreviewed (open) copy agrees with any decision; ignoring a charge with money booked does not.
+    decision_conflict := account_count>1 OR disposition_count>1 OR (agreed_disposition='ignored' AND transaction_count>0);
     SELECT count(DISTINCT r."providerAccountId")>1 OR coalesce(bool_or(
       EXISTS (SELECT 1 FROM jsonb_array_elements(jsonb_build_array(r."providerData"->'id',r."providerData"->'transaction'->'id')) claim
         WHERE claim<>'null'::jsonb AND (jsonb_typeof(claim)<>'string' OR claim #>> '{}' <> grp.provider_id)) OR
