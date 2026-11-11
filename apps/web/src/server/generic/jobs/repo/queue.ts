@@ -367,8 +367,8 @@ export async function assertJobClaim(
 }
 
 /**
- * Commit `tx` only while `claim` owns its Job. Checks cheaply now, then locks
- * the Job row once before commit, after every domain lock: saves and
+ * Commit `tx` only while `claim` owns its Job. Lock the Job row before
+ * commit, after every domain lock: saves and
  * cancellation also take domain rows before the Job, and a shared lock
  * upgraded at commit would deadlock against them.
  */
@@ -376,7 +376,6 @@ export async function fenceJob(
   tx: RepositoryQueryInput,
   claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
 ) {
-  await assertJobClaim(tx, claim);
   await repositoryBeforeCommit(
     tx,
     (commit) => assertJobClaim(commit, claim, "update"),
