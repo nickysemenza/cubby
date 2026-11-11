@@ -31,6 +31,7 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
     "HYPERDRIVE",
     "HYPERDRIVE_CACHED",
     "HYPERDRIVE_BACKGROUND",
+    "BACKGROUND_WORKER",
   ])
     delete env[key];
   for (const [key, value] of Object.entries(env)) {

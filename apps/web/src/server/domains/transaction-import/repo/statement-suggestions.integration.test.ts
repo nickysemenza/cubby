@@ -1268,6 +1268,74 @@ describe("statement Transaction suggestions", () => {
     expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
   });
 
+  // Failure modes: an export without provider IDs keeps every provider row
+  // under review as a sibling; an unequal group (a real repeat charge) is
+  // superseded anyway.
+  it.each([
+    ["equal counts", 1, 1, [false]],
+    ["an extra ID-less charge", 2, 0, [true, true, true]],
+  ])(
+    "supersedes exact ID-less twins of provider rows with %s",
+    async (_name, idless, superseded, withSiblings) => {
+      await card(ctx);
+      await record(
+        ctx,
+        Array.from({ length: idless }, () => rowInput()),
+        { fingerprint: "synthetic-idless-export" },
+      );
+      await record(
+        ctx,
+        [rowInput({ providerTransactionId: "synthetic-provider-1" })],
+        {
+          fingerprint: "synthetic-provider-export",
+        },
+      );
+      expect(
+        new Set(
+          (await listSourceTransactionRecords(ctx.db, {})).data.map(
+            (row) => row.chargeKey,
+          ),
+        ).size,
+      ).toBe(idless + 1);
+      await generate(ctx);
+      const rows = (await listSourceTransactionRecords(ctx.db, {})).data;
+      expect(
+        rows.filter((row) => row.matchState === "superseded"),
+      ).toHaveLength(superseded);
+      expect(
+        (await readPendingStatements(ctx)).map(
+          (suggestion) => suggestion.siblings > 0,
+        ),
+      ).toEqual(withSiblings);
+    },
+  );
+
+  it("leaves a cleared twin supersession to the member", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()], { fingerprint: "synthetic-idless-export" });
+    await record(
+      ctx,
+      [rowInput({ providerTransactionId: "synthetic-provider-1" })],
+      { fingerprint: "synthetic-provider-export" },
+    );
+    await generate(ctx);
+    const superseded = async () =>
+      (await listSourceTransactionRecords(ctx.db, {})).data.filter(
+        (row) => row.matchState === "superseded",
+      );
+    const [thin] = await superseded();
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: thin!.source, externalIds: [thin!.externalId] },
+        data: { supersededByExternalId: null },
+      },
+      ctx.actor,
+    );
+    await generate(ctx);
+    expect(await superseded()).toEqual([]);
+  });
+
   // Failure modes: the settlement-ref trigger supersedes the suggestion being
   // applied; a second accept creates a twin; the row stays unmatched.
   it("creates the transaction, ends applied, and refuses a replay", async () => {
@@ -2997,9 +3065,7 @@ describe("statement Transaction suggestions", () => {
         expect(
           await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
         ).toEqual(before);
-        expect(publication).toHaveBeenCalledTimes(
-          failure === "cancelled" ? 0 : 1,
-        );
+        expect(publication).toHaveBeenCalledTimes(1);
       } finally {
         vi.useRealTimers();
         publication.mockRestore();

@@ -200,7 +200,9 @@ async function compiledWebWorkerConfig(
     localConnectionString: options.databaseUrl,
   }));
   config.services = [
-    ...(config.services ?? []),
+    ...(config.services ?? []).filter(
+      (service) => service.binding !== "BACKGROUND_WORKER",
+    ),
     ...(profile.purchaseAgentPeers
       ? [
           {
