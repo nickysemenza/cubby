@@ -31,8 +31,12 @@ import {
 } from "drizzle-orm";
 
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import type { Database } from "~/server/db/database";
-import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries as getDb,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
 import { aiEvaluation } from "~/server/db/retained-tables";
 import type { DrainStore } from "~/server/generic/jobs/drain-store";
 import {
@@ -184,17 +188,33 @@ export async function dropAiEvaluationWork(db: Database, where: SQL) {
     .where(where);
 }
 
-/** Permit selection: one unit per feature with claimable rows; priority 0 is member demand. */
+/**
+ * Permit selection: one unit per feature with claimable rows and no live page;
+ * priority 0 is member demand. The live page's permit sends the successor.
+ */
 export const aiEvaluationDue = (prefix: string) =>
   sql`SELECT ${prefix}::text || ':' || ${aiEvaluation.feature} AS unit,
       min(${aiEvaluation.priority}) = 0 AS demand, min(${aiEvaluation.runAt}) AS since
     FROM ${aiEvaluation}
     WHERE ${pendingAndOwed()} AND ${claimable()}
+      AND ${aiEvaluation.feature} NOT IN (SELECT live.feature FROM "AiEvaluation" live
+        WHERE live."leaseUntil" > now())
     GROUP BY ${aiEvaluation.feature}`;
 
-/** When the next owed evaluation falls due or a lease lapses. */
+/**
+ * When the next owed evaluation falls due or a lease lapses. A feature with a
+ * live page is due no earlier than its last lease, so a page that died without
+ * a successor is woken when its feature becomes claimable again.
+ */
 export const aiEvaluationNext = () =>
-  sql`SELECT min(coalesce(${aiEvaluation.leaseUntil}, ${aiEvaluation.runAt})) FROM ${aiEvaluation} WHERE ${pendingAndOwed()}`;
+  sql`SELECT min(greatest(coalesce(owed."leaseUntil", owed."runAt"), live.until))
+    FROM ${aiEvaluation} owed
+    LEFT JOIN (SELECT feature, max("leaseUntil") AS until FROM "AiEvaluation"
+      WHERE "leaseUntil" > now() GROUP BY feature) live ON live.feature = owed.feature
+    WHERE owed.state IN (${sql.join(
+      PENDING_AI_STATES.map((state) => sql`${state}`),
+      sql`, `,
+    )}) AND owed."runAt" IS NOT NULL`;
 
 /** Give back whatever this page still holds, unchanged: it stays owed. */
 export async function releaseAiEvaluationPage(db: Database, token: string) {
@@ -321,58 +341,65 @@ export const aiEvaluationStore = (
       sql`${aiEvaluation.leaseUntil} > now()`,
     );
   return {
-    claim: async (db, limit) => {
-      const candidates = getDb(db)
-        .select({ id: aiEvaluation.id })
-        .from(aiEvaluation)
-        .where(
-          and(
-            sql`${aiEvaluation.feature} = ${feature}`,
-            pendingAndOwed(),
-            claimable(),
-          ),
-        )
-        .orderBy(
-          asc(aiEvaluation.priority),
-          asc(aiEvaluation.runAt),
-          asc(aiEvaluation.id),
-        )
-        .limit(limit)
-        .for("update", { skipLocked: true });
-      const rows = await getDb(db)
-        .update(aiEvaluation)
-        .set({
-          leaseToken: token,
-          leaseUntil: sql`now() + ${AI_EVALUATION_LEASE_MS} * interval '1 millisecond'`,
-          leaseStale: false,
-          // A lapsed lease is an attempt spent, so a crash loop still exhausts.
-          attempts: sql`${aiEvaluation.attempts} + CASE WHEN ${aiEvaluation.leaseUntil} IS NULL THEN 0 ELSE 1 END`,
-          waitCause: null,
-        })
-        .where(inArray(aiEvaluation.id, candidates))
-        .returning({
-          id: aiEvaluation.id,
-          priority: aiEvaluation.priority,
-          attempts: aiEvaluation.attempts,
-          runAt: aiEvaluation.runAt,
-          failingSince: aiEvaluation.failingSince,
-        });
-      return rows
-        .sort(
-          (a, b) =>
-            a.priority - b.priority ||
-            (a.runAt?.getTime() ?? 0) - (b.runAt?.getTime() ?? 0) ||
-            a.id.localeCompare(b.id),
-        )
-        .map((row): DrainItem => ({
-          target: AI_EVALUATION_TARGET,
-          ref: row.id,
-          ticket: 0,
-          priority: row.priority,
-          attempts: row.attempts,
-          failingSince: row.failingSince,
-        }));
-    },
+    // One live page per feature, so its publications run one at a time. The
+    // lock orders racing claims, and each READ COMMITTED claim sees the lease
+    // the previous one committed.
+    claim: (db, limit) =>
+      repositoryTransactionDatabase(db, async (db) => {
+        await advisoryXactLock(getDb(db), "ai-evaluation-page", feature);
+        const candidates = getDb(db)
+          .select({ id: aiEvaluation.id })
+          .from(aiEvaluation)
+          .where(
+            and(
+              sql`${aiEvaluation.feature} = ${feature}`,
+              pendingAndOwed(),
+              claimable(),
+              sql`NOT EXISTS (SELECT 1 FROM "AiEvaluation" live
+              WHERE live.feature = ${feature} AND live."leaseUntil" > now())`,
+            ),
+          )
+          .orderBy(
+            asc(aiEvaluation.priority),
+            asc(aiEvaluation.runAt),
+            asc(aiEvaluation.id),
+          )
+          .limit(limit)
+          .for("update", { skipLocked: true });
+        const rows = await getDb(db)
+          .update(aiEvaluation)
+          .set({
+            leaseToken: token,
+            leaseUntil: sql`now() + ${AI_EVALUATION_LEASE_MS} * interval '1 millisecond'`,
+            leaseStale: false,
+            // A lapsed lease is an attempt spent, so a crash loop still exhausts.
+            attempts: sql`${aiEvaluation.attempts} + CASE WHEN ${aiEvaluation.leaseUntil} IS NULL THEN 0 ELSE 1 END`,
+            waitCause: null,
+          })
+          .where(inArray(aiEvaluation.id, candidates))
+          .returning({
+            id: aiEvaluation.id,
+            priority: aiEvaluation.priority,
+            attempts: aiEvaluation.attempts,
+            runAt: aiEvaluation.runAt,
+            failingSince: aiEvaluation.failingSince,
+          });
+        return rows
+          .sort(
+            (a, b) =>
+              a.priority - b.priority ||
+              (a.runAt?.getTime() ?? 0) - (b.runAt?.getTime() ?? 0) ||
+              a.id.localeCompare(b.id),
+          )
+          .map((row): DrainItem => ({
+            target: AI_EVALUATION_TARGET,
+            ref: row.id,
+            ticket: 0,
+            priority: row.priority,
+            attempts: row.attempts,
+            failingSince: row.failingSince,
+          }));
+      }),
     lock: async (tx, items) => {
       if (!items.length) return [];
       const rows = await getDb(tx)

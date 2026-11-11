@@ -803,8 +803,11 @@ it (`priority` 0 when the owner or an uncancelled requester is a running,
 member-visible Run nobody scheduled; otherwise 1) and null once it settled or
 parked. A parked evaluation is owed again when a member launches its Run, and
 whenever a running Sweep's evaluate step still waits on it. Each feature is its
-own permit unit, so features page in parallel up to
-the queue's concurrency, which is also the bound on paid concurrency. A page
+own permit unit with at most one live page: a claim, ordered by a per-feature
+advisory lock, takes nothing while another page of the feature holds a live
+lease, and permit selection skips that feature until the live page's permit
+sends its successor. Features page in parallel up to the queue's concurrency,
+which is also the bound on paid concurrency. A page
 claims rows under one lease token (`attemptToken` on `DrainContext`), a
 16-minute lease nothing renews because no consumer outlives 15 minutes. A mark
 never takes a held lease, because that page may be paying the provider: no
@@ -820,7 +823,13 @@ instead of buying it again.
 
 Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
 selection after the page's checkpoint. Items run two at a time, each in its own
-guarded transactions under the drain lease. An item's workflow fence reads its
+guarded transactions under the drain lease, but a page publishes one item's
+SERIALIZABLE transaction at a time (`publishAiEvaluation`), so those
+publications have one writer per feature (Gmail evidence publication instead
+locks its Run): concurrent publications read each other's rows (a Purchase's lines,
+shared index pages) and abort each other, and an item whose retries all abort
+waits out transient backoff. A page that dies holds its feature until its lease
+lapses, and the drain's next-due time is that lapse, so the feature wakes then. An item's workflow fence reads its
 own row by primary key and fails once that row's lease is stale, lapsed or
 released; the page-wide lease read filters on the unindexed `leaseToken`, so it
 runs only outside SERIALIZABLE transactions, before paid requests. Heartbeat and

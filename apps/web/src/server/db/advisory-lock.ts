@@ -4,6 +4,7 @@ import type { RepositoryQueryClient } from "~/server/db/repository-access.bounda
 
 type AdvisoryLockNamespace =
   | "account-alias"
+  | "ai-evaluation-page"
   | "source"
   | "reviewed-booking"
   | "transaction-ref"
