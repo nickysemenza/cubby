@@ -1179,8 +1179,13 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
   };
 }
 
-/** OpenAI's "Resource Unavailable" 429 for flex is unbilled; resend at standard. */
-const FLEX_CAPACITY_REFUSAL = /resource[ _-]?unavailable/i;
+/**
+ * OpenAI's "Resource Unavailable" 429 for flex is unbilled; resend at
+ * standard. Its body names neither phrase reliably: production returned only
+ * "Flex processing is temporarily unavailable".
+ */
+const FLEX_CAPACITY_REFUSAL =
+  /resource[ _-]?unavailable|flex processing is temporarily unavailable/i;
 
 /** Cubby's AI Gateway as the Worker binding exposes it (`AiGateway.run`). */
 export interface UniversalGateway {

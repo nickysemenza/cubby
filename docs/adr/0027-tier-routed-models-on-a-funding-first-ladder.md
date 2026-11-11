@@ -54,8 +54,8 @@ decides what work costs, and most answers need only the fast tier. A structured
 feature answers on `fast` first; each stronger tier up to the declared one
 answers once, only after an answer without the forced tool call, a
 schema-invalid answer or one its caller's validation rejects. A transport or
-funding failure surfaces as before. Purchase audit runs on `fast` at high
-effort and has no second-model recovery.
+funding failure surfaces as before. Purchase audit declares `quality` at high
+effort; a proposed fix its caller rejects escalates like any other answer.
 
 **Escalation is one question.** The Mail import coordinator stays on Luna
 (#2151) for the whole Email. Its escalation request names one question; the
@@ -158,6 +158,7 @@ dropped when the settings row is read and rewritten.
   models, varies per request, and supports only Chat Completions and Responses.
 - **An evaluation gate per tier change**: rejected as ceremony at household
   scale; production signals and the optional Mail replay suffice.
-- **Retrying a failed audit on another model**: rejected with the paid Opus path.
+- **A paid recovery model for a failed audit outside the tier ladder**:
+  rejected with the paid Opus path.
 - **Pre-reading funding state to skip refused sources**: rejected; the egress
   Durable Object already answers them without an upstream call.
