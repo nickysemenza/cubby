@@ -58,6 +58,7 @@ import { isClean } from "~/server/domains/transaction-import/repo/statement-sugg
 import {
   buildChargeProposals,
   chargeId,
+  coalesceChargeRefreshes,
   type ChargeRef,
   labelledProposal,
   publishCompleteStatementLabels,
@@ -1260,22 +1261,25 @@ async function runStatementLabelBatch(
     }
     const { applied, rebuild, excluded } = await time(
       "statement_application",
+      // Each write's neighbour refresh joins one refresh after the round.
       () =>
-        applyPublishedStatementLabels(db, {
-          targets,
-          receipts,
-          published,
-          skipped,
-          failedCharges,
-          completed,
-          unfinished,
-          scope: input.scope,
-          reconsidered: new Set(
-            ready.map(({ current }) => chargeId(current.charge)),
-          ),
-          fail,
-          budgetSpent,
-        }),
+        coalesceChargeRefreshes(() =>
+          applyPublishedStatementLabels(db, {
+            targets,
+            receipts,
+            published,
+            skipped,
+            failedCharges,
+            completed,
+            unfinished,
+            scope: input.scope,
+            reconsidered: new Set(
+              ready.map(({ current }) => chargeId(current.charge)),
+            ),
+            fail,
+            budgetSpent,
+          }),
+        ),
     );
     for (const target of targets) {
       const key = chargeId(target.charge);

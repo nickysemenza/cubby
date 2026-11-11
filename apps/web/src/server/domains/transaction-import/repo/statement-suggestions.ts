@@ -63,6 +63,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
+import { withAfterCommitScope } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -3315,6 +3316,10 @@ async function prepareStatementGenerationPage(
   }
 }
 
+/** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
+export const coalesceChargeRefreshes = <T>(fn: () => Promise<T>) =>
+  withAfterCommitScope(fn);
+
 /** Refresh named charges once after the writing transaction commits. */
 export async function regenerateChargesAfterCommit(
   db: Parameters<typeof runAfterCommit>[0],
@@ -3690,51 +3695,54 @@ export async function generateStatementSuggestionPage(
     // This page's publication is current until one of its charges applies a
     // rule; only charges after such a money write regenerate first.
     let wrote = false;
-    for (const [chargeIndex, charge] of proposalCharges.entries()) {
-      const ref = `charge:${chargeId(charge)}`;
-      if (failed.some((failure) => failure.ref === ref)) continue;
-      try {
-        if (wrote) {
+    // Each write's neighbour refresh joins one page-wide refresh at the end.
+    await coalesceChargeRefreshes(async () => {
+      for (const [chargeIndex, charge] of proposalCharges.entries()) {
+        const ref = `charge:${chargeId(charge)}`;
+        if (failed.some((failure) => failure.ref === ref)) continue;
+        try {
+          if (wrote) {
+            log.info("Statement generation phase", {
+              phase: "regeneration",
+              chargeIndex,
+              charges: proposalCharges.length,
+            });
+            await regenerateCharges(db, [charge], input.scope);
+          }
           log.info("Statement generation phase", {
-            phase: "regeneration",
+            phase: "application",
             chargeIndex,
             charges: proposalCharges.length,
           });
-          await regenerateCharges(db, [charge], input.scope);
+          const outcome = await applyAutomaticRulesForCharge(
+            db,
+            charge,
+            input.servicesFor,
+            true,
+            input.scope,
+          );
+          if (outcome.applied.length) wrote = true;
+          // Booking a primary republished its copies as attaches; settle the
+          // ones this import covers in the same pass.
+          for (const copy of await bookedCopies(db, charge))
+            if (
+              (
+                await applyAutomaticRulesForCharge(
+                  db,
+                  copy,
+                  input.servicesFor,
+                  true,
+                  input.scope,
+                )
+              ).applied.length
+            )
+              wrote = true;
+        } catch (error) {
+          if (isWorkflowInterrupted(error)) throw error;
+          failed.push(statementGenerationFailure(ref, error));
         }
-        log.info("Statement generation phase", {
-          phase: "application",
-          chargeIndex,
-          charges: proposalCharges.length,
-        });
-        const outcome = await applyAutomaticRulesForCharge(
-          db,
-          charge,
-          input.servicesFor,
-          true,
-          input.scope,
-        );
-        if (outcome.applied.length) wrote = true;
-        // Booking a primary republished its copies as attaches; settle the
-        // ones this import covers in the same pass.
-        for (const copy of await bookedCopies(db, charge))
-          if (
-            (
-              await applyAutomaticRulesForCharge(
-                db,
-                copy,
-                input.servicesFor,
-                true,
-                input.scope,
-              )
-            ).applied.length
-          )
-            wrote = true;
-      } catch (error) {
-        if (isWorkflowInterrupted(error)) throw error;
-        failed.push(statementGenerationFailure(ref, error));
       }
-    }
+    });
   }
   const timings = {
     selection: Math.round(selectedAt - startedAt),
