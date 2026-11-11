@@ -281,12 +281,21 @@ const displayAttachmentCondition = (target: Entity, alias: string): SQL =>
     ? sql`${aliasColumn(alias, "purpose")} <> 'label'`
     : sql`TRUE`;
 
+/** Binds a branch's root rows `s` to the requested `refs` row. */
+type BranchRoot = (entity: Entity) => SQL;
+
+const requestedRoot: BranchRoot = (entity) => sql`refs."entityKind" = ${entity}
+          AND s.id = refs."entityId"`;
+
 /**
  * Direct storage is also resolved through its manifest relationship. Gallery
  * ordering remains the join row's sortOrder/createdAt; covers and logos have
  * no join row and use the owner creation time as their stable tie breaker.
  */
-const directStorageBranch = (entity: Entity): SQL | null => {
+const directStorageBranch = (
+  entity: Entity,
+  root: BranchRoot = requestedRoot,
+): SQL | null => {
   const storage = entityManifest[entity].images.storage;
   if (storage === false) return null;
   const traversal = compileTraversal(
@@ -312,8 +321,7 @@ const directStorageBranch = (entity: Entity): SQL | null => {
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
-        WHERE refs."entityKind" = ${entity}
-          AND s.id = refs."entityId"
+        WHERE ${root(entity)}
           AND ${rootLiveCondition(entity, "s")}
           AND ${displayAttachmentCondition(entity, attachmentHop?.alias ?? "")}
           AND ${displayableImageSql("i")}`;
@@ -326,6 +334,7 @@ const directStorageBranch = (entity: Entity): SQL | null => {
 const displaySourceBranch = (
   source: DisplaySource,
   index: number,
+  root: BranchRoot = requestedRoot,
 ): Pick<
   DisplayBranch,
   "branch" | "expenseProjectRefs" | "inheritedRelations" | "sharedProject"
@@ -427,15 +436,13 @@ const displaySourceBranch = (
       SELECT ${aliasColumn(expenseHop.fromAlias, "id")} AS "projectId"
       FROM ${sql.raw(`"${traversal.rootTable}"`)} s
       ${renderJoins({ hops: traversal.hops.slice(0, expenseHopIndex) })}
-      WHERE refs."entityKind" = ${source.entity}
-        AND s.id = refs."entityId" AND ${rootLiveCondition(source.entity, "s")}`,
+      WHERE ${root(source.entity)} AND ${rootLiveCondition(source.entity, "s")}`,
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
         SELECT ${projection}
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
-        WHERE refs."entityKind" = ${source.entity}
-          AND s.id = refs."entityId"
+        WHERE ${root(source.entity)}
           AND ${rootLiveCondition(source.entity, "s")}
           AND ${visible}`,
   };
@@ -443,18 +450,19 @@ const displaySourceBranch = (
 
 let compiledDisplayBranches: readonly DisplayBranch[] | undefined;
 
-/** Rebind both image candidates and their dependencies through accepted evidence. */
-const acceptedTransactionBranch = (branch: SQL): SQL => sql`
-        SELECT media.*
-        FROM source_display_settlements accepted
-        JOIN LATERAL (
-          SELECT candidate.*
-          FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
-                       accepted."transaction" AS "entityId") refs
-          JOIN LATERAL (${branch}) candidate ON true
-        ) media ON true
-        WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
-          AND accepted."record" = refs."entityId"`;
+/**
+ * A Source record borrows image candidates and their dependencies through
+ * every transaction its accepted evidence settles. Keep the settled set a root
+ * predicate: joining it around the transaction branch exceeds
+ * join_collapse_limit, and the planner then hashes every product image instead
+ * of following indexes from the page's few settled transactions.
+ */
+const acceptedTransactionRoot: BranchRoot =
+  () => sql`refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+          AND s.id = ANY(ARRAY(
+            SELECT accepted."transaction" FROM source_display_settlements accepted
+            WHERE accepted."record" = refs."entityId"
+          ))`;
 
 /** Compile SQL after the module graph initializes: traversal and list filters
  * can import each other while repository declarations are being constructed. */
@@ -462,42 +470,44 @@ function displayBranches(): readonly DisplayBranch[] {
   return (compiledDisplayBranches ??= compileDisplayBranches());
 }
 
-function compileDisplayBranches(): readonly DisplayBranch[] {
-  const declared: readonly DisplayBranch[] = [
-    ...allEntities.flatMap((entity) => {
-      const branch = directStorageBranch(entity);
-      return branch === null
-        ? []
-        : [
-            {
-              entity,
-              branch,
-              expenseProjectRefs: null,
-              inheritedRelations: [],
-            },
-          ];
-    }),
-    ...DISPLAY_SOURCES.map((source, index) => ({
-      entity: source.entity,
-      ...displaySourceBranch(source, index),
-    })),
-  ];
+/** Declared branches of the selected entities, bound through `root`. */
+const declaredBranches = (
+  include: (entity: Entity) => boolean,
+  root: BranchRoot,
+): DisplayBranch[] => [
+  ...allEntities.filter(include).flatMap((entity) => {
+    const branch = directStorageBranch(entity, root);
+    return branch === null
+      ? []
+      : [
+          {
+            entity,
+            branch,
+            expenseProjectRefs: null,
+            inheritedRelations: [],
+          },
+        ];
+  }),
+  // The source index names the branch's aliases; filter after numbering.
+  ...DISPLAY_SOURCES.flatMap((source, index) =>
+    include(source.entity)
+      ? [{ entity: source.entity, ...displaySourceBranch(source, index, root) }]
+      : [],
+  ),
+];
 
+function compileDisplayBranches(): readonly DisplayBranch[] {
   // Accepted evidence wins; a uniquely supported merchant logo is a later visual fallback.
   return [
-    ...declared,
-    ...declared
-      .filter(({ entity }) => entity === "financialTransaction")
-      .map((transactionBranch): DisplayBranch => ({
-        ...transactionBranch,
-        entity: "sourceTransactionRecord",
-        sharedProject: undefined,
-        branch: acceptedTransactionBranch(transactionBranch.branch),
-        expenseProjectRefs:
-          transactionBranch.expenseProjectRefs === null
-            ? null
-            : acceptedTransactionBranch(transactionBranch.expenseProjectRefs),
-      })),
+    ...declaredBranches(() => true, requestedRoot),
+    ...declaredBranches(
+      (entity) => entity === "financialTransaction",
+      acceptedTransactionRoot,
+    ).map((transactionBranch): DisplayBranch => ({
+      ...transactionBranch,
+      entity: "sourceTransactionRecord",
+      sharedProject: undefined,
+    })),
     {
       entity: "sourceTransactionRecord",
       expenseProjectRefs: null,
