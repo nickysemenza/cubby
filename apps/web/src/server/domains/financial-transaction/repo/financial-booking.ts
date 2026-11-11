@@ -676,7 +676,7 @@ type FinancialBookingResult = {
  * input order with each fresh preview seeing earlier writes, and then stamp
  * every fingerprint in one statement.
  */
-export async function commitFinancialBookings(
+async function commitFinancialBookings(
   db: Database,
   reviews: readonly FinancialBookingPreview[],
   actor: ActorContext,
