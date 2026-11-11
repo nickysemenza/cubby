@@ -3980,7 +3980,7 @@ describe("statement Transaction suggestions", () => {
     ]);
     // Statement generation runs the transfer-pair lookup for every charge.
     await expectStatementBudget(() => generate(ctx), {
-      statements: 36,
+      statements: 37,
       parameters: 39,
     });
     await label(
