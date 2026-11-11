@@ -419,7 +419,7 @@ const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
         WHERE frozen->>'orderMailId' = ${emailTable.orderMailId}::text
         AND frozen->>'checksum' = outcome.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'targetFingerprint')`
         : sql`outcome.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'targetFingerprint' = ${emailTable.checksum}
-        AND (outcome."completedAt" >= ${emailTable.updatedAt} OR ${emailTable.status} = ${"pending"})`
+        AND outcome."completedAt" >= ${emailTable.updatedAt}`
     }
     AND NOT EXISTS (SELECT 1 FROM "RunOperation" newer
       WHERE newer."runId" = outcome."runId" AND newer.kind = outcome.kind
