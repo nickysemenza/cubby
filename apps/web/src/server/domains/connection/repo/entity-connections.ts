@@ -74,6 +74,92 @@ export type PreparedEntityConnection = z.infer<
   typeof connectionSuggestionEvidence
 >;
 
+// Only the retained event link is written; discovery evidence remains independent.
+function connectionApplicationParts(
+  candidate: ConnectionCandidate,
+  basis: unknown,
+) {
+  const parsed = z
+    .object({
+      dependencies: z
+        .object({
+          originalId: z.string(),
+          eventId: z.string(),
+          expectedChecksum: z.string(),
+          evidence: z.array(
+            z
+              .object({
+                eventId: z.string().nullable(),
+                kind: z.string(),
+                purchaseId: z.string().nullable(),
+              })
+              .passthrough(),
+          ),
+        })
+        .nullable(),
+    })
+    .safeParse(basis);
+  const dependency = parsed.success ? parsed.data.dependencies : null;
+  return {
+    email: candidate.source.entityId,
+    purchase: candidate.target.entityId,
+    original: dependency?.originalId ?? null,
+    event: dependency?.eventId ?? null,
+    checksum: dependency?.expectedChecksum ?? null,
+    links:
+      dependency?.evidence
+        .filter(
+          (row) => row.eventId === dependency.eventId && row.kind === "linked",
+        )
+        .map((row) => row.purchaseId)
+        .sort() ?? [],
+  };
+}
+
+async function connectionApplicationKeyFor(
+  candidate: ConnectionCandidate,
+  basis: unknown,
+) {
+  return sha256CanonicalJson(connectionApplicationParts(candidate, basis));
+}
+
+async function applicationCandidate(db: Database, id: string) {
+  const [row] = await getDb(db)
+    .select({
+      evidence: connectionReadEvidenceSql(sql`${suggestionTable.evidence}`),
+    })
+    .from(suggestionTable)
+    .where(eq(suggestionTable.id, id))
+    .limit(1);
+  return connectionReadEvidence.parse(row?.evidence).candidate;
+}
+
+export async function connectionApplicationKey(
+  db: Database,
+  state: { id: string },
+) {
+  const candidate = await applicationCandidate(db, state.id);
+  const basis = await captureConnectionBasis(db, candidate);
+  return connectionApplicationKeyFor(candidate, basis);
+}
+
+export async function connectionApplicationTerms(
+  db: Database,
+  state: { id: string; data: unknown },
+) {
+  const candidate = await applicationCandidate(db, state.id);
+  const data = z
+    .object({ applicationTerms: z.record(z.string(), z.json()).optional() })
+    .parse(state.data);
+  return {
+    reviewed: data.applicationTerms ?? {},
+    current: connectionApplicationParts(
+      candidate,
+      await captureConnectionBasis(db, candidate),
+    ),
+  };
+}
+
 /** Capture immutable retrieval evidence before any subsequent provider wait. */
 export async function prepareEntityConnectionEvidence(
   db: Database,
@@ -153,6 +239,7 @@ export async function publishPreparedEntityConnections(
         entity,
         recordId,
         evidence,
+        applicationTerms: connectionApplicationParts(candidate, basis),
       });
     }
     // Several page owners may retrieve the same edge. Sequential publication
@@ -180,25 +267,29 @@ export async function publishPreparedEntityConnections(
         return id ? [[slotOf(entry), id] as const] : [];
       }),
     );
-    return entries.flatMap((entry) => {
-      const suggestionId = ids.get(slotOf(entry));
-      if (!suggestionId) return [];
-      return [
-        connectionProposal.parse({
-          ...entry.candidate,
-          fingerprint: entry.fingerprint,
-          review: {
-            suggestionId,
-            suppression: {
-              scope: entry.scope,
-              candidateKey: entry.candidateKey,
-              fingerprint: null,
-            },
-          },
-          integration: { kind: "connection-review" },
+    return (
+      await Promise.all(
+        entries.map(async (entry) => {
+          const suggestionId = ids.get(slotOf(entry));
+          if (!suggestionId) return [];
+          return [
+            connectionProposal.parse({
+              ...entry.candidate,
+              fingerprint: await sha256CanonicalJson(entry.applicationTerms),
+              review: {
+                suggestionId,
+                suppression: {
+                  scope: entry.scope,
+                  candidateKey: entry.candidateKey,
+                  fingerprint: null,
+                },
+              },
+              integration: { kind: "connection-review" },
+            }),
+          ];
         }),
-      ];
-    });
+      )
+    ).flat();
   });
 }
 
@@ -210,6 +301,7 @@ type ConnectionEntry = {
   entity: (typeof shortcodeEntities)[number];
   recordId: string;
   evidence: { version: number; candidate: ConnectionCandidate };
+  applicationTerms: ReturnType<typeof connectionApplicationParts>;
 };
 
 /** Deterministic discovery: rows carry no producer. */
@@ -255,7 +347,11 @@ const connectionSuggestions: SuggestionFamily<
     },
     // Queue counts need only this reference, not the full immutable basis.
     projection: {
-      data: { connection: true, connectionTarget: entry.candidate.target },
+      data: {
+        connection: true,
+        connectionTarget: entry.candidate.target,
+        applicationTerms: entry.applicationTerms,
+      },
     },
   }),
   labelBacklog: sql`false`,
@@ -406,7 +502,16 @@ async function readEntityConnectionsBatch(
     undefined,
     decidedEdges && (({ candidate }) => decidedEdges.has(edgeKey(candidate))),
   );
-  const fresh = liveProposals.filter((proposal) => admitted.has(proposal));
+  const fresh = await Promise.all(
+    liveProposals
+      .filter((proposal) => admitted.has(proposal))
+      .map(async (proposal) => ({
+        ...proposal,
+        fingerprint: await connectionApplicationKey(db, {
+          id: proposal.review.suggestionId,
+        }),
+      })),
+  );
   // Unbounded callers retain the original freshness-before-existing read order.
   const existing =
     selectedExisting ?? (await readExistingConnectionSuggestions(db, sources));
@@ -481,17 +586,29 @@ export async function readStoredConnectionProposals(
     const ref = refs.get(code);
     return ref ? names.get(`${ref.entity}:${ref.id}`) : undefined;
   };
-  return proposals.flatMap((proposal) =>
-    refs.has(proposal.source.entityId) && refs.has(proposal.target.entityId)
-      ? [
-          {
-            ...proposal,
-            sourceName: name(proposal.source.entityId),
-            targetName: name(proposal.target.entityId),
-          },
-        ]
-      : [],
+  const live = proposals.filter(
+    (proposal) =>
+      refs.has(proposal.source.entityId) && refs.has(proposal.target.entityId),
   );
+  const keyed = await Promise.all(
+    live.map(async (proposal) => {
+      const basis = await captureConnectionBasis(db, proposal);
+      if (
+        proposal.relation === "email-purchase" &&
+        connectionApplicationParts(proposal, basis).event === null
+      )
+        return [];
+      return [
+        {
+          ...proposal,
+          fingerprint: await connectionApplicationKeyFor(proposal, basis),
+          sourceName: name(proposal.source.entityId),
+          targetName: name(proposal.target.entityId),
+        },
+      ];
+    }),
+  );
+  return keyed.flat();
 }
 
 /** Stored-only, including inverse endpoint lookup; never calls discovery or models. */
@@ -551,14 +668,6 @@ export async function applyEntityConnection(
       .for("update");
     if (!freshState?.active || freshState.status !== "pending")
       throw new Error("Connection Suggestion is no longer pending");
-    if (
-      input.expectedFingerprint !== prediction.fingerprint ||
-      (await sha256CanonicalJson({ ...evidence, basis })) !==
-        prediction.fingerprint
-    )
-      throw new Error(
-        "Connection evidence changed; discover again before applying",
-      );
     const actor = context.actorContext;
     switch (candidate.relation) {
       case "email-purchase":

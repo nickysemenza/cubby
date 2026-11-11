@@ -10,7 +10,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
-type TargetKind = "purchase" | "financialTransaction";
+type TargetKind = "purchase" | "financialTransaction" | "emailPurchase";
 type TargetEligibility = "explicit" | "eligible" | "context";
 type TargetContextReason =
   | "settled"
@@ -27,6 +27,7 @@ export type TargetRequest = {
   amountMinor: number;
   owner?: { source: string; chargeKey: string };
   currentTransactionId?: string;
+  emailOwnerId?: string;
 };
 export type ClassifiedTarget = {
   id: string;
@@ -57,6 +58,12 @@ function classifyTarget(
     reason,
     remainingMinor: fact.remainingMinor,
   });
+  if (req.kind === "emailPurchase")
+    return fact.void
+      ? result("context", "void")
+      : fact.claimed
+        ? result("context", "claimed")
+        : result("eligible", null);
   if (req.explicitIds.includes(fact.id)) return result("explicit", null);
   if (fact.void) return result("context", "void");
   if (fact.transfer) return result("context", "kind");
@@ -97,6 +104,7 @@ export async function eligibleTargets(
       source: request.owner?.source ?? null,
       charge: request.owner?.chargeKey ?? null,
       current: request.currentTransactionId ?? null,
+      emailOwner: request.emailOwnerId ?? null,
     })),
   );
   if (!pairs.length) return result;
@@ -110,6 +118,7 @@ export async function eligibleTargets(
       source: "text",
       charge: "text",
       current: "uuid",
+      emailOwner: "uuid",
     },
     "r",
   );
@@ -138,6 +147,11 @@ export async function eligibleTargets(
       WHERE a."purchaseId" = p.id AND ${notDeleted("a")} AND ${notDeleted("t")}
         AND t.status NOT IN (${financialTransactionStatus.enum.void}, ${financialTransactionStatus.enum.expected}) AND t.id IS DISTINCT FROM r.current
         AND sign(a."amountMinor") = sign(r.amount)) alloc
+    UNION ALL
+    SELECT r.index, p.id, (p."deletedAt" IS NOT NULL), false,
+      NULL, NULL, (account."ledgerPartyId" IS NOT NULL AND account."ledgerPartyId" IS DISTINCT FROM r."emailOwner"), false
+    FROM r JOIN "Purchase" p ON r.kind = ${"emailPurchase"} AND p.id = r.id
+    LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
     UNION ALL
     SELECT r.index, t.id, (t."deletedAt" IS NOT NULL OR t.status = ${financialTransactionStatus.enum.void}), (t."ledgerTransferId" IS NOT NULL),
       t."amountMinor", NULL, (EXISTS (/* includes-deleted: retained occurrence reservations remain authoritative. */ SELECT 1 FROM "SourceOccurrence" o

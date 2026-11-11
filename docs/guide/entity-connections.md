@@ -9,7 +9,8 @@ connection always requires review.
 The only relation Cubby discovers is the Email purchase link,
 `connection.email-purchase`. Other relationships, such as a Task's subject
 Product or a Product's Ingredient, come from field suggestions and Sweeps, not
-from a connection pass.
+from a connection pass. These references do not exclusively claim their target;
+the field's own review controls changes to the source assignment.
 
 ## Discovery
 
@@ -17,7 +18,10 @@ Email→Purchase discovery starts from either endpoint and reuses bounded
 retained-event matching: order identity, or sender-proof Vendor plus amount and
 date when an order ID is missing. Subject text alone never matches. It is
 deterministic SQL over the Email purchase evidence policy: no model, no Run and
-no evaluation.
+no evaluation. The shared target eligibility check requires a live Purchase and
+an unowned account or one owned by the Email's member. Settlement and other
+Emails linked to the Purchase do not claim it; one Purchase can have order,
+shipping and delivery Emails. Retained event matching establishes compatibility.
 
 - The hourly `email-purchase-discovery` drain walks Emails whose retained
   evidence suggests a purchase link (see [Jobs](../jobs.md#producers)).
@@ -49,7 +53,7 @@ consequence shown before confirmation; it is not a blocking contradiction.
 - Wrong grades only that event and evidence. Persistent suppression is a
   separate explicit choice keyed by relation and endpoints.
 - Confirmation must refuse deleted endpoints, changed evidence, mismatched
-  scope/candidate, and an unexpected fingerprint inside the caller transaction.
+  scope/candidate, and changed application terms inside the caller transaction.
 - A rejected domain action must roll back; successful retries use the immutable
   receipt owned by `reviewSuggestion`, never an additional receipt store.
 - Retained Email checksums, order events, reviewed links and accepted sources
@@ -66,7 +70,7 @@ Suggestions. Public endpoints validate shortcode ownership through
 module keep their original meaning.
 
 A proposal carries canonical endpoints, a relation, reasons, contradictions,
-unknowns, its Suggestion review handle and evidence fingerprint. Candidate keys
+unknowns, its Suggestion review handle and application fingerprint. Candidate keys
 name the relation and endpoints. Changed evidence supersedes prior actionable
 projections while retaining immutable history and explicit suppression. Bare
 Wrong never becomes a persistent preference. Field and Email handles expose no
@@ -75,7 +79,8 @@ suppression; Product pairs retain their existing suppression contract.
 `applyEntityConnection` is the recommendation handler called by
 `reviewSuggestion`. Payload rows are acquired before the Suggestion lock,
 evidence is read again, and the active/pending status is checked before the
-domain write. The generic review handler owns the immutable application receipt
+domain write. The application key covers Email, Purchase, original, event, checksum and
+existing links for that event; other evidence is context. The generic review handler owns the immutable application receipt
 and retry. Reads omit stale new proposals. Incidental timestamps and media URL
 changes are excluded from connection fingerprints.
 
@@ -85,3 +90,5 @@ Relations, so a record with a pending pair shows a compact "Possible match" mark
 that links to its Relationships section. Member Wrong and Dismissed decisions and
 suppression still exclude a pair. Pairs come from deterministic import-time
 matching and the `product_enrichment` propose action.
+
+Product identity pairs compare two live Products; a Product may have multiple possible matches, so they have no exclusive target claim or settlement eligibility. Identity conflicts and merge policy decide whether a pair can apply.

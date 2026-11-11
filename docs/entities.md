@@ -3670,6 +3670,11 @@ connections and pairs, reference values of fields, and a statement row's account
 Transactions. Scoped reads resolve the record scope before joining immutable evidence, so unrelated
 pending families never enter the evidence join and overlapping branches count each Suggestion once;
 Suggestions and Automatic decisions share the statement settlement predicate and its deletion rules.
+For statement and Purchase spending candidates, explicitly named targets remain available; other
+Purchases must be live, have compatible signs and enough unsettled amount when known. Other
+FinancialTransactions must be live, non-transfer and sign-compatible, unclaimed by another charge
+from the same source, and exactly match the amount when owned by another source. Unknown amounts
+remain eligible. Ineligible candidates remain context.
 These are live canonical reads; any future stored projection must keep dynamic memberships and
 complete invalidation. Passive record reads never discover or publish advice. Similar-Product
 browsing stays informational; photo-import choices stay in their Run.

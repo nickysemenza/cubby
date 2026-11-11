@@ -12,7 +12,11 @@ import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-famil
 import { sql } from "drizzle-orm";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { readStoredConnectionProposals } from "~/server/domains/connection/repo/entity-connections";
+import {
+  connectionApplicationKey,
+  connectionApplicationTerms,
+  readStoredConnectionProposals,
+} from "~/server/domains/connection/repo/entity-connections";
 import {
   pendingRecommendationEligibility,
   recommendationScopes,
@@ -210,6 +214,9 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
   }),
   actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   transactionBound: false,
+  isolationLevel: "serializable",
+  applicationKey: connectionApplicationKey,
+  applicationTerms: connectionApplicationTerms,
   apply: async (db, context, state, input) => {
     const { applyEntityConnection } =
       await import("~/server/domains/connection/repo/entity-connections");
