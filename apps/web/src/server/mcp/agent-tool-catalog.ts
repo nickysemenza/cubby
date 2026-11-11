@@ -3,7 +3,9 @@ import {
   type AgentImportRunPurpose,
   type EntityReadView,
   type ImportRunAgentConfig,
+  type InputView,
 } from "@cubby/schemas/import-run-agent";
+import { SHORTCODE_PREFIX } from "@cubby/shared";
 import type { JSONType } from "zod";
 
 import {
@@ -86,6 +88,21 @@ function withoutOtherKindNotes(
   return [kept.join(" "), ...rest].join("\n\n");
 }
 
+/**
+ * A shortcode `pattern` (`^(?:PRD-…|RCP-…)$`) keeping only the alternatives
+ * for `prefixes`; any other shape is returned unchanged.
+ */
+function withPrefixes(pattern: string, prefixes: ReadonlySet<string>) {
+  const match = /^\^\(\?:(.*)\)\$$/u.exec(pattern);
+  if (!match?.[1] || prefixes.size === 0) return pattern;
+  const kept = match[1]
+    .split("|")
+    .filter((alternative) =>
+      prefixes.has(/^[A-Z]+-/u.exec(alternative)?.[0] ?? ""),
+    );
+  return kept.length === 0 ? pattern : `^(?:${kept.join("|")})$`;
+}
+
 type JsonObject = { [key: string]: JSONType };
 /** A tool's advertised input JSON Schema, as `narrowedToolSchema` publishes it. */
 type InputJsonSchema = NonNullable<
@@ -131,6 +148,11 @@ function narrowedEntityRead(
   view: EntityReadView,
 ): InputJsonSchema {
   const allowed = new Set(Object.keys(view.filters));
+  const prefixes = new Set(
+    Object.entries(SHORTCODE_PREFIX).flatMap(([kind, prefix]) =>
+      allowed.has(kind) ? [prefix] : [],
+    ),
+  );
   const keep = (branch: JSONType) => {
     const kind = branchKind(branch);
     return kind === undefined || allowed.has(kind);
@@ -145,7 +167,9 @@ function narrowedEntityRead(
       Object.entries(value).map(([name, item]): [string, JSONType] =>
         key === "entity" && name === "enum" && Array.isArray(item)
           ? [name, item.filter((kind) => allowed.has(String(kind)))]
-          : [name, narrow(item, name)],
+          : key === "id" && name === "pattern" && typeof item === "string"
+            ? [name, withPrefixes(item, prefixes)]
+            : [name, narrow(item, name)],
       ),
     );
   };
@@ -195,11 +219,49 @@ function narrowedEntityRead(
   };
 }
 
+/** `value` without the union branches and properties `view` drops. */
+function withInputView(value: JSONType, view: InputView): JSONType {
+  if (Array.isArray(value))
+    return value
+      .filter((item) => {
+        const kind = isJsonObject(item) ? kindOf(item) : undefined;
+        return kind === undefined || !view.omitKinds.includes(kind);
+      })
+      .map((item) => withInputView(item, view));
+  if (!isJsonObject(value)) return value;
+  const omitted = new Set(view.omitProperties[kindOf(value) ?? ""] ?? []);
+  return Object.fromEntries(
+    Object.entries(value).map(([name, item]): [string, JSONType] =>
+      name === "properties" && omitted.size > 0 && isJsonObject(item)
+        ? [
+            name,
+            withInputView(
+              Object.fromEntries(
+                Object.entries(item).filter(([key]) => !omitted.has(key)),
+              ),
+              view,
+            ),
+          ]
+        : [name, withInputView(item, view)],
+    ),
+  );
+}
+
+/** The `kind` const a union branch is discriminated by. */
+function kindOf(branch: JsonObject): string | undefined {
+  const properties = branch.properties;
+  const kind = isJsonObject(properties) ? properties.kind : undefined;
+  return isJsonObject(kind) && typeof kind.const === "string"
+    ? kind.const
+    : undefined;
+}
+
 /** Model-facing MCP inputs, with Mail's delegated identity supplied by the host. */
 export function purchaseAgentToolCatalog(purpose: AgentImportRunPurpose) {
   const {
     mcpActions,
     entityRead,
+    inputView,
     mcpInputActions,
     delegatedRunIdentity,
   }: ImportRunAgentConfig = importRunAgentManifest[purpose];
@@ -207,7 +269,24 @@ export function purchaseAgentToolCatalog(purpose: AgentImportRunPurpose) {
     new Set(mcpActions),
     entityRead,
     mcpInputActions,
-  ).map((tool) => {
+  ).map((viewed) => {
+    const tool =
+      inputView && isJsonObject(viewed.inputSchema)
+        ? {
+            ...viewed,
+            inputSchema: {
+              ...viewed.inputSchema,
+              ...(isJsonObject(viewed.inputSchema.properties)
+                ? {
+                    properties: withInputView(
+                      viewed.inputSchema.properties,
+                      inputView,
+                    ),
+                  }
+                : {}),
+            },
+          }
+        : viewed;
     if (!delegatedRunIdentity) return tool;
     const schema = tool.inputSchema;
     const properties = schema.properties;

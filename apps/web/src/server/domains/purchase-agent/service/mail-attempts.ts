@@ -27,7 +27,9 @@ const claim = z
     read: z.object({ checksum: evidence.shape.checksum }).nullable().optional(),
   })
   .refine((value) => Boolean(value.read?.checksum ?? value.email.checksum));
-const CURRENT = "mail-attempts:current";
+/** The latest claimed source; usage attribution reads it too. */
+export const CURRENT_MAIL_SOURCE_KEY = "mail-attempts:current";
+const CURRENT = CURRENT_MAIL_SOURCE_KEY;
 const currentEvidence = z.object({
   source: evidence,
   complete: z.boolean(),
@@ -51,6 +53,17 @@ const completeClaim = z.object({
     }),
   }),
 });
+
+/**
+ * The writer an Email claim admits: complete, attachment-free compact evidence
+ * takes `import_extracted_order`, anything else the exception flow. Said at
+ * claim time so no attempt is spent finding out.
+ */
+export function claimImportTool(claimed: unknown) {
+  return completeClaim.safeParse(claimed).success
+    ? EXTRACT_ORDER_TOOL
+    : "purchase_import.prepare";
+}
 
 /** Semantic attempts belong to source evidence, not a claim, model turn or tool name. */
 export function mailAttempts(store: EscalationStore) {

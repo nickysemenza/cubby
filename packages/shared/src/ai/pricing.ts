@@ -364,6 +364,43 @@ export const aiCostEvidenceSchema = z.object({
 });
 export type AiCostEvidence = z.infer<typeof aiCostEvidenceSchema>;
 
+/**
+ * OpenAI's `flex` service tier publishes half of every standard token rate,
+ * including cache reads and writes; it is that tier's list price, not a
+ * billing discount.
+ */
+export const FLEX_RATE_MULTIPLIER = 0.5;
+
+/** A standard-tier quote restated at the flex tier's published rates. */
+export function atFlexTier<
+  T extends { amount: number | null; evidence: AiCostEvidence["standard"] },
+>(priced: T): T {
+  const snapshot = priced.evidence?.pricingSnapshot;
+  if (priced.amount === null || !priced.evidence || !snapshot) return priced;
+  const scale = (rate: number | undefined) =>
+    rate === undefined ? undefined : rate * FLEX_RATE_MULTIPLIER;
+  return {
+    ...priced,
+    amount: priced.amount * FLEX_RATE_MULTIPLIER,
+    evidence: {
+      ...priced.evidence,
+      pricingSnapshot: {
+        ...snapshot,
+        rates: {
+          input: snapshot.rates.input * FLEX_RATE_MULTIPLIER,
+          output: snapshot.rates.output * FLEX_RATE_MULTIPLIER,
+          ...(snapshot.rates.cache_read === undefined
+            ? {}
+            : { cache_read: scale(snapshot.rates.cache_read) }),
+          ...(snapshot.rates.cache_write === undefined
+            ? {}
+            : { cache_write: scale(snapshot.rates.cache_write) }),
+        },
+      },
+    },
+  };
+}
+
 /** Capture the actual token-class rates once; persisted reads never consult the catalog. */
 export function priceAiUsage(
   pricing: AiModelPricing | null,

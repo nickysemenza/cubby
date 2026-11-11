@@ -65,6 +65,14 @@ describe("withContextCapture", () => {
     input: [
       { role: "developer", content: "x".repeat(600) },
       {
+        type: "additional_tools",
+        role: "developer",
+        tools: [
+          { type: "function", name: "report_progress", parameters: {} },
+          { type: "function", name: "mcp__cubby__entity_read", parameters: {} },
+        ],
+      },
+      {
         role: "user",
         content: [{ type: "input_text", text: "y".repeat(400) }],
       },
@@ -113,7 +121,9 @@ describe("withContextCapture", () => {
       estimated: false,
     });
     expect(total(call!.sections)).toBe(1_000);
-    expect(call!.sections.instructions).toBeGreaterThan(550);
+    expect(call!.sections.instructions).toBeGreaterThan(400);
+    expect(call!.sections.agentToolSchemas).toBeGreaterThan(0);
+    expect(call!.sections.mcpToolSchemas).toBeGreaterThan(0);
     expect(recorder.take("run-a")).toBeUndefined();
   });
 

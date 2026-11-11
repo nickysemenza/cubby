@@ -97,6 +97,7 @@ describe("purchase audit restart recovery", () => {
         entityKind: "purchase",
         entityId: order.id,
         action: "create",
+        channel: "mcp",
         userId: ctx.actor.userId,
         runId: f.parent.id,
       });
@@ -105,6 +106,7 @@ describe("purchase audit restart recovery", () => {
       entityKind: "purchase",
       entityId: f.order.id,
       action: "update",
+      channel: "mcp",
       userId: ctx.actor.userId,
       runId: successor.id,
     });
@@ -236,6 +238,7 @@ describe("purchase audit restart recovery", () => {
       entityKind: "purchase",
       entityId: writable.id,
       action: "create",
+      channel: "mcp",
       userId: ctx.actor.userId,
       runId: successor.id,
     });

@@ -34,6 +34,11 @@ export const mailAttemptInput = z.object({
     evidenceVersion: z.string(),
   }),
   identity: z.string().min(1).max(256),
+  /**
+   * The same extraction's identity before review `detail` left the hash;
+   * receipts recorded under it stay the same attempt.
+   */
+  legacyIdentity: z.string().min(1).max(256).optional(),
   invocation: z.string().min(1).max(256),
   publicationPossible: z.boolean(),
   proposal: z.record(z.string(), z.json()).optional(),
@@ -112,6 +117,10 @@ export const agentUsageEvent = purchaseAgentEventRef.extend({
   gatewayCacheStatus: z.enum(["hit", "miss"]).optional(),
   /** A failed turn's provider error, scrubbed and bounded when recorded. */
   failure: z.string().min(1).optional(),
+  /** OpenAI served the turn at the flex tier. */
+  serviceTier: z.literal("flex").optional(),
+  /** The source Email the turn worked on, when it was working on one. */
+  source: z.object({ mailboxId: z.string(), messageId: z.string() }).optional(),
 });
 export type AgentUsageEvent = z.infer<typeof agentUsageEvent>;
 
@@ -181,5 +190,21 @@ export const photoInventoryToolInputs = {
       .min(1)
       .max(1_000)
       .describe("What about this Email needs the stronger model."),
+    question: z
+      .string()
+      .trim()
+      .min(1)
+      .max(2_000)
+      .describe(
+        "The one question the stronger model answers from this Email, such as which printed amount is the order total or which candidate Product a line names.",
+      ),
+    facts: z
+      .string()
+      .trim()
+      .max(8_000)
+      .optional()
+      .describe(
+        "What you already established that the answer depends on: candidate Products with ids, your partial extraction, or the refusal text. The Email itself is attached for you.",
+      ),
   }),
 };

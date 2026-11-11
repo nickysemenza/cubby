@@ -134,10 +134,64 @@ export async function listRecentAiUsage(
 const savingsFor = (reason: AiCostEvidence["billingReason"]) =>
   sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null and ${aiUsage.costEvidence}->>'billingReason' = ${reason}), 0)`;
 
-export async function summarizeAiUsage(db: Database, days: number) {
+const snapshotRates = sql`(${aiUsage.costEvidence}#>'{standard,pricingSnapshot,rates}')`;
+const hasSnapshot = sql`${snapshotRates} is not null`;
+
+/**
+ * A cache replay's standard cost prices the tokens it avoided, which its own
+ * token columns do not carry.
+ */
+function pricedTokens(
+  column: AnyColumn,
+  avoidedKey:
+    | "inputTokens"
+    | "outputTokens"
+    | "cacheReadTokens"
+    | "cacheWriteTokens",
+) {
+  return sql`(case when ${aiUsage.costEvidence}->'avoidedUsage' is not null then coalesce((${aiUsage.costEvidence}#>>${sql.raw(`'{avoidedUsage,${avoidedKey}}'`)})::numeric, 0) else coalesce(${column}, 0) end)`;
+}
+
+/**
+ * Standard cost by token class from each row's stored rate snapshot ($/M
+ * tokens). History is never repriced from the current catalog: a row without
+ * a snapshot is left unsplit and reported in `unsplit*`.
+ */
+function standardCostSplitSql() {
+  const byClass = (
+    column: AnyColumn,
+    avoidedKey: Parameters<typeof pricedTokens>[1],
+    rate: "input" | "cache_write" | "cache_read" | "output",
+  ) =>
+    sql<number>`coalesce(sum(${pricedTokens(column, avoidedKey)} * coalesce((${snapshotRates}->>${sql.raw(`'${rate}'`)})::numeric, 0) / 1000000) filter (where ${hasSnapshot}), 0)::float8`;
+  return {
+    input: byClass(aiUsage.inputTokens, "inputTokens", "input"),
+    cacheWrite: byClass(
+      aiUsage.cacheWriteTokens,
+      "cacheWriteTokens",
+      "cache_write",
+    ),
+    cacheRead: byClass(
+      aiUsage.cacheReadTokens,
+      "cacheReadTokens",
+      "cache_read",
+    ),
+    output: byClass(aiUsage.outputTokens, "outputTokens", "output"),
+    unsplitCost: sql<number>`coalesce(sum(${aiUsage.standardCost}) filter (where not ${hasSnapshot}), 0)::float8`,
+    unsplitCount: sql<number>`(count(${aiUsage.id}) filter (where not ${hasSnapshot} and not ${failedWithoutUsage}))::int`,
+  };
+}
+
+export async function summarizeAiUsage(
+  db: Database,
+  days: number,
+  groupBy: "by_feature" | "by_job" = "by_feature",
+) {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   const usageDayGroup = householdDaySql(aiUsage.createdAt);
   const usageDay = sql<string>`to_char(${usageDayGroup}, 'YYYY-MM-DD')`;
+  // One row per job multiplies a long window's rows by its job count.
+  const byJob = groupBy === "by_job";
 
   const rows = await getDb(db)
     .select({
@@ -147,7 +201,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       model: aiUsage.model,
       operation: aiUsage.operation,
       jobKind: aiUsage.jobKind,
-      jobId: aiUsage.jobId,
+      jobId: byJob ? aiUsage.jobId : sql<null>`null`,
       cacheStatus: aiUsage.cacheStatus,
       applicationCacheStatus: aiUsage.applicationCacheStatus,
       transport: aiUsage.transport,
@@ -158,6 +212,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       cacheReadTokens: sql<string>`coalesce(sum(${aiUsage.cacheReadTokens}), 0)::bigint`,
       cacheWriteTokens: sql<string>`coalesce(sum(${aiUsage.cacheWriteTokens}), 0)::bigint`,
       ...aiCostSummarySql(),
+      standardCostSplit: standardCostSplitSql(),
       savingsByReason: {
         plan: savingsFor("plan"),
         subscriberCredit: savingsFor("subscriber_credit"),
@@ -175,7 +230,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       aiUsage.model,
       aiUsage.operation,
       aiUsage.jobKind,
-      aiUsage.jobId,
+      ...(byJob ? [aiUsage.jobId] : []),
       aiUsage.cacheStatus,
       aiUsage.applicationCacheStatus,
       aiUsage.transport,

@@ -5,9 +5,11 @@ import type {
   MailTriageIncompleteReason,
 } from "@cubby/schemas/mailbox-research";
 
+import { senderAddress } from "~/lib/vendor/domains";
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { MAILBOX_TRIAGE_FEATURE } from "~/server/ai/policy/features";
 import { droppedBodyParts } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import type { SenderHistory } from "~/server/domains/purchase-import/repo/gmail/sender-history";
 import type {
   GmailMessage,
   GmailMessagePart,
@@ -126,6 +128,7 @@ function triageView(
   raw: GmailMessage,
   normalized: GmailNormalizedMessage,
   prompt = MAILBOX_TRIAGE_FEATURE.prompt,
+  senderHistory: SenderHistory | null = null,
 ) {
   const bodyHtml = normalized.mail.bodyHtml;
   const html = bodyHtml ? wasm.compact_email_html(bodyHtml) : null;
@@ -242,6 +245,7 @@ function triageView(
     const view = {
       headers,
       senderDomain,
+      senderHistory,
       preheader,
       body: excerpt(body, 0, headLength),
       bodyEnd: full
@@ -325,6 +329,7 @@ export async function routeGmailMessage(
   normalized: GmailNormalizedMessage,
   choose: MailTriage,
   prompt = MAILBOX_TRIAGE_FEATURE.prompt,
+  readSenderHistory?: (address: string) => Promise<SenderHistory>,
 ): Promise<{
   decision: MailboxClassificationDecision;
   view: MailTriageView | null;
@@ -345,10 +350,12 @@ export async function routeGmailMessage(
       },
       view: null,
     };
+  const address = senderAddress(normalized.mail.headers.from ?? "");
   const { content, bytes, incompleteReasons, senderDomain, cues } = triageView(
     raw,
     normalized,
     prompt,
+    address && readSenderHistory ? await readSenderHistory(address) : null,
   );
   const view = {
     bytes,

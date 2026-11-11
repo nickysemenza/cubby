@@ -72,6 +72,7 @@ import {
   upsertOrderMail,
 } from "../../repo/gmail/persistence";
 import { queueSearchClassification } from "../../repo/gmail/reclassify-state";
+import { readSenderHistory } from "../../repo/gmail/sender-history";
 import { isGmailAuthorizationFailure } from "../../repo/gmail/tokens";
 import {
   extractEmailCandidatePreview,
@@ -669,8 +670,19 @@ async function acquireEligible(
                 reason: "Awaiting classification",
               })
             : async () =>
-                (await routeGmailMessage(message, normalized, ports.triage))
-                  .decision,
+                (
+                  await routeGmailMessage(
+                    message,
+                    normalized,
+                    ports.triage,
+                    undefined,
+                    (address) =>
+                      readSenderHistory(db, {
+                        ledgerPartyId: input.ledgerPartyId,
+                        address,
+                      }),
+                  )
+                ).decision,
           input.searchActor
             ? null
             : () =>

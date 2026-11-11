@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { DEFAULT_EMBEDDING_MODEL } from "@cubby/shared/ai/models";
+import { DEFAULT_EMBEDDING_MODEL, FAST_MODEL } from "@cubby/shared/ai/models";
 import * as externalFetch from "@cubby/shared/external-fetch";
 import {
   createModels,
@@ -362,7 +362,9 @@ it("keeps the model, gateway route, operation, and provider cause on a failed ca
       ports,
     ),
   ).rejects.toMatchObject({
-    message: expect.stringContaining(PURCHASE_IMPORT_REPAIR_FEATURE.model),
+    // A transport failure is not an unusable answer: the fast tier's failure
+    // surfaces instead of buying a stronger attempt.
+    message: expect.stringContaining(FAST_MODEL),
     cause: providerError,
   });
 });

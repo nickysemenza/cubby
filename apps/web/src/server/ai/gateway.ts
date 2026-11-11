@@ -48,6 +48,7 @@ export interface GatewayCallOptions
       | "beforePaidRequest"
       | "beforePlanRequest"
       | "funding"
+      | "flex"
     > {
   metadata: GatewayMetadata;
   collectPayload?: boolean;
@@ -147,6 +148,7 @@ export function gatewayFetch(
     chatGpt: chatGptInference,
     subscriptionRequired: opts.subscriptionRequired,
     subscriptionFallback: opts.subscriptionFallback,
+    flex: opts.flex,
     beforePaidRequest: async (request) => {
       await (
         await import("~/server/workflows/runs/execution")

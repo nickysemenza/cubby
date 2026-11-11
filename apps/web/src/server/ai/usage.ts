@@ -2,6 +2,7 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
 import {
+  atFlexTier,
   accountAiUsage,
   type AiAvoidedUsage,
   type AiCostEvidence,
@@ -65,6 +66,8 @@ export type RecordAiUsageInput = {
   /** What carried the call; `unknown` only when the caller has no evidence. */
   transport: AiUsageTransport;
   entity?: { entityKind: string; entityId: string } | null;
+  /** OpenAI served the call at the flex tier; its list price is half. */
+  serviceTier?: "flex";
   /**
    * An application-cache replay's original token usage. It prices the
    * replay's standard comparison; the row's token columns stay as reported.
@@ -123,11 +126,15 @@ async function usageBilling(
     ].some((tokens) => tokens != null && tokens > 0)
       ? input.avoidedUsage
       : null;
-  const snapshot = avoidedUsage
+  const quoted = avoidedUsage
     ? await snapshotPrice(input.provider, input.model, avoidedUsage)
     : supportedComparison && quotableTokens
       ? await snapshotPrice(input.provider, input.model, input)
       : null;
+  const snapshot =
+    quoted && input.serviceTier === "flex" && !avoidedUsage
+      ? atFlexTier(quoted)
+      : quoted;
   const standardCost =
     snapshot?.amount ??
     (supportedComparison ? (input.standardCost ?? null) : null);

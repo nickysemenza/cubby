@@ -446,6 +446,12 @@ export type AiRunUsage = z.infer<typeof aiRunUsageOut>;
 
 export const aiUsageSummaryInput = z.object({
   days: z.number().int().min(1).max(90).default(7),
+  /**
+   * `by_feature` groups by day, feature, provider, model, operation and
+   * transport; `by_job` also splits by `jobKind`/`jobId`, which multiplies
+   * rows by the number of jobs and is too large for long windows.
+   */
+  groupBy: z.enum(["by_feature", "by_job"]).default("by_feature"),
 });
 
 const aiUsageSummaryRowSchema = z.object({
@@ -457,6 +463,19 @@ const aiUsageSummaryRowSchema = z.object({
   cacheWriteTokens: z.number().int(),
   ...aiCostSummaryFields,
   failedWithoutUsageCount: z.number().int().nonnegative(),
+  /**
+   * `standardCost` by token class, each row's tokens times the rates stored
+   * in its own pricing snapshot (never the current catalog). Rows without a
+   * snapshot are not split: their `standardCost` is `unsplitCost`.
+   */
+  standardCostSplit: z.object({
+    input: z.number(),
+    cacheWrite: z.number(),
+    cacheRead: z.number(),
+    output: z.number(),
+    unsplitCost: z.number(),
+    unsplitCount: z.number().int().nonnegative(),
+  }),
   /** Standard minus charged cost, split by why the charge was lower. */
   savingsByReason: z.object({
     plan: z.number(),

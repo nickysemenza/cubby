@@ -114,10 +114,18 @@ function withinBytes<T>(items: readonly T[], maxBytes: number) {
 const DECORATIVE_IMAGE =
   /\b(?:logo|icon|facebook|instagram|twitter|pinterest|youtube|tiktok|linkedin|social)\b/iu;
 
+// Open-tracking pixels and click-tracking hosts never show an order line.
+const TRACKING_IMAGE_SRC =
+  /(?<![a-z])(?:pixel|beacon|tracking|spacer)(?![a-z])|(?<!\d)1x1(?!\d)|^https?:\/\/(?:click|clicks|track|tracking|trk|open|pixel|beacon|links?)\./iu;
+
 /**
  * Content images for line `imageUrl`s, purchase-cue images first, each `src`
  * once. Extraction only needs the exact `src` (Cubby checks it against the
- * stored HTML), so the coordinator never pages markup for it.
+ * stored HTML), so the coordinator never pages markup for it. Tracking pixels
+ * and alt-less images whose `src` exceeds MAIL_READ_LINK_HREF_MAX_BYTES
+ * (tracking redirects) are dropped silently, like branding: counting them in
+ * `imagesOmitted` would mark an ordinary receipt incomplete and force the
+ * exception flow.
  */
 function boundedImages(
   images: readonly { src: string; alt: string; cue: boolean }[],
@@ -126,9 +134,17 @@ function boundedImages(
   const candidates = [...images]
     .sort((a, b) => Number(b.cue) - Number(a.cue))
     .filter(({ src, alt }) => {
-      if (DECORATIVE_IMAGE.test(alt) || seen.has(src)) return false;
+      if (
+        DECORATIVE_IMAGE.test(alt) ||
+        TRACKING_IMAGE_SRC.test(src) ||
+        seen.has(src)
+      )
+        return false;
       seen.add(src);
-      return true;
+      return !(
+        alt.trim() === "" &&
+        encoder.encode(src).length > MAIL_READ_LINK_HREF_MAX_BYTES
+      );
     })
     .map(({ src, alt }) => ({ src, alt }));
   const { kept, omitted } = withinBytes(candidates, MAIL_READ_IMAGES_MAX_BYTES);
@@ -276,6 +292,30 @@ function shortenBody(
   };
 }
 
+const squashed = (text: string) => text.replace(/\s+/gu, " ").trim();
+
+/** `snippet` and `preheader` null when the body page already begins with them. */
+function withoutRepeatedLeads<T extends Pick<MailReadOut, "content">>(
+  read: T,
+): T {
+  const { snippet, preheader, bodyText } = read.content;
+  if (bodyText === null) return read;
+  const body = squashed(bodyText).toLowerCase();
+  const repeated = (lead: string | null) =>
+    lead !== null &&
+    squashed(lead) !== "" &&
+    body.startsWith(squashed(lead).toLowerCase());
+  if (!repeated(snippet) && !repeated(preheader)) return read;
+  return {
+    ...read,
+    content: {
+      ...read.content,
+      snippet: repeated(snippet) ? null : snippet,
+      preheader: repeated(preheader) ? null : preheader,
+    },
+  };
+}
+
 /**
  * Bound a whole Email read under the agent's response cap, measured on the
  * exact text the agent adapter emits (`mailReadAgentText`): images and
@@ -287,7 +327,8 @@ export function fitMailRead<
   T extends Pick<MailReadOut, "content"> & {
     originalAttachment?: MailAttachmentOriginal;
   },
->(full: T): T {
+>(original: T): T {
+  const full = withoutRepeatedLeads(original);
   const fits = (candidate: T) =>
     agentBytes(candidate) <= MAIL_READ_RESPONSE_MAX_BYTES;
   if (fits(full)) return full;

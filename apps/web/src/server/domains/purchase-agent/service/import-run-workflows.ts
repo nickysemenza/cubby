@@ -53,18 +53,18 @@ const fromBundle = (id: string, skills: SkillManifestEntry[]) =>
  */
 const ESCALATION_INSTRUCTIONS = `## Escalation
 
-This Run can hand one Email at a time to a stronger escalation model. Classify
-the blocker in \`escalate_import_work\`'s category: extraction, identity,
-contradiction, or unclassified when you cannot classify it reliably. Request this
-only when stronger reasoning could resolve the source evidence. A missing
-original, a member-only decision, a source held by another Run or a transient
-provider failure is not a reasoning problem: follow its owning recovery policy
-or resolve this Email unresolved with the exact gap, then claim the next.
-A schema refusal names its repair contract; correct it once instead of repeating
-unchanged calls. An unresolved outcome or prepare refusal never automatically
-spends a stronger-model turn. The escalation model continues this Email; the
-next different Email returns to the primary. Re-claiming the same Email does
-not reset its escalation. The stronger model may also resolve it unresolved.
+You can ask a stronger model one question about the current Email with
+\`escalate_import_work\`, classified as extraction, identity, contradiction, or
+unclassified when you cannot classify it reliably. Ask only when stronger
+reasoning over the Email could settle a specific fact; put that fact in
+\`question\` and what you already established in \`facts\`. The answer comes
+back to you: you keep this Email and make every write. Each Email may ask twice.
+A missing original, a member-only decision, a source held by another Run or a
+transient provider failure is not a reasoning problem: follow its owning
+recovery policy or resolve this Email unresolved with the exact gap, then claim
+the next. A schema refusal names its repair contract; correct it once instead
+of repeating unchanged calls. An unresolved outcome or prepare refusal never
+automatically asks a stronger model.
 `;
 
 /** The run carries identity and tools; the workflow is shared Markdown. */

@@ -1,4 +1,4 @@
-import type { AiCostEvidence } from "./pricing";
+import { FLEX_RATE_MULTIPLIER, type AiCostEvidence } from "./pricing";
 import {
   createProvider,
   type Api,
@@ -66,6 +66,8 @@ function gatewayAuth(route: ChatGatewayProvider) {
 }
 
 const comparisonCosts = new WeakMap<object, number>();
+/** Answers OpenAI served at the flex tier, which pi priced at its rates. */
+const flexMessages = new WeakSet<object>();
 const comparisonEvidence = new WeakMap<object, AiCostEvidence["standard"]>();
 
 function throughFetch(
@@ -112,6 +114,20 @@ function throughFetch(
                 : tier,
             undefined,
           ) ?? model.cost;
+      // pi prices a flex answer at the published flex rates; the message
+      // carries no tier, so the halved cost is the evidence of it.
+      const full =
+        (message.usage.input * rates.input +
+          message.usage.output * rates.output +
+          message.usage.cacheRead * rates.cacheRead +
+          message.usage.cacheWrite * rates.cacheWrite) /
+        1_000_000;
+      const flex =
+        full > 0 &&
+        Math.abs(message.usage.cost.total - full * FLEX_RATE_MULTIPLIER) <=
+          full * 1e-6;
+      if (flex) flexMessages.add(message);
+      const tier = flex ? FLEX_RATE_MULTIPLIER : 1;
       comparisonEvidence.set(message, {
         source: "estimate",
         pricingSource: "pi_sdk",
@@ -120,10 +136,10 @@ function throughFetch(
           model: model.id,
           capturedAt,
           rates: {
-            input: rates.input,
-            output: rates.output,
-            cache_read: rates.cacheRead,
-            cache_write: rates.cacheWrite,
+            input: rates.input * tier,
+            output: rates.output * tier,
+            cache_read: rates.cacheRead * tier,
+            cache_write: rates.cacheWrite * tier,
           },
         },
       });
@@ -583,5 +599,6 @@ export function piTokenUsage(message: {
     outputTokens: unknown ? null : message.usage.output,
     cacheReadTokens: unknown ? null : message.usage.cacheRead,
     cacheWriteTokens: unknown ? null : message.usage.cacheWrite,
+    ...(flexMessages.has(message) ? { serviceTier: "flex" as const } : {}),
   };
 }

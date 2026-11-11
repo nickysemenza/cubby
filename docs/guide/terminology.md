@@ -508,6 +508,10 @@ _Avoid_: charged cost, household expense, uncached price
 The incremental amount attributable to AI work after plan coverage, response caching, or billing discounts; it may be estimated or provider-reported, with that distinction retained. A plan-covered call has zero incremental charge; the plan's subscription fee is separate.
 _Avoid_: standard cost, subscription fee, confirmed bill when only estimated
 
+**Frontier model**:
+Any chat model reached through the AI funding ladder, at every tier, including the fast tier. Distinct from the Decision model, which answers closed-set questions and is not funded by the ladder.
+_Avoid_: small model (for a fast-tier frontier model), big model
+
 **Image job**:
 One durable unit of image processing (subject lift, description, or identification) for one Image source and processor revision, identified by `IPR-`. AI Gateway or an Apple device claims it in attempts, each with its own diagnostics and events; a Run that requested it may already include its cost.
 _Avoid_: image processing run, activity row

@@ -100,7 +100,10 @@ export async function recordMailAttempt(
             eq(runOperation.runId, runId),
             eq(runOperation.kind, "mail_extraction_attempt"),
             sql`${runOperation.result}->${"source"} = ${JSON.stringify(input.source)}::jsonb`,
-            sql`${runOperation.result}->>${"identity"} = ${input.identity}`,
+            inArray(sql<string>`${runOperation.result}->>${"identity"}`, [
+              input.identity,
+              ...(input.legacyIdentity ? [input.legacyIdentity] : []),
+            ]),
           ),
         );
       for (const alias of aliases)
@@ -151,11 +154,19 @@ export async function recordMailAttempt(
             ),
           )
       : [];
-    const saved = receipts.map((row) => ({
-      ...attemptReceipt.parse(row.result),
-      operationId: row.operationId,
-      ownerRunId: row.runId,
-    }));
+    const saved = receipts.map((row) => {
+      const receipt = attemptReceipt.parse(row.result);
+      return {
+        ...receipt,
+        // A receipt recorded under the legacy digest is this same attempt.
+        identity:
+          input.legacyIdentity && receipt.identity === input.legacyIdentity
+            ? input.identity
+            : receipt.identity,
+        operationId: row.operationId,
+        ownerRunId: row.runId,
+      };
+    });
     const localReplay = saved.some(
       (row) =>
         row.ownerRunId === runId &&

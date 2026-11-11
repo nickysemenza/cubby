@@ -4,14 +4,18 @@ import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import type { Message } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
-import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
+import { CLAIM_IMPORT_WORK_TOOL, CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
 
 const CLAIM: ImportRunAgentToolName = CLAIM_IMPORT_WORK_TOOL;
 
 const continuation = z.object({
-  kind: z.literal("commit_result"),
+  kind: z.enum(["commit_result", "resolve_result"]),
   nextWork: z.object({ kind: z.enum(["email", "none", "stopped"]) }),
 });
+const CONTINUING_TOOLS: readonly string[] = [
+  EXTRACT_ORDER_TOOL,
+  `${CUBBY_MCP_TOOL_PREFIX}purchase_import`,
+];
 
 /**
  * A request's messages without earlier work items: everything from the first
@@ -27,13 +31,15 @@ export function currentWorkItemMessages(
     messages.flatMap((message) => {
       if (
         message.role !== "toolResult" ||
-        message.toolName !== EXTRACT_ORDER_TOOL
+        !CONTINUING_TOOLS.includes(message.toolName)
       )
         return [];
       // An unreadable continuation cannot discard earlier evidence.
-      const text = message.content.find((part) => part.type === "text");
-      return text?.type === "text" &&
-        parseJsonAs(continuation, text.text) !== undefined
+      return message.content.some(
+        (part) =>
+          part.type === "text" &&
+          parseJsonAs(continuation, part.text) !== undefined,
+      )
         ? [message.toolCallId]
         : [];
     }),

@@ -61,7 +61,10 @@ import {
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
-import { safeImageProcessingError } from "~/server/domains/image-processing/service/safe-error";
+import {
+  cloudFailureRetryable,
+  safeImageProcessingError,
+} from "~/server/domains/image-processing/service/safe-error";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
@@ -345,7 +348,7 @@ async function completeNormalizedImageInput(
         outcome: {
           kind: "describe_image",
           status: "failed",
-          retryable: SERVER_FAILURE_RETRYABLE,
+          retryable: cloudFailureRetryable(error),
           reason: safeImageProcessingError(error),
         },
       },

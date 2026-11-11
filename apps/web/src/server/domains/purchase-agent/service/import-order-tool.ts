@@ -6,6 +6,7 @@ import {
 import {
   commitPurchaseImportInput,
   commitPurchaseImportOut,
+  importExtractionAgentInput,
   preparePurchaseImportInput,
   preparePurchaseImportOut,
   preparedProductResolution,
@@ -31,7 +32,7 @@ export const extractedOrderInput = z
     distinctFromPurchases: orderFields.distinctFromPurchases,
     defaultTrade: commitPurchaseImportInput.shape.defaultTrade,
     defaultProjectId: commitPurchaseImportInput.shape.defaultProjectId,
-    extraction: orderFields.extraction,
+    extraction: importExtractionAgentInput,
     products: z
       .array(preparedProductResolution.nullable())
       .max(500)
@@ -87,6 +88,9 @@ function nestedValue<S extends z.ZodType>(
     return schema.safeParse(undefined);
   }
 }
+
+const collapseWhitespace = (value: string) =>
+  value.replace(/\s+/gu, " ").trim();
 
 /** Pi supplies source facts once; code owns IDs, preparation and publication. */
 export function importExtractedOrderTool(
@@ -161,6 +165,12 @@ export function importExtractedOrderTool(
             ...refs.payments,
           ].filter((quote) => quote !== null)
         : [];
+      // Excerpts copied across line breaks or table cells differ only in
+      // whitespace; that refusal sent receipts to a stronger model (2026-11).
+      const text = collapseWhitespace(claimed.text);
+      const missing = quotes.filter(
+        (quote) => !text.includes(collapseWhitespace(quote)),
+      );
       if (
         !refs ||
         (candidate.orderId !== null && refs.orderId === null) ||
@@ -169,12 +179,18 @@ export function importExtractedOrderTool(
           refs.printedGrandTotal === null) ||
         refs.lines.length !== candidate.lines.length ||
         refs.payments.length !== candidate.payments.length ||
-        quotes.some((quote) => !claimed.text.includes(quote))
+        missing.length > 0
       )
         return finish({
           kind: "incomplete",
-          reason:
-            "Source references must quote the current retained Email and cover every submitted identifier, date, total, line and payment. Repair the references before publication.",
+          reason: `Source references must quote the current retained Email and cover every submitted identifier, date, total, line and payment. Repair the references before publication.${
+            missing.length > 0
+              ? ` Not found in the Email: ${missing
+                  .slice(0, 5)
+                  .map((quote) => JSON.stringify(quote.slice(0, 120)))
+                  .join(", ")}.`
+              : ""
+          }`,
         });
       // Writer operation IDs belong to this Run; canonical source identity
       // preserves earlier effects when identical facts replay in a successor.

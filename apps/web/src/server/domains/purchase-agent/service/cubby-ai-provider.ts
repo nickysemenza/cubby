@@ -100,7 +100,7 @@ const breakpoints = (value: unknown): number =>
  * breakpoint pi-ai places on the latest user message never matches the next
  * Email: mark the end of the kept prefix (kickoff, member and system
  * messages) so it is read from cache instead of re-written. OpenAI requests
- * key their prompt cache to the Run.
+ * key their prompt cache to the coordinator purpose, shared across Runs.
  */
 export function withWorkItemCaching(
   route: ChatGatewayProvider,
@@ -234,6 +234,8 @@ export function createCubbyGatewayFetch(
           options.cacheKey?.(),
         ),
       chatGpt: options.subscription,
+      // Coordinators run unattended: their OpenAI turns take the flex tier.
+      flex: true,
       ...policy,
       onTransport: options.onTransport,
       onResponse: options.onResponse,

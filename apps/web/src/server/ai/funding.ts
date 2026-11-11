@@ -56,8 +56,14 @@ import type { CreditRefusal } from "./gateway-egress-contract";
 export async function planBudgetRefusal(db: Database): Promise<string | null> {
   const status = await readAiBudget(db);
   const { plan } = status;
-  return plan.spentUsd >= plan.limitUsd
-    ? `ChatGPT plan budget reached: ${budgetUsd(plan.spentUsd)} of $${plan.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`
+  if (plan.spentUsd >= plan.limitUsd)
+    return `ChatGPT plan budget reached: ${budgetUsd(plan.spentUsd)} of $${plan.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`;
+  // A quota refusal holds the plan until its probe deadline. Sending every
+  // background request anyway made half of a coordinator's usage rows instant
+  // plan failures (2026-11-11).
+  const availability = await readChatGptPlanAvailability(db);
+  return availability.state === "paused"
+    ? `ChatGPT plan paused${availability.until ? ` until ${availability.until}` : " until the next window"}: ${availability.reason ?? "usage limit reached"}`
     : null;
 }
 
