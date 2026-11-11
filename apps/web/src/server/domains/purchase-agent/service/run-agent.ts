@@ -508,6 +508,7 @@ export class PurchaseImportRunAgent
       this.writeState(`mail-attempt-source:${call.id}`, JSON.stringify(source));
       const stage = escalation.escalated() ? "escalation" : "primary";
       const identity = await extractionIdentity(call);
+      const legacyIdentity = await legacyExtractionIdentity(call);
       const proposal =
         call.name === EXTRACT_ORDER_TOOL
           ? extractedOrderInput.safeParse(call.arguments)
@@ -516,6 +517,7 @@ export class PurchaseImportRunAgent
         source: { ...source, evidenceVersion: source.evidenceVersion },
         generation,
         identity,
+        ...(legacyIdentity ? { legacyIdentity } : {}),
         invocation: call.id,
         publicationPossible: validExtraction(call),
         proposal: proposal?.success
@@ -635,6 +637,7 @@ export class PurchaseImportRunAgent
                           },
                           generation,
                           identity: await extractionIdentity(call),
+                          legacyIdentity: await legacyExtractionIdentity(call),
                           invocation: call.id,
                           publicationPossible: validExtraction(call),
                           stage: escalation.escalated()
@@ -1237,6 +1240,42 @@ const extractionFacts = (extraction: ExtractionOutcome) =>
   Object.fromEntries(
     Object.entries(extraction).filter(([key]) => key !== "detail"),
   );
+
+/**
+ * The identity receipts recorded before `detail` left the hash, when it
+ * differs, so an exact replay of a pre-change proposal still matches it.
+ */
+async function legacyExtractionIdentity(
+  call: Pick<
+    import("@earendil-works/pi-ai").ToolCall,
+    "id" | "name" | "arguments"
+  >,
+) {
+  const parsed = extractedOrderInput.safeParse(call.arguments);
+  const prepared = parsed.success
+    ? undefined
+    : preparationFacts.safeParse(call.arguments.input);
+  const legacy = parsed.success
+    ? await sha256Hex(JSON.stringify(parsed.data))
+    : prepared?.success
+      ? await sha256Hex(
+          JSON.stringify(
+            prepared.data.orders.map((order) => ({
+              source: order.source,
+              evidenceChecksum: order.evidenceChecksum,
+              vendorId: order.vendorId,
+              vendor: order.vendor,
+              targetPurchaseId: order.targetPurchaseId,
+              distinctFromPurchases: order.distinctFromPurchases,
+              extraction: order.extraction,
+            })),
+          ),
+        )
+      : undefined;
+  return legacy && legacy !== (await extractionIdentity(call))
+    ? legacy
+    : undefined;
+}
 
 async function extractionIdentity(
   call: Pick<

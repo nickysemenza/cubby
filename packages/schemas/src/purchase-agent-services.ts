@@ -34,6 +34,11 @@ export const mailAttemptInput = z.object({
     evidenceVersion: z.string(),
   }),
   identity: z.string().min(1).max(256),
+  /**
+   * The same extraction's identity before review `detail` left the hash;
+   * receipts recorded under it stay the same attempt.
+   */
+  legacyIdentity: z.string().min(1).max(256).optional(),
   invocation: z.string().min(1).max(256),
   publicationPossible: z.boolean(),
   proposal: z.record(z.string(), z.json()).optional(),

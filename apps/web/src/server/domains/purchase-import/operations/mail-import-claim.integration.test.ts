@@ -1042,6 +1042,14 @@ describe("Mail import claim", () => {
     expect(await claimMailImportWork(ctx.db, first.owner.id)).toMatchObject({
       recovery: { tool: "import_extracted_order", arguments: request.proposal },
     });
+    // A receipt hashed before `detail` left the identity still admits its replay.
+    expect(
+      await recordMailAttempt(ctx.db, first.owner.id, {
+        ...request,
+        identity: "repair-without-detail",
+        legacyIdentity: "repair",
+      }),
+    ).toEqual({ kind: "admitted" });
     await recordMailAttempt(ctx.db, first.owner.id, {
       ...request,
       identity: "repair",
