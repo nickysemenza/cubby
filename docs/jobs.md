@@ -823,11 +823,12 @@ instead of buying it again.
 Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
 selection after the page's checkpoint. Items run two at a time, each in its own
 guarded transactions under the drain lease, but a page publishes one item's
-SERIALIZABLE transaction at a time (`publishAiEvaluation`), so a feature has one
-publisher: concurrent publications read each other's rows (a Purchase's lines,
+SERIALIZABLE transaction at a time (`publishAiEvaluation`), so those
+publications have one writer per feature (Gmail evidence publication instead
+locks its Run): concurrent publications read each other's rows (a Purchase's lines,
 shared index pages) and abort each other, and an item whose retries all abort
 waits out transient backoff. A page that dies holds its feature until its lease
-lapses. An item's workflow fence reads its
+lapses, and the drain's next-due time is that lapse, so the feature wakes then. An item's workflow fence reads its
 own row by primary key and fails once that row's lease is stale, lapsed or
 released; the page-wide lease read filters on the unindexed `leaseToken`, so it
 runs only outside SERIALIZABLE transactions, before paid requests. Heartbeat and

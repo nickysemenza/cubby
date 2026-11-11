@@ -7,6 +7,7 @@ import { aiEvaluation } from "~/server/db/schema";
 
 import {
   aiEvaluationDue,
+  aiEvaluationNext,
   aiEvaluationStore,
   releaseAiEvaluationPage,
 } from "./ai-evaluation-work";
@@ -72,6 +73,12 @@ describe("AI evaluation pages", () => {
         crypto.randomUUID(),
       ).claim(ctx.db, 8),
     ).toHaveLength(1);
+    // A page that dies keeps its feature until the lease lapses; the next
+    // wake is that lapse, not the unleased backlog behind it.
+    const [next] = z
+      .array(z.object({ min: z.coerce.date() }))
+      .parse((await getDb(ctx.db).execute(aiEvaluationNext())).rows);
+    expect(next!.min.getTime()).toBeGreaterThan(Date.now() + 15 * 60_000);
     await releaseAiEvaluationPage(ctx.db, page);
     expect(
       await aiEvaluationStore(

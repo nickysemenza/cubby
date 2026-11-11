@@ -201,9 +201,20 @@ export const aiEvaluationDue = (prefix: string) =>
         WHERE live."leaseUntil" > now())
     GROUP BY ${aiEvaluation.feature}`;
 
-/** When the next owed evaluation falls due or a lease lapses. */
+/**
+ * When the next owed evaluation falls due or a lease lapses. A feature with a
+ * live page is due no earlier than its last lease, so a page that died without
+ * a successor is woken when its feature becomes claimable again.
+ */
 export const aiEvaluationNext = () =>
-  sql`SELECT min(coalesce(${aiEvaluation.leaseUntil}, ${aiEvaluation.runAt})) FROM ${aiEvaluation} WHERE ${pendingAndOwed()}`;
+  sql`SELECT min(greatest(coalesce(owed."leaseUntil", owed."runAt"), live.until))
+    FROM ${aiEvaluation} owed
+    LEFT JOIN (SELECT feature, max("leaseUntil") AS until FROM "AiEvaluation"
+      WHERE "leaseUntil" > now() GROUP BY feature) live ON live.feature = owed.feature
+    WHERE owed.state IN (${sql.join(
+      PENDING_AI_STATES.map((state) => sql`${state}`),
+      sql`, `,
+    )}) AND owed."runAt" IS NOT NULL`;
 
 /** Give back whatever this page still holds, unchanged: it stays owed. */
 export async function releaseAiEvaluationPage(db: Database, token: string) {
