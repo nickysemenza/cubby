@@ -14,8 +14,8 @@ import {
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
@@ -85,7 +85,7 @@ describe("Run detail reports", () => {
       done: 3,
     });
     const publish = (key: string) =>
-      publishSuggestion(
+      publishExactSuggestion(
         ctx.db,
         {
           publicationKey: key,

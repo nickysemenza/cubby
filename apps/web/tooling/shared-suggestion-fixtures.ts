@@ -1,8 +1,6 @@
 import { z } from "zod";
-import {
-  fieldSuggestionPublication,
-  publishSuggestions,
-} from "~/server/generic/suggestions/repo/suggestion";
+import { fieldSuggestionPublication } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestions } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   dependencyStamps,
@@ -113,7 +111,7 @@ export async function seedFieldSuggestion(
       projection.recordId,
       projection.field,
     );
-  const [row] = await publishSuggestions(db, [
+  const [row] = await publishExactSuggestions(db, [
     fieldSuggestionPublication({ ...projection, data }),
   ]);
   if (!row) throw new Error("Synthetic field publication returned no row");

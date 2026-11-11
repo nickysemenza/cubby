@@ -12,6 +12,7 @@ import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   suggestionReviewInput,
   suggestionSubjects,
+  type SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -30,14 +31,17 @@ import {
   resolveShortcodes,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import {
+  publishSuggestionSet,
+  type SuggestionFamily,
+  type SuggestionRow,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
+import { recommendationSlot } from "~/server/generic/suggestions/repo/suggestion-recommendation";
+import {
+  suggestionCandidateKey,
   suggestionStateColumns,
-  pruneReplacedSuggestions,
-  transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { suggestionCandidateKey } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   canonicalJson,
   sha256CanonicalJson,
@@ -105,7 +109,7 @@ export async function publishPreparedEntityConnections(
       undefined,
       true,
     );
-    const entries = [];
+    const entries: ConnectionEntry[] = [];
     for (const original of prepared) {
       const { candidate } = original;
       const { basis, sourceId } = await captureConnectionEvidence(
@@ -151,94 +155,111 @@ export async function publishPreparedEntityConnections(
         evidence,
       });
     }
-    const predictions = await publishSuggestions(
-      db,
-      entries.map((entry) => ({
-        input: {
-          publicationKey: `connection:${entry.recordId}:${entry.candidateKey}:${entry.fingerprint}`,
-          family: "recommendation",
-          subject: {
-            kind: "recommendation",
-            entity: entry.entity,
-            recordId: entry.recordId,
-            scope: entry.scope,
-            candidateKey: entry.candidateKey,
-          },
-          judgment: { candidateKey: entry.candidateKey },
-          fingerprint: entry.fingerprint,
-          producer: null,
-          evidence: entry.evidence,
-        },
-        // Queue counts need only this reference, not the full immutable basis.
-        projection: {
-          data: { connection: true, connectionTarget: entry.candidate.target },
-        },
-      })),
-    );
     // Several page owners may retrieve the same edge. Sequential publication
-    // leaves the last fingerprint active; the set write must do the same.
-    const latest = new Map(
-      entries.map((entry, index) => [
-        `${entry.entity}:${entry.recordId}:${entry.scope}:${entry.candidateKey}`,
-        { entry, index },
-      ]),
-    );
-    const slots = [...latest.values()];
-    const wanted = sql.join(
-      slots.map(
-        ({ entry, index }) =>
-          sql`(${entry.entity}::text, ${entry.recordId}::uuid, ${entry.scope}::text, ${entry.candidateKey}::text, ${predictions[index]!.id}::uuid)`,
-      ),
-      sql`, `,
-    );
-    const replaced = await transitionSuggestionStates(
+    // leaves the last fingerprint active, so the last candidate per slot wins.
+    const slotOf = (entry: ConnectionEntry) =>
+      connectionSuggestions.slot(entry).lock;
+    const winners = [
+      ...new Map(entries.map((entry) => [slotOf(entry), entry])).values(),
+    ];
+    const outcomes = await publishSuggestionSet(
       db,
-      and(
-        eq(suggestionTable.family, "recommendation"),
-        eq(suggestionTable.active, true),
-        isNull(suggestionTable.suppression),
-        inArray(suggestionTable.entity, [
-          ...new Set(entries.map((entry) => entry.entity)),
-        ]),
-        inArray(suggestionTable.recordId, [
-          ...new Set(entries.map((entry) => entry.recordId)),
-        ]),
-        // Scope the indexed live subjects first, then join immutable evidence
-        // once. An OR of per-slot Suggestion subqueries replans/scans history
-        // for every candidate and dominated production-copy publication time.
-        sql`EXISTS (
-          SELECT 1 FROM (VALUES ${wanted}) wanted(entity, record_id, scope, candidate_key, current_id)
-          JOIN "Suggestion" prior ON prior.id = ${suggestionTable.id}
-          WHERE wanted.entity = ${suggestionTable.entity}
-            AND wanted.record_id = ${suggestionTable.recordId}
-            AND prior.id <> wanted.current_id
-            AND prior.subject->>'scope' = wanted.scope
-            AND prior.subject->>'candidateKey' = wanted.candidate_key
-        )`,
-      ),
-      { active: false, status: "superseded" },
+      connectionSuggestions,
+      winners,
+      connectionProducer,
     );
-    await pruneReplacedSuggestions(
-      db,
-      replaced.map((row) => row.id),
-    );
-    return entries.map((entry, index) =>
-      connectionProposal.parse({
-        ...entry.candidate,
-        fingerprint: entry.fingerprint,
-        review: {
-          suggestionId: predictions[index]!.id,
-          suppression: {
-            scope: entry.scope,
-            candidateKey: entry.candidateKey,
-            fingerprint: null,
-          },
-        },
-        integration: { kind: "connection-review" },
+    const ids = new Map(
+      winners.flatMap((entry, index) => {
+        const outcome = outcomes[index];
+        const id =
+          outcome?.outcome === "published"
+            ? outcome.suggestionId
+            : outcome?.outcome === "unchanged"
+              ? outcome.rows[0]?.id
+              : undefined;
+        return id ? [[slotOf(entry), id] as const] : [];
       }),
     );
+    return entries.flatMap((entry) => {
+      const suggestionId = ids.get(slotOf(entry));
+      if (!suggestionId) return [];
+      return [
+        connectionProposal.parse({
+          ...entry.candidate,
+          fingerprint: entry.fingerprint,
+          review: {
+            suggestionId,
+            suppression: {
+              scope: entry.scope,
+              candidateKey: entry.candidateKey,
+              fingerprint: null,
+            },
+          },
+          integration: { kind: "connection-review" },
+        }),
+      ];
+    });
   });
 }
+
+type ConnectionEntry = {
+  candidate: ConnectionCandidate;
+  fingerprint: string;
+  candidateKey: string;
+  scope: string;
+  entity: (typeof shortcodeEntities)[number];
+  recordId: string;
+  evidence: { version: number; candidate: ConnectionCandidate };
+};
+
+/** Deterministic discovery: rows carry no producer. */
+const connectionProducer: SuggestionProducer = {
+  kind: "rule",
+  model: null,
+  revision: null,
+  runId: null,
+  evaluationId: null,
+};
+
+/**
+ * Connection recommendations: one slot per source record and candidate edge.
+ * Only an Email purchase link has an apply path.
+ */
+const connectionSuggestions: SuggestionFamily<
+  ConnectionEntry,
+  SuggestionRow,
+  "unsupported_relation"
+> = {
+  family: "recommendation",
+  slot: (entry) => recommendationSlot(entry),
+  fingerprint: (entry) => entry.fingerprint,
+  evidenceFingerprint: (entry) => entry.fingerprint,
+  unapplicable: ({ candidate }) =>
+    candidate.relation === "email-purchase" ? null : "unsupported_relation",
+  onUnchanged: "none",
+  publication: (entry) => ({
+    input: {
+      publicationKey: `connection:${entry.recordId}:${entry.candidateKey}:${entry.fingerprint}`,
+      family: "recommendation",
+      subject: {
+        kind: "recommendation",
+        entity: entry.entity,
+        recordId: entry.recordId,
+        scope: entry.scope,
+        candidateKey: entry.candidateKey,
+      },
+      judgment: { candidateKey: entry.candidateKey },
+      fingerprint: entry.fingerprint,
+      producer: null,
+      evidence: entry.evidence,
+    },
+    // Queue counts need only this reference, not the full immutable basis.
+    projection: {
+      data: { connection: true, connectionTarget: entry.candidate.target },
+    },
+  }),
+  labelBacklog: sql`false`,
+};
 
 const connectionReadSelection = {
   id: suggestionTable.id,

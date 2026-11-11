@@ -62,7 +62,7 @@ import {
 import { afterResponse } from "~/server/cf-env";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import {
@@ -77,8 +77,8 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
@@ -290,7 +290,7 @@ export const inferFieldSuggestions = async (
       judgment: sql<unknown>`jsonb_build_object('outcome', ${suggestionTable.judgment}->'outcome')`,
     };
     // A repeated question reuses its published suggestion without opening the
-    // locking transaction; the transaction below still rechecks under its lock.
+    // publication transaction, which still replays it under the key's lock.
     const [published] = await getDb(context.db)
       .select(publishedFields)
       .from(suggestionTable)
@@ -298,68 +298,57 @@ export const inferFieldSuggestions = async (
       .limit(1);
     const prediction =
       published ??
-      (await withTransactionDatabase(context.db, async (transactionDb) => {
-        await getDb(transactionDb).execute(
-          sql`SELECT pg_advisory_xact_lock(hashtextextended(${publicationKey},0))`,
-        );
-        const [existing] = await getDb(transactionDb)
-          .select(publishedFields)
-          .from(suggestionTable)
-          .where(eq(suggestionTable.publicationKey, publicationKey))
-          .limit(1);
-        if (existing) return existing;
-        return publishSuggestion(
-          transactionDb,
-          {
-            publicationKey,
-            family: "field",
-            subject: {
-              kind: "field",
-              entity: input.entity,
-              recordId,
-              field,
-              draft: !input.entityId,
-            },
-            judgment: z.json().parse({
-              value: suggestion?.value ?? null,
-              ...(suggestion
-                ? {
-                    operation: suggestion.operation,
-                    removals: suggestion.removals,
-                  }
-                : {}),
-              outcome,
-            }),
-            fingerprint,
-            producer: producer
+      (await publishExactSuggestion(
+        context.db,
+        {
+          publicationKey,
+          family: "field",
+          subject: {
+            kind: "field",
+            entity: input.entity,
+            recordId,
+            field,
+            draft: !input.entityId,
+          },
+          judgment: z.json().parse({
+            value: suggestion?.value ?? null,
+            ...(suggestion
               ? {
-                  kind: "model",
-                  model: producer.model,
-                  revision: producer.promptVersion,
-                  runId: owner.runId ?? null,
-                  evaluationId: null,
+                  operation: suggestion.operation,
+                  removals: suggestion.removals,
                 }
-              : null,
-            evidence: z.json().parse({
-              basis: input.basis,
-              inputs,
-              dependencies,
-              proposal: suggestion ?? null,
-            }),
-          },
-          {
-            runId: owner.runId ?? null,
-            model: producer?.model ?? "unknown",
-            suggestedValue: suggestion?.value ?? null,
-            confidence: suggestion?.probability ?? outcome.probability ?? 0,
-            financeReviewFingerprint:
-              suggestion?.financeReview?.fingerprint ?? null,
-            status: suggestion ? "pending" : "resolved",
-            active: false,
-            data: { reviewKey },
-          },
-        );
-      }));
+              : {}),
+            outcome,
+          }),
+          fingerprint,
+          producer: producer
+            ? {
+                kind: "model",
+                model: producer.model,
+                revision: producer.promptVersion,
+                runId: owner.runId ?? null,
+                evaluationId: null,
+              }
+            : null,
+          evidence: z.json().parse({
+            basis: input.basis,
+            inputs,
+            dependencies,
+            proposal: suggestion ?? null,
+          }),
+        },
+        {
+          runId: owner.runId ?? null,
+          model: producer?.model ?? "unknown",
+          suggestedValue: suggestion?.value ?? null,
+          confidence: suggestion?.probability ?? outcome.probability ?? 0,
+          financeReviewFingerprint:
+            suggestion?.financeReview?.fingerprint ?? null,
+          status: suggestion ? "pending" : "resolved",
+          active: false,
+          data: { reviewKey },
+        },
+      ));
     // One round trip for every review that withholds this answer: its own
     // rejection, a rejection of the same served evidence, or a member's miss
     // on a draft.

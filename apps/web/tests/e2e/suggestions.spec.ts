@@ -24,7 +24,7 @@ import { product as productTable } from "~/server/db/schema";
 
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
@@ -574,7 +574,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       reason: "Restates brandName",
     },
   ];
-  const prediction = await publishSuggestion(
+  const prediction = await publishExactSuggestion(
     db,
     {
       publicationKey: `synthetic:prune:${id}`,

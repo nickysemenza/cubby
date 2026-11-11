@@ -31,8 +31,8 @@ import {
   reviewSuggestion,
   reviewSuggestionBatch,
 } from "~/server/generic/suggestions/repo/review";
-import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
+import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   acceptSuggestion,
   applyFieldCorrection,
@@ -649,7 +649,7 @@ describe("Suggestion review", () => {
       purpose: "ai_suggest",
       clientKey: crypto.randomUUID(),
     });
-    const prediction = await publishSuggestion(
+    const prediction = await publishExactSuggestion(
       ctx.db,
       {
         publicationKey: "synthetic:live-field-miss",

@@ -98,7 +98,11 @@ import {
   transferPairRows,
   TRANSFER_WEAK_BLOCKERS,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import { type SuggestionFamily } from "~/server/generic/suggestions/repo/suggestion-publication";
+import {
+  revisionSuppresses,
+  type SuggestionFamily,
+  type SuggestionRow,
+} from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   entities,
   leg,
@@ -1109,7 +1113,7 @@ export async function lockTransferPairLegs(db: Database, pairKey: string) {
  * re-run would drop.
  */
 export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair"> &
-  SuggestionFamily<Pair> = {
+  SuggestionFamily<Pair, SuggestionRow, "unavailable"> = {
   family: suggestionFamily.enum.transfer_pair,
   slot: ({ judgment }) => ({
     lock: advisoryLockKey("transfer-pair", judgment.key),
@@ -1118,6 +1122,10 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   fingerprint: ({ judgment }) => fingerprintTransferPair(judgment),
   evidenceFingerprint: ({ judgment }) =>
     transferPairEvidenceFingerprint(judgment),
+  suppresses: revisionSuppresses,
+  // A pair whose legs cannot be paired would leave a pending row only dismissal clears.
+  unapplicable: ({ judgment }) =>
+    judgment.apply.available ? null : "unavailable",
   onUnchanged: { reconfirm: "transfer_pair_reconfirmed" },
   publication: (pair, prior, producer, fingerprints) => {
     const { judgment } = pair;

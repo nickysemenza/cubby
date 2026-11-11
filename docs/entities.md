@@ -3630,6 +3630,15 @@ readers compose the same static declarations. The registry exposes live accessor
 implementations depend on generic review, and eager values could capture an unfinished circular
 import. Reference resolution, touching-record queries and Work tokens have separate runtimes.
 
+Every Suggestion is published through one module, `suggestion-publication.ts`; its immutable insert
+and pruning have no other caller. Statement transactions, transfer pairs, connections,
+recommendations, Product pairs and field sweeps each declare a `SuggestionFamily` slot and its
+suppression, unchanged and replacement policy. A candidate its family declares `unapplicable` (a
+transfer pair that cannot apply, a connection relation without an apply path) retires the slot's
+pending rows instead of publishing, so no pending row exists without an apply path. Run-scoped photo
+drafts and live field answers publish as exact immutable evidence keyed by publication, which never
+suppresses, matches or settles a queue row.
+
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue. Every
 multiselect, including Clean, offers **is / is not** through the shared filter editor with `__not__:`
 state and `<column>Exclude` URL parameters; quick pickers edit included values while keeping

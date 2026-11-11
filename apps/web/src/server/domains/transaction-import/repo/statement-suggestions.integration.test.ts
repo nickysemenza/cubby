@@ -55,11 +55,11 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import * as suggestionRepo from "~/server/generic/suggestions/repo/suggestion";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/suggestions/repo/suggestion-list";
+import * as publicationRepo from "~/server/generic/suggestions/repo/suggestion-publication";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { buildCrudServices } from "~/server/http/request-context";
@@ -716,7 +716,7 @@ describe("statement Transaction suggestions", () => {
       const checkpoint =
         statementSuggestionsRepo.recordStatementLabelCheckpoint;
       const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
-      const publishSuggestions = suggestionRepo.publishSuggestions;
+      const publishSuggestions = publicationRepo.publishReplacements;
       const checkpointSpy = vi
         .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
         .mockImplementation(async (...args) => {
@@ -730,7 +730,7 @@ describe("statement Transaction suggestions", () => {
           return publish(...args);
         });
       const batchSpy = vi
-        .spyOn(suggestionRepo, "publishSuggestions")
+        .spyOn(publicationRepo, "publishReplacements")
         .mockImplementation(async (...args) => {
           if (phase === "publication fallback" && !moved) {
             await move();
@@ -2802,7 +2802,7 @@ describe("statement Transaction suggestions", () => {
           return work(committed);
         }),
       );
-    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
+    const publication = vi.spyOn(publicationRepo, "publishReplacements");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -2880,7 +2880,7 @@ describe("statement Transaction suggestions", () => {
           throw new Error("Synthetic unavailable retirement connection");
         }),
       );
-    const publication = vi.spyOn(suggestionRepo, "publishSuggestions");
+    const publication = vi.spyOn(publicationRepo, "publishReplacements");
     try {
       const first =
         await statementSuggestionsRepo.publishCompleteStatementLabels(
@@ -2955,9 +2955,9 @@ describe("statement Transaction suggestions", () => {
         10,
       );
       const entries = await completeLabelPublications(ctx);
-      const publish = suggestionRepo.publishSuggestions;
+      const publish = publicationRepo.publishReplacements;
       const publication = vi
-        .spyOn(suggestionRepo, "publishSuggestions")
+        .spyOn(publicationRepo, "publishReplacements")
         .mockImplementation(async (...args) => {
           const result = await publish(...args);
           const owner = currentJobExecution();

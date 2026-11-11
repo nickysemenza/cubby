@@ -125,9 +125,8 @@ import {
 } from "~/server/generic/suggestions/repo/eligible-targets";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
-  publishSuggestion as publishStoredSuggestion,
-  publishSuggestions,
   matchedRulesOf,
+  type SuggestionPublication,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
@@ -146,9 +145,10 @@ import {
   countSuggestionLabelBacklog,
   inSuggestionBatches,
   lockSuggestionSlots,
+  publishReplacements,
   publishSuggestion,
   publishSuggestionBatches,
-  retireSupersededSuggestions,
+  revisionSuppresses,
   type SuggestionFamily,
   type SuggestionOutcome,
   type SuggestionRow,
@@ -2044,10 +2044,7 @@ function chargePublication(
         ),
       },
     },
-  } satisfies {
-    input: Parameters<typeof publishStoredSuggestion>[1];
-    projection: Parameters<typeof publishStoredSuggestion>[2];
-  };
+  } satisfies SuggestionPublication;
 }
 
 /** A statement slot's locked row in the family's own shape. */
@@ -2222,6 +2219,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   }),
   fingerprint: ({ proposal }) => proposal.fingerprint,
   evidenceFingerprint: ({ proposal }) => proposal.evidenceFingerprint,
+  suppresses: revisionSuppresses,
   row: (row) => ({
     ...row,
     producer: suggestionProducer.nullable().parse(row.producer),
@@ -3035,24 +3033,21 @@ async function publishCompleteLabelBatch(
         applicationOrder,
       });
     }
-    await retireSupersededSuggestions(
-      tx,
-      publications.flatMap(({ history }) =>
-        history.filter((row) => row.active).map((row) => row.id),
-      ),
-    );
     if (publications.length) {
-      const published = await publishSuggestions(
+      // A label round keeps the rule row it replaces as history.
+      const published = await publishReplacements(
         tx,
-        publications.map(({ entry, history, applicationOrder }) =>
-          chargePublication(
+        { replaced: "deactivate" },
+        publications.map(({ entry, history, applicationOrder }) => ({
+          rows: history,
+          publication: chargePublication(
             entry.proposal,
             entry.producer,
             history.length,
             applicationOrder,
             entry.checkpoint,
           ),
-        ),
+        })),
       );
       for (const [index, publication] of publications.entries()) {
         const suggestion = published[index];
