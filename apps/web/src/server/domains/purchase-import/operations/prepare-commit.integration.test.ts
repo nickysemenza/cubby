@@ -216,7 +216,7 @@ describe("caller-driven purchase import", () => {
       mailboxId,
     });
 
-  async function importConfirmation() {
+  async function importConfirmation(unpriced = false) {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: {
         name: "Synthetic garden shop",
@@ -247,7 +247,14 @@ describe("caller-driven purchase import", () => {
           evidenceChecksum: mail.rawChecksum,
           extractionRevision: "synthetic@1",
           extraction: {
-            status: "ready",
+            ...(unpriced
+              ? {
+                  status: "needs_review" as const,
+                  reason: "unpriced_itemization" as const,
+                  detail:
+                    "The confirmation prints its total but no item prices.",
+                }
+              : { status: "ready" as const }),
             candidate: {
               orderId: "SYN-100",
               orderedAt: "2026-09-20T12:00:00.000Z",
@@ -257,7 +264,7 @@ describe("caller-driven purchase import", () => {
               lines: [
                 {
                   title: "Synthetic trowel",
-                  amount: 18.5,
+                  amount: unpriced ? null : 18.5,
                   lineKind: "principal",
                 },
               ],
@@ -351,6 +358,26 @@ describe("caller-driven purchase import", () => {
       .from(emailTable)
       .where(eq(emailTable.messageId, mail.messageId));
     expect(message?.status).toBe("completed");
+  });
+
+  // The prepare/commit exception flow carries unpriced itemization lines too.
+  it("prepares and commits a total-only confirmation as its total beside an unpriced item", async () => {
+    const { prepared, committed } = await importConfirmation(true);
+    expect(prepared.orders[0]?.lines[0]?.amount).toBeNull();
+    const purchaseId = committed.items[0]?.purchaseId;
+    expect(purchaseId).toBeTruthy();
+    const rows = await getDb(ctx.db)
+      .select({ cost: expense.cost, lineBasis: expense.lineBasis })
+      .from(expense)
+      .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
+      .where(eq(purchase.shortcode, purchaseId!));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        { cost: 18.5, lineBasis: "allocation" },
+        { cost: null, lineBasis: "item_line" },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
   });
 
   // A completed prepare replays its recorded result even after its Email was

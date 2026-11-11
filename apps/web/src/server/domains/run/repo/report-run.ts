@@ -646,7 +646,8 @@ function preparedLineRow(
       title: prepared.title,
       lines,
     }),
-    trailing: formatCurrency(prepared.amount),
+    trailing:
+      prepared.amount === null ? "Unpriced" : formatCurrency(prepared.amount),
   };
   if (decidable && prepared.requiresProductResolution)
     built.choice = productChoice(lineChoiceId(order, prepared), prepared);
