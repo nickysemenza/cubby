@@ -3,9 +3,9 @@ import {
   suggestionFamily,
   type SuggestionFamily,
 } from "@cubby/schemas/suggestion";
-import { and, inArray, isNotNull, ne, sql, type SQL } from "drizzle-orm";
+import { and, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 
-import { uuidArrayParam } from "~/server/db/helpers";
+import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import {
   reviewSuggestion,
@@ -15,12 +15,7 @@ import {
 /** Rule applications leave pending and name the rule that applied them. */
 export function automaticSuggestionEligibility(appliedRule: SQL) {
   return and(
-    inArray(
-      reviewSuggestion.family,
-      Object.keys(reviewFamilyDeclarations).map((family) =>
-        suggestionFamily.parse(family),
-      ),
-    ),
+    sql`${reviewSuggestion.family} = ANY(${columnArrayParam(Object.keys(reviewFamilyDeclarations).map((family) => suggestionFamily.parse(family)))})`,
     ne(reviewSuggestion.status, suggestionStatus.enum.pending),
     isNotNull(appliedRule),
   );
@@ -53,10 +48,7 @@ export function pendingSuggestionRecordsSql(
 ) {
   const admits = (key: string) => !admitted || admitted.has(key);
   const pending = (families: readonly SuggestionFamily[]) =>
-    sql`s.family IN (${sql.join(
-      families.map((family) => sql`${family}`),
-      sql`, `,
-    )}) AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    sql`s.family = ANY(${columnArrayParam(families)}) AND s.active AND s.status = ${suggestionStatus.enum.pending}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
   const { recommendation, statement_transaction } = suggestionFamily.enum;
   const declared = [

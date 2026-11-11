@@ -13,6 +13,7 @@ import {
 } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type {
   EntityKernelContext,
@@ -95,10 +96,7 @@ export async function applyAutomaticRules(
     SELECT s.id, s.family, s.status, s.active, s.data, s.entity, s.field,
       s.kind, s.confidence, s.model, s.fingerprint, s."runId", s.judgment, s.evidence, s.subject
     FROM "Suggestion" s
-    WHERE s.id IN (${sql.join(
-      suggestionIds.map((id) => sql`${id}::uuid`),
-      sql`, `,
-    )})
+    WHERE s.id = ANY(${uuidArrayParam(suggestionIds)})
   `,
     "objects",
   );

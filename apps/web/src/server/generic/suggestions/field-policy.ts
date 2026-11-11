@@ -18,7 +18,6 @@ export type AutomaticFieldInput = {
   replaced: boolean;
 };
 
-export const fieldValueIsEmpty = <T>(value: T) => value == null || value === "";
 export const personHoldsField = (holder: AutomaticFieldInput["holder"]) =>
   holder === "person";
 
