@@ -24,11 +24,12 @@
   --text-base: 0.9375rem; /* 15px */
   --text-base--line-height: 1.375rem;
 
-  /* Sub-xs caption sizes - a home for what used to be arbitrary text-[10px]/[8px] */
-  --text-2xs: 0.625rem; /* 10px */
-  --text-2xs--line-height: 0.875rem;
-  --text-3xs: 0.5rem; /* 8px */
-  --text-3xs--line-height: 0.75rem;
+  /* Caption sizes. Nothing renders under 11px; 3xs is kept as a name for
+     existing callers. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-2xs--line-height: 0.9375rem;
+  --text-3xs: 0.6875rem; /* 11px */
+  --text-3xs--line-height: 0.9375rem;
 
   /* Control labels keep a fixed size in every density. `md` is a t-shirt name
      so stock tailwind-merge (`cn`) classifies it as a font size. */
@@ -170,45 +171,61 @@
   Cubby Theme - Field Guide
 */
 :root {
-  /* Web workspace palette. The native app keeps tokens.json colors; the web
-     runs flat: a white working surface, a #FAFAFA sidebar, 1px dividers, ink
-     controls, blue only for links and focus, and tinted status pills whose
-     ink clears 4.5:1 on its own surface. */
-  --brand-foreground: #262626;
-  --brand-graphite-secondary: #737373;
-  --brand-canvas: #ffffff;
-  --brand-surface: #ffffff;
-  --brand-inset: #f5f5f5;
-  --brand-hairline: #e5e5e5;
-  --brand-interaction: #111111;
-  --brand-interaction-hover: #2e2e2e;
-  --brand-slate: #737373;
-  --brand-neutral-status: #737373;
-  --brand-positive: #12733a;
-  --brand-positive-surface: #dcf7e3;
-  --brand-warning: #8f5a00;
-  --brand-warning-ink: #75500d;
-  --brand-warning-surface: #fff1cc;
+  /* Web workspace palette: Warm neutral. The native app keeps tokens.json
+     colors. The web runs flat and light only: a warm working surface, a
+     slightly deeper sidebar, 1px dividers, one blue for links and primary
+     controls, and colour only where it means something (running, done,
+     failed, stalled). Every text pair clears 4.5:1 on the surface, sidebar,
+     row hover and its own tint; marks and fills clear 3:1. */
+  --brand-foreground: #2b2621;
+  --brand-graphite-secondary: #655c52;
+  --brand-canvas: #fbf9f5;
+  --brand-surface: #fbf9f5;
+  --brand-inset: #efebe3;
+  --brand-hairline: #e4ded3;
+  --brand-interaction: #2a47c2;
+  --brand-interaction-hover: #2139a3;
+  --brand-slate: #655c52;
+  --brand-neutral-status: #655c52;
+  --brand-positive: #2d6a39;
+  --brand-positive-surface: #e2eddb;
+  --brand-warning: #744a08;
+  --brand-warning-ink: #744a08;
+  --brand-warning-surface: #f7e8c6;
   /* Warning callouts are a quieter wash than warning chips. */
-  --brand-warning-panel: #fbf3e0;
-  --brand-destructive: #c4291c;
-  --brand-destructive-surface: #ffe7e4;
-  --brand-info: #0067c7;
-  --brand-info-surface: #e3efff;
-  --brand-action-create: #0067c7;
-  --brand-action-create-surface: #e3efff;
+  --brand-warning-panel: #f6efdc;
+  --brand-destructive: #a8251c;
+  --brand-destructive-surface: #f8e0da;
+  --brand-info: #0e6a86;
+  --brand-info-surface: #dcedf1;
+  --brand-action-create: #2a47c2;
+  --brand-action-create-surface: #e1e6f7;
   --brand-elevation-popover:
     0 12px 32px -8px rgb(0 0 0 / 0.18), 0 2px 6px rgb(0 0 0 / 0.06);
   --brand-focus-ring: 0 0 0 2px var(--brand-surface), 0 0 0 4px var(--link);
-  --foreground-strong: #111111;
-  --link: #0077e6;
-  --hairline-soft: #f2f2f2;
+  --foreground-strong: #1a1612;
+  --link: #2a47c2;
+  --hairline-soft: #eee9e0;
   /* Dashed empty-state slots: one step stronger than a hairline. */
-  --hairline-strong: #d4d4d4;
-  --row-current: #ededed;
+  --hairline-strong: #d3cbbe;
+  --row-current: #e9e4da;
+  --row-hover: #f6f3ed;
+
+  /* Work state. Running is the info hue and done and failed are the positive
+     and destructive hues; the rest are named here. Needs-you is the primary
+     blue with white ink. */
+  --needs: var(--link);
+  --needs-foreground: #ffffff;
+  --stalled-surface: var(--brand-warning-surface);
+  --stalled-mark: #a86c12;
+  --queued: #8e8578;
+  --paused: #857b6e;
+  --progress-done: #3a342d;
+  --progress-track: var(--brand-hairline);
 
   /* Geometry for phones, coarse pointers and hosted native workspaces. */
   --table-row-height: 32px;
+  --table-row-height-two-line: 54px;
   --table-header-height: 32px;
   --table-cell-leading: 1.25rem;
   --table-checkbox-size: 1rem;
@@ -286,7 +303,7 @@
   --input: var(--brand-hairline);
   /* Checkbox border - a visible ink-leaning hairline so unchecked boxes read as
      empty controls against the paper surfaces */
-  --checkbox-border: oklch(0.6 0.01 80);
+  --checkbox-border: #8e8578;
   --ring: var(--link);
 
   /* A batch-selected row carries a faint link wash; the inspected row is grey. */
@@ -349,7 +366,7 @@
   --radius: var(--brand-web-radius-panel);
 
   /* Sidebar */
-  --sidebar: #fafafa;
+  --sidebar: #f3f0e9;
   --sidebar-foreground: var(--brand-foreground);
   --sidebar-primary: var(--brand-ultramarine);
   --sidebar-primary-foreground: var(--brand-on-accent);
@@ -412,6 +429,18 @@
   --color-info: var(--info);
   --color-info-surface: var(--info-surface);
   --color-neutral-status: var(--neutral-status);
+  --color-running: var(--info);
+  --color-running-surface: var(--info-surface);
+  --color-needs: var(--needs);
+  --color-needs-foreground: var(--needs-foreground);
+  --color-stalled: var(--warning-ink);
+  --color-stalled-surface: var(--stalled-surface);
+  --color-stalled-mark: var(--stalled-mark);
+  --color-queued: var(--queued);
+  --color-paused: var(--paused);
+  --color-progress-done: var(--progress-done);
+  --color-progress-track: var(--progress-track);
+  --color-row-hover: var(--row-hover);
   --color-category-1: var(--category-1);
   --color-category-2: var(--category-2);
   --color-category-3: var(--category-3);
@@ -531,7 +560,7 @@
     @apply transition-colors duration-100;
   }
   .table-row-hover:hover {
-    background: var(--brand-paper-alt);
+    background: var(--row-hover);
   }
 
   /* Record states stay distinct, including the opaque parked cells. */
@@ -540,7 +569,7 @@
     background: var(--table-row-surface);
   }
   .table-record-row:hover {
-    --table-row-surface: var(--brand-paper-alt);
+    --table-row-surface: var(--row-hover);
     background: var(--table-row-surface);
     box-shadow: none;
   }
@@ -684,22 +713,23 @@
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
   :root:not([data-hosted-workspace]) {
     --text-xs: 0.6875rem;
-    --text-xs--line-height: 0.875rem;
+    --text-xs--line-height: 0.9375rem;
     --text-sm: 0.75rem;
     --text-sm--line-height: 1rem;
     --text-base: 0.8125rem;
     --text-base--line-height: 1.125rem;
-    --text-lg: 0.875rem;
+    --text-lg: 0.9375rem; /* 15px section title */
     --text-lg--line-height: 1.25rem;
-    --text-xl: 1rem;
-    --text-xl--line-height: 1.25rem;
-    --table-row-height: 24px;
-    --table-header-height: 24px;
+    --text-xl: 1.25rem; /* 20px page title */
+    --text-xl--line-height: 1.625rem;
+    --table-row-height: 28px;
+    --table-row-height-two-line: 54px;
+    --table-header-height: 30px;
     --table-cell-leading: 1rem;
     --table-checkbox-size: 0.875rem;
     --table-checkbox-glyph: 0.75rem;
     --table-section-surface: var(--brand-paper);
-    --nav-row-height: 22px;
+    --nav-row-height: 24px;
     --pill-height: 18px;
     --pill-font-size: 0.6875rem; /* 11px */
     --record-pill-height: 18px;
