@@ -39,6 +39,7 @@ import {
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import type { FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
+import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
   adviseSpending,
   needsSpendingAdvice,
@@ -120,10 +121,11 @@ async function buildPage(
   db: Database,
   charges: readonly ChargeRef[],
   onFailure: (charge: ChargeRef, error: unknown) => void,
+  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
   const byCharge = new Map<string, ChargeProposal>();
   try {
-    for (const proposal of await buildChargeProposals(db, charges))
+    for (const proposal of await buildChargeProposals(db, charges, preparation))
       byCharge.set(chargeId(proposal.charge), proposal);
   } catch (error) {
     if (isWorkflowInterrupted(error)) throw error;
@@ -133,7 +135,11 @@ async function buildPage(
       STATEMENT_PUBLISH_CONCURRENCY,
       async (charge) => {
         try {
-          const [proposal] = await buildChargeProposals(db, [charge]);
+          const [proposal] = await buildChargeProposals(
+            db,
+            [charge],
+            preparation,
+          );
           if (proposal) byCharge.set(chargeId(charge), proposal);
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
@@ -869,7 +875,9 @@ async function runStatementLabelBatch(
   // writes that follow (publication, application) enforce the scope in their
   // own transactions, and a ledger write in this pass only happens in
   // application, whose next round admits again.
-  const admitTargets = async () => {
+  const admitTargets = async (
+    preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+  ) => {
     const scope = input.scope;
     if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
       return;
@@ -881,6 +889,7 @@ async function runStatementLabelBatch(
       db,
       scope,
       live.map((target) => target.row.id),
+      preparation,
     );
     for (const target of live) {
       const key = chargeId(target.charge);
@@ -897,7 +906,8 @@ async function runStatementLabelBatch(
     current: ChargeProposal & { amount: number };
   };
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
-    await admitTargets();
+    const preparation = await prepareFinancialStatementPreview(db);
+    await admitTargets(preparation);
     const proposals = await time("statement_discovery", () =>
       buildPage(
         db,
@@ -910,6 +920,7 @@ async function runStatementLabelBatch(
           )
           .map((target) => target.charge),
         fail,
+        preparation,
       ),
     );
     const ready = targets.flatMap<ReadyLabels>((target) => {
