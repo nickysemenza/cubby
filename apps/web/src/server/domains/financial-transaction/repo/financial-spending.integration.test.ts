@@ -1363,16 +1363,25 @@ describe("shared spending booking", () => {
   });
   // Older same-vendor spending blocks only while charge-side capacity can be open.
   it.each([
-    ["never paid", "ready", { posted: 0, expected: 0, returned: 0 }],
+    [
+      "never paid",
+      "ready",
+      { posted: 0, expected: 0, returned: 0, reimbursed: false },
+    ],
     [
       "an expected installment",
       "review_required",
-      { posted: 10, expected: 30, returned: 0 },
+      { posted: 10, expected: 30, returned: 0, reimbursed: false },
     ],
     [
       "returned principal",
       "review_required",
-      { posted: 30, expected: 0, returned: 10 },
+      { posted: 30, expected: 0, returned: 10, reimbursed: false },
+    ],
+    [
+      "a reimbursement-linked payment",
+      "review_required",
+      { posted: 40, expected: 0, returned: 0, reimbursed: true },
     ],
   ] as const)("older spending %s previews %s", async (_case, status, setup) => {
     const { account, transaction, vendor, advice } = await fixture();
@@ -1396,8 +1405,8 @@ describe("shared spending booking", () => {
       ["posted", setup.posted],
       ["expected", setup.expected],
     ] as const)
-      if (amount)
-        await createRepoIdentity(ctx, "financialTransaction", {
+      if (amount) {
+        const payment = await createRepoIdentity(ctx, "financialTransaction", {
           accountId: account.output.id,
           kind: "purchase",
           status: state,
@@ -1406,6 +1415,21 @@ describe("shared spending booking", () => {
           postedDate: state === "posted" ? "2026-03-01" : null,
           allocations: [{ purchaseId: receipt.output.id, amount }],
         });
+        if (!setup.reimbursed) continue;
+        const reimbursement = await createRepoIdentity(ctx, "expense", {
+          purchaseId: receipt.output.id,
+          name: "Synthetic reimbursement",
+          cost: amount,
+          trade: "other",
+        });
+        await getDb(ctx.db)
+          .update(expense)
+          .set({
+            economicRole: "reimbursement",
+            bookingTransactionCode: payment.output.id,
+          })
+          .where(eq(expense.shortcode, reimbursement.output.id));
+      }
     expect(
       await previewFinancialSpending(ctx.db, {
         transactionId: transaction.output.id,

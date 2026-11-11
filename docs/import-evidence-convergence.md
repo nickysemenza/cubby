@@ -139,7 +139,7 @@ automatic new spending while their complete graphs have open, unknown or
 overcovered settlement capacity. Partly paid means at least one positive
 payment is allocated and the charge-side vendor lines differ from the positive
 allocations, a line is unknown or unclassified, or an allocated payment is not
-plain posted settlement, as with installment plans and payment schedules. An
+plain posted settlement or is booked by a reimbursement line, as with installment plans and payment schedules. An
 older Purchase with no allocated payment does not block a later charge.
 These additional candidates are review-only: even a complete retained payment
 set cannot make them automatic settlement targets. Only confidently zero

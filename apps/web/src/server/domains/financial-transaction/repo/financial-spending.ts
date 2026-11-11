@@ -941,6 +941,9 @@ const chargePayments = sql`FROM "FinancialTransactionAllocation" paid
 const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NOT NULL
   OR pf.status IN (${financialTransactionStatus.enum.void}, ${financialTransactionStatus.enum.expected})
   OR pf."ledgerTransferId" IS NOT NULL OR pf."amountMinor" <= 0
+  OR EXISTS (SELECT 1 FROM "Expense" r WHERE r."purchaseId" = p.id
+    AND ${notDeleted("r")} AND r."bookingTransactionCode" = pf.shortcode
+    AND r."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement})
   OR pf.kind NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.fee}, ${financialTransactionKind.enum.refund})
   OR pf."amountMinor" IS DISTINCT FROM (SELECT sum(coverage."amountMinor")
     FROM "FinancialTransactionAllocation" coverage
