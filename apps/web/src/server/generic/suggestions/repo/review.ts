@@ -20,6 +20,7 @@ import type { StatementSuggestionScope } from "~/server/domains/transaction-impo
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { recordFeedbackWithInsertion } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import type { ApplicationTerms } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
@@ -62,14 +63,14 @@ export type Handler = {
     >,
   ) => Promise<void>;
   /**
-   * The key of what applying writes, which a review must name; defaults to the
-   * stored fingerprint. Evidence that changes nothing the application writes
-   * must not change it.
+   * What applying writes, as reviewed and as it is now, by part name. The
+   * engine refuses naming each part that differs; evidence the application
+   * does not write never refuses.
    */
-  applicationKey?: (
+  applicationTerms?: (
     db: Database,
     state: SuggestionStateRow,
-  ) => Promise<string | null>;
+  ) => Promise<ApplicationTerms>;
   apply: (
     db: Database,
     context: EntityKernelContext,

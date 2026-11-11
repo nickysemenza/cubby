@@ -6,13 +6,14 @@ import {
 import { productPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   currentProductPairPolicySql,
-  reviewedProductPairFingerprint,
+  productPairApplicationTerms,
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
@@ -158,7 +159,18 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   }),
   actionable,
   transactionBound: false,
-  applicationKey: reviewedProductPairFingerprint,
+  // Lock both Products before the engine compares their identity terms.
+  lockForApply: async (db, prediction) => {
+    const subject = z
+      .object({ recordId: z.uuid(), otherId: z.uuid() })
+      .parse(prediction.subject);
+    await unwrapDb(db).execute(sql`
+      SELECT 1 FROM product
+      WHERE id IN (${subject.recordId}::uuid, ${subject.otherId}::uuid)
+      ORDER BY id FOR UPDATE
+    `);
+  },
+  applicationTerms: productPairApplicationTerms,
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
       throw new Error("Product merging requires an accepted pair");
@@ -172,7 +184,6 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
         keepId: input.application.keepId,
         mergeId: input.application.mergeId,
         suggestionId: state.id,
-        expectedFingerprint: input.expectedFingerprint,
       },
     );
   },

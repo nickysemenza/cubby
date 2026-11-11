@@ -417,18 +417,58 @@ export async function publishProductPair(
  * them, so enrichment never retires it: it is fingerprinted live and a merge
  * pins what the member reviewed. Detector judgments keep their snapshot.
  */
-export async function reviewedProductPairFingerprint(
+/**
+ * A pair's identity facts as reviewed beside the current ones, per Product
+ * field. Pairs published without snapshots compare the pair fingerprint.
+ */
+export async function productPairApplicationTerms(
   db: Database,
   state: { recordId: string | null; data: unknown; fingerprint: string | null },
 ) {
-  const data = pairProjection.safeParse(state.data).data;
-  if (data?.source !== "agent") return state.fingerprint;
-  const { productPairFingerprint } =
+  const data = pairProjection.parse(state.data);
+  const sides = [
+    ["product", parseEntityId("product", suggestionRecordId(state))],
+    ["otherProduct", data.otherId],
+  ] as const;
+  const { pairFingerprint, productIdentitySnapshots } =
     await import("./product-identity-snapshot");
-  return productPairFingerprint(db, [
-    parseEntityId("product", suggestionRecordId(state)),
-    data.otherId,
-  ]);
+  const current = await productIdentitySnapshots(
+    db,
+    sides.map(([, id]) => id),
+  );
+  const reviewed = z
+    .object({ snapshots: z.array(z.record(z.string(), z.json())) })
+    .safeParse(data.signals).data?.snapshots;
+  if (!reviewed) {
+    const [first, second] = sides.map(([, id]) => current.get(id)?.fingerprint);
+    return {
+      reviewed: { identity: state.fingerprint },
+      current: {
+        identity:
+          first && second ? await pairFingerprint([first, second]) : null,
+      },
+    };
+  }
+  const terms = (
+    snapshot: (id: ProductId) => z.infer<ReturnType<typeof z.json>> | undefined,
+  ) =>
+    Object.fromEntries(
+      sides.flatMap(([side, id]) => {
+        const facts = z
+          .record(z.string(), z.json())
+          .safeParse(snapshot(id)).data;
+        return facts
+          ? Object.entries(facts).map(([field, value]) => [
+              `${side}.${field}`,
+              value,
+            ])
+          : [[side, null]];
+      }),
+    );
+  return {
+    reviewed: terms((id) => reviewed.find((snapshot) => snapshot.id === id)),
+    current: terms((id) => current.get(id)?.snapshot),
+  };
 }
 export async function upsertAgentProductMatch(
   db: Database | DrizzleTransaction,

@@ -26,6 +26,7 @@ import {
 import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { createAppError } from "~/server/errors/app-error";
+import { changedTerms } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -209,10 +210,7 @@ const reviewedBooking = (plan: FinancialSpendingPlan | null | undefined) =>
     : { status: plan?.status ?? null };
 
 function changedFields<T extends object>(reviewed: T, current: T) {
-  const now = new Map(Object.entries(current));
-  const changed = Object.entries(reviewed).flatMap(([key, value]) =>
-    canonicalJson(value) === canonicalJson(now.get(key) ?? null) ? [] : [key],
-  );
+  const changed = changedTerms({ reviewed, current });
   return changed.includes("status") ? ["status"] : changed;
 }
 

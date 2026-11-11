@@ -39,6 +39,7 @@ import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { suggestionCounts } from "~/server/generic/suggestions/repo/suggestion-review";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
 
@@ -95,6 +96,20 @@ export const reviewKey = (row: {
   suggestionId: string;
   fingerprint: string | null;
 }) => row.fingerprint ?? row.suggestionId;
+
+/** What an application writes, by part name, as reviewed and as it is now. */
+export type ApplicationTerms = { reviewed: object; current: object };
+
+/** Part names whose canonical value differs between review and now. */
+export function changedTerms({ reviewed, current }: ApplicationTerms) {
+  const before = new Map(Object.entries(reviewed));
+  const after = new Map(Object.entries(current));
+  return [...new Set([...before.keys(), ...after.keys()])].filter(
+    (key) =>
+      canonicalJson(before.get(key) ?? null) !==
+      canonicalJson(after.get(key) ?? null),
+  );
+}
 
 export const cleanAcceptance = (
   row: Pick<SuggestionKey, "suggestionId" | "fingerprint">,

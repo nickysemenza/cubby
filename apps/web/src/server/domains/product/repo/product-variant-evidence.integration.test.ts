@@ -201,7 +201,6 @@ describe("retained Product identity conflict guards", () => {
           keepId: first.id,
           mergeId: second.id,
           suggestionId: proposal.id,
-          expectedFingerprint: proposal.fingerprint!,
         }),
       ).rejects.toThrow(/identity conflict|evidence changed/);
       expect(
@@ -327,7 +326,6 @@ describe("retained Product identity conflict guards", () => {
           keepId: keeper.id,
           mergeId: second.id,
           suggestionId: proposal.id,
-          expectedFingerprint: proposal.fingerprint!,
         }),
       ).rejects.toThrow(/identity conflict|evidence changed/);
       previous = keeper;

@@ -25,7 +25,10 @@ import {
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
-import { reviewKey } from "~/server/generic/suggestions/repo/suggestion-presentation";
+import {
+  changedTerms,
+  reviewKey,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import type { ReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   suggestionStateColumns,
@@ -109,17 +112,25 @@ export function executeReviewApplication(
             ? await query.for("update")
             : await query;
         const applicableState = planApplicableState(state, prediction.family);
-        const key =
-          "applicationKey" in family && family.applicationKey
-            ? await family.applicationKey(transactionDb, applicableState)
-            : applicableState.fingerprint;
         if (
           input.expectedFingerprint !==
-          (key ??
-            reviewKey({ suggestionId: applicableState.id, fingerprint: null }))
+          reviewKey({
+            suggestionId: applicableState.id,
+            fingerprint: applicableState.fingerprint,
+          })
         )
           throw new Error(
-            "Suggestion changed since review; list it again and review the current version",
+            "Suggestion was republished since review; list it again and review the current version",
+          );
+        const changed =
+          "applicationTerms" in family && family.applicationTerms
+            ? changedTerms(
+                await family.applicationTerms(transactionDb, applicableState),
+              )
+            : [];
+        if (changed.length)
+          throw new Error(
+            `Suggestion changed since review: ${changed.join(", ")}; list it again and review the current version`,
           );
         (family.target ?? suggestionProjectionTargets[name]).parse(
           applicableState,

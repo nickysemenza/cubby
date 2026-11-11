@@ -4,10 +4,7 @@ import { z } from "zod";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable, product } from "~/server/db/schema";
-import {
-  productPairFingerprint,
-  prepareProductIdentityPair,
-} from "~/server/domains/product/repo/match/product-identity-snapshot";
+import { prepareProductIdentityPair } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { loadProductImageOrderFacts } from "~/server/domains/product/repo/match/product-match";
 import { currentProductPairPolicy } from "~/server/domains/product/repo/match/product-match-candidate";
 import { matchSurvivorImageOrder } from "~/server/domains/product/repo/match/product-match-ranking";
@@ -31,7 +28,6 @@ export async function mergeReviewedProductPair(
     suggestionId: string;
     keepId: string;
     mergeId: string;
-    expectedFingerprint: string;
   },
 ) {
   const [prediction] = await getDb(context.db)
@@ -101,15 +97,6 @@ export async function mergeReviewedProductPair(
     )
       throw new Error(
         "Product pair is stale or has an unresolved identity conflict",
-      );
-    const fingerprint = await productPairFingerprint(transactionDb, [
-      keepId,
-      mergeId,
-    ]);
-    if (!fingerprint) throw new Error("Product identity evidence changed");
-    if (fingerprint !== input.expectedFingerprint)
-      throw new Error(
-        "Product pair evidence changed; request a fresh comparison",
       );
     const txContext = { ...context, db: transactionDb };
     await withAuditReceipts(async () => {

@@ -3540,9 +3540,10 @@ reconstructed.
 `suggestions.review_batch`) record immutable review; each batch item has its own outcome. Draft and
 history verdicts settle on their own; an applying review commits with its application, so a stale
 or refused application records nothing and the same operation id may retry with a corrected review.
-Every applying review sends `expectedFingerprint`, the listed row's `fingerprint`. A family may
-declare `applicationKey`, a key over only what its apply writes; the engine compares that key, else
-the stored fingerprint, and refuses only when it moved, so drift in unrelated evidence never blocks.
+Every applying review sends `expectedFingerprint`, the listed row's `fingerprint`, naming the
+version it reviewed. A family may declare `applicationTerms`, what its apply writes as reviewed and
+as it is now; the engine refuses naming each part that moved, so drift in evidence the application
+does not write never blocks. Statement applications compare the same way inside their apply.
 A decision records correct, wrong, uncertain and presentation-only dismissal
 separately, with an explicit correction-presence discriminator so a corrected JSON null survives.
 Draft acceptance records history; saved application commits a separate immutable command-bound
