@@ -1,5 +1,6 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
+import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -39,7 +40,11 @@ export async function fieldReviewIdentity(input: {
           kind:
             input.proposal.operation === "remove"
               ? "prune"
-              : input.currentValue == null || input.currentValue === ""
+              : undecidedFieldValue(
+                    input.entity,
+                    input.field,
+                    input.currentValue,
+                  )
                 ? "addition"
                 : "correction",
           removals: input.proposal.removals.map((row) => row.value).sort(),

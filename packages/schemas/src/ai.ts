@@ -637,6 +637,8 @@ const decisionCatalogRowSchema = z.object({
   apply: z.enum(["auto", "review", "offer"]),
   /** Cubby fills it when empty but never replaces its own earlier value. */
   fillOnly: z.boolean().optional(),
+  /** A stored placeholder Cubby treats as empty, such as an enum's undecided default. */
+  undecided: z.string().optional(),
   prompt: z.object({ subject: z.string(), input: z.json() }),
   /** Stored Suggestion outcomes; null for decisions that store none. */
   counts: z

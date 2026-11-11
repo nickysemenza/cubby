@@ -1,0 +1,1 @@
+ALTER TABLE "Vendor" DROP CONSTRAINT "Vendor_spendingProfile_check", ADD CONSTRAINT "Vendor_spendingProfile_check" CHECK ("spendingProfile" IN ('unspecified', 'mixed_retail', 'food_retail', 'restaurant', 'coffee_shop', 'single_category'));

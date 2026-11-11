@@ -5,7 +5,10 @@ import {
   basisValueOf,
   fieldSuggestionContextKeys,
 } from "@cubby/schemas/field-suggestion";
-import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
+import {
+  suggestApplyPolicy,
+  undecidedFieldValue,
+} from "@cubby/schemas/field-suggestion-policy";
 import { z } from "zod";
 
 import {
@@ -179,7 +182,7 @@ async function applyPreviewSuggestions(args: {
         basisMode === "suggested" &&
         suggestApplyPolicy(args.entity, field) === "auto" &&
         args.explicit[field] === undefined &&
-        (currentValue == null || currentValue === "") &&
+        undecidedFieldValue(args.entity, field, currentValue) &&
         probability !== null &&
         probability >= HIGH_CONFIDENCE_PROBABILITY &&
         // A declared resolution needs an authoritative draft result before

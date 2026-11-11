@@ -4,7 +4,10 @@ import { auditAuthoritySchema, systemActor } from "@cubby/schemas/context";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { FieldGuess, FieldOrigin } from "@cubby/schemas/field-authority";
-import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
+import {
+  suggestApplyPolicy,
+  undecidedFieldValue,
+} from "@cubby/schemas/field-suggestion-policy";
 import {
   feedbackAuthority,
   feedbackVerdict,
@@ -53,8 +56,6 @@ const row = z.object({
   confidence: z.number().nullable(),
   keptAt: z.coerce.date().nullable(),
 });
-
-const empty = (value: unknown) => value == null || value === "";
 
 /**
  * The newest update audit row naming the field decides. Anything ambiguous —
@@ -126,10 +127,18 @@ async function fieldAuthorities(
     ) receipt ON true
     ORDER BY r.n
   `);
-  return result.rows.map((fact) => decideAuthority(row.parse(fact)));
+  return result.rows.map((fact) => {
+    const parsed = row.parse(fact);
+    return decideAuthority(parsed, (value) =>
+      undecidedFieldValue(entity, requests[parsed.n]!.field, value),
+    );
+  });
 }
 
-function decideAuthority(fact: z.infer<typeof row>): FieldAuthority {
+function decideAuthority(
+  fact: z.infer<typeof row>,
+  empty: (value: unknown) => boolean,
+): FieldAuthority {
   const live = fact.live;
   if (!fact.auditId)
     return empty(live) && fact.hasLive

@@ -477,6 +477,8 @@ export async function executeAiRefreshTarget(
     const runnerUp = decision?.alternatives[0];
     const entry = decision
       ? makeSweepSuggestion({
+          entity: snapshot.entity,
+          field: snapshot.field,
           currentValue: snapshot.currentValue,
           decision: {
             value: decision.value,

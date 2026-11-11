@@ -35,6 +35,8 @@ export function fieldPolicyFingerprint(
       mode: row.mode,
       apply: row.apply,
       fillOnly: row.fillOnly,
+      // Omitted when undefined, so only fields declaring it change fingerprint.
+      undecided: row.undecided,
       automaticAssignment: {
         ruleKey: "field.addition",
         revision: FIELD_ASSIGNMENT_REVISION,

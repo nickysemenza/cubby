@@ -1,4 +1,8 @@
 import { tradeSchema } from "@cubby/schemas/project";
+import {
+  spendingCategoryMappingMode,
+  vendorSpendingProfile,
+} from "@cubby/schemas/spending-classification";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -283,6 +287,49 @@ describe("Expense category resolution", () => {
       sql`UPDATE "Purchase" SET "spendingCategoryId"=${f.gifts.id} WHERE id=${f.purchase.id}`,
     );
     expect(await effective(f.expense.id)).toBe(f.gifts.id);
+  });
+  it("applies a single-category Vendor default to Product lines below mapping and Purchase fallback", async () => {
+    const f = await fixture();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Vendor" SET "defaultSpendingCategoryId"=${f.gifts.id} WHERE id=${f.vendor.id}`,
+    );
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    );
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.inherit},"spendingCategoryId"=NULL WHERE id=${f.root.id}`,
+    );
+    expect(await effective(f.expense.id)).toBeNull();
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Vendor" SET "spendingProfile"=${vendorSpendingProfile.enum.single_category} WHERE id=${f.vendor.id}`,
+    );
+    expect(await effective(f.expense.id)).toBe(f.gifts.id);
+    const [allocation] = await unwrapDb(ctx.db).execute(
+      sql`SELECT allocation.* FROM (${expenseSpendingAllocationSql(sql`ARRAY[${f.expense.id}]::uuid[]`)}) allocation`,
+      "objects",
+    );
+    expect(allocation).toMatchObject({
+      spendingCategoryId: f.gifts.id,
+      amount: 60,
+    });
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.mapped},"spendingCategoryId"=${f.clothing.id} WHERE id=${f.root.id}`,
+    );
+    expect(await effective(f.expense.id)).toBe(f.clothing.id);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.inherit},"spendingCategoryId"=NULL WHERE id=${f.root.id}`,
+    );
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "spendingCategoryId"=${f.electronics.id} WHERE id=${f.purchase.id}`,
+    );
+    expect(await effective(f.expense.id)).toBe(f.electronics.id);
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    );
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.blocked} WHERE id=${f.child.id}`,
+    );
+    expect(await effective(f.expense.id)).toBeNull();
   });
   it("scopes correlated category quality reads to the selected Expense basket", async () => {
     const f = await fixture();

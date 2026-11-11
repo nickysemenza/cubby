@@ -3502,8 +3502,10 @@ as the picker guess and never writes it: Expense project and Product, which move
 `fillOnly` fields (Vendor and Purchase defaults, Project trade) are filled when empty but never
 revised, because other records inherit them. Ordinary descriptive fields, including record emoji,
 use the common policy; effective derived itemization values are
-populated and protected. Vendor spending profiles default to `unspecified`, a populated reviewable
-value, never treated as empty.
+populated and protected. A field's `suggest.undecided` names a stored placeholder that records no
+decision: every open-field check treats it as empty. Vendor spending profiles
+default to `unspecified`, their undecided value, so Cubby fills a confident
+profile once (`fillOnly`) and never replaces a person's choice.
 
 Saved-record spending review is declared per field as `control.suggest.financeReview.context`:
 `finance` for the Purchase fallback and Expense category, `vendor` for the Vendor default category and

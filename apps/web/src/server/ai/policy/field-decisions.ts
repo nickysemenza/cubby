@@ -39,6 +39,7 @@ const suggestControlSchema = z
     mode: z.enum(["fill", "prune"]),
     apply: z.enum(["auto", "review", "offer"]).default("auto"),
     fillOnly: z.boolean().default(false),
+    undecided: z.string().optional(),
   })
   .passthrough();
 
@@ -149,6 +150,9 @@ function fieldRow(key: (typeof suggestFieldKeys)[number]): CatalogRow {
     rules: prompt.rules,
     apply: suggest.apply,
     fillOnly: suggest.fillOnly,
+    ...(suggest.undecided === undefined
+      ? {}
+      : { undecided: suggest.undecided }),
     prompt: rendered(prompt),
   };
 }

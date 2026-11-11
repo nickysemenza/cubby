@@ -631,7 +631,9 @@ category Product expectation also admits principal item lines to
 Product-resolution and quantity research; it does not silently exempt them.
 Explicit `not_expected` / `not_allowed` policies, services and allocations keep
 their exemptions. Coverage keeps its three-valued policy status, and research
-admission does not assign a spending category or copy a Vendor default. Stored
+admission does not assign a spending category or copy a Vendor default: the
+Expense category resolver reads the Vendor default live, and a stored copy
+would outrank later Product Category mappings and profile changes. Stored
 line quality follows rule changes through the stored-derived drain. Totals stay
 with paperwork and settlement reconciliation. Itemization, Product resolution
 and Expense booking have separate coverage; a charge is itemized only when every

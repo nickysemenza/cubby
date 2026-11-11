@@ -8,6 +8,7 @@ import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import {
   spendingCategoryMappingMode,
   vendorSpendingProfile,
+  type VendorSpendingProfile,
 } from "@cubby/schemas/spending-classification";
 import type {
   SpendingClassificationReviewInput,
@@ -42,13 +43,35 @@ const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
 
 const CategorySearch = referenceEntitySearch("productCategory");
 
-const SPENDING_PROFILE_OPTIONS: readonly PickerOption[] = [
-  { value: "unspecified", label: "Unspecified" },
-  { value: "mixed_retail", label: "Mixed retailer" },
-  { value: "food_retail", label: "Grocery / food retail" },
-  { value: "restaurant", label: "Restaurant" },
-  { value: "coffee_shop", label: "Coffee shop" },
-];
+/** The Vendor declaration owns the profile choices and their labels. */
+function SpendingProfilePicker({
+  inputId,
+  value,
+  disabled,
+  onValueChange,
+}: {
+  inputId: string;
+  value: VendorSpendingProfile;
+  disabled: boolean;
+  onValueChange: (value: VendorSpendingProfile) => void;
+}) {
+  const options = (
+    useEntityMetadata("vendor").fields.fields.find(
+      (field) => field.key === "spendingProfile",
+    )?.control?.options ?? []
+  ).map(({ value: option, label }) => ({ value: option, label }));
+  return (
+    <Picker
+      mode="choose"
+      inputId={inputId}
+      label="Merchant context"
+      options={options}
+      value={value}
+      disabled={disabled}
+      onValueChange={(next) => onValueChange(vendorSpendingProfile.parse(next))}
+    />
+  );
+}
 
 function ClassificationReview({
   initial,
@@ -153,18 +176,12 @@ function ClassificationReview({
       {request.action === "vendor" && (
         <div className="space-y-1 text-sm">
           <span>Merchant context</span>
-          <Picker
-            mode="choose"
+          <SpendingProfilePicker
             inputId={profileId}
-            label="Merchant context"
-            options={SPENDING_PROFILE_OPTIONS}
             value={request.spendingProfile}
             disabled={busy}
-            onValueChange={(next) =>
-              setDraft({
-                ...request,
-                spendingProfile: vendorSpendingProfile.parse(next),
-              })
+            onValueChange={(spendingProfile) =>
+              setDraft({ ...request, spendingProfile })
             }
           />
         </div>
