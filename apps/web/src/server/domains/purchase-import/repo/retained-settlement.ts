@@ -1,4 +1,4 @@
-import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   expenseLineBasisSchema,
   expenseLineKindSchema,
@@ -21,23 +21,12 @@ import {
   type PaymentTender,
 } from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney } from "@cubby/shared";
-import { createLogger } from "@cubby/worker-tracing";
-import {
-  and,
-  asc,
-  between,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  sql,
-} from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { DrizzleTransaction } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
-import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -47,7 +36,6 @@ import {
   financialTransactionAllocation,
   importSourceClaim,
   importSourceOrder,
-  ledgerParty,
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
@@ -64,18 +52,16 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
+  postingWindowDayBounds,
+  withinPostingInstantWindowSql,
+} from "~/server/domains/financial-transaction/repo/settlement-window";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
   matchCompletePaymentSet,
   type SettlementCandidate,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { merchantVendorAllowsSettlementSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-
-const log = createLogger("purchase-import.settlement");
-
-/** Payment lines and statement rows may disagree by posting lag, never more. */
-const POSTING_WINDOW_DAYS = 3;
-const DAY_MS = 86_400_000;
 
 type SettlementReader = Pick<
   DrizzleTransaction,
@@ -313,8 +299,7 @@ async function settleableCharges(
     payment.chargedAt ? [payment.chargedAt.getTime()] : [],
   );
   if (dated.length === 0) return [];
-  // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- matches paymentKey's UTC day
-  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  const window = postingWindowDayBounds(dated);
   const rows = await tx
     .select({
       id: financialTransaction.id,
@@ -348,8 +333,8 @@ async function settleableCharges(
         isNull(financialTransaction.ledgerTransferId),
         between(
           sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
-          day(Math.min(...dated) - POSTING_WINDOW_DAYS * DAY_MS),
-          day(Math.max(...dated) + POSTING_WINDOW_DAYS * DAY_MS),
+          window.from,
+          window.to,
         ),
         merchantVendorAllowsSettlementSql(
           outer(financialTransaction.merchant),
@@ -460,7 +445,6 @@ async function competingClaimants(
   charge: Charge,
   excludePurchaseId: PurchaseId,
 ): Promise<PurchaseId[]> {
-  const epoch = Math.floor(charge.occurredAt.getTime() / 1_000);
   const cards = charge.cardLastFours;
   const rows = await tx
     .selectDistinct({ purchaseId: purchasePaymentEvidence.purchaseId })
@@ -479,9 +463,8 @@ async function competingClaimants(
           purchasePaymentEvidence.amountMinor,
           financialEvidenceAmountMinor(charge.amount),
         ),
-        // Both sides as UTC epochs, independent of the session time zone.
         sql`(${purchasePaymentEvidence.chargedAt} IS NULL
-          OR abs(extract(epoch FROM ${purchasePaymentEvidence.chargedAt}) - ${epoch}) <= ${POSTING_WINDOW_DAYS * 86_400})`,
+          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
         charge.storedValue
           ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
           : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
@@ -916,96 +899,4 @@ async function writePlan(
     actor: input.actor,
   });
   return true;
-}
-
-/**
- * Settle each unsettled Purchase whose retained payment lines now meet a
- * charge that arrived later (a statement imported after the order). Only Purchases with an unallocated charge of a
- * matching amount near a payment date are visited, each in its own
- * transaction; one failure is logged and never stops the pass.
- */
-export async function settleRetainedPaymentEvidence(
-  db: Database,
-): Promise<{ allocated: number; reviewable: number; failed: number }> {
-  const pending = await getDb(db)
-    .selectDistinct({
-      purchaseId: purchasePaymentEvidence.purchaseId,
-      ledgerPartyId: importSourceClaim.ledgerPartyId,
-    })
-    .from(purchasePaymentEvidence)
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
-    )
-    .innerJoin(
-      purchase,
-      and(
-        eq(purchase.id, purchasePaymentEvidence.purchaseId),
-        notDeleted(purchase),
-      ),
-    )
-    .where(
-      and(
-        isNotNull(purchasePaymentEvidence.chargedAt),
-        sql`NOT EXISTS (
-          SELECT 1 FROM "FinancialTransactionAllocation" fta
-          WHERE fta."purchaseId" = ${purchase.id} AND ${notDeleted("fta")}
-        )`,
-        sql`EXISTS (
-          SELECT 1 FROM "FinancialTransaction" ft
-          JOIN "FinancialAccount" fa
-            ON fa."id" = ft."accountId" AND ${notDeleted("fa")}
-          WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
-            AND ${notDeleted("ft")}
-            AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
-            AND round((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}) * 100) = ${purchasePaymentEvidence.amountMinor}
-            AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
-            AND NOT EXISTS (
-              SELECT 1 FROM "FinancialTransactionAllocation" ofta
-              WHERE ofta."transactionId" = ft."id" AND ${notDeleted("ofta")}
-            )
-        )`,
-      ),
-    );
-  const actors = new Map<string, ActorContext | null>();
-  const tally = { allocated: 0, reviewable: 0, failed: 0 };
-  for (const row of pending) {
-    const ledgerPartyId = parseEntityId("ledgerParty", row.ledgerPartyId);
-    if (!actors.has(ledgerPartyId))
-      actors.set(ledgerPartyId, await memberActor(db, ledgerPartyId));
-    const actor = actors.get(ledgerPartyId);
-    if (!actor) continue;
-    try {
-      const outcome = await withTransaction(db, (tx) =>
-        settlePurchaseFromRetainedPayments(tx, {
-          purchaseId: row.purchaseId,
-          ledgerPartyId,
-          actor,
-        }),
-      );
-      if (outcome === "allocated") tally.allocated += 1;
-      else if (outcome !== "already_allocated" && outcome !== "no_evidence")
-        tally.reviewable += 1;
-    } catch (error) {
-      tally.failed += 1;
-      log.warn("Retained settlement failed for one Purchase", {
-        purchaseId: row.purchaseId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-  return tally;
-}
-
-/** The member who owns a ledger party acts for its unattended settlement. */
-async function memberActor(
-  db: Database,
-  ledgerPartyId: LedgerPartyId,
-): Promise<ActorContext | null> {
-  const [owner] = await getDb(db)
-    .select({ userId: ledgerParty.userId })
-    .from(ledgerParty)
-    .where(and(eq(ledgerParty.id, ledgerPartyId), notDeleted(ledgerParty)))
-    .limit(1);
-  return owner?.userId ? buildActorContext(owner.userId, "system") : null;
 }

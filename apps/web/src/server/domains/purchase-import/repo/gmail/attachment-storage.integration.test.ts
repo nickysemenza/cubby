@@ -12,10 +12,11 @@
  * - an upload failure publishes partial rows or loses retryable original evidence;
  * - a message deleted between listing and fetching fails the whole batch;
  * - a history event for a message Cubby never saved wedges the cursor;
- * - the cursor rewinds, or moves although another pass already moved it.
+ * - coverage moves although another pass already moved it.
  *
  * Gmail, model verdicts and object storage are synthetic; retention writers are real.
  */
+import { mailboxCoverage } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -40,7 +41,7 @@ import type { OrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
 import {
-  advanceMailboxCursor,
+  checkpointMailboxCoverage,
   loadGmailCursor,
   persistGmailEvents,
   readEmail,
@@ -640,57 +641,43 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(await getDb(ctx.db).select().from(orderMailEvent)).toHaveLength(1);
   });
 
-  it("moves the cursor only from the pass's own starting point, never backwards", async () => {
+  it("checkpoints coverage only from the pass's own starting point", async () => {
     const party = await seedParty();
-    const polledAt = new Date("2026-10-05T12:00:00.000Z");
-    const cursor = () =>
+    const coverage = (historyId: string) =>
+      mailboxCoverage.parse({
+        version: 1,
+        baselineHistoryId: "100",
+        broad: { pageToken: null, completed: false },
+        scoped: [],
+        history: { historyId, pageToken: null, targetHistoryId: null },
+        nextLane: "scan",
+      });
+    const checkpoint = (from: string | null, to: string) =>
+      checkpointMailboxCoverage(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
+        from: from === null ? null : coverage(from),
+        to: coverage(to),
+      });
+    const stored = () =>
       loadGmailCursor(ctx.db, {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-google-subject",
       });
 
+    expect(await checkpoint(null, "500")).toBe(true);
+    // A stale pass that started from the empty cursor cannot overwrite it.
+    expect(await checkpoint(null, "450")).toBe(false);
+    expect(await stored()).toMatchObject({ historyId: "500" });
+    expect(await checkpoint("500", "600")).toBe(true);
+    expect(await stored()).toMatchObject({ historyId: "600" });
     expect(
-      await advanceMailboxCursor(ctx.db, {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-google-subject",
-        from: null,
-        to: "500",
-        polledAt,
-      }),
-    ).toBe(true);
-    // A stale pass that started from the old cursor cannot overwrite it.
-    expect(
-      await advanceMailboxCursor(ctx.db, {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-google-subject",
-        from: null,
-        to: "450",
-        polledAt,
-      }),
-    ).toBe(false);
-    expect(
-      await advanceMailboxCursor(ctx.db, {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-google-subject",
-        from: "500",
-        to: "490",
-        polledAt,
-      }),
-    ).toBe(true);
-    expect(await cursor()).toMatchObject({ historyId: "500" });
-    await advanceMailboxCursor(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId: "synthetic-google-subject",
-      from: "500",
-      to: "600",
-      polledAt,
-    });
-    expect(await cursor()).toMatchObject({ historyId: "600" });
-    expect(
-      await getDb(ctx.db)
-        .select({ lastPolledAt: mailboxCursor.lastPolledAt })
-        .from(mailboxCursor)
-        .where(eq(mailboxCursor.ledgerPartyId, party.id)),
-    ).toEqual([{ lastPolledAt: polledAt }]);
+      (
+        await getDb(ctx.db)
+          .select({ lastPolledAt: mailboxCursor.lastPolledAt })
+          .from(mailboxCursor)
+          .where(eq(mailboxCursor.ledgerPartyId, party.id))
+      )[0]?.lastPolledAt,
+    ).toBeInstanceOf(Date);
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "~/server/db/generated/entity-table-definitions.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { related } from "~/server/db/helpers/related";
+import { withinPostingInstantWindow } from "~/server/domains/financial-transaction/repo/settlement-window";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
 export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
@@ -295,9 +296,6 @@ const tenderAdmits = (
       ? !storedValue
       : true;
 
-const withinPostingWindow = (a: Date, b: Date): boolean =>
-  Math.abs(a.getTime() - b.getTime()) <= 3 * 86_400_000;
-
 /**
  * Returns only complete allocation sets. A transaction is never partly
  * allocated: callers either persist this whole result in one transaction or
@@ -321,7 +319,7 @@ export const matchCompletePaymentSet = (
         (payment.cardLastFour === undefined ||
           candidate.cardLastFours.includes(payment.cardLastFour)) &&
         (chargedAt === null ||
-          withinPostingWindow(candidate.occurredAt, chargedAt)),
+          withinPostingInstantWindow(candidate.occurredAt, chargedAt)),
     );
     if (matches.length !== 1) return null;
     const match = matches[0];

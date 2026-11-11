@@ -77,7 +77,6 @@ import {
   orderMailAttachmentKey,
   type OrderMailAttachmentStorage,
 } from "./attachment-storage";
-import { maxHistoryId } from "./sync";
 import { GmailAuthorizationError } from "./tokens";
 import type {
   GmailAccountTokenPatch,
@@ -1147,68 +1146,6 @@ export const persistGmailEvents = async (
     if (saved)
       await recordChange(tx, { kind: "source", categories: ["email"] });
     return { saved, dropped: input.events.length - saved };
-  });
-};
-
-/**
- * Move a mailbox cursor from the position a pass started at. Returns false
- * when another pass already moved it, so a retried or stale pass can never
- * rewind it; the stored id is the later of the two either way.
- */
-export const advanceMailboxCursor = async (
-  db: Database,
-  input: {
-    ledgerPartyId: string;
-    provider?: string;
-    mailboxId: string;
-    from: string | null;
-    to: string | null;
-    polledAt: Date;
-  },
-): Promise<boolean> => {
-  const ledgerPartyId = parseEntityId("ledgerParty", input.ledgerPartyId);
-  const provider = input.provider ?? "gmail";
-  const next = maxHistoryId(input.from, input.to ?? undefined);
-  return withTransaction(db, async (tx) => {
-    // The row must exist before it can be locked: two first passes would
-    // otherwise both see no row and the later upsert could rewind the other.
-    await tx
-      .insert(mailboxCursor)
-      .values({
-        ledgerPartyId,
-        provider,
-        mailboxId: input.mailboxId,
-        historyId: null,
-      })
-      .onConflictDoNothing();
-    const [current] = await tx
-      .select({ historyId: mailboxCursor.historyId })
-      .from(mailboxCursor)
-      .where(
-        and(
-          eq(mailboxCursor.ledgerPartyId, ledgerPartyId),
-          eq(mailboxCursor.provider, provider),
-          eq(mailboxCursor.mailboxId, input.mailboxId),
-        ),
-      )
-      .for("update")
-      .limit(1);
-    if ((current?.historyId ?? null) !== input.from) return false;
-    await tx
-      .update(mailboxCursor)
-      .set({
-        historyId: next,
-        lastPolledAt: input.polledAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(mailboxCursor.ledgerPartyId, ledgerPartyId),
-          eq(mailboxCursor.provider, provider),
-          eq(mailboxCursor.mailboxId, input.mailboxId),
-        ),
-      );
-    return true;
   });
 };
 
