@@ -65,7 +65,8 @@ struct FieldDetailDisplayTests {
             ] {
                 #expect(
                     descriptor.applicabilityRefusal(in: raw)
-                        == "Only applies to credit-card accounts. Leave this field out of the update for other accounts.")
+                        == "Only applies to credit-card accounts. Leave this field out of the update for other accounts."
+                )
             }
             // Empty applicable fields and effective inherited values remain eligible for actions.
             #expect(descriptor.applicabilityRefusal(in: ["identity": ["kind": "credit_card"]]) == nil)

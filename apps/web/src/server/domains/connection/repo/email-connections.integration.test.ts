@@ -201,14 +201,12 @@ describe("fresh retained Email connection recommendations", () => {
         snippet: null,
       },
     });
-    await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: original.id,
-        event: "placed",
-        orderId: f.purchase.orderId,
-        sourceKey: "synthetic-second-event",
-      });
+    await getDb(ctx.db).insert(orderMailEvent).values({
+      orderMailId: original.id,
+      event: "placed",
+      orderId: f.purchase.orderId,
+      sourceKey: "synthetic-second-event",
+    });
     const [second] = await getDb(ctx.db)
       .select()
       .from(email)
