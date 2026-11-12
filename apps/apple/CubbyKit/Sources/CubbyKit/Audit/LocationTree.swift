@@ -17,11 +17,7 @@ extension LocationTreeNodeOut {
 
     static func coverImageURL(from displayImages: JSONValue) -> URL? {
         let row: JSONValue = ["fields": ["displayImages": displayImages]]
-        guard let first = row.recordValue("displayImages")?.arrayValue?.first else { return nil }
-        let value =
-            first["representations"]?["preferred"]?.stringValue
-            ?? first["url"]?.stringValue
-        return value.flatMap(URL.init(string:))
+        return row.displayCoverURL
     }
 }
 

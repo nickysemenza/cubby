@@ -4,7 +4,6 @@ import SwiftUI
 struct LocationPickerSheet: View {
     @Bindable var capture: CaptureModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
 
     private var filtered: [CaptureModel.LocationOption] {
@@ -23,45 +22,23 @@ struct LocationPickerSheet: View {
                     capture.select(option)
                     dismiss()
                 } label: {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        Thumb(
-                            url: option.imageURL, size: 40,
-                            symbol: EntityCatalog[.location].sfSymbol)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(option.name)
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphite)
-                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let path = option.path, !path.isEmpty {
-                                Text(path)
-                                    .font(.fieldGuideLabel)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if dynamicTypeSize.isAccessibilitySize {
-                                Text(option.id.rawValue)
-                                    .font(.fieldGuideCode)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            }
-                        }
-                        .layoutPriority(1)
-                        Spacer(minLength: FieldGuideTokens.Space.sm)
-                        if !dynamicTypeSize.isAccessibilitySize {
-                            Text(option.id.rawValue)
-                                .font(.fieldGuideCode)
+                    CoverIdentityRow(
+                        title: option.name, imageURL: option.imageURL,
+                        symbol: EntityCatalog[.location].sfSymbol, code: option.id.rawValue
+                    ) {
+                        if let path = option.path, !path.isEmpty {
+                            Text(path)
+                                .font(.fieldGuideLabel)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                    } trailing: {
                         if option.id == capture.session.location {
                             Image(systemName: "checkmark")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(FieldGuideTokens.interaction)
                         }
                     }
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(option.id == capture.session.location ? .isSelected : [])

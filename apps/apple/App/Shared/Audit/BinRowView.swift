@@ -130,7 +130,6 @@ private struct BinMoveToSheet: View {
     let session: RecountSession
     let id: InventoryEntryCode
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
 
     private var candidates: [(node: LocationTreeNode, depth: Int)] {
@@ -151,35 +150,11 @@ private struct BinMoveToSheet: View {
                     session.stage(.relocate(entry.node.id, name: entry.node.name), for: id)
                     dismiss()
                 } label: {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        Thumb(
-                            url: entry.node.coverImageURL, size: 40,
-                            symbol: EntityCatalog[.location].sfSymbol)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(entry.node.name)
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphite)
-                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if dynamicTypeSize.isAccessibilitySize {
-                                Text(entry.node.id.rawValue)
-                                    .font(.fieldGuideCode)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            }
-                        }
-                        .layoutPriority(1)
-                        Spacer(minLength: FieldGuideTokens.Space.sm)
-                        if !dynamicTypeSize.isAccessibilitySize {
-                            Text(entry.node.id.rawValue)
-                                .font(.fieldGuideCode)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                        }
-                    }
+                    CoverIdentityRow(
+                        title: entry.node.name, imageURL: entry.node.coverImageURL,
+                        symbol: EntityCatalog[.location].sfSymbol, code: entry.node.id.rawValue
+                    )
                     .padding(.leading, CGFloat(entry.depth) * 14)
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
