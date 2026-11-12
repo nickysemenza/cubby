@@ -1341,9 +1341,7 @@ export async function importPendingEmails(db: Database) {
           ],
           waitRecheck: {
             outcomeId: row.outcomeId,
-            settledAt: runOperation.completedAt.mapFromDriverValue(
-              row.settledAt,
-            ),
+            settledAt: new Date(row.settledAt.replace(" ", "T") + "Z"),
           },
         });
       } catch (error) {

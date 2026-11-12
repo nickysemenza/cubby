@@ -162,12 +162,16 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
 
 const emailSourceKeySql = sql`"Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId"`;
 
+/** Keep all three message-key segments, even when the message id is `attachment`. */
+const attachmentMessageKeySql = (key: SQL) =>
+  sql`substring(${key} from '^([^:]+?:.+?:[^:]+?):attachment:.+$')`;
+
 /** Permissive candidates for accepted mail evidence; the association policy
  * still verifies the claim family, attachment, checksum, Purchase and owner. */
 export const emailSourceClaimCandidateSql = sql`("Email"."ledgerPartyId", ${emailSourceKeySql}) IN (
   SELECT identity."ledgerPartyId", CASE
     WHEN identity.kind = ${importSourceKind.enum.mail_attachment}
-      THEN substring(identity."externalKey" from '^(.+?:[^:]+):attachment:')
+      THEN ${attachmentMessageKeySql(sql`identity."externalKey"`)}
     ELSE identity."externalKey" END
   FROM "ImportSourceClaim" identity
   WHERE identity.kind IN (${importSourceKind.enum.mail_message}, ${importSourceKind.enum.mail_attachment})
@@ -216,7 +220,7 @@ export const purchaseMailPartiesSql = (purchases: SQL): SQL => {
   JOIN "Email" ON ${notDeleted("Email")}
     AND "Email"."ledgerPartyId" = identity."ledgerPartyId"
     AND identity."kind" = ${importSourceKind.enum.mail_attachment}
-    AND ${emailSourceKeySql} = substring(identity."externalKey" from '^(.+?:[^:]+):attachment:')
+    AND ${emailSourceKeySql} = ${attachmentMessageKeySql(sql`identity."externalKey"`)}
   JOIN "OrderMail" original ON original."id" = "Email"."orderMailId"
     AND original."ledgerPartyId" = "Email"."ledgerPartyId"
   JOIN "OrderMailAttachment" attachment ON attachment."orderMailId" = original."id"

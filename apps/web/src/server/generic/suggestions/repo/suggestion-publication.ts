@@ -752,7 +752,7 @@ export async function inSuggestionBatches<Item, Outcome>(
   await forEachConcurrently(batches, input.concurrency, async (batch) => {
     let outcomes: (Outcome | undefined)[] = [];
     try {
-      outcomes = await input.batch(batch);
+      if (batch.length > 1) outcomes = await input.batch(batch);
     } catch (error) {
       if (isWorkflowInterrupted(error)) throw error;
       log.warn("Suggestion batch falling back to one-at-a-time publication", {
