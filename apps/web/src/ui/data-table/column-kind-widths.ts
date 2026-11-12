@@ -15,12 +15,11 @@ export type ColumnKind =
   | "money";
 
 /**
- * Widths belong to the column kind, never the entity: `[full, narrow]` px;
- * `full` is the most a state or progress value claims on a narrow pane.
- * State and progress keep their content (`CONTENT_KINDS`): a narrow pane
- * starts them at the narrow width, and a measured value may still grow to
- * the full width, so a reason or a progress label never truncates while a
- * lower-priority column could leave instead.
+ * Widths belong to the column kind, never the entity: `[full, narrow]` px.
+ * State and progress keep their content (`CONTENT_KINDS`): they start at
+ * their kind's width and a measured value may grow to the rendered-fit cap,
+ * so a reason or a progress label does not truncate while a lower-priority
+ * column could leave instead.
  */
 export const COLUMN_KIND_WIDTHS = {
   text: [220, 104],
@@ -56,14 +55,31 @@ export function columnKindOf(meta: KindedMeta | undefined): ColumnKind | null {
   return null;
 }
 
-/**
- * A kinded column's width on a narrow pane, and the most a measured value
- * may claim there. A full-width pane fits measured content instead.
- */
-export function columnKindWidth(kind: ColumnKind) {
+/** A kinded column's starting width, and the most a measured value may claim. */
+export function columnKindWidth(kind: ColumnKind, narrow: boolean) {
   const [full, small] = COLUMN_KIND_WIDTHS[kind];
-  return { size: small, fitMax: CONTENT_KINDS.has(kind) ? full : small };
+  return {
+    size: narrow ? small : full,
+    // Narrow text truncates at its narrow width; a longer date, amount or
+    // age may still reach the full width rather than clip.
+    fitMax: CONTENT_KINDS.has(kind)
+      ? CONTENT_FIT_MAX
+      : narrow && kind === "text"
+        ? small
+        : full,
+  };
 }
+
+/**
+ * Whether a column takes its kind's width at this pane width: state and
+ * progress always do; other kinds only on a narrow pane, so a full-width
+ * pane fits their measured content as before.
+ */
+export const columnUsesKindWidth = (kind: ColumnKind, narrow: boolean) =>
+  narrow || CONTENT_KINDS.has(kind);
+
+/** The most a state reason or progress label claims before it truncates. */
+const CONTENT_FIT_MAX = 320;
 
 /** Whether a pane is narrow; an unmeasured pane (0) draws full widths. */
 export const isNarrowTable = (availableWidth: number) =>

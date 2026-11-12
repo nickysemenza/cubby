@@ -29,6 +29,7 @@ import {
   type ColumnKind,
   columnKindOf,
   columnKindWidth,
+  columnUsesKindWidth,
   isNarrowTable,
 } from "./column-kind-widths";
 import {
@@ -672,15 +673,15 @@ export function resolvedTableColumnWidths(
   const narrow = isNarrowTable(availableWidth);
   for (const column of columns) {
     const fit = measured[column.id];
-    // A narrow pane steps each kinded column down to its kind's width; a
-    // full-width pane fits measured content as every other column does.
+    // State and progress take their kind's width and fit their content; a
+    // narrow pane also steps other kinded columns down to theirs.
     const kind = columnKindOf(column.columnDef.meta);
     const kinded =
       kind !== null &&
-      narrow &&
+      columnUsesKindWidth(kind, narrow) &&
       !isLockedColumn(column) &&
       !userSized.has(column.id)
-        ? columnKindWidth(kind)
+        ? columnKindWidth(kind, narrow)
         : null;
     const width = kinded
       ? fit !== undefined

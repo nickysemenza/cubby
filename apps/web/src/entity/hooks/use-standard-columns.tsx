@@ -65,6 +65,15 @@ interface BaseListRow {
 const titleValueSchema = z.string().nullish().catch(null);
 const kindValueSchema = z.string().nullish().catch(null);
 
+const labelSchema = z.string().min(1);
+const labelText = <TRow extends object>(
+  row: TRow,
+  labelPath: string | null | undefined,
+) =>
+  labelPath
+    ? (labelSchema.safeParse(readPathValue(row, labelPath)).data ?? null)
+    : null;
+
 const isEmptyValue = (value: unknown) =>
   value == null || value === "" || (Array.isArray(value) && value.length === 0);
 
@@ -260,13 +269,17 @@ export function useStandardColumns<TData extends BaseListRow>({
                   : [
                       {
                         key: field.key,
-                        node: renderCompactFieldValue(
-                          queryClient,
-                          entity,
-                          row,
-                          field,
-                          { singleLine: true },
-                        ),
+                        // A structured line (the Run's Why) reads as its
+                        // declared label, not its JSON.
+                        node:
+                          labelText(row, field.display.labelPath) ??
+                          renderCompactFieldValue(
+                            queryClient,
+                            entity,
+                            row,
+                            field,
+                            { singleLine: true },
+                          ),
                       },
                     ],
               )
