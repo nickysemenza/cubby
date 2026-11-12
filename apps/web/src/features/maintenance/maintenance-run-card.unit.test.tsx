@@ -6,7 +6,10 @@ import type {
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import {
+  referenceTitleQueryOptions,
+  type ReferenceTitle,
+} from "~/entity/components/ref-link/reference-title";
 import { maintenance } from "~/integrations/tanstack-query/generated/domains/maintenance.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -85,12 +88,13 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 describe("MaintenanceRunCard", () => {
   beforeEach(() => {
     harness = createBrowserTestHarness();
-    const queryKey = entityPreviewQueryOptions("run", "RUN-4K7M").queryKey;
+    const queryKey = referenceTitleQueryOptions("run", "RUN-4K7M").queryKey;
     harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
-    harness.queryClient.setQueryData(queryKey, {
-      id: "RUN-4K7M",
-      displayName: "Synthetic maintenance pass",
-    });
+    const label: ReferenceTitle = {
+      title: "Synthetic maintenance pass",
+      emoji: null,
+    };
+    harness.queryClient.setQueryData(queryKey, label);
   });
   afterEach(() => {
     harness.dispose();

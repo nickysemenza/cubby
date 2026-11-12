@@ -34,6 +34,7 @@ import {
   NativeWorkspaceBridge,
 } from "~/lib/native-workspace";
 import { PerfProfiler } from "~/lib/perf/perf-profiler";
+import { seedClientSession } from "~/lib/session-seed";
 import { useNavAuthed } from "~/lib/use-nav-authed";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { RouteErrorComponent } from "~/ui/feedback/route-error";
@@ -122,9 +123,9 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
     }
     if (import.meta.env.SSR) {
       const session = await getGuardSession();
-      return { isAuthed: !!session };
+      return { isAuthed: !!session, sessionSeed: session?.seed ?? null };
     }
-    return { isAuthed: getClientAuthed() };
+    return { isAuthed: getClientAuthed(), sessionSeed: null };
   },
   loader: ({ context }) =>
     context.queryClient.ensureQueryData(buildMetadataQueryOptions),
@@ -196,7 +197,9 @@ function RootComponent() {
     isNativeConnections(pathname, nativeWorkspaceParam);
   const buildMetadata = Route.useLoaderData();
   const footer = <AppFooter metadata={buildMetadata} />;
-  const { queryClient } = Route.useRouteContext();
+  const { queryClient, sessionSeed } = Route.useRouteContext();
+  // Render precedes the session atom's mount, which issues the first read.
+  seedClientSession(sessionSeed);
   const mainContentId = React.useId();
   const authed = useNavAuthed();
   const isWorkspaceRoute = useRouterState({

@@ -11,11 +11,21 @@ import {
   recordRunsReport,
 } from "~/server/generic/entity-report/repo/records";
 import {
+  readProductSummaryRow,
   productPricingSummary,
   productSellersReport,
   productStockSummary,
   productContextSummary,
 } from "~/server/generic/entity-report/repo/summary";
+
+/** The stock and pricing slots of one request share a single Product read. */
+const productSummaryRow = reportDependency(async (execution) =>
+  readProductSummaryRow(
+    execution.request.db,
+    execution.request.id,
+    execution.request.slots,
+  ),
+);
 
 export const reportBindings = {
   "product.sellers": reportDependency(async (execution) => ({
@@ -29,6 +39,7 @@ export const reportBindings = {
       execution.request.db,
       execution.request.id,
       await execution.read(productId),
+      await execution.read(productSummaryRow),
     ),
   })),
   "product.stock-summary": reportDependency(async (execution) => ({
@@ -36,6 +47,7 @@ export const reportBindings = {
       execution.request.db,
       execution.request.id,
       await execution.read(productId),
+      await execution.read(productSummaryRow),
     ),
   })),
   "product.use-summary": reportDependency(async (execution) => ({

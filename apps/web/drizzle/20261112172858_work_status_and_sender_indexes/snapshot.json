@@ -1,0 +1,241 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "48bd0127-99fc-4d2e-b792-29eba32da5a6",
+  "prevIds": [
+    "90093de1-eb0a-47bd-864b-509578fd9d8d"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Suggestion",
+        "Suggestion_member_decision_idx"
+      ],
+      "writes": [
+        "s|idx|public.Suggestion_member_decision_idx",
+        "n|idx|public.Suggestion_member_decision_idx",
+        "e|idx|public.Suggestion_member_decision_idx",
+        "n|rel|public.Suggestion_member_decision_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Suggestion",
+        "n|sch|public",
+        "n|col|public.Suggestion.entity",
+        "n|col|public.Suggestion.recordId"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Vendor",
+        "Vendor_orderEmailSenders_gin_idx"
+      ],
+      "writes": [
+        "s|idx|public.Vendor_orderEmailSenders_gin_idx",
+        "n|idx|public.Vendor_orderEmailSenders_gin_idx",
+        "e|idx|public.Vendor_orderEmailSenders_gin_idx",
+        "n|rel|public.Vendor_orderEmailSenders_gin_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Vendor",
+        "n|sch|public",
+        "n|col|public.Vendor.orderEmailSenders"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Vendor",
+        "Vendor_orderEmailSenderPolicies_gin_idx"
+      ],
+      "writes": [
+        "s|idx|public.Vendor_orderEmailSenderPolicies_gin_idx",
+        "n|idx|public.Vendor_orderEmailSenderPolicies_gin_idx",
+        "e|idx|public.Vendor_orderEmailSenderPolicies_gin_idx",
+        "n|rel|public.Vendor_orderEmailSenderPolicies_gin_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Vendor",
+        "n|sch|public",
+        "n|col|public.Vendor.orderEmailSenderPolicies"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "EntityEmbedding",
+        "EntityEmbedding_deletion_exhausted_idx"
+      ],
+      "writes": [
+        "s|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "n|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "e|idx|public.EntityEmbedding_deletion_exhausted_idx",
+        "n|rel|public.EntityEmbedding_deletion_exhausted_idx"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public",
+        "n|col|public.EntityEmbedding.updatedAt"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "SearchDocument",
+        "SearchDocument_embedding_exhausted_idx"
+      ],
+      "writes": [
+        "s|idx|public.SearchDocument_embedding_exhausted_idx",
+        "n|idx|public.SearchDocument_embedding_exhausted_idx",
+        "e|idx|public.SearchDocument_embedding_exhausted_idx",
+        "n|rel|public.SearchDocument_embedding_exhausted_idx"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public",
+        "n|col|public.SearchDocument.updatedAt"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Suggestion",
+        "name": "Suggestion_member_decision_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "entity",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "recordId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"status\" = 'superseded' AND \"decisions\" <> '[]'::jsonb",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Vendor",
+        "name": "Vendor_orderEmailSenders_gin_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "orderEmailSenders",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"deletedAt\" IS NULL",
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Vendor",
+        "name": "Vendor_orderEmailSenderPolicies_gin_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "orderEmailSenderPolicies",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"deletedAt\" IS NULL",
+        "with": "",
+        "method": "gin",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "EntityEmbedding",
+        "name": "EntityEmbedding_deletion_exhausted_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "updatedAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"deletionId\" IS NULL AND \"deletionAttempts\" >= 5",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "SearchDocument",
+        "name": "SearchDocument_embedding_exhausted_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "updatedAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"embeddingAttempts\" >= 5 AND \"deletedAt\" IS NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

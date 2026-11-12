@@ -19,6 +19,11 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import { InlineRefLink } from "./inline";
 import { ChipRefLink } from "./leaf";
+import {
+  isTitledReferenceEntity,
+  referenceTitleQueryOptions,
+  type ReferenceTitle,
+} from "./reference-title";
 
 const isNamedEntity = (
   entity: Entity,
@@ -65,18 +70,37 @@ export function ByIdRefLink({
   const legacyReference =
     (entityKind === "inventory" || entityKind === "cookbook") &&
     !shortcodeSchema(entityKind).safeParse(entityId).success;
-  // Unsupported runtime kinds and legacy UUID references skip the query.
+  // Unsupported runtime kinds and legacy UUID references skip the query. A
+  // listable record outside the four rich inline kinds needs only its title and
+  // mark, so links rendered together share one selected-field read.
+  const titled =
+    isNamedEntity(entityKind) &&
+    !isFetchableEntity(entityKind) &&
+    isTitledReferenceEntity(entityKind)
+      ? entityKind
+      : null;
   const queryOptions = useMemo(
     () =>
-      isNamedEntity(entityKind) && !legacyReference && !name
+      isNamedEntity(entityKind) && !legacyReference && !name && !titled
         ? entityPreviewQueryOptions(entityKind, entityId)
         : { queryKey: ["invalid"] as const, queryFn: skipToken },
-    [entityKind, entityId, name, legacyReference],
+    [entityKind, entityId, name, legacyReference, titled],
+  );
+  const titleQueryOptions = useMemo(
+    () =>
+      titled && !legacyReference && !name
+        ? referenceTitleQueryOptions(titled, entityId)
+        : { queryKey: ["invalid"] as const, queryFn: skipToken },
+    [titled, entityId, name, legacyReference],
   );
 
   // SAFETY: the options union is narrowed by the named entity guard, but
   // React Query's generic overload cannot express that correlation.
   const query = useQuery(queryOptions as never);
+  // SAFETY: the skipped placeholder never executes; a title query is typed.
+  const titleQuery = useQuery<ReferenceTitle | null>(
+    titleQueryOptions as never,
+  );
 
   if (entityKind === "inventory" && legacyReference) {
     return <span className="text-sm font-medium">Inventory Entry</span>;
@@ -98,15 +122,34 @@ export function ByIdRefLink({
 
   // The SSR query stream may settle before hydration. Both initial renders
   // must retain the loading label rather than disagree on the linked name.
-  if (isNamedEntity(entityKind) && (!hydrated || query.isPending)) {
+  const active = titled ? titleQuery : query;
+  if (isNamedEntity(entityKind) && (!hydrated || active.isPending)) {
     return (
       <output className="inline-flex items-center gap-1 text-muted-foreground">
         <Spinner aria-hidden className="size-3" /> Loading…
       </output>
     );
   }
-  if (isNamedEntity(entityKind) && query.isError)
-    return <span className="text-destructive">{query.error.message}</span>;
+  if (isNamedEntity(entityKind) && active.isError)
+    return <span className="text-destructive">{active.error.message}</span>;
+
+  if (titled) {
+    // The title read answers `null` for a record that no longer exists.
+    const label = titleQuery.data ?? null;
+    return (
+      <ChipRefLink
+        entity={titled}
+        id={entityId}
+        bare={bare}
+        emoji={label?.emoji ?? undefined}
+        name={
+          label
+            ? label.title || `Untitled ${entityLabel(titled).toLowerCase()}`
+            : `Missing ${entityLabel(titled).toLowerCase()}`
+        }
+      />
+    );
+  }
 
   if (!isFetchableEntity(entityKind) && isNamedEntity(entityKind)) {
     // Every other generated entity names itself through its manifest

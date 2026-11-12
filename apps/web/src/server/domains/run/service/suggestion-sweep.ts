@@ -509,14 +509,13 @@ export async function executeSuggestionSweepTarget(
   }
   const result = saved.data;
   await publishAiEvaluation(db, item.id, item.attemptToken, async (tx) => {
-    if (
-      (await fieldInputFingerprint(
-        tx,
-        input.entity,
-        target.entityId,
-        target.field,
-      )) !== preparedFingerprint
-    )
+    const liveInputFingerprint = await fieldInputFingerprint(
+      tx,
+      input.entity,
+      target.entityId,
+      target.field,
+    );
+    if (liveInputFingerprint !== preparedFingerprint)
       throw new JobEvidenceObsoleteError(
         "Suggestion basis changed during inference",
       );
@@ -532,6 +531,7 @@ export async function executeSuggestionSweepTarget(
         fieldDecisionId,
         evaluationId: item.id,
         provenance: result.provenance,
+        liveInputFingerprint,
       },
       result.entries,
       result.financeReviewFingerprint,

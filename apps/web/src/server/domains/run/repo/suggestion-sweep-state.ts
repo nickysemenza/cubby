@@ -221,6 +221,8 @@ export async function saveSweepSuggestions(
     predecessorIds?: string[];
     evaluationId?: string;
     provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
+    /** This transaction's fingerprint of the field's inputs, when the caller already read it. */
+    liveInputFingerprint?: string;
     /** The field's decision policy prunes an unordered set. */
     unordered: boolean;
     /** Why field automation asked; Changes by Cubby groups by it. */
@@ -235,12 +237,14 @@ export async function saveSweepSuggestions(
     db,
     async (tx) => {
       const typedRecordId = parseEntityId(input.entity, input.recordId);
-      const liveInputFingerprint = await fieldInputFingerprint(
-        tx,
-        input.entity,
-        input.recordId,
-        input.field,
-      );
+      const liveInputFingerprint =
+        input.liveInputFingerprint ??
+        (await fieldInputFingerprint(
+          tx,
+          input.entity,
+          input.recordId,
+          input.field,
+        ));
       const saved = await getDb(tx)
         .select(suggestionStateColumns)
         .from(suggestionTable)

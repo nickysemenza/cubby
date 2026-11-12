@@ -4,7 +4,7 @@ import {
   type EntityDisplayImagesOutput,
 } from "@cubby/schemas/entity-media";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { useQueries } from "@tanstack/react-query";
+import { hashKey, useQueries } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
 import {
   createContext,
@@ -21,6 +21,96 @@ import { entityMedia } from "~/integrations/tanstack-query/generated/domains/ent
 export type EntityDisplayImageMap = EntityDisplayImagesOutput;
 export type EntityDisplayImagesQueryOptions =
   typeof entityMedia.displayImages.queryOptions;
+
+type ImageWaiter = {
+  refs: readonly EntityRef[];
+  strong: boolean;
+  done: (images: EntityDisplayImageMap) => void;
+  fail: (error: unknown) => void;
+};
+
+let imageWaiters: ImageWaiter[] = [];
+let imageFlush: ReturnType<typeof setTimeout> | undefined;
+
+function flushDisplayImages() {
+  imageFlush = undefined;
+  const waiters = imageWaiters;
+  imageWaiters = [];
+  const unique = new Map<string, EntityRef>();
+  for (const waiter of waiters)
+    for (const ref of waiter.refs) unique.set(entityDisplayImageKey(ref), ref);
+  const strong = waiters.some((waiter) => waiter.strong);
+  const readOf = new Map<string, Promise<EntityDisplayImageMap>>();
+  for (const refs of chunk([...unique.values()], ID_CHUNK_SIZE)) {
+    const read = entityMedia.displayImages.call(
+      { refs },
+      strong ? { consistency: "strong" } : undefined,
+    );
+    for (const ref of refs) readOf.set(entityDisplayImageKey(ref), read);
+  }
+  for (const waiter of waiters) {
+    const reads = new Set(
+      waiter.refs.flatMap(
+        (ref) => readOf.get(entityDisplayImageKey(ref)) ?? [],
+      ),
+    );
+    Promise.all(reads).then((maps) => {
+      const merged: EntityDisplayImageMap = Object.assign({}, ...maps);
+      const own: EntityDisplayImageMap = {};
+      for (const ref of waiter.refs) {
+        const key = entityDisplayImageKey(ref);
+        if (Object.hasOwn(merged, key)) own[key] = merged[key] ?? null;
+      }
+      waiter.done(own);
+    }, waiter.fail);
+  }
+}
+
+/**
+ * Display-image reads issued in the same tick (the table, its relation
+ * providers and the shell collector mount together) become one operation
+ * per 50 references; each caller still receives exactly the keys it asked for.
+ */
+const coalescedDisplayImagesQueryOptions: EntityDisplayImagesQueryOptions = (
+  input,
+) => {
+  const base = entityMedia.displayImages.queryOptions(input);
+  return {
+    ...base,
+    queryFn: async ({ client, queryKey }) => {
+      const strong = client.getQueryState(queryKey)?.isInvalidated === true;
+      // References another provider already resolved, and that are still
+      // fresh, are not read again.
+      const known: EntityDisplayImageMap = {};
+      if (!strong)
+        for (const query of client.getQueryCache().findAll({
+          predicate: (candidate) =>
+            candidate.meta?.operation === base.meta?.operation &&
+            candidate.queryHash !== hashKey(queryKey) &&
+            candidate.state.data !== undefined &&
+            !candidate.state.isInvalidated &&
+            !candidate.isStaleByTime(
+              typeof base.staleTime === "number" ? base.staleTime : 0,
+            ),
+        }))
+          Object.assign(known, query.state.data);
+      const missing = input.refs.filter(
+        (ref) => !Object.hasOwn(known, entityDisplayImageKey(ref)),
+      );
+      const own: EntityDisplayImageMap = {};
+      for (const ref of input.refs) {
+        const key = entityDisplayImageKey(ref);
+        if (Object.hasOwn(known, key)) own[key] = known[key] ?? null;
+      }
+      if (missing.length === 0) return own;
+      const fetched = await new Promise<EntityDisplayImageMap>((done, fail) => {
+        imageWaiters.push({ refs: missing, strong, done, fail });
+        imageFlush ??= setTimeout(flushDisplayImages, 0);
+      });
+      return Object.assign(own, fetched);
+    },
+  };
+};
 
 const CoveredImageRefsContext = createContext<ReadonlySet<string>>(new Set());
 const RegisterImageRefContext = createContext<
@@ -48,8 +138,7 @@ const stableRefs = (refs: readonly EntityRef[]) =>
 export function useEntityDisplayImages(
   refs: readonly EntityRef[],
   seeded: EntityDisplayImageMap = EMPTY_IMAGES,
-  queryOptions: EntityDisplayImagesQueryOptions = (input) =>
-    entityMedia.displayImages.queryOptions(input),
+  queryOptions: EntityDisplayImagesQueryOptions = coalescedDisplayImagesQueryOptions,
 ): EntityDisplayImageMap {
   // Do not make a caller's freshly mapped ref array a hook dependency. The
   // canonical key is stable for the same logical collection.

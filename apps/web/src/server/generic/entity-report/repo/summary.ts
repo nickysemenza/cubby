@@ -112,31 +112,67 @@ function connectedBlock(
   };
 }
 
-export async function productStockSummary(
+const PRODUCT_STOCK_FIELDS = [
+  "onHandUnits",
+  "categoryFeature",
+  "primaryPlacement",
+] as const;
+const PRODUCT_PRICING_FIELDS = [
+  "purchaseDate",
+  "unitPriceLabel",
+  "pricing",
+  "categoryFeature",
+] as const;
+
+const productSummaryRowSchema = z.object({
+  onHandUnits: z.number().nullable().optional(),
+  primaryPlacement: productPrimaryPlacement.nullable().optional(),
+  categoryFeature: productCategoryFeature.nullable().optional(),
+  purchaseDate: z.string().nullable().optional(),
+  unitPriceLabel: z.string().nullish(),
+  pricing: productPricingOut.optional(),
+});
+export type ProductSummaryRow = z.infer<typeof productSummaryRowSchema>;
+
+/** One selected Product row for the summary slots a request names, read once. */
+export async function readProductSummaryRow(
   db: Database,
   code: string,
-  resolvedId?: ProductId,
-): Promise<ReportBlock[]> {
-  if (!resolvedId) await resolveOrThrow(db, "product", code);
-  const products = await productScaffold.read(db, {
+  slots: readonly string[],
+): Promise<ProductSummaryRow> {
+  const fields = new Set<string>(["id"]);
+  if (slots.includes("product.stock-summary"))
+    for (const field of PRODUCT_STOCK_FIELDS) fields.add(field);
+  if (slots.includes("product.pricing-summary"))
+    for (const field of PRODUCT_PRICING_FIELDS) fields.add(field);
+  const result = await productScaffold.read(db, {
     filters: { ids: [parseShortcodeFor("product", code)] },
     sorts: [],
     pagination: { pageIndex: 0, pageSize: 1 },
     readIntent: "page",
     projection: selectedListProjection(productRepositoryReadSchema, [
-      "id",
-      "onHandUnits",
-      "categoryFeature",
-      "primaryPlacement",
+      ...fields,
     ]),
   });
+  return productSummaryRowSchema.parse(result.data[0]);
+}
+
+export async function productStockSummary(
+  db: Database,
+  code: string,
+  resolvedId?: ProductId,
+  row?: ProductSummaryRow,
+): Promise<ReportBlock[]> {
+  if (!resolvedId) await resolveOrThrow(db, "product", code);
   const product = z
     .object({
       onHandUnits: z.number().nullable(),
       primaryPlacement: productPrimaryPlacement.nullable(),
       categoryFeature: productCategoryFeature.nullable(),
     })
-    .parse(products.data[0]);
+    .parse(
+      row ?? (await readProductSummaryRow(db, code, ["product.stock-summary"])),
+    );
   if (isServiceProductFeature(product.categoryFeature))
     return [
       {
@@ -325,23 +361,11 @@ export async function productPricingSummary(
   db: Database,
   code: string,
   resolvedId?: ProductId,
+  selected?: ProductSummaryRow,
 ): Promise<ReportBlock[]> {
   const productId = resolvedId ?? (await resolveOrThrow(db, "product", code));
   // Exact ids are canonical shortcodes; Product declares no static list scope. Saved-view
   // defaults are UI filters and are not applied to this explicit repository request.
-  const result = await productScaffold.read(db, {
-    filters: { ids: [parseShortcodeFor("product", code)] },
-    sorts: [],
-    pagination: { pageIndex: 0, pageSize: 1 },
-    readIntent: "page",
-    projection: selectedListProjection(productRepositoryReadSchema, [
-      "id",
-      "purchaseDate",
-      "unitPriceLabel",
-      "pricing",
-      "categoryFeature",
-    ]),
-  });
   const row = z
     .object({
       purchaseDate: z.string().nullable(),
@@ -349,7 +373,10 @@ export async function productPricingSummary(
       pricing: productPricingOut,
       categoryFeature: productCategoryFeature.nullable(),
     })
-    .parse(result.data[0]);
+    .parse(
+      selected ??
+        (await readProductSummaryRow(db, code, ["product.pricing-summary"])),
+    );
   if (isServiceProductFeature(row.categoryFeature)) {
     return serviceChargesSummary(db, productId, code);
   }
