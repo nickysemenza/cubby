@@ -87,11 +87,10 @@ establish that a descriptor describes a movement. A pair is clean only when:
   cash-out or funding, or ATM withdrawal).
 
 Generic payment or deposit, ACH, checks and repayments require review unless
-stronger context identifies an account move. A payment-app row naming a
-household member in full, or a bank row with transfer words naming one, is a
-movement whose other account is unknown: it waits for its pair and never books
-as a repayment Credit. Only a payment-app row (a stored-value account or a
-peer-payment descriptor) can have a person counterparty. Model confidence never supplies
+stronger context identifies an account move. Only a payment-app row (a
+stored-value account or a peer-payment descriptor) can have a person
+counterparty, and a payment between household members is a Ledger Transfer,
+never a repayment Credit. Model confidence never supplies
 apply authority, and pairs between different owners always require member
 review and record a Ledger Transfer between those owners. A found statement row
 qualifies as a leg before its FinancialTransaction exists.

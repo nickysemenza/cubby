@@ -3,9 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   decideStatementKind,
-  householdMemberNamed,
   kindAgreed,
-  type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
 } from "./statement-transaction-kind";
@@ -333,30 +331,6 @@ describe("ownAccountNamed", () => {
         { ...otherWallet, id: "wallet-c", ledgerPartyId: "member-c" },
       ]),
     ).toEqual({ accountId: null, ledgerTransfer: true });
-  });
-
-  it("routes money between household members to a transfer", () => {
-    const members = [
-      { ledgerPartyId: "member-a", name: "Sample Alpha" },
-      { ledgerPartyId: "member-b", name: "Sample Beta" },
-    ];
-    const named = (rawDescription: string, account: OwnAccount) =>
-      householdMemberNamed(
-        { rawDescription, merchant: null },
-        account,
-        members,
-      );
-    expect(named("SAMPLE BETA", wallet)).toEqual({
-      accountId: null,
-      ledgerTransfer: true,
-    });
-    expect(
-      named("Requested transfer to Sample X Alpha (EXAMPLE BANK)", bank),
-    ).toEqual({ accountId: null, ledgerTransfer: false });
-    // A bill or a card charge carrying the member's name is spending.
-    expect(named("UTILITY_PAY SAMPLE ALPHA", bank)).toBeNull();
-    expect(named("SAMPLE BETA BOUTIQUE", card)).toBeNull();
-    expect(named("SAMPLE FRIEND", wallet)).toBeNull();
   });
 });
 

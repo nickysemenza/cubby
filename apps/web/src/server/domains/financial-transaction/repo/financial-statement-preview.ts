@@ -21,7 +21,6 @@ import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.bou
 import {
   financialAccount,
   financialTransaction,
-  ledgerParty,
   sourceTransactionRecord,
   transactionImport,
   transactionImportRecord,
@@ -88,12 +87,7 @@ export async function prepareFinancialStatementPreview(db: Database) {
       and(eq(vendor.id, financialAccount.providerVendorId), notDeleted(vendor)),
     )
     .where(notDeleted(financialAccount));
-  const members = await unwrapDb(db)
-    .select({ ledgerPartyId: ledgerParty.id, name: ledgerParty.name })
-    .from(ledgerParty)
-    .where(and(eq(ledgerParty.kind, "member"), notDeleted(ledgerParty)));
   return {
-    members,
     sameFiles: new Map<
       string,
       Map<string, Promise<ReadonlySet<number | null>>>

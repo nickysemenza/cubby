@@ -118,7 +118,6 @@ import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-impo
 import {
   kindAgreed,
   decideStatementKind,
-  householdMemberNamed,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -1586,8 +1585,7 @@ export async function buildChargeProposals(
     });
     const account = accountById.get(accountId);
     const transfer = account
-      ? (ownAccountNamed(canonical.rawDescription, account, accounts) ??
-        householdMemberNamed(canonical, account, preparation.members))
+      ? ownAccountNamed(canonical.rawDescription, account, accounts)
       : null;
     const past = history.get(chargeId(charge));
     const decision = decideStatementKind({

@@ -47,10 +47,10 @@ group by group, filtering a group with
    Vendor, and is never clean. Only a payment-app row (a stored-value account,
    or a Venmo, Zelle or Cash App descriptor) can have a person counterparty;
    elsewhere a person label or history reads as a business, such as a Square
-   shop named after its owner or a bill naming the member. A payment-app row
-   naming a household member in full, or a bank row with transfer words naming
-   one, is a `transfer` awaiting its pair: money between members is a Ledger
-   Transfer, never a Credit, even when it settles a shared dinner. An outgoing
+   shop named after its owner or a bill naming the member. A payment to or from
+   a household member is not a person counterparty: record it as a transfer
+   with a Ledger Transfer between the members, never a Credit, even when it
+   settles a shared dinner. An outgoing
    payment to a friend is your share of a shared cost: create it as `purchase`
    with the merchant set to the business the memo (`create.notes`) names, or
    the payment app's settle-up Vendor when it names none. An incoming one is a
