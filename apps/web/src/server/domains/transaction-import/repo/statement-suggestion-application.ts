@@ -19,7 +19,10 @@ import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
+import {
+  statementRecommendation,
+  statementAttachCandidate,
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementCandidateSubject,
   statementLabelSubject,
@@ -122,17 +125,6 @@ export function withPublishedLabels(
   return judgment;
 }
 
-const defaultAttachCandidate = (judgment: StatementTransactionJudgment) => {
-  const attachable = judgment.candidates.filter(
-    (candidate) => candidate.eligibility !== "context",
-  );
-  return (
-    attachable.find(
-      (candidate) => candidate.transactionId === judgment.pairedTransactionId,
-    ) ?? (attachable.length === 1 ? attachable[0] : undefined)
-  );
-};
-
 /**
  * What applying `application` writes: the money and dates of a create, or the
  * one Transaction an attach, supersede, void or book touches. Other candidates,
@@ -183,7 +175,7 @@ function statementApplicationTerms(
         ? judgment.candidates.find(
             (candidate) => candidate.transactionId === targetId,
           )
-        : defaultAttachCandidate(judgment);
+        : statementAttachCandidate(judgment);
       return {
         ...base,
         "attach.transactionId": target?.transactionId ?? null,
@@ -391,7 +383,7 @@ export async function statementApplicationSelection(
       const attachable = judgment.candidates.filter(
         (candidate) => candidate.eligibility !== "context",
       );
-      const preferred = defaultAttachCandidate(judgment);
+      const preferred = statementAttachCandidate(judgment);
       if (!application.transactionId && !preferred && attachable.length > 1)
         throw refuseStatementApplication(
           `Name the transaction to attach to: ${attachable.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,

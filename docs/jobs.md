@@ -325,8 +325,7 @@ the untouched suffix's receipts and inclusive cursor for the next page.
 Application walks the page's published receipts in page order. Each run of
 consecutive receipts that no automatic rule matches, or whose rule applies an
 as-is `create` the family can batch, settles in one SERIALIZABLE transaction
-of at most eight creates, so its predicate locks stay page-level instead of
-escalating to whole tables:
+bounded to 32 creates to limit its predicate-lock footprint:
 it fences the Job once, rechecks statement scope once, takes every review,
 transfer-leg, evidence-source and occurrence lock in the single-review
 namespace order (sorted within each namespace), rebuilds the run's proposals

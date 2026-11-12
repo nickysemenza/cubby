@@ -1100,13 +1100,13 @@ does not recreate or restamp labels. Resumed application receipts repeat that
 exact retirement check before application, including recovery from a crash
 before the after-commit callback started. Automatic financial application
 admits only the original ready prefix. Import generation and label pages apply
-compatible creates through the same guarded batches of at most eight. Each
+compatible creates through the same guarded batches of at most 32. Each
 batch rebuilds current evidence under its locks, preserves per-charge receipts
 and rejects overlapping write footprints; declined items use single admission.
 Generation settles the booked charge's in-scope copies in the same pass. An
 as-is attach uses its proven paired Transaction even beside other candidates;
 an unpaired ambiguous attach requires an explicit target. Preview, stale-term
-comparison and application use that same target. Charges already skipped by
+comparison, spending preparation and application use that same target. Charges already skipped by
 the current label page do not split that prefix; failed, unfinished and
 applicable-rule charges stop it. Unscoped passes may complete consecutive
 no-action receipts in bounded transactions: lock the exact receipts, verify

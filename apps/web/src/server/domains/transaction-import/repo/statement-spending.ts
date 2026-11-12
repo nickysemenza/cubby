@@ -16,6 +16,7 @@ import {
   type FinancialSpendingPage,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { statementAttachCandidate } from "~/server/domains/transaction-import/repo/statement-charge";
 
 /** Statement observations supply evidence to the shared financial planner. */
 export async function prepareStatementSpending(
@@ -112,9 +113,8 @@ const spendingTarget = (judgment: StatementTransactionJudgment) =>
   (judgment.recommended === "supersede"
     ? judgment.supersede?.pendingTransactionId
     : null) ??
-  (judgment.recommended === "attach" &&
-  (judgment.candidates.length === 1 || judgment.pairedTransactionId)
-    ? judgment.candidates[0]!.transactionId
+  (judgment.recommended === "attach"
+    ? (statementAttachCandidate(judgment)?.transactionId ?? null)
     : null);
 
 /**

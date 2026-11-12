@@ -49,6 +49,23 @@ export const CHARGE_STATE = sql`(
 export const OCCURRENCE_IDENTITY_REVIEW =
   "This observation has no ready, proven source occurrence. Automatic financial actions remain blocked; retain its evidence and money unchanged.";
 
+/** A bank-copy proof names its target; candidate ranking cannot replace it. */
+export function statementAttachCandidate(
+  judgment: Pick<
+    StatementTransactionJudgment,
+    "candidates" | "pairedTransactionId"
+  >,
+): StatementTransactionJudgment["candidates"][number] | undefined {
+  const attachable = judgment.candidates.filter(
+    (candidate) => candidate.eligibility !== "context",
+  );
+  return (
+    attachable.find(
+      (candidate) => candidate.transactionId === judgment.pairedTransactionId,
+    ) ?? (attachable.length === 1 ? attachable[0] : undefined)
+  );
+}
+
 /**
  * Book a matched charge, supersede a hold, attach only to a candidate that can
  * take this charge, otherwise create. A context candidate (settled elsewhere,

@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/source-transaction-record";
 import {
   STATEMENT_LABEL_REVISION,
+  statementTransactionJudgment,
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
@@ -79,6 +80,7 @@ import {
   updateSourceTransactionRecords,
 } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
+import { prepareStatementSpending } from "./statement-spending";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import {
   buildChargeProposals,
@@ -2597,7 +2599,9 @@ describe("statement Transaction suggestions", () => {
     rowInput({
       ...(account && { accountDescriptor: account }),
       providerAmount: -(11 + index * 7),
-      statementDate: `2026-05-${String(1 + index * 3).padStart(2, "0")}`,
+      statementDate: new Date(Date.UTC(2026, 4, 1 + index * 3))
+        .toISOString()
+        .slice(0, 10),
       merchant: `${prefix} Shop ${index}`,
       rawDescription: `${prefix.toUpperCase()} SHOP ${index}`,
     });
@@ -2606,7 +2610,9 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     const recorded = await record(
       ctx,
-      Array.from({ length: 8 }, (_, index) => shop("Example", index)),
+      Array.from({ length: 32 }, (_, index) =>
+        shop(`Example ${String(index).padStart(3, "0")}`, index),
+      ),
     );
     await generate(ctx);
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
@@ -2617,18 +2623,20 @@ describe("statement Transaction suggestions", () => {
           runId,
           scope: { importId: recorded.batchId },
         }),
-      { statements: 300, parameters: 200 },
+      { statements: 400, parameters: 700 },
     );
-    expect(outcome).toMatchObject({ completed: 8, failed: [], next: null });
+    expect(outcome).toMatchObject({ completed: 32, failed: [], next: null });
     expect(
       await getDb(ctx.db)
         .select()
         .from(financialTransaction)
         .where(notDeleted(financialTransaction)),
-    ).toHaveLength(8);
+    ).toHaveLength(32);
     const retained = await record(
       ctx,
-      Array.from({ length: 8 }, (_, index) => shop("Other", index)),
+      Array.from({ length: 32 }, (_, index) =>
+        shop(`Other ${String(index).padStart(3, "0")}`, index),
+      ),
       { fingerprint: "synthetic-retained-generation-labels" },
     );
     await generate(ctx);
@@ -2644,15 +2652,15 @@ describe("statement Transaction suggestions", () => {
         scope: { importId: retained.batchId },
       });
     expect(
-      await expectStatementBudget(replay, { statements: 350, parameters: 200 }),
-    ).toMatchObject({ processed: 8, failed: [] });
+      await expectStatementBudget(replay, { statements: 450, parameters: 700 }),
+    ).toMatchObject({ processed: 32, failed: [] });
     await replay();
     expect(
       await getDb(ctx.db)
         .select()
         .from(financialTransaction)
         .where(notDeleted(financialTransaction)),
-    ).toHaveLength(16);
+    ).toHaveLength(64);
   });
 
   it("writes the same ledger, audit and Feedback on the page and single paths", async () => {
@@ -3749,6 +3757,26 @@ describe("statement Transaction suggestions", () => {
         (candidate) => candidate.eligibility !== "context",
       ),
     ).toHaveLength(2);
+    const [stored] = await getDb(ctx.db)
+      .select({ judgment: suggestionTable.judgment })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, copy!.suggestionId));
+    const judgment = statementTransactionJudgment.parse(stored!.judgment);
+    // Candidate ranking does not change which Transaction the bank-copy proof names.
+    const reversed = {
+      ...judgment,
+      candidates: [...judgment.candidates].sort(
+        (left, right) =>
+          Number(left.transactionId === judgment.pairedTransactionId) -
+          Number(right.transactionId === judgment.pairedTransactionId),
+      ),
+    };
+    expect(reversed.candidates[0]!.transactionId).not.toBe(
+      judgment.pairedTransactionId,
+    );
+    expect(
+      (await prepareStatementSpending(ctx.db, reversed))?.request.transactionId,
+    ).toBe(booked!.shortcode);
     await accept(ctx, copy!);
     expect(await readPendingStatements(ctx)).toEqual([]);
     const { rows } = await getDb(ctx.db).execute<{ n: number }>(
