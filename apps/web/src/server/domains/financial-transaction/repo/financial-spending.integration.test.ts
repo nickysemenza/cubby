@@ -2164,24 +2164,29 @@ describe("shared spending booking", () => {
     expect(
       await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
     ).toEqual([{ cost: 42.5 }]);
+    // A settling charge of another amount is a different bank event.
     await updateFinancialTransaction(
       ctx.db,
       next.output.id,
-      {
-        transactionDate: "2026-07-04",
-        postedDate: "2026-07-04",
-      },
+      { amount: 17.25 },
       ctx.actor,
     );
-    // Overcoverage is uncertainty, not proof that the old receipt is exhausted.
-    await getDb(ctx.db).update(expense).set({ cost: 40 });
     expect(
       await previewFinancialSpending(ctx.db, {
         transactionId: next.output.id,
         advice,
       }),
-    ).toMatchObject({ status: "review_required" });
-    await getDb(ctx.db).update(expense).set({ cost: 42.5 });
+    ).toMatchObject({ status: "ready", effect: "create_aggregate" });
+    await updateFinancialTransaction(
+      ctx.db,
+      next.output.id,
+      {
+        amount: 42.5,
+        transactionDate: "2026-07-04",
+        postedDate: "2026-07-04",
+      },
+      ctx.actor,
+    );
     const independent = await previewFinancialSpending(ctx.db, {
       transactionId: next.output.id,
       advice,
@@ -2310,9 +2315,24 @@ describe("shared spending booking", () => {
       cost: -12,
       trade: "other",
     });
+    // An original outside the refund window still needs the member's choice.
+    const request = { transactionId: transaction.output.id, advice };
+    expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
+      "review_required",
+    );
+    await getDb(ctx.db)
+      .update(purchase)
+      .set({ date: "2026-04-28" })
+      .where(eq(purchase.shortcode, original.output.id));
+    // One recent same-Vendor original whose open returned line is exactly the
+    // refund identifies it.
+    expect(await previewFinancialSpending(ctx.db, request)).toMatchObject({
+      status: "ready",
+      effect: "link_existing",
+      purchaseId: original.output.id,
+    });
     const plan = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-      advice,
+      ...request,
       purchaseId: original.output.id,
     });
     expect(plan.status).toBe("ready");

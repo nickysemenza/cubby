@@ -368,7 +368,7 @@ describe("settlement from retained order evidence", () => {
       );
       await tx
         .update(purchasePaymentEvidence)
-        .set({ chargedAt: null })
+        .set({ chargedAt: new Date("2026-10-15T12:00:00.000Z") })
         .where(eq(purchasePaymentEvidence.purchaseId, purchaseId));
       // Commit planning must ignore even a supplied discovery snapshot.
       expect(
@@ -377,7 +377,7 @@ describe("settlement from retained order evidence", () => {
           { ...input, discovery: false },
           discovery,
         ),
-      ).toBe("no_evidence");
+      ).toBe("incomplete");
       await tx
         .update(purchase)
         .set({ deletedAt: new Date() })
@@ -489,6 +489,50 @@ describe("settlement from retained order evidence", () => {
     );
     expect(plan.candidates).toMatchObject([{ strength: "strong" }]);
     expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  it("settles a wholly undated payment line at its order date past a weak nearby receipt", async () => {
+    const { card, vendor, run } = await world();
+    const purchaseId = await importOrder(run, {
+      orderId: "undated-anchor",
+      total: 40,
+      payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
+    });
+    await getDb(ctx.db)
+      .update(purchasePaymentEvidence)
+      .set({ chargedAt: null })
+      .where(eq(purchasePaymentEvidence.purchaseId, purchaseId));
+    await importOrder(run, {
+      orderId: "undated-anchor-receipt",
+      total: 60,
+      payments: [],
+    });
+    const source = financialSpendingSource.parse({
+      accountId: card.shortcode,
+      kind: "purchase",
+      status: "posted",
+      amount: 40,
+      transactionDate: null,
+      postedDate: "2026-09-03",
+      merchant: vendor.name,
+      rawDescription: null,
+      sourceRefs: [{ source: "synthetic-bank", externalId: "undated-anchor" }],
+    });
+    const advice = financialSpendingAdvice.parse({
+      vendorName: vendor.name,
+      counterparty: "business",
+      vendorConfidence: "high",
+    });
+    expect(
+      await previewFinancialSpending(ctx.db, { source, advice }),
+    ).toMatchObject({ status: "ready", effect: "settle_existing" });
+    // Beyond the posting window of the order date the line names no charge.
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        source: { ...source, postedDate: "2026-09-08" },
+        advice,
+      }),
+    ).toMatchObject({ status: "review_required" });
   });
 
   it("commits a prospective combined charge only once across the conserved retained group", async () => {
