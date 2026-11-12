@@ -9,6 +9,7 @@ import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import {
   type DecisionPort,
   runDecisionChoice,
+  settleDecisionBranches,
 } from "~/server/ai/decision-model";
 import {
   suggestFields,
@@ -42,7 +43,13 @@ export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
   );
 }
 
-/** Advice has no write authority; every caller still uses the shared financial planner. */
+/**
+ * Advice has no write authority; every caller still uses the shared financial
+ * planner. Questions that do not read each other's answers join one decision
+ * wave: the loan-escrow question beside merchant identity, and identity support
+ * beside the category question, which reads only the proposed name. A failure
+ * surfaces in that order after both branches settle.
+ */
 export async function adviseSpending(
   db: Database,
   input: {
@@ -65,12 +72,13 @@ export async function adviseSpending(
   const account =
     input.preparation?.accounts.get(input.judgment.accountId) ??
     (await financialSpendingAccountIdentity(db, input.judgment.accountId));
-  let escrowDisbursement = false;
-  if (
-    account?.identity.kind === "loan" &&
-    create.kind === "purchase" &&
-    create.amount > 0
-  ) {
+  const escrow = async () => {
+    if (
+      account?.identity.kind !== "loan" ||
+      create.kind !== "purchase" ||
+      create.amount <= 0
+    )
+      return false;
     const feature = LOAN_ESCROW_DISBURSEMENT_FEATURE;
     const decision = await runDecisionChoice({
       feature,
@@ -91,44 +99,47 @@ export async function adviseSpending(
         operation: "spending.loanEscrowDisbursement",
       },
     });
-    escrowDisbursement =
-      decision.selectedIndex === 0 && decision.confidence === "high";
-  }
+    return decision.selectedIndex === 0 && decision.confidence === "high";
+  };
   const merchant = create.merchant?.trim() || create.rawDescription?.trim();
-  if (!merchant) return financialSpendingAdvice.parse({});
-  const [named] = await resolveFinancialSpendingVendors(
-    db,
-    [merchant],
-    input.preparation,
-  );
-  let identity = merchantIdentityProposal.parse({
-    name: named?.row?.name ?? null,
-    counterparty: "unknown",
-    confidence: "low",
-  });
-  if (named?.row && !named.candidates.length)
-    identity = {
-      name: named.row.name,
-      counterparty: "business",
-      confidence: "high",
-    };
-  // A supplied decision port is a closed-set test/evaluation seam; it must
-  // never fall through to a live generative request for an unknown merchant.
-  if (!named?.row && !named?.candidates.length && !input.port) {
-    identity = await runStructuredFeature(
-      MERCHANT_IDENTITY_FEATURE,
-      MERCHANT_IDENTITY_FEATURE.request(merchant, create.rawDescription),
-      { db, ...input.owner, operation: "spending.merchantIdentity" },
+  const advise = async (merchant: string) => {
+    const [named] = await resolveFinancialSpendingVendors(
+      db,
+      [merchant],
+      input.preparation,
     );
-    if (identity.name && identity.counterparty === "business") {
-      const subject = JSON.stringify({
-        merchant,
-        description: create.rawDescription,
-        proposed: identity.name,
-      });
+    let identity = merchantIdentityProposal.parse({
+      name: named?.row?.name ?? null,
+      counterparty: "unknown",
+      confidence: "low",
+    });
+    if (named?.row && !named.candidates.length)
+      identity = {
+        name: named.row.name,
+        counterparty: "business",
+        confidence: "high",
+      };
+    // A supplied decision port is a closed-set test/evaluation seam; it must
+    // never fall through to a live generative request for an unknown merchant.
+    const proposed = !named?.row && !named?.candidates.length && !input.port;
+    if (proposed)
+      identity = await runStructuredFeature(
+        MERCHANT_IDENTITY_FEATURE,
+        MERCHANT_IDENTITY_FEATURE.request(merchant, create.rawDescription),
+        { db, ...input.owner, operation: "spending.merchantIdentity" },
+      );
+    const support = async () => {
+      if (!proposed || !identity.name || identity.counterparty !== "business")
+        return true;
       const validation = await runDecisionChoice({
         feature: MERCHANT_IDENTITY_SUPPORT_FEATURE,
-        ...MERCHANT_IDENTITY_SUPPORT_FEATURE.prompt(subject),
+        ...MERCHANT_IDENTITY_SUPPORT_FEATURE.prompt(
+          JSON.stringify({
+            merchant,
+            description: create.rawDescription,
+            proposed: identity.name,
+          }),
+        ),
         choices: MERCHANT_IDENTITY_SUPPORT_FEATURE.choices,
         decisionModel: input.model,
         usage: {
@@ -137,47 +148,61 @@ export async function adviseSpending(
           operation: "spending.merchantIdentitySupport",
         },
       });
-      if (validation.selectedIndex !== 0 || validation.confidence !== "high")
-        identity.confidence = "low";
-    }
-  }
-  let history: Awaited<ReturnType<typeof financialSpendingCategoryHistory>> =
-    [];
-  if (named?.row) {
-    const lookup =
-      input.preparation?.categoryHistory.get(named.row.id) ??
-      financialSpendingCategoryHistory(db, named.row.id);
-    input.preparation?.categoryHistory.set(named.row.id, lookup);
-    history = await lookup;
-  }
-  const result = await suggestFields(
-    db,
-    input.owner,
-    {
-      entity: "expense",
-      targets: ["spendingCategoryId"],
-      basisMode: "provided",
-      basis: {
-        name: merchant,
-        vendor: identity.name ?? merchant,
-        lineKind: "principal",
-        notes: JSON.stringify({
-          description: create.rawDescription,
-          amount: create.amount,
-          kind: create.kind,
-          providerCategory: create.sourceCategory,
-          kindVotes: create.votes,
-          categoryHistory: history,
-        }),
-      },
-    },
-    {
-      decisionPort: input.port,
-      decisionModel: input.model,
-      usageFor: input.usageFor,
-    },
+      return validation.selectedIndex === 0 && validation.confidence === "high";
+    };
+    const category = async () => {
+      let history: Awaited<
+        ReturnType<typeof financialSpendingCategoryHistory>
+      > = [];
+      if (named?.row) {
+        const lookup =
+          input.preparation?.categoryHistory.get(named.row.id) ??
+          financialSpendingCategoryHistory(db, named.row.id);
+        input.preparation?.categoryHistory.set(named.row.id, lookup);
+        history = await lookup;
+      }
+      const result = await suggestFields(
+        db,
+        input.owner,
+        {
+          entity: "expense",
+          targets: ["spendingCategoryId"],
+          basisMode: "provided",
+          basis: {
+            name: merchant,
+            vendor: identity.name ?? merchant,
+            lineKind: "principal",
+            notes: JSON.stringify({
+              description: create.rawDescription,
+              amount: create.amount,
+              kind: create.kind,
+              providerCategory: create.sourceCategory,
+              kindVotes: create.votes,
+              categoryHistory: history,
+            }),
+          },
+        },
+        {
+          decisionPort: input.port,
+          decisionModel: input.model,
+          usageFor: input.usageFor,
+        },
+      );
+      return result.suggestions.spendingCategoryId;
+    };
+    const [supported, suggested] = await settleDecisionBranches(
+      support,
+      category,
+    );
+    if (!supported) identity.confidence = "low";
+    return { identity, category: suggested };
+  };
+  const [escrowDisbursement, advised] = await settleDecisionBranches(
+    escrow,
+    async () => (merchant ? advise(merchant) : null),
   );
-  const category = result.suggestions.spendingCategoryId;
+  if (!advised) return financialSpendingAdvice.parse({});
+  const { identity, category } = advised;
   return financialSpendingAdvice.parse({
     ...(escrowDisbursement ? { escrowDisbursement: true } : {}),
     spendingCategoryId: category?.value ?? null,

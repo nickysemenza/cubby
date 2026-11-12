@@ -691,7 +691,9 @@ the shared decision runner (`server/ai/decision-model.ts`).
   slots while questions wait, and submits compatible cache misses in waves. Each
   question keeps its originating input-capture context; each work item keeps
   its own usage attribution and outcome. Use a shared usage object only when
-  the collection has one attribution owner.
+  the collection has one attribution owner. Independent branches of one item
+  run through `settleDecisionBranches`, so their questions join one wave rather
+  than the first branch's question dispatching while the other still prepares.
 - Cache hits keep their individual keys, while owned cache misses share
   requests only within the same feature, selected model, usage context and
   embedded image content. Shared images are sent once per batch; different
