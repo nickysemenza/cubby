@@ -5,7 +5,7 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
-import { entityPreviewQueryOptions } from "~/entity/entity-query";
+import { referenceTitleQueryOptions } from "~/entity/components/ref-link/reference-title";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -35,11 +35,11 @@ it("imports a shipment without an order ID and links every server-created Run", 
   const calls: unknown[] = [];
   // Keep names available so only refreshed source operands can clear the links.
   for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries()) {
-    const queryKey = entityPreviewQueryOptions("run", ref).queryKey;
+    const queryKey = referenceTitleQueryOptions("run", ref).queryKey;
     harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
     harness.queryClient.setQueryData(queryKey, {
-      id: ref,
-      displayName: `Synthetic import ${index + 1}`,
+      title: `Synthetic import ${index + 1}`,
+      emoji: null,
     });
   }
   const restore = overrideOperationDispatch(async (operation, input) => {
