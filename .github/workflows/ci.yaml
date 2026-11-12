@@ -377,6 +377,7 @@ jobs:
         with:
           ffi-targets: sim
           build-cache: "true"
+          spm-cache-contents: sources-only
       - name: Run iOS app checks
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
@@ -390,7 +391,7 @@ jobs:
       - name: Save SPM clone cache
         uses: ./.github/actions/save-cache-main-only
         with:
-          path: apps/apple/SourcePackages
+          path: ${{ steps.apple.outputs.spm-clones-cache-paths }}
           key: ${{ steps.apple.outputs.spm-clones-cache-key }}
           cache-hit: ${{ steps.apple.outputs.spm-clones-cache-hit }}
           matched-key: ${{ steps.apple.outputs.spm-clones-cache-matched-key }}

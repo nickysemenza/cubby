@@ -10,6 +10,8 @@ inputs:
   node: { default: "true", description: Install Node and the workspace }
   wasm: { default: "false", description: setup-node-with-deps wasm mode }
   spm-cache: { default: "true", description: Restore app package clones }
+  spm-cache-contents:
+    { default: full, description: "SPM cache contents: full or sources-only" }
   xcodegen: { default: "true", description: Install XcodeGen }
   sentry-cli: { default: "false", description: Install sentry-cli for archives }
   build-cache:
@@ -21,6 +23,7 @@ inputs:
     }
 outputs:
   toolchain-hash: { value: "${{ steps.toolchain.outputs.hash }}" }
+  spm-clones-cache-paths: { value: "${{ steps.spm-paths.outputs.value }}" }
   spm-clones-cache-hit: { value: "${{ steps.spm-cache.outputs.cache-hit }}" }
   spm-clones-cache-matched-key:
     { value: "${{ steps.spm-cache.outputs.cache-matched-key }}" }
@@ -176,6 +179,33 @@ runs:
       shell: bash
       run: brew install getsentry/tools/sentry-cli
 
+    - name: Define SPM cache paths
+      id: spm-paths
+      shell: bash
+      env:
+        CONTENTS: ${{ inputs.spm-cache-contents }}
+      run: |
+        set -euo pipefail
+        case "$CONTENTS" in
+          full)
+            echo 'value=apps/apple/SourcePackages' >> "$GITHUB_OUTPUT"
+            ;;
+          sources-only)
+            # Let normal resolution reconstruct artifact state and fetch archives.
+            # Do not restore workspace-state.json pointing at omitted artifacts.
+            {
+              echo 'value<<SPM_PATHS'
+              echo 'apps/apple/SourcePackages/repositories'
+              echo 'apps/apple/SourcePackages/checkouts'
+              echo 'SPM_PATHS'
+            } >> "$GITHUB_OUTPUT"
+            ;;
+          *)
+            echo '::error::spm-cache-contents must be full or sources-only'
+            exit 1
+            ;;
+        esac
+
     # App package versions float within their declared ranges. Xcode's normal
     # resolver fetches any delta from an advisory dependency clone cache, so a
     # warm cache never reclones Sentry/GRDB/Nuke.
@@ -184,7 +214,7 @@ runs:
       id: spm-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
-        path: apps/apple/SourcePackages
+        path: ${{ steps.spm-paths.outputs.value }}
         key: spm-clones-v2-${{ runner.os }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved', 'apps/apple/Package.resolved', 'apps/apple/packages.yml') }}
         restore-keys: |
           spm-clones-v2-${{ runner.os }}-

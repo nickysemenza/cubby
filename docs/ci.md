@@ -284,8 +284,13 @@ profile. On a miss, setup verifies the fingerprint again after Rust-cache
 preparation and before building. Archive jobs can run this preparation without
 installing JS dependencies.
 
-It restores `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones
-used by app builds; the host resolves its smaller package graph directly.
+The required simulator lane caches complete SPM repositories and checkouts under
+`apps/apple/SourcePackages`. SwiftPM reconstructs workspace state and acquires,
+validates and extracts binary artifacts through normal resolution. The setup
+action's `spm-cache-contents` defaults to `full`, restoring the whole directory
+for journeys and TestFlight; `sources-only` selects repositories and checkouts.
+Restore and save steps consume the same path output, with broad package and
+resolved-pin keys. The host resolves its smaller package graph directly.
 That clone cache is separate from the FFI output cache and compiler caches. Simulator compiler keys include the Xcode toolchain,
 package declarations, both resolved-pin files, generated FFI headers, app and
 Kit sources, and build tooling. Partial restores require the same package graph.
