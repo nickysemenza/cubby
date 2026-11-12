@@ -29,6 +29,7 @@ import {
   storeAiEvaluationResult,
   type ClaimedAiEvaluation,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
+import { withoutFieldSuggestionPreparation } from "~/server/ai/field-suggest/registry";
 import {
   suggestFields,
   type SuggestFieldsPorts,
@@ -467,7 +468,11 @@ export async function executeAiRefreshTarget(
   }
   const saved = result.data;
   await publishAiEvaluation(db, id, token, async (tx) => {
-    const now = await prepareField(tx, target, fieldPorts);
+    // The drain page shares rosters read before inference; the fingerprint
+    // recheck must see this transaction's rosters.
+    const now = await withoutFieldSuggestionPreparation(() =>
+      prepareField(tx, target, fieldPorts),
+    );
     if (
       !now ||
       now.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
