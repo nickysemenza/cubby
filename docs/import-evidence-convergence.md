@@ -753,7 +753,11 @@ collection member without creating identity or money. Distinct identical
 physical positions stay distinct.
 
 Generic create/merge remain unavailable. Judgment edits resolve to the one
-occurrence for every observation, including legacy records. Observation notes
+occurrence for every observation, including legacy records. Explicit source keys
+select the union of exact external aliases and the named occurrence's current
+observation through indexed identity reads. An external alias retains its
+immutable observation's source; filtered selectors retain the full
+observation-state policy. Observation notes
 and exact reviewed replacement selections stay local. Preserved historical
 annotations keep every original decision without copying it into new revisions.
 A reviewed replacement names its exact retained observation, with an occurrence
@@ -1099,7 +1103,10 @@ admits only the original ready prefix. Import generation and label pages apply
 compatible creates through the same guarded batches of at most eight. Each
 batch rebuilds current evidence under its locks, preserves per-charge receipts
 and rejects overlapping write footprints; declined items use single admission.
-Generation settles the booked charge's in-scope copies in the same pass. Charges already skipped by
+Generation settles the booked charge's in-scope copies in the same pass. An
+as-is attach uses its proven paired Transaction even beside other candidates;
+an unpaired ambiguous attach requires an explicit target. Preview, stale-term
+comparison and application use that same target. Charges already skipped by
 the current label page do not split that prefix; failed, unfinished and
 applicable-rule charges stop it. Unscoped passes may complete consecutive
 no-action receipts in bounded transactions: lock the exact receipts, verify
