@@ -365,15 +365,6 @@ export const parseExpenseCategoryResolution = (
   value: unknown,
 ): FieldResolution => fieldResolutionSchema.parse(value);
 
-/** The exact principal-line graph booking will create, without storing advice as an override. */
-export async function resolveAggregateExpenseCategory(
-  db: Database,
-  draft: AggregateExpenseDraft,
-): Promise<FieldResolution> {
-  const [resolution] = await resolveAggregateExpenseCategories(db, [draft]);
-  return resolution!;
-}
-
 type AggregateExpenseDraft = {
   purchaseId: PurchaseId | null;
   vendorId: VendorId | null;

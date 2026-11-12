@@ -35,6 +35,7 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialSpending,
+  previewFinancialSpendings,
   commitFinancialSpending,
   commitFinancialSpendings,
   prepareFinancialSpendingCandidates,
@@ -743,18 +744,26 @@ export async function applyStatementTransactionSuggestions(
       sources: [],
     });
     await prepareFinancialSpendingCandidates(txDb, createdPage);
+    const previews = await previewFinancialSpendings(
+      txDb,
+      applied.map(({ published }, position) => ({
+        request: {
+          transactionId: parseShortcodeFor(
+            "financialTransaction",
+            codes.get(created[position]!)!,
+          ),
+          advice: published.spending?.request.advice ?? null,
+        },
+      })),
+      createdPage,
+    );
     const plans = [];
-    for (const [position, { judgment, published }] of applied.entries()) {
+    for (const [position, { judgment }] of applied.entries()) {
       const transactionId = parseShortcodeFor(
         "financialTransaction",
         codes.get(created[position]!)!,
       );
-      const plan = await previewFinancialSpending(
-        txDb,
-        { transactionId, advice: published.spending?.request.advice ?? null },
-        undefined,
-        createdPage,
-      );
+      const plan = previews[position]!;
       if (plan.status === "deferred") {
         if (
           judgment.providerStatus === "posted" &&

@@ -59,7 +59,7 @@ import { readExpenseAttributionParties } from "~/server/domains/expense/repo/exp
 import {
   effectiveExpenseSpendingCategoriesSql,
   effectiveExpenseSpendingCategorySql,
-  resolveAggregateExpenseCategory,
+  resolveAggregateExpenseCategories,
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
@@ -1736,6 +1736,21 @@ async function exactReceiptTarget(
   return competing.rows.length ? undefined : match;
 }
 
+type PreparedFinancialSpendingPreview =
+  | FinancialSpendingPlan
+  | {
+      draft:
+        | Parameters<typeof resolveAggregateExpenseCategories>[1][number]
+        | undefined;
+      finish: (
+        category:
+          | Awaited<
+              ReturnType<typeof resolveAggregateExpenseCategories>
+            >[number]
+          | undefined,
+      ) => Promise<FinancialSpendingPlan>;
+    };
+
 export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
@@ -1750,6 +1765,64 @@ export async function previewFinancialSpending(
   },
   page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan> {
+  const [plan] = await previewFinancialSpendings(
+    db,
+    [{ request: raw, attachment }],
+    page,
+  );
+  return plan!;
+}
+
+/** Resolve one category vector after every read-only preview has prepared its draft. */
+export async function previewFinancialSpendings(
+  db: Database,
+  entries: readonly {
+    request: z.input<typeof financialSpendingRequest>;
+    attachment?: Parameters<typeof previewFinancialSpending>[2];
+  }[],
+  page: FinancialSpendingPage | undefined,
+): Promise<FinancialSpendingPlan[]> {
+  const prepared = [];
+  for (const entry of entries)
+    prepared.push(
+      await prepareFinancialSpendingPreview(
+        db,
+        entry.request,
+        entry.attachment,
+        page,
+      ),
+    );
+  const categories = await resolveAggregateExpenseCategories(
+    db,
+    prepared.flatMap((value) =>
+      "finish" in value && value.draft ? [value.draft] : [],
+    ),
+  );
+  let ordinal = 0;
+  const plans = [];
+  for (const value of prepared)
+    plans.push(
+      "finish" in value
+        ? await value.finish(value.draft ? categories[ordinal++] : undefined)
+        : value,
+    );
+  return plans;
+}
+
+async function prepareFinancialSpendingPreview(
+  db: Database,
+  raw: z.input<typeof financialSpendingRequest>,
+  attachment?: {
+    settlementRef: FinancialTransactionSourceRef;
+    fields?: Partial<
+      Pick<
+        z.infer<typeof financialSpendingSource>,
+        "amount" | "status" | "postedDate"
+      >
+    >;
+  },
+  page?: FinancialSpendingPage,
+): Promise<PreparedFinancialSpendingPreview> {
   const request = spendingRequestBoundary.parse(raw);
   const facts = await spendingFacts(db, request, page, attachment?.fields);
   // Preview an impending reference attachment without duplicating its charge.
@@ -1886,7 +1959,6 @@ export async function previewFinancialSpending(
   return prepareReadySpending(db, evidence, target, Boolean(chosen));
 }
 
-// eslint-disable-next-line complexity -- Candidate capacity and creation-only reviewed intent share one admission decision.
 async function prepareReadySpending(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -1896,7 +1968,7 @@ async function prepareReadySpending(
       >["liveCandidates"][number]
     | undefined,
   chosen: boolean,
-): Promise<FinancialSpendingPlan> {
+): Promise<PreparedFinancialSpendingPreview> {
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
   const { row, source } = facts;
@@ -2011,43 +2083,49 @@ async function prepareReadySpending(
     return review(
       "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
     );
-  const effectiveCategory =
+  const draft =
     effect === "create_aggregate"
-      ? await resolveAggregateExpenseCategory(db, {
+      ? {
           purchaseId: target ? parseEntityId("purchase", target.id) : null,
           vendorId: vendor?.id ?? null,
           spendingCategoryId: bookingCategory?.id ?? null,
           name: source.merchant || source.rawDescription || "Reviewed spending",
-        })
+        }
       : undefined;
   const beneficiaries = await readExpenseAttributionParties(
     db,
     basis.request.beneficiaries,
   );
-  return financialSpendingPlan.parse({
-    ...basis,
-    status: "ready",
-    snapshot: await digestValue({
-      snapshot: basis.snapshot,
-      effectiveCategory,
-      ...(basis.request.beneficiaries === undefined ? {} : { beneficiaries }),
-    }),
-    effect,
-    purchaserId: facts.purchaser?.shortcode ?? null,
-    purchaserSnapshot: await digestValue({
-      account: facts.account,
-      purchaserProof: facts.purchaserProof,
-    }),
-    vendorId: vendor?.shortcode ?? null,
-    vendorName: vendor?.name ?? advice!.vendorName,
-    spendingCategoryId: bookingCategory?.shortcode ?? null,
-    categoryOverride:
-      effect === "create_aggregate"
-        ? (bookingCategory?.shortcode ?? null)
-        : null,
-    ...(effectiveCategory ? { effectiveCategory } : {}),
-    purchaseId: target?.shortcode ?? null,
-  });
+  return {
+    draft,
+    finish: async (effectiveCategory) =>
+      financialSpendingPlan.parse({
+        ...basis,
+        status: "ready",
+        snapshot: await digestValue({
+          snapshot: basis.snapshot,
+          effectiveCategory,
+          ...(basis.request.beneficiaries === undefined
+            ? {}
+            : { beneficiaries }),
+        }),
+        effect,
+        purchaserId: facts.purchaser?.shortcode ?? null,
+        purchaserSnapshot: await digestValue({
+          account: facts.account,
+          purchaserProof: facts.purchaserProof,
+        }),
+        vendorId: vendor?.shortcode ?? null,
+        vendorName: vendor?.name ?? advice!.vendorName,
+        spendingCategoryId: bookingCategory?.shortcode ?? null,
+        categoryOverride:
+          effect === "create_aggregate"
+            ? (bookingCategory?.shortcode ?? null)
+            : null,
+        ...(effectiveCategory ? { effectiveCategory } : {}),
+        purchaseId: target?.shortcode ?? null,
+      }),
+  };
 }
 
 /** The outer caller owns a single serializable retry spanning evidence and all effects. */
@@ -2176,10 +2254,17 @@ export async function commitFinancialSpendings(
           return name ? [name] : [];
         }),
       );
+      const previews = await previewFinancialSpendings(
+        txDb,
+        committed.map(({ plan, transactionId }) => ({
+          request: { ...plan.request, source: undefined, transactionId },
+        })),
+        page,
+      );
       const rechecked = [];
-      for (const { plan, transactionId } of committed)
+      for (const [index, { plan }] of committed.entries())
         rechecked.push(
-          await recheckFinancialSpending(txDb, plan, transactionId, page),
+          await recheckFinancialSpending(txDb, plan, page, previews[index]!),
         );
       const purchases = rechecked.flatMap((outcome) =>
         "fresh" in outcome && outcome.fresh.purchaseId
@@ -2254,19 +2339,9 @@ async function recheckFinancialSpending(
     FinancialSpendingPlan,
     { status: "review_required" | "deferred" }
   >,
-  transactionId: FinancialTransactionShortcode,
   page: FinancialSpendingPage,
+  fresh: FinancialSpendingPlan,
 ): Promise<RecheckedSpending> {
-  const fresh = await previewFinancialSpending(
-    txDb,
-    {
-      ...plan.request,
-      source: undefined,
-      transactionId,
-    },
-    undefined,
-    page,
-  );
   if (fresh.status === "already_booked") {
     const facts = await spendingFacts(txDb, fresh.request, page);
     if (plan.status === "already_booked" && plan.snapshot !== fresh.snapshot)
