@@ -45,7 +45,9 @@ import { DateDisplay } from "~/ui/values/date-display";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { detailSlotsFor } from "./detail-slots";
 import { fieldRecorded, useDetailFieldOverrides } from "./entity-record-fields";
+import { recordStateOf } from "./record-header";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
 import {
   LIVE_REPORT_POLL_MS,
@@ -99,9 +101,10 @@ function summarySlotFields(
 
 /**
  * The fields the full page's header and side column draw: the declared lines,
- * AI summary and needs, the state badge's fields and the kind tag.
+ * AI summary and needs, the state badge's fields, the kind tag and the
+ * header's `hero.when` date.
  */
-export function headerPlacedFields(
+function headerPlacedFields(
   queryClient: QueryClient,
   entity: GenericDetailEntity,
 ): Set<string> {
@@ -114,6 +117,7 @@ export function headerPlacedFields(
       ...detail.lines.map((line) => line.field),
       detail.aiSummary,
       detail.side?.needs,
+      detail.hero.when?.field,
       state?.field,
       state?.reason,
       state?.wait,
@@ -124,10 +128,39 @@ export function headerPlacedFields(
 }
 
 /**
+ * Option fields whose current value reads the same as the header's state (a
+ * stored status beside the displayed one): the header already says it.
+ */
+function repeatsHeaderState<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
+  entity: E,
+  record: DetailRecordOf<E>,
+): (key: string) => boolean {
+  const state = recordStateOf(queryClient, entity, record);
+  if (state === null) return () => false;
+  const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
+    .fields;
+  return (key) => {
+    const field = fields.find((candidate) => candidate.key === key);
+    if (!field) return false;
+    const raw = readPathValue(
+      record,
+      field.display.readPath ?? field.readKey ?? field.key,
+    );
+    const options: readonly { value: string; label: string }[] =
+      field.control?.options ?? field.display.valueOptions ?? [];
+    return options.some(
+      (option) => option.value === raw && option.label === state.option.label,
+    );
+  };
+}
+
+/**
  * The section fields a record surface still shows: a field a summary cell shows
  * is not repeated, and a Name row only repeats the title above it (the header's
  * Edit keeps it editable). On the full page (`placed`) the header and side
- * column own their fields outright, recorded or not, so no fact appears twice.
+ * column own their fields outright, recorded or not, and an option field that
+ * reads the same as the header's state leaves too, so no fact appears twice.
  */
 export function detailSectionFields<E extends GenericDetailEntity>(
   queryClient: QueryClient,
@@ -150,13 +183,49 @@ export function detailSectionFields<E extends GenericDetailEntity>(
             : [],
         ),
   );
+  const repeatsState = options.placed
+    ? repeatsHeaderState(queryClient, entity, record)
+    : () => false;
   const titled =
     options.omitTitle &&
     typeof readPathValue(record, titleField) === "string" &&
     readPathValue(record, titleField) !== "";
   return keys.filter(
-    (key) => !summarized.has(key) && !(titled && key === titleField),
+    (key) =>
+      !summarized.has(key) &&
+      !(titled && key === titleField) &&
+      !repeatsState(key),
   );
+}
+
+/**
+ * Whether a side-column report or records cell repeats a section the page
+ * draws: a report slot named `<entity>.<section id>`, or a records cell over a
+ * relation a section lists. The section keeps the whole content.
+ */
+function repeatsSection<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
+  entity: E,
+  record: DetailRecordOf<E>,
+  slot: DetailSummarySlot,
+): boolean {
+  if (slot.kind !== "report" && slot.kind !== "records") return false;
+  const slots = detailSlotsFor(entity);
+  const sections: CompiledEntityPresentation["detail"]["sections"] =
+    entityMetadata(queryClient, entity).summary.detail.sections;
+  return sections.some((section) => {
+    if (!onDetailSurface(section, "web")) return false;
+    if (slot.kind === "records")
+      return (
+        section.kind === "relation" &&
+        slot.viewKey === `relation:${section.relation}`
+      );
+    if (section.kind !== "slot" || slot.slot !== `${entity}.${section.id}`)
+      return false;
+    const fill = slots?.[section.id];
+    // SAFETY: `detailSlotsFor` hands back this entity's own slots.
+    return fill !== undefined && fill.applies?.(record as never) !== false;
+  });
 }
 
 function isRoutedReportEntity(
@@ -437,7 +506,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
   const hydrated = useHydrated();
   const declared: readonly DetailSummarySlot[] =
     metadata.summary.detail.summary;
-  const slots = declared.filter((slot) => onDetailSurface(slot, "web"));
+  // Beside the sections, a cell that repeats one leaves the side column.
+  const slots = declared.filter(
+    (slot) =>
+      onDetailSurface(slot, "web") &&
+      !(side && repeatsSection(queryClient, entity, record, slot)),
+  );
   const id = record.id;
   const [showContext, setShowContext] = useState(false);
   const records = slots.filter((slot) => slot.kind === "records");
@@ -612,8 +686,9 @@ export function DetailSummary<E extends GenericDetailEntity>({
   });
   if (side) {
     // Every field cell joins one Key facts list; absent facts fold under it
-    // with their Add controls.
-    const keys = [...new Set(fieldKeys)];
+    // with their Add controls. A field the header draws stays there.
+    const header = headerPlacedFields(queryClient, entity);
+    const keys = [...new Set(fieldKeys)].filter((key) => !header.has(key));
     const recorded = keys.flatMap((key) => {
       const field = fields.find((candidate) => candidate.key === key);
       return field && fieldRecorded(entity, record, field) ? [field] : [];

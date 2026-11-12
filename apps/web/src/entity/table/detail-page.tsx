@@ -55,8 +55,8 @@ export interface DetailSection extends IndexedSection {
   placement: DetailPlacement;
   /**
    * The tab this section sits in. An undeclared supporting group
-   * (relations, activity, evidence) is the last tab; any other unknown id, or
-   * none, is the first.
+   * (relations, activity, evidence) is the Evidence tab, else the last; any
+   * other unknown id, or none, is the first.
    */
   group?: string;
   /** Specialized workflows can supply their own internal surface while retaining
@@ -77,19 +77,21 @@ interface DetailSectionsProps {
 
 /**
  * Each section in its tab; tabs with no sections leave. A section naming a
- * group the entity did not declare joins the last tab when it is supporting
- * (relations, activity, evidence), otherwise the first.
+ * group the entity did not declare joins Evidence when it is supporting
+ * (relations, activity, evidence) and the entity declares one, else the last
+ * tab; any other section joins the first.
  */
 function groupSections(
   declared: readonly DetailGroup[],
   sections: readonly DetailSection[],
 ): DetailWorkspaceGroup[] {
   const supporting = new Set(["relations", "activity", "evidence"]);
+  const evidence =
+    declared.find((tab) => tab.id === "evidence") ?? declared.at(-1);
   const resolve = (id: string | undefined) =>
     declared.some((tab) => tab.id === id)
       ? id
-      : (id !== undefined && supporting.has(id) ? declared.at(-1) : declared[0])
-          ?.id;
+      : (id !== undefined && supporting.has(id) ? evidence : declared[0])?.id;
   const placed = sections.map((section) => ({
     section,
     group: resolve(section.group),

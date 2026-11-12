@@ -9,6 +9,7 @@ import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { embeddableEntitySchema } from "@cubby/schemas/search";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -98,8 +99,10 @@ import {
   recordStateOf,
 } from "./record-header";
 import {
+  isScoredEntity,
   QualitySectionChecks,
   RecordQualityProvider,
+  RecordQualitySection,
   useQualityCheckSections,
 } from "./record-quality";
 
@@ -781,6 +784,17 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         <DocumentViewerList documents={documents} />
       ) : null,
   });
+  // The record's quality summary and the results no section places live in
+  // a tab; its open issues join Needs you.
+  if (isScoredEntity(entity))
+    sections.push({
+      id: "record-quality",
+      title: "Record quality",
+      group: "evidence",
+      icon: CheckCircleIcon,
+      placement: "primary",
+      content: <RecordQualitySection entity={entity} id={bag.id} />,
+    });
   const relationOf = new Map(
     detail.sections.flatMap((section) =>
       section.kind === "relation" ? [[section.id, section.relation]] : [],
@@ -908,6 +922,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
           <RecordQualityProvider
             entity={entity}
             id={bag.id}
+            summary="placed"
             renderedSections={placed.map((section) => section.id)}
             visibleFields={renderedFields}
           >

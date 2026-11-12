@@ -22,15 +22,17 @@ const ROWS = [
 const article = (label: string) => (/^[aeiou]/iu.test(label) ? "an" : "a");
 
 /**
- * "What a Sweep does": the kind's targets, exclusions, effects, dependencies,
+ * "What a Sweep does": the kind option's description, then its targets, exclusions, effects, dependencies,
  * cost and recovery, each label over its value so the narrow side column
  * reads them without a label gutter.
  */
 export function KindExplanation({
   label,
+  description,
   explanation,
 }: {
   label: string;
+  description?: string;
   explanation: KindExplanationValue;
 }) {
   const title = `What ${article(label)} ${label} does`;
@@ -39,6 +41,9 @@ export function KindExplanation({
       <h2 className="mb-1.5 text-sm font-semibold text-foreground-strong">
         {title}
       </h2>
+      {description ? (
+        <p className="mb-1.5 text-sm text-foreground">{description}</p>
+      ) : null}
       <dl className="divide-y divide-border text-sm">
         {ROWS.map(([key, rowLabel]) => (
           <div key={key} className="py-1.5 first:pt-0">

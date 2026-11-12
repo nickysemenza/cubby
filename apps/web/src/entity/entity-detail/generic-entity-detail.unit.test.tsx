@@ -219,12 +219,18 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     expect(container.querySelector("section#import-targets")).toBeNull();
-    expect(await screen.findByText(/Target outcomes · Defect/)).toBeVisible();
-    const jump = screen
-      .getByRole("navigation", { name: "Quality issues" })
-      .querySelector("a");
-    expect(jump).not.toBeNull();
-    expect(document.getElementById(jump!.hash.slice(1))).not.toBeNull();
+    // The unplaced check sits in the Record quality section on its tab; Needs
+    // you links to it from the side column.
+    expect(
+      await screen.findByText(/Target outcomes · Defect/),
+    ).toBeInTheDocument();
+    const jump = within(
+      screen.getByRole("heading", { name: /Needs you/u }).closest("section")!,
+    ).getByRole("link", { name: /Target outcomes/u });
+    expect(jump).toBeVisible();
+    expect(
+      document.getElementById(jump.getAttribute("href")!.slice(1)),
+    ).not.toBeNull();
   });
 
   // Regression: `externalIds` is a `text-array` field whose read shape is an

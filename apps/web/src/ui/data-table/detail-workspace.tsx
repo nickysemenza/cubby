@@ -76,8 +76,8 @@ function useUntilFound(
  * The full record's workspace: a side column (Needs you, key facts, the kind
  * explanation) beside the declared section groups as tabs. Every panel stays
  * mounted, so drafts survive a tab switch. The tab is the `#<group>` fragment;
- * a section's own fragment selects its group, unfolds it when empty, and
- * focuses it. Known-empty sections fold into one line per panel.
+ * a section's own fragment, or any anchor inside a panel, selects its group,
+ * unfolds it when empty, and focuses it. Known-empty sections fold into one line per panel.
  */
 export function DetailWorkspace({
   groups,
@@ -134,7 +134,13 @@ export function DetailWorkspace({
   useLayoutEffect(() => {
     const id = normalizedHash(hash);
     if (!id) return;
-    const group = groupFor(groupsRef.current, id);
+    // Any other anchor (a field row, a check result) selects the panel it
+    // sits in.
+    const group =
+      groupFor(groupsRef.current, id) ??
+      rootRef.current
+        ?.querySelector<HTMLElement>(`[id="${CSS.escape(id)}"]`)
+        ?.closest<HTMLElement>("[data-detail-panel]")?.dataset.detailPanel;
     if (group === undefined) return;
     setActive(group);
     if (group !== id) {
@@ -152,6 +158,7 @@ export function DetailWorkspace({
     // Wait until the section and its panel show: a hidden target cannot focus.
     if (!target || target.closest("[hidden]")) return;
     pendingFocus.current = undefined;
+    if (!target.hasAttribute("tabindex")) target.tabIndex = -1;
     target.scrollIntoView({ behavior: "instant", block: "start" });
     target.focus({ preventScroll: true });
   });

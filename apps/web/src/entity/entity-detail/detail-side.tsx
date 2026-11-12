@@ -10,9 +10,13 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
-import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
+import { entityMetadata } from "~/entity/metadata";
+import {
+  RecordWorkQueueRow,
+  useRecordWorkQueue,
+} from "~/entity/work-queue/record-work-queue";
 import { formatCount } from "~/lib/number-format";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import { readPathValue } from "../read-path";
@@ -20,6 +24,7 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { DetailSummary, sideHeading } from "./detail-summary";
 import { KindExplanation } from "./kind-explanation";
 import type { RecordKind } from "./record-header";
+import { QualityIssueLink, useQualityAttention } from "./record-quality";
 
 type Field = EntityFieldModel["fields"][number];
 
@@ -44,22 +49,54 @@ export function declaredNeedsOf<E extends GenericDetailEntity>(
   return parsed.success ? (parsed.data ?? []) : [];
 }
 
-/** The declared `side.needs` items: what waits on a member, each linked. */
-function DeclaredNeeds<E extends GenericDetailEntity>({
+const needsMark = (failed: boolean) => (
+  <span
+    aria-hidden
+    className={
+      failed
+        ? "mt-1 block size-2 rounded-[1.5px] bg-destructive"
+        : "mt-1 block size-2 rounded-[1.5px] bg-needs"
+    }
+  />
+);
+
+/**
+ * Needs you: the declared `side.needs` items (else the record's Work queue
+ * rows), then the open quality checks no queue row already names, each linked
+ * to its field or result. Nothing draws when nothing waits.
+ */
+function NeedsYou<E extends GenericDetailEntity>({
   entity,
   record,
 }: {
   entity: E;
   record: DetailRecordOf<E>;
 }) {
-  const items = declaredNeedsOf(useQueryClient(), entity, record);
-  if (items.length === 0) return null;
+  const queryClient = useQueryClient();
+  const { detail }: CompiledEntityPresentation = entityMetadata(
+    queryClient,
+    entity,
+  ).summary;
+  const declared = detail.side?.needs;
+  const items = declaredNeedsOf(queryClient, entity, record);
+  const queue = useRecordWorkQueue(record.id, declared === undefined);
+  const rows = declared === undefined ? queue.rows : [];
+  const named = new Set(
+    rows.flatMap((row) => row.gaps.map((gap): string => gap.check)),
+  );
+  const quality = useQualityAttention().filter(
+    ({ check }) => !named.has(check.check),
+  );
+  const count = items.length + rows.length + quality.length;
+  if (queue.error && declared === undefined)
+    return <ErrorDisplay error={queue.error} title="Needs you" />;
+  if (count === 0) return null;
   return (
     <section aria-label="Needs you" data-testid="needs-you">
       <h2 className={sideHeading}>
         Needs you{" "}
         <span className="font-normal text-muted-foreground tabular-nums">
-          {formatCount(items.length)}
+          {formatCount(count)}
         </span>
       </h2>
       <RecordList>
@@ -70,12 +107,7 @@ function DeclaredNeeds<E extends GenericDetailEntity>({
               key={`${item.entity}:${item.id}:${item.title}`}
               clip={false}
               stacked
-              leading={
-                <span
-                  aria-hidden
-                  className="mt-1 block size-2 rounded-[1.5px] bg-needs"
-                />
-              }
+              leading={needsMark(false)}
               primary={
                 target.success &&
                 item.id &&
@@ -96,6 +128,31 @@ function DeclaredNeeds<E extends GenericDetailEntity>({
             />
           );
         })}
+        {rows.map((row) => (
+          <RecordRow
+            key={row.key}
+            clip={false}
+            stacked
+            leading={needsMark(false)}
+            primary={<RecordWorkQueueRow row={row} />}
+          />
+        ))}
+        {quality.map(({ check, anchor }) => (
+          <RecordRow
+            key={check.check}
+            clip={false}
+            stacked
+            leading={needsMark(check.kind === "defect")}
+            primary={
+              <QualityIssueLink
+                check={check}
+                anchor={anchor}
+                className="hover:underline"
+              />
+            }
+            secondary={check.stateLabel}
+          />
+        ))}
       </RecordList>
     </section>
   );
@@ -115,19 +172,16 @@ export function DetailSide<E extends GenericDetailEntity>({
   record: DetailRecordOf<E>;
   kind: RecordKind | null;
 }) {
-  const { detail }: CompiledEntityPresentation =
-    useEntityMetadata(entity).summary;
-  const needs = detail.side?.needs;
   return (
     <div className="grid min-w-0 gap-4 [&>*+*]:border-t [&>*+*]:border-border [&>*+*]:pt-4 [&>:empty]:hidden">
-      {needs === undefined ? (
-        <RecordWorkQueue id={record.id} variant="needs-you" />
-      ) : (
-        <DeclaredNeeds entity={entity} record={record} />
-      )}
+      <NeedsYou entity={entity} record={record} />
       <DetailSummary entity={entity} record={record} layout="side" />
       {kind?.explanation ? (
-        <KindExplanation label={kind.label} explanation={kind.explanation} />
+        <KindExplanation
+          label={kind.label}
+          description={kind.description}
+          explanation={kind.explanation}
+        />
       ) : null}
     </div>
   );
