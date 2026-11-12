@@ -27,7 +27,6 @@ import {
   domainWayfinding,
   type WayfindingDomain,
 } from "~/ui/navigation/domain-wayfinding";
-import { Badge, type BadgeVariant } from "~/ui/reui/badge";
 import { CopyableShortcode } from "~/ui/values/copyable-shortcode";
 import { DateDisplay } from "~/ui/values/date-display";
 
@@ -46,13 +45,6 @@ export interface DetailWayfinding {
   label: string;
   domain: WayfindingDomain | null;
 }
-
-/** `heroStamp`'s tone, as a `Badge` variant. */
-const heroStampVariant = {
-  ink: "secondary",
-  red: "destructive",
-  green: "positive",
-} as const satisfies Record<"ink" | "red" | "green", BadgeVariant>;
 
 const detailRawDataSchema = z
   .object({
@@ -150,9 +142,9 @@ interface DetailPageHeaderProps {
   rawData?: unknown;
   /** Reference code shown in the breadcrumb (e.g. the product shortcode). */
   heroNo?: string;
-  /** Record status beside the title. */
-  heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Ordered detail cells under the identity. */
+  /** Beside the title: the kind tag, then the record's state once. */
+  status?: ReactNode;
+  /** Under the title band: the declared lines and AI summary. */
   summary?: ReactNode;
   heroActions?: DetailHeroActions;
   /** Identity thumbnail; the full gallery stays in the Images section. */
@@ -161,14 +153,14 @@ interface DetailPageHeaderProps {
   heroDisplayImage?: ImageUrlSummary | null;
 }
 
-/** A record's identity: breadcrumb, title and status, facts, actions, key numbers. */
+/** A record's identity: breadcrumb, title, kind and state, actions, then its declared lines. */
 export function DetailPageHeader({
   entity,
   wayfinding,
   title,
   rawData,
   heroNo,
-  heroStamp,
+  status,
   summary,
   heroActions,
   heroImages,
@@ -270,16 +262,10 @@ export function DetailPageHeader({
           ) : undefined
         }
         title={title}
-        status={
-          heroStamp ? (
-            <Badge variant={heroStampVariant[heroStamp.tone ?? "ink"]}>
-              {heroStamp.label}
-            </Badge>
-          ) : undefined
-        }
+        status={status}
         actions={actions}
       />
-      {summary ? <div className="-mx-2 md:-mx-4">{summary}</div> : null}
+      {summary}
     </>
   );
 }

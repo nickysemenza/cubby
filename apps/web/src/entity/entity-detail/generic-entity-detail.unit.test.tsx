@@ -180,7 +180,7 @@ describe("GenericEntityDetail", () => {
       { wrapper: harness.wrapper },
     );
     const titles = screen
-      .getAllByRole("heading", { level: 3 })
+      .getAllByRole("heading", { level: 2 })
       .map((heading) => heading.textContent);
     expect(titles).toEqual(expect.arrayContaining(["AI usage", "Changes"]));
     expect(titles).not.toContain("Import");
@@ -350,14 +350,14 @@ describe("GenericEntityDetail", () => {
         selector: '[data-slot="fact-label"]',
       }),
     ).toBeNull();
-    // Brand has its own summary cell, so the facts do not repeat it.
+    // Brand has its own summary cell, so the sections do not repeat it.
     expect(
-      within(container).queryByText("Brand", {
+      within(overview).queryByText("Brand", {
         selector: '[data-slot="fact-label"]',
       }),
     ).toBeNull();
     expect(overview.querySelector("#coverage")).not.toBeNull();
-    // An empty one-field cell is omitted, so the facts keep Brand fillable.
+    // An empty summary fact folds in the side column, which keeps it fillable.
     rerender(
       <GenericEntityDetail
         entity="product"
@@ -376,10 +376,10 @@ describe("GenericEntityDetail", () => {
       />,
     );
     expect(
-      within(container).getByText("Brand", {
-        selector: '[data-slot="fact-label"]',
-      }),
-    ).toBeVisible();
+      within(
+        container.querySelector<HTMLElement>("[data-key-facts]")!,
+      ).getByText(/not recorded:/).parentElement?.textContent,
+    ).toContain("Brand");
   });
 
   it("labels a book barcode as its ISBN", () => {

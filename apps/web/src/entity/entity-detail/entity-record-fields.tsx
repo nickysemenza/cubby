@@ -1,4 +1,6 @@
+import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
 import { getErrorMessage } from "@cubby/shared";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
@@ -13,12 +15,18 @@ import {
   entityMutationOptionsFactory,
   isGeneratedBrowserCrudEntity,
 } from "~/entity/entity-contracts";
+import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { useEntityActionMutation } from "~/entity/hooks/use-action-mutation";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { isReferencePickerEntity } from "~/ui/combobox/reference-picker-entities";
+import { FoldedFacts } from "~/ui/records/facts";
 
+import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { fieldQualityChecks, useFieldQuality } from "./record-quality";
+
+type Field = EntityFieldModel["fields"][number];
 
 /** Scalar controls the generic inline editor renders as an `EditableCell`. */
 const INLINE_EDITABLE_CONTROLS = new Set([
@@ -95,6 +103,37 @@ function useInlineFieldOverrides(
   );
 }
 
+const hasValue = (value: unknown) =>
+  value != null &&
+  value !== "" &&
+  !(Array.isArray(value) && value.length === 0);
+
+/**
+ * Whether a field has a value worth showing. A refused classification and an
+ * allocated decision keep their named state; a field with no flat read is
+ * drawn by its renderer and always counts. A list field reads its display
+ * items.
+ */
+export function fieldRecorded<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  field: Field,
+): boolean {
+  const resolution = fieldResolutionFor(record, field.key);
+  if (
+    (resolution ? fieldDecisionOf(resolution)?.provenance?.kind : undefined) ===
+      "allocated" ||
+    classificationFieldRefusal(entity, record, field.key) !== null
+  )
+    return true;
+  if (field.display.itemsPath)
+    return hasValue(readPathValue(record, field.display.itemsPath));
+  return (
+    field.readKey === null ||
+    hasValue(readPathValue(record, field.display.readPath ?? field.readKey))
+  );
+}
+
 /**
  * The renderer each named field shows on a detail surface, shared by field
  * sections and summary cells so a fact keeps its interaction wherever it is
@@ -120,6 +159,11 @@ export function useDetailFieldOverrides<E extends GenericDetailEntity>(
   return overrides;
 }
 
+/**
+ * A field section: recorded facts as rows, and the absent ones folded into one
+ * "N fields not recorded" line whose body keeps their Add controls. A field
+ * with a quality check, or one its record requires, stays a visible row.
+ */
 export function EntityRecordFields<E extends GenericDetailEntity>({
   entity,
   record,
@@ -132,14 +176,47 @@ export function EntityRecordFields<E extends GenericDetailEntity>({
   /** The heading above: a lone prose field needn't say its name twice. */
   sectionTitle?: string;
 }) {
+  const queryClient = useQueryClient();
   const overrides = useDetailFieldOverrides(entity, record, fields);
+  const quality = useFieldQuality(entity, record.id);
+  const model: readonly Field[] = entityMetadata(queryClient, entity).fields
+    .fields;
+  const folded = fields.flatMap((key) => {
+    const field = model.find((candidate) => candidate.key === key);
+    if (
+      !field ||
+      fieldRecorded(entity, record, field) ||
+      field.requiredOnCreate ||
+      fieldQualityChecks(quality?.checks ?? [], key).length > 0
+    )
+      return [];
+    return [field];
+  });
+  const foldedKeys = new Set(folded.map((field) => field.key));
+  const shown = fields.filter((key) => !foldedKeys.has(key));
+  const pick = (keys: readonly string[]) =>
+    Object.fromEntries(
+      Object.entries(overrides).filter(([key]) => keys.includes(key)),
+    );
   return (
-    <EntityBasicInfo
-      entity={entity}
-      fields={fields}
-      record={record}
-      overrides={overrides}
-      sectionTitle={sectionTitle}
-    />
+    <div className="grid min-w-0 gap-1">
+      {shown.length > 0 ? (
+        <EntityBasicInfo
+          entity={entity}
+          fields={shown}
+          record={record}
+          overrides={pick(shown)}
+          sectionTitle={sectionTitle}
+        />
+      ) : null}
+      <FoldedFacts labels={folded.map((field) => field.label)}>
+        <EntityBasicInfo
+          entity={entity}
+          fields={[...foldedKeys]}
+          record={record}
+          overrides={pick([...foldedKeys])}
+        />
+      </FoldedFacts>
+    </div>
   );
 }

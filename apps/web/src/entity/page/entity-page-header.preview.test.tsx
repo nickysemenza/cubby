@@ -9,6 +9,7 @@ import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
 import { DetailPageHeader, ListPageHeader } from "./entity-page-header";
+import { HeaderLines } from "./header-lines";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -21,7 +22,6 @@ afterEach(() => {
 for (const width of [402, 900, 1280]) {
   it(`keeps detail identity and facts compact without clipping at ${width}px`, async () => {
     await page.viewport(width, 874);
-    // The page inset the key-numbers strip bleeds into.
     render(
       <div className="px-2 md:px-4">
         <DetailPageHeader
@@ -31,17 +31,16 @@ for (const width of [402, 900, 1280]) {
           heroDisplayImage={{
             url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23111'/%3E%3C/svg%3E",
           }}
-          heroStamp={{ label: "Ready" }}
+          status={<span>Ready</span>}
           rawData={{ createdAt: "2026-01-01T12:00:00Z" }}
           heroActions={{ primary: <Button size="sm">Edit</Button> }}
           summary={
-            <div
-              data-testid="detail-key-numbers"
-              className="grid grid-cols-2 border-y border-border p-3"
-            >
-              <span>Value $48.00</span>
-              <span>On hand 3</span>
-            </div>
+            <HeaderLines
+              lines={[
+                { label: "Why", value: "Value $48.00" },
+                { label: "What", value: "On hand 3" },
+              ]}
+            />
           }
         />
       </div>,
@@ -62,7 +61,7 @@ for (const width of [402, 900, 1280]) {
     const centersMatch =
       Math.abs(title.top + title.height / 2 - edit.top - edit.height / 2) <= 2;
     expect(centersMatch).toBe(width >= 640);
-    // About 56px on a desktop; the strip sits outside this sticky header.
+    // About 56px on a desktop; the lines sit outside this sticky header.
     expect(plate.height).toBeLessThanOrEqual(width < 640 ? 164 : 64);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     expect(screen.getByText("Value $48.00")).toBeVisible();
