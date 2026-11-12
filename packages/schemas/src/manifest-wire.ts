@@ -21,6 +21,7 @@ export const fieldDisplayWire = {
   referencePreviewLimit: "integer~",
   listHidden: "boolean",
   width: "string~",
+  priority: "string~",
   format: "string~",
   readPath: "string~",
   labelPath: "string~",
@@ -71,6 +72,8 @@ export const manifestWire = {
       glyph: "EnumOptionIcon?",
       quiet: "boolean?",
       closed: "boolean?",
+      phase: "EntityPhase?",
+      explanation: "OptionExplanation?",
     },
     {
       defaults: {
@@ -79,10 +82,23 @@ export const manifestWire = {
         glyph: "nil",
         quiet: "nil",
         closed: "nil",
+        phase: "nil",
+        explanation: "nil",
       },
     },
   ),
   EnumOptionIcon: record({ phosphor: "string", sfSymbol: "string" }),
+  /** Where a state option leaves its record (`ENTITY_PHASES`). */
+  EntityPhase: raw({ needs: "needs", active: "active", finished: "finished" }),
+  /** What choosing a kind option does, shown where a record explains its kind. */
+  OptionExplanation: record({
+    targets: "string",
+    exclusions: "string",
+    effects: "string",
+    dependencies: "string",
+    cost: "string",
+    recovery: "string",
+  }),
   FieldReference: record({
     entity: "EntityKey",
     multiple: "boolean",
@@ -331,6 +347,24 @@ export const manifestWire = {
     chart: { viewKey: "string" },
   }),
   ActivityRelation: record({ relation: "string", dateField: "string" }),
+  /** `presentation.state`: the record's one state badge and its phase inputs. */
+  RecordStateSpec: record({
+    field: "string",
+    reason: "string~",
+    wait: "string~",
+    stalled: "string~",
+    recentDays: "integer~",
+  }),
+  /** `presentation.progress`: a `ProgressValue` field and its note. */
+  RecordProgressSpec: record({ field: "string", note: "string~" }),
+  /** One `detail.lines` entry under the record title. */
+  DetailLine: record({ label: "string", field: "string" }),
+  /** `list.tree`: nesting under the declared parent, and the batch fold. */
+  ListTreeSpec: record({
+    toggle: "boolean",
+    defaultNested: "boolean",
+    batchBy: "string~",
+  }),
   ListRail: record({ field: "string", sub: "string?", total: "string?" }),
   ListSwipe: record({ leading: "[string]?", trailing: "[string]?" }),
   EntityPresentation: record({
@@ -344,6 +378,12 @@ export const manifestWire = {
     detailQuickActions: "[EntityHeroActionID]?",
     detailQuickFields: "[string]?",
     detailHeroMedia: "string?",
+    recordState: "RecordStateSpec~",
+    recordProgress: "RecordProgressSpec~",
+    recordKind: "string~",
+    detailLines: "[DetailLine]",
+    detailAISummary: "string~",
+    detailNeeds: "string~",
     activityRelations: "[ActivityRelation]",
     detailSections: "[DetailSection]",
     connectedViews: "[ConnectedViewSpec]",
@@ -352,6 +392,7 @@ export const manifestWire = {
     shelfSubtitle: "[string]",
     titleSubtitle: "boolean",
     listLayoutRevision: "integer?",
+    listTree: "ListTreeSpec~",
     listActions: "[EntityListActionID]",
     listQuickActions: "[string]?",
     listRail: "[ListRail]?",

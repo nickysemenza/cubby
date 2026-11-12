@@ -270,20 +270,36 @@ const options = (
         quiet?: true;
         closed?: true;
         glyph?: { phosphor: string; sfSymbol: string };
+        phase?: "needs" | "active" | "finished";
+        explanation?: ManifestWire<"OptionExplanation">;
       }[]
     | null,
 ) =>
   values === null
     ? null
-    : values.map(({ value, label, color, role, glyph, quiet, closed }) => ({
-        value,
-        label,
-        color,
-        role,
-        glyph,
-        quiet,
-        closed,
-      }));
+    : values.map(
+        ({
+          value,
+          label,
+          color,
+          role,
+          glyph,
+          quiet,
+          closed,
+          phase,
+          explanation,
+        }) => ({
+          value,
+          label,
+          color,
+          role,
+          glyph,
+          quiet,
+          closed,
+          phase,
+          explanation: explanation && { ...explanation },
+        }),
+      );
 
 const filterJSON = (
   filter: CompiledEntity["filterDescriptors"][number],
@@ -733,6 +749,21 @@ const presentationJSON = (
       : undefined,
     detailQuickFields: detail.quickFields,
     detailHeroMedia: detail.heroMedia,
+    recordState: presentation.state && {
+      field: presentation.state.field,
+      reason: presentation.state.reason ?? null,
+      wait: presentation.state.wait ?? null,
+      stalled: presentation.state.stalled ?? null,
+      recentDays: presentation.state.recentDays ?? null,
+    },
+    recordProgress: presentation.progress && {
+      field: presentation.progress.field,
+      note: presentation.progress.note ?? null,
+    },
+    recordKind: presentation.kind?.field ?? null,
+    detailLines: detail.lines.map(({ label, field }) => ({ label, field })),
+    detailAISummary: detail.aiSummary,
+    detailNeeds: detail.side?.needs ?? null,
     activityRelations: detail.activityRelations.map((entry) => ({
       relation: entry.relation,
       dateField: entry.dateField,
@@ -758,6 +789,11 @@ const presentationJSON = (
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
     titleSubtitle: list.titleSubtitle,
     listLayoutRevision: list.layoutRevision ?? undefined,
+    listTree: list.tree && {
+      toggle: list.tree.toggle,
+      defaultNested: list.tree.defaultNested,
+      batchBy: list.tree.batch?.by ?? null,
+    },
     listActions: [...list.actions],
     listQuickActions: list.quickActions.length
       ? [...list.quickActions]

@@ -111,7 +111,8 @@ public actor CubbyClient {
         pageSize: Int = 50,
         sort: String? = nil,
         filters: EntityFilterState = EntityFilterState(),
-        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known
+        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known,
+        nesting: ListNestingRequest? = nil
     ) async throws -> ListPage<EntityRow> {
         switch descriptor.key.nativeReadKind {
         case .usdaFood:
@@ -120,7 +121,7 @@ public actor CubbyClient {
         case .kernel:
             let result = try await descriptor.listPage(
                 client: self, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: groupBy, resultMembership: resultMembership)
+                groupBy: groupBy, resultMembership: resultMembership, nesting: nesting)
             return ListPage(
                 items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
         case .unavailable:
