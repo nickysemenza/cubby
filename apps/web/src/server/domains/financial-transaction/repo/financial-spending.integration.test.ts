@@ -2322,7 +2322,7 @@ describe("shared spending booking", () => {
     );
     await getDb(ctx.db)
       .update(purchase)
-      .set({ date: "2026-04-20" })
+      .set({ date: "2026-04-28" })
       .where(eq(purchase.shortcode, original.output.id));
     // One recent same-Vendor original whose open returned line is exactly the
     // refund identifies it.

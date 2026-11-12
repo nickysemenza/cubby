@@ -454,13 +454,6 @@ export function retainedSettlementDiscoveryCouldMatch(
   );
 }
 
-// SQL form of anchorPayments for one evidence row; NULL for an undated line
-// beside a dated one.
-const anchoredPaymentInstant = sql`coalesce(${purchasePaymentEvidence.chargedAt},
-  CASE WHEN NOT EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" dated
-    WHERE dated."purchaseId" = ${purchasePaymentEvidence.purchaseId} AND dated."chargedAt" IS NOT NULL)
-  THEN ${purchase.date}::timestamp + interval '12 hours' END)`;
-
 /**
  * Other live Purchases still short of their own payment total whose retained
  * payment line could take this charge. Deliberately wide (any member, any
@@ -489,8 +482,10 @@ async function competingClaimants(
           purchasePaymentEvidence.amountMinor,
           financialEvidenceAmountMinor(charge.amount),
         ),
-        sql`(${anchoredPaymentInstant} IS NULL
-          OR ${withinPostingInstantWindowSql(anchoredPaymentInstant, charge.occurredAt)})`,
+        // An undated line's charge date is unknown, so it competes for any
+        // charge of its amount; the order-date anchor never narrows it.
+        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
+          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
         charge.storedValue
           ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
           : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),

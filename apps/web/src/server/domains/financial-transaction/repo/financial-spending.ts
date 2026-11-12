@@ -1111,8 +1111,9 @@ const partlyPaidSpending = sql`(${vendorSpendingExists}
   OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
     > (SELECT sum(paid."amountMinor") ${chargePayments})))`;
 // A wholly undated retained payment set is anchored at the order date, as in
-// the retained-settlement matcher. An undated line beside a dated one has no
-// date of its own; an exact amount keeps that Purchase as a review-only blocker.
+// the retained-settlement matcher. That anchor only proposes a match: an
+// undated exact amount anywhere still keeps the Purchase as a review-only
+// blocker, since its charge date is unknown.
 const datedSibling = (alias: string) =>
   sql`EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" dated
     WHERE dated."purchaseId" = ${sql.identifier(alias)}."purchaseId" AND dated."chargedAt" IS NOT NULL)`;
@@ -1123,19 +1124,17 @@ const undatedPayment = (amounts: readonly number[]) =>
     ? sql`(${vendorSpendingExists} AND EXISTS (
   SELECT 1 FROM "PurchasePaymentEvidence" undated
   WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
-    AND ${datedSibling("undated")}
     AND undated."amountMinor" = ANY(${columnArrayParam(amounts)})))`
     : sql`false`;
 const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
   SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
   WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
-    AND ${datedSibling("undated")}
 ) ELSE ARRAY[]::text[] END`;
 // A refund's original is a same-Vendor order from the preceding window that
 // records a returned line. Selection is not identity: exactReceiptTarget still
 // requires one unique order whose open refund capacity equals the refund. An
 // explicit standalone refund (`purchaseId: null`) selects none.
-const REFUND_WINDOW_DAYS = 90;
+const REFUND_WINDOW_DAYS = 14;
 const refundOriginal = (input: CandidateInput) =>
   input.refund && input.vendorId && input.purchaseId !== null
     ? sql`(p."vendorId" = ${input.vendorId}::uuid
@@ -1572,8 +1571,9 @@ async function discoverSpendingEvidence(
       ) === 0
     );
   });
-  // A settling charge of another amount is another bank event. A pending
-  // amount may still change, so only firm amounts prove it.
+  // A settling charge of another amount is another bank event. Pending and
+  // observed (unknown status) amounts may still be revised, so only posted
+  // amounts on both sides prove it.
   const otherAmounts = new Set(
     exhausted
       .filter((candidate) => {
@@ -1582,11 +1582,11 @@ async function discoverSpendingEvidence(
           ? otherSettlements(graph, source.amount, row?.id)
           : [];
         return (
-          source.status !== "pending" &&
+          source.status === "posted" &&
           settled.length > 0 &&
           settled.every(
             (entry) =>
-              entry.status !== "pending" &&
+              entry.status === "posted" &&
               Math.abs(cents(Number(entry.transactionAmount))) !==
                 Math.abs(cents(source.amount)),
           )
@@ -2085,9 +2085,11 @@ async function prepareFinancialSpendingPreview(
     : undefined;
   if (request.purchaseId && !chosen)
     return review("The chosen Purchase is no longer a candidate.");
-  const strongTargets = liveCandidates.filter((candidate) =>
-    strong.has(candidate.shortcode),
-  );
+  // An explicit standalone choice (`purchaseId: null`) admits no automatic target.
+  const strongTargets =
+    request.purchaseId === null
+      ? []
+      : liveCandidates.filter((candidate) => strong.has(candidate.shortcode));
   const exact =
     !chosen && !strongTargets.length && request.purchaseId !== null
       ? await exactReceiptTarget(db, evidence)
