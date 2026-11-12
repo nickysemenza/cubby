@@ -1,5 +1,5 @@
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, getTableColumns, sql, Subquery } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
@@ -56,8 +56,34 @@ async function loadEmailQualityRecords(
   ids: readonly string[],
 ) {
   if (!ids.length) return [];
-  // Domain evidence is resolved only for this ID page, once per record and
-  // shared by its checks. No retained body is selected or decompressed.
+  // Extract each completed Run's source keys once, preserving explicit JSON
+  // null while excluding absent keys and scalar sources. Membership is scoped
+  // to the same member; COALESCE keeps unknown tuple comparisons false.
+  const scopedEmails = new Subquery(
+    sql`
+    WITH completed_mail_imports AS MATERIALIZED (
+      SELECT DISTINCT import."ledgerPartyId", source.value->'orderMailId' AS "orderMailId"
+      FROM "Run" import
+      CROSS JOIN LATERAL jsonb_array_elements(CASE
+        WHEN jsonb_typeof(import.input->'sources') = 'array' THEN import.input->'sources'
+        ELSE '[]'::jsonb END) source(value)
+      WHERE import.purpose = ${runPurpose.enum.mail_import}
+        AND import.status = ${runStatus.enum.completed}
+        AND ${notDeleted("import")}
+        AND source.value->'orderMailId' IS NOT NULL
+    )
+    SELECT original.*, coalesce(
+      (original."ledgerPartyId", coalesce(to_jsonb(original."orderMailId"::text), 'null'::jsonb))
+        IN (SELECT "ledgerPartyId", "orderMailId" FROM completed_mail_imports),
+      false
+    ) AS "completedImport"
+    FROM "Email" original
+    WHERE ${notDeleted("original")} AND original.id = ANY(${uuidArrayParam(ids)})
+  `,
+    getTableColumns(email),
+    "Email",
+  );
+  // Domain evidence is resolved only for this ID page. No retained body is read.
   return unwrapDb(db)
     .select({
       id: email.id,
@@ -77,23 +103,9 @@ async function loadEmailQualityRecords(
         AND preview.preview->>'checksum' = "Email"."checksum"
     )`,
       linked: emailLinkedSql(),
-      // Preserve JSON containment, including explicit null, missing-key/scalar
-      // exclusion and completed, live, same-member Mail import ownership.
-      completedImport: sql<boolean>`EXISTS (
-      SELECT 1 FROM "Run" import
-      WHERE import.purpose = ${runPurpose.enum.mail_import}
-        AND import.status = ${runStatus.enum.completed}
-        AND ${notDeleted("import")}
-        AND import."ledgerPartyId" = "Email"."ledgerPartyId"
-        AND import.input @> jsonb_build_object('sources', jsonb_build_array(
-          jsonb_build_object('orderMailId', "Email"."orderMailId"::text)
-        ))
-    )`,
+      completedImport: sql<boolean>`"Email"."completedImport"`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("email", sql`${email.id}`)}`,
     })
-    .from(email)
-    .leftJoin(orderMail, eq(orderMail.id, email.orderMailId))
-    .where(
-      and(notDeleted(email), sql`${email.id} = ANY(${uuidArrayParam(ids)})`),
-    );
+    .from(scopedEmails)
+    .leftJoin(orderMail, eq(orderMail.id, email.orderMailId));
 }
