@@ -1278,23 +1278,25 @@ async function runStatementLabelBatch(
       "statement_application",
       // Each write's neighbour refresh joins one refresh after the round.
       () =>
-        coalesceChargeRefreshes(() =>
-          applyPublishedStatementLabels(db, {
-            targets,
-            receipts,
-            published,
-            skipped,
-            failedCharges,
-            completed,
-            unfinished,
-            scope: input.scope,
-            reconsidered: new Set(
-              ready.map(({ current }) => chargeId(current.charge)),
-            ),
-            fail,
-            budgetSpent,
-            time,
-          }),
+        coalesceChargeRefreshes(
+          () =>
+            applyPublishedStatementLabels(db, {
+              targets,
+              receipts,
+              published,
+              skipped,
+              failedCharges,
+              completed,
+              unfinished,
+              scope: input.scope,
+              reconsidered: new Set(
+                ready.map(({ current }) => chargeId(current.charge)),
+              ),
+              fail,
+              budgetSpent,
+              time,
+            }),
+          (flush) => time("statement_application_refresh", flush),
         ),
     );
     for (const target of targets) {

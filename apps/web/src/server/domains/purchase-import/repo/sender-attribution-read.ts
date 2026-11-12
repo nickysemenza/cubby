@@ -14,6 +14,7 @@ import type { RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { email, purchase, vendor } from "~/server/db/retained-tables";
 import { emailPurchaseEvidenceSql } from "~/server/domains/email/repo/email-purchase-links";
+import { emailSourceClaimCandidateSql } from "~/server/domains/email/repo/email-sql";
 type Db = Database | DrizzleTransaction;
 const normalizedSender = sql<
   string | null
@@ -69,6 +70,7 @@ export async function readSenderAttributions(
       .where(
         and(
           notDeleted(email),
+          emailSourceClaimCandidateSql,
           requested ? inArray(normalizedSender, requested) : undefined,
         ),
       ),

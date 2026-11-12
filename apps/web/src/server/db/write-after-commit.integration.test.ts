@@ -132,18 +132,21 @@ describe("repository writes publish after their commit", () => {
       release = resolve;
     });
     await runWithExecutionCtx({ waitUntil: (task) => tasks.push(task) }, () =>
-      withAfterCommitScope(async () => {
-        await withTransactionDatabase(ctx.db, async (db) => {
-          await runAfterCommit(db, {
-            key: "deferred",
-            items: ["later"],
-            flush: async (_db, items) => {
-              await gate;
-              flushed.push(items);
-            },
+      withAfterCommitScope(
+        async () => {
+          await withTransactionDatabase(ctx.db, async (db) => {
+            await runAfterCommit(db, {
+              key: "deferred",
+              items: ["later"],
+              flush: async (_db, items) => {
+                await gate;
+                flushed.push(items);
+              },
+            });
           });
-        });
-      }, afterResponse),
+        },
+        (flush) => afterResponse(flush()),
+      ),
     );
     expect(flushed).toEqual([["outer", "released", "second"]]);
     expect(tasks).toHaveLength(1);

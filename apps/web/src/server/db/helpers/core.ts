@@ -80,7 +80,7 @@ const enrollAfterCommit = (
 /** Coalesce keyed effects across commits in one request scope. */
 export async function withAfterCommitScope<T>(
   fn: () => Promise<T>,
-  finish: (flush: Promise<void>) => Promise<void> = (flush) => flush,
+  finish: (flush: () => Promise<void>) => Promise<void> = (flush) => flush(),
 ): Promise<T> {
   if (afterCommitScope.getStore()) return fn();
   const pending: AfterCommitEntry[] = [];
@@ -88,20 +88,18 @@ export async function withAfterCommitScope<T>(
     try {
       return await fn();
     } finally {
-      await finish(
-        (async () => {
-          for (const entry of pending) {
-            if (typeof entry === "function") continue;
-            try {
-              await entry.flush(scopeDatabases.get(entry)!, entry.items);
-            } catch (error) {
-              transactionLog.error("After-commit scoped effect failed", {
-                error: String(error),
-              });
-            }
+      await finish(async () => {
+        for (const entry of pending) {
+          if (typeof entry === "function") continue;
+          try {
+            await entry.flush(scopeDatabases.get(entry)!, entry.items);
+          } catch (error) {
+            transactionLog.error("After-commit scoped effect failed", {
+              error: String(error),
+            });
           }
-        })(),
-      );
+        }
+      });
     }
   });
 }

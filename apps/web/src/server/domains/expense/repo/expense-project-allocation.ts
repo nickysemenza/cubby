@@ -53,6 +53,13 @@ export const expenseSelectionIdsSql = (selection: ExpenseIdSelection): SQL =>
 const allocationBasis = spendingCategoryAllocationSchema.shape.basis.enum;
 export type ExpenseProjectAllocationBasis = SpendingCategoryAllocation["basis"];
 
+/** Positive principals carry adjustments, else refunds do. Known all-zero
+ * principals share them evenly; any unpriced principal keeps the default. */
+export const eligiblePrincipalWeightSql = sql`(d.has_positive AND f.cost_cents > 0)
+  OR (NOT d.has_positive AND d.has_negative AND f.cost_cents < 0)
+  OR (NOT d.has_positive AND NOT d.has_negative
+    AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)`;
+
 export type ExpenseProjectAllocationRow = {
   expenseId: ExpenseId;
   purchaseId: PurchaseId | null;
@@ -201,13 +208,7 @@ export const expenseJointAllocationSql = (
       CASE WHEN d.has_negative AND NOT d.has_positive THEN ${allocationBasis.refund} ELSE ${allocationBasis.positive} END::text AS basis,
       greatest(abs(f.cost_cents), 1)::bigint AS weight
     FROM principal_fact f JOIN purchase_direction d USING ("purchaseId")
-    WHERE (d.has_positive AND f.cost_cents > 0)
-      OR (NOT d.has_positive AND d.has_negative AND f.cost_cents < 0)
-      -- Every principal priced at $0 (an award ticket, a free item that still
-      -- shipped): the known zero weights split adjustments evenly. Any unpriced
-      -- principal keeps the unknown default instead of inventing a denominator.
-      OR (NOT d.has_positive AND NOT d.has_negative
-        AND NOT coalesce(d.has_unpriced_principal, false) AND f.cost_cents = 0)
+    WHERE ${eligiblePrincipalWeightSql}
   ), ${
     principals
       ? sql``

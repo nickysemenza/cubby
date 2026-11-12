@@ -374,7 +374,11 @@ timing gates.
 
 Measure read-only on real production, not a copy or a synthetic fixture: open
 `BEGIN READ ONLY` with a `statement_timeout`, compare `pg_stat_statements`
-deltas, sample `pg_locks`, and read Worker traces with `cf --profile personal`.
+deltas, sample `pg_locks`, and read Worker traces with `cf` using an authenticated
+profile. Check `cf auth whoami` with the default login before selecting a named
+profile or requesting credentials.
+Custom spans live in the `otel` dataset; query it or all datasets rather than
+restricting a span query to `cloudflare-workers` logs.
 Never print the database URL; ask the member for it when you have no access.
 Judge a fix by whole-database load over a clean window on new code only
 (background pages keep the code they started with), not by the target's own

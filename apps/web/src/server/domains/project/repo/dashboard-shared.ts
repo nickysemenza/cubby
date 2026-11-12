@@ -29,7 +29,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { buildSearchConditions, notDeleted } from "~/server/db/helpers";
 import { project, task } from "~/server/db/schema";
-import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
+import { expenseProjectMembershipSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
 export function dashboardKindLocationConditions(
@@ -120,7 +120,7 @@ function datedTaskProjectIds(dateFrom?: string, dateTo?: string) {
  */
 function datedExpenseProjectIds(dateFrom?: string, dateTo?: string) {
   return sql`(SELECT DISTINCT allocation."projectId"
-    FROM (${expenseDerivedReadSql("projects")}) allocation
+    FROM (${expenseProjectMembershipSql()}) allocation
     JOIN "Expense" dated_expense ON dated_expense."id" = allocation."expenseId"
     WHERE allocation."projectId" IS NOT NULL
       AND dated_expense."date" IS NOT NULL

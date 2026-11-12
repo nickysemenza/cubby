@@ -971,6 +971,10 @@ filters apply to rounded shares, unknown costs stay null, and unscoped totals su
 Unclassified receipt roles keep one unresolved allocation with the original signed amount and never
 enter adjustment weighting; role completeness is reported separately from amount completeness.
 
+Readers that need Project membership without amounts use `expenseProjectMembershipSql` for the
+allocation's Expense/Project pairs, including zero-cent shares, without calculating attributed cents
+or remainder rounding.
+
 The full-filter Product price footer groups live sibling quantities and visited kit-ancestor
 Expenses; page-sized scalar pricing keeps its correlated path. Preserve values, signed money and full
 sibling weights when revisiting either path, and measure broad and one-leaf populations separately.
