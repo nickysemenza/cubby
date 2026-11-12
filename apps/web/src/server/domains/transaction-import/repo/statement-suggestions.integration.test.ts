@@ -46,7 +46,10 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import {
+  labelStatementSuggestions as runStatementLabels,
+  STATEMENT_SPENDING_CONCURRENCY,
+} from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import {
   readWorkQueue,
   readRecordWorkQueue,
@@ -2053,10 +2056,11 @@ describe("statement Transaction suggestions", () => {
   });
 
   it("checkpoints unstarted spending after the cooperative page deadline", async () => {
+    const wave = STATEMENT_SPENDING_CONCURRENCY;
     await card(ctx);
     await record(
       ctx,
-      Array.from({ length: 33 }, (_, index) =>
+      Array.from({ length: wave + 1 }, (_, index) =>
         rowInput({
           rawDescription: `SYNTHETIC DEADLINE ${index}`,
           merchant: `Example deadline ${index}`,
@@ -2071,19 +2075,19 @@ describe("statement Transaction suggestions", () => {
       const first = await runStatementLabels(ctx.db, {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
         cooperative: true,
-        limit: 33,
+        limit: wave + 1,
         port: answering({ kind: "purchase", counterparty: "business" }),
         spendingAdvice: async () => {
-          if (++spendingCalls === 32)
+          if (++spendingCalls === wave)
             vi.setSystemTime(
               Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs + 1_000,
             );
           return financialSpendingAdvice.parse({});
         },
       });
-      expect(spendingCalls).toBe(32);
+      expect(spendingCalls).toBe(wave);
       expect(first).toMatchObject({
-        completed: 32,
+        completed: wave,
         failed: [],
         next: { inclusive: true },
       });
