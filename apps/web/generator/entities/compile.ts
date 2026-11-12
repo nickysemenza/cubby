@@ -2305,8 +2305,13 @@ const phaseFilterDescriptors = (
       optionsRef: null,
       optionsKey: null,
       label: "Phase",
-      schemaDescription:
-        "needs: waiting on a member or stalled; active: under way; finished: over, and older: finished before the recent window",
+      // The enum names the phases; this says only what places a record in one.
+      schemaDescription: [
+        `needs: waits on a member${state.stalled === undefined ? "" : " or stalled"}`,
+        ...(state.recentBy === undefined
+          ? []
+          : [`older: finished over ${state.recentDays} days ago`]),
+      ].join("; "),
       deriveSchema: true,
       schemaFromRead: false,
       brandRef: null,
