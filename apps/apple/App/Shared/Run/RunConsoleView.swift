@@ -4,9 +4,9 @@ import SwiftUI
 /// A Run's detail, for every Run purpose: the manifest-declared hero and `run` detail slots
 /// (progress, controls, approvals, findings, targets, evidence, transcript, log, usage, changes)
 /// drawn through `DetailSlotRegistry` and `ReportDetailSlot`, the path every detail screen uses.
-/// A Run has no native generic `get` read, so the slot host's row is built from the Run's work
-/// snapshot (read once, for its purpose) and the status its batched report read returns on every
-/// poll — the one poll that keeps the screen live.
+/// The slot host's row is the Run's generic detail read (title, state, lines, AI summary) under
+/// its work snapshot (read for its purpose) and the status its batched report read returns on
+/// every poll — the one poll that keeps the screen live.
 ///
 /// A photo Run adds its processing section (upload, descriptions, recovery, starting grouping);
 /// reviewing its proposed groups is web's, so its `photo-batch` slot is a handoff row. A purchase
@@ -19,6 +19,8 @@ struct RunConsoleView: View {
     @State private var session: RunConsoleSession
     @State private var reportBatches = ReportBatchStore()
     @State private var batch: ReportBatchModel?
+    /// The generic Run read the header's declared state, lines and summary come from.
+    @State private var detail: EntityRow?
 
     init(runID: String, previewSession: RunConsoleSession? = nil) {
         self.runID = runID
@@ -32,9 +34,11 @@ struct RunConsoleView: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[.run] }
 
-    /// The fields the slot registry reads (purpose, status); the title is the purpose's label.
+    /// The generic detail read under the fields the slot registry reads (purpose, status); the
+    /// title is the record's, else the purpose's label.
     private func row(_ snapshot: RunSnapshot) -> EntityRow {
-        var values = snapshot.raw.objectValue ?? [:]
+        var values = detail?.raw.objectValue ?? [:]
+        values.merge(snapshot.raw.objectValue ?? [:]) { _, live in live }
         values["id"] = .string(runID)
         values["purpose"] = .string(snapshot.purpose.rawValue)
         // The batch's poll is the live status; the snapshot only seeds it.
@@ -44,7 +48,8 @@ struct RunConsoleView: View {
             EntityFieldValue.text(in: raw, field: $0, surface: "detail")
         }
         return EntityRow(
-            id: runID, title: title ?? descriptor.singular, subtitle: nil, imageURL: nil, raw: raw)
+            id: runID, title: detail?.title ?? title ?? descriptor.singular, subtitle: nil,
+            imageURL: detail?.imageURL, raw: raw)
     }
 
     /// The declared slots. A full-width slot is a specialist review — the Run's next action — so
@@ -163,6 +168,13 @@ struct RunConsoleView: View {
     }
 
     private func refresh() async {
+        do {
+            detail = try await appModel.client.row(descriptor, id: runID) ?? detail
+        } catch is CancellationError {
+        } catch {
+            // The work snapshot still draws the console; the header loses only its declared facts.
+            Diagnostics.report(error, context: "run.console.detail")
+        }
         await session.refresh(runID: runID, client: appModel.client)
         await session.autoStartGroupingWhenAnalyzed(runID: runID, client: appModel.client)
     }

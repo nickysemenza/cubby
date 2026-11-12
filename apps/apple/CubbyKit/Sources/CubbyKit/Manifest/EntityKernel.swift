@@ -78,7 +78,8 @@ extension EntityDescriptor {
     /// ordered `groupBy` dimensions, each with its own ancestor level or calendar bucket.
     func listInput(
         page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
-        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known
+        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known,
+        nesting: ListNestingRequest? = nil
     ) throws -> JSONValue {
         var input: [String: JSONValue] = [
             "entity": .string(key.rawValue),
@@ -97,6 +98,7 @@ extension EntityDescriptor {
                 })
         }
         if !groupBy.isEmpty { input["groupBy"] = try JSONValue(encoding: groupBy) }
+        if let nesting { input["nesting"] = nesting.json }
         if resultMembership != .known {
             input["resultMembership"] = try JSONValue(encoding: resultMembership)
         }
@@ -112,12 +114,13 @@ extension EntityDescriptor {
     /// One page of rows as the dynamic projection `EntityRow` reads.
     func listPage(
         client: CubbyClient, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
-        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known
+        groupBy: [ListGroupDimension] = [], resultMembership: ListResultMembership = .known,
+        nesting: ListNestingRequest? = nil
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
         let body = try listInput(
             page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy,
-            resultMembership: resultMembership)
+            resultMembership: resultMembership, nesting: nesting)
         let response = try await client.native_entity_list(body: body)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
         return ListPage(

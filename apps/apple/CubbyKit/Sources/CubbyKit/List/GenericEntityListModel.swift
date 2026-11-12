@@ -89,6 +89,14 @@ public final class GenericEntityListModel {
     public var groupBy: String? { groupDimensions.first?.key }
     public var groupLevel: Int? { groupDimensions.first?.level }
     private var memberships: [(id: String, path: [String])] = []
+    /// Whether a `list.tree` entity reads its rows nested under their parent.
+    public private(set) var nested: Bool
+    /// The first roots page's folded batches (`meta.batches`).
+    public private(set) var rootBatches: [ListBatch] = []
+    /// Expanded record and batch nodes, kept across refreshes while they still exist.
+    public internal(set) var expandedNodes: Set<String> = []
+    var branches: [String: EntityTreeBranch] = [:]
+    var treeGeneration = 0
     public private(set) var timeline: EntityTimelineOut?
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
@@ -112,6 +120,40 @@ public final class GenericEntityListModel {
     }
 
     public var views: [ListView] { descriptor.presentation.listViews }
+
+    /// The grouping and filter key `presentation.state` compiles.
+    public static let phaseGroupingKey = "phase"
+
+    /// The grouping a list opens with: by phase (Needs you, Active, Recently finished) where the
+    /// entity declares `presentation.state`, else none.
+    public static func defaultGroupDimensions(_ descriptor: EntityDescriptor) -> [ListGroupDimension] {
+        descriptor.presentation.recordState != nil && descriptor.groupChoice(phaseGroupingKey) != nil
+            ? [.init(key: phaseGroupingKey)] : []
+    }
+
+    /// Whether the declared list reads the tree scope now: a `list.tree` entity, nested, on its
+    /// own declared route, outside search and the timeline.
+    public var nests: Bool {
+        source == nil && descriptor.presentation.listTree != nil && nested && !isSearching
+            && view != .timeline
+    }
+
+    /// Whether the tree folds automatic siblings into batch rows: a declared `list.tree.batch`,
+    /// ungrouped or grouped by phase or by the batch's own `by` field.
+    var foldsBatches: Bool {
+        guard let batchBy = descriptor.presentation.listTree?.batchBy else { return false }
+        guard groupByUnavailableReason == nil, let dimension = groupDimensions.first else { return true }
+        return groupDimensions.count == 1
+            && (dimension.key == Self.phaseGroupingKey || dimension.key == batchBy)
+    }
+
+    /// Nests or flattens a `list.tree` list and reloads it.
+    public func apply(nested newNested: Bool) async {
+        guard descriptor.presentation.listTree?.toggle == true, newNested != nested else { return }
+        nested = newNested
+        expandedNodes = []
+        await refreshQuery()
+    }
 
     /// Why the list cannot group right now, shown on every Group by choice: Timeline is already
     /// arranged by date, and search results are ranked by match. `groupBy` is kept and returns
@@ -144,8 +186,12 @@ public final class GenericEntityListModel {
     /// The loaded base rows in the server's sections, or nil when the list is not grouped.
     public var sections: [EntityListSection]? {
         guard groupChoice != nil, let groups = meta?.groups else { return nil }
+        let batchKeys = Set(
+            rootBatches(in: nil).compactMap { batch in
+                groupDimensions.first.flatMap { batchSectionKey(batch, dimension: $0) }
+            })
         return EntityListSection.sections(
-            rows: rows,
+            rows: rows, keeping: batchKeys,
             groups: groups.map {
                 (key: $0.key, path: $0.path, label: $0.label, count: $0.count, subtree: $0.subtree ?? false)
             }, memberships: memberships,
@@ -181,6 +227,7 @@ public final class GenericEntityListModel {
         groupBy: String? = nil,
         groupLevel: Int? = nil,
         groupDimensions: [ListGroupDimension]? = nil,
+        nested: Bool? = nil,
         searchLoader: EntityListSearchModel.PageLoader? = nil,
         searchDebounceNanoseconds: UInt64 = 250_000_000
     ) {
@@ -192,10 +239,14 @@ public final class GenericEntityListModel {
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
+        self.nested =
+            descriptor.presentation.listTree.map { !$0.toggle || (nested ?? $0.defaultNested) } ?? false
         if let groupDimensions {
             self.groupDimensions = groupDimensions
         } else if let key = descriptor.groupChoice(groupBy)?.id {
             self.groupDimensions = [.init(key: key, level: groupLevel)]
+        } else {
+            self.groupDimensions = Self.defaultGroupDimensions(descriptor)
         }
         self.searchModel =
             searchLoader.map {
@@ -227,6 +278,7 @@ public final class GenericEntityListModel {
         self.searchDebounceNanoseconds = searchDebounceNanoseconds
         self.filters = EntityFilterState()
         self.view = view
+        self.nested = false
         self.source = source
         self.searchModel = source.searchPage.map {
             EntityListSearchModel(debounceNanoseconds: searchDebounceNanoseconds, loader: $0)
@@ -300,12 +352,13 @@ public final class GenericEntityListModel {
     }
 
     /// Apply filters, ordering and grouping together so a saved view never sends an
-    /// intermediate scope. An empty supplied grouping restores an ungrouped list.
+    /// intermediate scope. A saved view without a grouping keeps the entity's default grouping.
     public func apply(savedView: SavedView) async {
         guard source == nil else { return }
         let newFilters = savedView.filterState
         let newSort = savedView.sortParameter
-        let newDimensions = savedView.groupBy
+        let newDimensions =
+            savedView.groupBy.isEmpty ? Self.defaultGroupDimensions(descriptor) : savedView.groupBy
         // The view mode is not part of active-view matching (`activeSavedView`): switching it
         // never changes the query, so it must not depend on whether the query changed.
         if let newView = savedView.listView(in: descriptor) { await select(view: newView) }
@@ -503,7 +556,10 @@ public final class GenericEntityListModel {
                     coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
                 }
                 page = requestedPage
-                if replacing { memberships = [] }
+                if replacing {
+                    memberships = []
+                    rootBatches = result.meta.batches ?? []
+                }
                 memberships.append(
                     contentsOf: (result.meta.memberships ?? []).map { (id: $0.id, path: $0.path) })
                 meta = result.meta
@@ -524,6 +580,14 @@ public final class GenericEntityListModel {
                 }
             }
             finishRequest(generation)
+            if requestedActivity != .loadingNextPage, generation == requestGeneration {
+                if nests, !expandedNodes.isEmpty {
+                    await reloadExpandedBranches()
+                } else {
+                    treeGeneration += 1
+                    branches = [:]
+                }
+            }
         }
         requestTask = task
         return task
@@ -538,10 +602,24 @@ public final class GenericEntityListModel {
         let filters = filters
         let resultMembership = resultMembership
         let dimensions = groupByUnavailableReason == nil ? groupDimensions : []
+        let nesting: ListNestingRequest? = nests ? .roots(batches: foldsBatches) : nil
         return { page in
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: dimensions, resultMembership: resultMembership)
+                groupBy: dimensions, resultMembership: resultMembership, nesting: nesting)
+        }
+    }
+
+    /// One tree branch's pages: the same filters and order as the roots, ungrouped, in `nesting`.
+    func treeLoader(_ nesting: ListNestingRequest) -> EntityListPageSource.PageLoader {
+        let client = client
+        let descriptor = descriptor
+        let pageSize = pageSize
+        let sort = sort
+        let filters = filters
+        return { page in
+            try await client.list(
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters, nesting: nesting)
         }
     }
 

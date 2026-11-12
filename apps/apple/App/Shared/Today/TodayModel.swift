@@ -28,8 +28,9 @@ enum TodayCreation: String, Identifiable {
     var key: EntityKey { self == .task ? .task : .meal }
 }
 
-/// Today's Work rows: how many Runs and Image jobs match their entity's declared `attention`
-/// saved view, read as the generic list's server total. A row hides while loading and at zero;
+/// Today's Work rows: how many Runs and Image jobs wait on a member — the Needs you phase where
+/// the entity declares `presentation.state`, else its declared `attention` saved view — read as
+/// the generic list's server total. A row hides while loading and at zero;
 /// a failed count keeps the row without a number so the path stays reachable.
 @MainActor
 @Observable
@@ -41,6 +42,18 @@ final class WorkAttentionModel {
     }
 
     static let savedView = "attention"
+
+    /// The filters the row counts and opens: the opening filters narrowed to Needs you, else the
+    /// `attention` saved view's.
+    static func filters(_ key: EntityKey) -> EntityFilterState? {
+        let descriptor = EntityCatalog[key]
+        if descriptor.presentation.recordState != nil {
+            var filters = EntityFilterState(filters: descriptor.presentation.initialFilters)
+            filters.set(["needs"], for: GenericEntityListModel.phaseGroupingKey)
+            return filters
+        }
+        return descriptor.presentation.savedViews.first { $0.id == savedView }?.filterState
+    }
 
     private(set) var runs: Count
     private(set) var imageJobs: Count
@@ -66,11 +79,9 @@ final class WorkAttentionModel {
 
     private static func count(_ key: EntityKey, client: CubbyClient) async -> Count {
         let descriptor = EntityCatalog[key]
-        guard let view = descriptor.presentation.savedViews.first(where: { $0.id == savedView }) else {
-            return .unavailable
-        }
+        guard let filters = filters(key) else { return .unavailable }
         do {
-            let page = try await client.list(descriptor, pageSize: 1, filters: view.filterState)
+            let page = try await client.list(descriptor, pageSize: 1, filters: filters)
             return page.meta.totalCount.map(Count.known) ?? .unavailable
         } catch {
             Diagnostics.report(error, context: "today.attention.\(key.rawValue)")

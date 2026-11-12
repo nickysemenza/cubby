@@ -113,17 +113,19 @@ struct EntityListView: View {
         _hiddenTableColumns = State(  // state-init-ok: manifest defaults for this route's entity
             initialValue: Self.defaultHiddenTableColumns(EntityCatalog[key]))
         #if os(macOS)
+            // A declared `list.layoutRevision` starts saved layouts over on its new defaults.
+            let revision = EntityCatalog[key].presentation.listLayoutRevision.map { ".r\($0)" } ?? ""
             _columnCustomization = SceneStorage(
-                wrappedValue: TableColumnCustomization<EntityRow>(), "cubby.table.\(key.rawValue)")
+                wrappedValue: TableColumnCustomization<EntityRow>(), "cubby.table.\(key.rawValue)\(revision)")
         #endif
     }
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
-    /// Table columns start hidden where the manifest declares `listHidden`, except a relation's
-    /// context fields, which stand in for a column web shows.
+    /// Table columns start hidden where the manifest declares `listHidden` or `priority:
+    /// "optional"`, except a relation's context fields, which stand in for a column web shows.
     private static func defaultHiddenTableColumns(_ descriptor: EntityDescriptor) -> Set<String> {
-        Set(descriptor.fields.filter(\.listHidden).map(\.key))
+        Set(descriptor.fields.filter { $0.listHidden || $0.priority == "optional" }.map(\.key))
             .subtracting(EntityRowPresentation.listContextKeys(descriptor: descriptor))
             .subtracting((descriptor.presentation.listRail ?? []).map(\.field))
     }
@@ -460,6 +462,7 @@ struct EntityListView: View {
         if let model, !descriptor.grouping.isEmpty {
             groupByMenu(model)
         }
+        if let model { nestToggle(model) }
         if !descriptor.filters.isEmpty {
             Button {
                 showingFilters = true
@@ -476,6 +479,7 @@ struct EntityListView: View {
                 if !descriptor.sortFields.isEmpty {
                     sortMenu(model)
                 }
+                nestToggle(model)
                 if !descriptor.grouping.isEmpty {
                     groupByMenu(model)
                 }
@@ -599,6 +603,19 @@ struct EntityListView: View {
             }
         }
         .accessibilityIdentifier("browse.\(key.rawValue).group-by")
+    }
+
+    /// Nests a `list.tree` list under each record's declared parent, or lists it flat.
+    @ViewBuilder
+    private func nestToggle(_ model: GenericEntityListModel) -> some View {
+        if descriptor.presentation.listTree?.toggle == true {
+            Toggle(
+                "Nest under parent",
+                isOn: Binding(
+                    get: { model.nested }, set: { value in Task { await model.apply(nested: value) } })
+            )
+            .accessibilityIdentifier("browse.\(key.rawValue).nest")
+        }
     }
 
     @ViewBuilder
@@ -1032,6 +1049,8 @@ struct EntityListView: View {
                         ? selection.selectedIDs : Set([singleTableSelection].compactMap { $0 })
                 },
                 set: { ids in
+                    // Batch and branch status lines are not records.
+                    let ids = ids.filter(EntityTreeNode.isRecordID)
                     selection.selectedIDs = ids
                     guard ids.count <= 1 else { return }
                     let id = ids.first
@@ -1167,6 +1186,62 @@ struct EntityListView: View {
         descriptor.fields.first(where: { $0.key == descriptor.titleField })?.label ?? descriptor.singular
     }
 
+    /// A nested table's lines as table rows: records as themselves, a batch or branch status line
+    /// as a placeholder row its cells draw from `tree`.
+    private func tableRows(
+        _ model: GenericEntityListModel, roots: [EntityRow], batches: [ListBatch]
+    ) -> [EntityRow] {
+        guard model.nests else { return roots }
+        return model.treeNodes(roots: roots, batches: batches).map { node in
+            if case .record(let row) = node.content { return row }
+            return EntityRow(id: node.id, title: "", subtitle: nil, imageURL: nil, raw: .object([:]))
+        }
+    }
+
+    /// Every visible nested line by id, for the table's cells.
+    private func treeIndex(_ model: GenericEntityListModel, sections: [EntityListSection]?, rows: [EntityRow])
+        -> [String: EntityTreeNode]
+    {
+        guard model.nests else { return [:] }
+        let nodes =
+            sections.map { sections in
+                sections.flatMap { model.treeNodes(roots: $0.rows, batches: model.rootBatches(in: $0)) }
+            } ?? model.treeNodes(roots: rows, batches: model.rootBatches(in: nil))
+        return Dictionary(nodes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    @ViewBuilder
+    private func treeTitle(_ row: EntityRow, node: EntityTreeNode?, model: GenericEntityListModel)
+        -> some View
+    {
+        let toggle = { if let node { Task { await model.toggle(node: node.id) } } }
+        switch node?.content {
+        case .batch(let batch)?:
+            let summary = ListBatchSummary(batch: batch, descriptor: descriptor)
+            HStack(spacing: FieldGuideTokens.Space.xs) {
+                TreeDisclosure(
+                    depth: node?.depth ?? 0, expandable: true, expanded: node?.expanded ?? false,
+                    title: summary.title, toggle: toggle)
+                Image(systemName: "square.stack.3d.up").foregroundStyle(.secondary).accessibilityHidden(true)
+                Text(summary.title).fontWeight(.medium)
+                Text(summary.rollup).foregroundStyle(.secondary).lineLimit(1)
+            }
+            .entityTableCell()
+        case .more?, .loading?, .failed?:
+            if let node { TreeBranchStatusRow(node: node, model: model).entityTableCell() }
+        default:
+            HStack(spacing: 0) {
+                if let node {
+                    TreeDisclosure(
+                        depth: node.depth, expandable: node.expandable, expanded: node.expanded,
+                        title: row.title,
+                        toggle: toggle)
+                }
+                tableTitle(row)
+            }
+        }
+    }
+
     private func tableTitle(_ row: EntityRow) -> some View {
         let titleParts = EntityRowPresentation.titleParts(descriptor: descriptor, row: row)
         let subtitle = [
@@ -1191,6 +1266,7 @@ struct EntityListView: View {
         let sections = model.sections
         let actions = sectionActions(model)
         let hasMore = model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore
+        let tree = treeIndex(model, sections: sections, rows: visibleRows)
         #if os(macOS)
             // Every column is declared so hides persist; manifest `listHidden` sets the default.
             let fields = allTableFields
@@ -1235,7 +1311,7 @@ struct EntityListView: View {
                             Text(tableTitleLabel),
                             sortUsing: EntityRowFieldComparator(fieldKey: descriptor.titleField)
                         ) { row in
-                            tableTitle(row)
+                            treeTitle(row, node: tree[row.id], model: model)
                         }
                         .width(.title)
                         .customizationID("title")
@@ -1243,7 +1319,7 @@ struct EntityListView: View {
                     }
                     if !descriptor.sortFields.contains(descriptor.titleField) {
                         TableColumn(Text(tableTitleLabel)) { (row: EntityRow) in
-                            tableTitle(row)
+                            treeTitle(row, node: tree[row.id], model: model)
                         }
                         .width(.title)
                         .customizationID("title")
@@ -1254,7 +1330,7 @@ struct EntityListView: View {
                             TableColumn(
                                 columnHeader(field), sortUsing: EntityRowFieldComparator(fieldKey: sortKey)
                             ) { row in
-                                tableCell(field, row: row, fact: tableFact(field, row: row))
+                                treeCell(field, row: row, node: tree[row.id])
                                     .environment(cellAppModel)
                             }
                             .width(EntityTableColumnWidth(field))
@@ -1263,7 +1339,7 @@ struct EntityListView: View {
                         }
                         if sortKey(for: field) == nil {
                             TableColumn(columnHeader(field)) { (row: EntityRow) in
-                                tableCell(field, row: row, fact: tableFact(field, row: row))
+                                treeCell(field, row: row, node: tree[row.id])
                                     .environment(cellAppModel)
                             }
                             .width(EntityTableColumnWidth(field))
@@ -1275,7 +1351,10 @@ struct EntityListView: View {
                     if let sections {
                         ForEach(sections) { section in
                             Section {
-                                ForEach(section.rows) { TableRow($0) }
+                                ForEach(
+                                    tableRows(
+                                        model, roots: section.rows, batches: model.rootBatches(in: section))
+                                ) { TableRow($0) }
                             } header: {
                                 EntityListSectionHeader(
                                     section: section, entity: key, actions: actions(section),
@@ -1284,7 +1363,9 @@ struct EntityListView: View {
                             }
                         }
                     } else {
-                        ForEach(visibleRows) { TableRow($0) }
+                        ForEach(tableRows(model, roots: visibleRows, batches: model.rootBatches(in: nil))) {
+                            TableRow($0)
+                        }
                     }
                     // Load more is the table's last row, so paging stays inside the scrolled
                     // content instead of a footer below it.
@@ -1315,7 +1396,7 @@ struct EntityListView: View {
                         }
                     }
                 } primaryAction: { records in
-                    if !usesBrowseSelection, let id = records.first {
+                    if !usesBrowseSelection, let id = records.first, EntityTreeNode.isRecordID(id) {
                         open(RecordSelection(key: key, id: id))
                     }
                 }
@@ -1344,7 +1425,9 @@ struct EntityListView: View {
                         if let sections {
                             ForEach(sections) { section in
                                 Section {
-                                    ForEach(section.rows) { row in regularTableRow(row, fields: fields) }
+                                    regularTableRows(
+                                        model, roots: section.rows, batches: model.rootBatches(in: section),
+                                        fields: fields)
                                 } header: {
                                     EntityListSectionHeader(
                                         section: section, entity: key, actions: actions(section),
@@ -1353,7 +1436,9 @@ struct EntityListView: View {
                                 }
                             }
                         } else {
-                            ForEach(visibleRows) { row in regularTableRow(row, fields: fields) }
+                            regularTableRows(
+                                model, roots: visibleRows, batches: model.rootBatches(in: nil), fields: fields
+                            )
                         }
                     }
                 }
@@ -1379,7 +1464,44 @@ struct EntityListView: View {
             (field.map(EntityTableColumnWidth.init) ?? .title).ideal * tableColumnScale
         }
 
-        private func regularTableRow(_ row: EntityRow, fields: [FieldDescriptor]) -> some View {
+        /// The regular-width table's rows, nested under their declared parent when the list nests.
+        @ViewBuilder
+        private func regularTableRows(
+            _ model: GenericEntityListModel, roots: [EntityRow], batches: [ListBatch],
+            fields: [FieldDescriptor]
+        ) -> some View {
+            if model.nests {
+                ForEach(model.treeNodes(roots: roots, batches: batches)) { node in
+                    switch node.content {
+                    case .record(let row):
+                        regularTableRow(row, fields: fields, node: node) {
+                            Task { await model.toggle(node: node.id) }
+                        }
+                    case .batch(let batch):
+                        VStack(spacing: 0) {
+                            EntityBatchRow(
+                                descriptor: descriptor, batch: batch, depth: node.depth,
+                                expanded: node.expanded
+                            ) {
+                                Task { await model.toggle(node: node.id) }
+                            }
+                            .padding(.horizontal, FieldGuideTokens.Space.md)
+                            Divider()
+                        }
+                    case .more, .loading, .failed:
+                        TreeBranchStatusRow(node: node, model: model).padding(
+                            .horizontal, FieldGuideTokens.Space.md)
+                    }
+                }
+            } else {
+                ForEach(roots) { row in regularTableRow(row, fields: fields) }
+            }
+        }
+
+        private func regularTableRow(
+            _ row: EntityRow, fields: [FieldDescriptor], node: EntityTreeNode? = nil,
+            toggle: @escaping () -> Void = {}
+        ) -> some View {
             // A fact depends only on its own field, so one resolve serves every cell in the row.
             let facts = EntityRowPresentation.resolve(
                 descriptor: descriptor, row: row, columns: fields.map(\.key)
@@ -1393,6 +1515,11 @@ struct EntityListView: View {
                 .first(where: EntityRowPresentation.isVisibleListFactValue)
             return VStack(spacing: 0) {
                 HStack(spacing: 0) {
+                    if let node {
+                        TreeDisclosure(
+                            depth: node.depth, expandable: node.expandable, expanded: node.expanded,
+                            title: row.title, toggle: toggle)
+                    }
                     Button {
                         open(RecordSelection(key: key, id: row.id))
                     } label: {
@@ -1468,6 +1595,28 @@ struct EntityListView: View {
         private func tableFact(_ field: FieldDescriptor, row: EntityRow) -> EntityRowPresentation.Fact? {
             EntityRowPresentation.fact(field.key, descriptor: descriptor, row: row)
         }
+
+        /// A nested table's cell: a record's own, a batch's rollup under the state and progress
+        /// columns, nothing for a branch status line.
+        @ViewBuilder
+        private func treeCell(_ field: FieldDescriptor, row: EntityRow, node: EntityTreeNode?) -> some View {
+            switch node?.content {
+            case .batch(let batch)?:
+                let summary = ListBatchSummary(batch: batch, descriptor: descriptor)
+                Group {
+                    if field.key == descriptor.presentation.recordState?.field, let lead = summary.lead {
+                        StateBadge(state: lead, trailing: .some(nil))
+                    } else if field.key == descriptor.presentation.recordProgress?.field {
+                        ProgressMeter(value: summary.progress, variant: .row)
+                    }
+                }
+                .entityTableCell()
+            case .more?, .loading?, .failed?:
+                EmptyView()
+            default:
+                tableCell(field, row: row, fact: tableFact(field, row: row))
+            }
+        }
     #endif
 
     /// Mac cells are one line: the provenance caption iPhone stacks below a value is dropped,
@@ -1477,7 +1626,17 @@ struct EntityListView: View {
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
     ) -> some View {
         Group {
-            if let reason = field.displayApplicabilityRefusal(in: row.raw) {
+            if field.key == descriptor.presentation.recordState?.field,
+                let state = descriptor.recordState(in: row.raw)
+            {
+                StateBadge(state: state)
+            } else if field.key == descriptor.presentation.recordProgress?.field,
+                let progress = descriptor.recordProgress(in: row.raw)
+            {
+                ProgressMeter(
+                    value: progress, variant: .row,
+                    paused: descriptor.recordState(in: row.raw)?.role == .paused)
+            } else if let reason = field.displayApplicabilityRefusal(in: row.raw) {
                 Text("—").foregroundStyle(.tertiary)
                     .help(reason)
                     .accessibilityLabel("\(field.label): Not applicable. \(reason)")
@@ -1568,7 +1727,7 @@ struct EntityListView: View {
             let actions = sectionActions(model)
             ForEach(sections) { section in
                 Section {
-                    listRows(section.rows)
+                    sectionRows(model, roots: section.rows, batches: model.rootBatches(in: section))
                 } header: {
                     EntityListSectionHeader(
                         section: section, entity: key, actions: actions(section),
@@ -1578,39 +1737,78 @@ struct EntityListView: View {
                 }
             }
         } else {
-            listRows(visibleRows)
+            sectionRows(model, roots: visibleRows, batches: model.rootBatches(in: nil))
         }
         if model.isSearching ? (model.searchModel?.hasMore ?? false) : model.hasMore { loadMore(model) }
     }
 
+    /// A section's rows: flat, or nested under their declared parent with batch rows.
+    @ViewBuilder
+    private func sectionRows(
+        _ model: GenericEntityListModel, roots: [EntityRow], batches: [ListBatch]
+    ) -> some View {
+        if model.nests {
+            let columns = EntityRowPresentation.defaultColumns(descriptor: descriptor)
+            ForEach(model.treeNodes(roots: roots, batches: batches)) { node in
+                switch node.content {
+                case .record(let row):
+                    listRow(row, columns: columns, node: node, model: model)
+                case .batch(let batch):
+                    EntityBatchRow(
+                        descriptor: descriptor, batch: batch, depth: node.depth, expanded: node.expanded
+                    ) {
+                        Task { await model.toggle(node: node.id) }
+                    }
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: 0, leading: FieldGuideTokens.Space.md, bottom: 0,
+                            trailing: FieldGuideTokens.Space.md)
+                    )
+                    .selectionDisabled()
+                case .more, .loading, .failed:
+                    TreeBranchStatusRow(node: node, model: model).selectionDisabled()
+                }
+            }
+        } else {
+            listRows(roots)
+        }
+    }
+
     private func listRows(_ rows: [EntityRow]) -> some View {
         let columns = EntityRowPresentation.defaultColumns(descriptor: descriptor)
-        return ForEach(rows) { row in
-            let placement = ActionPlacement(entity: descriptor, row: row)
-            rowContent(row, columns: columns, placement: placement)
-                #if os(iOS)
-                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        ForEach(placement.leadingSwipe) { action in
-                            PlacedActionItem(
-                                action: action, key: key, row: row, runner: rowActions, inSwipe: true)
-                        }
-                    }
-                    // Delete confirms first, so a full swipe never runs a trailing action.
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        ForEach(placement.trailingSwipe) { action in
-                            PlacedActionItem(
-                                action: action, key: key, row: row, runner: rowActions, inSwipe: true)
-                        }
-                    }
-                    .tag(row.id)
-                #endif
-                .contextMenu {
-                    EntityRowContextMenu(
-                        placement: placement, key: key, row: row, runner: rowActions,
-                        onSelect: supportsSelection ? beginSelection : { _ in })
-                }
-                .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
+        return ForEach(rows) { row in listRow(row, columns: columns) }
+    }
+
+    @ViewBuilder
+    private func listRow(
+        _ row: EntityRow, columns: [String], node: EntityTreeNode? = nil, model: GenericEntityListModel? = nil
+    ) -> some View {
+        let placement = ActionPlacement(entity: descriptor, row: row)
+        rowContent(row, columns: columns, placement: placement, node: node) {
+            if let model, let node { Task { await model.toggle(node: node.id) } }
         }
+        #if os(iOS)
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                ForEach(placement.leadingSwipe) { action in
+                    PlacedActionItem(
+                        action: action, key: key, row: row, runner: rowActions, inSwipe: true)
+                }
+            }
+            // Delete confirms first, so a full swipe never runs a trailing action.
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                ForEach(placement.trailingSwipe) { action in
+                    PlacedActionItem(
+                        action: action, key: key, row: row, runner: rowActions, inSwipe: true)
+                }
+            }
+            .tag(row.id)
+        #endif
+        .contextMenu {
+            EntityRowContextMenu(
+                placement: placement, key: key, row: row, runner: rowActions,
+                onSelect: supportsSelection ? beginSelection : { _ in })
+        }
+        .accessibilityIdentifier("browse.\(key.rawValue).row.\(row.id)")
     }
 
     /// The count with the entity's noun ("8 products"), then the summed rail columns' totals over
@@ -1669,10 +1867,16 @@ struct EntityListView: View {
     /// One row: the optional row command, then the row's one link. While selecting, the row is
     /// plain so a tap toggles its selection mark.
     @ViewBuilder private func rowContent(
-        _ row: EntityRow, columns: [String], placement: ActionPlacement
+        _ row: EntityRow, columns: [String], placement: ActionPlacement, node: EntityTreeNode? = nil,
+        toggle: @escaping () -> Void = {}
     ) -> some View {
         let command = selection.isSelecting ? nil : placement.rowCommand
         HStack(spacing: 0) {
+            if let node {
+                TreeDisclosure(
+                    depth: node.depth, expandable: node.expandable, expanded: node.expanded, title: row.title,
+                    toggle: toggle)
+            }
             if let command {
                 RowCommandButton(action: command, key: key, row: row, runner: rowActions)
             }
