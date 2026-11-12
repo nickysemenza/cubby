@@ -95,7 +95,9 @@ export function recordStateOf<E extends GenericDetailEntity>(
     reason: text(state.reason),
     wait: wait?.success ? wait.data : undefined,
     stalled: state.stalled !== undefined && valueOf(state.stalled) === true,
-    failed: option?.color === "destructive",
+    // Display options carry the token as a CSS reference.
+    failed:
+      option?.color === "destructive" || option?.color === "var(--destructive)",
   };
 }
 

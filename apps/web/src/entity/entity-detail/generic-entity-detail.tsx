@@ -79,7 +79,7 @@ import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-import { DetailSide } from "./detail-side";
+import { declaredNeedsOf, DetailSide } from "./detail-side";
 import { detailSlotsFor } from "./detail-slots";
 import { detailSectionFields } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
@@ -180,7 +180,15 @@ function headerStatus<E extends GenericDetailEntity>(
           size="header"
           option={state.option}
           phase={state.phase}
-          reason={state.reason}
+          reason={
+            // The side column's Needs you already says it.
+            declaredNeedsOf(queryClient, entity, record).some(
+              (item) =>
+                item.title === state.reason || item.subtitle === state.reason,
+            )
+              ? null
+              : state.reason
+          }
           wait={state.wait}
           stalled={state.stalled}
           failed={state.failed}

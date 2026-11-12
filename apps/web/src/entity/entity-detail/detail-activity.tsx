@@ -15,7 +15,6 @@ import { useHouseholdToday } from "~/lib/use-household-today";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";
-import { Section } from "~/ui/layout";
 import {
   RecordDot,
   RecordList,
@@ -68,28 +67,18 @@ function ChangeSubtitle({ event }: { event: DetailActivityEvent }) {
  * activity relations merged with the record's own change history.
  */
 export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
+  // The workspace section supplies the Activity heading and `#history` anchor.
   return (
-    <Section
-      // The page's established activity anchor: `#history` links keep working.
-      id="history"
-      title="Activity"
-      headingAs="h2"
-      data-detail-group
-      tabIndex={-1}
-      className="scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      data-testid="detail-activity"
+    <VisibleContent
+      fallback={
+        <RecordList
+          aria-label="Recent changes and spend"
+          state={{ status: "pending" }}
+        />
+      }
     >
-      <VisibleContent
-        fallback={
-          <RecordList
-            aria-label="Recent changes and spend"
-            state={{ status: "pending" }}
-          />
-        }
-      >
-        <DetailActivityContent entity={entity} id={id} />
-      </VisibleContent>
-    </Section>
+      <DetailActivityContent entity={entity} id={id} />
+    </VisibleContent>
   );
 }
 

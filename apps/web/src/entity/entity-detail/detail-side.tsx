@@ -2,7 +2,7 @@ import { entitySchema } from "@cubby/schemas/entity";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { displayItems } from "@cubby/schemas/entity-definitions/label-field";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import {
@@ -23,24 +23,36 @@ import type { RecordKind } from "./record-header";
 
 type Field = EntityFieldModel["fields"][number];
 
-/** The declared `side.needs` items: what waits on a member, each linked. */
-function DeclaredNeeds<E extends GenericDetailEntity>({
-  entity,
-  record,
-  field,
-}: {
-  entity: E;
-  record: DetailRecordOf<E>;
-  field: string;
-}) {
-  const queryClient = useQueryClient();
+/** The record's declared `side.needs` items, empty when undeclared or unset. */
+export function declaredNeedsOf<E extends GenericDetailEntity>(
+  queryClient: QueryClient,
+  entity: E,
+  record: DetailRecordOf<E>,
+) {
+  const { detail }: CompiledEntityPresentation = entityMetadata(
+    queryClient,
+    entity,
+  ).summary;
+  const field = detail.side?.needs;
+  if (field === undefined) return [];
   const fields: readonly Field[] = entityMetadata(queryClient, entity).fields
     .fields;
   const declared = fields.find((candidate) => candidate.key === field);
   const parsed = displayItems.safeParse(
     readPathValue(record, declared?.display.itemsPath ?? field),
   );
-  const items = parsed.success ? (parsed.data ?? []) : [];
+  return parsed.success ? (parsed.data ?? []) : [];
+}
+
+/** The declared `side.needs` items: what waits on a member, each linked. */
+function DeclaredNeeds<E extends GenericDetailEntity>({
+  entity,
+  record,
+}: {
+  entity: E;
+  record: DetailRecordOf<E>;
+}) {
+  const items = declaredNeedsOf(useQueryClient(), entity, record);
   if (items.length === 0) return null;
   return (
     <section aria-label="Needs you" data-testid="needs-you">
@@ -111,7 +123,7 @@ export function DetailSide<E extends GenericDetailEntity>({
       {needs === undefined ? (
         <RecordWorkQueue id={record.id} variant="needs-you" />
       ) : (
-        <DeclaredNeeds entity={entity} record={record} field={needs} />
+        <DeclaredNeeds entity={entity} record={record} />
       )}
       <DetailSummary entity={entity} record={record} layout="side" />
       {kind?.explanation ? (

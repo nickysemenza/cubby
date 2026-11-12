@@ -54,9 +54,9 @@ export interface DetailSection extends IndexedSection {
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
   /**
-   * The tab this section sits in. A default group id the tabs lack joins
-   * them (Relations, Activity, Evidence); any other unknown id, or none, is
-   * the first tab.
+   * The tab this section sits in. An undeclared supporting group
+   * (relations, activity, evidence) is the last tab; any other unknown id, or
+   * none, is the first.
    */
   group?: string;
   /** Specialized workflows can supply their own internal surface while retaining
@@ -75,24 +75,26 @@ interface DetailSectionsProps {
   side?: ReactNode;
 }
 
-/** Each section in its tab; tabs with no sections leave. */
+/**
+ * Each section in its tab; tabs with no sections leave. A section naming a
+ * group the entity did not declare joins the last tab when it is supporting
+ * (relations, activity, evidence), otherwise the first.
+ */
 function groupSections(
   declared: readonly DetailGroup[],
   sections: readonly DetailSection[],
 ): DetailWorkspaceGroup[] {
-  const tabs: DetailGroup[] = [...declared];
-  const resolve = (id: string | undefined) => {
-    if (id !== undefined && !tabs.some((tab) => tab.id === id)) {
-      const fallback = DEFAULT_DETAIL_GROUPS.find((tab) => tab.id === id);
-      if (fallback && id !== "overview" && id !== "work") tabs.push(fallback);
-    }
-    return tabs.some((tab) => tab.id === id) ? id : tabs[0]?.id;
-  };
+  const supporting = new Set(["relations", "activity", "evidence"]);
+  const resolve = (id: string | undefined) =>
+    declared.some((tab) => tab.id === id)
+      ? id
+      : (id !== undefined && supporting.has(id) ? declared.at(-1) : declared[0])
+          ?.id;
   const placed = sections.map((section) => ({
     section,
     group: resolve(section.group),
   }));
-  return tabs.flatMap((tab) => {
+  return declared.flatMap((tab) => {
     const members = placed
       .filter((entry) => entry.group === tab.id)
       .map((entry) => entry.section);
