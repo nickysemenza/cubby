@@ -17,7 +17,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
-import { referenceTitleQueryOptions } from "~/entity/components/ref-link/reference-title";
+import {
+  referenceTitleQueryOptions,
+  type ReferenceTitle,
+} from "~/entity/components/ref-link/reference-title";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   EntityDisplayImagesProvider,
@@ -153,10 +156,14 @@ it("renders proposed multiple references without borrowing current nested record
       referenceTitleQueryOptions("task", id).queryKey,
       { staleTime: Infinity },
     );
-    queryClient.setQueryData(referenceTitleQueryOptions("task", id).queryKey, {
+    const label: ReferenceTitle = {
       title: `Synthetic dependency ${index + 1}`,
       emoji: null,
-    });
+    };
+    queryClient.setQueryData(
+      referenceTitleQueryOptions("task", id).queryKey,
+      label,
+    );
   }
   const record = {
     id: "TSK-2M4K",
