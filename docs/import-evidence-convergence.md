@@ -93,7 +93,9 @@ graph reader keeps compact decision fields and canonical JSON of the complete
 graph, and snapshot hashing reproduces identical fingerprint bytes;
 attributions, notes and payment-account facts remain evidence dependencies.
 Ready plans and commit-time validation recheck those dependencies and current
-ownership. Persisted booking-lineage fingerprints are unchanged by any of this.
+ownership. A read-only preview group resolves its prospective aggregate Expense
+categories together after preparing every draft. Commit groups prepare fresh
+drafts under their locks and resolve them before any financial write. Persisted booking-lineage fingerprints are unchanged by any of this.
 
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.
