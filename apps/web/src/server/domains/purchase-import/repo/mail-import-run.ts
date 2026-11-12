@@ -1070,28 +1070,39 @@ const newestHolderOutcome = sql`SELECT o.result, o."completedAt" FROM "RunOperat
 /** `sha256Hex(JSON.stringify(["waiting-on", outcomeId]))`, admission's waitRecheck revision. */
 const waitRecheckRevisionSql = sql`encode(sha256(convert_to('["waiting-on",' || to_json(newest.result #>> '{mailOutcome,id}')::text || ']', 'UTF8')), 'hex')`;
 
+/** Live Purchases grouped by normalized order id, so one hash join finds an awaited order. */
+const waitingOrderPurchasesSql = sql`
+  SELECT p.key, array_agg(p.id) AS ids, array_agg(p."createdAt") AS created,
+    array_agg(p."vendorId"::text) AS vendor_ids,
+    array_agg(account."ledgerPartyId") AS parties
+  FROM (
+    SELECT p.id, p."createdAt", p."vendorId", p."vendorAccountId",
+      ${normalizedOrderIdSql(sql`p."orderId"`)} AS key
+    FROM ${purchase} p WHERE ${notDeleted("p")} AND p."orderId" IS NOT NULL
+  ) p
+  LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
+  GROUP BY p.key
+`;
+
+/** The awaited order's key, joined once to `order_purchase`: a per-row scan of that CTE is quadratic. */
+const awaitedOrderKeySql = normalizedOrderIdSql(
+  sql`newest.result #>> '{mailOutcome,judgment,waitingOn,orderId}'`,
+);
+
 /**
  * When the source an unresolved outcome waits on last settled: a live,
  * owner-eligible Purchase holding the awaited order (at the awaited Vendor
  * when known) was created or gained an accepted source, or the awaited Email
  * was imported or linked. Null while it has not.
  */
-const waitingOrderPurchasesSql = sql`
-  SELECT p.id, p."createdAt", p."vendorId", p."vendorAccountId",
-    ${normalizedOrderIdSql(sql`p."orderId"`)} AS key
-  FROM ${purchase} p WHERE ${notDeleted("p")} AND p."orderId" IS NOT NULL
-`;
-
 const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
-  SELECT greatest(p."createdAt", (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
-      WHERE accepted."purchaseId" = p.id)) AS at
-  FROM (SELECT ${normalizedOrderIdSql(sql`newest.result #>> '{mailOutcome,judgment,waitingOn,orderId}'`)} AS key OFFSET 0) awaited
-  JOIN order_purchase p ON p.key = awaited.key
-  LEFT JOIN ${vendorAccount} account ON account.id = p."vendorAccountId" AND ${notDeleted("account")}
+  SELECT greatest(x.created, (SELECT max(accepted."updatedAt") FROM ${importSourceOrder} accepted
+      WHERE accepted."purchaseId" = x.id)) AS at
+  FROM unnest(keyed.ids, keyed.created, keyed.vendor_ids, keyed.parties) AS x(id, created, vendor_id, party)
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"order"}
     AND (newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}' IS NULL
-      OR p."vendorId"::text = newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}')
-    AND (account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = ${emailTable.ledgerPartyId})
+      OR x.vendor_id = newest.result #>> '{mailOutcome,judgment,waitingOn,vendorId}')
+    AND (x.party IS NULL OR x.party = ${emailTable.ledgerPartyId})
   UNION ALL
   SELECT awaited."completedAt" FROM "RunOperation" awaited
   WHERE newest.result #>> '{mailOutcome,judgment,waitingOn,kind}' = ${"email"}
@@ -1295,6 +1306,10 @@ export async function importPendingEmails(db: Database) {
       )
       .innerJoin(run, eq(run.id, emailTable.runId))
       .innerJoin(sql`LATERAL (${newestHolderOutcome}) newest`, sql`true`)
+      .leftJoin(
+        sql`order_purchase keyed`,
+        sql`keyed.key = ${awaitedOrderKeySql}`,
+      )
       .innerJoin(sql`LATERAL (${waitedSourceSettledSql}) settled`, sql`true`)
       .where(
         and(
