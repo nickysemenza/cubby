@@ -993,7 +993,16 @@ async function runStatementLabelBatch(
               await prepareAdvisedFinancialSpending(
                 db,
                 spendingPage,
-                planning.map(({ advised }) => advised!.advice),
+                planning.flatMap(({ labels, advised }) =>
+                  labels.judgment.create
+                    ? [
+                        {
+                          advice: advised!.advice,
+                          source: labels.judgment.create,
+                        },
+                      ]
+                    : [],
+                ),
               );
             plans = await prepareStatementSpendings(
               db,

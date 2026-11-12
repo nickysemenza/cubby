@@ -528,16 +528,28 @@ async function prepareVendorCandidates(
 /**
  * Before a page previews advised spending in sequence, read once what each
  * preview would otherwise read alone: advised and deferred Vendor names, their
- * histories and candidate pools, every pooled candidate's receipt graph and
- * payments, and advised categories. Previews still select their own evidence;
- * a missing graph is left for the preview to refuse. Call it outside a write
- * transaction: it reads the whole pool, not one preview's candidates.
+ * histories and candidate pools, the receipt graphs and payments of the
+ * candidates each source's date, amount and Vendor select, and advised
+ * categories. Previews still apply eligibility and select their own evidence;
+ * a missing graph is left for the preview to read. Call it outside a write
+ * transaction: previews and commits re-read their authority.
  */
 export async function prepareAdvisedFinancialSpending(
   db: Database,
   page: FinancialSpendingPage,
-  advice: readonly (FinancialSpendingAdvice | null)[],
+  entries: readonly {
+    advice: FinancialSpendingAdvice | null;
+    source: {
+      kind: string;
+      amount: number;
+      transactionDate?: string | null;
+      postedDate?: string | null;
+      merchant?: string | null;
+      rawDescription?: string | null;
+    };
+  }[],
 ) {
+  const advice = entries.map((entry) => entry.advice);
   const names = [
     ...new Set([
       ...page.pendingVendorNames,
@@ -558,10 +570,38 @@ export async function prepareAdvisedFinancialSpending(
       resolved.flatMap((result) => (result.row ? [result.row.id] : [])),
     ),
   ]);
-  const pooled = [
-    ...Object.values(page.paymentCandidates).flat(),
-    ...(await Promise.all(page.vendorCandidates.values())).flat(),
-  ].map((candidate) => parseEntityId("purchase", candidate.id));
+  // Only the candidates a preview's own selector returns: the page pool spans
+  // every source date and amount, which a large Vendor can make unbounded.
+  const pooled: ReturnType<typeof parseEntityId<"purchase">>[] = [];
+  for (const { advice: entry, source } of entries) {
+    const date = source.transactionDate ?? source.postedDate;
+    // A refund's originals are an exact per-preview read; leave them to it.
+    if (!date || source.kind === "refund") continue;
+    const rows = (
+      await Promise.all(
+        [
+          ...new Set(
+            [
+              source.merchant?.trim() || source.rawDescription?.trim(),
+              entry?.vendorName,
+            ].filter((name): name is string => Boolean(name)),
+          ),
+        ].map((name) => page.vendors.get(canonicalJson([name]))),
+      )
+    ).flatMap((results) => results ?? []);
+    const vendorIds = new Set(
+      rows.flatMap((row) => (row.row ? [row.row.id] : [])),
+    );
+    // The preview's Vendor is the single resolved row; an issuer fee or a
+    // selected Vendor reads its own candidates in the preview.
+    const vendorId = vendorIds.size === 1 ? [...vendorIds][0] : undefined;
+    for (const candidate of await spendingCandidates(
+      db,
+      { date, amount: cents(source.amount), refund: false, vendorId },
+      page,
+    ))
+      pooled.push(parseEntityId("purchase", candidate.id));
+  }
   const graphIds = [...new Set(pooled)].filter((id) => !page.graphs.has(id));
   const paymentIds = [...new Set(pooled)].filter(
     (id) => !page.payments.has(id),
