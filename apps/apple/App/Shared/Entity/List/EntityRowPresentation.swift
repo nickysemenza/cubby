@@ -163,12 +163,20 @@ struct EntityRowPresentation: Sendable, Hashable {
     static func subtitleFact(
         descriptor: EntityDescriptor, row: EntityRow, excluding excluded: Set<String>
     ) -> Fact? {
+        subtitleFacts(descriptor: descriptor, row: row, excluding: excluded).first
+    }
+
+    /// Every declared mobile `subtitle` fact with a visible value, in priority order: a two-line
+    /// row (`titleSubtitle`) with a declared state reads them together as its secondary line, as
+    /// web two-line rows draw every subtitle field under the name.
+    static func subtitleFacts(
+        descriptor: EntityDescriptor, row: EntityRow, excluding excluded: Set<String>
+    ) -> [Fact] {
         descriptor.fields
             .filter { $0.mobileSlot == "subtitle" && !excluded.contains($0.key) }
             .sorted { ($0.mobilePriority ?? .max) < ($1.mobilePriority ?? .max) }
-            .lazy
             .compactMap { fact($0.key, descriptor: descriptor, row: row) }
-            .first {
+            .filter {
                 isVisibleListFactValue($0.value) && $0.value.caseInsensitiveCompare(row.title) != .orderedSame
             }
     }
@@ -298,12 +306,14 @@ struct EntityRowPresentation: Sendable, Hashable {
     }
 
     static func statusField(descriptor: EntityDescriptor) -> FieldDescriptor? {
-        descriptor.fields.first { $0.valueOptions?.contains { $0.quiet == true } == true }
+        // A declared `presentation.state` draws as the row's StateBadge instead.
+        if let state = descriptor.presentation.recordState { return descriptor.field(state.field) }
+        return descriptor.fields.first { $0.valueOptions?.contains { $0.quiet == true } == true }
             ?? descriptor.presentation.heroChip.flatMap(descriptor.field)
     }
 
     static func status(descriptor: EntityDescriptor, row: EntityRow) -> Status? {
-        guard let field = statusField(descriptor: descriptor),
+        guard descriptor.presentation.recordState == nil, let field = statusField(descriptor: descriptor),
             let fact = fact(field.key, descriptor: descriptor, row: row),
             isVisibleListFactValue(fact.value)
         else { return nil }

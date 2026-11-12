@@ -40,6 +40,9 @@ public struct EntityTreeNode: Identifiable, Sendable, Hashable {
     public let expandable: Bool
     public let expanded: Bool
 
+    /// Whether a nested line's id is a record's, rather than a batch's or a branch status line's.
+    public static func isRecordID(_ id: String) -> Bool { !id.hasPrefix("batch:") && !id.contains("#") }
+
     /// The node id a batch row and its member branch share.
     public static func batchID(_ batch: ListBatch) -> String {
         "batch:\(batch.parentId ?? ""):\(batch.value)"
@@ -95,7 +98,8 @@ extension GenericEntityListModel {
             let id = EntityTreeNode.batchID(batch)
             let expanded = expandedNodes.contains(id)
             nodes.append(
-                EntityTreeNode(id: id, content: .batch(batch), depth: depth, expandable: true, expanded: expanded))
+                EntityTreeNode(
+                    id: id, content: .batch(batch), depth: depth, expandable: true, expanded: expanded))
             if expanded { appendBranch(id, depth: depth + 1, into: &nodes) }
         }
         for row in rows {
@@ -112,14 +116,20 @@ extension GenericEntityListModel {
         guard let branch = branches[id] else { return }
         appendNodes(rows: branch.rows, batches: branch.batches, depth: depth, into: &nodes)
         if branch.loading {
-            nodes.append(.init(id: "\(id)#loading", content: .loading(parentID: id), depth: depth, expandable: false, expanded: false))
+            nodes.append(
+                .init(
+                    id: "\(id)#loading", content: .loading(parentID: id), depth: depth, expandable: false,
+                    expanded: false))
         } else if let error = branch.error {
             nodes.append(
                 .init(
                     id: "\(id)#failed", content: .failed(parentID: id, message: error), depth: depth,
                     expandable: false, expanded: false))
         } else if branch.hasMore {
-            nodes.append(.init(id: "\(id)#more", content: .more(parentID: id), depth: depth, expandable: false, expanded: false))
+            nodes.append(
+                .init(
+                    id: "\(id)#more", content: .more(parentID: id), depth: depth, expandable: false,
+                    expanded: false))
         }
     }
 

@@ -37,7 +37,8 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
     /// Leaf paths are explicit; roots remain unique while an overlapping row
     /// appears once in each section that contains its membership.
     public static func sections(
-        rows: [EntityRow], keeping kept: Set<String> = [], groups: [(key: String, path: [String], label: String, count: Int, subtree: Bool)],
+        rows: [EntityRow], keeping kept: Set<String> = [],
+        groups: [(key: String, path: [String], label: String, count: Int, subtree: Bool)],
         memberships: [(id: String, path: [String])], sums: [[String]: [String: Double]] = [:]
     ) -> [EntityListSection] {
         let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })

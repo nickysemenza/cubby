@@ -227,6 +227,7 @@ public final class GenericEntityListModel {
         groupBy: String? = nil,
         groupLevel: Int? = nil,
         groupDimensions: [ListGroupDimension]? = nil,
+        nested: Bool? = nil,
         searchLoader: EntityListSearchModel.PageLoader? = nil,
         searchDebounceNanoseconds: UInt64 = 250_000_000
     ) {
@@ -238,7 +239,8 @@ public final class GenericEntityListModel {
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
-        self.nested = descriptor.presentation.listTree.map { !$0.toggle || $0.defaultNested } ?? false
+        self.nested =
+            descriptor.presentation.listTree.map { !$0.toggle || (nested ?? $0.defaultNested) } ?? false
         if let groupDimensions {
             self.groupDimensions = groupDimensions
         } else if let key = descriptor.groupChoice(groupBy)?.id {

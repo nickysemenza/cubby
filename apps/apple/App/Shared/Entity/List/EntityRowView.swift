@@ -54,6 +54,9 @@ struct EntityRowView: View {
         let trailingValue: EntityRowPresentation.Fact?
         let date: EntityRowPresentation.Fact?
         let needsData: Bool
+        /// The declared `presentation.state` and `progress`, drawn on their own line.
+        let state: RecordState?
+        let progress: ProgressValue?
     }
 
     private var layout: Layout {
@@ -71,7 +74,10 @@ struct EntityRowView: View {
 
         // The status field reads as line 2's mark (or stays quiet) and rail fields read in their
         // columns; neither repeats as the subtitle.
+        let headerKeys = descriptor.presentation.recordState == nil ? [] : descriptor.headerFieldKeys
+        let stateKeys = headerKeys.subtracting(descriptor.presentation.detailLines.map(\.field))
         let lineExcluded = railKeys.union([statusKey].compactMap { $0 }).union(contextFields)
+            .union(stateKeys)
         let titleSubtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)
             .flatMap { lineExcluded.contains($0.id) ? nil : $0 }
         let mobileSubtitle = EntityRowPresentation.subtitleFact(
@@ -81,11 +87,20 @@ struct EntityRowView: View {
             fact.id != descriptor.titleField && EntityRowPresentation.isVisibleListFactValue(fact.value)
                 && fact.value.caseInsensitiveCompare(row.title) != .orderedSame
         }
+        // A two-line row with a declared state reads its subtitle fields together (Why · Outcome).
+        let secondary =
+            descriptor.presentation.titleSubtitle && descriptor.presentation.recordState != nil
+            ? Array(
+                EntityRowPresentation.subtitleFacts(descriptor: descriptor, row: row, excluding: lineExcluded)
+                    .filter(addsToTitle).prefix(2)) : []
         let subtitle = [titleSubtitle, mobileSubtitle].compactMap { $0 }.first(where: addsToTitle)
         // An empty subtitle lets a composed title move its reference suffix to line 2.
         let titleParts = EntityRowPresentation.titleParts(
             descriptor: descriptor, row: row, subtitle: subtitle?.value ?? "")
-        let subtitleText = subtitle.map(EntityRowPresentation.lineText) ?? titleParts.subtitle
+        let subtitleText =
+            secondary.isEmpty
+            ? subtitle.map(EntityRowPresentation.lineText) ?? titleParts.subtitle
+            : secondary.map(EntityRowPresentation.lineText).joined(separator: " · ")
 
         // Without a declared rail, the highest-priority trailing fact and a semantic date keep
         // the free trailing slot. The status field already reads on line 2.
@@ -106,7 +121,7 @@ struct EntityRowView: View {
         }
         let omitted = Set(
             ["dataQuality", statusKey, subtitle?.id, trailingValue?.id, date?.id].compactMap { $0 }
-        ).union(railKeys).union(contextFields)
+        ).union(railKeys).union(contextFields).union(stateKeys).union(secondary.map(\.id))
         let facts = presentation.facts.filter { !omitted.contains($0.id) && addsToTitle($0) }
         return Layout(
             presentation: presentation, title: titleParts.title, status: status, facts: facts,
@@ -114,7 +129,8 @@ struct EntityRowView: View {
                 EntityRowPresentation.isVisibleListFactValue($0) ? $0 : nil
             },
             rail: rail, trailingValue: trailingValue, date: date,
-            needsData: EntityRowPresentation.needsData(in: row))
+            needsData: EntityRowPresentation.needsData(in: row),
+            state: descriptor.recordState(in: row.raw), progress: descriptor.recordProgress(in: row.raw))
     }
 
     var body: some View {
@@ -159,6 +175,14 @@ struct EntityRowView: View {
                 }
             }
         } supplement: {
+            if layout.state != nil || layout.progress != nil {
+                WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
+                    if let state = layout.state { StateBadge(state: state) }
+                    if let progress = layout.progress {
+                        ProgressMeter(value: progress, variant: .row, paused: layout.state?.role == .paused)
+                    }
+                }
+            }
             ForEach(presentation.facts) { fact in
                 if let field = EntityCatalog[key].field(fact.id) {
                     FieldProvenanceCaption(raw: row.raw, field: field)
@@ -210,6 +234,10 @@ struct EntityRowView: View {
         func label(_ id: String) -> String { descriptor.field(id)?.label ?? id }
         var parts = [layout.title]
         if let status = layout.status { parts.append(status.text) }
+        if let state = layout.state {
+            parts.append(([state.label] + [state.trailing].compactMap { $0 }).joined(separator: ", "))
+        }
+        if let progress = layout.progress { parts.append(progress.label) }
         parts += lineItems(layout).map(\.spoken)
         parts += layout.rail.compactMap { cell in
             cell.value.map {
