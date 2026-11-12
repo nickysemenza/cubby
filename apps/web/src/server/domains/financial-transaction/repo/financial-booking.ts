@@ -47,7 +47,7 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
-  liveHouseholdCard,
+  liveHouseholdSpendingAccount,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -654,9 +654,9 @@ async function previewFinancialBookings(
     const { account } = dated[index]!;
     const purchaser =
       account && financialAccountPurchaser(account, purchaserProofs[index]);
-    if (!purchaser && !(account && liveHouseholdCard(account)))
+    if (!purchaser && !liveHouseholdSpendingAccount(account))
       return constraintViolation(
-        "Choose a live member purchaser or confirm a household credit card before creating a bare Purchase.",
+        "Choose a live member purchaser or confirm a household card, bank or stored-value account before creating a bare Purchase.",
       );
     input.purchaserId = purchaser
       ? parseShortcodeFor("ledgerParty", purchaser.shortcode)

@@ -79,8 +79,33 @@ export async function loadAccountPurchaserProofs(
   );
 }
 
+/** Household spending authority does not identify an individual purchaser. */
+export function liveHouseholdSpendingAccount(
+  account:
+    | (typeof financialAccount.$inferSelect & {
+        ledgerParty: typeof ledgerParty.$inferSelect | null;
+      })
+    | null
+    | undefined,
+): boolean {
+  return (
+    !!account &&
+    !account.deletedAt &&
+    householdSpendingKinds.has(account.identity.kind) &&
+    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
+    !account.ledgerParty.deletedAt
+  );
+}
+
+// Loans and other liabilities hold payments, not spending.
+const householdSpendingKinds = new Set<string>([
+  financialAccountIdentityKind.enum.credit_card,
+  financialAccountIdentityKind.enum.bank_account,
+  financialAccountIdentityKind.enum.stored_value,
+]);
+
 /** Household-card authority does not identify an individual purchaser. */
-export function liveHouseholdCard(
+function liveHouseholdCard(
   account: typeof financialAccount.$inferSelect & {
     ledgerParty: typeof ledgerParty.$inferSelect | null;
   },
