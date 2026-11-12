@@ -906,6 +906,9 @@ export function createActionsColumnBase<T extends RowData>(
     maxSize: leading ? 120 : 72,
     meta: attachCubbyColumnMeta<T>({
       entityColumnRole: "action",
+      // The cell's inline wrappers shrink to content; aligning the text keeps
+      // every row's menu in one place whether or not a quick command shows.
+      className: "text-right",
       mobile: { slot: "actions", priority: 100 },
       rowMenu,
     }),

@@ -2,9 +2,10 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import type { RunCause, RunPurpose } from "@cubby/schemas/run-fields";
 import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
-import { asc, eq, isNull } from "drizzle-orm";
+import { asc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { getDb } from "~/server/db/helpers";
+import { email as emailTable } from "~/server/db/retained-tables";
 import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
@@ -51,6 +52,24 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
     .orderBy(asc(schema.vendor.name))
     .limit(1);
 
+  const [source] = await database
+    .select({
+      orderMailId: emailTable.orderMailId,
+      checksum: emailTable.checksum,
+    })
+    .from(emailTable)
+    .where(isNotNull(emailTable.orderMailId))
+    .orderBy(asc(emailTable.orderMailId))
+    .limit(1);
+  const roster = source?.orderMailId
+    ? {
+        kind: "mail_research",
+        sources: [
+          { orderMailId: source.orderMailId, checksum: source.checksum },
+        ],
+      }
+    : null;
+
   const seed = async (run: SeededRun): Promise<RunId> => {
     const id = await ensureRun(db, actorContext, {
       purpose: run.purpose,
@@ -60,6 +79,12 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
       ...(run.parent ? { parentRunId: run.parent } : {}),
       // SAFETY: each fixture input matches its purpose's stored shape.
       ...(run.input ? { input: run.input as never } : {}),
+      // A live Mail import always holds a roster that names a retained
+      // Email; run.control and the Run detail read it back.
+      // SAFETY: the roster is the mail_research shape built above.
+      ...(run.purpose === "mail_import" && !run.input && roster
+        ? { input: roster as never }
+        : {}),
     });
     const startedAt = new Date(now - run.startedMinutesAgo * MINUTE);
     const endedAt =

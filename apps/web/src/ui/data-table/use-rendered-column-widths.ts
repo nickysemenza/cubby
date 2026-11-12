@@ -148,7 +148,11 @@ export function useRenderedColumnWidths<TData extends RowData>(
         ),
       ];
       const rows = [
-        ...sourceTable.querySelectorAll<HTMLElement>("tbody tr[data-cell-row]"),
+        // Expanded children truncate instead of refitting: their wider
+        // content dropped a column the moment a parent opened.
+        ...sourceTable.querySelectorAll<HTMLElement>(
+          "tbody tr[data-cell-row]:not([data-row-nested])",
+        ),
       ].slice(0, SAMPLE_ROWS);
       const cells = [
         ...headers,

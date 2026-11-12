@@ -355,6 +355,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   return (
     <TableRow
       data-cell-row={rowIndex}
+      data-row-nested={row.depth > 0 ? "" : undefined}
       data-row-focused={isFocused ? "" : undefined}
       data-state={isSelected && "selected"}
       // Inspection is independent of batch selection.

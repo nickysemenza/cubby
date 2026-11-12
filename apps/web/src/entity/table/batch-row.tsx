@@ -22,10 +22,17 @@ import { rowLineClasses } from "~/ui/data-table/density";
 import type { CubbyRow as Row } from "~/ui/data-table/table-features";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ProgressMeter } from "~/ui/feedback/progress-meter";
+import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "~/ui/primitives/dropdown-menu";
 import { TableCell, TableRow } from "~/ui/primitives/table";
 import { StateBadge } from "~/ui/records/state-badge";
-import { renderScalarValue } from "~/ui/values/scalar-value";
+import { DateDisplay } from "~/ui/values/date-display";
+import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import type { BatchCommand } from "./batch-command";
 
@@ -207,33 +214,54 @@ export function BatchRow<TItem extends RowData>({
         />
       );
     if (columnId === activityColumn && batch.latestActivity)
-      return renderScalarValue({
-        kind: "timestamp",
-        raw: batch.latestActivity,
-      });
+      return (
+        <DenseCellContext value={{ linksTo: null }}>
+          <DateDisplay timestamp={batch.latestActivity} />
+        </DenseCellContext>
+      );
+    // One menu like a record row's: an icon per command overflowed the
+    // actions column under the activity cell.
     if (meta?.entityColumnRole === "action" && offered.length > 0)
       return (
-        <span className="flex items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
-          {offered.map((command) => {
-            const { label, icon: Icon } = verbDef(command.verb);
-            return (
-              <Button
-                key={command.id}
-                variant="ghost"
-                size="icon-xs"
-                disabled={running !== null}
-                aria-label={`${label} every active member of ${title}`}
-                title={`${label} all`}
-                onClick={() => void run(command)}
-              >
-                <Icon aria-hidden className="size-3.5" />
-              </Button>
-            );
-          })}
+        <span className="flex justify-end">
+          <DropdownMenu>
+            <MoreMenuTrigger
+              aria-label={`Actions for every active member of ${title}`}
+              size="icon-sm"
+              disabled={running !== null}
+              onClick={(event) => event.stopPropagation()}
+            />
+            <DropdownMenuContent align="end">
+              {offered.map((command) => {
+                const { label, icon: Icon } = verbDef(command.verb);
+                return (
+                  <DropdownMenuItem
+                    key={command.id}
+                    onClick={() => void run(command)}
+                  >
+                    <Icon aria-hidden />
+                    {label} all
+                  </DropdownMenuItem>
+                );
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </span>
       );
     return null;
   };
+
+  const paint = (cell: ReturnType<typeof row.getVisibleCells>[number]) => (
+    <TableCell
+      key={cell.id}
+      data-column-id={cell.column.id}
+      className={cn(cellClassName, cell.column.columnDef.meta?.className)}
+    >
+      <div className={lines.cellContentClass}>
+        <div className="min-w-0">{content(cell.column.id)}</div>
+      </div>
+    </TableCell>
+  );
 
   return (
     <TableRow
@@ -242,20 +270,13 @@ export function BatchRow<TItem extends RowData>({
       className={cn("border-b border-hairline-soft", lines.rowClass)}
       style={{ height }}
     >
-      {row
-        .getVisibleCells()
+      {[...row.getStartVisibleCells(), ...row.getCenterVisibleCells()]
         .filter((cell) => !unpaintedColumns.has(cell.column.id))
-        .map((cell) => (
-          <TableCell
-            key={cell.id}
-            data-column-id={cell.column.id}
-            className={cn(cellClassName, cell.column.columnDef.meta?.className)}
-          >
-            <div className={lines.cellContentClass}>
-              <div className="min-w-0">{content(cell.column.id)}</div>
-            </div>
-          </TableCell>
-        ))}
+        .map(paint)}
+      {/* The same trailing spacer as a record row, so pinned end columns
+          (the actions menu) line up with the rows around the batch. */}
+      <TableCell data-spacer aria-hidden className={cellClassName} />
+      {row.getEndVisibleCells().map(paint)}
     </TableRow>
   );
 }
