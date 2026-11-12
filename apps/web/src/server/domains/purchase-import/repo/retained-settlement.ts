@@ -101,7 +101,7 @@ type RetainedPaymentRow = RetainedPayment &
 
 type RetainedSettlementDiscoveryFacts = Readonly<{
   target: Readonly<
-    Pick<typeof purchase.$inferSelect, "vendorId"> & {
+    Pick<typeof purchase.$inferSelect, "vendorId" | "date"> & {
       statedTotal: number | null;
     }
   > | null;
@@ -195,6 +195,23 @@ function normalizePaymentSet(
 }
 
 /**
+ * A wholly undated payment set stands at its order date: charges for such
+ * orders post within the posting window of the order date. A dated line keeps
+ * its instant, and its undated siblings stay bounded by it. Without either
+ * there is no window, and an amount alone is coincidence, not evidence.
+ */
+const anchorPayments = (
+  payments: readonly RetainedPayment[],
+  orderDate: string | null,
+): RetainedPayment[] =>
+  !orderDate || payments.some((payment) => payment.chargedAt)
+    ? [...payments]
+    : payments.map((payment) => ({
+        ...payment,
+        chargedAt: new Date(`${orderDate}T12:00:00.000Z`),
+      }));
+
+/**
  * Page-local discovery facts only. Plans still match each charge separately;
  * commit planning ignores these snapshots and re-reads under its usual locks.
  */
@@ -211,6 +228,7 @@ export async function prepareRetainedSettlementDiscovery(
       .select({
         id: purchase.id,
         vendorId: purchase.vendorId,
+        date: purchase.date,
         statedTotal: sql<
           number | null
         >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(
@@ -429,12 +447,19 @@ export function retainedSettlementDiscoveryCouldMatch(
   if (existingCharge || !facts) return true;
   return (
     facts.payments !== "conflicting_sources" &&
-    facts.payments.some(
+    anchorPayments(facts.payments, facts.target?.date ?? null).some(
       (payment) =>
         matchCompletePaymentSet(toPolicyPayments([payment]), [charge]) !== null,
     )
   );
 }
+
+// SQL form of anchorPayments for one evidence row; NULL for an undated line
+// beside a dated one.
+const anchoredPaymentInstant = sql`coalesce(${purchasePaymentEvidence.chargedAt},
+  CASE WHEN NOT EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" dated
+    WHERE dated."purchaseId" = ${purchasePaymentEvidence.purchaseId} AND dated."chargedAt" IS NOT NULL)
+  THEN ${purchase.date}::timestamp + interval '12 hours' END)`;
 
 /**
  * Other live Purchases still short of their own payment total whose retained
@@ -464,8 +489,8 @@ async function competingClaimants(
           purchasePaymentEvidence.amountMinor,
           financialEvidenceAmountMinor(charge.amount),
         ),
-        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
-          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
+        sql`(${anchoredPaymentInstant} IS NULL
+          OR ${withinPostingInstantWindowSql(anchoredPaymentInstant, charge.occurredAt)})`,
         charge.storedValue
           ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
           : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
@@ -516,6 +541,7 @@ async function evidencedChargeGroup(
     .select({
       id: purchase.id,
       vendorId: purchase.vendorId,
+      date: purchase.date,
       statedTotal: sql<
         number | null
       >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
@@ -557,6 +583,7 @@ async function namesOnlyThisCharge(
     row: {
       id: PurchaseId;
       vendorId: VendorId | null;
+      date: string | null;
       statedTotal: number | null;
     };
   },
@@ -578,8 +605,9 @@ async function namesOnlyThisCharge(
     .where(eq(importSourceOrder.purchaseId, row.id))
     .limit(1);
   if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
-  const payments = await loadPaymentSet(tx, row.id);
-  if (payments === "conflicting_sources" || payments.length !== 1) return false;
+  const retained = await loadPaymentSet(tx, row.id);
+  if (retained === "conflicting_sources" || retained.length !== 1) return false;
+  const payments = anchorPayments(retained, row.date);
   if (
     (payments[0]?.amountMinor ?? 0n) !==
     financialEvidenceAmountMinor(input.charge.amount)
@@ -675,6 +703,7 @@ export async function planPurchaseRetainedSettlement(
   const targetQuery = tx
     .select({
       vendorId: purchase.vendorId,
+      date: purchase.date,
       statedTotal: sql<
         number | null
       >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
@@ -712,7 +741,7 @@ export async function planPurchaseRetainedSettlement(
   const retained =
     preloaded?.payments ?? (await loadPaymentSet(tx, input.purchaseId));
   if (retained === "conflicting_sources") return retained;
-  const payments = retained.filter((payment) =>
+  const payments = anchorPayments(retained, target.date).filter((payment) =>
     refund ? payment.amountMinor < 0n : payment.amountMinor > 0n,
   );
   if (refund && !retained.some((payment) => payment.amountMinor > 0n))
@@ -734,8 +763,6 @@ export async function planPurchaseRetainedSettlement(
     ownerIds.some((ownerId) => ownerId !== input.ledgerPartyId)
   )
     return "conflicting_sources";
-  // Without a dated payment line there is no posting window to bound the
-  // search; an amount alone is coincidence, not evidence.
   if (!payments.some((payment) => payment.chargedAt)) return "no_evidence";
   const charges = await settleableCharges(tx, {
     purchaseId: input.purchaseId,

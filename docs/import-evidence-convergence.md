@@ -140,7 +140,9 @@ the generic fee description is not a Vendor alias. A missing issuer needs review
 
 Existing Purchase settlement reuses the retained-payment matcher: exact cents,
 card/tender and owner evidence, the posting window, and a complete unique
-conserved set. The same evidence checks apply to pending and observed charges;
+conserved set. A wholly undated payment set stands at its order date; an
+undated line beside a dated one stays bounded by the dated lines. The same
+evidence checks apply to pending and observed charges;
 status alone neither proves identity nor prevents settlement. Weaker
 same-Vendor candidates within fourteen days, including tips, partial payments,
 splits and combined charges, need review; amount/date coincidence alone does not
@@ -149,6 +151,9 @@ whose only exact match is one unpaid same-Vendor receipt within three days, with
 no retained payment evidence, open capacity equal to the charge, no older blocking spending, and no other
 unbooked charge or Transaction for that amount within three days of the
 receipt. That link is the same capacity-checked link a member would choose.
+A complete retained-payment target, like that receipt, settles past weak nearby
+candidates; older review-only spending, or a candidate that another charge
+already settles and that may be this same charge, still needs review.
 
 Nearby candidates without explicit payment or member evidence require review
 only when known remaining Purchase capacity can cover the charge, or capacity
@@ -157,31 +162,36 @@ remain visible as context and do not prevent automatic new spending.
 
 For positive charges, actual nonfuture vendor Expenses on partly paid
 same-Vendor Purchases outside that window or without dates also prevent
-automatic new spending while their complete graphs have open, unknown or
-overcovered settlement capacity. Partly paid means at least one positive
-payment is allocated and the charge-side vendor lines differ from the positive
-allocations, a line is unknown or unclassified, or an allocated payment is not
-plain posted settlement or is booked by a reimbursement line, as with
-installment plans and payment schedules. Undated retained payment evidence for
-the exact charge amount also keeps an older Purchase as a blocker. Otherwise an
-older Purchase with no allocated payment does not block a later charge.
+automatic new spending while their complete graphs have open or unknown
+settlement capacity. Partly paid means at least one positive payment is
+allocated and the charge-side vendor lines exceed the positive allocations, a
+line is unknown or unclassified, or an allocated payment is not plain posted
+settlement or is booked by a reimbursement line, as with installment plans and
+payment schedules. Payments beyond the lines, as on a returned or recharged
+order, leave no balance for a later charge. An undated retained payment line for
+the exact charge amount beside a dated line also keeps an older Purchase as a
+blocker. Otherwise an older Purchase with no allocated payment does not block a
+later charge.
 These additional candidates are review-only: even a complete retained payment
 set cannot make them automatic settlement targets. Only confidently zero
 remaining capacity excludes an additional candidate. A nearby candidate is
 excluded only when its capacity is confidently zero and every settling
-Transaction was accepted from a provably different bank event of the charge's
-source: another provider ID in the same provider scope, or another position in
-the same collection, as an earlier booking from the same feed creates. A
-manual, legacy, reviewed or cross-kind settlement may be this same charge and
-keeps blocking. Complete settlement targets, the
+Transaction is a provably different bank event: a firm (not pending) amount
+other than this firm charge's, or an acceptance from another provider ID in the
+same provider scope or another position in the same collection, as an earlier
+booking from the same feed creates. A manual, legacy, reviewed or cross-kind
+settlement of the same amount may be this same charge and keeps blocking. Complete settlement targets, the
 explicitly chosen Purchase, refund originals and Purchases whose retained
 payment evidence names the charge's amount stay intact. Explicit member
 selection or rejection keeps its authority. A header total without actual vendor lines is outside this
 check, and exhausted capacity does not prove source-event identity.
 
 Refunds require supported original-Purchase evidence independently of that
-weak-candidate window. Reuse recorded negative Expenses before creating a
-negative lump line. An identified original's single live effective category on
+weak-candidate window. Besides retained refund evidence and member choice, one
+same-Vendor order from the preceding 90 days whose open returned-line capacity
+equals the refund identifies it, under the receipt exception's competing-evidence
+check between that order and the refund. Reuse recorded negative Expenses before
+creating a negative lump line. An identified original's single live effective category on
 vendor spending, excluding future and reimbursement lines, supplies the refund
 category unless a member explicitly chooses another. An unmatched refund needs
 explicit review before a standalone refund Purchase is booked.

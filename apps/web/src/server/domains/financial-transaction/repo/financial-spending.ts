@@ -355,10 +355,10 @@ export async function prepareFinancialSpendingPage(
       ? (
           await getDb(db).execute<PaymentCandidate>(sql`
         SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          payment."amountMinor"::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
+          payment."amountMinor"::text AS "amountKey", ${paymentDate}::text AS "chargedDate"
         FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
         WHERE payment."amountMinor" = ANY(${columnArrayParam(amounts)})
-          AND payment."chargedAt"::date BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
+          AND ${paymentDate} BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
         ORDER BY p.id
       `)
         ).rows
@@ -896,6 +896,26 @@ async function settledByOtherOccurrences(
   );
 }
 
+/** Same-direction settlements of other charges, excluding reimbursement and income legs. */
+function otherSettlements(
+  graph: Awaited<ReturnType<typeof spendingGraph>>,
+  amount: number,
+  currentId?: string,
+) {
+  const reimbursements = new Set(
+    graph.lines
+      .filter((line) => line.economicRole === "reimbursement")
+      .map((line) => line.bookingTransactionCode),
+  );
+  return graph.settlements.filter(
+    (entry) =>
+      entry.transactionId !== currentId &&
+      entry.kind !== "income" &&
+      !reimbursements.has(entry.transactionCode) &&
+      Math.sign(Number(entry.amount)) === Math.sign(amount),
+  );
+}
+
 function availableCents(
   graph: Awaited<ReturnType<typeof spendingGraph>> | undefined,
   amount: number,
@@ -915,18 +935,7 @@ function availableCents(
       ? line.cost !== null && line.cost < 0 && line.lineKind === "principal"
       : line.cost !== null && (line.cost >= 0 || line.lineKind !== "principal"),
   );
-  const reimbursements = new Set(
-    graph.lines
-      .filter((line) => line.economicRole === "reimbursement")
-      .map((line) => line.bookingTransactionCode),
-  );
-  const other = graph.settlements.filter(
-    (entry) =>
-      entry.transactionId !== currentId &&
-      entry.kind !== "income" &&
-      !reimbursements.has(entry.transactionCode) &&
-      Math.sign(Number(entry.amount)) === Math.sign(amount),
-  );
+  const other = otherSettlements(graph, amount, currentId);
   if (
     other.some(
       (entry) =>
@@ -1090,29 +1099,50 @@ const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NO
 // Outside the nearby window only partly paid spending blocks creation: an
 // installment plan or payment schedule has a linked payment and an open or
 // unknown balance. Never-paid older Purchases are left to settlement review;
-// loading every one of them per charge exhausts Worker memory. This prefilter
-// keeps every unknown or uncertain case; the graph capacity check still
-// decides each Purchase it selects.
+// loading every one of them per charge exhausts Worker memory. Payments beyond
+// the charge-side lines (a returned or recharged order) leave no balance for a
+// later charge. This prefilter keeps every unknown or uncertain case; the
+// graph capacity check still decides each Purchase it selects.
 const partlyPaidSpending = sql`(${vendorSpendingExists}
   AND EXISTS (SELECT 1 ${chargePayments}) AND (
   EXISTS (SELECT 1 ${vendorLines} AND (e.cost IS NULL
     OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
   OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
   OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
-    IS DISTINCT FROM (SELECT sum(paid."amountMinor") ${chargePayments})))`;
-// Undated retained payment evidence cannot use the posting window; an exact
-// amount keeps the older Purchase as a review-only blocker.
+    > (SELECT sum(paid."amountMinor") ${chargePayments})))`;
+// A wholly undated retained payment set is anchored at the order date, as in
+// the retained-settlement matcher. An undated line beside a dated one has no
+// date of its own; an exact amount keeps that Purchase as a review-only blocker.
+const datedSibling = (alias: string) =>
+  sql`EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" dated
+    WHERE dated."purchaseId" = ${sql.identifier(alias)}."purchaseId" AND dated."chargedAt" IS NOT NULL)`;
+const paymentDate = sql`coalesce(payment."chargedAt"::date,
+  CASE WHEN NOT ${datedSibling("payment")} THEN p.date END)`;
 const undatedPayment = (amounts: readonly number[]) =>
   amounts.length
     ? sql`(${vendorSpendingExists} AND EXISTS (
   SELECT 1 FROM "PurchasePaymentEvidence" undated
   WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+    AND ${datedSibling("undated")}
     AND undated."amountMinor" = ANY(${columnArrayParam(amounts)})))`
     : sql`false`;
 const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
   SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
   WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
+    AND ${datedSibling("undated")}
 ) ELSE ARRAY[]::text[] END`;
+// A refund's original is a same-Vendor order from the preceding window that
+// records a returned line. Selection is not identity: exactReceiptTarget still
+// requires one unique order whose open refund capacity equals the refund. An
+// explicit standalone refund (`purchaseId: null`) selects none.
+const REFUND_WINDOW_DAYS = 90;
+const refundOriginal = (input: CandidateInput) =>
+  input.refund && input.vendorId && input.purchaseId !== null
+    ? sql`(p."vendorId" = ${input.vendorId}::uuid
+      AND p.date BETWEEN ${input.date}::date - ${REFUND_WINDOW_DAYS}::int AND ${input.date}::date
+      AND EXISTS (SELECT 1 ${vendorLines} AND e.cost < 0
+        AND e."lineKind" = ${expenseLineKindSchema.enum.principal}))`
+    : sql`false`;
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -1131,14 +1161,15 @@ async function spendingCandidates(
     const original = sql`(p.shortcode = ${input.purchaseId ?? null}
       OR (p."vendorId" = ${input.vendorId ?? null}::uuid AND ${!input.refund}
         AND abs(p.date - ${input.date}::date) <= 14)
+      OR ${refundOriginal(input)}
       OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment
         WHERE payment."purchaseId" = p.id
           AND payment."amountMinor" = ${input.amount}
-          AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3))`;
+          AND abs(${paymentDate} - ${input.date}::date) <= 3))`;
     return (
       await getDb(db)
         .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date,
-          COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3)), false) AS "explicit",
+          COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(${paymentDate} - ${input.date}::date) <= 3)), false) AS "explicit",
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
@@ -1193,6 +1224,19 @@ async function spendingCandidates(
           reviewOnly: !nearby,
         });
     }
+  }
+  if (input.vendorId && input.refund && input.purchaseId !== null) {
+    const originals = await getDb(db)
+      .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
+        WHERE ${notDeleted("p")} AND ${refundOriginal(input)} ORDER BY p.id`)
+      .then((result) => result.rows);
+    for (const candidate of originals)
+      if (!candidates.has(candidate.id))
+        candidates.set(candidate.id, {
+          ...candidate,
+          explicit: false,
+          reviewOnly: false,
+        });
   }
   if (input.purchaseId) {
     let lookup = page.explicitCandidates.get(input.purchaseId);
@@ -1528,29 +1572,66 @@ async function discoverSpendingEvidence(
       ) === 0
     );
   });
+  // A settling charge of another amount is another bank event. A pending
+  // amount may still change, so only firm amounts prove it.
+  const otherAmounts = new Set(
+    exhausted
+      .filter((candidate) => {
+        const graph = candidateGraphs.get(candidate.id);
+        const settled = graph
+          ? otherSettlements(graph, source.amount, row?.id)
+          : [];
+        return (
+          source.status !== "pending" &&
+          settled.length > 0 &&
+          settled.every(
+            (entry) =>
+              entry.status !== "pending" &&
+              Math.abs(cents(Number(entry.transactionAmount))) !==
+                Math.abs(cents(source.amount)),
+          )
+        );
+      })
+      .map((candidate) => candidate.id),
+  );
   const distinctlySettled = await settledByOtherOccurrences(
     db,
-    exhausted.map((candidate) => ({
-      id: candidate.id,
-      transactionIds: (candidateGraphs.get(candidate.id)?.settlements ?? [])
-        .map((entry) => entry.transactionId)
-        .filter((id) => id !== row?.id),
-    })),
+    exhausted
+      .filter((candidate) => !otherAmounts.has(candidate.id))
+      .map((candidate) => ({
+        id: candidate.id,
+        transactionIds: (candidateGraphs.get(candidate.id)?.settlements ?? [])
+          .map((entry) => entry.transactionId)
+          .filter((id) => id !== row?.id),
+      })),
     source.sourceRefs,
   );
+  // A live Purchase another charge already settles may be this same charge; it
+  // also stops a retained-payment target from winning over weak candidates.
+  const settledLive = new Set<string>();
   const liveCandidates = unrejectedCandidates.filter((candidate) => {
     if (!candidate.reviewOnly) {
       // Spent capacity does not prove a different bank event: a settled or
-      // short Purchase blocks unless another occurrence provably settled it.
+      // short Purchase blocks unless its settling charges provably differ.
       const reason = contextReasons.get(candidate.id);
-      if (reason === "settled" || reason === "amount")
-        return !distinctlySettled.has(candidate.id);
+      if (reason === "settled" || reason === "amount") {
+        if (
+          distinctlySettled.has(candidate.id) ||
+          otherAmounts.has(candidate.id)
+        )
+          return false;
+        const graph = candidateGraphs.get(candidate.id);
+        if (!graph || otherSettlements(graph, source.amount, row?.id).length)
+          settledLive.add(candidate.id);
+        return true;
+      }
       return !reason;
     }
     const graph = candidateGraphs.get(candidate.id);
-    // Only confidently exhausted capacity removes an added-only blocker.
-    // Unknown and negative capacity cannot establish ordinary full settlement.
-    return availableCents(graph, source.amount, row?.id) !== 0;
+    // Only known capacity removes an added-only blocker: exhausted, or paid
+    // beyond its lines. Unknown capacity cannot establish settlement.
+    const available = availableCents(graph, source.amount, row?.id);
+    return available === null || available > 0;
   });
   const live = new Set(liveCandidates);
   let categoryFromPurchase = false;
@@ -1676,6 +1757,7 @@ async function discoverSpendingEvidence(
     vendor,
     ambiguous,
     liveCandidates,
+    settledLive,
     strong,
     candidateEvidence,
     basis,
@@ -1752,6 +1834,8 @@ async function existingSpendingOutcome(
 // match is unique on both sides: one same-Vendor unpaid receipt within three
 // days whose open capacity is exactly the charge, and no other unbooked charge
 // for that amount near the receipt. Older partly paid spending still blocks.
+// A refund's original is likewise one same-Vendor order from the preceding
+// refund window whose open returned-line capacity is exactly the refund.
 // Retained payment evidence belongs to the retained matcher, which may have
 // rejected this charge (another card, for example); it never falls back here.
 async function exactReceiptTarget(
@@ -1761,36 +1845,47 @@ async function exactReceiptTarget(
   const { facts, liveCandidates, candidateEvidence, vendor } = evidence;
   const { row, source } = facts;
   const date = source.transactionDate ?? source.postedDate;
+  const refund = source.kind === "refund" && source.amount < 0;
   if (
     !vendor ||
     !date ||
-    source.kind !== "purchase" ||
-    source.amount <= 0 ||
+    !(refund || (source.kind === "purchase" && source.amount > 0)) ||
     liveCandidates.some((candidate) => candidate.reviewOnly)
   )
     return undefined;
   const amount = cents(source.amount);
-  const matches = liveCandidates.filter((candidate) => {
-    const graph = candidateEvidence.find(
-      (entry) => entry.id === candidate.id,
-    )?.graph;
-    return (
-      candidate.date !== null &&
-      calendarGap(candidate.date, date) <= 3 &&
-      graph?.target?.vendorId === vendor.id &&
-      graph.settlements.length === 0 &&
-      availableCents(graph, source.amount, row?.id) === amount
-    );
-  });
+  // Eligibility nets an order's returned lines into its total, so a refund
+  // reads every selected original rather than only live candidates.
+  const matches = (refund ? candidateEvidence : liveCandidates).filter(
+    (candidate) => {
+      const graph = candidateEvidence.find(
+        (entry) => entry.id === candidate.id,
+      )?.graph;
+      return (
+        candidate.date !== null &&
+        (refund
+          ? candidate.date <= date &&
+            calendarGap(candidate.date, date) <= REFUND_WINDOW_DAYS
+          : calendarGap(candidate.date, date) <= 3 &&
+            graph?.settlements.length === 0) &&
+        graph?.target?.vendorId === vendor.id &&
+        availableCents(graph, source.amount, row?.id) === amount
+      );
+    },
+  );
   if (matches.length !== 1) return undefined;
   const [match] = matches;
+  // Competing evidence for the same amount: near the receipt, or between the
+  // original order and the refund.
+  const from = refund ? sql`${match!.date}::date` : sql`${match!.date}::date-3`;
+  const to = refund ? sql`${date}::date+3` : sql`${match!.date}::date+3`;
   const charges = source.sourceRefs.map((ref) => ref.externalId);
   const competing = await getDb(db).execute<{ competing: number }>(sql`
     SELECT 1 AS competing FROM "FinancialTransaction" f
     WHERE ${notDeleted("f")} AND f.id IS DISTINCT FROM ${row?.id ?? null}::uuid
       AND f."amountMinor" = ${amount}
       AND f.status <> ${financialTransactionStatus.enum.void}
-      AND abs(coalesce(f."transactionDate", f."postedDate") - ${match!.date}::date) <= 3
+      AND coalesce(f."transactionDate", f."postedDate") BETWEEN ${from} AND ${to}
       AND NOT EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a
         WHERE a."transactionId" = f.id AND ${notDeleted("a")})
     UNION ALL
@@ -1801,10 +1896,11 @@ async function exactReceiptTarget(
       AND o.source = ANY(${textArrayParam([...new Set(source.sourceRefs.map((ref) => ref.source))])})
       AND o.shortcode <> ALL(${textArrayParam([...charges])})
       AND r."amountMinor" = ${amount}
-      AND abs(r."statementDate" - ${match!.date}::date) <= 3
+      AND r."statementDate" BETWEEN ${from} AND ${to}
     UNION ALL
     SELECT 1 FROM "PurchasePaymentEvidence" retained
     WHERE retained."purchaseId" = ${match!.id}::uuid
+      AND (${!refund} OR retained."amountMinor" < 0)
     LIMIT 1
   `);
   return competing.rows.length ? undefined : match;
@@ -1941,6 +2037,7 @@ async function prepareFinancialSpendingPreview(
     vendor,
     ambiguous,
     liveCandidates,
+    settledLive,
     strong,
     candidateEvidence,
     basis,
@@ -1991,6 +2088,11 @@ async function prepareFinancialSpendingPreview(
   const strongTargets = liveCandidates.filter((candidate) =>
     strong.has(candidate.shortcode),
   );
+  const exact =
+    !chosen && !strongTargets.length && request.purchaseId !== null
+      ? await exactReceiptTarget(db, evidence)
+      : undefined;
+  if (exact) return prepareReadySpending(db, evidence, exact, true);
   if (
     source.kind === "refund" &&
     !chosen &&
@@ -1998,15 +2100,18 @@ async function prepareFinancialSpendingPreview(
     request.purchaseId !== null
   )
     return review("Identify the original Purchase before booking this refund.");
-  const exact =
-    !chosen && !strongTargets.length && request.purchaseId !== null
-      ? await exactReceiptTarget(db, evidence)
-      : undefined;
-  if (exact) return prepareReadySpending(db, evidence, exact, true);
+  // A retained-payment target wins over nearby weak candidates, as an exact
+  // receipt does. Older review-only spending, or a settled Purchase that may be
+  // this same charge, still needs review.
   if (
     !chosen &&
     liveCandidates.length &&
-    (strongTargets.length !== liveCandidates.length || !strongTargets.length)
+    (!strongTargets.length ||
+      liveCandidates.some(
+        (candidate) =>
+          !strong.has(candidate.shortcode) &&
+          (candidate.reviewOnly || settledLive.has(candidate.id)),
+      ))
   )
     return review(
       "Possible existing Purchases require review before creating more spending.",
