@@ -368,7 +368,7 @@ async function refreshStatementNeighbours(
 }
 
 // Bound SERIALIZABLE create runs to keep their predicate-lock footprint small.
-export const STATEMENT_PAGE_RUN_CREATES = 8;
+export const STATEMENT_PAGE_RUN_CREATES = 32;
 
 /**
  * A published create an import page can apply with others: no transfer, hold,

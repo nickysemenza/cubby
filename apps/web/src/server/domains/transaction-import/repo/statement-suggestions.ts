@@ -226,6 +226,9 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  */
 export const STATEMENT_PUBLISH_CONCURRENCY = 4;
 
+// Limit preparation discarded when a later application invalidates its suffix.
+const STATEMENT_GENERATION_REBUILD_SIZE = 8;
+
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
   return match?.[1] && match[2]
@@ -3889,7 +3892,10 @@ export async function generateStatementSuggestionPage(
               // Share rebuilds between this page's applications. Any applied rule
               // or declined page invalidates the suffix before its next use.
               const upcoming = proposalCharges
-                .slice(chargeIndex, chargeIndex + STATEMENT_PAGE_RUN_CREATES)
+                .slice(
+                  chargeIndex,
+                  chargeIndex + STATEMENT_GENERATION_REBUILD_SIZE,
+                )
                 .filter(
                   (next) =>
                     !batchApplied.has(chargeId(next)) &&
