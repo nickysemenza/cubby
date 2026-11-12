@@ -1,3 +1,4 @@
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseId } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { sql, type SQL, type SQLWrapper, type Subquery } from "drizzle-orm";
@@ -11,8 +12,10 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
 import type { ExpenseSpendingCategoryResolutionDraft } from "~/server/domains/expense/repo/expense-category-resolution";
 
+import { principalExpenseInheritanceSql } from "./expense-inheritance";
 import {
   expenseAllocationScopeConditionSql,
+  eligiblePrincipalWeightSql,
   expenseJointAllocationSql,
   expenseSelectionConditionSql,
   expenseSelectionIdsSql,
@@ -126,6 +129,58 @@ export function expenseDerivedReadSql(
         bool_or("projectId" IS NULL) AS "noProject"
         FROM (${allocations}) derived_share GROUP BY "expenseId"`;
   }
+}
+
+/** Every live Expense's `(expenseId, projectId)` share rows without attributed cents, for
+ * readers that need Project membership but no amounts. It must yield the same
+ * pairs as `expenseJointAllocationSql`: a principal follows its inherited
+ * Project; an adjustment on a live Purchase gets one share per eligible
+ * principal weight (positive lines, else refund lines, else all-$0 lines when
+ * none is unpriced) or the Purchase's default Project; an adjustment without a
+ * live Purchase follows its own Project; an unclassified line has one share
+ * with no Project. Shares count regardless of attributed cents, so zero-cent
+ * shares remain members. */
+export function expenseProjectMembershipSql(): SQL {
+  const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+  const kind = expenseLineKindSchema.enum;
+  return sql`WITH principal AS MATERIALIZED (
+    SELECT e."id", e."purchaseId", ${inherited.projectId} AS "projectId",
+      ${dollarsToMinorSql(sql`e."cost"`)} AS cost_cents, live_purchase."id" IS NOT NULL AS live_purchase
+    FROM "Expense" e
+    LEFT JOIN "Purchase" live_purchase
+      ON live_purchase."id" = e."purchaseId" AND ${notDeleted("live_purchase")}
+    ${inherited.joins}
+    WHERE ${notDeleted("e")} AND e."lineKind" = ${kind.principal}
+  ), purchase_direction AS (
+    SELECT "purchaseId", coalesce(bool_or(cost_cents > 0), false) AS has_positive,
+      coalesce(bool_or(cost_cents < 0), false) AS has_negative,
+      bool_or(cost_cents IS NULL) AS has_unpriced_principal
+    FROM principal WHERE live_purchase GROUP BY "purchaseId"
+  ), weight_project AS (
+    SELECT DISTINCT f."purchaseId", f."projectId"
+    FROM principal f JOIN purchase_direction d USING ("purchaseId")
+    WHERE ${eligiblePrincipalWeightSql}
+  ), purchase_project AS (
+    SELECT "purchaseId", "projectId" FROM weight_project
+    UNION ALL
+    SELECT p."id", default_project."id" FROM "Purchase" p
+    LEFT JOIN "Project" default_project
+      ON default_project."id" = p."defaultProjectId" AND ${notDeleted("default_project")}
+    WHERE ${notDeleted("p")}
+      AND NOT EXISTS (SELECT 1 FROM weight_project w WHERE w."purchaseId" = p."id")
+  )
+  SELECT "id" AS "expenseId", "projectId" FROM principal
+  UNION ALL
+  SELECT e."id", CASE WHEN p."id" IS NULL THEN standalone_project."id" ELSE w."projectId" END
+  FROM "Expense" e
+  LEFT JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
+  LEFT JOIN purchase_project w ON w."purchaseId" = p."id"
+  LEFT JOIN "Project" standalone_project
+    ON standalone_project."id" = e."projectId" AND ${notDeleted("standalone_project")}
+  WHERE ${notDeleted("e")} AND e."lineKind" NOT IN (${kind.principal}, ${kind.unclassified})
+  UNION ALL
+  SELECT e."id", NULL::uuid FROM "Expense" e
+  WHERE ${notDeleted("e")} AND e."lineKind" = ${kind.unclassified}`;
 }
 
 /** Plain-root list predicates need any matching share, including zero cents.

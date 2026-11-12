@@ -162,6 +162,17 @@ export const purchaseAssociatedEmailsSql = (purchaseId: SQL): SQL => sql`
 
 const emailSourceKeySql = sql`"Email"."provider" || ':' || "Email"."mailboxId" || ':' || "Email"."messageId"`;
 
+/** Permissive candidates for accepted mail evidence; the association policy
+ * still verifies the claim family, attachment, checksum, Purchase and owner. */
+export const emailSourceClaimCandidateSql = sql`("Email"."ledgerPartyId", ${emailSourceKeySql}) IN (
+  SELECT identity."ledgerPartyId", CASE
+    WHEN identity.kind = ${importSourceKind.enum.mail_attachment}
+      THEN substring(identity."externalKey" from '^(.+?:[^:]+):attachment:')
+    ELSE identity."externalKey" END
+  FROM "ImportSourceClaim" identity
+  WHERE identity.kind IN (${importSourceKind.enum.mail_message}, ${importSourceKind.enum.mail_attachment})
+)`;
+
 /**
  * `("purchaseId", "ledgerPartyId")` for each mailbox whose live Email
  * `emailPurchaseAssociationsSql` associates with a live purchase of

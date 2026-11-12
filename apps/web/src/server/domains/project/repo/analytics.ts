@@ -18,7 +18,10 @@ import {
   plannedExpenseSql,
 } from "~/server/db/helpers/predicates";
 import { task } from "~/server/db/schema";
-import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
+import {
+  expenseDerivedReadSql,
+  expenseProjectMembershipSql,
+} from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dependencyIdsFor } from "~/server/generic/entity-links/repo/dependency-edges";
 
@@ -218,7 +221,7 @@ export async function projectContentDates(
       }>(sql`
       SELECT allocation."projectId",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
-      FROM (${expenseDerivedReadSql("projects")}) allocation
+      FROM (${expenseProjectMembershipSql()}) allocation
       JOIN "Expense" e ON e."id" = allocation."expenseId"
       WHERE ${scope(sql`allocation."projectId"`)}
       GROUP BY allocation."projectId"
@@ -250,7 +253,7 @@ export async function projectContentDatesExcluding(
         contentStart: string | null;
         contentEnd: string | null;
       }>(sql`
-      WITH allocation AS MATERIALIZED (${expenseDerivedReadSql("projects")})
+      WITH allocation AS MATERIALIZED (${expenseProjectMembershipSql()})
       SELECT excluded.id AS "excludedId", allocation."projectId",
         min(e."date") AS "contentStart", max(e."date") AS "contentEnd"
       FROM allocation

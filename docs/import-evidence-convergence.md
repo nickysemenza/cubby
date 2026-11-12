@@ -175,6 +175,11 @@ explicit review before a standalone refund Purchase is booked.
 
 ### Automatic booking rule
 
+Applying statement evidence refreshes pending advice on the same account within
+seven days of each affected date, plus explicit copies. Disjoint date windows
+stay disjoint. Refreshes coalesce within a page and use the shared Suggestion
+batch publisher, preserving unchanged advice, paid labels and member decisions.
+
 The clean import booking rule (clean spending creates, books and supersedes,
 clean income, transfer and card-payment creates, and paired copy attaches) is fixed code and always on; there is no member
 switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy

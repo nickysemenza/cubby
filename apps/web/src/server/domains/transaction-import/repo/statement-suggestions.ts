@@ -2046,15 +2046,30 @@ export async function pendingChargesNear(
   accountId: string,
   dates: readonly string[],
 ): Promise<ChargeRef[]> {
-  const sorted = [...dates].sort();
-  if (!sorted.length) return [];
+  const windows: { first: string; last: string }[] = [];
+  for (const date of [...new Set(dates)].sort()) {
+    const last = windows.at(-1);
+    if (
+      last &&
+      plainDateDaysBetween(last.last, date) <= PENDING_POST_WINDOW_DAYS * 2
+    )
+      last.last = date;
+    else windows.push({ first: date, last: date });
+  }
+  if (!windows.length) return [];
   const rows = await unwrapDb(db).execute<ChargeRef>(
     sql`SELECT DISTINCT ${suggestionField("source", STATE)} AS source, ${suggestionField("chargeKey", STATE)} AS "chargeKey"
       FROM "Suggestion" WHERE ${pendingStatementState}
         AND ${suggestionField("accountId", STATE)} = ${accountId}
-        AND (${suggestionField("statementDate", STATE)})::date
-          BETWEEN ${sorted[0]}::date - ${PENDING_POST_WINDOW_DAYS}::int
-          AND ${sorted.at(-1)}::date + ${PENDING_POST_WINDOW_DAYS}::int`,
+        AND (${sql.join(
+          windows.map(
+            ({ first, last }) =>
+              sql`(${suggestionField("statementDate", STATE)})::date
+                BETWEEN ${first}::date - ${PENDING_POST_WINDOW_DAYS}::int
+                AND ${last}::date + ${PENDING_POST_WINDOW_DAYS}::int`,
+          ),
+          sql` OR `,
+        )})`,
     "objects",
   );
   return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
@@ -3355,8 +3370,10 @@ async function prepareStatementGenerationPage(
 }
 
 /** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
-export const coalesceChargeRefreshes = <T>(fn: () => Promise<T>) =>
-  withAfterCommitScope(fn);
+export const coalesceChargeRefreshes = <T>(
+  fn: () => Promise<T>,
+  finish?: (flush: () => Promise<void>) => Promise<void>,
+) => withAfterCommitScope(fn, finish);
 
 /** Refresh named charges once after the writing transaction commits. */
 export async function regenerateChargesAfterCommit(
@@ -3417,14 +3434,37 @@ export async function regenerateCharges(
     startedAt,
     scope?.accountIds,
   );
-  for (const proposal of proposals) {
-    if (
+  let failure: Error | undefined;
+  let published = 0;
+  let unchanged = 0;
+  await publishSuggestionBatches(
+    db,
+    statementSuggestions,
+    proposals.flatMap((proposal) =>
       scope?.accountIds?.length &&
       !scope.accountIds.includes(proposal.judgment.accountId)
-    )
-      continue;
-    await publishChargeProposal(db, proposal, ruleProducer(null));
-  }
+        ? []
+        : [{ proposal }],
+    ),
+    ruleProducer(null),
+    {
+      concurrency: STATEMENT_PUBLISH_CONCURRENCY,
+      onOutcome: (_, outcome) => {
+        if (outcome.outcome === "published") published++;
+        else if (outcome.outcome === "unchanged") unchanged++;
+      },
+      onFailure: (_, error) => {
+        failure ??= error;
+      },
+    },
+  );
+  log.info("Statement charge refresh", {
+    charges: charges.length,
+    proposals: proposals.length,
+    published,
+    unchanged,
+  });
+  if (failure) throw failure;
 }
 
 /** Admit a retry in its current scope before repairing any projection. */
