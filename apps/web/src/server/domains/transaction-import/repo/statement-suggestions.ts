@@ -3817,6 +3817,11 @@ export async function generateStatementSuggestionPage(
     // Single admission rebuilds after a money write or a declined page;
     // a decline can reveal a new live candidate even before any write commits.
     let recheck = false;
+    const refreshed = new Set<string>();
+    const invalidateRefreshes = () => {
+      recheck = true;
+      refreshed.clear();
+    };
     // Each write's neighbour refresh joins one page-wide refresh at the end.
     await coalesceChargeRefreshes(async () => {
       for (const [chargeIndex, charge] of proposalCharges.entries()) {
@@ -3843,7 +3848,7 @@ export async function generateStatementSuggestionPage(
             }
             for (const item of batch) batchTried.add(chargeId(item.charge));
             if (batch.length > 1) {
-              recheck = true;
+              invalidateRefreshes();
               try {
                 const applicationStartedAt = performance.now();
                 const page = await applyAutomaticRulePage(
@@ -3865,7 +3870,7 @@ export async function generateStatementSuggestionPage(
                   if (page.outcomes.get(item.selection.row.id) !== "applied")
                     continue;
                   batchApplied.add(chargeId(item.charge));
-                  recheck = true;
+                  invalidateRefreshes();
                 }
               } catch (error) {
                 if (isWorkflowInterrupted(error)) throw error;
@@ -3875,18 +3880,37 @@ export async function generateStatementSuggestionPage(
                   charges: batch.length,
                   error: scrubErrorMessage(String(error)),
                 });
-                recheck = true;
+                invalidateRefreshes();
               }
             }
           }
           if (!batchApplied.has(key)) {
-            if (recheck) {
+            if (recheck && !refreshed.has(key)) {
+              // Share rebuilds between this page's applications. Any applied rule
+              // or declined page invalidates the suffix before its next use.
+              const upcoming = proposalCharges
+                .slice(chargeIndex, chargeIndex + STATEMENT_PAGE_RUN_CREATES)
+                .filter(
+                  (next) =>
+                    !batchApplied.has(chargeId(next)) &&
+                    !failed.some(
+                      (failure) => failure.ref === `charge:${chargeId(next)}`,
+                    ),
+                );
               log.info("Statement generation phase", {
                 phase: "regeneration",
                 chargeIndex,
-                charges: proposalCharges.length,
+                charges: upcoming.length,
               });
-              await regenerateCharges(db, [charge], input.scope);
+              try {
+                await regenerateCharges(db, upcoming, input.scope);
+                for (const next of upcoming) refreshed.add(chargeId(next));
+              } catch (error) {
+                if (isWorkflowInterrupted(error)) throw error;
+                // Attribute a failed rebuild to its own charge, not an earlier
+                // charge that shared its reads or publication batch.
+                await regenerateCharges(db, [charge], input.scope);
+              }
             }
             log.info("Statement generation phase", {
               phase: "application",
@@ -3900,7 +3924,7 @@ export async function generateStatementSuggestionPage(
               true,
               input.scope,
             );
-            if (outcome.applied.length) recheck = true;
+            if (outcome.applied.length) invalidateRefreshes();
           }
           // Booking a primary republished its copies as attaches; settle the
           // ones this import covers in the same pass.
@@ -3916,9 +3940,10 @@ export async function generateStatementSuggestionPage(
                 )
               ).applied.length
             )
-              recheck = true;
+              invalidateRefreshes();
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
+          invalidateRefreshes();
           failed.push(statementGenerationFailure(ref, error));
         }
       }

@@ -1108,7 +1108,11 @@ clear only the proven prefix through the projection writer. A missing, replaced
 or rule-bearing receipt stops the batch (current
 import-only rules cannot execute outside import admission, so their stamps do
 not). Single-item import admissions regenerate after an applied rule on the same
-page, since regeneration can introduce actionable rules. Statement application and booking request only
+page, since regeneration can introduce actionable rules. Generation shares that
+rebuild across bounded groups while no application has changed the ledger;
+every applied rule, copy, declined page or application failure invalidates the
+prepared group before its next admission. A failed grouped rebuild falls back
+to the current charge so failures retain their own references. Statement application and booking request only
 identity output from their mutation writers when they consume only IDs; the
 writers keep validation, locks, audits, allocations and receipts.
 
