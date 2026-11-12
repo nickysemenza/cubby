@@ -4,7 +4,9 @@ Root rules apply. This file is loaded for `apps/web` work; load the focused
 reference below before changing the matching surface.
 
 Before changing visible UI (layout, spacing, density, color, copy), load the
-`impeccable` skill in Operate mode and read [DESIGN.md](DESIGN.md).
+`impeccable` skill in Operate mode and read [DESIGN.md](DESIGN.md). For a
+visible redesign, show several mock options first, build to the chosen one, and
+compare the shipped screen with the mock before review.
 
 - **React hooks, queries, mutations, client/server boundaries, SSR:**
   [web runtime rules](docs/web-runtime.md).
@@ -23,8 +25,10 @@ Use structured page text, snapshots and console output to verify text, structure
 and loading. Use screenshots for visual questions or final visual evidence;
 [PR screenshots](../../docs/agents/validation.md#pr-screenshots) owns capture and
 attachment. A hidden preview tab can suspend rAF and leave below-the-fold
-screenshots blank: check with a tall viewport and fresh navigation. If a ref-click
-silently fails to fire a React `onClick`, try a coordinate click.
+screenshots blank: check with a tall viewport and fresh navigation. Verify a
+hover or click fix with real pointer input; synthetic events pass where real
+ones fail. If a ref-click silently fails to fire a React `onClick`, try a
+coordinate click.
 
 Native owns fieldwork: barcode/QR scanning, recount, sweep, and the location
 photo pass live in `apps/apple`, and the web app is not an installable PWA. Do

@@ -182,6 +182,16 @@ Preview builds run `build:cf` directly with `CUBBY_DEV_PREVIEW_BUILD`, which
 Nx's `build-cf` key also includes, so a later Nx build replaces their output.
 The lifecycle plugin's idle and orphan checks currently apply to HMR only.
 
+### Toolchain
+
+Rust and WASM builds use Homebrew's rustup proxies in
+`/opt/homebrew/opt/rustup/bin`, which are not linked into `/opt/homebrew/bin`;
+prepend that directory to `PATH` when `rustc` or `cargo` is not found. Always go
+through the proxies: a `~/.rustup/toolchains/<toolchain>/bin` directory on
+`PATH` bypasses rustup's library setup, and `rust-lld` aborts with
+`Library not loaded: @rpath/libLLVM.dylib`. Apple tools follow
+[native verification](../apps/apple/AGENTS.md#verification).
+
 ## Tooling layout
 
 Local runtime tooling lives in `apps/web/tooling/dev/`. `index.ts` owns the

@@ -13,318 +13,43 @@ the [shared work model](work-queue.md).
 
 ## Discover from financial history
 
-Resolve financial merchant descriptions to Vendors before creating Purchases
-just to discover email. A processor or marketplace description is a lead, not
-proof of the seller. Research uncertain vendor identity and missing websites
-or logos through the shared queue. A VendorAccount records a member's vendor
-relationship, not proof of a login, and is not a prerequisite for discovery.
-VendorAccounts have no active/disabled status. The Mail import switch, the AI
-budget and explicit Run controls own whether work can proceed.
-Importing purchase evidence attributed to a known Vendor and member creates
-or reuses that member's Vendor Account automatically. Scanning unrelated mail
-or leaving Vendor identity unresolved does not establish this relationship.
+Cubby resolves financial merchant descriptions to Vendors before creating
+Purchases just to discover email. A processor or marketplace description is a
+lead, not proof of the seller. Uncertain vendor identity and missing websites or
+logos go to research through the shared queue. A Vendor Account records a
+member's relationship with a Vendor, not proof of a login; importing purchase
+evidence attributed to a known Vendor and member creates or reuses it.
+
+## Mail import
 
 Mail import is one switch per connected mailbox (Settings → Mail import, or
 `run.set_mail_import` over MCP). While it is on, the daily discovery pass needs
-no further approval: it classifies new mail across all senders, so an
-unfamiliar vendor can be discovered, and pages targeted history searches. Each
-ordinary Vendor's verified receipt senders and website domain seed exact
-`from:`/domain searches; a Vendor name never becomes a free-text search, and a
-Vendor without a verified sender or website waits for research. Merchant
-descriptions on unallocated financial transactions seed one search per distinct
-merchant; a transaction without a provider merchant searches its bank
-descriptor instead, with the processor prefix (`SQ *`, `TST*`), store numbers
-and trailing city/state removed (`parseBankDescriptor`). The raw descriptor
-stays on the transaction, and the transaction list's processor filter derives
-from it on read. Targets are recomputed on every pass; an unfinished search that is no
-longer a target is dropped, and a Vendor that gains a verified sender
-joins history search automatically. A newly created Brand uses that same
-Vendor discovery path on the next pass, without needing a Purchase or
-VendorAccount. Generic / Unbranded is excluded; its role is only Product Brand.
-An explicit immediate search uses the existing Vendor mail-search action.
-Targeted pages alternate with new mail;
-there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared
-platform domains do not identify the seller, establish purchase ownership, or
-authorize an identifier issuer namespace.
-Related mail observed on a shared sender domain also seeds an exact-address
-history search in that same member mailbox. These searches use the existing
-targeted discovery cursor and do not establish the seller. A shared commerce
-platform domain never supplies seller proof by itself. Exact addresses are
-independent identities: assigning one to a Vendor means both seller attribution
-and that Vendor's mailbox search scope. Known generic addresses, such as
-`noreply@order.online`, remain mailbox-discovery targets and cannot be assigned
-to one seller. They are an exact-address vocabulary, not a domain ban.
-An exact address on a shared domain can be learned from current accepted
-receipt evidence for one seller. Its local address pattern alone proves nothing.
-Accepted receipts for another seller make a saved mapping disputed and suspend
-its seller proof and Vendor search scope. The stored member decision and earlier
-Purchases remain intact. Unmapped addresses with accepted receipts from multiple
-sellers remain shared. Learned mappings whose supporting evidence is no longer
-current also lose proof.
-Sender resolution and the Vendor coverage inspector show the saved decision,
-learning origin and a bounded preview of the original Email/Purchase links.
-Confirm Vendor saves the exact address; removing attribution records an
-exclusion that automatic learning cannot reverse. Vendor field edits and merges
-preserve that intent. During a merge, confirmed or excluded member intent takes
-precedence over learned intent; conflicting explicit decisions keep the keeper
-Vendor's decision. Edits and merges validate their address lock set under
-Vendor locks and restart a contended snapshot before changing identity or
-recording exclusions. Conflicting historical evidence stays visible until it is
-reviewed on the original records; confirmation never rewrites it.
-Verified mappings apply to new mail and make eligible unresolved originals
-available to the existing automatic import admission when their mailbox is on.
-An untouched automatic unresolved outcome can be re-admitted once per verified
-source checksum and sender/Vendor mapping, including when a mapping is changed
-away and later restored. Its old Run inputs and outcome receipts remain immutable.
-The admission rechecks live ownership, original checksum, mailbox switches,
-current sender proof and later member edits or reviews. Active or paused work,
-member-selected imports and explicit exclusions keep their existing controls.
-Sources with accepted or linked Purchases never enter this recheck. Import is
-not implied by saving a mapping.
-Receipt content still names the actual seller. A conflicting printed seller
-cannot become an alias of a platform merely because its sender was mapped.
-An older platform alias cannot silently win seller resolution; the canonical
-seller is reused, otherwise reviewed correction is required. No existing
-Purchase, money, inventory or source original is rewritten by attribution.
-Search completion describes the scope actually scanned, not proof that every
-purchase from that Vendor has been found.
+no further approval. It classifies new mail from every sender, so an unfamiliar
+vendor can be discovered, and searches history for each Vendor's verified
+receipt senders and website domain and for the merchants on unallocated
+transactions. There is no all-of-Gmail crawl, and Spam and Trash are excluded.
 
-Mail coverage starts with mailbox discovery: last recorded poll, whether a
-paginated new-mail catch-up remains, automatic import status, active discovery
-Run, current targeted searches completed/total, and separate local scanned,
-classified, retained, pending, unsettled and imported counts. Imported Emails
-have accepted Purchase evidence; lifecycle links alone do not count. A poll is not proof of
-completed classification, import or exhaustive history. Sender resolution separates
-unassigned, disputed and excluded addresses from genuinely multi-seller shared
-addresses; a shared domain never decides that grouping. Verified addresses
-appear with their Vendor, including addresses on free-mail and platform domains.
-Sender and Vendor tables expose standard row-selection checkboxes. Sender rows show
-their exact history query, recorded completion and Run, local classification
-and retention counts, linked Emails and distinct Purchases. These counts overlap
-Vendor coverage and must not be added together. Completed queries cover only
-their actual definitions; the rest of Gmail history remains unscanned.
+A shared platform sender domain never identifies the seller by itself. Confirm
+an exact address on a Vendor to attribute its mail and search it; removing the
+attribution records an exclusion that automatic learning cannot reverse.
+Conflicting receipts mark a learned mapping disputed without rewriting earlier
+Purchases.
 
-Seller unresolved counts related retained originals without attributed seller
-or accepted/linked Purchase evidence. Its drilldown lists the latest 50 per
-connected mailbox, explicitly showing the displayed count against the full
-local count, with links to the original Emails. It does not create a Generic
-Vendor or infer seller identity from sender matches. Vendor/account-scoped
-coverage retains its existing Vendor context.
-Each connected mailbox receives its own bounded sample before any mailbox
-filter is applied, so newer receipts in one mailbox cannot hide another's
-originals. Mobile discovery and shared-sender rows retain their key summaries;
-discovery Details and the shared-sender inspector expose every remaining field
-and Run link. Shared senders support search, status views and column controls;
-the default view keeps source identity, search state and key outcomes visible.
+Mail coverage and Vendor coverage show what each mailbox has searched,
+classified, retained and imported. Counts can overlap across Vendors, and a
+completed search describes the scope scanned, not proof that every purchase was
+found. Choose a coverage row to import one Vendor's mail for a date range; that
+pauses other automatic imports for the mailbox until you resume them.
 
-Vendor coverage, alongside Emails and linked from Settings, shows every known
-Vendor in each connected member mailbox. Existing Vendor Accounts provide the
-member/Vendor record context; unsearched rows do not create accounts. Each row
-separates search coverage from local scanned, classified and retained Emails,
-linked Emails and distinct linked Purchases. Several Emails can describe one
-Purchase. Local sender/domain matches are candidates, not Vendor attribution
-or a Gmail-wide total. Domains shared by Vendors can contribute candidates to
-more than one row, so row counts are not additive.
-Local counts include the union of sender/domain candidates, sender-proof Vendor
-attribution and accepted Purchase links, counting each Email once per Vendor
-and mailbox. Content saved counts currently retained originals. Purchase links
-survive content clearing, so linked Emails can exceed content saved; the linked
-Email cell breaks down saved content versus metadata-only evidence. Account
-labels are the current Vendor and member names, resolved in the report batch.
+Pi imports what is unambiguous and leaves the rest in the Work queue. Each
+unresolved Email becomes its own Work item, routed to an agent, to you, or to
+Cubby itself when it is only waiting for another source. A transient failure
+retries automatically with the same model; other failures stop with the raw
+error. When the household AI budget runs out, Runs pause and resume once budget
+is available again.
 
-Search coverage is completed query definitions out of current query definitions,
-not an Email count or a Run count. Each cell opens its sender/domain queries,
-individual completion states and recorded finish times. These are full-history
-checkpoints; date-limited runs remain visible as controlled imports. Existing
-Emails may come from earlier or manual imports even before a current query has
-completed. Color reinforces the text: completed searches are positive,
-missing recorded classifications and unfinished searches warn, and zeros are muted.
-
-The sortable Queue column follows the mailbox cursor's targeted-query order,
-including unmatched-charge searches in its positions. Running now requires a
-recorded active page or controlled import; a partial historical cursor alone
-never proves active execution. New-mail checks can run between targeted queries,
-so positions are not start-time promises. Paused imports and discovery recovery
-retain their reason and actual Run link. Turning automatic imports off does not
-stop discovery from classifying mail. Search checkpoints record their committing
-Run going forward; older checkpoints without provenance say Run not recorded.
-Completed controlled all-history receipts can identify their own Run after the
-request cursor is pruned. Never substitute the mailbox's newest unrelated Run.
-
-Coverage views are URL-addressable: All coverage, Running & queued, Never
-searched, Incomplete and Needs attention. Their counts respect the linked-record
-context. Selection and date drafts live above the responsive inspector, and
-polling updates existing rows without remounting the table. Compact defaults
-keep diagnostic counts in the column menu. Last searched is the latest recorded
-completion among current query definitions; it is not a new-mail freshness or
-Purchase-import guarantee. Import next uses the existing controlled-import
-command and does not interrupt active work.
-
-Email count drilldowns use the same union as the coverage report: sender/domain
-candidates, sender-proof attribution and accepted Purchase evidence. The Email
-list's Mail coverage row set keeps the Vendor and stage on the same membership,
-with the selected mailbox/member retained in the route. Linked Purchase counts
-open the distinct linked Purchase records rather than a broader Vendor list.
-
-Each search records its finish time, retained Email count and newly tracked
-message count (`completedAt`, `emailCount`, `messageCount`). Older checkpoints
-retain unknown counts. No matches means every current search finished with a
-known zero message count; zero retained Emails alone never establishes it.
-The Vendor
-list's derived Mail search column is done when every current search of that
-Vendor has finished in every member's connected mailbox, in progress once any
-has a finished page or a page token, not started otherwise, and blank for a
-Vendor with no searches; the Vendor's Mail search section lists each search
-per mailbox.
-
-Choose a coverage row to import only that Vendor's mail from the selected
-mailbox. The shared date picker accepts dates such as `1 year ago`. From is
-unbounded and Through defaults to household today; clear both for all history.
-Range shortcuts reuse the historical filters' month, 30/90-day, year-to-date
-and 12-month choices. Applying one sets both dates together and replaces any
-uncommitted date text. All history clears both bounds.
-Check Gmail matches reads the same union of sender/domain queries and date
-bounds without importing or pausing anything. After the first check, committed
-date changes refresh it. A complete first page is an exact message count;
-larger results use Gmail's estimate, labeled About, and an unavailable estimate
-stays unknown. Overlapping sender/domain results are never added together.
-The request
-pauses other automatic imports for that mailbox, lets active work finish and
-runs the selected scope next. Automatic imports stay paused after completion
-until explicitly resumed. The selected scope covers both search and import;
-normal relevance, Vendor attribution, duplicate and purchase-evidence rules
-still apply. Paid AI is allowed within the household budget without an
-over-budget grant. Existing evidence, completed work and member decisions are
-reused. Follow the persisted Run to distinguish waiting, discovery and import
-from completion. Settings keeps mailbox connections and automatic-import
-switches, with review work in the Work queue.
-Resuming restores the previous automatic-import setting, so a mailbox that
-was off stays off while its previously queued work can continue. Settled
-Emails and review stops are preserved. Source transfers keep the older Run's
-roster and outcomes, with an immutable transfer receipt releasing its
-responsibility for those sources. Pausing a controlled Run keeps its mailbox
-fenced until that scope is resumed or cancelled and the mailbox pause is
-explicitly released.
-Changing the Settings switch is an explicit on/off override; an active
-controlled scope still finishes first.
-
-Discovery admits retained candidates to Pi, which imports what is unambiguous
-under the writer contracts and leaves the rest in the Work queue. Keep a
-minimal identity and classification footprint for scanned negatives; retain
-useful related evidence and uncertain candidates for resolution.
-Retained attachments and reversal or lifecycle exception evidence always go to
-the coordinator, including Emails classified unrelated; neither rule shortcut
-can clear those originals without review.
-Original attachment reads support images and PDFs within the existing byte
-limit. A generic binary content type is identified from the retained bytes;
-the filename alone never establishes the format. Content-type case and
-parameters are normalized for the read without rewriting source metadata.
-Other formats return an explicit unsupported-reader response.
-Import operation IDs identify exact requests. An unchanged retry replays its
-retained result; a changed request under the same ID returns a conflict and
-must use a new ID. This never replaces a saved result or relaxes source checks.
-Catch-up also admits older retained related Emails in enabled mailboxes. Only
-usable text or retained attachments count toward its bounded page; empty shells
-and historical sources with unresolved ownership stay out. An admission failure
-does not stop other sources or new-mail discovery, and retains its diagnostics.
-Manual Run pauses remain active ownership: they can be resumed or cancelled,
-and retain the vendor account's active-Run exclusion; catch-up never resumes
-them.
-A Mail import commit files supported Purchases and Product findings while
-keeping the batch running; an unresolved principal line does not prevent the
-next Email from being claimed. A member's own `file_import` still ends with
-its commit. Unresolved goods send that member import through its required audit
-to `needs_review`, using the saved member actor and owner without requiring a
-coordinator session. If auditing fails after commit, exact commit replay resumes
-finalization from the saved result; replay after the audited stop returns that
-result without importing again or auditing the stopped Run. At Mail batch
-settlement, every import batch is audited. A Run whose every admitted Email was
-imported, linked, excluded or resolved unresolved with a recorded outcome ends
-`completed`: each unresolved Email is its own Work item routed by who settles
-its gap (`MAIL_IMPORT_GAP_EXECUTOR`). An agent researches `missing_evidence`,
-`invalid_extraction`, `attempt_limit` and `unknown` gaps; only the member
-settles `identity_ambiguity` and `member_decision`. Cubby settles the rest by
-itself: a `source_held` Email waits for its source, and a `transient_failure`
-Email returns to ordinary admission, bounded by its attempts. `needs_review` is
-left for a Run that could not finish: open commit or audit findings, or an
-unresolved Email without a recorded outcome.
-
-A Mail import Run that ends before settling every Email (its coordinator fails
-or aborts, or it stops for review) returns the Emails no coordinator reached to
-catch-up as `pending`. A member's cancel instead keeps every researching Email
-with the Run as `unsettled`, so catch-up never undoes the member's stop; the
-Run's retry or restart transfers them, and evidence recovery readmits them only
-for changed bytes or accepted order evidence newer than the cancel. An Email this Run claimed, or an
-earlier review or self-failed Run attempted, stays with it as `unsettled`: its
-`target_outcome` or Email claim in the RunOperation ledger proves the attempt;
-roster admission alone does not. A later completed outcome in that Run clears
-its earlier unsettled attempt. This release also applies when settlement
-revisits a Run already stopped for review. No Run completes, and no coordinator
-is retired, while its roster still holds a `researching` Email.
-
-An `unsettled` Email is readmitted from any ended holder, failed and retired
-ones included, only when a new evidence revision appears: a newly verified
-sender mapping its coordinator never read with that Vendor, new accepted
-Purchase evidence for an order it prints, the source its `source_held` outcome
-waits on settling after that outcome, a newer importer revision
-(`MAIL_IMPORT_SKILL_REVISION`, stamped as each Mail import Run's
-`skillRevision`) for a gap an agent would settle, or new retained bytes. A gap
-only the member settles is never re-run for a newer importer. A held outcome
-names what it waits on (`waitingOn`): the awaited Email, imported or linked, or
-an order number, held by a live Purchase on the owner's account (at the awaited
-Vendor when known) that is created or gains an accepted source. Without a named
-source, a held Email waits on the one order number it prints at its sender's
-Vendor. Each revision admits at most one attempt, so repeatedly
-unsettled messages never spend a coordinator every pass. Without a new revision,
-automatic import admits one Email at one evidence revision (its checksum, plus
-any sender, order or source revision that rechecked it) into at most three Runs
-in all, counting transient retries and Runs that failed before claiming it; then
-it stays `unsettled` with its last Run. A new revision starts its own count. Retrying a failed Run transfers only the
-Emails it still holds.
-
-A failed coordinator is classified from its last model or tool error. A funding
-stop pauses the Run. A transient fault (provider or gateway 408/409/425/429/5xx,
-deadline, egress, overload, harness reset, database connection) retries
-automatically as one successor Run with that Run's unsettled Emails that have
-an attempt left, on the escalation coordinator model, and holds back new
-automatic admission for an hour. A deterministic failure, such as a
-tool-validation loop or an explicit 401/403, never retries. Either way the last failed Run carries one
-finding naming the class and the raw error, and its claimed Emails stay
-`unsettled`.
-
-Before the coordinator, the claim links a lifecycle notice without a model call
-when exact evidence names exactly one Purchase on the owner's account: a
-Shipment the Email already sourced, a tracking number equal to exactly one
-Shipment, or the sender-proven Vendor's normalized order number. Conflicting
-evidence, including an order number on another member's account, goes to the
-coordinator. So does a shipping or delivery notice whose packages the link
-could not fully record: no recognised tracking, more than one package, an
-unknown carrier, more labelled references than recognised tracking numbers,
-or any package reference after a tracking, package, parcel or shipment label,
-or in a tracking link, that is not a recognised key. A
-tracking or order-number link records the Email's one package as shipment
-evidence; a confirmation links only to a Purchase an import already sourced.
-Run targets retain that Run's recorded Email outcomes, with an unresolved
-target's gap category. An unsettled target now held elsewhere names the owning
-Run; it never inherits that Run's live Email state or completion time.
-
-A shipping notice that arrives before its order keeps the order number on its
-Shipment (`orderId`: the linked Purchase's, else the one order number the Email
-prints). An unlinked, unreviewed Shipment joins the one live Purchase holding
-that normalized order number, at the Vendor its source Emails attribute and on
-their member's account; recording the notice and each catch-up pass link it, and
-two candidate Purchases hold it back.
-
-The household AI budget is a stopgap safety net on frontier chat-model spend:
-$1 per fixed six-hour UTC window (`server/ai/budget.ts`), summed from
-`AiUsage`. Embeddings, closed-set decision models (Jev/Clef) and other model
-roles are not budgeted, and neither is classification (mail triage and
-relevance escalation). The limit is soft: usage lands after each call, so calls
-already in flight can overshoot a window by their own cost. A Run that reaches
-the limit pauses with `execution_limit`, and the Work queue shows it waiting on
-the budget. Reclassification, suggestion sweeps and agent imports resume
-through missed-work recovery once a later window has room. A member-selected
-coordinator import is foreground work and is not budgeted.
+The [purchase import service](../../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end)
+owns the admission, settlement, retry and coverage contracts.
 
 ## Follow the evidence
 

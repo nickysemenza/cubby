@@ -8,7 +8,7 @@ of its attachment. PDFs share the table and are excluded by `contentType`.
 ## Why similarity, not metadata
 
 Photos reach Cubby by paths that often preserve pixels while discarding origin
-metadata. The previous iOS uploader re-encoded to a 2048px JPEG named `photo.jpeg`; a web
+metadata. A web
 drag from Photos can transcode HEIC to JPEG; edits change bytes; Messages,
 AirDrop, Slack, screenshots, and MCP attachments may arrive without EXIF. A
 Photos cloud identifier exists only on the app path, original-byte SHA-256
@@ -16,28 +16,23 @@ breaks on transcoding, and `IMG_NNNN` filenames collide across devices and
 years. Filename matches can refer to different photos. Perceptual similarity
 is therefore the durable primary signal.
 
-## Experiment findings
+## Thresholds
 
-The experiment computed a 64-bit DCT pHash (32×32 grayscale, DCT-II, top-left
-8×8, bits above the median) through CoreGraphics on both sides. It compared
-`cdn-cgi` 256px thumbnails with local 256px Photos thumbnails fetched by a Mac
-PhotoKit CLI. Distance is Hamming distance; the median threshold makes every
-distance even. Private library counts and source records are omitted here.
+Hashes are 64-bit DCT pHashes (32×32 grayscale, DCT-II, top-left 8×8, bits
+above the median) of 256px thumbnails, compared by Hamming distance; the median
+threshold makes every distance even.
 
-- Distances 0–2 separated matches well. Renames, HEIC-to-JPEG conversion,
-  downscaling, and EXIF removal remained at distance 0; portrait rotation
-  also agreed across both sides.
-- Distances 4–6 mixed true and false matches. An aspect-ratio gate rejected
-  square catalog images falsely matched to 4:3 photos.
-- Distances 8–10 produced false matches: low-texture library images acted as
-  attractors for scraped product-on-white images without matching aspect ratios.
-- The 4–6 band needs further measurement on representative, consented photo
-  samples before relaxing the strict threshold.
-- In-app `CameraPicker` captures may never enter Photos. Pixel dimensions
-  describe export paths but do not reliably identify phone photos.
-- Bursts, retakes, and duplicates can put another library asset within distance 6. Treating a burst twin as probably in Cubby is the desired behavior.
-- Hashing the same bytes with Sharp and CoreGraphics can differ by at least
-  eight bits. Resampler drift is large enough to break the strict threshold.
+- Distances 0–2 are safe matches: renames, HEIC-to-JPEG conversion,
+  downscaling, EXIF removal and portrait rotation stay at 0.
+- Distances 4–6 mix true and false matches; an aspect-ratio gate rejects square
+  catalog images against 4:3 photos. Burst twins in this band count as probably
+  in Cubby.
+- Distances 8–10 are false matches: low-texture library images attract
+  product-on-white images.
+- Sharp and CoreGraphics hashes of the same bytes can differ by eight bits or
+  more, so both sides must hash with the same resampler.
+- In-app `CameraPicker` captures may never enter Photos, and pixel dimensions do
+  not reliably identify phone photos.
 
 ## Accepted design
 
@@ -250,26 +245,3 @@ A failed transfer can be retried individually or explicitly excluded. Both paths
 Recovery first consumes any already completed background PUT result. If that result is HTTP 403 and the URL's signed `X-Amz-Date` plus `X-Amz-Expires` proves it expired, the importer restages only that photo and retries once automatically with a fresh URL. It preserves finalized photos and the batch UUID. Other 403 responses, malformed expiry metadata, and a failed renewed attempt remain explicit attention; they do not trigger unconditional retries.
 
 An admission attempt is persisted before `createRun` or `admitBatch` HTTP. Cancellation with an uncertain response replays that same idempotent intent to recover the batch identity, then seals it; the journal and originals remain until the seal is acknowledged. Sheet retirement waits for cancellation settlement before clearing confirmed selection IDs, and retains the remaining selections for an explicit later import.
-
-## Device validation
-
-The synthetic native input journey selects the newest 25 distinct pixel fixtures
-from the authorized Library grid using fresh accessibility refs, then verifies
-original digests, capture dates, import Sightings, sheet-close continuation, and
-no automatic Product, financial or inventory writes. Group approval, including a
-selected subset, is covered on web by `photo-group-review.spec.ts`. The separate system-picker scripts retain the denied-library entry path. Fixture
-setup grants library access to the simulator app without resetting its library;
-each fixture batch has distinct original bytes so older batches cannot satisfy
-the digest readback.
-
-PhotoKit parity keeps exact source-byte, edited-rendition, alpha, and orientation
-checks. Thumbnail and full-file perceptual hashes use the shared production
-`PhotoMatchVerdict` strong-match decision: PhotoKit and ImageIO resampling can
-produce a small hash difference without changing the duplicate decision. Export
-refreshes a retained asset snapshot before checking whether it has edits.
-
-Physical iPhone first-run throughput, memory and thermal behavior, Photos
-limited-access fallback, progressive-filter interaction, and PhotoKit
-current-rendition fixture parity still need device checks. Mac interaction
-requires an unlocked Photos library with authorization. Simulator and browser
-emulation do not establish physical-device behavior.

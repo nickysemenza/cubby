@@ -446,9 +446,8 @@ release's content-addressed results (~1 GB each), so unchanged Swift, the
 generated client included, replays instead of compiling; a successful main
 release saves a new entry.
 
-Uploads are internal-only with automatic group distribution. Verify processing
-and installation in TestFlight after publishing: upload acceptance alone does
-not establish availability. Server deployment remains immediate, so breaking
+Uploads are internal-only with automatic group distribution. Upload success
+does not mean the build is available yet. Server deployment remains immediate, so breaking
 changes can leave an update-required period until the new app is installed.
 
 After a long pause, manually re-enable scheduling and dispatch a fresh build.

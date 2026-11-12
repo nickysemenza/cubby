@@ -167,7 +167,10 @@ sizing) stay small and are re-applied after each refresh, and density or color
 belongs in theme tokens rather than class strings. Classes merge through the
 `cn` package with stock tailwind-merge, so custom font sizes use t-shirt names
 (`text-md`) that it classifies as sizes. Filters and file upload are
-Cubby-owned. Prefer existing shared components before importing registry items.
+Cubby-owned. Prefer existing shared components before importing registry items,
+and a ReUI item over plain shadcn where ReUI has one. Buy no paid UI kits:
+recreate a block from its public preview with Cubby components. Strip upstream
+`dark:` classes from every copy.
 
 To refresh a registry copy, run `pnpm --dir apps/web exec shadcn add <item> --dry-run --diff`
 and read what upstream changed, then `shadcn add <item> --overwrite --yes`. Revert

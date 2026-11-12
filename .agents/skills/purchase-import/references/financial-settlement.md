@@ -165,9 +165,11 @@ reject an otherwise exact date/amount/vendor match over them.
 
 ### Working the backlog through Transaction suggestions
 
-When settlement requires resolving statement Suggestions, use
-[Reviewing statement outcomes](../../../../docs/import-evidence-convergence.md#reviewing-statement-outcomes)
-and its backlog policy. Retained holds, explicit booking classification and
+When settlement requires resolving statement Suggestions, follow the
+[statement backlog](../../financial-evidence-import/references/statement-backlog.md)
+workflow and
+[Reviewing statement outcomes](../../../../docs/import-evidence-convergence.md#reviewing-statement-outcomes).
+Retained holds, explicit booking classification and
 receipt replay use that same owning contract; a separate preview tool call is
 optional, and application revalidates current evidence.
 
