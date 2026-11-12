@@ -38,6 +38,7 @@ const identityTerms = (
       ]);
     case "stored_value":
       return presentIdentityTerms([identity.kind, ...last4s]);
+    case "loan":
     case "cash":
       return [identity.kind];
     case "other":

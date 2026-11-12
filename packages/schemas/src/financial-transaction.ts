@@ -72,7 +72,7 @@ const purchaseSettlementSignRules = {
   refund: { sign: "negative", binds: "always" },
   adjustment: { sign: "any", binds: "always" },
   fee: { sign: "positive", binds: "always" },
-  interest: { sign: "positive", binds: "always" },
+  interest: { sign: "positive", binds: "linked" },
   income: { sign: "negative", binds: "linked" },
 } as const satisfies Record<
   PurchaseSettlementKind,

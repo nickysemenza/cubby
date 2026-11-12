@@ -80,6 +80,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-input";
 import {
   foldProviderCategory,
+  isLoanPayment,
   MONEY_MOVE_KINDS,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
@@ -498,7 +499,12 @@ async function loadStatementLegs(
       return [];
     const amount = -canonical.providerAmount;
     const signals = categorySignals(canonical.sourceCategory, amount);
-    const seed = isSeed({ recordedKind: null, ...signals });
+    // An unresolved account may turn out to be a loan; this retrieves the
+    // entry without using its descriptor as proof of a transfer pair.
+    const seed =
+      isSeed({ recordedKind: null, ...signals }) ||
+      (canonical.rawDescription ?? canonical.merchant)?.trim().toUpperCase() ===
+        "PAYMENT";
     if (filter.seedOnly && !seed) return [];
     const charge = { source: canonical.source, chargeKey: canonical.chargeKey };
     return [{ charge, canonical, observations, signals, seed, amount }];
@@ -538,6 +544,7 @@ async function loadStatementLegs(
       const account = accounts.byCode.get(row.accountId);
       if (!account) continue;
       const { canonical, observations, charge } = entry;
+      const loanPayment = isLoanPayment(account, canonical);
       legs.push({
         key: `stmt:${chargeId(charge)}`,
         origin: "statement",
@@ -553,6 +560,9 @@ async function loadStatementLegs(
         recordedKind: null,
         providerCategory: canonical.sourceCategory,
         ...entry.signals,
+        ...(loanPayment
+          ? { ruleKind: financialTransactionKind.enum.account_transfer }
+          : {}),
         // One proven occurrence handle addresses acceptance; aliases stay retained evidence.
         refs: [{ source: canonical.source, externalId: canonical.chargeKey }],
         transactionOverlaps: row.existingTransactions.map((existing) => ({

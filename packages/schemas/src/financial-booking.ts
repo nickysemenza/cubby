@@ -27,6 +27,8 @@ export const FINANCIAL_SPENDING_POLICY = "2026-10-29.2";
 
 /** Advice never bypasses planning; explicit commands and queue policy authorize execution. */
 export const financialSpendingAdvice = z.object({
+  /** High-confidence classification of an escrow disbursement on a loan. */
+  escrowDisbursement: z.boolean().optional(),
   spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   categoryConfidence: z.enum(["low", "medium", "high"]).default("low"),
   vendorName: z.string().trim().min(1).nullable().default(null),

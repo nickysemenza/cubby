@@ -48,6 +48,7 @@ import {
 import {
   accountPurchaserKey,
   liveHouseholdSpendingAccount,
+  liveHouseholdLoan,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -401,8 +402,14 @@ export async function previewFinancialBooking(
   db: Database,
   raw: FinancialBookingInput,
   projection?: BookingProjection,
+  loanEscrow = false,
 ) {
-  const [preview] = await previewFinancialBookings(db, [raw], [projection]);
+  const [preview] = await previewFinancialBookings(
+    db,
+    [raw],
+    [projection],
+    loanEscrow ? new Set([raw.transactionId]) : undefined,
+  );
   return preview!;
 }
 
@@ -412,10 +419,28 @@ export async function previewFinancialBooking(
  * preview. Bookings that share state must not be previewed together for one
  * commit (see `bookFinancialTransactions`).
  */
+function supportedLoanEscrow(input: {
+  household: boolean;
+  authorized: boolean;
+  kind: string;
+  amount: number;
+  purchase: boolean;
+  purchaser: boolean;
+}) {
+  return (
+    input.household &&
+    input.authorized &&
+    !input.purchaser &&
+    ((input.kind === "purchase" && input.amount > 0) ||
+      (input.kind === "refund" && input.amount < 0 && input.purchase))
+  );
+}
+
 async function previewFinancialBookings(
   db: Database,
   raws: readonly FinancialBookingInput[],
   projections: readonly (BookingProjection | undefined)[] = [],
+  loanEscrowIds: ReadonlySet<string> = new Set(),
 ) {
   if (!raws.length) return [];
   const inputs = raws.map((raw) => financialBookingInput.parse(raw));
@@ -650,8 +675,25 @@ async function previewFinancialBookings(
       : undefined,
   );
   for (const [index, input] of inputs.entries()) {
-    if (purchaseIds[index] || input.purchaserId) continue;
     const { account } = dated[index]!;
+    if (account?.identity.kind === "loan") {
+      const row = rows[index]!;
+      if (
+        !supportedLoanEscrow({
+          household: liveHouseholdLoan(account),
+          authorized: loanEscrowIds.has(input.transactionId),
+          kind: row.kind,
+          amount: row.amount,
+          purchase: Boolean(input.purchaseId),
+          purchaser: Boolean(input.purchaserId),
+        })
+      )
+        return constraintViolation(
+          "Only a supported household loan escrow disbursement can book spending.",
+        );
+      continue;
+    }
+    if (purchaseIds[index] || input.purchaserId) continue;
     const purchaser =
       account && financialAccountPurchaser(account, purchaserProofs[index]);
     if (!purchaser && !liveHouseholdSpendingAccount(account))
@@ -1127,6 +1169,7 @@ export async function bookFinancialTransactions(
   db: Database,
   raws: readonly FinancialBookingInput[],
   actor: ActorContext,
+  loanEscrowIds: ReadonlySet<string> = new Set(),
 ) {
   if (!raws.length) return [];
   const purchases = raws.flatMap((raw) =>
@@ -1146,6 +1189,8 @@ export async function bookFinancialTransactions(
       const reviews = await previewFinancialBookings(
         databaseForTransaction(tx),
         raws,
+        [],
+        loanEscrowIds,
       );
       return commitFinancialBookings(tx, reviews, actor, true);
     },

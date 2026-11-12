@@ -31,6 +31,27 @@ import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue
 describe("Account scalar suggestion acceptance", () => {
   const ctx = withTestDb();
 
+  it("identifies an other account as a loan without allowing arbitrary identity changes", async () => {
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "other" },
+    });
+    const updated = await executeEntity(kernelCtx(ctx), {
+      entity: "financialAccount",
+      action: "update",
+      id: account.output.id,
+      data: { identity: { kind: "loan" } },
+    });
+    expect(updated).toMatchObject({ item: { identity: { kind: "loan" } } });
+    await expect(
+      executeEntity(kernelCtx(ctx), {
+        entity: "financialAccount",
+        action: "update",
+        id: account.output.id,
+        data: { identity: { kind: "cash" } },
+      }),
+    ).rejects.toThrow(/identity kind is fixed/);
+  });
+
   it("saves a native capture after switching to cash without keeping card-only drafts", async () => {
     const result = await executeEntity(kernelCtx(ctx), {
       entity: "financialAccount",

@@ -195,6 +195,11 @@ export const { definition, readSchemas } = defineEntityModel({
               color: "neutral-status",
             },
             {
+              value: "loan",
+              label: "Loan",
+              color: "neutral-status",
+            },
+            {
               value: "other",
               label: "Other",
               color: "neutral-status",
@@ -589,6 +594,7 @@ export const { definition, readSchemas } = defineEntityModel({
           "bank_account",
           "stored_value",
           "cash",
+          "loan",
           "other",
         ],
       },
@@ -711,6 +717,7 @@ export const { definition, readSchemas } = defineEntityModel({
           { value: "bank_account", label: "Bank account" },
           { value: "stored_value", label: "Stored value" },
           { value: "cash", label: "Cash" },
+          { value: "loan", label: "Loan" },
           { value: "other", label: "Other" },
         ],
       },
