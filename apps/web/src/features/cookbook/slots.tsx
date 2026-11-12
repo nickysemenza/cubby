@@ -15,7 +15,7 @@ import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-pan
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { recipeStreams } from "~/integrations/tanstack-query/generated/domains/recipeStreams.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -154,7 +154,18 @@ export const CookbookActions: DetailSlotComponent<"cookbook"> = ({
         </Row>
       </DetailAction>
       {reprocess.running && (
-        <BulkProgressBar verb="Reprocessing" progress={reprocess.progress} />
+        <ProgressMeter
+          value={countedProgress({
+            done: reprocess.progress?.done ?? 0,
+            total: reprocess.progress?.total ?? null,
+            unit: "recipes",
+          })}
+          label={
+            reprocess.progress
+              ? `Reprocessing ${reprocess.progress.done} of ${reprocess.progress.total}`
+              : "Reprocessing…"
+          }
+        />
       )}
     </Stack>
   );

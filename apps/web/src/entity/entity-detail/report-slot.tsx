@@ -28,14 +28,10 @@ import {
 } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { countedProgress, ProgressMeter } from "~/ui/feedback/progress-meter";
 import { Row, Stack } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
 import { Button } from "~/ui/primitives/button";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { KeyNumbers } from "~/ui/records/key-numbers";
 import { Description } from "~/ui/text/description";
@@ -355,20 +351,21 @@ export function ReportBlocks({
                 aria-label={block.label}
                 className="space-y-2 py-1"
               >
-                {block.total === null ? (
-                  <p className="text-xs text-muted-foreground">
-                    {block.label} · {block.summary}
-                  </p>
-                ) : (
-                  <Progress
-                    value={block.processed}
-                    max={block.total}
-                    aria-valuetext={block.summary}
-                  >
-                    <ProgressLabel>{block.label}</ProgressLabel>
-                    <ProgressValue>{() => block.summary}</ProgressValue>
-                  </Progress>
-                )}
+                <ProgressMeter
+                  value={countedProgress({
+                    done: block.processed,
+                    total: block.total,
+                    unit: block.label.toLocaleLowerCase(),
+                  })}
+                  label={
+                    <>
+                      <span className="font-medium text-foreground">
+                        {block.label}
+                      </span>{" "}
+                      · {block.summary}
+                    </>
+                  }
+                />
                 <Description size="xs">{block.detail}</Description>
               </section>
             );

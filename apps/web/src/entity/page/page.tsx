@@ -152,7 +152,9 @@ interface PageDetailProps extends PageBaseProps {
   variant: "detail";
   entity: Entity;
   wayfinding?: DetailWayfinding | false;
-  heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
+  /** Beside the title: the kind tag and state. */
+  status?: ReactNode;
+  /** Under the title band: the declared lines and AI summary. */
   summary?: ReactNode;
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
@@ -275,7 +277,7 @@ function DetailPageShell(props: PageDetailProps) {
           title={props.title}
           rawData={props.rawData}
           heroNo={props.heroNo}
-          heroStamp={props.heroStamp}
+          status={props.status}
           summary={props.summary}
           heroActions={props.heroActions}
           heroImages={props.heroImages}

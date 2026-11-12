@@ -17,6 +17,7 @@ import {
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
+import { runSummaryDrain } from "~/server/domains/run/service/run-summary";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   derivedRebuildDue,
@@ -173,6 +174,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
   fieldAutomationDrain,
+  runSummaryDrain,
   reconcileDrain,
 ];
 

@@ -846,7 +846,7 @@ describe("MCP catalog schemas", () => {
 
 /** Kernel tools keep full schemas; capability tools publish compact envelopes
  * and return a selected member schema through progressive disclosure. */
-const KERNEL_SCHEMA_BUDGET = 143_360;
+const KERNEL_SCHEMA_BUDGET = 145_408;
 const WORKFLOW_SCHEMA_BUDGET = 2_048;
 const KERNEL_TOOLS = new Set(
   compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS)

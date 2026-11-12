@@ -182,6 +182,9 @@ async function createDiscoveryPasses(
     clientKey?: string;
     reconcileRoster: boolean;
     paidGrant?: DiscoveryPaidGrant;
+    /** `manual` with `member_request` when a member asked; the cron and continuations are `scheduled`. */
+    trigger: "manual" | "scheduled";
+    cause: "member_request" | "scheduled";
   },
 ): Promise<RunId[]> {
   return withTransactionDatabase(db, async (tx) => {
@@ -285,7 +288,8 @@ async function createDiscoveryPasses(
           });
           const runId = await ensureRun(tx, input.actor, {
             purpose: "mail_discovery",
-            trigger: "scheduled",
+            trigger: input.trigger,
+            cause: input.cause,
             status: "completed",
             execution: false,
             clientKey: input.clientKey,
@@ -318,7 +322,8 @@ async function createDiscoveryPasses(
       }
       const runId = await ensureRun(tx, input.actor, {
         purpose: "mail_discovery",
-        trigger: "scheduled",
+        trigger: input.trigger,
+        cause: input.cause,
         status: "running",
         ...(input.clientKey
           ? {
@@ -438,6 +443,8 @@ export async function startMailDiscovery(
   options: {
     target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
     paidGrant?: DiscoveryPaidGrant;
+    /** The member who asked for this scan; their Runs are member-started. */
+    requestedBy?: ActorContext;
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
   const grantDiscovery = async (runId: RunId) => {
@@ -487,8 +494,15 @@ export async function startMailDiscovery(
     }
     const runIds = await createDiscoveryPasses(db, {
       ledgerPartyId: target.ledgerPartyId,
-      actor: buildActorContext(userId.parse(target.userId), "system"),
-      notes: "Scheduled Gmail discovery",
+      // An inherited `runId` would make `ensureRun` return the caller's Run.
+      actor: options.requestedBy
+        ? { ...options.requestedBy, runId: null }
+        : buildActorContext(userId.parse(target.userId), "system"),
+      trigger: options.requestedBy ? "manual" : "scheduled",
+      cause: options.requestedBy ? "member_request" : "scheduled",
+      notes: options.requestedBy
+        ? "Member-requested Gmail discovery"
+        : "Scheduled Gmail discovery",
       reconcileRoster: true,
       paidGrant: options.paidGrant,
       frozen: {
@@ -958,6 +972,8 @@ export async function continueMailDiscovery(
     notes: "Continue Gmail history coverage",
     clientKey,
     reconcileRoster: false,
+    trigger: "scheduled",
+    cause: "scheduled",
   });
 }
 

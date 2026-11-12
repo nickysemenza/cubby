@@ -485,8 +485,8 @@ it("embeds a fixed saved view without inheriting its host URL and links the whol
   render(
     <EmbeddedEntityList
       entity="run"
-      savedViewId="attention"
-      filters={{ purpose: ["maintenance"] }}
+      savedViewId="ai-work"
+      filters={{ trigger: ["manual"] }}
       pageSize={10}
       allLink
       operations={{ list: operation }}
@@ -495,19 +495,15 @@ it("embeds a fixed saved view without inheriting its host URL and links the whol
   );
   const link = await screen.findByRole("link", { name: "All 37" });
   expect(link.getAttribute("href")).toContain("/runs");
-  expect(link.getAttribute("href")).toContain("needsAttention");
+  expect(link.getAttribute("href")).toContain("ai_suggest");
   expect(link.getAttribute("href")).not.toContain("foreign");
   expect(reads).toContainEqual(
     expect.objectContaining({
       filters: expect.objectContaining({
-        purpose: ["maintenance"],
-        needsAttention: true,
+        purpose: ["ai_suggest", "background"],
+        trigger: ["manual"],
       }),
       pagination: { pageIndex: 0, pageSize: 10 },
-      sort: [
-        { orderBy: "stalled", direction: "desc" },
-        { orderBy: "startedAt", direction: "desc" },
-      ],
     }),
   );
 });

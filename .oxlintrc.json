@@ -510,6 +510,7 @@
         "packages/schemas/src/photo-categories.ts",
         "packages/schemas/src/photo-run-input.ts",
         "packages/schemas/src/recipe-shared.ts",
+        "packages/schemas/src/progress.ts",
         "packages/schemas/src/run-work-progress.ts",
         "packages/schemas/src/run-waiting-on.ts",
         "packages/schemas/src/unitmapping.ts"

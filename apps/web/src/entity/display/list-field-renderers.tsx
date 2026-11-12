@@ -36,6 +36,8 @@ import { DataQualityValue } from "./data-quality-value";
 import { SpendingCategorySummaryValue } from "./detail-field-renderers/spending-category-summary";
 import type { ListRenderer } from "./list-renderer-types";
 import { emailListRenderers } from "./list-renderers/email";
+import { progressListRenderer } from "./list-renderers/generic-progress";
+import { stateListRenderer } from "./list-renderers/generic-state";
 import { mealListRenderers } from "./list-renderers/meal";
 import { productListRenderers } from "./list-renderers/product";
 import { projectListRenderers } from "./list-renderers/project";
@@ -56,15 +58,21 @@ type ClientListRenderer<TRow extends object> = (
 
 // Ranges over every entity, not just `ListEntity`: an entity with no generic
 // list read (usda-food) still carries a disposition for each renderer id.
+/**
+ * Renderers every entity carries; the runtime supplies them, not a module
+ * (`SHARED_LIST_RENDERERS` in native coverage, plus Quality).
+ */
+type SharedListRendererId = "data-quality" | "state" | "progress";
+
 type ListRendererEntity = {
-  [E in Entity]: Exclude<ListRendererId<E>, "data-quality"> extends never
+  [E in Entity]: Exclude<ListRendererId<E>, SharedListRendererId> extends never
     ? never
     : E;
 }[Entity];
 
 type EntityListRendererCoverage<E extends ListRendererEntity> = Readonly<
   Record<
-    Exclude<ListRendererId<E>, "data-quality">,
+    Exclude<ListRendererId<E>, SharedListRendererId>,
     E extends ListEntity
       ? PresentationCoverage<ListRenderer<E>>
       : E extends keyof ClientListRows
@@ -276,9 +284,6 @@ const buildListRendererCoverage = () => {
       "purchase-links": implemented(emailListRenderers["purchase-links"]),
     },
     run: {
-      "run-throughput": implemented(runListRenderers["run-throughput"]),
-      "run-waiting-on": implemented(runListRenderers["run-waiting-on"]),
-      "run-activity": implemented(runListRenderers["run-activity"]),
       "run-ai-cost": implemented(runListRenderers["run-ai-cost"]),
     },
   } satisfies {
@@ -293,6 +298,8 @@ const buildEffectiveListRendererCoverage = () => {
     "data-quality": implemented((helper: CubbyColumnHelper<object>) =>
       createDataQualityColumn(helper, scored.has(entity)),
     ),
+    state: implemented(stateListRenderer(entity)),
+    progress: implemented(progressListRenderer(entity)),
     ...Object.entries(custom).find(([key]) => key === entity)?.[1],
   }));
 };

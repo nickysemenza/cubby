@@ -10,7 +10,11 @@ import type {
 } from "@cubby/schemas/entity-definitions/definition";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
-import { listViewId } from "@cubby/schemas/entity-definitions/definition";
+import {
+  DEFAULT_DETAIL_GROUPS,
+  PHASE_GROUPING_KEY,
+  listViewId,
+} from "@cubby/schemas/entity-definitions/definition";
 import { relationSectionPlanSchema } from "@cubby/schemas/entity-definitions/relation-plan";
 import type {
   CompiledEditSection,
@@ -612,6 +616,7 @@ const checkHero = (
 const checkSections = (
   sections: EntityPresentation["detail"]["sections"],
   summary: EntityPresentation["detail"]["summary"],
+  headerFields: ReadonlySet<string>,
   fieldModel: EntityFieldModel,
   relations: EntityDeclarationMetadata["relations"],
   lookup: FieldLookup,
@@ -686,7 +691,8 @@ const checkSections = (
     }
   }
   // A summary slot is a placement too: both clients omit its fields from
-  // later field sections. A listHidden field may stay off the page.
+  // later field sections. So are the header lines, AI summary and side-column
+  // needs. A listHidden field may stay off the page.
   const summarized = new Set(
     summary.flatMap((slot) => (slot.kind === "fields" ? slot.fields : [])),
   );
@@ -696,7 +702,8 @@ const checkSections = (
         field.display.detail &&
         !field.display.listHidden &&
         !namedDetailFields.has(field.key) &&
-        !summarized.has(field.key),
+        !summarized.has(field.key) &&
+        !headerFields.has(field.key),
     )
     .map((field) => field.key);
   if (orphans.length > 0)
@@ -707,36 +714,99 @@ const checkSections = (
 };
 
 /**
- * `detail.lead` and `detail.pairs` place declared sections on the web page.
- * Relation tables keep the full width their columns need.
+ * The detail header and tabs: `lines` and `aiSummary` name readable fields
+ * once each, `groups` ids are unique, every section `group` names one of
+ * them (or a default group), and `side.needs` reads. Returns the fields the
+ * header and side column place.
  */
-const checkSectionPlacement = (
-  context: string,
-  detail: { lead: readonly string[]; pairs: ReadonlyArray<readonly string[]> },
-  sections: ReadonlyArray<{ id: string; kind: string }>,
-): void => {
-  const kinds = new Map(sections.map((section) => [section.id, section.kind]));
-  for (const id of detail.lead)
-    if (!kinds.has(id))
+const checkDetailLayout = (
+  detail: EntityPresentation["detail"],
+  sections: ReadonlyArray<{ id: string; group?: string }>,
+  lookup: FieldLookup,
+): Set<string> => {
+  const { context } = lookup;
+  const placed = new Set<string>();
+  const place = (key: string, where: string) => {
+    lookup.read(key, where);
+    if (placed.has(key))
       throw new EntityDeclarationError(
-        `${context}.detail.lead names ${id}, which is not a declared section.`,
+        `${context}.${where} repeats ${key}, already in the detail header.`,
       );
-  const paired = new Set<string>();
-  for (const id of detail.pairs.flat()) {
-    if (!kinds.has(id))
+    placed.add(key);
+  };
+  for (const line of detail.lines) place(line.field, "detail.lines");
+  if (detail.aiSummary !== null) place(detail.aiSummary, "detail.aiSummary");
+  if (detail.side?.needs !== undefined)
+    place(detail.side.needs, "detail.side.needs");
+  const groups = detail.groups ?? DEFAULT_DETAIL_GROUPS;
+  const groupIds = new Set<string>();
+  for (const group of groups) {
+    if (groupIds.has(group.id))
       throw new EntityDeclarationError(
-        `${context}.detail.pairs names ${id}, which is not a declared section.`,
+        `${context}.detail.groups repeats ${group.id}.`,
       );
-    if (kinds.get(id) === "relation")
-      throw new EntityDeclarationError(
-        `${context}.detail.pairs names the relation section ${id}; relation tables stay full width.`,
-      );
-    if (paired.has(id))
-      throw new EntityDeclarationError(
-        `${context}.detail.pairs repeats ${id}.`,
-      );
-    paired.add(id);
+    groupIds.add(group.id);
   }
+  for (const section of sections)
+    if (section.group !== undefined && !groupIds.has(section.group))
+      throw new EntityDeclarationError(
+        `${context}.detail.sections[${section.id}].group names ${section.group}, which is not a ${detail.groups === null ? "default" : "declared"} detail group.`,
+      );
+  return placed;
+};
+
+/** A field's option roster: its select options, else its display options. */
+const optionRoster = (field: EntityField) =>
+  field.control?.options ?? field.display.valueOptions ?? null;
+
+/**
+ * `presentation.state`, `progress` and `kind` name fields both the list row
+ * and the detail record read. State and kind fields carry an option roster;
+ * `stalled` is a boolean; the finished window names its date and its length
+ * together.
+ */
+const checkRecordState = (
+  presentation: EntityPresentation,
+  lookups: readonly FieldLookup[],
+): void => {
+  const read = (key: string, where: string) =>
+    lookups.map((lookup) => lookup.read(key, where))[0]!;
+  const context = lookups[0]!.context;
+  const rostered = (key: string, where: string) => {
+    if (!optionRoster(read(key, where))?.length)
+      throw new EntityDeclarationError(
+        `${context}.${where} ${key} must declare an option roster.`,
+      );
+  };
+  const { state, progress, kind } = presentation;
+  if (state !== null) {
+    rostered(state.field, "state.field");
+    if (state.reason !== undefined) read(state.reason, "state.reason");
+    if (state.wait !== undefined) read(state.wait, "state.wait");
+    if (
+      state.stalled !== undefined &&
+      read(state.stalled, "state.stalled").kind !== "boolean"
+    )
+      throw new EntityDeclarationError(
+        `${context}.state.stalled ${state.stalled} must be a boolean field.`,
+      );
+    if ((state.recentBy === undefined) !== (state.recentDays === undefined))
+      throw new EntityDeclarationError(
+        `${context}.state.recentBy and state.recentDays are declared together.`,
+      );
+    if (state.recentBy !== undefined) {
+      const field = read(state.recentBy, "state.recentBy");
+      if (field.kind !== "date" && field.kind !== "timestamp")
+        throw new EntityDeclarationError(
+          `${context}.state.recentBy ${state.recentBy} must be a date or timestamp field.`,
+        );
+    }
+  }
+  if (progress !== null) {
+    read(progress.field, "progress.field");
+    if (progress.note !== undefined) read(progress.note, "progress.note");
+  }
+  if (kind !== null) rostered(kind.field, "kind.field");
 };
 
 /**
@@ -767,6 +837,7 @@ const checkList = (
   timelineSection: boolean,
   lookup: FieldLookup,
   hierarchy: EntityFieldModel["hierarchy"],
+  stateDeclared: boolean,
 ) => {
   const { context } = lookup;
   const viewIds = new Set<string>();
@@ -781,7 +852,10 @@ const checkList = (
   for (const key of list.shelf?.subtitle ?? [])
     lookup.read(key, "list.shelf.subtitle");
   for (const filter of list.initialFilter)
-    lookup.read(filter.id, "list.initialFilter");
+    // `presentation.state` compiles the phase filter (Needs you, Active,
+    // Recently finished, older).
+    if (!(stateDeclared && filter.id === PHASE_GROUPING_KEY))
+      lookup.read(filter.id, "list.initialFilter");
   if (list.tree !== null) {
     if (hierarchy === null)
       throw new EntityDeclarationError(
@@ -796,6 +870,15 @@ const checkList = (
       throw new EntityDeclarationError(
         `${lookup.context}.list.tree.defaultNested false without toggle never nests.`,
       );
+    const batch = list.tree.batch;
+    if (batch !== null) {
+      if (!optionRoster(lookup.read(batch.by, "list.tree.batch.by"))?.length)
+        throw new EntityDeclarationError(
+          `${lookup.context}.list.tree.batch.by ${batch.by} must declare an option roster.`,
+        );
+      for (const filter of batch.when)
+        lookup.read(filter.id, "list.tree.batch.when");
+    }
   }
   if (
     (timelineSection || viewIds.has("timeline")) &&
@@ -1141,10 +1224,12 @@ export const compilePresentation = (
         `${context}.searchFacts: "${key}" must be a readable list field.`,
       );
   }
-  checkSectionPlacement(context, detail, sections);
+  checkRecordState(presentation, [listLookup, lookup]);
+  const headerFields = checkDetailLayout(detail, sections, lookup);
   const timelineSection = checkSections(
     sections,
     detail.summary,
+    headerFields,
     fieldModel,
     relations,
     lookup,
@@ -1155,6 +1240,7 @@ export const compilePresentation = (
     timelineSection,
     listLookup,
     fieldModel.hierarchy,
+    presentation.state !== null,
   );
   if ((capabilities.timeline === "custom") !== (ports.timeline !== null))
     throw new EntityDeclarationError(
@@ -1204,8 +1290,10 @@ export const compilePresentation = (
       })),
       activityRelations: detail.activityRelations,
       overviewSections: detail.overviewSections,
-      lead: detail.lead,
-      pairs: detail.pairs,
+      lines: detail.lines,
+      aiSummary: detail.aiSummary,
+      groups: detail.groups,
+      side: detail.side,
       preview,
       omitRelations: detail.omitRelations,
       relationFilterOverrides: detail.relationFilterOverrides,
@@ -1234,6 +1322,7 @@ export const compilePresentation = (
         list.tree === null || fieldModel.hierarchy === null
           ? null
           : { parentField: fieldModel.hierarchy.parentField, ...list.tree },
+      layoutRevision: list.layoutRevision,
       actions: [
         ...list.actions,
         ...derivedListActions(

@@ -26,6 +26,13 @@ import {
 import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 
 import {
+  type ColumnKind,
+  columnKindOf,
+  columnKindWidth,
+  columnUsesKindWidth,
+  isNarrowTable,
+} from "./column-kind-widths";
+import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyColumnDef,
@@ -472,6 +479,7 @@ type TableWidthColumn = {
       code?: boolean;
       linksTo?: string;
       cellData?: { kind: string };
+      widthKind?: ColumnKind;
     };
   };
 };
@@ -488,9 +496,11 @@ const FIXED_WIDTH_KINDS = new Set([
 ]);
 
 /**
- * Only the record identity uses pane slack, up to its 240px fit. Widening a
- * fact column only moves it away from its neighbours. The identity is pinned by
- * default, so being pinned does not disqualify it.
+ * Only the record identity uses pane slack: it starts at its 240px fit and
+ * grows to its whole measured title, so the name is the column that widens
+ * with the pane. Widening a fact column only moves it away from its
+ * neighbours. The identity is pinned by default, so being pinned does not
+ * disqualify it.
  */
 function isFlexibleColumn(column: TableWidthColumn) {
   if (isLockedColumn(column)) return false;
@@ -534,12 +544,13 @@ export const spacerWidthValue = `var(${SPACER_WIDTH_VARIABLE}, 0px)`;
 
 /**
  * Shares `slack` across `candidates` in proportion to configured width, each
- * column capped at its fit maximum; returns what no column could take.
+ * column capped at `cap`; returns what no column could take.
  */
 function distributeSlack(
   widths: Record<string, number>,
   candidates: readonly TableWidthColumn[],
   slack: number,
+  cap: (column: TableWidthColumn) => number,
 ) {
   let remaining = slack;
   let pool = candidates;
@@ -551,7 +562,7 @@ function distributeSlack(
     const open: TableWidthColumn[] = [];
     for (const column of pool) {
       const share = Math.floor((remaining * column.getSize()) / totalWeight);
-      const room = columnFitMax(column) - (widths[column.id] ?? 0);
+      const room = cap(column) - (widths[column.id] ?? 0);
       const grant = Math.max(0, Math.min(share, room));
       widths[column.id] = (widths[column.id] ?? 0) + grant;
       distributed += grant;
@@ -645,7 +656,8 @@ function pinnedIdentityCap(
  * column-sizing state. A user's deliberate resize remains the source of truth
  * (`userSized` and pinned columns never receive slack). A measured width
  * stops at the column's fit maximum. Pane slack goes only to the record
- * identity, up to its 240px fit; the rest goes to the trailing spacer.
+ * identity, up to its whole measured title; the rest goes to the trailing
+ * spacer.
  *
  * Regressions: all slack used to go to one column past its maxSize, so a
  * three-column table (Product Categories) painted a 1200px name beside
@@ -662,10 +674,26 @@ export function resolvedTableColumnWidths(
   collapsed: ReadonlySet<string> = new Set(),
 ) {
   const widths: Record<string, number> = {};
+  const narrow = isNarrowTable(availableWidth);
   for (const column of columns) {
     const fit = measured[column.id];
-    const width =
-      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
+    // State and progress take their kind's width and fit their content; a
+    // narrow pane also steps other kinded columns down to theirs.
+    const kind = columnKindOf(column.columnDef.meta);
+    const kinded =
+      kind !== null &&
+      columnUsesKindWidth(kind, narrow) &&
+      !isLockedColumn(column) &&
+      !userSized.has(column.id)
+        ? columnKindWidth(kind, narrow)
+        : null;
+    const width = kinded
+      ? fit !== undefined
+        ? Math.min(fit, kinded.fitMax)
+        : kinded.size
+      : !isLockedColumn(column) &&
+          !userSized.has(column.id) &&
+          fit !== undefined
         ? Math.min(fit, columnFitMax(column))
         : column.getSize();
     widths[column.id] = collapsed.has(column.id)
@@ -686,10 +714,17 @@ export function resolvedTableColumnWidths(
       pinnedIdentityCap(column, columns, availableWidth) >=
         columnFitMax(column),
   );
+  // The identity grows to its whole measured title (its kind tag included);
+  // only then does the trailing spacer take the rest.
   const remaining = distributeSlack(
     widths,
     flexible,
     Math.floor(availableWidth - configuredWidth),
+    (column) =>
+      Math.min(
+        column.columnDef.maxSize ?? Number.POSITIVE_INFINITY,
+        Math.max(columnFitMax(column), measured[column.id] ?? 0),
+      ),
   );
   return { widths, spacer: Math.max(0, remaining) };
 }

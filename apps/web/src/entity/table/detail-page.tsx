@@ -1,22 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { DEFAULT_DETAIL_GROUPS } from "@cubby/schemas/entity-definitions/definition";
 import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { useLocation, useNavigate } from "@tanstack/react-router";
-import { type FC, type ReactNode, useEffect, useMemo } from "react";
+import { type FC, type ReactNode, useMemo } from "react";
 import { z } from "zod";
 
 import { usePageDetailContext } from "~/entity/page/page";
 import { useDebug } from "~/ui/hooks/use-debug";
-import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 
 import {
-  type IndexedSection,
-  IndexedSections,
-  type IndexedSectionGroup,
-  normalizedHash,
-  SectionStack,
-} from "../../ui/data-table/indexed-sections";
+  DetailWorkspace,
+  type DetailWorkspaceGroup,
+} from "../../ui/data-table/detail-workspace";
+import type { IndexedSection } from "../../ui/data-table/indexed-sections";
 import JsonRenderer from "../../ui/text/json-renderer";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import {
@@ -56,24 +53,57 @@ type DetailPlacement = "primary" | "full";
 export interface DetailSection extends IndexedSection {
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
-  /** `false` places the section in Evidence unless an explicit workspace owns it. */
-  overview?: boolean;
-  workspace?: "overview" | "work" | "evidence" | "relations";
+  /**
+   * The tab this section sits in. An undeclared supporting group
+   * (relations, activity, evidence) is the Evidence tab, else the last; any
+   * other unknown id, or none, is the first.
+   */
+  group?: string;
   /** Specialized workflows can supply their own internal surface while retaining
-   * the shared index, relationship, activity, and debug extensions. */
+   * the shared relationship, activity, and debug extensions. */
   surface?: "card" | "plain";
 }
 
+type DetailGroup = { readonly id: string; readonly title: string };
+
 interface DetailSectionsProps {
-  onlyWorkspace?: "evidence";
   sections: DetailSection[];
   rawData: unknown;
-  /** Above the section groups: the Needs-you block. */
-  lead?: ReactNode;
-  /** Index entries for the blocks inside `lead`. */
-  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
-  /** The caller renders its own activity timeline; skip generic History. */
-  omitActivity?: boolean;
+  /** The record's tabs, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
+  groups?: readonly DetailGroup[];
+  /** The side column beside the tabs. */
+  side?: ReactNode;
+}
+
+/**
+ * Each section in its tab; tabs with no sections leave. A section naming a
+ * group the entity did not declare joins Evidence when it is supporting
+ * (relations, activity, evidence) and the entity declares one, else the last
+ * tab; any other section joins the first.
+ */
+function groupSections(
+  declared: readonly DetailGroup[],
+  sections: readonly DetailSection[],
+): DetailWorkspaceGroup[] {
+  const supporting = new Set(["relations", "activity", "evidence"]);
+  const evidence =
+    declared.find((tab) => tab.id === "evidence") ?? declared.at(-1);
+  const resolve = (id: string | undefined) =>
+    declared.some((tab) => tab.id === id)
+      ? id
+      : (id !== undefined && supporting.has(id) ? evidence : declared[0])?.id;
+  const placed = sections.map((section) => ({
+    section,
+    group: resolve(section.group),
+  }));
+  return declared.flatMap((tab) => {
+    const members = placed
+      .filter((entry) => entry.group === tab.id)
+      .map((entry) => entry.section);
+    return members.length > 0
+      ? [{ id: tab.id, title: tab.title, sections: members }]
+      : [];
+  });
 }
 
 function resolveRelationshipDetail(
@@ -93,6 +123,7 @@ function resolveRelationshipDetail(
     title: "Relationships",
     icon: relationshipsSectionIcon,
     placement: "full",
+    group: "relations",
     content: (
       <EntityRelations
         entity={pageDetail.entity}
@@ -128,6 +159,7 @@ function resolveActivityDetail(
     title: "History",
     icon: ClockIcon,
     placement: "primary",
+    group: "activity",
     content: (
       <AuditLogList
         entityKind={pageDetail.entity}
@@ -164,17 +196,16 @@ function contextSourceId(
   return pageDetail ? detailSourceId(pageDetail.entity, record) : undefined;
 }
 
+/**
+ * A record's body: its sections in tabs beside the side column, plus the
+ * generic Relationships explorer and History when the page brings neither.
+ */
 export const DetailSections: FC<DetailSectionsProps> = ({
-  onlyWorkspace,
   sections,
   rawData,
-  lead,
-  leadIndex,
-  omitActivity = false,
+  groups = DEFAULT_DETAIL_GROUPS,
+  side,
 }) => {
-  const hydrated = useHydrated();
-  const locationHash = useLocation({ select: (location) => location.hash });
-  const navigate = useNavigate();
   const { isDebugEnabled } = useDebug();
   const pageDetail = usePageDetailContext();
   const parsedDetailRecord = pageDetail
@@ -189,91 +220,21 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     [pageDetail, sourceId, sections],
   );
   const activity = useMemo(
-    () =>
-      omitActivity
-        ? { ownSection: undefined, section: undefined }
-        : resolveActivityDetail(pageDetail, sourceId, sections),
-    [omitActivity, pageDetail, sourceId, sections],
+    () => resolveActivityDetail(pageDetail, sourceId, sections),
+    [pageDetail, sourceId, sections],
   );
   validateDetailSectionIds(sections, relationship, activity);
-  const groups = useMemo(() => {
-    const groupSections = (
-      workspace: "overview" | "work" | "evidence" | "relations",
-    ) =>
-      sections.filter(
-        (section) =>
-          section.id !== RELATIONS_SECTION_ID &&
-          section.id !== ACTIVITY_SECTION_ID &&
-          (section.workspace ??
-            (section.overview === false ? "evidence" : "overview")) ===
-            workspace,
-      );
-    const result: IndexedSectionGroup[] = [
-      {
-        id: "detail-group-overview",
-        title: "Overview",
-        sections: groupSections("overview"),
-      },
-      {
-        id: "detail-group-work",
-        title: "Work",
-        sections: groupSections("work"),
-      },
-      {
-        id: "detail-group-evidence",
-        title: "Evidence",
-        sections: groupSections("evidence"),
-      },
-      {
-        id: "detail-group-relations",
-        title: "Relations",
-        sections: [
-          ...groupSections("relations"),
-          ...(relationship.section ? [relationship.section] : []),
-        ],
-      },
-      {
-        id: "detail-group-activity",
-        title: "Activity",
-        sections: activity.section ? [activity.section] : [],
-      },
-    ];
-    return result.filter((group) => group.sections.length > 0);
-  }, [sections, relationship.section, activity.section]);
-  useEffect(() => {
-    if (!hydrated || onlyWorkspace !== "evidence" || !locationHash) return;
-    const id = normalizedHash(locationHash);
-    if (
-      id === "evidence" ||
-      sections.some(
-        (section) => section.workspace === "evidence" && section.id === id,
-      )
-    )
-      return;
-    void navigate({
-      to: ".",
-      search: true,
-      hash: "",
-      replace: true,
-      resetScroll: false,
-      hashScrollIntoView: false,
-    });
-  }, [hydrated, onlyWorkspace, locationHash, sections, navigate]);
-  if (onlyWorkspace === "evidence")
-    return (
-      <div className="space-y-2" data-run-evidence>
-        <SectionStack
-          sections={sections.filter(
-            (section) => section.workspace === "evidence",
-          )}
-        />
-      </div>
-    );
+  const tabs = groupSections(groups, [
+    ...sections,
+    ...(relationship.ownSection || !relationship.section
+      ? []
+      : [relationship.section]),
+    ...(activity.ownSection || !activity.section ? [] : [activity.section]),
+  ]);
   return (
-    <IndexedSections
-      groups={groups}
-      lead={lead}
-      leadIndex={leadIndex}
+    <DetailWorkspace
+      groups={tabs}
+      side={side}
       footer={
         isDebugEnabled && (
           <Section headingAs="h2" title="Raw details">

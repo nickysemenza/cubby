@@ -1,16 +1,13 @@
 import { parseShortcode } from "@cubby/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { createContext, useContext, useEffect } from "react";
+import { useEffect } from "react";
 
 import { postNativeWorkspaceMessage } from "./native-workspace/bridge";
 export type { NativeWorkspaceMessage } from "./native-workspace/contract";
 
 import { exactRippleTags } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-
-export const NativeRunEvidenceContext = createContext(false);
-export const useNativeRunEvidence = () => useContext(NativeRunEvidenceContext);
 
 export function isNativeRunEvidence(
   pathname: string,

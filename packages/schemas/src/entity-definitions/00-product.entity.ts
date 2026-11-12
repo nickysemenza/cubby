@@ -197,13 +197,6 @@ export const { definition, readSchemas } = defineEntityModel(
           breadcrumb: "primaryPlacement",
           extraActions: ["addToInventory", "recordSale", "discard"],
         },
-        lead: ["stock-and-price", "notes"],
-        pairs: [
-          ["stock-and-price", "notes"],
-          ["owners", "names-and-tags"],
-          ["garden-source", "identifiers"],
-          ["nutrition", "nutrition-links"],
-        ],
         sections: [
           {
             kind: "relation",

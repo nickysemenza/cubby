@@ -1,0 +1,126 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3836388a-463d-46e6-8616-664eba159769",
+  "prevIds": [
+    "90093de1-eb0a-47bd-864b-509578fd9d8d"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Run",
+        "Run_ended_summary_idx"
+      ],
+      "writes": [
+        "s|idx|public.Run_ended_summary_idx",
+        "n|idx|public.Run_ended_summary_idx",
+        "e|idx|public.Run_ended_summary_idx",
+        "n|rel|public.Run_ended_summary_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.Run.endedAt"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Run",
+        "Run_predecessorRunId_idx"
+      ],
+      "writes": [
+        "s|idx|public.Run_predecessorRunId_idx",
+        "n|idx|public.Run_predecessorRunId_idx",
+        "e|idx|public.Run_predecessorRunId_idx",
+        "n|rel|public.Run_predecessorRunId_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.Run.predecessorRunId"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "AiAnalysis"
+      ],
+      "writes": [
+        "s|ck|public.AiAnalysis.AiAnalysis_entityKind_check"
+      ],
+      "reads": [
+        "n|tbl|public.AiAnalysis",
+        "n|sch|public",
+        "n|col|public.AiAnalysis.entityKind",
+        "e|col|public.AiAnalysis.entityKind"
+      ],
+      "sqlHash": "9cd6e40449c900f2"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Run",
+        "name": "Run_ended_summary_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "endedAt",
+            "isExpression": false,
+            "asc": false,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"endedAt\" IS NOT NULL AND \"trigger\" <> 'ephemeral' AND \"purpose\" NOT IN ('ai_suggest', 'background')",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Run",
+        "name": "Run_predecessorRunId_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "predecessorRunId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"AiAnalysis\",\"AiAnalysis_entityKind_check\"]",
+      "set": {
+        "value": "\"entityKind\" IN ('image', 'location', 'product', 'recipe', 'run', 'global')"
+      }
+    }
+  ]
+}

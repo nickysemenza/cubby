@@ -286,20 +286,59 @@ export const listGroupMarginSchema = z
   .meta({ id: "ListGroupMargin" });
 export type ListGroupMargin = z.infer<typeof listGroupMarginSchema>;
 
+/** Ask a `roots`/`children` page to fold `list.tree.batch` siblings into `meta.batches`. */
+const listNestingBatches = z.boolean().optional();
+
 /**
  * A tree list's scope (`list.tree`), applied after the filters: every
  * matching row (`flat`, the default), the roots — rows whose parent is null
- * or does not itself match — or one parent's matching children. Rows in the
+ * or does not itself match — one parent's matching children, or one batch's
+ * members (`parentId` null for a batch of roots). Rows in the
  * `roots`/`children` scopes carry `childCount`; `totalCount` counts the scope.
  */
 export const listNestingSchema = z
   .discriminatedUnion("scope", [
     z.object({ scope: z.literal("flat") }),
-    z.object({ scope: z.literal("roots") }),
-    z.object({ scope: z.literal("children"), parentId: z.string().min(1) }),
+    z.object({ scope: z.literal("roots"), batches: listNestingBatches }),
+    z.object({
+      scope: z.literal("children"),
+      parentId: z.string().min(1),
+      batches: listNestingBatches,
+    }),
+    z.object({
+      scope: z.literal("batch"),
+      parentId: z.string().min(1).nullable(),
+      value: z.string().min(1),
+    }),
   ])
   .meta({ id: "ListNesting" });
 export type ListNesting = z.infer<typeof listNestingSchema>;
+
+/**
+ * Sibling rows folded into one batch row: the scope's batchable rows whose
+ * `list.tree.batch.by` field holds `value`, under the parent `parentId`
+ * (a shortcode, null among roots). `phases` and `states` count members by
+ * `ListPhase` and by state-field value; `latestActivity` is the newest member
+ * activity. A first page lists its scope's batches; later pages omit them,
+ * and `{ scope: "batch", parentId, value }` pages the members.
+ */
+export const listBatchSchema = z
+  .object({
+    parentId: z.string().min(1).nullable(),
+    value: z.string().min(1),
+    count: z.number().int().min(2),
+    phases: z.record(z.string(), z.number().int().nonnegative()),
+    states: z.record(z.string(), z.number().int().nonnegative()),
+    latestActivity: z.iso.datetime({ offset: true }).nullable(),
+  })
+  .meta({ id: "ListBatch" });
+export type ListBatch = z.infer<typeof listBatchSchema>;
+/**
+ * The most members one batch command acts on: a client sends the existing
+ * per-record command once per unfinished member, and a larger batch is acted
+ * on from its opened member list.
+ */
+export const LIST_BATCH_COMMAND_LIMIT = 50;
 /** Select known matches or candidates awaiting a declared result. */
 export const listResultMembership = z.enum(["known", "unresolved"]);
 export type ListResultMembership = z.infer<typeof listResultMembership>;
@@ -331,6 +370,8 @@ export function buildPaginatedResponse<T>(
     membershipCount?: number;
     /** Full-filter totals at each metric's declared contributor grain. */
     metrics?: Record<string, ListGroupMetric>;
+    /** The scope's batch rows, on the first page of a `batches` request. */
+    batches?: ListBatch[];
   } = {},
 ) {
   type PaginatedMeta = z.infer<typeof paginatedMetaSchema>;
@@ -367,6 +408,7 @@ export function buildPaginatedResponse<T>(
   if (aggregates.memberships) meta.memberships = aggregates.memberships;
   if (aggregates.membershipCount !== undefined)
     meta.membershipCount = aggregates.membershipCount;
+  if (aggregates.batches) meta.batches = aggregates.batches;
   return {
     meta,
     items: data,
@@ -390,6 +432,7 @@ export const paginatedMetaSchema = z
     metrics: z.record(z.string(), listGroupMetricSchema).optional(),
     memberships: z.array(listGroupMembershipSchema).optional(),
     membershipCount: z.number().int().nonnegative().optional(),
+    batches: z.array(listBatchSchema).optional(),
   })
   .meta({ id: "ListPageMeta" });
 

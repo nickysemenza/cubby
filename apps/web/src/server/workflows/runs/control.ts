@@ -29,6 +29,7 @@ import {
   run as runTable,
 } from "~/server/db/schema";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
+import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
@@ -94,15 +95,20 @@ export async function controlWorkflowRun(
       "RUN_CONTROL_REFUSED",
       "This AI refresh Run has no durable evaluation roster; its original scope cannot be recovered.",
     );
+  if (
+    input.action === "pause" ||
+    input.action === "resume" ||
+    input.action === "retry"
+  ) {
+    const refusal = runControlRefusal(input.action, {
+      purpose,
+      status: row.status,
+      failureCode: row.failureCode,
+      hasSuccessor: false,
+    });
+    if (refusal) throw createAppError("RUN_CONTROL_REFUSED", refusal);
+  }
   if (input.action === "pause") {
-    if (
-      (purpose !== "mail_reclassify" && purpose !== "sweep") ||
-      row.status !== "running"
-    )
-      throw createAppError(
-        "RUN_CONTROL_REFUSED",
-        "Only running member-requested AI work can be paused",
-      );
     await withTransactionDatabase(db, async (tx) => {
       await getDb(tx)
         .update(runTable)
@@ -126,20 +132,10 @@ export async function controlWorkflowRun(
     return;
   }
   if (input.action === "resume") {
-    if (!["paused", "paused_auth"].includes(row.status))
-      throw createAppError(
-        "RUN_CONTROL_REFUSED",
-        "Only paused AI work can be resumed",
-      );
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
   if (input.action === "retry") {
-    if (row.status !== "failed")
-      throw createAppError(
-        "RUN_CONTROL_REFUSED",
-        `Only a failed Run can be retried (${row.status})`,
-      );
     if (purpose === "mail_reclassify") {
       const { requestedAiEvaluations } =
         await import("~/server/ai/evaluation/repo/ai-evaluation-requests");

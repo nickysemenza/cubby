@@ -264,7 +264,16 @@ pnpm dev seed purchase
 pnpm dev seed garden
 pnpm dev seed calendar
 pnpm dev seed problems
+pnpm dev seed runs
 ```
+
+`runs` adds Runs in every state the Runs list draws: an inbox scan with an
+unknown total whose Email imports fold into a batch row, a member's import
+whose Sweeps batch beside stalled and needs-review Sweeps, Runs queued in claim
+order, a long failure, a paused Sweep, and recent and older finished Runs. Its
+queued Jobs are a handler-less fixture kind and execution stays off; the queue
+estimate reads the kind's completions of the last few minutes, so it fades
+after seeding.
 
 For performance investigations, `pnpm dev seed performance` adds a larger
 connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with

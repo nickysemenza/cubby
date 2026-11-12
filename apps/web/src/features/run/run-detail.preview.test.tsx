@@ -318,13 +318,11 @@ it.each(["paused", "failed"] as const)(
     });
     const progress = await screen.findByTestId("run-evaluations");
     expect(
-      within(progress).getByRole("progressbar", { name: "Records checked" }),
-    ).toHaveTextContent("80 of 100");
+      within(progress).getByText("Records checked: 80 of 100"),
+    ).toBeVisible();
     expect(
-      within(progress).getByRole("progressbar", {
-        name: "Evaluations settled",
-      }),
-    ).toHaveTextContent("63 of 85");
+      within(progress).getByText("Evaluations settled: 63 of 85"),
+    ).toBeVisible();
     expect(progress).not.toHaveTextContent("/min");
     expect(progress).not.toHaveTextContent("left for what is queued");
   },
@@ -374,8 +372,8 @@ it("retains cancelled evaluations in the stopped Run population", async () => {
   });
   const progress = await screen.findByTestId("run-evaluations");
   expect(
-    within(progress).getByRole("progressbar", { name: "Evaluations settled" }),
-  ).toHaveTextContent("20 of 100");
+    within(progress).getByText("Evaluations settled: 20 of 100"),
+  ).toBeVisible();
   expect(progress).toHaveTextContent("80 cancelled");
   expect(
     within(progress).getByRole("columnheader", { name: "Cancelled" }),

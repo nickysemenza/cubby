@@ -10,8 +10,8 @@ import {
 } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { BulkProgressEvent } from "~/lib/bulk-progress";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Stack } from "~/ui/layout";
-import { Progress } from "~/ui/primitives/progress";
 
 import { PendingButton } from "./pending-button";
 
@@ -79,7 +79,7 @@ export function useBackfill<TResult>({
 /**
  * A maintenance backfill's run button, driven entirely by props. The backfill
  * runs server-side in ONE streamed mutation (see `useBulkStream`); this
- * renders a live `<Progress>` bar beneath the button while it runs.
+ * renders a live `ProgressMeter` beneath the button while it runs.
  */
 export function BackfillButton<TResult>(
   props: BackfillButtonProps<TResult>,
@@ -95,10 +95,12 @@ export function BackfillButton<TResult>(
         pendingLabel={props.pendingLabel}
       />
       {running && (
-        <Progress
-          value={progress?.done ?? 0}
-          max={progress?.total ?? 1}
-          indeterminate={!progress}
+        <ProgressMeter
+          value={countedProgress({
+            done: progress?.done ?? 0,
+            total: progress?.total ?? null,
+            unit: "records",
+          })}
         />
       )}
       {running && props.foreground && (

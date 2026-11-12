@@ -69,7 +69,6 @@ export const { definition, readSchemas } = defineEntityModel(
             fields: ["legacyFoodInfo"],
           },
         ],
-        lead: ["overview"],
         sections: [
           {
             kind: "fields",

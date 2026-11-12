@@ -31,7 +31,6 @@ import { FLAGS } from "~/lib/flags";
 import {
   isNativeRunEvidence,
   isNativeConnections,
-  NativeRunEvidenceContext,
   NativeWorkspaceBridge,
 } from "~/lib/native-workspace";
 import { PerfProfiler } from "~/lib/perf/perf-profiler";
@@ -257,10 +256,8 @@ function RootComponent() {
             data-native-workspace
             className="w-full min-w-0 [--app-chrome-bottom:0px] [--app-chrome-top:0px]"
           >
-            <NativeRunEvidenceContext.Provider value>
-              <NativeWorkspaceBridge />
-              {!nativeAuth && routeContent}
-            </NativeRunEvidenceContext.Provider>
+            <NativeWorkspaceBridge />
+            {!nativeAuth && routeContent}
           </main>
         ) : authed && isWorkspaceRoute ? (
           <AuthenticatedAppShell

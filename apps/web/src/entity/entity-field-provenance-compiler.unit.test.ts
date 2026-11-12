@@ -1,4 +1,4 @@
-import purchaseDeclaration from "@cubby/schemas/compiler/entity-definitions/12-purchase.entity";
+import declaredPurchase from "@cubby/schemas/compiler/entity-definitions/12-purchase.entity";
 import vendorAccountDeclaration from "@cubby/schemas/compiler/entity-definitions/21-vendorAccount.entity";
 import { describe, expect, it } from "vitest";
 
@@ -6,6 +6,21 @@ import {
   compileEntity,
   validateEntityIdentities,
 } from "../../generator/entities/compile";
+
+// Shipment declares the relation Purchase's Shipments section lists; compiled
+// alone, Purchase drops that section.
+const purchaseDeclaration = {
+  ...declaredPurchase,
+  presentation: {
+    ...declaredPurchase.presentation,
+    detail: {
+      ...declaredPurchase.presentation.detail,
+      sections: declaredPurchase.presentation.detail.sections.filter(
+        (section) => section.id !== "shipments",
+      ),
+    },
+  },
+};
 
 describe("entity field provenance", () => {
   it("publishes a reference field's related entity", () => {

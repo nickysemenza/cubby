@@ -27,4 +27,9 @@ export const tableSearchFields = {
   worklist: urlStringParam,
   /** `none`: the person cleared the entity's declared default filter. */
   filters: z.literal("none").optional().catch(undefined),
+  /**
+   * `2`: two-line rows, on a list that declares a second line. Not `rows` or
+   * `lines`: entities already declare those keys.
+   */
+  rowLines: z.coerce.number().pipe(z.literal(2)).optional().catch(undefined),
 };

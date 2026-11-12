@@ -18,14 +18,10 @@ import { formatRelative } from "~/lib/date-format";
 import { formatCount } from "~/lib/number-format";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import {
-  Progress,
-  ProgressLabel,
-  ProgressValue,
-} from "~/ui/primitives/progress";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 /** "about 12 min", "about 3 h", "under a minute". */
@@ -163,29 +159,26 @@ export function RunEvaluations({ record }: { record: EvaluationRun }) {
     <div className="grid gap-4" data-testid="run-evaluations">
       <div className="grid gap-1.5">
         {data.roster ? (
-          <Progress
-            value={data.roster.walked}
-            max={data.roster.total}
+          <ProgressMeter
+            value={countedProgress({
+              done: data.roster.walked,
+              total: data.roster.total,
+              unit: "records",
+            })}
+            label={`Records checked: ${formatCount(data.roster.walked)} of ${formatCount(data.roster.total)}`}
             paused={!moving || pace === 0}
-          >
-            <ProgressLabel>Records checked</ProgressLabel>
-            <ProgressValue>
-              {() =>
-                `${formatCount(data.roster?.walked ?? 0)} of ${formatCount(data.roster?.total ?? 0)}`
-              }
-            </ProgressValue>
-          </Progress>
+          />
         ) : null}
-        <Progress
-          value={totals.settled}
-          max={total}
+        <ProgressMeter
+          value={countedProgress({
+            done: totals.settled - totals.failed,
+            failed: totals.failed,
+            total,
+            unit: "evaluations",
+          })}
+          label={`Evaluations settled: ${formatCount(totals.settled)} of ${formatCount(total)}`}
           paused={!moving || pace === 0}
-        >
-          <ProgressLabel>Evaluations settled</ProgressLabel>
-          <ProgressValue>
-            {() => `${formatCount(totals.settled)} of ${formatCount(total)}`}
-          </ProgressValue>
-        </Progress>
+        />
         {facts.length ? (
           <p className="text-xs text-muted-foreground">{facts.join(" · ")}</p>
         ) : null}

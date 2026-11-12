@@ -45,6 +45,7 @@ export const { definition, readSchemas } = defineEntityModel({
   identifiers: { brand: "PurchaseId", shortcode: "PUR-" },
   presentation: {
     searchFacts: ["date", "expenseTotal"],
+    state: { field: "reconciliation" },
     edit: {
       // Vendor, date, and total lead (the untitled remainder); how the
       // order is classified follows.
@@ -82,48 +83,25 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Receipt", sfSymbol: "cart", emoji: "🧾" },
     detail: {
+      // The header's key money facts.
+      lines: [
+        { label: "Stated total", field: "statedTotal" },
+        { label: "Expense lines", field: "expenseTotal" },
+        { label: "Settled", field: "financialReconciliationLabel" },
+      ],
       summary: [
         {
-          kind: "records",
-          id: "seller",
-          title: "Seller",
-          viewKey: "relation:vendor",
-        },
-        {
           kind: "fields",
-          id: "account-total",
-          title: "Account & total",
-          fields: ["vendorAccountId", "expenseTotal", "statedTotal"],
+          id: "key-facts",
+          title: "Key facts",
+          fields: ["vendorId", "purchaserId", "date", "vendorAccountId"],
         },
         {
-          kind: "records",
-          id: "items",
-          title: "Items",
-          viewKey: "relation:products",
-        },
-        {
-          kind: "report",
-          id: "settlement",
-          title: "Settlement",
-          slot: "purchase.financial-settlement",
-        },
-        {
-          kind: "records",
-          id: "shipping",
-          title: "Shipments",
-          viewKey: "relation:shipments",
-        },
-        {
-          kind: "report",
-          id: "projects",
-          title: "Projects",
-          slot: "purchase.project-allocation",
-        },
-        {
-          kind: "records",
-          id: "receipts",
-          title: "Receipts",
-          viewKey: "relation:images",
+          // The side column lists both field cells as one Key facts list.
+          kind: "fields",
+          id: "context",
+          title: "Project and notes",
+          fields: ["defaultProjectId", "displayLabel", "notes"],
         },
         {
           kind: "chart",
@@ -131,6 +109,12 @@ export const { definition, readSchemas } = defineEntityModel({
           title: "Spend over 12 months",
           viewKey: "relation:expenses",
         },
+      ],
+      groups: [
+        { id: "overview", title: "Overview" },
+        { id: "money", title: "Money" },
+        { id: "evidence", title: "Evidence" },
+        { id: "record", title: "Record" },
       ],
 
       activityRelations: [
@@ -143,18 +127,11 @@ export const { definition, readSchemas } = defineEntityModel({
         "financial-transactions":
           "The financial-settlement slot renders the allocations with their amounts.",
       },
-      hero: {
-        when: { field: "date", label: "Ordered" },
-      },
-      lead: ["overview", "order"],
-      pairs: [
-        ["overview", "order"],
-        ["financial-settlement", "reconciliation"],
-      ],
       sections: [
         {
           kind: "relation",
           id: "expenses",
+          group: "overview",
           title: "Expenses",
           relation: "expenses",
           filter: { descriptor: "purchaseIdFilter" },
@@ -170,54 +147,59 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         {
-          kind: "fields",
-          id: "overview",
-          title: "Record",
-          fields: ["vendorId", "date", "statedTotal", "notes"],
-        },
-        { kind: "slot", id: "receiving", title: "Receive into Inventory" },
-        {
           kind: "slot",
-          id: "project-allocation",
-          title: "Project allocation",
+          id: "receiving",
+          group: "overview",
+          title: "Receive into Inventory",
         },
         {
-          kind: "fields",
-          id: "order",
-          title: "Order",
-          fields: [
-            "orderId",
-            "vendorAccountId",
-            "displayLabel",
-            "purchaserOverrideId",
-          ],
+          kind: "relation",
+          id: "products",
+          group: "overview",
+          title: "Products",
+          relation: "products",
+          filter: { descriptor: "related:product.purchases" },
+          columns: ["name", "brandId", "categoryId", "expenseTotal"],
         },
         {
           kind: "slot",
           id: "financial-settlement",
+          group: "money",
           title: "Financial settlement",
           explanationField: "financialReconciliation",
         },
         {
           kind: "slot",
           id: "reconciliation",
+          group: "money",
           title: "Reconciliation",
           explanationField: "reconciliation",
         },
         {
+          kind: "slot",
+          id: "project-allocation",
+          group: "money",
+          title: "Project allocation",
+        },
+        {
           kind: "fields",
-          id: "classification",
-          title: "Classification",
-          fields: [
-            "defaultProjectId",
-            "defaultTrade",
-            "spendingCategoryId",
-            "itemizationExpectation",
-          ],
+          id: "spending",
+          group: "money",
+          title: "Spending by category",
+          fields: ["spendingCategorySummary"],
+        },
+        {
+          kind: "relation",
+          id: "payment-accounts",
+          group: "money",
+          title: "Payment accounts",
+          relation: "paymentAccounts",
+          filter: { descriptor: "purchaseId" },
         },
         {
           kind: "relation",
           id: "emails",
+          group: "evidence",
           title: "Emails",
           relation: "emails",
           filter: { descriptor: "purchaseId" },
@@ -225,19 +207,52 @@ export const { definition, readSchemas } = defineEntityModel({
           // Linked, then suggestions to act on, then dismissals, newest first.
           sort: { field: "linkState", direction: "asc" },
         },
-        { kind: "slot", id: "runs", title: "Import runs" },
+        { kind: "slot", id: "runs", group: "evidence", title: "Import runs" },
+        {
+          kind: "relation",
+          id: "shipments",
+          group: "evidence",
+          title: "Shipments",
+          relation: "shipments",
+          filter: { descriptor: "purchaseId" },
+        },
+        {
+          kind: "fields",
+          id: "order",
+          group: "record",
+          title: "Order",
+          // Date, account and stated total draw in the header and key facts;
+          // they stay named here because their quality checks place on them.
+          fields: [
+            "orderId",
+            "date",
+            "vendorAccountId",
+            "statedTotal",
+            "purchaserOverrideId",
+          ],
+        },
+        {
+          kind: "fields",
+          id: "classification",
+          group: "record",
+          title: "Classification",
+          fields: [
+            "spendingCategoryId",
+            "itemizationExpectation",
+            "spendingCategoryOrigin",
+            "defaultTrade",
+          ],
+        },
         {
           kind: "fields",
           id: "coverage",
-          title: "Coverage and summaries",
+          group: "record",
+          title: "Coverage",
           fields: [
-            "purchaserId",
             "bookingCoverage",
             "documentCoverage",
             "itemizationCoverage",
             "productsCoverage",
-            "spendingCategorySummary",
-            "spendingCategoryOrigin",
           ],
         },
       ],
@@ -983,21 +998,25 @@ export const { definition, readSchemas } = defineEntityModel({
               value: "match",
               quiet: true,
               label: "Reconciles",
+              phase: "finished",
               color: "positive",
             },
             {
               value: "refund_adjusted",
               label: "Refund-adjusted",
+              phase: "finished",
               color: "neutral-status",
             },
             {
               value: "mismatch",
               label: "Needs review",
+              phase: "needs",
               color: "warning",
             },
             {
               value: "unknown",
               label: "No stated total",
+              phase: "active",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",

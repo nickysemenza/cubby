@@ -15,7 +15,7 @@ import { useCallback, useId, useMemo, useRef } from "react";
 import { recipe } from "~/integrations/tanstack-query/generated/domains/recipe.gen";
 import { flattenRecipes } from "~/lib/cookbook-graph";
 import { cookbookRecipeSignature } from "~/lib/recipe-signature";
-import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { RemoveButton } from "~/ui/forms/remove-button";
 import { Disclosure } from "~/ui/layout";
 import { Panel } from "~/ui/layout";
@@ -347,7 +347,20 @@ function ImportProgress({ book, total }: { book: Book; total: number }) {
     (result) => result.status === "done",
   ).length;
   if (book.importProgress) {
-    return <BulkProgressBar verb="Importing" progress={book.importProgress} />;
+    return (
+      <ProgressMeter
+        value={countedProgress({
+          done: book.importProgress?.done ?? 0,
+          total: book.importProgress?.total ?? null,
+          unit: "recipes",
+        })}
+        label={
+          book.importProgress
+            ? `Importing ${book.importProgress.done} of ${book.importProgress.total}`
+            : "Importing…"
+        }
+      />
+    );
   }
   if (doneCount === 0) return null;
   return (
@@ -421,7 +434,18 @@ function PhotoImportControls({
         </Row>
       )}
       {book.photoProgress ? (
-        <BulkProgressBar verb="Adding photos" progress={book.photoProgress} />
+        <ProgressMeter
+          value={countedProgress({
+            done: book.photoProgress?.done ?? 0,
+            total: book.photoProgress?.total ?? null,
+            unit: "photos",
+          })}
+          label={
+            book.photoProgress
+              ? `Adding photos ${book.photoProgress.done} of ${book.photoProgress.total}`
+              : "Adding photos…"
+          }
+        />
       ) : photoWarningCount > 0 ? (
         <Description size="xs" className="text-warning-ink">
           {photoWarningCount} recipe photo

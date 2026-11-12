@@ -533,9 +533,10 @@ describe("PhotoImportRunView", () => {
     // Progress tally derived from `run.targets`, not from the review fetch.
     const progress = screen.getByText("Progress").closest("section");
     if (!progress) throw new Error("Photo progress section is missing");
-    expect(
-      within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
-    ).toHaveAttribute("aria-valuenow", "2");
+    expect(within(progress).getByRole("progressbar")).toHaveAttribute(
+      "aria-valuenow",
+      "2",
+    );
     expect(progress).toHaveTextContent("2 of 3 photos settled");
     await userEvent.click(
       within(progress).getByRole("button", { name: "Processing details" }),

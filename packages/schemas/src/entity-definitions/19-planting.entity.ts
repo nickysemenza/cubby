@@ -92,7 +92,6 @@ export const { definition, readSchemas } = defineEntityModel({
       activityRelations: [{ relation: "entries", dateField: "observedOn" }],
       variantOverride: "journal",
       hero: { chip: "status" },
-      lead: ["overview"],
       sections: [
         {
           kind: "relation",

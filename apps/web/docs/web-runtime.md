@@ -537,6 +537,24 @@ Skullet boxes supply placeholders without rendering hidden data readers.
   undersized viewport fills at once. Automatic paging pauses when every server
   group is collapsed. The virtualizer owns scroll offset and pane measurement: do
   not add row observers, scroll listeners or resize cycles for read scheduling.
+- An entity with `presentation.state` opens grouped by the `phase` grouping
+  (Needs you, Active, Recently finished). Its `list.initialFilter` filters
+  `phase` to those three, so "Recently finished" is bounded by the declared
+  `recentDays` rather than paged; the finished section's "Show older" adds
+  `older` to that filter. Group counts come from the group summaries.
+- With `nesting.batches`, the first page of a scope also returns `batches`:
+  automatic members of one kind under one parent (or at the root) that number
+  two or more leave the paged rows and arrive as one `ListBatch` each. A list
+  requests batches only where a batch row has a section: ungrouped, grouped by
+  `phase` (the top of its worst-phase group) or by the batch's own `by` field
+  (its value's group); under any other grouping the members list unbatched in
+  their own sections (`listTreeBatches`). A batch's rollup uses only counts the
+  server can address (phase counts and latest activity), never progress summed
+  client-side. Expanding a batch pages the `batch` nesting scope
+  (`{scope: "batch", parentId, value}`) with the normal sort and paging.
+  Batch commands read a batch's unfinished member codes through that scope
+  (at most 50) and run the command once per member. Needs-you and
+  member-started rows never fold into a batch.
 - Desktop virtualization keeps four extra items beyond each edge. An open inline
   editor keeps its row mounted by stable occurrence key through save, cancel and
   focus restoration, and draft and focus survive scrolling away, without

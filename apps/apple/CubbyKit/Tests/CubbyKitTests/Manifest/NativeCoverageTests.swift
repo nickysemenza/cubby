@@ -38,13 +38,15 @@ struct NativeCoverageTests {
     }
 
     /// Native draws no per-renderer list view: a `generic` list renderer prints the text the row
-    /// carries at the field's `labelPath`, so a field without one would draw nothing.
+    /// carries at the field's `labelPath`, or its option label, so a field with neither would draw
+    /// nothing.
     @Test func everyGenericListRendererFieldDeclaresALabelPath() {
         var missing: [String] = []
         for descriptor in EntityCatalog.all {
             for field in descriptor.fields {
                 guard let renderer = field.listRenderer,
-                    coverage.list[renderer.rawValue] == .generic, field.labelPath == nil
+                    coverage.list[renderer.rawValue] == .generic, field.labelPath == nil,
+                    field.kind != .enum, field.valueOptions == nil
                 else { continue }
                 missing.append("\(descriptor.key.rawValue).\(field.key) (\(renderer.rawValue))")
             }

@@ -27,7 +27,7 @@ import { CellFrame } from "../../ui/data-table/cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "../../ui/data-table/cell-selection-context";
 import { columnOffsetValue } from "../../ui/data-table/column-layout";
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
-import { ROW_DENSITY } from "../../ui/data-table/density";
+import { rowLineClasses, RowLinesContext } from "../../ui/data-table/density";
 import {
   CellKeyProvider,
   railPopupOpen,
@@ -180,6 +180,7 @@ function DesktopDataCell<TItem extends RowData>({
   const explained = explainedCellContent(queryClient, cell, content);
   const edges = cell.getSelectionEdges();
   const activity = useContext(RowActivityStoreContext);
+  const lines = useContext(RowLinesContext);
   const cellKey = tableCellKey(cell.row.id, cell.column.id);
   const activateCellFromPointer = (
     event: PointerEvent<HTMLTableCellElement>,
@@ -221,7 +222,7 @@ function DesktopDataCell<TItem extends RowData>({
       )}
       style={inset}
     >
-      <div className={ROW_DENSITY.cellContentClass}>
+      <div className={rowLineClasses(lines).cellContentClass}>
         <div className="min-w-0">
           <CellKeyProvider value={cellKey}>
             <DenseCellContext
@@ -354,6 +355,7 @@ function DesktopDataRowInner<TItem extends RowData>({
   return (
     <TableRow
       data-cell-row={rowIndex}
+      data-row-nested={row.depth > 0 ? "" : undefined}
       data-row-focused={isFocused ? "" : undefined}
       data-state={isSelected && "selected"}
       // Inspection is independent of batch selection.

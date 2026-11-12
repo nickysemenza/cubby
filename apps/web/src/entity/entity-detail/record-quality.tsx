@@ -11,7 +11,7 @@ import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { createContext, useContext, useId, type ReactNode } from "react";
 
 import { WhyValue } from "~/entity/fields/explanation/why-value";
@@ -225,19 +225,29 @@ type RecordQualityProps = {
   visibleFields?: readonly string[];
   visibleSections?: readonly string[];
   renderedSections?: readonly string[];
+  /**
+   * `inline` draws the summary and unplaced checks above the children (the
+   * inspector); `placed` leaves them to `RecordQualitySection` and
+   * `useQualityAttention`, which the full page puts in a tab and Needs you.
+   */
+  summary?: "inline" | "placed";
 };
 
-function AssessedRecordQuality({
-  entity,
-  id,
-  children,
-  visibleFields,
-  visibleSections,
-  renderedSections,
-}: RecordQualityProps) {
-  const prefix = useId();
+/** What the record's quality read says, for the summary and Needs you. */
+interface QualityAssessment {
+  query: ReturnType<typeof useFieldExplanation>;
+  checks: readonly RecordQualityCheck[];
+  orphaned: readonly RecordQualityCheck[];
+  unresolved: readonly RecordQualityCheck[];
+  attention: readonly RecordQualityCheck[];
+  anchor: (check: RecordQualityCheck) => string;
+}
+
+const AssessmentContext = createContext<QualityAssessment | null>(null);
+
+function useFieldExplanation(entity: Entity, id: string) {
   const hydrated = useHydrated();
-  const result = useQuery({
+  return useQuery({
     ...fieldExplanation.explain.queryOptions({
       entityKind: entity,
       entityId: id,
@@ -246,6 +256,174 @@ function AssessedRecordQuality({
     }),
     enabled: hydrated,
   });
+}
+
+/** Opens the check's anchor: its field or result row, selecting its tab first. */
+export function QualityIssueLink({
+  check,
+  anchor,
+  className,
+}: {
+  check: RecordQualityCheck;
+  anchor: string;
+  className?: string;
+}) {
+  const navigate = useNavigate();
+  return (
+    <a
+      href={`#${anchor}`}
+      className={className}
+      onClick={(event) => {
+        event.preventDefault();
+        void navigate({
+          to: ".",
+          search: true,
+          hash: anchor,
+          resetScroll: false,
+          hashScrollIntoView: false,
+        });
+      }}
+    >
+      {check.label}
+    </a>
+  );
+}
+
+/**
+ * The record's quality summary: counts, how it is assessed, the open issues,
+ * the Suggestions that would fix them and the results no section places.
+ */
+function QualitySummary({
+  entity,
+  id,
+  titledOrphans = false,
+}: {
+  entity: Entity;
+  id: string;
+  /** Head the unplaced results "Record quality" (the inspector has no tab). */
+  titledOrphans?: boolean;
+}) {
+  const assessment = useContext(AssessmentContext);
+  if (!assessment) return null;
+  const { query, orphaned, unresolved, attention, anchor } = assessment;
+  const breakdown = query.data?.qualityBreakdown;
+  const allChecks = breakdown?.checks ?? EMPTY_CHECKS;
+  return (
+    <>
+      {query.isPending ? (
+        <output className="text-xs text-muted-foreground">
+          Loading quality checks…
+        </output>
+      ) : query.isError ? (
+        <div>
+          <ErrorDisplay error={query.error} title="quality checks" />
+          <Button
+            size="xs"
+            variant="outline"
+            onClick={() => void query.refetch()}
+          >
+            Retry quality checks
+          </Button>
+        </div>
+      ) : breakdown ? (
+        <div className="border-b border-border pb-2 text-xs">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <strong>
+              {breakdown.status === "not_assessed"
+                ? "Quality not assessed"
+                : unresolved.length === 0
+                  ? "Nothing missing"
+                  : `${unresolved.length} missing`}
+            </strong>
+            <span className="text-muted-foreground">
+              {allChecks.filter((check) => check.state === "satisfied").length}{" "}
+              satisfied · {unresolved.length} unresolved ·{" "}
+              {allChecks.filter((check) => check.state === "excepted").length}{" "}
+              accepted exceptions
+            </span>
+            <WhyValue
+              entity={entity}
+              id={id}
+              field="dataQuality"
+              label="Quality checks"
+              resolution={query.data?.envelope}
+            />
+          </div>
+          {attention.length > 0 ? (
+            <nav
+              aria-label="Quality issues"
+              className="mt-1 flex flex-wrap gap-x-3 gap-y-1"
+            >
+              {attention.map((check) => (
+                <QualityIssueLink
+                  key={check.check}
+                  check={check}
+                  anchor={anchor(check)}
+                  className="text-warning-ink underline-offset-2 hover:underline"
+                />
+              ))}
+            </nav>
+          ) : null}
+          {attention.length > 0 ? (
+            <div className="mt-1">
+              <SuggestionsImpactLink
+                entity={entity}
+                id={id}
+                failing={attention}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {orphaned.length === 0 ? null : titledOrphans ? (
+        <Section title="Record quality" headingAs="h2">
+          <QualityCheckRows checks={orphaned} />
+        </Section>
+      ) : (
+        <QualityCheckRows checks={orphaned} />
+      )}
+    </>
+  );
+}
+
+/** The full page's Record quality section body. */
+export function RecordQualitySection({
+  entity,
+  id,
+}: {
+  entity: Entity;
+  id: string;
+}) {
+  return (
+    <div className="grid min-w-0 gap-2">
+      <QualitySummary entity={entity} id={id} />
+    </div>
+  );
+}
+
+/**
+ * The open checks that ask a member for something, each linked to its field
+ * or result: the full page lists them under Needs you.
+ */
+export function useQualityAttention() {
+  const assessment = useContext(AssessmentContext);
+  return (assessment?.attention ?? EMPTY_CHECKS).map((check) => ({
+    check,
+    anchor: assessment?.anchor(check) ?? "",
+  }));
+}
+
+function AssessedRecordQuality({
+  entity,
+  id,
+  children,
+  visibleFields,
+  visibleSections,
+  renderedSections,
+  summary = "inline",
+}: RecordQualityProps) {
+  const prefix = useId();
+  const result = useFieldExplanation(entity, id);
   const breakdown = result.data?.qualityBreakdown;
   // The summary covers every check, so the counts and issue links do too; a
   // check this surface does not place keeps its result in a fallback list.
@@ -274,98 +452,29 @@ function AssessedRecordQuality({
       ? `${prefix}-field-${placement.field}`
       : `${prefix}-${check.check}`;
   };
-  const summary = (
-    <>
-      {result.isPending ? (
-        <output className="text-xs text-muted-foreground">
-          Loading quality checks…
-        </output>
-      ) : result.isError ? (
-        <div>
-          <ErrorDisplay error={result.error} title="quality checks" />
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => void result.refetch()}
-          >
-            Retry quality checks
-          </Button>
-        </div>
-      ) : breakdown ? (
-        <div className="border-b border-border pb-2 text-xs">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <strong>
-              {breakdown.status === "not_assessed"
-                ? "Quality not assessed"
-                : unresolved.length === 0
-                  ? "Nothing missing"
-                  : `${unresolved.length} missing`}
-            </strong>
-            <span className="text-muted-foreground">
-              {allChecks.filter((check) => check.state === "satisfied").length}{" "}
-              satisfied · {unresolved.length} unresolved ·{" "}
-              {allChecks.filter((check) => check.state === "excepted").length}{" "}
-              accepted exceptions
-            </span>
-            <WhyValue
-              entity={entity}
-              id={id}
-              field="dataQuality"
-              label="Quality checks"
-              resolution={result.data?.envelope}
-            />
-          </div>
-          {attention.length > 0 ? (
-            <nav
-              aria-label="Quality issues"
-              className="mt-1 flex flex-wrap gap-x-3 gap-y-1"
-            >
-              {attention.map((check) => (
-                <a
-                  key={check.check}
-                  href={`#${anchor(check)}`}
-                  className="text-warning-ink underline-offset-2 hover:underline"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    const target = document.getElementById(anchor(check));
-                    target?.scrollIntoView({ block: "center" });
-                    if (target) {
-                      target.tabIndex = -1;
-                      target.focus({ preventScroll: true });
-                    }
-                  }}
-                >
-                  {check.label}
-                </a>
-              ))}
-            </nav>
-          ) : null}
-          {attention.length > 0 ? (
-            <div className="mt-1">
-              <SuggestionsImpactLink
-                entity={entity}
-                id={id}
-                failing={attention}
-              />
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </>
-  );
   return (
     <QualityContext
       value={{ entity, id, prefix, checks, resolution: result.data?.envelope }}
     >
-      <Stack gap="sm">
-        {summary}
-        {orphaned.length > 0 ? (
-          <Section title="Record quality" headingAs="h2">
-            <QualityCheckRows checks={orphaned} />
-          </Section>
-        ) : null}
-        {children}
-      </Stack>
+      <AssessmentContext
+        value={{
+          query: result,
+          checks,
+          orphaned,
+          unresolved,
+          attention,
+          anchor,
+        }}
+      >
+        {summary === "inline" ? (
+          <Stack gap="sm">
+            <QualitySummary entity={entity} id={id} titledOrphans />
+            {children}
+          </Stack>
+        ) : (
+          children
+        )}
+      </AssessmentContext>
     </QualityContext>
   );
 }
@@ -377,3 +486,6 @@ export function RecordQualityProvider(props: RecordQualityProps) {
     <>{props.children}</>
   );
 }
+
+/** Whether the entity's records carry quality checks at all. */
+export const isScoredEntity = (entity: Entity) => scored.has(entity);

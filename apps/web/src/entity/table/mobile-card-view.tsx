@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { BugIcon } from "@phosphor-icons/react/dist/csr/Bug";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import {
@@ -44,7 +45,11 @@ import type { GroupConfig } from "../../ui/data-table/use-grouped-list";
 import { useGroupedList } from "../../ui/data-table/use-grouped-list";
 import { TreeStatusRow } from "../../ui/tree/tree-status-row";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
-import { serverTreeStatusOf } from "../hooks/use-server-tree-children";
+import {
+  serverTreeBatchOf,
+  serverTreeStatusOf,
+} from "../hooks/use-server-tree-children";
+import { batchSummary } from "./batch-row";
 import { TableEmptyState } from "./entity-empty-states";
 import { useInfiniteScrollSentinel } from "./use-infinite-scroll-sentinel";
 import {
@@ -760,6 +765,7 @@ export function MobileCardView<TItem extends RowData>({
   rowContentVersion,
   emptyState,
 }: MobileCardViewProps<TItem>) {
+  const queryClient = useQueryClient();
   const { isDebugEnabled } = useDebug();
   const mobileRows = useMobileListModel({
     table,
@@ -932,6 +938,36 @@ export function MobileCardView<TItem extends RowData>({
           </div>
         </VirtualRow>
       );
+    const batch = entity ? serverTreeBatchOf(row.original) : undefined;
+    if (batch && entity) {
+      const summary = batchSummary(queryClient, entity, batch);
+      return (
+        <VirtualRow
+          key={occurrenceKey}
+          vi={vi}
+          virtualizer={virtualizer}
+          role="presentation"
+        >
+          <button
+            type="button"
+            aria-expanded={row.getIsExpanded()}
+            onClick={row.getToggleExpandedHandler()}
+            className="flex min-h-11 w-full min-w-0 items-center gap-2 border-b border-border px-4 text-left text-sm"
+            style={{ paddingLeft: `${1 + row.depth * 1.25}rem` }}
+          >
+            <span className="min-w-0 truncate">
+              <span className="font-medium">{summary.title}</span>
+              {summary.words ? (
+                <span className="text-muted-foreground">
+                  {" "}
+                  · {summary.words}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </VirtualRow>
+      );
+    }
     const card = (
       <PhoneListRow
         model={model}

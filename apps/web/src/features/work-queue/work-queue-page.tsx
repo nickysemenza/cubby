@@ -387,7 +387,12 @@ function queueColumns(
         id: "owner",
         header: "Owner",
         size: 190,
-        cell: (info) => <OwnerPill {...info.row.original} />,
+        cell: (info) => (
+          <OwnerPill
+            owners={info.row.original.owners}
+            shared={info.row.original.shared}
+          />
+        ),
         meta: attachCubbyColumnMeta<QueueTableRow>({
           mobile: { slot: "trailing", priority: 1, interactive: true },
           cellData: textCellData<QueueTableRow>("text", ownerLabel),

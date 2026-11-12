@@ -6,7 +6,6 @@ import { merchantVendorInference } from "./financial-transaction-fields";
 import { projectRollup } from "./project-output-fields";
 import { recipeTotals, rawRecipeTopLevelFields } from "./recipe-shared";
 import { listLabel } from "./entity-definitions/label-field";
-import { runWorkProgress } from "./run-work-progress";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { purchaseReconciliation } from "./purchase-fields";
 import {
@@ -126,6 +125,20 @@ const STRUCTURED_VALUE_RENDERERS = [
   "source-refs",
   "unit-mappings",
 ] as const satisfies readonly ControlRendererId[];
+
+/**
+ * Entity-independent list cells any declaration may name: the `presentation.state` badge and
+ * the `presentation.progress` meter. They stay classified when no declaration names them;
+ * native draws their fields through the generic row from the declared labels.
+ */
+export const SHARED_LIST_RENDERERS = ["state", "progress"] as const;
+
+/**
+ * The detail rows for the same two fields: `StateBadge` and a block `ProgressMeter`. The web
+ * draws them for the fields `presentation.state` and `presentation.progress` name even when no
+ * declaration names the id; native draws those fields through the generic row.
+ */
+export const SHARED_DETAIL_RENDERERS = ["state", "progress"] as const;
 
 /** Whether a structured editor needs an input schema, including fields native hands off to web. */
 export const drawsFromValueSchema = (
@@ -260,13 +273,6 @@ export const nativeCoverage = {
         { path: "vendorLogo", schema: imageUrlSummary },
       ],
     },
-    "run-throughput": {
-      status: "generic",
-      inputs: [
-        { path: "workProgress", schema: runWorkProgress },
-        { path: "status", schema: z.string() },
-      ],
-    },
     "run-ai-cost": {
       status: "generic",
       inputs: [{ path: "chargedCostLabel", schema: listLabel }],
@@ -288,13 +294,8 @@ export const nativeCoverage = {
     // Drawn from the field's declared `display.labelPath`: the server-composed figure (a rule
     // computed once, not per client) or the display name of the record a cell links to. The rich
     // web cell (tooltip, pill, link, workbench) stays web-only; the fact it carries does not.
-    ...generic([
-      "tag-links",
-      "purchase-links",
-      "product-link",
-      "run-activity",
-      "run-waiting-on",
-    ]),
+    ...generic(["tag-links", "purchase-links", "product-link"]),
+    ...generic(SHARED_LIST_RENDERERS),
     // The Image row IS the picture: native draws it as the row thumbnail.
   },
   detail: {
@@ -318,14 +319,13 @@ export const nativeCoverage = {
       "financial-transaction-allocations",
       "run-failure-details",
       "run-ai-cost",
-      "run-outcome-counts",
-      "run-waiting-on",
       "email-import-outcome",
       "shipment-order",
       "financial-account-identity",
       "financial-transaction-vendor-inference",
       "ledger-transfer-classification",
     ]),
+    ...generic(SHARED_DETAIL_RENDERERS),
     ...implemented([
       "recipe-source",
       "expense-spending-category",
@@ -358,6 +358,8 @@ export const nativeCoverage = {
     // selection-wide edit has no row to anchor to on a detail screen.
     // Native uses one Fetch or refresh logo operation for both states.
     ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo"]),
+    // Run control verbs: the native `run.import-controls` slot draws them.
+    ...ownedElsewhere(["pause", "resume", "retry", "restart"]),
   },
   /**
    * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`

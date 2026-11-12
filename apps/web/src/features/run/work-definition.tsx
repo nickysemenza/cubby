@@ -1,7 +1,5 @@
 import { jobKindDeclaration, JOB_LANE_LABEL } from "@cubby/schemas/job";
 import {
-  RUN_KINDS,
-  runPurpose,
   type RunKindDeclaration,
   type RunStepDeclaration,
 } from "@cubby/schemas/run-fields";
@@ -89,26 +87,6 @@ function StepScope({ step }: { step: RunStepDeclaration }) {
             ? `Eligible ${step.unit} are discovered during execution. The set can grow; there is no fixed total.`
             : `One bounded operation reports its observed ${step.unit}. No complete target count is known in advance.`}
     </p>
-  );
-}
-
-export function RunDefinition({ purpose }: { purpose: string }) {
-  const parsed = runPurpose.safeParse(purpose);
-  if (!parsed.success)
-    return (
-      <Description>
-        This retained Run has no current type definition. Its recorded outcomes
-        remain available below.
-      </Description>
-    );
-  const kind: RunKindDeclaration = RUN_KINDS[parsed.data];
-  return (
-    <Disclosure summary={`What ${kind.label} does`}>
-      <Stack gap="md">
-        <p className="max-w-prose text-sm">{kind.description}</p>
-        <WorkEffects explanation={kind.explanation} />
-      </Stack>
-    </Disclosure>
   );
 }
 

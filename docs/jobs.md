@@ -99,6 +99,12 @@ gate reserves it a turn, and an 8–12 minute fallback re-polls meanwhile. A
 gate that cannot answer defers the same way ("Waiting for the coordinator gate
 to answer") and re-polls in 1–2 minutes.
 
+`run-ai.summary.write` writes the [AI summary of an ended Run](#run-summaries):
+a server kind with six attempts on the recoverable backoff, provider-fenced,
+keyed `run-summary:<runId>:<endedAt ms>` so each Run end is one Job. Its task
+names the summarized Run as `subjectRunId`, never the envelope `runId`, so the
+Job is never that Run's own work and cannot hold it open.
+
 `background.drain` is an internal record kind: one completed row per drain unit
 (`key` `drain:<unit>`) whose `lastClaimedAt` places the unit in rotation. It is
 never claimed or executed. Its `lastExecution` is the unit's last page,
@@ -186,6 +192,12 @@ leases, paused or other counts, else expired leases.
   "Retrying after an error (TimeoutError) · next try in about 4 min"); clock
   times are in the household zone. Web recomputes it on the display clock.
   `jobs` keeps the per-reason counts (`describeJobRollup`).
+
+The Run declares `waitingOn` as its `presentation.state.wait` and `stalled` as
+its `stalled`, so `StateBadge` draws the wait beside `displayStatus` in the list
+cell, the batch row and the detail header; neither field has a renderer of its
+own. A stalled Run draws the stalled pill and groups under Needs you.
+
 - Device: `updateRequired`, `inactive` (not seen for 7 days or never) and
   `appleIntelligenceAvailable` (the hello's actual-image description
   availability, null until a hello reports it).
@@ -547,6 +559,9 @@ Mailbox discovery runs as `run.execute` pages under the Job contract above.
 Its Mail-specific admission rules (targeted-search capacity, exclusive scans,
 page yielding, coverage advancement and Gmail cooldowns) are owned by the
 [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mailbox-admission-and-coverage).
+A member-requested inbox scan is a `manual`, `member_request` Run acted by that
+member; scheduled passes and their continuations are `scheduled` on both
+trigger and cause, and batch under one row in the Runs list.
 
 ## Image processing
 
@@ -815,6 +830,9 @@ Embeddings remain outside frontier funding caps.
 
 ## AI evaluation drains
 
+Run summaries are not evaluations; they are [Jobs](#run-summaries) writing
+`AiAnalysis`, like the Location description.
+
 `ai/evaluation` owns the drain, its items and evaluation pages. Run authority
 (live Run checks, pausing, funding resumption, the workflow fence around one
 evaluation) comes in through the `AiEvaluationExecution` port that
@@ -917,6 +935,23 @@ publication re-reads the declaration's read path, including mutation aliases
 such as `ingredientId` exposed as `ingredient.id`. A loaded nullable relation is
 empty; an absent root or missing governed result remains unavailable and cannot
 authorize a proposal.
+
+### Run summaries
+
+The `run-summary` drain (`domains/run/service/run-summary.ts`) publishes one
+`run-ai.summary.write` Job per owed Run end, up to 20 a page. A Run end is owed
+when the Run sits in the default Runs list, ended `completed`, `failed`,
+`dispatch_failed` or `needs_review` at or after `RUN_SUMMARY_CUTOFF`, has no
+live summary of that `endedAt`, and has no Job under that key; an exhausted Job
+keeps its end from being owed again. The handler skips a Run that restarted,
+re-ended or was removed, sends the Run's own composed title, Why, Outcome,
+state, wall time, failure and step counts (never Email bodies or transcripts)
+to `RUN_SUMMARY_FEATURE`, and writes the text with its `generation` (the
+`endedAt`) through `upsertAiAnalysis` after re-reading the Run under a share
+lock. The call is automatic AI work (`AUTOMATIC_AI_CALL`): a funding stop
+throws into the Job's retry instead of pausing the summarized Run. The Run's
+`aiSummary` field reads the newest live analysis whose generation matches its
+current `endedAt`, so a restarted Run reads none until its new end is written.
 
 ## Diagnostics and repair
 
@@ -1035,6 +1070,14 @@ No Run status, transcript, source evidence, finding or paid result changes
 under this policy, and execution alerts on already retired Runs stay stored.
 
 ## Run progress and diagnostics
+
+A Run's `progressMeter` is its `presentation.progress` field, a `ProgressValue`
+composed on read from the same `workProgress` and outcome counts the detail
+reports use: done items, failed items, the remaining items as active (at least
+one) while running, stalled when the Run is stalled, failed on failure, queued
+otherwise, a nullable total and the work unit. `outcomeLine` is the meter's
+note. `workProgress` keeps its shape for native and MCP and is not a list
+column.
 
 Run detail shows a Plan table from `RUN_KINDS` in
 `packages/schemas/src/activity-fields.ts`, filtered by the Run's selected
@@ -1195,7 +1238,46 @@ queue size. It takes the `run` and `workQueue` cache tags, not entity roots.
 
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` co-locates each Job kind's member explanation with its
-execution policy. Run and Job execution views show these definitions, while
+execution policy. Runs declare `purpose` as their `presentation.kind`, and each
+purpose option's `explanation` is its `RUN_KINDS` explanation, shown on every
+Run as "What a {label} does". `mail_import` is labelled "Email import" and
+`mail_discovery` "Inbox scan".
+
+A Run's words are composed on the server (`domains/run/run-phrases.ts`) from
+its stored row and one batch per page; clients never compose them:
+
+- **Title** (`displayName`) says what the Run does: "Import 3 order emails from
+  Synthetic Vendor", "Scan inbox", "Sweep product brand for 40 products",
+  "Categorize 12 statement lines", "Review 6 photos"; other kinds read their
+  label and vendor, party or actor.
+- **Why** (`whyLine`, a `displayItem` linking the Run it names) comes from
+  `predecessorRunId`, then `Run.cause`: "Retry of RUN-…", "You started this"
+  for the viewer's own Run (else "{name} started this"), "After {kind} RUN-…"
+  or "After import TIM-…", "Found by {kind} RUN-…", "Scheduled", "Retry" or
+  "Evidence changed". A Run with no recorded cause has a null Why, which reads
+  "Cause not recorded".
+- **What** (`whatLine`, detail only) names the input it covers.
+- **Outcome** (`outcomeLine`) states what changed, "so far" while in flight,
+  else "Nothing changed" or "Nothing changed yet".
+- **State reason** (`stateReason`) is the muted text after the state: the
+  successor of a retried Run, the first sentence of a failure, the members a
+  review waits on, or the wall time of a completed Run.
+- **Needs you** (`openItems`, detail only) lists what waits on a member.
+
+Producers record why a Run started, so the Why line has a cause to read:
+
+- Member actions record `cause: "member_request"`; a member-requested inbox
+  scan (`run.discoverMail`) records the member as actor with trigger `manual`,
+  while scheduled and continuation scans record trigger and cause `scheduled`.
+- A photo Run records `member_request`.
+- An import's category Sweep and statement suggestion generation record
+  `import_completed`; the Sweep also records the import Run as `parentRunId`.
+  The Sweep's own actor carries no `runId`, so it is never the import Run's
+  work.
+
+`isMemberStartedRun` (a member-facing purpose with cause `member_request` or a
+foreground or manual trigger) is the one test for member-started Runs: they
+never fold into a batch row. Run and Job execution views show these definitions, while
 actual outcomes, waits, raw errors and retry controls remain on their records.
 Definitions are not evidence that execution happened. Retained unknown kinds
 keep their diagnostics and explicitly lack a current definition.
@@ -1259,6 +1341,7 @@ of the rows marked "session", and rows marked "no Run" can have none.
 | `ImportPreparedOrder`, `ImportSourceClaim` (`firstRunId`, `lastRunId`)                                                                | Import session evidence, kept                                                 |
 | `PhotoGroupProposal`, `PhotoRunImage`, `ImageProcessingJob`                                                                           | Photo session and device work, kept                                           |
 | `Run` (`parentRunId`, `predecessorRunId`)                                                                                             | Lineage, kept                                                                 |
+| `AiAnalysis` (`entityKind` `run`)                                                                                                     | The Run's AI summary, kept; no foreign key                                    |
 
 ### Routine Run history
 

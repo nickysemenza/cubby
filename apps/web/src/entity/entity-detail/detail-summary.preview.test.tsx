@@ -110,18 +110,9 @@ const examples = {
       })}
     />
   ),
-  purchase: (
-    <DetailSummary
-      entity="purchase"
-      record={fromPartial<DetailRecordOf<"purchase">>({
-        id: shortcode("PUR-4K7M"),
-        orderId: "SYNTHETIC-42",
-      })}
-    />
-  ),
 };
 
-it.each(["product", "vendor", "purchase", "expense"] as const)(
+it.each(["product", "vendor", "expense"] as const)(
   "keeps %s summaries compact with readable pills and bounded phone width",
   async (entity) => {
     const harness = createBrowserTestHarness();
@@ -170,19 +161,7 @@ it.each(["product", "vendor", "purchase", "expense"] as const)(
           data: {
             reports: entityReportManyInput.parse(input).slots.map((slot) => ({
               slot,
-              report: {
-                blocks:
-                  slot === "purchase.financial-settlement"
-                    ? [
-                        ...blocks,
-                        {
-                          kind: "note",
-                          text: "Settlement needs review.",
-                          tone: "warning",
-                        },
-                      ]
-                    : blocks,
-              },
+              report: { blocks },
             })),
           },
         };
@@ -209,15 +188,6 @@ it.each(["product", "vendor", "purchase", "expense"] as const)(
         );
         expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
         await waitFor(() => expect(harness.queryClient.isFetching()).toBe(0));
-        expect(screen.queryAllByText("Settlement needs review.")).toHaveLength(
-          entity === "purchase" ? 1 : 0,
-        );
-        expect(
-          screen
-            .queryByText("Settlement needs review.")
-            ?.closest("section")
-            ?.hasAttribute("hidden") ?? false,
-        ).toBe(false);
         expect(
           screen.queryAllByRole("link", {
             name: "Synthetic allocated supplies",
@@ -267,9 +237,10 @@ it("keeps failed contextual reports visible without expanding context", async ()
     throw new Error(`Unexpected summary operation: ${operation}`);
   });
   try {
-    render(examples.purchase, { wrapper: harness.wrapper });
-    const error = await screen.findByText("Couldn't load Settlement.");
-    expect(error.closest("section")).not.toHaveAttribute("hidden");
+    render(examples.product, { wrapper: harness.wrapper });
+    const errors = await screen.findAllByText(/^Couldn't load /);
+    for (const error of errors)
+      expect(error.closest("section")).not.toHaveAttribute("hidden");
   } finally {
     restore();
     cleanup();

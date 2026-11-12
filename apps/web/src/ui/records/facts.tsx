@@ -1,3 +1,4 @@
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { cn } from "cn";
 import {
@@ -78,6 +79,10 @@ export function FactsDensityProvider({
   return <FactsDensityContext value={density}>{children}</FactsDensityContext>;
 }
 
+/** Whether values sit in a compact fact list (a side column, an inspector). */
+export const useCompactFacts = () =>
+  useContext(FactsDensityContext) === "compact";
+
 const FactsAddContext = createContext<(() => void) | null>(null);
 
 /**
@@ -124,6 +129,41 @@ export function AddFactValue({
         Add
       </span>
     </button>
+  );
+}
+
+/**
+ * A section's unrecorded facts as one quiet line, "N fields not recorded: A,
+ * B", that expands to `children` (the same fact rows, with their Add controls).
+ * The body stays mounted so find-in-page reaches it.
+ */
+export function FoldedFacts({
+  labels,
+  children,
+}: {
+  labels: readonly string[];
+  children: ReactNode;
+}) {
+  if (labels.length === 0) return null;
+  return (
+    <details data-folded-facts className="group/folded min-w-0 text-sm">
+      <summary className="flex min-h-(--fact-row-height) cursor-default list-none items-baseline gap-1.5 rounded-sm py-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11 [&::-webkit-details-marker]:hidden">
+        <CaretRightIcon
+          aria-hidden
+          weight="bold"
+          className="size-3 shrink-0 translate-y-0.5 transition-transform duration-(--brand-motion-standard) group-open/folded:rotate-90 motion-reduce:transition-none"
+        />
+        <span className="min-w-0">
+          <strong className="font-semibold text-foreground">
+            {labels.length === 1
+              ? "1 field not recorded:"
+              : `${labels.length} fields not recorded:`}
+          </strong>{" "}
+          {labels.join(", ")}
+        </span>
+      </summary>
+      <div className="pt-1">{children}</div>
+    </details>
   );
 }
 

@@ -339,13 +339,6 @@ export const { definition, readSchemas } = defineEntityModel({
 
         extraActions: ["setStatus"],
       },
-      lead: ["overview", "notes"],
-      pairs: [
-        ["overview", "notes"],
-        ["schedule", "schedule-dates"],
-        ["budget", "budget-estimate"],
-        ["dependencies", "defaults"],
-      ],
       sections: [
         {
           kind: "relation",

@@ -87,7 +87,6 @@ export const { definition, readSchemas } = defineEntityModel({
       hero: {
         when: { field: "date", label: "Transferred" },
       },
-      lead: ["overview"],
       sections: [
         {
           kind: "fields",

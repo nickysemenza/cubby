@@ -1,4 +1,8 @@
-import type { ListNesting } from "@cubby/schemas/pagination";
+import {
+  LIST_BATCH_COMMAND_LIMIT,
+  type ListBatch,
+  type ListNesting,
+} from "@cubby/schemas/pagination";
 import { useQueries, type QueryFunctionContext } from "@tanstack/react-query";
 import type { ExpandedState, OnChangeFn, RowData } from "@tanstack/react-table";
 import { useCallback, useMemo, useState } from "react";
@@ -8,6 +12,7 @@ import type {
   ListQueryPlan,
   ListQueryResponse,
 } from "../table/use-paginated-table-core";
+import type { ScopedPlanNarrowing } from "./use-infinite-table-list";
 
 export type ServerTreeRow<T> = T & { subRows?: ServerTreeRow<T>[] };
 
@@ -49,6 +54,40 @@ export const serverTreeStatusOf = (
 ): ServerTreeChildStatus | undefined =>
   typeof row === "object" && row !== null ? statusRows.get(row) : undefined;
 
+/**
+ * A folded batch of automatic siblings (`list.tree.batch`): the server's
+ * rollup, drawn as one row whose expansion pages the batch's members.
+ */
+export type ServerTreeBatch = ListBatch & {
+  /** The parent scope's expansion key, or null among roots. */
+  scopeId: string | null;
+};
+
+// Batch rows are registered by identity like status rows.
+const batchRows = new WeakMap<object, ServerTreeBatch>();
+
+/** The batch a synthetic tree row stands for, or undefined for a record. */
+export const serverTreeBatchOf = (row: RowData): ServerTreeBatch | undefined =>
+  typeof row === "object" && row !== null ? batchRows.get(row) : undefined;
+
+const BATCH_ID_PREFIX = "batch:";
+const batchKeySchema = z.tuple([z.string().nullable(), z.string()]);
+
+/** A batch row's id, unique beside record ids and stable across pages. */
+export const serverTreeBatchId = (
+  batch: Pick<ListBatch, "parentId" | "value">,
+) => `${BATCH_ID_PREFIX}${JSON.stringify([batch.parentId, batch.value])}`;
+
+function batchScopeOf(id: string): ListNesting | null {
+  if (!id.startsWith(BATCH_ID_PREFIX)) return null;
+  const parsed = batchKeySchema.safeParse(
+    JSON.parse(id.slice(BATCH_ID_PREFIX.length)),
+  );
+  return parsed.success
+    ? { scope: "batch", parentId: parsed.data[0], value: parsed.data[1] }
+    : null;
+}
+
 const NO_PAGES: Readonly<Record<string, number>> = {};
 const NO_EXPANDED: Readonly<Record<string, boolean>> = {};
 
@@ -69,13 +108,20 @@ type ChildResult<TData> = {
  */
 export function useServerTreeChildren<TData extends { id: string }>({
   enabled,
+  batches = false,
   scope,
   planFor,
 }: {
   enabled: boolean;
+  /** The entity declares `list.tree.batch`: scopes fold automatic siblings. */
+  batches?: boolean;
   /** Changes whenever the filters or sort change. */
   scope: string;
-  planFor: (nesting: ListNesting, pageIndex: number) => ListQueryPlan<TData>;
+  planFor: (
+    nesting: ListNesting,
+    pageIndex: number,
+    narrow?: ScopedPlanNarrowing,
+  ) => ListQueryPlan<TData>;
 }) {
   const [state, setState] = useState({
     scope,
@@ -102,10 +148,16 @@ export function useServerTreeChildren<TData extends { id: string }>({
         Array.from({ length: state.pages[parentId] ?? 1 }, (_, pageIndex) => ({
           parentId,
           pageIndex,
-          plan: planFor({ scope: "children", parentId }, pageIndex),
+          plan: planFor(
+            batchScopeOf(parentId) ??
+              (batches
+                ? { scope: "children", parentId, batches: true }
+                : { scope: "children", parentId }),
+            pageIndex,
+          ),
         })),
       ),
-    [expandedIds, planFor, state.pages],
+    [batches, expandedIds, planFor, state.pages],
   );
   const combine = useCallback((results: ChildResult<TData>[]) => results, []);
   const results = useQueries({
@@ -136,7 +188,11 @@ export function useServerTreeChildren<TData extends { id: string }>({
   const childrenByParent = useMemo(() => {
     const byParent = new Map<
       string,
-      { items: TData[]; status?: ServerTreeChildStatus }
+      {
+        items: TData[];
+        status?: ServerTreeChildStatus;
+        batches?: readonly ListBatch[];
+      }
     >();
     const pagesByParent = new Map<string, ChildResult<TData>[]>();
     requests.forEach(({ parentId }, index) => {
@@ -178,7 +234,11 @@ export function useServerTreeChildren<TData extends { id: string }>({
                   loadMore: () => loadMore(parentId),
                 }
               : undefined;
-      byParent.set(parentId, status ? { items, status } : { items });
+      byParent.set(parentId, {
+        items,
+        ...(status ? { status } : {}),
+        ...(meta?.batches ? { batches: meta.batches } : {}),
+      });
     }
     return byParent;
   }, [loadMore, requests, results]);
@@ -195,12 +255,38 @@ export function useServerTreeChildren<TData extends { id: string }>({
   );
 
   const attach = useCallback(
-    (roots: readonly TData[]): ServerTreeRow<TData>[] => {
+    (
+      roots: readonly TData[],
+      rootBatches: readonly ListBatch[] = [],
+    ): ServerTreeRow<TData>[] => {
+      // A scope's batch rows lead its records. A batch row carries only its
+      // id and member count; table renderers draw it from its rollup.
+      const withBatches = (
+        rows: readonly TData[],
+        scopeBatches: readonly ListBatch[],
+        scopeId: string | null,
+      ): readonly TData[] => {
+        if (scopeBatches.length === 0) return rows;
+        const batchRowsForScope = scopeBatches.map((batch) => {
+          // SAFETY: renderers, selection and grouping consult
+          // `serverTreeBatchOf` before reading any record field.
+          // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- a batch row is synthetic: it has an id and a member count, never record fields.
+          const row = {
+            id: serverTreeBatchId(batch),
+            childCount: batch.count,
+          } as unknown as TData;
+          batchRows.set(row, { ...batch, scopeId });
+          return row;
+        });
+        return [...batchRowsForScope, ...rows];
+      };
       const visit = (rows: readonly TData[]): ServerTreeRow<TData>[] =>
         rows.map((row) => {
           const children = childrenByParent.get(row.id);
           if (!children) return row;
-          const subRows = visit(children.items);
+          const subRows = visit(
+            withBatches(children.items, children.batches ?? [], row.id),
+          );
           // The status row copies its parent's fields so a grouped list
           // files it in the parent's section; it is never expandable.
           if (children.status) {
@@ -212,12 +298,38 @@ export function useServerTreeChildren<TData extends { id: string }>({
             statusRows.set(statusRow, children.status);
             subRows.push(statusRow);
           }
-          return { ...row, subRows };
+          const expanded = { ...row, subRows };
+          // An opened batch row is a new object; it stays a batch row.
+          const batch = batchRows.get(row);
+          if (batch) batchRows.set(expanded, batch);
+          return expanded;
         });
-      return visit(roots);
+      return visit(withBatches(roots, rootBatches, null));
     },
     [childrenByParent],
   );
 
-  return { expanded: state.expanded, onExpandedChange, attach };
+  // A batch command's members: the batch scope's active members under the
+  // list's own filters, one bounded page.
+  const readBatchMembers = useCallback(
+    async (
+      batch: ListBatch,
+      signal: AbortSignal,
+    ): Promise<readonly TData[]> => {
+      const page = await planFor(
+        { scope: "batch", parentId: batch.parentId, value: batch.value },
+        0,
+        { filters: { phase: ["active"] }, pageSize: LIST_BATCH_COMMAND_LIMIT },
+      ).execute(signal, "strong");
+      return page.items;
+    },
+    [planFor],
+  );
+
+  return {
+    expanded: state.expanded,
+    onExpandedChange,
+    attach,
+    readBatchMembers,
+  };
 }

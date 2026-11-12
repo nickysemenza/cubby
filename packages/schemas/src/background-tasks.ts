@@ -59,6 +59,22 @@ export const imageMetadataExtractTaskSchema = z.object({
   imageId,
 });
 
+/**
+ * Write the AI summary of one ended Run's end generation. The summarized Run
+ * is `subjectRunId`, never the envelope's `runId`: the Job must not count as
+ * the Run's own work (its wait, stall or progress).
+ */
+export const runAiSummaryWriteTaskSchema = z.object({
+  kind: z.literal("run-ai.summary.write"),
+  ...taskEnvelopeFields,
+  subjectRunId: z.uuid(),
+  /** The `endedAt` this summary describes; a re-ended Run is a new key. */
+  endedAt: z.iso.datetime(),
+});
+/** One summary Job per Run end generation; an exhausted one is never re-owed. */
+export const runAiSummaryJobKey = (runId: string, endedAt: string) =>
+  `run-summary:${runId}:${Date.parse(endedAt)}`;
+
 export const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
@@ -84,6 +100,7 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
+  runAiSummaryWriteTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

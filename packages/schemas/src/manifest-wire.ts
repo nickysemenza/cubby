@@ -351,6 +351,7 @@ export const manifestWire = {
     listTotals: "[ListTotalDescriptor]",
     shelfSubtitle: "[string]",
     titleSubtitle: "boolean",
+    listLayoutRevision: "integer?",
     listActions: "[EntityListActionID]",
     listQuickActions: "[string]?",
     listRail: "[ListRail]?",

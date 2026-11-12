@@ -33,6 +33,48 @@ export type ListReadProjection = {
   nesting?: "flat";
 };
 
+const readRoot = (path: string | null | undefined) =>
+  path?.split(".")[0]?.split("[")[0];
+
+/**
+ * What the shared state and progress cells and the title cell read whether
+ * or not their own columns show: a state's reason, wait and stalled flag,
+ * the progress note, the kind tag and the declared second line.
+ */
+function declaredPresentationReads(
+  metadata: ReturnType<typeof entityMetadata>,
+): string[] {
+  const state: {
+    field: string;
+    reason?: string;
+    wait?: string;
+    stalled?: string;
+  } | null = metadata.summary.state;
+  const progress: { field: string; note?: string } | null =
+    metadata.summary.progress;
+  const secondLine = metadata.summary.list.titleSubtitle
+    ? (metadata.summary.list.shelf?.subtitle ?? [])
+    : [];
+  return [
+    state?.field,
+    state?.reason,
+    state?.wait,
+    state?.stalled,
+    progress?.field,
+    progress?.note,
+    metadata.summary.kind?.field,
+    ...secondLine,
+  ].flatMap((key) => {
+    if (!key) return [];
+    const field = metadata.fields.fields.find((entry) => entry.key === key);
+    const label = readRoot(field?.display.labelPath);
+    return [
+      readRoot(field?.display.readPath) ?? field?.readKey ?? key,
+      ...(label ? [label] : []),
+    ];
+  });
+}
+
 /** Shared by the eager loader and mounted roster; visibility never changes membership. */
 export const declaredListReadProjection: ListReadProjection = (
   queryClient,
@@ -120,6 +162,8 @@ export const declaredListReadProjection: ListReadProjection = (
     const label = rootOf(field.display.labelPath);
     if (label) wanted.add(label);
   }
+  for (const read of declaredPresentationReads(metadata))
+    if (readable.has(read)) wanted.add(read);
   // Audit columns are requested only when the shared presentation exposes them.
   if (visibility.createdAt !== false) wanted.add("createdAt");
   if (visibility.updatedAt !== false) wanted.add("updatedAt");

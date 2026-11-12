@@ -8,7 +8,6 @@ import {
 import type { ReportRowState } from "@cubby/schemas/entity-report";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { runInputsErased } from "@cubby/schemas/run-fields";
-import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -36,7 +35,7 @@ import {
   PhotoImportRunView,
   PhotoRunGroupingAction,
 } from "~/features/run/photo-run-detail";
-import { RunLink, useRun } from "~/features/run/run-lineage";
+import { useRun } from "~/features/run/run-lineage";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
@@ -236,59 +235,32 @@ function RunControls({ run }: { run: RunDetail }) {
           with that Email, so it can’t be retried or restarted.
         </Description>
       ) : null}
-      <RunLineageAndInputs run={run} />
+      <RestartInputs run={run} />
     </Stack>
   );
 }
 
-/** Where this run came from, what replaced it, and the inputs a restart copies. */
-function RunLineageAndInputs({ run }: { run: RunDetail }) {
-  const links = [
-    ["Parent run", run.parentRunId],
-    ["Retry of", run.predecessorRunPublicId],
-    ["Retried as", run.successorRunPublicId],
-  ] as const;
-  if (
-    !run.restartInputs &&
-    !run.cause &&
-    !run.attempt &&
-    !links.some(([, publicId]) => publicId)
-  )
-    return null;
+/**
+ * The inputs a restart copies. Lineage, cause and attempt are the Run's own
+ * fields; the header's Why line and the Retries key facts draw them.
+ */
+function RestartInputs({ run }: { run: RunDetail }) {
+  if (!run.restartInputs) return null;
   return (
-    <Stack gap="sm">
-      {run.cause || run.attempt ? (
-        <p className="text-xs text-muted-foreground">
-          {[
-            run.cause ? humanize(run.cause) : null,
-            run.attempt ? `Attempt ${run.attempt}` : null,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </p>
-      ) : null}
-      {links.map(([label, publicId]) =>
-        publicId ? (
-          <RunLink key={label} label={label} publicId={publicId} />
-        ) : null,
-      )}
-      {run.restartInputs ? (
-        <Panel tone="default">
-          <Disclosure summary="Restart inputs">
-            <Description size="xs">
-              Exactly what “Start new run with same inputs” copies. Proposals,
-              decisions, and the agent conversation are not carried over.
-            </Description>
-            <pre
-              aria-label="Restart inputs JSON"
-              className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
-            >
-              {JSON.stringify(run.restartInputs, null, 2)}
-            </pre>
-          </Disclosure>
-        </Panel>
-      ) : null}
-    </Stack>
+    <Panel tone="default">
+      <Disclosure summary="Restart inputs">
+        <Description size="xs">
+          Exactly what “Start new run with same inputs” copies. Proposals,
+          decisions, and the agent conversation are not carried over.
+        </Description>
+        <pre
+          aria-label="Restart inputs JSON"
+          className="mt-2 max-h-96 overflow-auto bg-muted p-2 font-mono text-xs"
+        >
+          {JSON.stringify(run.restartInputs, null, 2)}
+        </pre>
+      </Disclosure>
+    </Panel>
   );
 }
 
@@ -827,11 +799,7 @@ function hasRunControls(run: RunDetail): boolean {
     runActions(run).length > 0 ||
     waitsForFunding(run) ||
     runInputsErased(run.retirementReason) ||
-    Boolean(
-      run.restartInputs ||
-      run.predecessorRunPublicId ||
-      run.successorRunPublicId,
-    )
+    Boolean(run.restartInputs)
   );
 }
 
@@ -867,7 +835,7 @@ function ImportRunSlot({
   return shown ? children(run) : <StatusText>No items.</StatusText>;
 }
 
-/** Run detail slot: control actions, lineage and restart inputs. */
+/** Run detail slot: control actions and restart inputs. */
 export function RunImportControls({ record }: { record: RunOut }) {
   return (
     <ImportRunSlot record={record} visible={hasRunControls}>

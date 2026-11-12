@@ -247,6 +247,7 @@ export const runHandlers = implementOperationDomain(runContract, {
         userId: context.auth.userId,
         mailboxId: input.mailboxId,
       },
+      requestedBy: context.actorContext,
       ...(input.paidAllowed && {
         paidGrant: {
           actor: context.actorContext,

@@ -22,6 +22,9 @@ import { parseRangeBounds } from "@cubby/shared/filter";
 import { compileEnumOptions } from "@cubby/shared/enum-palette";
 import {
   FILTER_KINDS,
+  LIST_PHASE_LABELS,
+  LIST_PHASES,
+  PHASE_GROUPING_KEY,
   defaultReadSchemas,
   parseEntityDeclarationMetadata,
 } from "@cubby/schemas/entity-definitions/definition";
@@ -2276,6 +2279,62 @@ const suggestionFilterDescriptors = (
   ];
 };
 
+/**
+ * The `PHASE_GROUPING_KEY` filter `presentation.state` implies; its derived
+ * value is compiled in `compileListFields`. Without `recentBy` the finished
+ * phase is unbounded, so there is no `older`.
+ */
+const phaseFilterDescriptors = (
+  state: EntityDeclarationMetadata["presentation"]["state"],
+): FilterDescriptor[] => {
+  if (state === null) return [];
+  const phases = LIST_PHASES.filter(
+    (phase) => phase !== "older" || state.recentBy !== undefined,
+  );
+  return [
+    {
+      columnId: PHASE_GROUPING_KEY,
+      field: null,
+      urlKey: PHASE_GROUPING_KEY,
+      kind: "multiselect",
+      placeholder: "Filter by phase...",
+      options: phases.map((value) => ({
+        value,
+        label: LIST_PHASE_LABELS[value],
+      })),
+      optionsRef: null,
+      optionsKey: null,
+      label: "Phase",
+      // The enum names the phases; this says only what places a record in one.
+      schemaDescription: [
+        `needs: waits on a member${state.stalled === undefined ? "" : " or stalled"}`,
+        ...(state.recentBy === undefined
+          ? []
+          : [`older: finished over ${state.recentDays} days ago`]),
+      ].join("; "),
+      deriveSchema: true,
+      schemaFromRead: false,
+      brandRef: null,
+      expandRef: null,
+      schemaRef: null,
+      stored: null,
+      anyOf: null,
+      derived: PHASE_GROUPING_KEY,
+      range: null,
+      nullable: null,
+      sentinels: null,
+      match: null,
+      exclude: null,
+      subtree: null,
+      currentMember: false,
+      singleValue: null,
+      exclusiveGroup: null,
+      aliasOf: null,
+      wire: { kind: "param", name: PHASE_GROUPING_KEY },
+    },
+  ];
+};
+
 const validateStoredTotalResults = (
   declaration: EntityDeclarationMetadata,
   declaredFieldModel: EntityFieldModel,
@@ -2575,6 +2634,7 @@ export const compileEntity = (
   const filterDescriptorsWithAudit = [
     ...filterDescriptors,
     ...suggestionFilterDescriptors(declaredFieldModel.fields),
+    ...phaseFilterDescriptors(declaration.presentation.state),
     ...auditDescriptors,
   ];
   const descriptorUrlKeys = filterDescriptorsWithAudit.map(

@@ -9,6 +9,7 @@ import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { embeddableEntitySchema } from "@cubby/schemas/search";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
@@ -21,6 +22,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -48,20 +50,18 @@ import {
 import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
+import { HeaderLines } from "~/entity/page/header-lines";
 import { Page } from "~/entity/page/page";
-import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { useNativeRunEvidence } from "~/lib/native-workspace";
 import { DetailEditAction } from "~/ui/forms/detail-edit-action";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { FactsAddProvider } from "~/ui/records/facts";
+import { KindTag } from "~/ui/records/kind-tag";
+import { StateBadge } from "~/ui/records/state-badge";
+import { Badge } from "~/ui/reui/badge";
 
-import {
-  SectionPair,
-  SectionStack,
-} from "../../ui/data-table/indexed-sections";
 import { DocumentViewerList } from "../../ui/media/document-viewer-list";
 import {
   actionVerbs,
@@ -81,8 +81,9 @@ import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { declaredNeedsOf, DetailSide } from "./detail-side";
 import { detailSlotsFor } from "./detail-slots";
-import { DetailSummary, detailSectionFields } from "./detail-summary";
+import { detailSectionFields } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
@@ -93,8 +94,16 @@ import {
   relationSkeletonRows,
 } from "./entity-relation-table";
 import {
+  aiSummaryOf,
+  headerLinesOf,
+  recordKindOf,
+  recordStateOf,
+} from "./record-header";
+import {
+  isScoredEntity,
   QualitySectionChecks,
   RecordQualityProvider,
+  RecordQualitySection,
   useQualityCheckSections,
 } from "./record-quality";
 
@@ -144,23 +153,69 @@ const sectionIcon = (kind: DeclaredSection["kind"]) => {
   }
 };
 
-/** The chip the hero declares, read off the record. */
-function heroStampOf<E extends GenericDetailEntity>(
+/**
+ * Beside the title: the kind tag, then the state once. The declared
+ * `presentation.state` draws as `StateBadge`; an entity without one keeps its
+ * declared hero chip.
+ */
+function headerStatus<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
 ) {
+  const kind = recordKindOf(queryClient, entity, record);
+  const state = recordStateOf(queryClient, entity, record);
   const { hero } = presentationOf(queryClient, entity).detail;
   const fields: readonly DisplayField[] = entityMetadata(queryClient, entity)
     .fields.fields;
   const chipField =
-    hero.chip === null
+    state !== null || hero.chip === null
       ? undefined
       : fields.find((candidate) => candidate.key === hero.chip);
   const chip = chipField
     ? heroChipLabel(queryClient, entity, record, chipField)
     : null;
-  return chip === null ? undefined : { label: chip, tone: "ink" as const };
+  if (!kind && !state && chip === null) return undefined;
+  return (
+    <>
+      {kind ? <KindTag option={kind} /> : null}
+      {state ? (
+        <StateBadge
+          size="header"
+          option={state.option}
+          phase={state.phase}
+          reason={
+            // The side column's Needs you already says it.
+            declaredNeedsOf(queryClient, entity, record).some(
+              (item) =>
+                item.title === state.reason || item.subtitle === state.reason,
+            )
+              ? null
+              : state.reason
+          }
+          wait={state.wait}
+          stalled={state.stalled}
+          failed={state.failed}
+        />
+      ) : chip !== null ? (
+        <Badge variant="secondary">{chip}</Badge>
+      ) : null}
+    </>
+  );
+}
+
+/** A section's tab when the entity declares none: from its kind. */
+function defaultGroup(section: DeclaredSection) {
+  switch (section.kind) {
+    case "fields":
+      return "overview";
+    case "relation":
+      return "work";
+    case "timeline":
+      return "evidence";
+    case "slot":
+      return section.overview === false ? "evidence" : "overview";
+  }
 }
 
 function SlotFallback() {
@@ -199,15 +254,16 @@ function declaredSections<E extends GenericDetailEntity>(
   operations: GenericEntityDetailOperations,
   placement: {
     omitTitle: boolean;
-    /** Lead sections mount immediately: they are the first thing on the page. */
-    eager?: ReadonlySet<string>;
     relationCount?: (relation: string) => number | undefined;
   } = { omitTitle: false },
 ): DetailSection[] {
   const { detail, singular } = presentationOf(queryClient, entity);
   const slots = detailSlotsFor(entity);
   const unsummarized = (keys: readonly string[]) =>
-    detailSectionFields(queryClient, entity, record, keys, placement);
+    detailSectionFields(queryClient, entity, record, keys, {
+      omitTitle: placement.omitTitle,
+      placed: true,
+    });
   const sections = detail.sections.filter((section) =>
     onDetailSurface(section, "web"),
   );
@@ -216,14 +272,9 @@ function declaredSections<E extends GenericDetailEntity>(
       id: section.id,
       placement: section.placement,
       icon: sectionIcon(section.kind),
-      overview: section.overview,
-      workspace:
-        section.workspace ??
-        (section.kind === "timeline"
-          ? "evidence"
-          : section.kind === "relation"
-            ? "work"
-            : undefined),
+      group:
+        section.group ??
+        (detail.groups === null ? defaultGroup(section) : undefined),
     };
     switch (section.kind) {
       case "fields": {
@@ -352,11 +403,9 @@ function declaredSections<E extends GenericDetailEntity>(
   let streamedRelation = false;
   return ordered.map((section) => {
     const declared = sections.find((candidate) => candidate.id === section.id);
-    if (declared?.kind === "fields" || placement.eager?.has(section.id))
-      return section;
-    // Work slots own review actions and deep links into their record content.
-    // Their targets must mount before the browser can scroll to them.
-    if (declared?.kind === "slot" && section.workspace === "work")
+    // Fields and slots mount with the page so a hidden tab's text stays
+    // findable and deep links into slot content have a destination.
+    if (declared?.kind === "fields" || declared?.kind === "slot")
       return section;
     if (declared?.kind === "relation" && !streamedRelation) {
       streamedRelation = true;
@@ -527,80 +576,7 @@ type GenericEntityDetailProps<E extends GenericDetailEntity> = {
 export function GenericEntityDetail<E extends GenericDetailEntity>(
   props: GenericEntityDetailProps<E>,
 ) {
-  return useNativeRunEvidence() ? (
-    <RunEvidenceDetail {...props} />
-  ) : (
-    <FullEntityDetail {...props} />
-  );
-}
-
-function RunEvidenceDetail<E extends GenericDetailEntity>({
-  entity,
-  record,
-  operations = {},
-}: GenericEntityDetailProps<E>) {
-  const queryClient = useQueryClient();
-  useEntityMetadata(entity);
-  const bag = detailRecordSchema.parse(record);
-  const { titleField } = presentationOf(queryClient, entity);
-  const title =
-    readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const factSections = new Set(
-    presentationOf(queryClient, entity)
-      .detail.sections.filter((section) => section.kind === "fields")
-      .map((section) => section.id),
-  );
-  const sections = declaredSections(
-    queryClient,
-    entity,
-    record,
-    bag,
-    operations,
-  )
-    .filter((section) => section.workspace === "evidence")
-    .sort(
-      (left, right) =>
-        Number(factSections.has(left.id)) - Number(factSections.has(right.id)),
-    );
-  return (
-    <DetailActionProvider>
-      <Page
-        variant="detail"
-        entity={entity}
-        title={`${title} · Evidence`}
-        wayfinding={false}
-        rawData={record}
-      >
-        <RecordQualityProvider
-          entity={entity}
-          id={bag.id}
-          visibleSections={sections.map((section) => section.id)}
-          visibleFields={presentationOf(queryClient, entity)
-            .detail.sections.filter(
-              (section) =>
-                section.workspace === "evidence" && section.kind === "fields",
-            )
-            .flatMap((section) =>
-              section.kind === "fields" ? section.fields : [],
-            )}
-        >
-          <DetailSections
-            onlyWorkspace="evidence"
-            sections={sections.map((section) => ({
-              ...section,
-              content: (
-                <>
-                  <QualitySectionChecks section={section.id} />
-                  {section.content}
-                </>
-              ),
-            }))}
-            rawData={record}
-          />
-        </RecordQualityProvider>
-      </Page>
-    </DetailActionProvider>
-  );
+  return <FullEntityDetail {...props} />;
 }
 
 /**
@@ -637,7 +613,15 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const heroStamp = heroStampOf(queryClient, entity, record);
+  const status = headerStatus(queryClient, entity, record);
+  const kind = recordKindOf(queryClient, entity, record);
+  const summary = aiSummaryOf(queryClient, entity, record);
+  // A hosted native workspace confines navigation to this record; list links
+  // in the trail would be dead there.
+  const hosted = useSearch({
+    from: "__root__",
+    select: (search) => search.nativeWorkspace !== undefined,
+  });
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -678,27 +662,31 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     declaredRelations,
     operations.graph,
   );
-  const leadIds = new Set<string>(detail.lead);
   const sections = declaredSections(
     queryClient,
     entity,
     record,
     bag,
     operations,
-    {
-      omitTitle: true,
-      eager: leadIds,
-      relationCount: relationCounts.count,
-    },
+    { omitTitle: true, relationCount: relationCounts.count },
   );
   // Change history plus declared dated relations, merged into one timeline.
   const timeline =
     entityMetadata(queryClient, entity).descriptor.auditable ||
     detail.activityRelations.length > 0;
+  if (timeline)
+    sections.push({
+      id: "history",
+      title: "Activity",
+      group: "activity",
+      icon: ClockIcon,
+      placement: "primary",
+      content: <DetailActivity entity={entity} id={bag.id} />,
+    });
   sections.push({
     id: "connected-records",
     title: "Connected records",
-    workspace: "relations",
+    group: "relations",
     icon: LinkIcon,
     placement: "primary",
     content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
@@ -712,7 +700,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "related-records",
       title: "Related records",
-      workspace: "relations",
+      group: "relations",
       icon: SparkleIcon,
       placement: "primary",
       content: (
@@ -732,6 +720,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     sections.push({
       id: "suggestions",
       title: "Suggestions",
+      group: "evidence",
       icon: SparkleIcon,
       placement: "primary",
       content: (
@@ -752,6 +741,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       id: "images",
       title: "Images",
       count: images.length,
+      group: "evidence",
       icon: ImageIcon,
       placement: "primary",
       content: (
@@ -774,6 +764,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       id: "images",
       title: "Images",
       count: images.length,
+      group: "evidence",
       icon: ImageIcon,
       placement: "primary",
       content: (
@@ -792,6 +783,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     id: "documents",
     title: "Documents",
     count: documents.length,
+    group: "evidence",
     icon: FileTextIcon,
     placement: "primary",
     content:
@@ -799,33 +791,37 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         <DocumentViewerList documents={documents} />
       ) : null,
   });
+  // The record's quality summary and the results no section places live in
+  // a tab; its open issues join Needs you.
+  if (isScoredEntity(entity))
+    sections.push({
+      id: "record-quality",
+      title: "Record quality",
+      group: "evidence",
+      icon: CheckCircleIcon,
+      placement: "primary",
+      content: <RecordQualitySection entity={entity} id={bag.id} />,
+    });
   const relationOf = new Map(
     detail.sections.flatMap((section) =>
       section.kind === "relation" ? [[section.id, section.relation]] : [],
     ),
   );
-  // Match declaredSections: lead tables and the first remaining relation stream
-  // immediately, so a Work fragment has a mounted destination before counts load.
-  const firstRelation = sections.find(
-    (section) => relationOf.has(section.id) && !leadIds.has(section.id),
-  );
-  const partnerOf = new Map<string, string>(detail.pairs);
+  // Match declaredSections: the first relation streams immediately, so a
+  // fragment naming it has a mounted destination before counts load.
+  const firstRelation = sections.find((section) => relationOf.has(section.id));
   const placed = sections.map((section): DetailSection => {
     const relation = relationOf.get(section.id);
     const count = relation && relationCounts.count(relation);
-    const lead = leadIds.has(section.id);
     return {
       ...section,
-      pairWith: partnerOf.get(section.id),
-      foldWhenEmpty: !lead,
+      foldWhenEmpty: true,
       knownCount: typeof count === "number" ? count : undefined,
       knownEmpty: count === 0,
       countPending:
-        !lead &&
         relation !== undefined &&
         section !== firstRelation &&
         relationCounts.pending,
-      ...(lead ? { headingAs: "h2" as const, overflowVisible: true } : {}),
     };
   });
   const renderedFields = detail.sections.flatMap((section) => {
@@ -836,7 +832,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         entity,
         record,
         section.kind === "fields" ? section.fields : section.contextFields,
-        { omitTitle: true },
+        { omitTitle: true, placed: true },
       );
     return [];
   });
@@ -858,10 +854,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       </>
     ),
   });
-  // Declared lead order, not section order, reads first.
-  const leadSections = detail.lead.flatMap((id) =>
-    placed.filter((section) => section.id === id).map(withQualityChecks),
-  );
   // `edit` is the page's own affordance (the hero button); every other
   // declared verb is offered from the registry, on the plate.
   const declaredVerbs = heroActions.filter(
@@ -901,7 +893,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       <Page
         variant="detail"
         entity={entity}
-        wayfinding={detailWayfinding(entity, record)}
+        wayfinding={hosted ? false : detailWayfinding(entity, record)}
         title={
           <span className="flex min-w-0 items-center gap-2">
             {((!heroImages?.length && !heroDisplayImage) || emoji) && (
@@ -919,41 +911,33 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         heroImages={heroImages}
         heroDisplayImage={heroDisplayImage}
         heroNo={bag.id}
-        heroStamp={heroStamp}
-        summary={<DetailSummary entity={entity} record={record} />}
+        status={status}
+        summary={
+          <HeaderLines
+            lines={headerLinesOf(queryClient, entity, record)}
+            aiSummary={
+              summary && {
+                text: summary.text,
+                attribution: `AI-written summary · ${summary.model}, after the ${singular.toLocaleLowerCase()} ended`,
+              }
+            }
+          />
+        }
         heroActions={plateActions}
       >
         <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
           <RecordQualityProvider
             entity={entity}
             id={bag.id}
+            summary="placed"
             renderedSections={placed.map((section) => section.id)}
             visibleFields={renderedFields}
           >
             <DetailBody
-              sections={placed
-                .filter((section) => !leadIds.has(section.id))
-                .map(withQualityChecks)}
+              sections={placed.map(withQualityChecks)}
               rawData={record}
-              omitActivity={timeline}
-              leadIndex={[
-                ...leadSections.map((section) => ({
-                  id: section.id,
-                  title: section.title,
-                })),
-                ...(timeline ? [{ id: "history", title: "Activity" }] : []),
-              ]}
-              lead={
-                <>
-                  <SectionStack sections={leadSections} />
-                  <SectionPair>
-                    <RecordWorkQueue id={bag.id} variant="needs-you" />
-                    {timeline ? (
-                      <DetailActivity entity={entity} id={bag.id} />
-                    ) : null}
-                  </SectionPair>
-                </>
-              }
+              groups={detail.groups ?? undefined}
+              side={<DetailSide entity={entity} record={record} kind={kind} />}
             />
           </RecordQualityProvider>
         </FactsAddProvider>

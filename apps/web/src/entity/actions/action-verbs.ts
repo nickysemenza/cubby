@@ -1,3 +1,4 @@
+import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
 import { ArrowsClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowsClockwise";
 import { ArrowsLeftRightIcon } from "@phosphor-icons/react/dist/csr/ArrowsLeftRight";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
@@ -13,7 +14,9 @@ import { LinkSimpleBreakIcon } from "@phosphor-icons/react/dist/csr/LinkSimpleBr
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { NotePencilIcon } from "@phosphor-icons/react/dist/csr/NotePencil";
 import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
+import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
+import { PlayIcon } from "@phosphor-icons/react/dist/csr/Play";
 import { PlusMinusIcon } from "@phosphor-icons/react/dist/csr/PlusMinus";
 import { PrinterIcon } from "@phosphor-icons/react/dist/csr/Printer";
 import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
@@ -133,6 +136,10 @@ export const actionVerbs = {
   copyCodes: { label: "Copy codes", icon: ClipboardIcon },
   copyIdentifiers: { label: "Copy identifiers", icon: ClipboardIcon },
   duplicate: { label: "Duplicate", icon: CopyIcon },
+  pause: { label: "Pause", icon: PauseIcon },
+  resume: { label: "Resume", icon: PlayIcon },
+  retry: { label: "Retry", icon: ArrowCounterClockwiseIcon },
+  restart: { label: "Restart", icon: ArrowsClockwiseIcon },
 
   // — removal ————————————————————————————————————————————————————————
   delete: { label: "Delete", icon: TrashIcon, tone: "destructive" },

@@ -433,7 +433,7 @@ const fieldJSON = (
     key: field.key,
     columnId: field.display.columnId ?? null,
     readKey: field.readKey,
-    valueOptions: field.display.valueOptions ?? null,
+    valueOptions: options(field.display.valueOptions ?? null),
     label: field.label,
     columnLabel: field.display.columnLabel ?? null,
     kind: field.kind,
@@ -757,6 +757,7 @@ const presentationJSON = (
     })),
     shelfSubtitle: [...(list.shelf?.subtitle ?? [])],
     titleSubtitle: list.titleSubtitle,
+    listLayoutRevision: list.layoutRevision ?? undefined,
     listActions: [...list.actions],
     listQuickActions: list.quickActions.length
       ? [...list.quickActions]

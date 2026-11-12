@@ -48,10 +48,10 @@ import {
 } from "~/ui/data-table/table-features";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
 import { Badge } from "~/ui/reui/badge";
 
 import {
@@ -819,13 +819,14 @@ export function EnrichmentWorkbench({
     </Button>
   ) : markNoUsda.progress ? (
     <Row align="center" gap="sm" className="min-w-48">
-      <span className="text-xs text-muted-foreground">
-        Marking {markNoUsda.progress.done}/{markNoUsda.progress.total}
-      </span>
-      <Progress
-        className="w-24"
-        value={markNoUsda.progress.done}
-        max={markNoUsda.progress.total}
+      <ProgressMeter
+        variant="row"
+        value={countedProgress({
+          done: markNoUsda.progress.done,
+          total: markNoUsda.progress.total,
+          unit: "ingredients",
+        })}
+        label={`Marking ${markNoUsda.progress.done}/${markNoUsda.progress.total}`}
       />
     </Row>
   ) : null;

@@ -6,7 +6,10 @@ import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
 } from "./fixtures/photos";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 test("taxonomy edits keep product classification paths and labels separate from covers", async ({
@@ -81,11 +84,10 @@ test("taxonomy edits keep product classification paths and labels separate from 
       exact: true,
     }),
   ).toBeVisible();
-  // Section navigation follows the target while streamed loading elements are replaced.
-  await page
-    .getByRole("navigation", { name: "Section index" })
-    .getByRole("link", { name: "Images", exact: true })
-    .click();
+  // The Evidence tab holds Images; its panel stays mounted while streamed
+  // loading elements are replaced.
+  await page.getByRole("tab", { name: /^Evidence/u }).click();
+  await expect(page).toHaveURL(/#evidence$/u);
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
@@ -118,8 +120,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
       ),
     )
     .toBe(true);
-  const labels = page.locator("#labels");
-  await labels.scrollIntoViewIfNeeded();
+  const labels = await showDetailSection(page, "labels");
   await expect(
     labels.getByRole("img", { name: `${labelImageName}.png` }),
   ).toBeVisible();

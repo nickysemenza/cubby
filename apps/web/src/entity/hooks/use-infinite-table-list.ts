@@ -64,6 +64,13 @@ export interface InfiniteScrollControls<
   loadAllPages: (cap?: number) => Promise<TData[]>;
 }
 
+/** Extra declared filters and a page size for one scoped read (a batch command). */
+export type ScopedPlanNarrowing = {
+  /** Declared filter ids and their values (`phase: ["active"]`). */
+  filters?: Readonly<Record<string, readonly string[]>>;
+  pageSize?: number;
+};
+
 interface UseInfiniteTableListReturn<
   TData extends IdentifiedListRow,
   TPage extends ListQueryResponse<TData>,
@@ -93,6 +100,7 @@ interface UseInfiniteTableListReturn<
   scopedPlan: (
     nesting: ListNesting,
     pageIndex: number,
+    narrow?: ScopedPlanNarrowing,
   ) => ReturnType<ListQueryOptionsFn<unknown, TData, TPage>>;
   timing: QueryTiming;
   infiniteScroll: InfiniteScrollControls<TData>;
@@ -156,12 +164,24 @@ function useInfiniteTableListPlan<
     ],
   );
   const scopedPlan = useCallback(
-    (scope: ListNesting, pageIndex: number) =>
-      queryOptions({
-        ...pageInputFor(pageIndex),
+    (scope: ListNesting, pageIndex: number, narrow?: ScopedPlanNarrowing) => {
+      const input = pageInputFor(pageIndex);
+      return queryOptions({
+        ...input,
+        ...(narrow?.filters
+          ? {
+              // SAFETY: entity list filters are a record keyed by declared
+              // filter id; a narrowing adds declared ids to that record.
+              filters: { ...input.filters, ...narrow.filters } as TFilters,
+            }
+          : {}),
+        ...(narrow?.pageSize
+          ? { pagination: { pageIndex, pageSize: narrow.pageSize } }
+          : {}),
         nesting: scope,
         includeCount: true,
-      }),
+      });
+    },
     [pageInputFor, queryOptions],
   );
 

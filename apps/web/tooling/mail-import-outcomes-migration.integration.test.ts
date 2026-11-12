@@ -146,3 +146,46 @@ it("completes only Mail imports whose every admitted Email has an outcome", asyn
     expect(emails).toEqual([{ status: "unsettled" }]);
   });
 });
+
+// Failure modes: a photo Run started before causes were recorded stays
+// uncaused, or a Run's AI summary cannot be stored.
+it("records member-started photo Runs and accepts Run AI analyses", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261111192147_statement_sweep_indexes",
+    });
+    const party = "00000000-0000-4000-8000-000000000001";
+    const photoRun = "00000000-0000-4000-8000-000000000041";
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'ledgerParty','LPY-SYNTH1'), ($2,'run','RUN-SYNTH41')`,
+      [party, photoRun],
+    );
+    await client.query(`INSERT INTO "user" (id,name,email)
+      VALUES ('synthetic-member','Synthetic member','synthetic-member@example.test')`);
+    await client.query(
+      `INSERT INTO "LedgerParty" (id,shortcode,name,kind) VALUES ($1,'LPY-SYNTH1','Synthetic member','member')`,
+      [party],
+    );
+    await client.query(
+      `INSERT INTO "Run" (id,shortcode,"ledgerPartyId","actorLedgerPartyShortcode","actorName",trigger,"actorUserId","actorEmail",purpose,status)
+       VALUES ($1,'RUN-SYNTH41',$2,'LPY-SYNTH1','Synthetic member','manual','synthetic-member','synthetic-member@example.test','photo_inventory','running')`,
+      [photoRun, party],
+    );
+
+    await migrateDatabase(db, {
+      through: "20261111235138_run_redesign_indexes",
+    });
+
+    const { rows } = await client.query<{ cause: string | null }>(
+      `SELECT cause FROM "Run" WHERE id = $1`,
+      [photoRun],
+    );
+    expect(rows).toEqual([{ cause: "member_request" }]);
+    await client.query(
+      `INSERT INTO "AiAnalysis" ("entityKind","entityId",feature,model,"promptVersion","inputFingerprint",result)
+       VALUES ('run',$1,'run-summary','synthetic-model','v1','synthetic','{}'::jsonb)`,
+      [photoRun],
+    );
+  });
+});

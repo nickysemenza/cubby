@@ -48,6 +48,8 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   groupConfig?: GroupConfig;
   /** A server tree's nested/flat switch (`list.tree.toggle`). */
   nestToggle?: NestToggle;
+  /** A server tree's batch-row commands. */
+  batchCommands?: RTableProps<TItem>["batchCommands"];
 }
 
 /** Server-backed lists always provide the complete asynchronous controls. */
@@ -87,6 +89,7 @@ type CallerOwnedProps<TItem extends RowData> = Pick<
   | "showCellSelectionStats"
   | "showColumnMenu"
   | "verticalAlign"
+  | "rowLines"
   | "toolbarMode"
   | "withoutImages"
 >;
@@ -201,6 +204,7 @@ export function ListWorkbench<TItem extends RowData>({
         refreshControls={model.refreshControls}
         groupConfig={model.groupConfig}
         nestToggle={model.nestToggle}
+        batchCommands={model.batchCommands}
         embedded={embedded}
         toolbarMode={embedded ? "internal" : "auto"}
         additionalToolbarContent={contextualStatus}

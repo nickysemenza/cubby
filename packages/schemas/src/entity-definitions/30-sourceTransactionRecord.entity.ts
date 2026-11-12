@@ -90,7 +90,6 @@ export const { definition, readSchemas } = defineEntityModel({
           viewKey: "relation:firstImport",
         },
       ],
-      lead: ["reconciliation"],
       sections: [
         {
           kind: "fields",

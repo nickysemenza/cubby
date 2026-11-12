@@ -18,10 +18,10 @@ import { formatCount } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 
 /** Poll while a pass runs; an idle card has nothing to watch. */
@@ -196,18 +196,15 @@ function ActivePass({ run }: { run: MaintenanceRunSummary }) {
         <RunLink runId={run.runId} />
       </Row>
       {step && step.left !== null && step.found > 0 && (
-        <>
-          <span className="font-mono text-xs text-muted-foreground tabular-nums">
-            {formatCount(step.done + step.failed + step.skipped)} of{" "}
-            {formatCount(step.found)} · {formatCount(step.left)} left
-            {step.failed > 0 && ` · ${formatCount(step.failed)} failed`}
-          </span>
-          <Progress
-            value={step.done + step.failed + step.skipped}
-            max={step.found}
-            aria-label={`${step.label} progress`}
-          />
-        </>
+        <ProgressMeter
+          value={countedProgress({
+            done: step.done + step.skipped,
+            failed: step.failed,
+            total: step.found,
+            unit: "items",
+          })}
+          label={`${formatCount(step.done + step.failed + step.skipped)} of ${formatCount(step.found)} · ${formatCount(step.left)} left${step.failed > 0 ? ` · ${formatCount(step.failed)} failed` : ""}`}
+        />
       )}
       {run.status === "paused_auth" && step?.pausedReason && (
         <span className="text-xs text-warning">

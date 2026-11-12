@@ -820,7 +820,7 @@ export function renderDetailFieldValue<TRecord extends object>(
           items={reference.items}
           limit={field.display.referencePreviewLimit}
           renderItem={(item) => (
-            <span className="flex items-center gap-2">
+            <span className="flex max-w-full min-w-0 items-center gap-2">
               {referenceLink(reference.entity, item)}
               {item.amount !== undefined && (
                 <span className="tabular-nums">
@@ -1997,6 +1997,19 @@ function cellDataForField<TRecord extends object>(
   }
 }
 
+/**
+ * The fields a two-line list row draws under its title: the declared shelf
+ * subtitle (its mobile `subtitle` slot), when the entity opts in with
+ * `titleSubtitle`.
+ */
+export function identitySecondLineFields(
+  queryClient: QueryClient,
+  entity: Entity,
+): readonly string[] {
+  const list = entityMetadata(queryClient, entity).summary.list;
+  return list.titleSubtitle ? (list.shelf?.subtitle ?? []) : [];
+}
+
 /** Specialized columns retain their cell behavior and table metadata. Declared
  * membership, field accessors, and plain headers belong to the entity model. */
 export function createEntityDisplayColumns<TRecord extends object>(
@@ -2045,10 +2058,22 @@ export function createEntityDisplayColumns<TRecord extends object>(
     onSaveFields && data.applyPaste
       ? { ...data, rowWrite: { field, save: onSaveFields } }
       : data;
-  const titleField = entityMetadata(queryClient, entity).summary.titleField;
+  const { summary } = entityMetadata(queryClient, entity);
+  const titleField = summary.titleField;
   const updateFields: readonly string[] = entityMetadata(queryClient, entity)
     .fields.update;
+  // An undeclared priority is derived: the declared state and progress
+  // fields stay on a narrow pane, every other column drops from the end.
+  const roleFields = new Set<string>(
+    [summary.state?.field, summary.progress?.field].filter(
+      (key): key is NonNullable<typeof key> => key !== undefined,
+    ),
+  );
   const listFields = orderedListFields(queryClient, entity);
+  // Two-line rows draw these under the title, so their columns step aside.
+  const secondLineFields = new Set(
+    identitySecondLineFields(queryClient, entity),
+  );
   const selected =
     only === undefined
       ? listFields
@@ -2076,6 +2101,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
         );
         if (field.display.columnGroup)
           meta.columnGroup = field.display.columnGroup;
+        meta.priority =
+          field.display.priority ??
+          (roleFields.has(field.key) ? "essential" : "default");
+        if (secondLineFields.has(field.key)) meta.secondLine = true;
         meta.valueKind = isMoneyField(field)
           ? "money"
           : field.reference?.entity === "ledgerParty"

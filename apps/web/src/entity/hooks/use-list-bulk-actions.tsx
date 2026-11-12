@@ -138,13 +138,13 @@ export function useListBulkActions<TData extends { id: string }>({
   );
   const state = useBulkActions({ config: config ?? emptyConfig });
 
-  const rowMenuItems = registered.rowMenuItems;
-  const latestRowMenuItems = useRef(rowMenuItems);
-  latestRowMenuItems.current = rowMenuItems;
+  const latestRowActions = useRef(registered);
+  latestRowActions.current = registered;
   const rowActions = useMemo<EntityActionsEntry>(
     () => ({
       entity,
-      rowMenuItems: (row) => latestRowMenuItems.current(row),
+      rowMenuItems: (row) => latestRowActions.current.rowMenuItems(row),
+      rowQuickAction: (row) => latestRowActions.current.rowQuickAction(row),
     }),
     [entity],
   );
@@ -169,6 +169,8 @@ export function useListBulkActions<TData extends { id: string }>({
      * resolve its own — `RTable` only falls back when nobody does.
      */
     rowActions,
+    /** The same instance's selection commands, which a batch row sends per member. */
+    selectionCommands: registered.selectionActionItems,
     actionDialogs: registered.dialogs,
   };
 }

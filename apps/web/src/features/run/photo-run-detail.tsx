@@ -16,10 +16,10 @@ import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { photoImport } from "~/integrations/tanstack-query/generated/domains/photoImport.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 import { AiCost } from "~/ui/values/ai-cost";
@@ -119,37 +119,29 @@ function PhotoRunProgress({
     <Section headingAs="h2" title="Progress">
       <div className="grid gap-3">
         <p className="text-sm font-medium">{stage}</p>
-        <Progress
-          value={
+        <ProgressMeter
+          value={countedProgress({
+            done:
+              (uploading
+                ? review?.lifecycle?.finalizedImageCount
+                : describing || handoffReady
+                  ? described
+                  : settled) ?? 0,
+            total: grouping ? null : total,
+            unit: "photos",
+          })}
+          label={
             uploading
-              ? review?.lifecycle?.finalizedImageCount
-              : describing || handoffReady
-                ? described
-                : settled
-          }
-          max={Math.max(total, 1)}
-          indeterminate={grouping}
-          aria-label={
-            uploading
-              ? "Uploads received"
-              : describing || handoffReady
-                ? "Cloud descriptions"
-                : grouping
-                  ? "Grouping photos"
-                  : "Photos reviewed"
+              ? `${review?.lifecycle?.finalizedImageCount ?? 0} of ${total} photos received`
+              : grouping
+                ? "Grouping the uploaded photos…"
+                : handoffReady
+                  ? `${photos.length} photos ready for your Claude/Codex session`
+                  : describing
+                    ? `${described} of ${photos.length} descriptions ready`
+                    : `${settled} of ${photos.length} photos settled`
           }
         />
-        <p className="font-mono text-xs text-muted-foreground tabular-nums">
-          {uploading
-            ? `${review?.lifecycle?.finalizedImageCount ?? 0} of ${total} photos received`
-            : grouping
-              ? "Grouping the uploaded photos…"
-              : handoffReady
-                ? `${photos.length} photos ready for your Claude/Codex session`
-                : describing
-                  ? `${described} of ${photos.length} descriptions ready`
-                  : `${settled} of ${photos.length} photos settled`}
-        </p>
         <Disclosure summary="Processing details">
           <PhotoRunCost run={run} />
           {imageWork.length ? (

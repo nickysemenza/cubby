@@ -118,7 +118,6 @@ export const { definition, readSchemas } = defineEntityModel(
         },
         // A deliberate member edit of the count, not a recount: verifiedAt is untouched.
         quickActions: ["moveTo", "adjustAmount"],
-        lead: ["overview"],
         sections: [
           {
             kind: "fields",

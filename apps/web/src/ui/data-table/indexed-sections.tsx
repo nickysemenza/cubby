@@ -69,12 +69,8 @@ export interface IndexedSection {
   foldWhenEmpty?: boolean;
   /** A batched read already proved no rows, so the body need not mount. */
   knownEmpty?: boolean;
-  /** Set this section beside a later one in the same list where width allows. */
-  pairWith?: string;
   /** Still waiting on the batched read: neither mounted nor reported empty. */
   countPending?: boolean;
-  /** A section leading a page has no group heading above it. */
-  headingAs?: "h2";
   /** The declared section has no title of its own: it renders no heading. */
   bare?: boolean;
 }
@@ -106,7 +102,7 @@ export function SectionPair({ children }: { children: ReactNode }) {
   );
 }
 
-const sectionIsFolded = (
+export const sectionIsFolded = (
   section: IndexedSection,
   state: SectionIndexState | undefined,
 ) =>
@@ -149,7 +145,7 @@ function SectionCard({
   const heading: ComponentProps<typeof Section> = section.bare
     ? {}
     : {
-        headingAs: section.headingAs ?? (continuous ? "h3" : "h2"),
+        headingAs: continuous ? "h3" : "h2",
         title: section.title,
       };
   // A proven-empty relation mounts nothing: no skeleton and no later collapse.
@@ -200,7 +196,7 @@ function SectionCard({
   );
 }
 
-/** Sections in order, each declared pair sharing a row. */
+/** Sections in order. */
 export function SectionStack({
   sections,
   unfolded,
@@ -208,35 +204,20 @@ export function SectionStack({
   sections: IndexedSection[];
   unfolded?: ReadonlySet<string>;
 }) {
-  const partners = new Set(sections.map((section) => section.pairWith));
-  const card = (section: IndexedSection) => (
+  return sections.map((section) => (
     <SectionCard
       key={section.id}
       section={section}
       unfolded={unfolded?.has(section.id)}
     />
-  );
-  return sections.flatMap((section) => {
-    if (partners.has(section.id)) return [];
-    const partner = sections.find(
-      (candidate) => candidate.id === section.pairWith,
-    );
-    return partner ? (
-      <SectionPair key={section.id}>
-        {card(section)}
-        {card(partner)}
-      </SectionPair>
-    ) : (
-      card(section)
-    );
-  });
+  ));
 }
 
 /**
  * Known-empty sections read as one quiet line at the end of their group. A
  * name unfolds its section, which keeps the section's own Add and Open all.
  */
-function FoldedSectionsLine({
+export function FoldedSectionsLine({
   sections,
   pending,
   onUnfold,
@@ -274,7 +255,7 @@ function FoldedSectionsLine({
 
 function hashForDetailTarget(id: string, groups: IndexedSectionGroup[]) {
   const alias = id.replace("detail-group-", "");
-  // A lead entry is a group whose id is its own anchor (e.g. facts `overview`).
+  // A group whose id is also a section's keeps its prefixed anchor.
   return groups.some(
     (group) =>
       (group.id === alias && group.id !== id) ||
@@ -572,23 +553,17 @@ function currentAtLine(targets: readonly HTMLElement[], line: number) {
 /**
  * One continuous, mounted page of grouped sections with a sticky contents
  * index on a wide surface (a "Jump to" menu below 800px), scroll-tracked
- * current entry, and URL fragments that keep Back/Forward. Record details and
- * the design showcase both render through it.
+ * current entry, and URL fragments that keep Back/Forward. Settings and the
+ * long analytical pages render through it; record details use
+ * `DetailWorkspace`.
  */
 export function IndexedSections({
   groups,
   footer,
-  lead,
-  leadIndex = [],
 }: {
   groups: IndexedSectionGroup[];
   /** Rendered after the last group, outside the index. */
   footer?: ReactNode;
-  /** Leads the center column, above the first group (Needs you, Activity). */
-  lead?: ReactNode;
-  /** Top-level index entries for blocks inside `lead`. Each target carries the
-   * id, `data-detail-group` and `tabIndex={-1}` so jumps focus it. */
-  leadIndex?: ReadonlyArray<{ id: string; title: string }>;
 }) {
   const hydrated = useHydrated();
   const workspaceRef = useRef<HTMLDivElement>(null);
@@ -632,10 +607,7 @@ export function IndexedSections({
       ? [{ ...group, sections }]
       : [];
   });
-  const indexGroups = [
-    ...leadIndex.map((entry) => ({ ...entry, sections: [] })),
-    ...populatedGroups,
-  ];
+  const indexGroups = populatedGroups;
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const jumpTargetRef = useRef<
     | {
@@ -866,7 +838,6 @@ export function IndexedSections({
               ref={bodyRef}
               className="min-w-0 flex-1 space-y-(--section-gap) text-sm"
             >
-              {lead}
               {groups.map((group) => (
                 <div
                   key={group.id}

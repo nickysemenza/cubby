@@ -1,11 +1,5 @@
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -51,15 +45,13 @@ for (const width of [560, 900, 1100, 1400]) {
       </div>,
       { wrapper: harness.wrapper },
     );
-    if (width >= 800)
-      await screen.findByRole("navigation", { name: "Section index" });
-    // A right rail squeezed record facts beside a second column; sections now
-    // share one full-width column in declaration order.
+    // Without a side column, sections share one full-width column in
+    // declaration order.
     expect(document.querySelector("aside")).toBeNull();
     const facts = document.getElementById("facts")!.getBoundingClientRect();
     const support = document.getElementById("support")!.getBoundingClientRect();
     const body = document
-      .querySelector("[data-detail-group]")!
+      .querySelector("[data-detail-panel]:not([hidden])")!
       .getBoundingClientRect();
     expect(support.top).toBeGreaterThan(facts.top);
     for (const rect of [facts, support]) {
@@ -73,9 +65,8 @@ for (const width of [560, 900, 1100, 1400]) {
   });
 }
 
-// Hidden workspace bodies and folded reports made a continuous record unreadable;
-// section navigation must keep every body and an in-progress draft available.
-it("keeps all record sections open while jumping between groups", async () => {
+// Tabs must never cost a draft or hide content from a link or find-in-page.
+it("keeps every panel mounted, drafts included, and follows section links", async () => {
   await page.viewport(1280, 900);
   render(
     <DetailSections
@@ -86,41 +77,41 @@ it("keeps all record sections open while jumping between groups", async () => {
           title: "Facts",
           icon: CircleIcon,
           placement: "primary",
-          content: <p>Record facts</p>,
-        },
-        {
-          id: "review",
-          title: "Review",
-          icon: CircleIcon,
-          placement: "full",
-          workspace: "work",
           content: <input aria-label="Review draft" />,
         },
         {
-          id: "evidence",
+          id: "source",
           title: "Source evidence",
           icon: CircleIcon,
           placement: "full",
-          workspace: "evidence",
+          group: "evidence",
           content: <p>Source evidence body</p>,
         },
       ]}
     />,
     { wrapper: harness.wrapper },
   );
-  expect(screen.getByRole("textbox", { name: "Review draft" })).toBeVisible();
-  expect(screen.getByText("Source evidence body")).toBeVisible();
   fireEvent.change(screen.getByRole("textbox", { name: "Review draft" }), {
     target: { value: "Unsaved review" },
   });
-  fireEvent.click(await screen.findByRole("link", { name: "Source evidence" }));
-  expect(document.activeElement).toBe(document.getElementById("evidence"));
+  const evidence = document.getElementById("detail-group-evidence")!;
+  expect(evidence.getAttribute("hidden")).toBe("until-found");
+  fireEvent.click(screen.getByRole("tab", { name: "Evidence" }));
+  expect(screen.getByText("Source evidence body")).toBeVisible();
+  await harness.router.navigate({ to: "/", hash: "facts" });
+  await waitFor(() =>
+    expect(document.activeElement).toBe(document.getElementById("facts")),
+  );
+  expect(screen.getByRole("tab", { name: "Overview" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
   expect(screen.getByRole("textbox", { name: "Review draft" })).toHaveValue(
     "Unsaved review",
   );
 });
 
-it("defers folded execution evidence and opens it through the section index", async () => {
+it("opens folded execution evidence through its fragment", async () => {
   await page.viewport(1280, 900);
   render(
     <DetailSections
@@ -131,7 +122,7 @@ it("defers folded execution evidence and opens it through the section index", as
           placement: "primary",
           title: "Execution log",
           icon: CircleIcon,
-          workspace: "evidence",
+          group: "evidence",
           collapsed: true,
           content: <p>Recorded execution evidence</p>,
         },
@@ -140,11 +131,7 @@ it("defers folded execution evidence and opens it through the section index", as
     { wrapper: harness.wrapper },
   );
   expect(screen.queryByText("Recorded execution evidence")).toBeNull();
-  fireEvent.click(
-    within(
-      await screen.findByRole("navigation", { name: "Section index" }),
-    ).getByRole("link", { name: /^Execution log$/ }),
-  );
+  await harness.router.navigate({ to: "/", hash: "execution-log" });
   await waitFor(() =>
     expect(screen.getByText("Recorded execution evidence")).toBeVisible(),
   );

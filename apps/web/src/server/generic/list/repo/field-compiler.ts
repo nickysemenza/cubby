@@ -247,6 +247,18 @@ export const sharedListPrepare = <P>(
   });
 };
 
+// Loads nothing: a composed value's inputs prepare under their own keys.
+const composedValuePrepare = sharedListPrepare(async () => null);
+
+/**
+ * A value composed in the kernel from other declared values of the same
+ * request: `render` reads the whole context, so the composing scaffold must
+ * also request the prepares of every value it composes.
+ */
+export const listComposedValue = (
+  render: (context: ListContext) => DerivedValue,
+): PreparedValue => ({ prepare: composedValuePrepare, render });
+
 /** One read operation, one database identity; never retained across writes. */
 export class ListPreparationScope {
   constructor(private readonly db: Database | DrizzleTransaction) {}

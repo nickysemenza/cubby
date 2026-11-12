@@ -13,6 +13,7 @@ import type { z } from "zod";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCount } from "~/lib/number-format";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "~/ui/primitives/alert-dialog";
-import { Progress } from "~/ui/primitives/progress";
 
 import { RecordLink } from "./suggestion-values";
 
@@ -200,16 +200,15 @@ export function useAcceptClean(
 function AcceptProgress({ state }: { state: Progressing }) {
   return (
     <div className="space-y-1" aria-live="polite">
-      <p className="text-xs text-muted-foreground tabular-nums">
-        {state.label}: Accepted{" "}
-        {formatCount(state.done - state.failures.length)} of{" "}
-        {formatCount(state.total)}
-        {state.failures.length
-          ? ` · ${formatCount(state.failures.length)} failed`
-          : ""}
-        {state.running ? "…" : ""}
-      </p>
-      <Progress value={state.done} max={Math.max(state.total, 1)} />
+      <ProgressMeter
+        value={countedProgress({
+          done: state.done - state.failures.length,
+          failed: state.failures.length,
+          total: state.total,
+          unit: "accepted",
+        })}
+        label={`${state.label}: Accepted ${formatCount(state.done - state.failures.length)} of ${formatCount(state.total)}${state.failures.length ? ` · ${formatCount(state.failures.length)} failed` : ""}${state.running ? "…" : ""}`}
+      />
       {state.failures.length ? (
         <ul className="space-y-0.5 text-xs" aria-label="Failed suggestions">
           {state.failures.map((failure, index) => (

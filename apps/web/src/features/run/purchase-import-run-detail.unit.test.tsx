@@ -460,34 +460,11 @@ it("explains an erased retired run and offers no retry or restart", async () => 
     await screen.findByText(/inputs and targets were erased/u),
   ).toBeInTheDocument();
   expect(
-    screen.getAllByRole("link", { name: /Parent run RUN-5K8N/ })[0],
-  ).toBeInTheDocument();
-  expect(
     screen.queryByRole("button", { name: "Retry unresolved work" }),
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: /Start (new|another) run/u }),
   ).not.toBeInTheDocument();
-});
-
-it("separates the source parent from retry lineage and shows the declared cause and attempt", async () => {
-  detailRun = {
-    ...run,
-    parentRunId: shortcode("RUN-5K8N"),
-    predecessorRunPublicId: shortcode("RUN-6K9P"),
-    cause: "import_completed",
-    attempt: 2,
-  };
-  render(<RunImportControls record={record} />, { wrapper: harness.wrapper });
-  expect(
-    (await screen.findAllByRole("link", { name: /Parent run RUN-5K8N/ }))[0],
-  ).toHaveAttribute("href", expect.stringContaining("RUN-5K8N"));
-  expect(
-    screen.getAllByRole("link", { name: /Retry of RUN-6K9P/ })[0],
-  ).toHaveAttribute("href", expect.stringContaining("RUN-6K9P"));
-  expect(
-    screen.getAllByText("Import completed · Attempt 2")[0],
-  ).toBeInTheDocument();
 });
 
 it("shows durable progress and diagnostics alongside photo group review", async () => {

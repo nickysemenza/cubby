@@ -28,7 +28,7 @@ import {
   pinnedColumnWidthVariables,
   resolvedTableColumnWidths,
 } from "./column-layout";
-import { ROW_DENSITY } from "./density";
+import { rowLineClasses } from "./density";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
@@ -169,7 +169,7 @@ function FitFixture({
               <TableCell
                 data-column-id="quality"
                 data-testid="quality"
-                className={ROW_DENSITY.cellClass}
+                className={rowLineClasses("single").cellClass}
                 style={cellStyle("quality")}
               >
                 <CellFrame
@@ -189,7 +189,7 @@ function FitFixture({
               <TableCell
                 data-column-id="location"
                 data-testid="location"
-                className={ROW_DENSITY.cellClass}
+                className={rowLineClasses("single").cellClass}
                 style={cellStyle("location")}
               >
                 {editing ? (
@@ -319,9 +319,9 @@ function DateFitFixture() {
             <TableCell
               data-column-id="date"
               data-testid="date"
-              className={`${ROW_DENSITY.cellClass} overflow-hidden text-ellipsis`}
+              className={`${rowLineClasses("single").cellClass} overflow-hidden text-ellipsis`}
             >
-              <div className={ROW_DENSITY.cellContentClass}>
+              <div className={rowLineClasses("single").cellContentClass}>
                 <div className="min-w-0">
                   {flexRender(column.columnDef.cell, cell.getContext())}
                 </div>
@@ -562,7 +562,7 @@ describe("rendered column fit", () => {
       info.getBoundingClientRect().left - pill.getBoundingClientRect().right;
     expect(gap).toBeGreaterThanOrEqual(2);
     expect(gap).toBeLessThan(3);
-    expect(view.getByTestId("quality").getBoundingClientRect().height).toBe(24);
+    expect(view.getByTestId("quality").getBoundingClientRect().height).toBe(28);
     expect(view.getByTestId("manual-state").textContent).toBe("{}");
   });
 

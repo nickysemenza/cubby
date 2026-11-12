@@ -289,6 +289,57 @@ export const listViewId = (view: EntityListView): string =>
 // Metadata vocabularies, never stored in SQL. `no-raw-enum-literal-in-sql` reads
 // inline `z.enum([...])` lists as stored values, so these stay named tuples.
 const columnWidths = ["xs", "sm", "md", "lg", "xl"] as const;
+/**
+ * Whether a list column survives a narrow table: `essential` never drops,
+ * `optional` leaves the default visible set below the narrow breakpoint, and
+ * `default` columns leave from the trailing end while the rest overflow.
+ * Unset derives it: the title and the `presentation.state` and `progress`
+ * fields are essential, every other column is default.
+ */
+const COLUMN_PRIORITIES = ["essential", "default", "optional"] as const;
+export type ColumnPriority = (typeof COLUMN_PRIORITIES)[number];
+/**
+ * Where a state option leaves its record: waiting on a member (`needs`),
+ * under way (`active`) or over (`finished`). An option without `phase` is
+ * `finished` when `closed` and `active` otherwise; `needs` is always declared.
+ */
+const ENTITY_PHASES = ["needs", "active", "finished"] as const;
+export type EntityPhase = (typeof ENTITY_PHASES)[number];
+/**
+ * The phase grouping's values in list order. `older` is a finished record
+ * outside `presentation.state.recentDays`; the default view filters it out.
+ */
+export const LIST_PHASES = [...ENTITY_PHASES, "older"] as const;
+export type ListPhase = (typeof LIST_PHASES)[number];
+/** Each phase's group and filter label. */
+export const LIST_PHASE_LABELS = {
+  needs: "Needs you",
+  active: "Active",
+  finished: "Recently finished",
+  older: "Older",
+} as const satisfies Record<ListPhase, string>;
+/**
+ * The grouping and filter key `presentation.state` compiles: each row's
+ * `ListPhase`, from the state field's declared option phases and `stalled`.
+ */
+export const PHASE_GROUPING_KEY = "phase";
+export const optionPhase = (option: {
+  readonly phase?: EntityPhase;
+  readonly closed?: true;
+}): EntityPhase => option.phase ?? (option.closed ? "finished" : "active");
+/**
+ * The detail tabs an entity gets without `detail.groups`. Sections without a
+ * `group` map into these from their kind and position.
+ */
+export const DEFAULT_DETAIL_GROUPS = [
+  { id: "overview", title: "Overview" },
+  { id: "work", title: "Work" },
+  { id: "evidence", title: "Evidence" },
+  { id: "relations", title: "Relations" },
+  { id: "activity", title: "Activity" },
+] as const;
+/** At most this many `detail.lines` sit under a record's title. */
+const MAX_DETAIL_LINES = 3;
 const pivotShares = ["count", "row", "column", "total"] as const;
 const exceptionPolicies = ["inherit", "forbidden"] as const;
 const timelineModes = ["default", "custom"] as const;
@@ -347,6 +398,22 @@ const buildMetadataSchemas = () => {
 
   /** One glyph for web (Phosphor component name) and Apple (SF Symbol). */
   const enumOptionIconSchema = enumIconSchema;
+  /** Option facts shared by select controls and display rosters. */
+  const enumOptionStateFields = {
+    /** The state phase this option places its record in; see `ENTITY_PHASES`. */
+    phase: z.enum(ENTITY_PHASES).optional(),
+    /** What choosing a kind does, shown where the record explains its kind. */
+    explanation: z
+      .strictObject({
+        targets: nonEmptyString(),
+        exclusions: nonEmptyString(),
+        effects: nonEmptyString(),
+        dependencies: nonEmptyString(),
+        cost: nonEmptyString(),
+        recovery: nonEmptyString(),
+      })
+      .optional(),
+  };
 
   const entityFieldControlMetadataSchema = z
     .strictObject({
@@ -371,6 +438,7 @@ const buildMetadataSchemas = () => {
               /** A terminal value (a task's Done): the record's work is over, so a passed
                * deadline no longer reads as overdue. */
               closed: z.literal(true).optional(),
+              ...enumOptionStateFields,
             })
             .strict(),
         ),
@@ -510,6 +578,8 @@ const buildMetadataSchemas = () => {
        * Mac table to a width range. `xl` is for long prose such as notes.
        */
       width: orNull(z.enum(columnWidths)),
+      /** List column priority at narrow widths; see `COLUMN_PRIORITIES`. */
+      priority: orNull(z.enum(COLUMN_PRIORITIES)),
       /**
        * Where a field with no flat read key (`readKey: null`) is read
        * from on a list or detail row: a dotted path with `[n]` indexing and
@@ -636,6 +706,7 @@ const buildMetadataSchemas = () => {
               /** A terminal value (a task's Done): the record's work is over, so a passed
                * deadline no longer reads as overdue. */
               closed: z.literal(true).optional(),
+              ...enumOptionStateFields,
             })
             .strict(),
         ),
@@ -1459,18 +1530,16 @@ const buildMetadataSchemas = () => {
     .enum(["primary", "full"])
     .optional()
     .default("primary");
-  // Presentation choices are not persisted SQL enum vocabulary.
-  const sectionWorkspace = z.union([
-    z.literal("overview"),
-    z.literal("work"),
-    z.literal("evidence"),
-  ]);
+  /**
+   * The `detail.groups` tab (or `DEFAULT_DETAIL_GROUPS` tab when the entity
+   * declares none) this section sits in; omission follows its kind and position.
+   */
+  const sectionGroup = sectionId.optional();
   const sectionBase = {
     id: sectionId,
     title: nonEmptyString(),
     placement: sectionPlacement,
-    /** Focused detail workspace; omission follows the section's semantic kind. */
-    workspace: sectionWorkspace.optional(),
+    group: sectionGroup,
     surfaces: detailSurfacesSchema,
   };
   /**
@@ -1543,7 +1612,7 @@ const buildMetadataSchemas = () => {
       title: orNull(nonEmptyString()),
       /** Declared computed field whose explanation applies to this slot. */
       explanationField: orNull(fieldKey),
-      workspace: sectionWorkspace.optional(),
+      group: sectionGroup,
       placement: sectionPlacement,
       surfaces: detailSurfacesSchema,
     }),
@@ -1628,6 +1697,30 @@ const buildMetadataSchemas = () => {
      * enum option whose value the readable `field` holds.
      */
     recordGlyph: orNull(z.strictObject({ field: fieldKey, options: fieldKey })),
+    /**
+     * The record's state, drawn once as a badge in its list cell and detail
+     * header and compiled into the `PHASE_GROUPING_KEY` grouping. `field` is a
+     * status roster whose options declare `phase`; `reason` is muted text
+     * after the label; `wait` is a run-wait value (kind, queue position,
+     * estimate); a true `stalled` places the record in `needs`. `recentBy`
+     * and `recentDays` bound the finished phase to that many days.
+     */
+    state: orNull(
+      z.strictObject({
+        field: fieldKey,
+        reason: fieldKey.optional(),
+        wait: fieldKey.optional(),
+        stalled: fieldKey.optional(),
+        recentBy: fieldKey.optional(),
+        recentDays: z.number().int().positive().optional(),
+      }),
+    ),
+    /** A `ProgressValue` field drawn as the record's progress, with an optional note. */
+    progress: orNull(
+      z.strictObject({ field: fieldKey, note: fieldKey.optional() }),
+    ),
+    /** The roster field naming what kind of record this is: a title tag, and its option `explanation`. */
+    kind: orNull(z.strictObject({ field: fieldKey })),
     icons: z
       .object({
         /** A `@phosphor-icons/react` export name; the browser registry resolves it. */
@@ -1709,20 +1802,31 @@ const buildMetadataSchemas = () => {
          * supporting detail reachable through its existing section id. */
         overviewSections: orNull(z.array(sectionId)),
         /**
-         * Sections that answer the record's job, leading the web page ahead
-         * of Needs you and Activity. Native keeps `sections` order and never
-         * reads this.
+         * Labelled lines under the record's title, in order. Each `field` is a
+         * text, `labelField` or `displayItem` value; references stay links.
          */
-        lead: z.array(sectionId).optional().default([]),
-        /**
-         * Two sections the web page sets side by side where width allows,
-         * stacking below about 1000px. Relation tables stay full width, and
-         * declared `sections` order is unchanged.
-         */
-        pairs: z
-          .array(z.tuple([sectionId, sectionId]))
+        lines: z
+          .array(z.strictObject({ label: nonEmptyString(), field: fieldKey }))
+          .max(MAX_DETAIL_LINES)
           .optional()
           .default([]),
+        /** A stored AI-written summary of the record, drawn under the lines. */
+        aiSummary: orNull(fieldKey),
+        /**
+         * The detail tabs, in order; sections join one through `group`. Null
+         * gives the entity `DEFAULT_DETAIL_GROUPS`.
+         */
+        groups: orNull(
+          z
+            .array(z.strictObject({ id: sectionId, title: nonEmptyString() }))
+            .min(1),
+        ),
+        /**
+         * The detail side column. `needs` is a `displayItems` field listing
+         * what waits on a member; the column also carries the summary facts
+         * and the kind explanation.
+         */
+        side: orNull(z.strictObject({ needs: fieldKey.optional() })),
         /**
          * The detail page's authored reading order. Edit sections group a
          * form; these group a record for reading, so neither derives from
@@ -1769,8 +1873,10 @@ const buildMetadataSchemas = () => {
           summary,
           activityRelations,
           overviewSections,
-          lead,
-          pairs,
+          lines,
+          aiSummary,
+          groups,
+          side,
           relationFilterOverrides,
           variantOverride,
           hero,
@@ -1788,8 +1894,10 @@ const buildMetadataSchemas = () => {
           sections,
           activityRelations,
           overviewSections,
-          lead,
-          pairs,
+          lines,
+          aiSummary,
+          groups,
+          side,
           relationFilterOverrides,
           omitRelations,
         }),
@@ -1862,8 +1970,10 @@ const buildMetadataSchemas = () => {
         /** Replaces the subtitle inferred from mobile card placement. */
         shelfSubtitleOverride: z.array(fieldKey).optional(),
         /**
-         * Native presentation may show the first populated shelf subtitle.
-         * Web RTable identity columns always contain only the name.
+         * The entity has a second row line: its `mobile.slot: "subtitle"`
+         * fields. Native shows the first populated one; web single-line rows
+         * draw only the name and two-line rows (Display › Rows) draw the
+         * subtitle fields under it.
          */
         titleSubtitle: z.boolean().optional().default(false),
         /**
@@ -2020,9 +2130,36 @@ const buildMetadataSchemas = () => {
             .object({
               toggle: z.boolean().optional().default(false),
               defaultNested: z.boolean().optional().default(true),
+              /**
+               * Folds sibling rows into one batch row per `by` value when a
+               * request asks for `nesting.batches`. A row joins only while
+               * every `when` filter matches, it is not member-started, and
+               * its phase is not `needs`; a value needs two such rows.
+               */
+              batch: orNull(
+                z.strictObject({
+                  by: fieldKey,
+                  when: z
+                    .array(
+                      z.strictObject({
+                        id: fieldKey,
+                        value: z.union([
+                          z.string(),
+                          z.array(z.string()).min(1),
+                        ]),
+                      }),
+                    )
+                    .min(1),
+                }),
+              ),
             })
             .strict(),
         ),
+        /**
+         * Bumped when a list's default layout changes enough that saved
+         * native table layouts should start over; unset keeps them.
+         */
+        layoutRevision: orNull(z.number().int().positive()),
         /**
          * Workflow verbs from `action-verbs.ts`, ahead of the verbs derived
          * from eligible updates (`bulkEdit`) and capabilities (kernel `merge`, kernel `delete`).
@@ -2127,6 +2264,7 @@ const buildMetadataSchemas = () => {
           scope,
           scopes,
           tree,
+          layoutRevision,
           links,
           timeline,
         }) => ({
@@ -2146,6 +2284,7 @@ const buildMetadataSchemas = () => {
           scope,
           scopes,
           tree,
+          layoutRevision,
           actions: extraActions,
           quickActions,
           rail,
@@ -2533,6 +2672,8 @@ const buildMetadataSchemas = () => {
     inputs: z.array(derivedInputSchema).optional().default([]),
     /** Where the synthesized `dataQuality` list column sits; unordered = last. */
     listOrder: z.number().int().nonnegative().optional(),
+    /** Leaves the `dataQuality` column out of the default columns; Display still offers it. */
+    listHidden: flag(false),
   });
 
   const classificationFieldPolicyMetadataSchema = z.strictObject({

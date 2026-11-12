@@ -16,11 +16,11 @@ import { MiddleTruncate } from "~/ui/values/middle-truncate";
 
 import { HeaderLabel } from "../../entity/table/table-header-layout";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
-import { ROW_DENSITY } from "./density";
+import { rowLineClasses } from "./density";
 import { RowActiveProvider } from "./row-activity";
 import { useCellSpill } from "./use-cell-spill";
 
-// At 32px row height, overflow must keep values and nested controls reachable.
+// At the fixed row height, overflow must keep values and nested controls reachable.
 
 function Fixture({
   cells,
@@ -65,10 +65,10 @@ function Fixture({
                   key={cell.id}
                   data-column-id={`c${index}`}
                   data-testid={`cell-${index}`}
-                  className={`${ROW_DENSITY.cellClass}${cell.numeric ? " text-right" : ""}`}
+                  className={`${rowLineClasses("single").cellClass}${cell.numeric ? " text-right" : ""}`}
                   style={{ width: cell.width, maxWidth: cell.width }}
                 >
-                  <div className={ROW_DENSITY.cellContentClass}>
+                  <div className={rowLineClasses("single").cellContentClass}>
                     <div className="min-w-0">{cell.content}</div>
                   </div>
                 </TableCell>
@@ -114,9 +114,9 @@ describe("table density", () => {
     const spill = overlay();
     if (!spill) throw new Error("missing spill overlay");
     expect(rect(spill).width).toBeGreaterThan(rect(clipped).width);
-    expect(Math.round(rect(spill).height)).toBe(24);
+    expect(Math.round(rect(spill).height)).toBe(28);
     expect(Math.round(rect(spill).top)).toBe(Math.round(rect(clipped).top));
-    expect(Math.round(rect(clipped).height)).toBe(24);
+    expect(Math.round(rect(clipped).height)).toBe(28);
 
     // The overlay now covers its neighbour, so leave through the header.
     await userEvent.hover(view.getByTestId("head-1"));
@@ -452,7 +452,7 @@ describe("table density", () => {
     const shown = [...cell.querySelectorAll<HTMLElement>("[data-chip]")];
     const tops = new Set(shown.map((chip) => Math.round(rect(chip).top)));
     expect(tops.size).toBe(1);
-    expect(Math.round(rect(cell).height)).toBe(24);
+    expect(Math.round(rect(cell).height)).toBe(28);
   });
 
   it("keeps a code's first and last four characters when it truncates", async () => {
@@ -613,7 +613,7 @@ describe("table density", () => {
       expect(overflow?.textContent ?? null).toBe(
         count === 1 ? null : `+${count - 1}`,
       );
-      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(24);
+      expect(Math.round(rect(view.getByTestId("cell-0")).height)).toBe(28);
     },
   );
 });

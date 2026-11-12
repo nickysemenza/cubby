@@ -5,6 +5,7 @@ export const aiAnalysisEntityKind = z.enum([
   "location",
   "product",
   "recipe",
+  "run",
   "global",
 ]);
 export type AiAnalysisEntityKind = z.infer<typeof aiAnalysisEntityKind>;

@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ListGroupBy, ListNesting } from "@cubby/schemas/pagination";
 import { type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -37,3 +38,37 @@ export function nestSearchValue(
     return undefined;
   return nested ? "on" : "off";
 }
+
+/**
+ * Whether a tree folds automatic siblings into batch rows (`list.tree.batch`).
+ * A batch row needs a section: ungrouped, by phase (its most urgent member
+ * phase) or by the batch's own `by` field (its value). Under any other
+ * grouping its members list unbatched in their own sections.
+ */
+export function listTreeBatches(
+  queryClient: QueryClient,
+  entity: Entity,
+  groupBy: readonly ListGroupBy[],
+): boolean {
+  const batch = entityMetadata(queryClient, entity).summary.list.tree?.batch;
+  if (!batch) return false;
+  const [dimension, ...nested] = groupBy;
+  return (
+    dimension === undefined ||
+    (nested.length === 0 &&
+      (dimension.key === "phase" || dimension.key === batch.by))
+  );
+}
+
+/**
+ * A nested list's roots scope. SSR and the mounted list share it, so both
+ * read one query key.
+ */
+export const listRootsScope = (
+  queryClient: QueryClient,
+  entity: Entity,
+  groupBy: readonly ListGroupBy[],
+): ListNesting =>
+  listTreeBatches(queryClient, entity, groupBy)
+    ? { scope: "roots", batches: true }
+    : { scope: "roots" };

@@ -1,5 +1,8 @@
 import type { Page } from "@playwright/test";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+} from "./support/e2e-helpers";
 import { createEntityFixture } from "./fixtures/core";
 import {
   seedImagePrerequisite,
@@ -61,9 +64,7 @@ test("detected label nutrition stays editable and Save persists the panel eviden
   expect(saved?.inferenceEvidence).toBe(
     "Not a significant source of total fat.",
   );
-  await page
-    .getByRole("heading", { name: "Nutrition summary", exact: true })
-    .scrollIntoViewIfNeeded();
+  await showDetailSection(page, "nutrition");
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
   await expect(review).toHaveCount(0);
 });

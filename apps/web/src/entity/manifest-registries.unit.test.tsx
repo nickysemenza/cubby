@@ -14,6 +14,7 @@ import {
   detailFieldRenderersFor,
   detailRendererCoverage,
 } from "./display/detail-field-renderers";
+import { isSharedDetailRenderer } from "./display/detail-field-renderers/shared";
 import { listRendererCoverage } from "./display/list-field-renderers";
 
 const queryClient = await metadataQueryClient();
@@ -80,7 +81,7 @@ describe("manifest registries", () => {
           );
         }
         const detail = field.display.renderer?.detail;
-        if (detail) {
+        if (detail && !isSharedDetailRenderer(detail)) {
           inspect(
             `detail:${entity}.${field.key}:${detail}`,
             nested(detailRendererCoverage(), entity, detail),

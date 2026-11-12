@@ -1,4 +1,5 @@
 import type {
+  ListBatch,
   ListGroupMargin,
   ListGroupSummary,
   ListGroupMembership,
@@ -23,4 +24,5 @@ export interface ListReadPage<T = ListReadRow> {
   memberships?: ListGroupMembership[];
   membershipCount?: number;
   metrics?: Record<string, ListGroupMetric>;
+  batches?: ListBatch[];
 }

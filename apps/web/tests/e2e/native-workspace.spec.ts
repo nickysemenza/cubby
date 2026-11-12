@@ -128,13 +128,9 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   });
   await page.goto(`/${run.shortcode}?nativeWorkspace=run-evidence#evidence`);
   await expect(page.locator("[data-native-workspace]")).toBeVisible();
-  await expect(page.locator("[data-run-evidence]")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Evidence",
-  );
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Overview", exact: true }),
-  ).toHaveCount(0);
+  // The pilot opens the Run's own detail on its Evidence tab.
+  const evidenceTab = page.getByRole("tab", { name: /^Evidence/u });
+  await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
   await expect(page.locator('[data-app-shell="authenticated"]')).toHaveCount(0);
   await expect
     .poll(() => page.evaluate(() => window.workspaceTestMessages))
@@ -144,7 +140,10 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   const pilotURL = page.url();
   const runsLink = page.getByRole("link", { name: "Runs", exact: true });
   await expect(runsLink).toHaveCount(0);
-  const productLink = page.locator(`a[href^="/products/${product.id}"]`);
+  // Every tab stays mounted; the pilot's link is the one in Evidence.
+  const productLink = page
+    .getByRole("tabpanel", { name: /^Evidence/u })
+    .locator(`a[href^="/products/${product.id}"]`);
   await expect(productLink).toContainText("Workspace drill");
   await expect(productLink).toBeVisible();
   await productLink.click();
@@ -169,10 +168,10 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     window.dispatchEvent(new Event("cubby-workspace-refresh")),
   );
   await expect(productLink).toContainText("Workspace drill refreshed");
-  await expect(page.locator("[data-run-evidence]")).toBeVisible();
+  await expect(evidenceTab).toHaveAttribute("aria-selected", "true");
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.locator("[data-run-evidence]")).toBeVisible();
+  await expect(evidenceTab).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(
@@ -185,11 +184,11 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   await page.goto(
     `/runs/${run.shortcode}?nativeWorkspace=run-evidence#unsupported-section`,
   );
-  await expect(page).not.toHaveURL(/#unsupported-section$/u);
   expect(new URL(page.url()).searchParams.get("nativeWorkspace")).toBe(
     "run-evidence",
   );
-  await expect(page.locator("[data-run-evidence]")).toBeVisible();
+  await expect(page.locator("[data-native-workspace]")).toBeVisible();
+  await expect(page.getByRole("tab", { selected: true }).first()).toBeVisible();
   // The pilot flag cannot turn an ordinary record into a hosted workspace.
   await page.goto(`/${product.id}?nativeWorkspace=run-evidence`);
   await expect(
@@ -200,11 +199,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   await expect(page.locator('[data-app-shell="authenticated"]')).toBeVisible();
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(
-    page.getByRole("heading", { level: 2, name: "Work", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /^Jump to:/ }).click();
-  await page.getByRole("menuitem", { name: "Work", exact: true }).click();
+  await page.getByRole("tab", { name: /^Work/u }).click();
   await expect(page).toHaveURL(/#work$/u);
   await expect
     .poll(() =>

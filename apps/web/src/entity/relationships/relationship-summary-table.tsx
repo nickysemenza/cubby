@@ -20,7 +20,7 @@ import { VendorMark } from "~/entity/components/vendor-cell";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { formatCurrency } from "~/lib/number-format";
-import { ROW_DENSITY } from "~/ui/data-table/density";
+import { rowDensity } from "~/ui/data-table/density";
 import { Stack } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
@@ -379,7 +379,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
       add(
         helper.display({
           id: "image",
-          size: ROW_DENSITY.rowHeight + 1,
+          size: rowDensity().row + 1,
           header: () => <ImageIcon className="size-3 text-muted-foreground" />,
           meta: {
             entityColumnRole: "image",

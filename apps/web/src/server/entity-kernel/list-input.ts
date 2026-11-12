@@ -120,5 +120,13 @@ export const parseNesting = (
       `${binding.entity} declares no list.tree; its list nesting is flat only`,
     );
   if (nesting.scope === "children") binding.schemas.id.parse(nesting.parentId);
+  if (nesting.scope === "batch") {
+    if (!tree.batch)
+      throw createAppError(
+        "LIST_NESTING_UNSUPPORTED",
+        `${binding.entity} declares no list.tree.batch; it has no batches to page`,
+      );
+    if (nesting.parentId !== null) binding.schemas.id.parse(nesting.parentId);
+  }
   return nesting;
 };

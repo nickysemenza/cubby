@@ -36,7 +36,7 @@ import {
   type CellEditEventDetail,
   NON_SELECTABLE_COLUMN_IDS,
 } from "./cell-selection-context";
-import { ROW_DENSITY } from "./density";
+import { rowDensity } from "./density";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
 
 interface UseCellSelectionArgs<TItem extends RowData> {
@@ -192,7 +192,7 @@ function handleArrowKey<TItem extends RowData>(
     if (event.key === "PageUp" || event.key === "PageDown") {
       const page = Math.max(
         1,
-        Math.floor(event.currentTarget.clientHeight / ROW_DENSITY.rowHeight),
+        Math.floor(event.currentTarget.clientHeight / rowDensity().row),
       );
       row = Math.max(
         0,

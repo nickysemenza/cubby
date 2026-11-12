@@ -105,6 +105,7 @@
     "./base-entity": "./src/base-entity.ts",
     "./date-range": "./src/date-range.ts",
     "./pagination": "./src/pagination.ts",
+    "./progress": "./src/progress.ts",
     "./context": "./src/context.ts",
     "./context-breakdown": "./src/context-breakdown.ts",
     "./coordinator-models": "./src/coordinator-models.ts",

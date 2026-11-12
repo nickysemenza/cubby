@@ -6,8 +6,8 @@ import { type ReactNode, useState } from "react";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
+import { ProgressMeter, countedProgress } from "~/ui/feedback/progress-meter";
 import { Disclosure } from "~/ui/layout";
-import { Progress } from "~/ui/primitives/progress";
 import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 import {
   RecordDot,
@@ -201,11 +201,14 @@ function InputBlock({ step }: { step: RunStepView }) {
           ) : null}
         </span>
       </div>
-      <Progress
-        value={completed}
-        max={step.total}
+      <ProgressMeter
+        value={countedProgress({
+          done: completed,
+          total: step.total,
+          unit: step.unit,
+        })}
+        label={null}
         paused={step.phase !== "running"}
-        aria-label={`${step.label} progress`}
       />
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         <LockSimpleIcon aria-hidden className="mt-0.5 size-3 shrink-0" />
