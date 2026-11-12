@@ -206,43 +206,6 @@ export const { definition, readSchemas } = defineEntityModel(
             },
           },
           {
-            id: "stale-recounts",
-            label: "Overdue a recount",
-            description: "Holding stock, not counted in 60 days (or ever)",
-            // Inventory never auto-decrements, so nothing but a deliberate recount
-            // restores a count's truth — an uncounted bin just drifts. Deliberately
-            // looser than the 30-day tint the location page shows: that nudges, this
-            // raises a row.
-            filters: [
-              { id: "inventoryEntries", value: "has" },
-              { id: "lastBulkInventory", value: "60" },
-            ],
-            // Oldest recount first. Never-recounted bins do NOT lead: `buildOrderBy`
-            // emits NULLS LAST in both directions, which is the house convention
-            // (revisited and kept 2026-07 — empties are found with presence filters,
-            // not by sort direction). The detector this replaced ordered `nulls
-            // first`; that behaviour is gone deliberately rather than by accident,
-            // and a one-column exception is exactly what the convention exists to
-            // prevent. They are still fully IN the section — the `IS NULL` half of
-            // the predicate is load-bearing — and the count includes them; they just
-            // don't fill the card's sample.
-            sort: [{ id: "lastBulkInventory", desc: false }],
-            problem: {
-              key: "staleLocations",
-              title: "Locations overdue a recount",
-              description:
-                "Holding stock whose count hasn't been checked against the shelf in 60 days — or ever.",
-              emptyMessage:
-                "Every stocked location has been recounted recently.",
-            },
-            layout: {
-              columnVisibility: {
-                lastBulkInventory: true,
-                inventoryEntries: true,
-              },
-            },
-          },
-          {
             id: "empty-leaves",
             label: "Empty",
             description: "Leaf locations holding nothing",

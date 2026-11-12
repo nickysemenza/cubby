@@ -6,6 +6,7 @@ import {
   PRODUCT_DECISION_REASON_MAX,
 } from "@cubby/shared/client-constants";
 import { tradeSchema } from "./task-fields";
+import type { MemberDecision } from "./work-queue";
 import { z } from "zod";
 import { agentImportRunPurpose } from "./import-run-agent";
 import { plainDate } from "./base-entity";
@@ -486,6 +487,62 @@ const runFindingKind = z.enum([
   "unresolved_targets",
   "other",
 ]);
+
+/**
+ * How the Work queue names and routes an open finding (ADR 0028 §1). Writers
+ * file a few distinct cases as `other`; the routing kind tells them apart by
+ * the record or proposed fix, so a stored kind never changes.
+ */
+export const RUN_FINDING_ROUTING = {
+  wrong_product: { label: "Product link may be wrong", decision: null },
+  duplicate_product: { label: "Possible duplicate Product", decision: "merge" },
+  sum_mismatch: {
+    label: "Order total doesn't match its lines",
+    decision: "money",
+  },
+  duplicate_lines: { label: "Duplicate order lines", decision: "delete" },
+  foreign_currency: { label: "Order in another currency", decision: "money" },
+  reversal_kind: { label: "Return or refund kind unclear", decision: "money" },
+  missing_line: { label: "Order line missing", decision: null },
+  kit_double_booked: { label: "Kit booked twice", decision: "money" },
+  variant_doubt: { label: "Product variant unclear", decision: null },
+  product_unresolved: { label: "Order line needs its Product", decision: null },
+  arrived: { label: "Delivered; ready to receive", decision: "stock" },
+  refund_unbooked: { label: "Refund not booked", decision: "money" },
+  return_window: { label: "Return window closing", decision: "personal" },
+  auth_required: { label: "Vendor sign-in needed", decision: "personal" },
+  expected_order_not_found: {
+    label: "Expected order not found",
+    decision: null,
+  },
+  receipt_required: { label: "Receipt needed", decision: null },
+  unclassified_vendor: { label: "Vendor needs classifying", decision: null },
+  unresolved_targets: {
+    label: "Import left Emails unresolved",
+    decision: null,
+  },
+  shipment_identity_ambiguous: {
+    label: "Shipment's order unclear",
+    decision: null,
+  },
+  /** `other` with a `reconcile_source_order` fix. */
+  source_conflict: {
+    label: "Source order differs from the ledger",
+    decision: "contradiction",
+  },
+  /** `other` on an Email: relevance disagrees with an accepted Purchase link. */
+  relevance_conflict: {
+    label: "Unrelated Email has an accepted Purchase",
+    decision: "contradiction",
+  },
+  /** An agent's handoff (`resolve_run_finding` `ask_member`). */
+  member_question: { label: "Question for you", decision: "personal" },
+  other: { label: "Import needs review", decision: null },
+} as const satisfies Record<
+  string,
+  { label: string; decision: MemberDecision | null }
+>;
+export type RunFindingRoutingKind = keyof typeof RUN_FINDING_ROUTING;
 export const replacementLineIdentity = z.object({
   productId: entityIdSchema("product").nullable(),
   promote: z.boolean(),

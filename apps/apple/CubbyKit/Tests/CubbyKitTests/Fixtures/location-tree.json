@@ -16,7 +16,7 @@
         "name": "Garage",
         "aliases": [],
         "tags": [],
-        "lastBulkInventory": null,
+        "lastBulkInventory": "2026-09-01T12:00:00.000Z",
         "createdAt": "2026-01-01T00:00:00.000Z",
         "updatedAt": "2026-01-01T00:00:00.000Z",
         "childCount": 1,

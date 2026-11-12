@@ -38,10 +38,10 @@ struct LocationTreeTests {
     }
 
     /// Shelf A holds nothing directly, so it is not a stop; its stocked descendants are.
-    @Test func auditableBinsAreStockedNodesDepthFirst() throws {
+    @Test func auditableBinsAreStockedNodesStalestFirst() throws {
         let tree = try Self.tree()
         #expect(
-            tree.auditableBins(under: LocationCode("LOC-3456")).map(\.name) == ["Garage", "Bin 1", "Bin 2"])
+            tree.auditableBins(under: LocationCode("LOC-3456")).map(\.name) == ["Bin 1", "Bin 2", "Garage"])
         #expect(tree.auditableBins(under: LocationCode("LOC-4567")).map(\.name) == ["Bin 1", "Bin 2"])
         #expect(tree.auditableBins(under: LocationCode("LOC-9ABC")).isEmpty)
     }

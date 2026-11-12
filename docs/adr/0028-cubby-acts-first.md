@@ -67,8 +67,9 @@ asked where they do not apply (a grocery asked which plant it grows).
    field its classification refuses by default, and `growsPlantId` is asked only
    under the `planting` category feature.
 8. **One saved state on screen.** A value looks the same whoever set it. Guesses
-   live in the field's picker as "Cubby's guess"; the review queue holds only
-   Disagreements and fields that need a member; Changes by Cubby lists what Cubby
+   live in the field's picker as "Cubby's guess"; Needs you holds only member
+   decisions (Disagreements, fields that need a member, merge, delete, money,
+   stock, contradiction, personal); agent work is the Agent view backlog; Changes by Cubby lists what Cubby
    did. Tuning is an agent procedure (`decision-grading`), not a screen.
 
 ## Consequences

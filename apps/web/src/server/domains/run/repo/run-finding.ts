@@ -240,11 +240,11 @@ export async function resolveRunFindingRow(
   tx: DrizzleTransaction,
   id: string,
   input: {
-    verdict: "correct" | "dismissed";
+    verdict: "correct" | "dismissed" | "asked_member";
     intent: "apply" | "history";
     actorUserId: string;
     metadata?: z.infer<ReturnType<typeof z.json>>;
-    status: "applied" | "rejected";
+    status: "applied" | "rejected" | "superseded";
   },
 ) {
   const entry = resolutionEntry({

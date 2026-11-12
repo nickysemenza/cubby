@@ -1,10 +1,11 @@
 import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
-import type { ProblemKey } from "@cubby/schemas/problems";
+import { PROBLEM_DECISION, type ProblemKey } from "@cubby/schemas/problems";
 import { problemDetectors } from "@cubby/schemas/problems-raw-read";
 import type {
   IncompleteWorkDiagnosticSource,
   WorkDiagnosticFacts,
 } from "@cubby/schemas/work-diagnostic-facts";
+import { decisionExecutor } from "@cubby/schemas/work-queue";
 import type { ParsedShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 
@@ -186,7 +187,7 @@ export const diagnosticWorkSources = () => {
     const source: WorkSource = {
       id: definition.key,
       family: "problem",
-      executor: "human",
+      executor: decisionExecutor(PROBLEM_DECISION[definition.key]),
       entity: null,
       link: { kind: "reason" },
       reasons: [{ key: definition.key, label: definition.title }],

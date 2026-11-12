@@ -4,8 +4,9 @@ Work is the household's operational entry point at `/activity`: one screen with
 a Background work list (the health verdict, then every stuck or failed kind,
 device wait and stopped Run, each with its retry) and one Needs you queue
 summarized by reason. Needs you is the queue's
-member-executed work (`executor: human`) that is mine or shared: decisions,
-required proposals and concrete Problems. Home's preview, the sidebar count and
+member-executed work (`executor: human`) that is mine or shared, and it holds
+only what a member decides: decisions, required proposals and concrete Problems
+whose declared decision names a member. Home's preview, the sidebar count and
 Work read that one `NEEDS_YOU_FILTERS` population from the household's published
 Work items, so the count is the queue's own total, never a copy. Waiting never
 implies failure.
@@ -20,7 +21,10 @@ than ten minutes old, Home, Work and the queue keep the rows and add a quiet
 "Needs you last updated …" line with the raw error under Technical details and
 Retry; the sidebar's Work row shows its warning glyph.
 
-Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
+Work's "More work" row opens the Agent backlog first (`Agent backlog · N`,
+the `executor: agent` view of `/work-queue`, newest first). It is a quiet link:
+it never counts toward the sidebar badge or Home, and members keep every action
+on its items. Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and
 History (`/history`: Run outcomes and recorded changes). Maintenance lives at Settings
 → Maintenance. Stuck and failed background work shows under Background work on
@@ -128,7 +132,7 @@ The queue is declared over its sources' union, so its filters behave as entity
 list filters do: Type, Owner, Family, Executor and
 Reason each accept their `Exclude` input, Type and Owner accept No value, and
 Owner accepts Me. The Reason filter selects stable `reasonKeys`: data-check
-keys, Problem keys and source keys such as `reconciliation:purchase-unsettled`.
+keys, Problem keys and source keys such as `finding:sum_mismatch`.
 A reason filter prunes sources that cannot emit any selected reason before the
 union, and search matches a row's name, reason and shortcode. Totals, view
 counts and group counts are computed in the same pass and describe all matching
@@ -192,13 +196,45 @@ logos, including ordinary Vendors created only as Brands before any Purchase.
 Generic / Unbranded is exempt from both checks and does not enter that queue. A supported website
 exception closes that gap without suppressing independent logo research.
 
+Only a member decides a merge, a delete, booking money on a judgment, moving
+stock, contradicting what a person recorded, and anything needing the member's
+own sign-in, a physical errand or a file only they hold. Every work reason
+declares which of these it needs, or none; work with none is agent work, and
+only work that names one is Needs you. Agent work is the Agent view
+(`activity_read.queue` with `view: "agent"`, newest first). A Claude or ChatGPT
+session over MCP acts as the member, so it pulls that backlog, settles what the
+evidence allows and never leaves an item open. When it cannot decide, it calls
+`resolve_run_finding` with `action: "ask_member"` and one specific `question`:
+that closes its finding and files a member question on the same record, routed
+to Needs you; the member answers by acting and then dismisses it. For a Mail
+import Email, resolving it unresolved with the `member_decision` or
+`identity_ambiguity` category is the handoff. An agent inside a Run (the in-app
+purchase agent) cannot take member-decision actions. Queue membership never
+launches a session.
+
 Email relevance decided by a rule, the decision model or the relevance model is
-final, and an import outcome settles it. Only Email whose relevance stays
-uncertain after escalation reaches a member; import and preview gaps wait on
-Mail import, and a missing original goes to an agent. An Email a Mail import
-left unresolved is its own item, routed by its gap: Needs research goes to an
-agent, Needs you to the member, and a Waiting Email (a held source or a
+final, and an import outcome settles it. Email whose relevance stays uncertain,
+unpublished inputs and a missing original go to an agent, because a correction
+re-reads the original; import and preview gaps wait on Mail import. An Email a
+Mail import left unresolved is its own item, routed by its gap: a Needs you
+Email received within 365 days goes to the member, older mail and every Needs
+research Email go to an agent, and a Waiting Email (a held source or a
 transient failure) is no item because Cubby re-runs it by itself.
+
+Each open Run finding is one item named by its routing kind (reason key
+`finding:<kind>`). Member kinds are a possible duplicate Product, a total that
+does not match its lines, duplicate lines, another currency, a return or refund
+kind, a kit booked twice, delivered or ready to receive, a refund not booked, a
+return window, a vendor sign-in, a source order that differs from the ledger,
+an unrelated Email with an accepted Purchase, and an agent's member question;
+every other kind is agent work. A Run's unresolved-targets finding is no item:
+each Email it names is its own `email:import-gap` item. A finding closes when
+it is fixed or dismissed. Run needs attention follows the Run's
+stop: photo-inventory group proposals go to the member, a paused Run is
+Waiting, a failed or dispatch-failed Run is Automatic (Background work lists
+and retries it), and any other stop goes to an agent. Suggestions (statement
+transactions, product and transfer pairs, unapplied corrections) stay member
+work.
 
 People resolve material ambiguity and conflicting accepted facts. Supported
 unambiguous work should complete automatically within the Mail import switch

@@ -1,4 +1,3 @@
-import { amount, dateTime } from "@cubby/schemas/codec";
 import type {
   DiagnosticKey,
   EntityProblemSource,
@@ -21,7 +20,6 @@ import {
   listEntities,
   type ListEntity,
 } from "~/entity/model/list-contracts";
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   getProductConversionCoverageFreshness,
@@ -193,13 +191,6 @@ const usesConversionCoverageProjection = (key: ProblemKey): boolean =>
  */
 const refSchema = z.object({ id: z.string(), name: z.string() });
 
-const inventoryCardSchema = z.object({
-  id: z.string(),
-  amount,
-  product: refSchema,
-  location: refSchema,
-});
-
 const unusedIngredientCardSchema = refSchema.extend({
   product: z.array(refSchema),
 });
@@ -241,20 +232,11 @@ const withoutMappingsCardSchema = productWithoutMappingsSchema
     usdaUnavailable: z.boolean().nullable(),
   });
 
-const staleLocationCardSchema = refSchema.extend({
-  type: z.string().nullable(),
-  lastBulkInventory: dateTime.nullable(),
-  inventoryEntries: z.array(z.unknown()),
-});
-
 const ingredientWithoutProductCardSchema = refSchema.extend({
   ownRecipeCount: z.number(),
 });
 
 const PROBLEM_ROW_PRESENTERS = {
-  neverVerifiedInventory: selectedProblemCard(inventoryCardSchema, (row) =>
-    toInventoryRow(row),
-  ),
   unusedIngredientsWithProduct: selectedProblemCard(
     unusedIngredientCardSchema,
     (row) => toUnusedIngredient(row, true),
@@ -280,9 +262,6 @@ const PROBLEM_ROW_PRESENTERS = {
   productsWithoutMappings: selectedProblemCard(
     withoutMappingsCardSchema,
     (row) => toProductWithoutMappings(row),
-  ),
-  staleLocations: selectedProblemCard(staleLocationCardSchema, (row) =>
-    toStaleLocation(row),
   ),
   ingredientsWithoutProduct: selectedProblemCard(
     ingredientWithoutProductCardSchema,
@@ -358,15 +337,6 @@ export const executeEntityProblem = async (
   };
 };
 
-const toInventoryRow = (r: z.output<typeof inventoryCardSchema>) => {
-  return problemRow(
-    "inventory",
-    { id: r.id, name: r.product.name },
-    [field("Amount", `${r.amount.value} ${r.amount.unit}`)],
-    [recordBadge("product", r.product), ...locationBadges([r.location])],
-  );
-};
-
 const toUnusedIngredient = (
   r: z.output<typeof unusedIngredientCardSchema>,
   withProduct: boolean,
@@ -439,20 +409,6 @@ const toProductWithoutMappings = (
     ingredientId: r.ingredient?.id ?? null,
     usdaUnavailable: r.usdaUnavailable ?? false,
   };
-};
-
-const toStaleLocation = (r: z.output<typeof staleLocationCardSchema>) => {
-  // The recount age is the finding, so it leads. `inventoryEntries` is the
-  // live population the `directItemCountMin` filter selected on.
-  return problemRow("location", r, [
-    field(
-      "Last recount",
-      r.lastBulkInventory ? householdLocalDate(r.lastBulkInventory) : "Never",
-      "warning",
-    ),
-    r.type ? field("Type", r.type) : null,
-    field("Items", String(r.inventoryEntries.length)),
-  ]);
 };
 
 const toIngredientWithoutProduct = (

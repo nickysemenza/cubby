@@ -23,6 +23,10 @@ For unified backlog triage, `activity_read.queue` offers the connected member's
 eligible work plus shared Product research (`family: research`). The Work queue
 page shows the household's owners. Public Product facts are shared work; private original/order/account work follows current source ownership.
 Queue membership grants no new source access or execution authorization.
+Pull agent work newest first with `activity_read.queue` `view: "agent"`, settle
+what you can, and when you cannot decide call `activity.resolve_run_finding`
+with `action: "ask_member"` and one specific `question` instead of leaving the
+item open.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.

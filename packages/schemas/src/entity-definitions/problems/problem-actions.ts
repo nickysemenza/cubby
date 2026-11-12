@@ -81,22 +81,6 @@ export const problemActionCapabilities = {
       destructive: true,
     }),
   ],
-  staleLocations: [
-    action({
-      id: "start-recount",
-      label: "Start recount",
-      scope: "item",
-      target: "guided-flow",
-    }),
-  ],
-  neverVerifiedInventory: [
-    action({
-      id: "start-recount",
-      label: "Start recount",
-      scope: "item",
-      target: "guided-flow",
-    }),
-  ],
   duplicateVendors: [
     action({ id: "merge", label: "Merge", scope: "item", target: "item" }),
   ],

@@ -493,7 +493,9 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   `NEEDS_YOU_FILTERS`, the same population as the sidebar and Home. Empty, it
   reads `Nothing needs you.`; with incomplete inputs it shows the known-work
   notice instead, because an unknown source cannot be claimed empty. Source and
-  Problem keys never reach the member.
+  Problem keys never reach the member. The "More work" row leads with one quiet
+  link, "Agent backlog · N", to the Agent view; it never counts toward the
+  sidebar badge or Home.
 - When the published queue's last republish failed or its rows are over ten
   minutes old, Home, Work and the full queue add one line: "Needs you last
   updated <relative time>", "; the latest update failed" when it did, a closed
