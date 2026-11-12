@@ -1,5 +1,6 @@
 import { readBuildOutput } from "@cloudflare/build-output-utils";
 import { convertToWranglerConfig, type ModuleType } from "@cloudflare/config";
+import { readdirSync } from "node:fs";
 import path from "node:path";
 import type { Unstable_RawConfig } from "wrangler";
 
@@ -8,9 +9,7 @@ import type { Unstable_RawConfig } from "wrangler";
 export { createTestHarness } from "wrangler";
 export type { TestHarness, TestHarnessOptions } from "wrangler";
 
-type ModuleRule = NonNullable<
-  ReturnType<typeof convertToWranglerConfig>["rules"]
->[number];
+type ModuleRule = NonNullable<Unstable_RawConfig["rules"]>[number];
 
 const moduleRuleTypes = {
   esm: "ESModule",
@@ -68,6 +67,27 @@ export async function builtWorkerTestConfig(root: string) {
       );
     const type = moduleRuleTypes[module.type];
     rules.find((rule) => rule.type === type)?.globs.push(name);
+  }
+  // Wrangler recompiles every rule glob for every discovered file. Collapse
+  // the JS roster only when the wildcard admits exactly the manifest's ESM
+  // modules; mixed types or stray files retain exact per-module rules.
+  const esmRule = rules.find((rule) => rule.type === "ESModule")!;
+  const jsModules = new Set(
+    esmRule.globs.filter((name) => name.endsWith(".js")),
+  );
+  if (jsModules.size > 1) {
+    const jsFiles = readdirSync(built.bundleDir, {
+      recursive: true,
+      encoding: "utf8",
+    }).filter((name) => name.endsWith(".js"));
+    if (
+      jsFiles.length === jsModules.size &&
+      jsFiles.every((name) => jsModules.has(name))
+    )
+      esmRule.globs = [
+        ...esmRule.globs.filter((name) => !jsModules.has(name)),
+        "**/*.js",
+      ];
   }
   return {
     ...config,

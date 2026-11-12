@@ -745,7 +745,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       icon: ImageIcon,
       placement: "primary",
       content: (
-        <Suspense fallback={<SlotFallback />}>
+        <>
           <RecordImageChain
             entity={entity}
             id={bag.id}
@@ -756,7 +756,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
             id={bag.id as never}
             images={images}
           />
-        </Suspense>
+        </>
       ),
     });
   } else {

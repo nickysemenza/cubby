@@ -4,24 +4,33 @@ import {
   externalIdKind,
 } from "@cubby/schemas/external-id";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
+import { publicImageUrl } from "@cubby/schemas/image-summary";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { redundantTokens } from "@cubby/shared/redundant-tokens";
 import { type NutrientKey, TIER1_NUTRIENTS } from "@cubby/usda";
 import { MagnifyingGlassIcon } from "@phosphor-icons/react/dist/csr/MagnifyingGlass";
 import { useQueryClient } from "@tanstack/react-query";
-import { useId, useMemo, useState } from "react";
-import { useWatch } from "react-hook-form";
+import { useId, useMemo, useRef, useState } from "react";
+import {
+  type FieldValues,
+  type UseFormReturn,
+  useWatch,
+} from "react-hook-form";
 import { z } from "zod";
 
 import { ProductExternalIds } from "~/entity/components/product-external-ids";
 import { collectionEditSchema } from "~/entity/editing/collection-edit";
 import { structuredSchemaFor } from "~/entity/editing/structured-schema";
 import { StructuredValueField } from "~/entity/editing/structured-value-field";
+import { PendingDocumentUpload } from "~/entity/entity-media/pending-document-upload";
+import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
 import { UsdaFoodSearchField } from "~/entity/picker/with-usda-food-search";
 import { basisValueOf } from "~/entity/suggestions/field-suggestion";
 import { ExternalIdKindSuggestion } from "~/features/product/external-id-kind-suggestion";
+import { IdentifyProductButton } from "~/features/product/identify-product-with-ai";
 import { UnitMappingPairField } from "~/features/units/unit-mapping-pair-field";
 import { upc as upcLookup } from "~/integrations/tanstack-query/generated/domains/upc.gen";
 import { barcodeForLookup } from "~/lib/barcode";
@@ -39,7 +48,13 @@ import { FieldError } from "~/ui/primitives/field";
 import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 
+import type {
+  EntityEditorMediaInput,
+  EntityEditorMediaOutput,
+} from "../../entity/editing/editor-presentations";
 import type { SpecializedIntentRendererProps } from "../../entity/editing/entity-primitive-fields";
+import { mergeOwnedIds } from "../../entity/editing/shared-id-field";
+import type { EntityEditRecord } from "../../entity/editing/types";
 import { useProductBrandIngress } from "./use-product-brand-ingress";
 
 /** Compatibility tags with redundant-token suggestions. */
@@ -517,4 +532,153 @@ export function ProductLabelNutritionField({
       </Stack>
     </Disclosure>
   );
+}
+
+/** The form port `IdentifyProductButton` accepts — see its own `form` prop. */
+interface ProductIdentityFormPort {
+  setValue(update: {
+    field: "name" | "brandId" | "model";
+    value: string;
+  }): void;
+}
+
+/**
+ * `IdentifyProductButton` reads name/brandName/model off the form through
+ * a small port, the same shape the retired `product-form-fields.tsx` used.
+ */
+function productIdentityFormPort(
+  form: UseFormReturn<FieldValues>,
+): ProductIdentityFormPort {
+  return {
+    setValue: (update) =>
+      form.setValue(update.field, update.value, { shouldDirty: true }),
+  };
+}
+
+/**
+ * The product `media` hook's `actions` slot: a just-removed existing image
+ * is client-only until save, so it stays out of the identify read set —
+ * otherwise the model would be asked to read a photo the operator is mid-
+ * detaching (the regression `IdentifyProductButton`'s own doc comment names).
+ */
+function ProductIdentifyAction({
+  form,
+  existingImages,
+  pendingImages,
+}: {
+  form: UseFormReturn<FieldValues>;
+  existingImages: readonly PendingImage[];
+  pendingImages: readonly PendingImage[];
+}) {
+  const removedImageIds = z
+    .array(z.string())
+    .catch([])
+    .parse(useWatch({ control: form.control, name: "removeImageIds" }));
+  const identifiable = existingImages.filter(
+    (image) => !removedImageIds.includes(image.id),
+  );
+  return (
+    <IdentifyProductButton
+      form={productIdentityFormPort(form)}
+      existingImages={[...identifiable]}
+      pendingImages={[...pendingImages]}
+    />
+  );
+}
+
+const attachedImageWithContentType = imageOut.extend({
+  purpose: z.enum(["item", "label"]).nullable(),
+});
+const asPendingImage = (
+  image: z.output<typeof attachedImageWithContentType>,
+): PendingImage => ({
+  id: image.id,
+  url: publicImageUrl(image) ?? "",
+  filename: image.filename,
+  key: image.key,
+  ...(image.purpose ? { purpose: image.purpose } : {}),
+});
+
+/**
+ * The product `media` hook's `documents` slot: manuals share the Product
+ * `images` relation with item/label photos, distinguished only by content
+ * type (`partitionEntityFiles`) — they can live in either `record.images` or
+ * `record.labelImages`. Its uploads/removals write into the shared
+ * `pendingImageIds`/`removeImageIds` the image block owns, merging rather
+ * than overwriting (`entity-edit-dialog-content.tsx`'s own matching merge on
+ * the image side) — each writer tracks and replaces only the slice of the
+ * shared array it previously contributed.
+ */
+function ProductManualsField({
+  form,
+  record,
+}: {
+  form: UseFormReturn<FieldValues>;
+  record?: EntityEditRecord;
+}) {
+  // `EntityEditRecord.id` is always a string; no narrowing needed.
+  const documentFolder = record?.id;
+  const existingDocuments = useMemo(() => {
+    const images = z
+      .array(attachedImageWithContentType)
+      .catch([])
+      .parse(record?.images);
+    const labelImages = z
+      .array(attachedImageWithContentType)
+      .catch([])
+      .parse(record?.labelImages);
+    return partitionEntityFiles([...images, ...labelImages]).documents.map(
+      (document) => ({ ...asPendingImage(document), size: undefined }),
+    );
+  }, [record]);
+  const ownPendingDocumentIds = useRef<readonly string[]>([]);
+  const ownRemovedDocumentIds = useRef<readonly string[]>([]);
+  return (
+    <PendingDocumentUpload
+      entityKind="PRODUCT"
+      folder={documentFolder}
+      existingDocuments={existingDocuments}
+      onDocumentsChange={(documents) =>
+        mergeOwnedIds(
+          form,
+          "pendingImageIds",
+          ownPendingDocumentIds,
+          documents.map((document) => document.id),
+        )
+      }
+      onExistingDocumentsRemove={(removedIds) =>
+        mergeOwnedIds(form, "removeImageIds", ownRemovedDocumentIds, removedIds)
+      }
+    />
+  );
+}
+
+/**
+ * Product's `EntityEditorPresentation.media` hook: `IdentifyProductButton`
+ * as `actions`, `record.labelImages`' displayable images merged into the
+ * gallery as `extraExistingImages`, and the manuals dropzone as `documents`.
+ */
+export function productMedia({
+  form,
+  record,
+  pendingImages,
+  existingImages,
+}: EntityEditorMediaInput): EntityEditorMediaOutput {
+  const labelImages = z
+    .array(attachedImageWithContentType)
+    .catch([])
+    .parse(record?.labelImages);
+  const extraExistingImages =
+    partitionEntityFiles(labelImages).images.map(asPendingImage);
+  return {
+    actions: (
+      <ProductIdentifyAction
+        form={form}
+        existingImages={existingImages}
+        pendingImages={pendingImages}
+      />
+    ),
+    extraExistingImages,
+    documents: <ProductManualsField form={form} record={record} />,
+  };
 }

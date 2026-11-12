@@ -435,6 +435,9 @@ export default defineConfig({
                 testTimeout: 20_000,
                 retry: serviceRetry,
                 isolate: false,
+                // A shared sequence group requires the Workers project's
+                // single-worker cap in CI as well as local runs.
+                maxWorkers: 1,
                 sequence: { groupOrder: 3 },
               },
             }) satisfies TestProjectConfiguration,

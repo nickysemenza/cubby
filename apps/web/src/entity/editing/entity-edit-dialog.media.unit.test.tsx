@@ -225,9 +225,7 @@ describe("image block attachment roles", () => {
   it("writes a role correction into pendingImagePurposes and pendingImageIds", async () => {
     render(<Harness />, { wrapper: harness.wrapper });
     fireEvent.click(
-      await screen.findByRole("combobox", {
-        name: "Attachment role for record.jpg",
-      }),
+      screen.getByRole("combobox", { name: "Attachment role for record.jpg" }),
     );
     const row = await screen.findByRole("option", { name: "Label photo" });
     // Base UI Select commits a mouse click only after a pointerdown on the row.

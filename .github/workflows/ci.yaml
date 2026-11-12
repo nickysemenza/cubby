@@ -388,7 +388,7 @@ jobs:
           cache-hit: ${{ steps.apple.outputs.cache-hit }}
           matched-key: ${{ steps.apple.outputs.save-matched-key }}
       - name: Measure SPM cache contents
-        run: du -sh apps/apple/SourcePackages/* apps/apple/DerivedData/CompilationCache.noindex
+        run: du -h -d 3 apps/apple/SourcePackages/artifacts
       - name: Save SPM clone cache
         uses: ./.github/actions/save-cache-main-only
         with:

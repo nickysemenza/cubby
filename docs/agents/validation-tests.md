@@ -157,9 +157,9 @@ before its entrance opacity transition finishes.
   Signed-out specs use the test-scoped `test.use({ signedIn: false })`. Gmail
   specs are named `gmail.*.spec.ts` so the one-worker `Gmail profile tests`
   project runs them together.
-- Record video with `CUBBY_E2E_VIDEO=1`. `CUBBY_E2E_STARTUP_PROFILE=1` (always
-  on in CI) annotates navigation with startup timings; these are diagnostics,
-  never correctness results, and task CPU categories must not be summed.
+- Record video with `CUBBY_E2E_VIDEO=1`. Navigation annotations retain elapsed
+  and response/readiness phases; optional CPU and resource profiling belongs
+  to `tooling/checks/navigation-performance.ts`, outside correctness journeys.
 - A standalone Playwright request context inherits project storage state unless
   it sets empty cookies and origins.
 
@@ -324,6 +324,11 @@ shards. The `workers` project runs source modules in workerd through the
 Cloudflare pool. Agent and Worker journeys belong in Playwright; a PostgreSQL
 rule behind them belongs in an integration test that injects bindings with
 `setCfEnv`.
+
+The built runtime takes module membership and types from the native build
+manifest. Its JavaScript discovery glob may combine those entries only after
+checking that the files on disk match the manifest's ESM set exactly; otherwise
+it retains individual rules. Sourcemaps stay outside the runtime module graph.
 
 A runtime borrowing a `withTestDb` database closes in `afterEach`, before the
 next reset; `afterAll` is too late and leaves unowned sessions that fail reset.
