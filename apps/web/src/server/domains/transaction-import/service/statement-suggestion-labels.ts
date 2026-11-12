@@ -207,6 +207,7 @@ function prepareLabelledJudgment(
             label: previous.judgment.create.counterparty.label,
           },
           transfer: judgment.transfer,
+          descriptor: judgment.create,
         }),
       );
   }
@@ -349,6 +350,7 @@ function prepareLabelledJudgment(
             votes: judgment.create.votes,
             counterparty: judgment.create.counterparty,
             transfer: judgment.transfer,
+            descriptor: judgment.create,
           }),
         );
     },

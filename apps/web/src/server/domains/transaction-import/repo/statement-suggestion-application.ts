@@ -115,6 +115,7 @@ export function withPublishedLabels(
           label: published.create.counterparty.label,
         },
         transfer: judgment.transfer,
+        descriptor: judgment.create,
       }),
     );
   judgment.recommended = statementRecommendation(judgment);

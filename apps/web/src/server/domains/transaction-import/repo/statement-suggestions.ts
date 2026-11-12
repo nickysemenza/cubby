@@ -1606,6 +1606,7 @@ export async function buildChargeProposals(
         storedValue: account?.kind === "stored_value",
       },
       transfer,
+      descriptor: canonical,
     });
     const copy = pairCopies(charge, copies.get(chargeId(charge)), candidates, {
       hold: Boolean(hold),
@@ -2518,6 +2519,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
           label: previous.create.counterparty.label,
         },
         transfer: judgment.transfer,
+        descriptor: create,
       }),
     );
     for (const entry of judgment.candidates)
@@ -3987,6 +3989,7 @@ export async function recordStatementLabelCheckpoint(
                 votes: create.votes,
                 counterparty: create.counterparty,
                 transfer: merged.judgment.transfer,
+                descriptor: create,
               }),
             );
           }
