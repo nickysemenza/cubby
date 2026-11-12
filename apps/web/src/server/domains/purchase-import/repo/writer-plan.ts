@@ -30,10 +30,8 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 
 import { normalizeOrderKey } from "./order-identity";
-import type {
-  ImportSourceAssociationInput,
-  LineIdentityDecision,
-} from "./writer";
+import type { ImportSourceAssociationInput } from "./writer";
+import type { LineIdentityDecision } from "./writer-decisions";
 import type { LineMutation } from "./writer-lines";
 import type {
   loadAcceptedPaymentFacts,

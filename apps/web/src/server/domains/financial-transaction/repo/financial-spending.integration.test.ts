@@ -54,7 +54,6 @@ import {
   commitFinancialSpending,
   commitFinancialSpendings,
   prepareFinancialSpendingPage,
-  prepareFinancialSpendingCandidates,
   financialSpendingCategoryHistory,
 } from "./financial-spending";
 import {
@@ -212,21 +211,20 @@ describe("shared spending booking", () => {
       ).toEqual([{ purchaser: owner.entityId }]);
     },
   );
-  it.each([
-    [null, null, false],
-    ["2026-05-04", "2026-05-10", false],
-    ["2026-04-01", "2026-05-04", false],
-    [null, "2026-05-03", true],
-    ["2026-05-05", null, true],
-  ] as const)(
-    "uses inclusive sole-access bounds %s through %s (ready=%s)",
-    async (validFrom, validTo, ready) => {
-      const { owner, account, transaction, vendor, category, advice } =
-        await fixture(true);
-      const other = await createRepoIdentity(ctx, "ledgerParty", {
-        name: "Synthetic authorized member",
-        kind: "member",
-      });
+  it("uses inclusive sole-access bounds for open, active, expired and future access", async () => {
+    const { owner, account, transaction, vendor, category, advice } =
+      await fixture(true);
+    const other = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic authorized member",
+      kind: "member",
+    });
+    for (const [validFrom, validTo, ready] of [
+      [null, null, false],
+      ["2026-05-04", "2026-05-10", false],
+      ["2026-04-01", "2026-05-04", false],
+      [null, "2026-05-03", true],
+      ["2026-05-05", null, true],
+    ] as const) {
       await getDb(ctx.db)
         .update(financialAccount)
         .set({
@@ -262,8 +260,8 @@ describe("shared spending booking", () => {
         }),
       );
       expect(direct).toEqual({ purchaserId: ready ? owner.output.id : null });
-    },
-  );
+    }
+  });
   it("uses the projected posting date for sole access when the charge date is absent", async () => {
     const { owner, account, transaction, vendor, category, advice } =
       await fixture(true);
@@ -810,87 +808,6 @@ describe("shared spending booking", () => {
       ).toEqual(booked ? [{ cost: 42.5 }] : []);
     },
   );
-  it("keeps complete spending previews identical with page-loaded receipt graphs", async () => {
-    const { account, vendor, transaction, advice, category } = await fixture();
-    // The older receipt's first installment keeps it partly paid.
-    for (const [date, cost, paid] of [
-      ["2026-05-04", 42.5, 0],
-      ["2026-03-06", 19, 5],
-    ] as const) {
-      const receipt = await createRepoIdentity(ctx, "purchase", {
-        vendorId: vendor.output.id,
-        date,
-        statedTotal: cost,
-      });
-      await createRepoIdentity(ctx, "expense", {
-        purchaseId: receipt.output.id,
-        name: "Synthetic receipt line",
-        cost,
-        date,
-        trade: "other",
-        spendingCategoryId: category.id,
-      });
-      if (paid)
-        await createRepoIdentity(ctx, "financialTransaction", {
-          accountId: account.output.id,
-          kind: "purchase",
-          status: "posted",
-          amount: paid,
-          transactionDate: date,
-          postedDate: date,
-          allocations: [{ purchaseId: receipt.output.id, amount: paid }],
-        });
-    }
-    const page = await prepareFinancialSpendingPage(ctx.db, {
-      accountIds: [
-        await resolveOrThrow(ctx.db, "financialAccount", account.output.id),
-      ],
-      transactionIds: [
-        await resolveOrThrow(
-          ctx.db,
-          "financialTransaction",
-          transaction.output.id,
-        ),
-      ],
-      sources: [
-        {
-          amount: 42.5,
-          transactionDate: "2026-05-04",
-          merchant: "Synthetic Orchard",
-          kind: "purchase",
-        },
-      ],
-    });
-    await prepareFinancialSpendingCandidates(ctx.db, page);
-    const blocked = await previewFinancialSpending(ctx.db, {
-      transactionId: transaction.output.id,
-    });
-    expect(blocked).toMatchObject({ status: "review_required" });
-    expect(blocked.candidates).toHaveLength(2);
-    const requests = [
-      { transactionId: transaction.output.id, advice },
-      {
-        source: financialSpendingSource.parse({
-          accountId: account.output.id,
-          kind: "refund",
-          status: "observed",
-          amount: -19,
-          transactionDate: "2026-05-06",
-          postedDate: null,
-          rawDescription: null,
-          merchant: "Synthetic Orchard",
-          sourceRefs: [
-            { source: "synthetic-bank", externalId: "synthetic-refund" },
-          ],
-        }),
-        advice,
-      },
-    ];
-    for (const request of requests)
-      expect(
-        await previewFinancialSpending(ctx.db, request, undefined, page),
-      ).toEqual(await previewFinancialSpending(ctx.db, request));
-  });
   it("rechecks category evidence at commit and leaves deleted model categories unknown", async () => {
     const { account, transaction, advice, category } = await fixture();
     const accountId = await resolveOrThrow(

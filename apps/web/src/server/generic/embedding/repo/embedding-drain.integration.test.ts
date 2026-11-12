@@ -25,6 +25,7 @@ import {
   JobRetryableError,
 } from "~/server/generic/jobs/errors";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -338,29 +339,21 @@ describe("embedding refresh and cleanup drains", () => {
     ).toEqual([]);
   });
 
-  // Forty real writer fixtures exceed the default budget on shared CI runners.
   it("chunks provider requests by byte limits and isolates a long input", async () => {
-    const refs: SearchableEntityRef[] = [];
-    for (let index = 0; index < 39; index++) {
-      const subject = await createProductIdentityFixture(
-        ctx.db,
-        makeProductInput({
-          name: `Synthetic byte fixture ${index}`,
-          notes: "x".repeat(7_800),
-        }),
-        ctx.actor,
-      );
-      refs.push({ entityKind: "product", entityId: subject.entityId });
-    }
-    const long = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Synthetic long input fixture",
-        notes: "y".repeat(9_000),
-      }),
-      ctx.actor,
-    );
-    refs.push({ entityKind: "product", entityId: long.entityId });
+    // This boundary needs 300 KB of real source text, not forty create workflows.
+    // Admission and its effects are exercised by the other drain scenarios.
+    const subjects = await insertManyWithShortcode(ctx.db, "product", [
+      ...Array.from({ length: 39 }, (_, index) => ({
+        name: `Synthetic byte fixture ${index}`,
+        notes: "x".repeat(7_800),
+      })),
+      { name: "Synthetic long input fixture", notes: "y".repeat(9_000) },
+    ]);
+    const refs: SearchableEntityRef[] = subjects.map((subject) => ({
+      entityKind: "product",
+      entityId: subject.id,
+    }));
+    const long = subjects.at(-1)!;
     await markRefresh(ctx.db, refs);
     const remote = fakeStore();
     const calls: string[][] = [];
@@ -378,7 +371,7 @@ describe("embedding refresh and cleanup drains", () => {
           ) <= 300_000,
       ),
     ).toBe(true);
-    const longItem = await embeddingWorkFor(ctx.db, [long.entityId]);
+    const longItem = await embeddingWorkFor(ctx.db, [long.id]);
     expect(longItem).toHaveLength(1);
     expect(longItem[0]?.attempts).toBe(1);
     expect(
@@ -387,7 +380,7 @@ describe("embedding refresh and cleanup drains", () => {
         refs.slice(0, -1).map((ref) => ref.entityId),
       ),
     ).toHaveLength(39);
-  }, 60_000);
+  });
 
   // Failure mode: an exhausted OpenAI credit balance fails embeddings, spends
   // their attempts, and a funding reset leaves them waiting out their backoff.

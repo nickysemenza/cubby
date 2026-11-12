@@ -46,22 +46,12 @@ import {
   SourceAliasesField,
   SourceRefsField,
 } from "~/features/finance/financial-form-fields";
-import { FinancialTransactionFormFields } from "~/features/finance/financial-transaction-form";
 import { financialTransactionListRenderers } from "~/features/finance/list-renderers";
-import { EntityPhotosSection } from "~/features/image/entity-photos-section";
 import { discardInventoryActionDefinition } from "~/features/inventory/discard-inventory-action";
 import { inventoryLocationEntityActionDefinitions } from "~/features/inventory/inventory-location-entity-actions";
 import { locationListRenderers } from "~/features/location/list-renderers";
 import { addToInventoryActionDefinition } from "~/features/product/add-to-inventory-action";
-import {
-  ProductExternalIdsField,
-  ProductLabelNutritionField,
-  productMedia,
-  ProductTagsField,
-  ProductUnitMappingsField,
-  ProductBarcodeField,
-  ProductUsdaFoodField,
-} from "~/features/product/product-editor-fields";
+import { productMedia } from "~/features/product/product-editor-media";
 import { useUpcAwareCreate } from "~/features/product/use-upc-aware-create";
 import { purchaseListRenderers } from "~/features/purchase/list-renderers";
 import { recipeEntityActionDefinitions } from "~/features/recipe/recipe-entity-actions";
@@ -85,6 +75,54 @@ const named = <M, K extends keyof M>(
   module: Promise<M>,
   name: K,
 ): Promise<{ default: M[K] }> => module.then((m) => ({ default: m[name] }));
+
+const ProductExternalIdsField = lazy(() =>
+  named(
+    import("~/features/product/product-editor-fields"),
+    "ProductExternalIdsField",
+  ),
+);
+const ProductLabelNutritionField = lazy(() =>
+  named(
+    import("~/features/product/product-editor-fields"),
+    "ProductLabelNutritionField",
+  ),
+);
+const ProductTagsField = lazy(() =>
+  named(import("~/features/product/product-editor-fields"), "ProductTagsField"),
+);
+const ProductUnitMappingsField = lazy(() =>
+  named(
+    import("~/features/product/product-editor-fields"),
+    "ProductUnitMappingsField",
+  ),
+);
+const ProductBarcodeField = lazy(() =>
+  named(
+    import("~/features/product/product-editor-fields"),
+    "ProductBarcodeField",
+  ),
+);
+const ProductUsdaFoodField = lazy(() =>
+  named(
+    import("~/features/product/product-editor-fields"),
+    "ProductUsdaFoodField",
+  ),
+);
+
+const FinancialTransactionFormFields = lazy(() =>
+  named(
+    import("~/features/finance/financial-transaction-form"),
+    "FinancialTransactionFormFields",
+  ),
+);
+
+const EntityPhotosSection = lazy(() =>
+  named(
+    import("~/features/image/entity-photos-section"),
+    "EntityPhotosSection",
+  ),
+);
 
 const ProductDiscardDialog = lazy(() =>
   named(

@@ -81,8 +81,12 @@ export interface FeatureRegistry {
     SpendingCategoryMergeReview: ComponentType<
       ComponentProps<typeof SpendingCategoryMergeReview>
     >;
-    FinancialTransactionFormFields: typeof FinancialTransactionFormFields;
-    EntityPhotosSection: typeof EntityPhotosSection;
+    FinancialTransactionFormFields: ComponentType<
+      ComponentProps<typeof FinancialTransactionFormFields>
+    >;
+    EntityPhotosSection: ComponentType<
+      ComponentProps<typeof EntityPhotosSection>
+    >;
     createUnitMappingsColumn: typeof createUnitMappingsColumn;
     useUpcAwareCreate: typeof useUpcAwareCreate;
   };

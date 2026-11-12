@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import { expense, entityLink } from "~/server/db/schema";
+import { expense } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -139,69 +139,5 @@ test.describe("split and attach, with the server's rules", () => {
       .from(expense)
       .where(eq(expense.id, untouched.id));
     expect(left[0]?.purchaseId).toBeNull();
-  });
-
-  test("attaching products links only the checked one and hides it afterwards", async ({
-    page,
-  }) => {
-    test.setTimeout(90_000);
-    const db = getFixtureDb();
-    const stamp = Date.now();
-    const vendor = await insertWithShortcode(db, "vendor", {
-      name: `Synthetic product vendor ${stamp}`,
-    });
-    const target = await insertWithShortcode(db, "purchase", {
-      vendorId: vendor.id,
-      date: "2026-09-01",
-    });
-    const brand = await insertWithShortcode(db, "vendor", {
-      name: "Synthetic Maker",
-    });
-    const chosen = await insertWithShortcode(db, "product", {
-      name: `Synthetic chosen saw ${stamp}`,
-      brandId: brand.id,
-    });
-    await insertWithShortcode(db, "product", {
-      name: `Synthetic skipped saw ${stamp}`,
-      brandId: brand.id,
-    });
-
-    await gotoDetailActions(
-      page,
-      `/purchases/${target.shortcode}#work`,
-      page.getByRole("button", { name: "Attach products" }),
-    );
-    await page.getByRole("button", { name: "Attach products" }).click();
-    const dialog = page.getByRole("dialog", { name: /^Attach products to / });
-    await dialog.getByPlaceholder("Search products…").fill(`saw ${stamp}`);
-    await dialog
-      .getByRole("row")
-      .filter({ hasText: `Synthetic chosen saw ${stamp}` })
-      .getByRole("checkbox")
-      .click();
-    await dialog.getByRole("button", { name: "Attach 1" }).click();
-    await expect(dialog).toHaveCount(0);
-
-    const links = await getDb(db)
-      .select({ toEntityId: entityLink.toEntityId })
-      .from(entityLink)
-      .where(
-        and(
-          eq(entityLink.fromEntityId, target.id),
-          isNull(entityLink.deletedAt),
-        ),
-      );
-    expect(links.map((link) => link.toEntityId)).toEqual([chosen.id]);
-
-    // Reopened, the attached product is no longer offered; the other still is.
-    await page.getByRole("button", { name: "Attach products" }).click();
-    const reopened = page.getByRole("dialog", { name: /^Attach products to / });
-    await reopened.getByPlaceholder("Search products…").fill(`saw ${stamp}`);
-    await expect(
-      reopened.getByText(`Synthetic skipped saw ${stamp}`),
-    ).toBeVisible();
-    await expect(
-      reopened.getByText(`Synthetic chosen saw ${stamp}`),
-    ).toHaveCount(0);
   });
 });

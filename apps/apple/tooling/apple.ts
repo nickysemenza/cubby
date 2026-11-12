@@ -194,7 +194,7 @@ export const appleBuildArguments = (
   "-skipMacroValidation",
   "COMPILATION_CACHE_ENABLE_CACHING=YES",
   "COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES",
-  "COMPILATION_CACHE_LIMIT_SIZE=10G",
+  `COMPILATION_CACHE_LIMIT_SIZE=${ci ? "1G" : "10G"}`,
   `COMPILATION_CACHE_CAS_PATH=${ci ? join(derived, "CompilationCache.noindex") : join(homedir(), "Library/Caches/cubby/xcode")}`,
   "COMPILER_INDEX_STORE_ENABLE=NO",
 ];

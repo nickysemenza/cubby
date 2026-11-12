@@ -15,7 +15,8 @@ import { expense, importSourceProduct } from "~/server/db/schema";
 import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import type { LineIdentityDecision, LineProducts } from "./writer";
+import type { LineProducts } from "./writer";
+import type { LineIdentityDecision } from "./writer-decisions";
 import {
   planAggregateExpense,
   planLineAction,

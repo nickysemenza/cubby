@@ -47,6 +47,11 @@ PR, not in this file. The test files show which owner covers a behavior.
 services; CI's `vitest-ci` target runs every merge-gate project. `preview` is
 opt-in; `live-eval` is never part of the gate.
 
+Node units finish before tooling, packages and MCP contracts so shared workers
+reuse their project's import graph. UI runs next, followed by capability and
+Worker projects together, then integration. Integration retains its own group
+and per-file database leases.
+
 CI retries a failed Playwright test, or a failed test in a service-backed
 Vitest project (`integration`, `capability`, `preview`, `workers`), once.
 Node unit, UI, tooling and package projects never retry, and nothing retries

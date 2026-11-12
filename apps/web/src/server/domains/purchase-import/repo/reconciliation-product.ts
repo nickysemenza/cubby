@@ -9,7 +9,8 @@ import {
 import type { ReconciliationExpenseContext } from "./reconciliation-apply";
 import type { ReconciliationPlan } from "./reconciliation-plan";
 import type { ReconciliationState } from "./reconciliation-state";
-import { lineProductResolver, type LineIdentityDecision } from "./writer";
+import { lineProductResolver } from "./writer";
+import type { LineIdentityDecision } from "./writer-decisions";
 
 type ReconciliationLine = ReconciliationPlan["lines"][number];
 

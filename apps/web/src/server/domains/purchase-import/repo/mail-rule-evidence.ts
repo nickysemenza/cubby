@@ -43,7 +43,7 @@ import { wasm } from "~/server/wasm";
 
 import { mailReadContent } from "./gmail/read-content";
 import { normalizeOrderKey, vendorOrderIdsSql } from "./order-identity";
-import { lineIdentifierRequests } from "./writer";
+import { lineIdentifierRequests } from "./writer-decisions";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
 

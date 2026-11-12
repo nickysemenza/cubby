@@ -258,7 +258,9 @@ loaders split through TanStack Router's `defaultBehavior` alongside components.
   React-free in `detail-loader.ts`.
 - Interaction-only registry dialogs stay lazy with a local Suspense boundary
   inside their open state; loading one must not suspend the action host or page.
-  Feature installation stays synchronous and idempotent.
+  Feature installation stays synchronous and idempotent. Specialized Product
+  controls, finance forms and gallery controls load at their editor or section
+  boundary; the Product media hook stays small and synchronous.
 - The account menu and the default row inspector load from an effect behind
   their existing placeholder, reuse the loaded component on remount and rethrow
   import failures to the host error boundary. Do not put a new Suspense

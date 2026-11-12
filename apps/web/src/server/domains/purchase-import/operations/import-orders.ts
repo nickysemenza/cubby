@@ -106,7 +106,8 @@ import {
   normalizeOrderKey,
   reviewedVendorOrderOwner,
 } from "../repo/order-identity";
-import { importVendorOrder, lineIdentifierRequests } from "../repo/writer";
+import { importVendorOrder } from "../repo/writer";
+import { lineIdentifierRequests } from "../repo/writer-decisions";
 import { chooseLineStage } from "../service/line-stage";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {

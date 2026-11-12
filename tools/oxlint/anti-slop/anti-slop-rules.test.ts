@@ -4,12 +4,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
-import { test } from "vitest";
+import { dirname, join, resolve } from "node:path";
+import { afterAll, beforeAll, test } from "vitest";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = join(
@@ -28,6 +30,7 @@ interface OxlintLabel {
 }
 
 interface OxlintDiagnostic {
+  filename: string;
   code: string;
   labels: OxlintLabel[];
 }
@@ -37,7 +40,7 @@ interface OxlintOutput {
 }
 
 function runOxlint(
-  fixturePath: string,
+  fixturePath: string | string[],
   configuration = ".oxlintrc.json",
 ): OxlintDiagnostic[] {
   const result = spawnSync(
@@ -48,7 +51,7 @@ function runOxlint(
       configuration,
       "--format",
       "json",
-      fixturePath,
+      ...[fixturePath].flat(),
     ],
     { cwd: repoRoot, encoding: "utf8" },
   );
@@ -68,51 +71,75 @@ function fixtureFilename(fixtureName: string): string {
     : fixtureName.replace(/\.txt$/, ".ts");
 }
 
+// Each scope shares one CLI process; diagnostic filenames keep assertions
+// independent while the scoped files still exercise the real override globs.
+const fixtureRuns = new Map<string, OxlintDiagnostic[]>();
+const fixtureRoots: string[] = [];
+beforeAll(() => {
+  for (const [scope, root] of [
+    ["global", tmpdir()],
+    ["scoped", join(repoRoot, "apps/web/src/server")],
+  ] as const) {
+    const directory = realpathSync(mkdtempSync(join(root, ".lint-fixture-")));
+    fixtureRoots.push(directory);
+    const files = readdirSync(fixtureDirectory).filter(
+      (file) =>
+        file.endsWith(".txt") &&
+        (scope === "global" ||
+          file.startsWith("require-soft-delete-filter-") ||
+          file === "native-source-alias.txt" ||
+          file === "no-ordinary-dialog-relative.txt"),
+    );
+    const paths = files.map((file) => {
+      const path = join(directory, fixtureFilename(file));
+      writeFileSync(path, readFileSync(join(fixtureDirectory, file), "utf8"));
+      return path;
+    });
+    const diagnostics = runOxlint(paths);
+    assert.ok(
+      diagnostics.length > 0,
+      `${scope} lint run must report known violations`,
+    );
+    assert.ok(
+      diagnostics.every((diagnostic) =>
+        paths.includes(realpathSync(resolve(repoRoot, diagnostic.filename))),
+      ),
+    );
+    for (const [index, file] of files.entries())
+      fixtureRuns.set(
+        `${scope}:${file}`,
+        diagnostics.filter(
+          (diagnostic) =>
+            realpathSync(resolve(repoRoot, diagnostic.filename)) ===
+            paths[index],
+        ),
+      );
+  }
+});
+afterAll(() => {
+  for (const directory of fixtureRoots)
+    rmSync(directory, { recursive: true, maxRetries: 5 });
+});
+
 function lintFixture(
   ruleName: string,
   fixtureName: string,
   plugin = "anti-slop",
-): OxlintDiagnostic[] {
-  const source = readFileSync(join(fixtureDirectory, fixtureName), "utf8");
-  const temporaryDirectory = mkdtempSync(join(tmpdir(), "cubby-anti-slop-"));
-  const fixturePath = join(temporaryDirectory, fixtureFilename(fixtureName));
-  writeFileSync(fixturePath, source);
-
-  try {
-    return runOxlint(fixturePath).filter(
-      (diagnostic) => diagnostic.code === `${plugin}(${ruleName})`,
-    );
-  } finally {
-    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
-  }
+) {
+  return fixtureRuns
+    .get(`global:${fixtureName}`)!
+    .filter((diagnostic) => diagnostic.code === `${plugin}(${ruleName})`);
 }
 
-/**
- * `require-soft-delete-filter` is scoped in `.oxlintrc.json` to
- * `apps/web/src/server/**\/*.ts` (a real repo path, so `application-schema`'s
- * catalog and the drizzle imports resolve as they would in production code).
- * A plain OS-tmpdir fixture (as `lintFixture` uses) falls outside that glob and
- * would silently never run the rule, so this places the fixture under the
- * scoped directory instead, in a disposable subdirectory removed afterward.
- */
+/** Scoped fixtures must match apps/web/src/server overrides in the real config. */
 function lintScopedFixture(
   ruleName: string,
   fixtureName: string,
   plugin = "cubby",
-): OxlintDiagnostic[] {
-  const source = readFileSync(join(fixtureDirectory, fixtureName), "utf8");
-  const scopedRoot = join(repoRoot, "apps", "web", "src", "server");
-  const temporaryDirectory = mkdtempSync(join(scopedRoot, ".lint-fixture-"));
-  const fixturePath = join(temporaryDirectory, fixtureFilename(fixtureName));
-  writeFileSync(fixturePath, source);
-
-  try {
-    return runOxlint(fixturePath).filter(
-      (diagnostic) => diagnostic.code === `${plugin}(${ruleName})`,
-    );
-  } finally {
-    rmSync(temporaryDirectory, { recursive: true, maxRetries: 5 });
-  }
+) {
+  return fixtureRuns
+    .get(`scoped:${fixtureName}`)!
+    .filter((diagnostic) => diagnostic.code === `${plugin}(${ruleName})`);
 }
 
 test("type assertions need a SAFETY comment unless they narrow to literal types", () => {
