@@ -60,7 +60,7 @@ const execution: WorkSource = {
           sql`${notDeleted(alias(run, "Run"))} AND NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND (("Run".status = ${runStatus.enum.running} AND ("Run".purpose = ANY(${textArrayParam(EXECUTED_RUN_PURPOSES.filter((purpose) => !isStepRunPurpose(purpose)))} ) OR "Run"."dispatchEventId" IS NOT NULL)) OR ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
             runTable,
             (successor) =>
-              sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+              sql`${successor.predecessorRunId} = ${outer(runTable.id)} AND ${successor.predecessorRunId} IS NOT NULL`,
             // The work moved even to a deleted successor.
             { includeDeleted: true },
           ).exists()}))`,

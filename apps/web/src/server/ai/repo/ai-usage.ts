@@ -30,12 +30,23 @@ import { jsonCursor } from "~/server/lib/json-cursor";
  */
 const failedWithoutUsage = sql`(${aiUsage.status} = ${aiUsageStatus.enum.failed} and ${aiUsage.inputTokens} is null and ${aiUsage.outputTokens} is null and ${aiUsage.cacheReadTokens} is null and ${aiUsage.cacheWriteTokens} is null)`;
 
+/**
+ * What a charge-only reader needs. A list of Runs sums thousands of calls per
+ * Run, so it must not pay for the evidence and standard-price aggregates
+ * `aiCostSummarySql` adds.
+ */
+export function aiChargedCostSql() {
+  return {
+    chargedCost: sql<number>`coalesce(sum(${aiUsage.chargedCost}), 0)`,
+    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null and not ${failedWithoutUsage}))::int`,
+  };
+}
+
 export function aiCostSummarySql() {
   return {
+    ...aiChargedCostSql(),
     standardCost: sql<number>`coalesce(sum(${aiUsage.standardCost}), 0)`,
-    chargedCost: sql<number>`coalesce(sum(${aiUsage.chargedCost}), 0)`,
     standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is null and not ${failedWithoutUsage}))::int`,
-    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null and not ${failedWithoutUsage}))::int`,
     savings: sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null), 0)`,
     comparedCalls: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null))::int`,
     count: sql<number>`count(${aiUsage.id})::int`,
