@@ -4,8 +4,7 @@
   "dialect": "postgres",
   "id": "7789bb92-f4b7-4665-ae0c-83529a435490",
   "prevIds": [
-    "48bd0127-99fc-4d2e-b792-29eba32da5a6",
-    "3836388a-463d-46e6-8616-664eba159769"
+    "48bd0127-99fc-4d2e-b792-29eba32da5a6"
   ],
   "footprints": [
     {
