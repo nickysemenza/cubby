@@ -23,8 +23,10 @@ enum FieldGuideTokens {
     static let graphite = Color.primary
     static let graphiteSecondary = Color.secondary
 
-    // Interaction and attention are separate roles.
-    static let interaction = Color("AccentColor")
+    // Interaction and attention are separate roles. The accent is the web's Warm neutral link
+    // blue; `Work` holds the same palette's state and progress colours. Surfaces and text stay
+    // system colours.
+    static let interaction = Color(light: 0x2A47C2, dark: 0x8FA3F0)
     static let signal = Color("Signal")
 
     // Condition.
@@ -33,6 +35,21 @@ enum FieldGuideTokens {
     static let destructive = Color("Destructive")
     static let info = Color("Info")
     static let neutralStatus = Color("NeutralStatus")
+
+    /// Work state and progress, from the web Warm neutral palette. Dark values are lightened to
+    /// keep at least 4.5:1 against the dark system backgrounds; light values clear it on white.
+    enum Work {
+        static let needs = FieldGuideTokens.interaction
+        static let needsInk = Color(light: 0xFFFFFF, dark: 0x0B1640)
+        static let running = Color(light: 0x0E6A86, dark: 0x6CC3DE)
+        static let done = Color(light: 0x2D6A39, dark: 0x7CC78A)
+        static let failed = Color(light: 0xA8251C, dark: 0xF28B80)
+        static let stalled = Color(light: 0x744A08, dark: 0xE8B75F)
+        static let stalledMark = Color(light: 0xA86C12, dark: 0xE3B061)
+        static let queued = Color(light: 0x8E8578, dark: 0xA39A8E)
+        static let paused = Color(light: 0x857B6E, dark: 0x9E9488)
+        static let progressDone = Color(light: 0x3A342D, dark: 0xD9D2C7)
+    }
 
     /// Kinds that are not states: cycled in declaration order (`colorizeEnumOptions`).
     static let categoryRamp: [Color] = (1...8).map { Color("Category\($0)") }
@@ -144,6 +161,30 @@ extension Font {
 }
 
 extension Color {
+    /// A light and dark pair the system resolves for the current appearance.
+    init(light: UInt32, dark: UInt32) {
+        func components(_ hex: UInt32) -> (CGFloat, CGFloat, CGFloat) {
+            (CGFloat((hex >> 16) & 0xFF) / 255, CGFloat((hex >> 8) & 0xFF) / 255, CGFloat(hex & 0xFF) / 255)
+        }
+        let (lr, lg, lb) = components(light)
+        let (dr, dg, db) = components(dark)
+        #if os(iOS)
+            self.init(
+                uiColor: UIColor { traits in
+                    traits.userInterfaceStyle == .dark
+                        ? UIColor(red: dr, green: dg, blue: db, alpha: 1)
+                        : UIColor(red: lr, green: lg, blue: lb, alpha: 1)
+                })
+        #else
+            self.init(
+                nsColor: NSColor(name: nil) { appearance in
+                    appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+                        ? NSColor(srgbRed: dr, green: dg, blue: db, alpha: 1)
+                        : NSColor(srgbRed: lr, green: lg, blue: lb, alpha: 1)
+                })
+        #endif
+    }
+
     init(hex: UInt32) {
         self.init(
             .sRGB,

@@ -22,18 +22,18 @@ public struct RecordState: Sendable, Hashable {
     /// The wait's live Job breakdown ("36 backing off · 1 in progress"), for the detail header.
     public let jobs: String?
 
-    public init(option: LabeledOption, reason: String?, waitReason: String?, waitLabel: String?, jobs: String?, stalled: Bool) {
+    public init(
+        option: LabeledOption, reason: String?, waitReason: String?, waitLabel: String?, jobs: String?,
+        stalled: Bool
+    ) {
         self.option = option
         phase = option.statePhase
         let failed = option.isFailure
         role =
-            if failed { .failed }
-            else if stalled { .stalled }
-            else if phase == .needs { .needs }
-            else if phase == .finished { option.isPositive ? .done : .ended }
-            else if waitReason == "paused" { .paused }
-            else if let waitReason, waitReason != "in_progress" { .queued }
-            else { .running }
+            if failed { .failed } else if stalled { .stalled } else if phase == .needs {
+                .needs
+            } else if phase == .finished { option.isPositive ? .done : .ended } else if waitReason == "paused"
+            { .paused } else if let waitReason, waitReason != "in_progress" { .queued } else { .running }
         label = role == .stalled ? "Stalled" : option.label
         trailing = reason ?? waitLabel.map { Self.withoutLabel($0, label: option.label) }
         self.jobs = jobs
@@ -69,7 +69,8 @@ extension EntityDescriptor {
             field.optionRoster?.first { $0.value == value } ?? LabeledOption(value: value, label: value)
         let wait = spec.wait.flatMap { raw.recordValue($0) }.flatMap { $0 == .null ? nil : $0 }
         let reason = spec.reason.flatMap { key in
-            self.field(key).flatMap { $0.labelPath.flatMap(raw.pathText) } ?? raw.recordValue(key)?.stringValue
+            self.field(key).flatMap { $0.labelPath.flatMap(raw.pathText) }
+                ?? raw.recordValue(key)?.stringValue
         }
         return RecordState(
             option: option, reason: reason.flatMap { $0.isEmpty ? nil : $0 },
@@ -198,7 +199,9 @@ public struct ProgressValue: Sendable, Hashable {
                 (.done, done), (.failed, failed), (.active, active), (.stalled, stalled), (.queued, total),
             ]
             for (state, count) in counts {
-                for _ in 0..<count where units.count < total { units.append(Segment(state: state, label: nil)) }
+                for _ in 0..<count where units.count < total {
+                    units.append(Segment(state: state, label: nil))
+                }
             }
             return .segments(units)
         }
@@ -229,11 +232,15 @@ public struct ListBatchSummary: Sendable, Hashable {
             .first { $0.value == batch.value }
         let noun = kind?.label ?? descriptor.singular
         title = String(AttributedString(localized: "^[\(batch.count) \(noun)](inflect: true)").characters)
-        let options = descriptor.presentation.recordState.flatMap { descriptor.field($0.field) }?.optionRoster ?? []
+        let options =
+            descriptor.presentation.recordState.flatMap { descriptor.field($0.field) }?.optionRoster ?? []
         let order: [EntityPhase] = [.needs, .active, .finished]
         let counted = batch.states.filter { $0.value > 0 }
             .map { value, count in
-                (option: options.first { $0.value == value } ?? LabeledOption(value: value, label: value), count: count)
+                (
+                    option: options.first { $0.value == value } ?? LabeledOption(value: value, label: value),
+                    count: count
+                )
             }
             .sorted {
                 (order.firstIndex(of: $0.option.statePhase) ?? 0, $0.option.value)
@@ -241,7 +248,8 @@ public struct ListBatchSummary: Sendable, Hashable {
             }
         rollup = counted.map { "\($0.count) \($0.option.label.lowercased())" }.joined(separator: ", ")
         lead = counted.first.map {
-            RecordState(option: $0.option, reason: nil, waitReason: nil, waitLabel: nil, jobs: nil, stalled: false)
+            RecordState(
+                option: $0.option, reason: nil, waitReason: nil, waitLabel: nil, jobs: nil, stalled: false)
         }
         progress = ProgressValue(
             done: batch.phases["finished"] ?? 0,
