@@ -60,15 +60,18 @@ export async function buildEntityReports(
     actor,
     services,
   });
-  const reports: EntityReportManyOut["reports"] = [];
-  for (const slot of input.slots) {
-    if (slot === "task.briefing")
-      throw new Error("task.briefing does not support a record scope.");
-    reports.push({
-      slot,
-      report: foldRepeatedRows(await execution.read(await reportFor(slot))),
-    });
-  }
+  // The execution memoizes shared dependencies by promise, so slots read
+  // together overlap their queries and still return in request order.
+  const reports = await Promise.all(
+    input.slots.map(async (slot) => {
+      if (slot === "task.briefing")
+        throw new Error("task.briefing does not support a record scope.");
+      return {
+        slot,
+        report: foldRepeatedRows(await execution.read(await reportFor(slot))),
+      };
+    }),
+  );
   return { reports };
 }
 

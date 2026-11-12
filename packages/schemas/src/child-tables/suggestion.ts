@@ -141,6 +141,12 @@ export const suggestionChildren = [
       },
       { name: "Suggestion_run_status_idx", on: ["runId", "status"] },
       {
+        // Work lists member corrections a Suggestion never applied; decided rows are rare.
+        name: "Suggestion_member_decision_idx",
+        on: ["entity", "recordId"],
+        where: "{status} = 'superseded' AND {decisions} <> '[]'::jsonb",
+      },
+      {
         name: "Suggestion_active_suppression_idx",
         on: ["entity", "recordId"],
         where: "{active} AND {suppression} IS NOT NULL",

@@ -11,7 +11,7 @@ import {
   emailPurchaseAssociationsSql,
 } from "~/server/domains/email/repo/email-sql";
 import { purchasePurchaserSetSql } from "~/server/domains/purchase/repo/purchase-purchaser";
-import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 
 const livePurchases = new QueryBuilder()
   .select({ id: purchaseTable.id, vendorId: purchaseTable.vendorId })
@@ -65,7 +65,8 @@ export function relationshipQueryCondition(
           : query.kind === "sourceObservationWithdrawal"
             ? "withdrawalImportId"
             : "supersededByRowId";
-      return sql`EXISTS (SELECT 1 FROM ${sourceObservations} observation
+      // These fields are observation facts; the full relation also folds alias history.
+      return sql`EXISTS (SELECT 1 FROM ${sourceObservationFacts} observation
         WHERE observation.id = ${s("id")} AND observation.${sql.identifier(field)} = ${t("id")})`;
     }
     case "reviewedEmailTransactions":

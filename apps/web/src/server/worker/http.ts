@@ -39,6 +39,7 @@ import {
   isMaintenanceMode,
   maintenanceResponse,
 } from "~/server/http/maintenance";
+import { withRequestMemo } from "~/server/http/request-memo";
 import { classifyHttpWorkload } from "~/server/http/workload";
 import {
   type AppSpan,
@@ -180,14 +181,16 @@ async function dispatchHttp(
       ),
     },
     () =>
-      withMemberFreshness(async () => {
-        const response = await invokeApplication(request, url);
-        const cookie = await memberWriteCookie();
-        if (!cookie || response.status === 101) return response;
-        const marked = new Response(response.body, response);
-        marked.headers.append("set-cookie", cookie);
-        return marked;
-      }),
+      withMemberFreshness(() =>
+        withRequestMemo(async () => {
+          const response = await invokeApplication(request, url);
+          const cookie = await memberWriteCookie();
+          if (!cookie || response.status === 101) return response;
+          const marked = new Response(response.body, response);
+          marked.headers.append("set-cookie", cookie);
+          return marked;
+        }),
+      ),
   );
 }
 

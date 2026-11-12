@@ -1164,6 +1164,19 @@ export const { definition, readSchemas } = defineEntityModel({
         where: "{deletedAt} IS NULL",
       },
       { on: ["systemKey"], unique: true },
+      {
+        // A sender lookup under SERIALIZABLE reads index pages, not every Vendor.
+        name: "Vendor_orderEmailSenders_gin_idx",
+        on: ["orderEmailSenders"],
+        using: "gin",
+        where: "{deletedAt} IS NULL",
+      },
+      {
+        name: "Vendor_orderEmailSenderPolicies_gin_idx",
+        on: ["orderEmailSenderPolicies"],
+        using: "gin",
+        where: "{deletedAt} IS NULL",
+      },
     ],
     checks: [
       { column: "spendingProfile" },
