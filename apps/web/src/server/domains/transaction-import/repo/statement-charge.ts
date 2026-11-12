@@ -14,6 +14,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   sourceObservationFacts,
+  sourceObservationIdentities,
   sourceOccurrenceStates,
   sourceOccurrenceStatesWhere,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -34,13 +35,13 @@ export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 
 /** Scoped direct state, with one row per owner and no observation-state aggregation. */
 export const chargeStateOf = (scope: SQL) =>
-  sourceOccurrenceStatesWhere(sql`EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+  sourceOccurrenceStatesWhere(sql`EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
     WHERE r.source = o.source AND r."chargeKey" = o.shortcode
       AND ${notDeleted("r")} AND (${scope}))`);
 
 export const CHARGE_STATE = sql`(
   SELECT state.* FROM ${sourceOccurrenceStates} state
-  WHERE EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+  WHERE EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
     WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
       AND ${notDeleted("r")})
 )`;

@@ -65,7 +65,7 @@ export async function markWorkPublicationDirty(db: Database): Promise<void> {
 }
 
 /**
- * Replaces the publication with the sources' current union. A transaction
+ * Reconciles the publication with the sources' current union. A transaction
  * try-lock admits one publisher; another returns at once, and readers never
  * wait, keeping the previous rows until this transaction commits. The insert
  * runs in a savepoint, so its failure is recorded by the attempt that still
