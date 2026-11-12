@@ -17,12 +17,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
+import { referenceTitleQueryOptions } from "~/entity/components/ref-link/reference-title";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
-import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { useStandardColumns } from "~/entity/hooks/use-standard-columns";
 import { entityMetadata } from "~/entity/metadata";
 import { installFeatures } from "~/features/registry";
@@ -150,12 +150,12 @@ it("renders proposed multiple references without borrowing current nested record
   const proposedIds = ["TSK-4K7M", "TSK-7M4K"];
   for (const [index, id] of proposedIds.entries()) {
     queryClient.setQueryDefaults(
-      entityPreviewQueryOptions("task", id).queryKey,
+      referenceTitleQueryOptions("task", id).queryKey,
       { staleTime: Infinity },
     );
-    queryClient.setQueryData(entityPreviewQueryOptions("task", id).queryKey, {
-      id,
-      name: `Synthetic dependency ${index + 1}`,
+    queryClient.setQueryData(referenceTitleQueryOptions("task", id).queryKey, {
+      title: `Synthetic dependency ${index + 1}`,
+      emoji: null,
     });
   }
   const record = {
