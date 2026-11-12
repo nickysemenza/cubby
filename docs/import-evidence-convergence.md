@@ -19,10 +19,11 @@ Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
 Clean purchases and fees book spending automatically; uncertain work remains in
-the shared Suggestions queue. Transfers, card payments and ordinary income
+the shared Suggestions queue. Transfers, card payments, earned interest and ordinary income
 remain settlement-only: clean ones are created automatically without Expenses,
 and a money move is clean only with its clean opposite leg, created as a pair.
-All money continues to be `SUM(Expense.cost)`.
+All money continues to be `SUM(Expense.cost)`. Interest earned is recorded as
+`interest` with an inflow; interest linked to a Purchase remains an outflow.
 
 Pending or unknown provider status does not prevent an otherwise supported
 booking, and spending advice is generated for pending and observed spending
@@ -125,6 +126,8 @@ and acknowledge conflicting category history while correcting a held booking.
 Reviewed category and new business-name choices are kept separately from model
 advice. Booking corrections use the server's retained advice and explicit
 reviewed fields; clients cannot submit replacement model evidence.
+Standard card-fee descriptions use the card account's live issuer Vendor;
+the generic fee description is not a Vendor alias. A missing issuer needs review.
 
 ### Settling existing Purchases and refunds
 

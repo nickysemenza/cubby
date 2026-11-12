@@ -119,6 +119,7 @@ import {
   kindAgreed,
   decideStatementKind,
   offRailPerson,
+  isLoanPayment,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -1589,7 +1590,9 @@ export async function buildChargeProposals(
     });
     const account = accountById.get(accountId);
     const transfer = account
-      ? ownAccountNamed(canonical.rawDescription, account, accounts)
+      ? isLoanPayment(account, canonical)
+        ? { accountId: null, ledgerTransfer: false }
+        : ownAccountNamed(canonical.rawDescription, account, accounts)
       : null;
     const past = history.get(chargeId(charge));
     const decision = decideStatementKind({

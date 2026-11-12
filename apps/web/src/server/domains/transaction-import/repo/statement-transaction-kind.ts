@@ -34,9 +34,8 @@ const CATEGORY_RULES = new Map<string, KindRule>(
     "business income": { kind: "income", direction: "inflow" },
     income: { kind: "income", direction: "inflow" },
     "dividends capital gains": { kind: "income", direction: "inflow" },
-    // `interest` and `fee` are charges and must be positive: interest earned is
-    // income, and a reversed fee is an adjustment (a refund is goods returned).
-    interest: { kind: "interest", inflow: "income" },
+    // A reversed fee is an adjustment (a refund is goods returned).
+    interest: { kind: "interest" },
     transfer: { kind: "account_transfer" },
     transfers: { kind: "account_transfer" },
     "internal transfer": { kind: "account_transfer" },
@@ -107,6 +106,15 @@ export type StatementDescriptor = Pick<
   NonNullable<StatementTransactionJudgment["create"]>,
   "rawDescription" | "merchant"
 >;
+
+/** The loan statement's payment entry records a balance movement. */
+export function isLoanPayment(
+  account: { kind: string },
+  descriptor: StatementDescriptor,
+): boolean {
+  const text = descriptor.rawDescription ?? descriptor.merchant;
+  return account.kind === "loan" && text?.trim().toUpperCase() === "PAYMENT";
+}
 
 /** Rails a person can pay or be paid through: payment apps and checks. */
 const P2P_RAIL =
@@ -187,8 +195,7 @@ export function decideStatementKind(input: {
   if (transfer) return decided("account_transfer", "rule");
   if (counterparty.label === "person")
     return decided(input.amount > 0 ? "purchase" : "income", "model");
-  // A kind the transaction schema refuses at this sign (an inflow as
-  // `interest` or `fee`) is never proposed, and so never agreed.
+  // A kind the transaction schema refuses at this sign is never proposed.
   const cast = [votes.rule, votes.label, votes.history].filter(
     (vote): vote is FinancialTransactionKind =>
       vote !== null &&

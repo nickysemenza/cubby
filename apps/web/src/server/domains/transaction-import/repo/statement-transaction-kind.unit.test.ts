@@ -3,18 +3,37 @@ import { describe, expect, it } from "vitest";
 
 import {
   decideStatementKind,
+  isLoanPayment,
   kindAgreed,
   ownAccountNamed,
   statementTransactionKind,
 } from "./statement-transaction-kind";
 
 describe("statementTransactionKind", () => {
+  it("recognizes the loan payment entry without treating escrow tax as a payment", () => {
+    expect(
+      isLoanPayment(
+        { kind: "loan" },
+        { rawDescription: "PAYMENT", merchant: null },
+      ),
+    ).toBe(true);
+    expect(
+      isLoanPayment(
+        { kind: "loan" },
+        { rawDescription: "COUNTY TAX PMT", merchant: null },
+      ),
+    ).toBe(false);
+    expect(
+      isLoanPayment(
+        { kind: "other" },
+        { rawDescription: "PAYMENT", merchant: null },
+      ),
+    ).toBe(false);
+  });
   it.each([
     ["Paychecks", -2500, "income", "rule"],
     ["Interest", 1.25, "interest", "rule"],
-    // Interest earned is money in; `interest` means interest charged and must
-    // be positive, so an inflow under Interest was once unappliable.
-    ["Interest", -8.66, "income", "rule"],
+    ["Interest", -8.66, "interest", "rule"],
     ["Financial Fees", -35, "adjustment", "rule"],
     ["Transfer", 500, "account_transfer", "rule"],
     ["Transfer", -500, "account_transfer", "rule"],
@@ -187,9 +206,8 @@ describe("decideStatementKind and kindAgreed", () => {
       kind: "credit_card_payment",
       kindSource: "model",
     });
-    // Failure mode: a card payment from another owner's account was clean
-    // with no LedgerTransfer. Money moves wait for their opposite leg.
     expect(kindAgreed(create, null)).toBe(false);
+    expect(kindAgreed(create, { ledgerTransfer: true })).toBe(false);
   });
 
   it("holds a stored-value payment back until history names a business", () => {
@@ -349,9 +367,7 @@ describe("ownAccountNamed", () => {
 });
 
 describe("decideStatementKind sign rules", () => {
-  // `interest` and `fee` must be positive: an inflow labelled either became an
-  // unappliable suggestion.
-  it("never proposes or cleans a kind the transaction's sign refuses", () => {
+  it("accepts earned interest without permitting it as purchase settlement", () => {
     const create = decideStatementKind({
       amount: -1.25,
       votes: { rule: null, label: "interest", history: "interest" },
@@ -359,7 +375,21 @@ describe("decideStatementKind sign rules", () => {
       transfer: null,
       descriptor: card,
     });
-    expect(create).toMatchObject({ kind: "refund", kindSource: "sign" });
-    expect(kindAgreed(create, null)).toBe(false);
+    expect(create).toMatchObject({ kind: "interest", kindSource: "model" });
+    expect(kindAgreed(create, null)).toBe(true);
+    expect(
+      financialTransactionSettlementViolation({
+        linked: false,
+        kind: "interest",
+        amount: -1.25,
+      }),
+    ).toBeNull();
+    expect(
+      financialTransactionSettlementViolation({
+        linked: true,
+        kind: "interest",
+        amount: -1.25,
+      }),
+    ).not.toBeNull();
   });
 });

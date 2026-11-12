@@ -3528,9 +3528,7 @@ describe("statement Transaction suggestions", () => {
     );
   });
 
-  // Failure mode: the model picks `interest` for interest earned, which the
-  // settlement sign rule refuses, so the accept could never apply.
-  it("ignores a model kind the transaction could not be created as", async () => {
+  it("recognizes earned interest without requiring purchase settlement", async () => {
     await card(ctx);
     await record(ctx, [
       rowInput({
@@ -3545,8 +3543,8 @@ describe("statement Transaction suggestions", () => {
     const [suggestion] = await readPendingStatements(ctx);
     expect(suggestion!.create).toMatchObject({
       amount: -8.66,
-      kind: "refund",
-      kindSource: "sign",
+      kind: "interest",
+      kindSource: "model",
       votes: { label: "interest" },
     });
     expect(suggestion!.clean).toBe(false);

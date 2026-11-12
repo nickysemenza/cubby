@@ -609,12 +609,12 @@ export const updateFinancialAccount = defineMutationWriter({
         data.providerVendorId === undefined
           ? undefined
           : await resolveProviderVendorForAccount(tx, data.providerVendorId);
-      // The identity kind is the discriminator statement routing depends on, so it is chosen
-      // at creation; the other identity fields and the card numbers stay editable.
+      // Statement routing depends on identity. Only an unspecified account can be identified as a loan.
       const beforeIdentity = financialAccountIdentity.parse(before.identity);
       if (
         data.identity !== undefined &&
-        data.identity.kind !== beforeIdentity.kind
+        data.identity.kind !== beforeIdentity.kind &&
+        !(beforeIdentity.kind === "other" && data.identity.kind === "loan")
       )
         throw createAppError(
           "CONSTRAINT_VIOLATION",

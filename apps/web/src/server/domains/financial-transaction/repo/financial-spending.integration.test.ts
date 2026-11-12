@@ -118,6 +118,51 @@ describe("shared spending booking", () => {
     });
     return { owner, account, vendor, category, transaction, advice };
   }
+  it("books the card issuer for a generic fee on each card", async () => {
+    const owner = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic member",
+      kind: "member",
+    });
+    for (const [index, name] of [
+      "Synthetic issuer one",
+      "Synthetic issuer two",
+    ].entries()) {
+      const issuer = await createRepoIdentity(ctx, "vendor", { name });
+      const account = await createRepoIdentity(ctx, "financialAccount", {
+        name: `Synthetic card ${index}`,
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: owner.output.id,
+        providerVendorId: issuer.output.id,
+      });
+      const transaction = await createRepoIdentity(
+        ctx,
+        "financialTransaction",
+        {
+          accountId: account.output.id,
+          kind: "fee",
+          status: "posted",
+          amount: 20 + index,
+          postedDate: "2026-05-05",
+          merchant: "Annual Membership Fee",
+          sourceRefs: [
+            { source: "synthetic-bank", externalId: `fee-${index}` },
+          ],
+        },
+      );
+      const plan = await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+      });
+      expect(plan).toMatchObject({
+        status: "ready",
+        vendorId: issuer.output.id,
+      });
+      await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    }
+    const purchases = await getDb(ctx.db)
+      .select({ vendorId: purchase.vendorId })
+      .from(purchase);
+    expect(new Set(purchases.map((row) => row.vendorId)).size).toBe(2);
+  });
   it.each(["missing", "uncertain", "conflicting"] as const)(
     "books supported spending once with an unknown %s category instead of guessing",
     async (categoryEvidence) => {

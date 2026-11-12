@@ -8,6 +8,8 @@ Reports use Spending Categories whether a Purchase has item lines or only a
 lump amount. Without item evidence, classify only as specifically as the known
 purchase evidence supports; a mixed retailer's name alone does not establish
 its basket contents. Keep unresolved money visible in totals.
+Card fees use the issuing account's Vendor; a shared fee description does not
+establish a shared merchant or category default.
 
 Later itemization can refine historical allocation when the resulting lines have
 no explicit category override. A lump's saved category is currently copied to

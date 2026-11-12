@@ -124,6 +124,8 @@ function spendingBlocker(input: {
   ambiguous: boolean;
 }) {
   const { facts, advice } = input;
+  if (issuerCardFee(facts) && !input.vendorResolved)
+    return "The card account needs a live issuer Vendor before booking this fee.";
   if (!facts.purchaser && !liveHouseholdSpendingAccount(facts.account))
     return "A confirmed member-owned account or household card, bank or stored-value account is required before booking spending.";
   if (
@@ -141,11 +143,26 @@ function spendingBlocker(input: {
   )
     return "The merchant needs a supported business name before a Vendor can be created.";
   if (
-    advice?.counterparty === "person" ||
-    advice?.counterparty === "payment_processor"
+    !issuerCardFee(facts) &&
+    (advice?.counterparty === "person" ||
+      advice?.counterparty === "payment_processor")
   )
     return "The counterparty does not identify a business Vendor.";
   return null;
+}
+
+/** Standard card fee descriptions identify the issuer, not a merchant. */
+function issuerCardFee(facts: Awaited<ReturnType<typeof spendingFacts>>) {
+  if (
+    facts.account.identity.kind !== "credit_card" ||
+    facts.source.kind !== "fee"
+  )
+    return false;
+  return [facts.source.merchant, facts.source.rawDescription].some((value) =>
+    /^(foreign transaction fee|annual membership fee|renewal membership fee|membership fee|return payment fee|monthly service fee)$/i.test(
+      value?.trim() ?? "",
+    ),
+  );
 }
 
 const resolveSpendingVendors = (db: Database, names: readonly string[]) =>
@@ -1236,11 +1253,29 @@ async function discoverSpendingEvidence(
 ) {
   const { row, source, account, allocations, graphs } = facts;
   let advice = reviewedSpendingAdvice(request);
+  const issuerFee = issuerCardFee(facts);
+  const issuer =
+    issuerFee && account.providerVendorId
+      ? await getDb(db).query.vendor.findFirst({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(vendorTable.id, account.providerVendorId!),
+                  notDeleted(vendorTable),
+                ),
+              ),
+          },
+        })
+      : undefined;
   const names = [
     ...new Set(
       [
-        source.merchant?.trim() || source.rawDescription?.trim(),
-        advice?.vendorName,
+        issuerFee
+          ? issuer?.name
+          : source.merchant?.trim() || source.rawDescription?.trim(),
+        issuerFee ? undefined : advice?.vendorName,
       ].filter((value): value is string => Boolean(value)),
     ),
   ];
@@ -1272,7 +1307,11 @@ async function discoverSpendingEvidence(
     : undefined;
   const vendor =
     selectedVendor ??
-    (vendors.size === 1 ? [...vendors.values()][0] : undefined);
+    (issuerFee
+      ? issuer
+      : vendors.size === 1
+        ? [...vendors.values()][0]
+        : undefined);
   let category = advice?.spendingCategoryId
     ? await spendingCategoryForDiscovery(
         db,
@@ -2435,8 +2474,9 @@ async function resolveBookingVendors(
   actor: ActorContext,
 ) {
   const lookups = bookings.map(({ fresh, facts }) => {
-    const merchant =
-      facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
+    const merchant = issuerCardFee(facts)
+      ? undefined
+      : facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
     return {
       merchant,
       names: [
