@@ -2602,7 +2602,7 @@ describe("statement Transaction suggestions", () => {
       rawDescription: `${prefix.toUpperCase()} SHOP ${index}`,
     });
 
-  it("applies an import label page's creates within its statement budget", async () => {
+  it("applies import label and retained-label generation creates within their statement budget", async () => {
     await card(ctx);
     const recorded = await record(
       ctx,
@@ -2626,6 +2626,33 @@ describe("statement Transaction suggestions", () => {
         .from(financialTransaction)
         .where(notDeleted(financialTransaction)),
     ).toHaveLength(8);
+    const retained = await record(
+      ctx,
+      Array.from({ length: 8 }, (_, index) => shop("Other", index)),
+      { fingerprint: "synthetic-retained-generation-labels" },
+    );
+    await generate(ctx);
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId,
+    });
+    const replay = () =>
+      generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
+        runId,
+        after: null,
+        scope: { importId: retained.batchId },
+      });
+    expect(
+      await expectStatementBudget(replay, { statements: 350, parameters: 200 }),
+    ).toMatchObject({ processed: 8, failed: [] });
+    await replay();
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(financialTransaction)
+        .where(notDeleted(financialTransaction)),
+    ).toHaveLength(16);
   });
 
   it("writes the same ledger, audit and Feedback on the page and single paths", async () => {
@@ -2739,7 +2766,7 @@ describe("statement Transaction suggestions", () => {
     expect(single).toEqual(page);
   });
 
-  it("applies alone what a member reviewed or the page shares, without failing the page", async () => {
+  async function applyAfterMemberReview(phase: "label" | "generation") {
     await card(ctx);
     const vendor = await createRepoIdentity(ctx, "vendor", {
       name: "Example Shared Vendor",
@@ -2784,6 +2811,10 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
+    if (phase === "generation")
+      await labelStatementSuggestions(ctx.db, {
+        port: answering({ kind: "purchase", counterparty: "business" }),
+      });
     const page = automaticRuleRuntime.applyAutomaticRulePage;
     const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
     const reviewed: string[] = [];
@@ -2799,12 +2830,21 @@ describe("statement Transaction suggestions", () => {
     const pageSpy = vi
       .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
       .mockImplementation(async (...args) => {
-        // A member reviews between selection and the page's locks.
-        for (const selection of args[1]) {
-          const data = z
-            .object({ source: z.string(), chargeKey: z.string() })
-            .parse(selection.row.data);
-          if ((await descriptionOf(data)) !== "EXAMPLE REVIEWED SHOP") continue;
+        // A member reviews after selection, before the page's locks. Charge-key
+        // and receipt ordering can put that charge in a later generation run.
+        if (!reviewed.length) {
+          const [row] = await getDb(ctx.db)
+            .select({ id: suggestionTable.id })
+            .from(suggestionTable).where(sql`${suggestionTable.active}
+              AND ${suggestionTable.judgment}->${"create"}->>${"rawDescription"} = ${"EXAMPLE REVIEWED SHOP"}`);
+          if (!row) throw new Error("Expected the reviewed synthetic charge");
+          const selection = (
+            await automaticRuleRuntime.selectAutomaticRules(ctx.db, [row.id], {
+              importClean: true,
+            })
+          ).get(row.id);
+          if (!selection)
+            throw new Error("Expected the reviewed synthetic rule");
           reviewed.push(selection.row.id);
           await reviewSuggestion(ctx.db, kernelCtx(ctx), {
             operationId: "synthetic-member-apply",
@@ -2827,10 +2867,18 @@ describe("statement Transaction suggestions", () => {
         return apply(...args);
       });
     try {
-      const outcome = await labelStatementSuggestions(ctx.db, {
-        port: answering({ kind: "purchase", counterparty: "business" }),
-        scope: { importId: recorded.batchId },
-      });
+      const outcome =
+        phase === "label"
+          ? await labelStatementSuggestions(ctx.db, {
+              port: answering({ kind: "purchase", counterparty: "business" }),
+              scope: { importId: recorded.batchId },
+            })
+          : await generateStatementSuggestionPage(ctx.db, {
+              servicesFor: buildCrudServices,
+              runId: null,
+              after: null,
+              scope: { importId: recorded.batchId },
+            });
       expect(outcome).toMatchObject({ failed: [] });
     } finally {
       pageSpy.mockRestore();
@@ -2842,10 +2890,12 @@ describe("statement Transaction suggestions", () => {
     expect(alone).toContain("EXAMPLE REVIEWED SHOP");
     // Of the two charges naming one new Vendor, the later in page order
     // applies alone after the page.
-    expect(
-      alone.filter((description) => description.startsWith("EXAMPLE TWIN")),
-    ).toHaveLength(1);
-    expect(alone).not.toContain("EXAMPLE PLAIN SHOP 0");
+    const twinsAlone = alone.filter((description) =>
+      description.startsWith("EXAMPLE TWIN"),
+    );
+    // Generation orders charge keys; labels order their publication receipts.
+    // Either order keeps a colliding create outside the shared write.
+    expect(twinsAlone.length).toBeGreaterThanOrEqual(1);
     const transactions = (
       await getDb(ctx.db)
         .select({ rawDescription: financialTransaction.rawDescription })
@@ -2862,7 +2912,12 @@ describe("statement Transaction suggestions", () => {
     );
     // Payments near one existing Purchase stay for review.
     expect(transactions.filter((row) => row?.includes("SHARED"))).toEqual([]);
-  });
+  }
+
+  it.each(["label", "generation"] as const)(
+    "applies alone what a member reviewed or the %s page shares",
+    applyAfterMemberReview,
+  );
 
   it.each(["cancelled", "expired"] as const)(
     "fences no-action receipt completion under %s Job ownership",

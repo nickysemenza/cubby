@@ -54,7 +54,10 @@ import {
   prepareStatementSpending,
   prepareStatementSpendingFacts,
 } from "~/server/domains/transaction-import/repo/statement-spending";
-import { statementBatchCandidate } from "~/server/domains/transaction-import/repo/statement-suggestion-apply";
+import {
+  statementBatchCandidate,
+  STATEMENT_PAGE_RUN_CREATES,
+} from "~/server/domains/transaction-import/repo/statement-suggestion-apply";
 import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
   buildChargeProposals,
@@ -99,10 +102,6 @@ const STATEMENT_LABEL_BATCH = 32;
 const STATEMENT_SPENDING_CONCURRENCY = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
-// A SERIALIZABLE run that reads more than 32 pages of a table escalates to a
-// table-wide predicate lock (max_pred_locks_per_transaction 64), and then
-// conflicts with almost every concurrent writer. Small runs stay page-level.
-const STATEMENT_PAGE_RUN_CREATES = 8;
 const log = createLogger("statement-suggestion-labels");
 
 const identityLabel = {

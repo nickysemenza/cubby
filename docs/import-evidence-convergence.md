@@ -1095,7 +1095,11 @@ obsolete input fence, and finish retirement before acknowledgement; recovery
 does not recreate or restamp labels. Resumed application receipts repeat that
 exact retirement check before application, including recovery from a crash
 before the after-commit callback started. Automatic financial application
-admits only the original ready prefix, sequentially. Charges already skipped by
+admits only the original ready prefix. Import generation and label pages apply
+compatible creates through the same guarded batches of at most eight. Each
+batch rebuilds current evidence under its locks, preserves per-charge receipts
+and rejects overlapping write footprints; declined items use single admission.
+Generation settles the booked charge's in-scope copies in the same pass. Charges already skipped by
 the current label page do not split that prefix; failed, unfinished and
 applicable-rule charges stop it. Unscoped passes may complete consecutive
 no-action receipts in bounded transactions: lock the exact receipts, verify
@@ -1103,9 +1107,8 @@ their charge/evidence, active pending state and absent rule descriptors, then
 clear only the proven prefix through the projection writer. A missing, replaced
 or rule-bearing receipt stops the batch (current
 import-only rules cannot execute outside import admission, so their stamps do
-not). Import-scoped passes regenerate before each admission that follows an
-applied rule on the same page, since regeneration can introduce actionable
-rules. Statement application and booking request only
+not). Single-item import admissions regenerate after an applied rule on the same
+page, since regeneration can introduce actionable rules. Statement application and booking request only
 identity output from their mutation writers when they consume only IDs; the
 writers keep validation, locks, audits, allocations and receipts.
 
