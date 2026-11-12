@@ -44,12 +44,24 @@ group by group, filtering a group with
    so the recommendation is `create`; two visits for the same amount are two
    creates.
 4. A person counterparty on a payment app is a shared-cost repayment, never a
-   Vendor, and is never clean. An outgoing payment to a person is your share
-   of a shared cost: create it as `purchase` with the merchant set to the
-   business the cost paid for. An incoming one is a repayment: create it, then
-   book it with `finance.book_transaction` as `economicRole: "reimbursement"`.
-   Never save a person's name or a generic payment-app merchant string (such
-   as a bare app name) as a Vendor or Vendor alias.
+   Vendor, and is never clean. Only a payment-app row (a stored-value account,
+   or a Venmo, Zelle or Cash App descriptor) can have a person counterparty;
+   elsewhere a person label or history reads as a business, such as a Square
+   shop named after its owner or a bill naming the member. A payment-app row
+   naming a household member in full, or a bank row with transfer words naming
+   one, is a `transfer` awaiting its pair: money between members is a Ledger
+   Transfer, never a Credit, even when it settles a shared dinner. An outgoing
+   payment to a friend is your share of a shared cost: create it as `purchase`
+   with the merchant set to the business the memo (`create.notes`) names, or
+   the payment app's settle-up Vendor when it names none. An incoming one is a
+   repayment: create it, then book it with `finance.book_transaction` as
+   `economicRole: "reimbursement"` onto the Purchase it repaid when the memo
+   names exactly one household charge from 14 days before to 2 days after at a
+   plausible share, otherwise onto that year's settle-up Purchase (see the
+   [household ledger](../../purchase-import/references/household-ledger.md)).
+   Ignore bets, gifts and pools with a reason. Never save a person's name or a
+   generic payment-app merchant string (such as a bare app name) as a Vendor
+   or Vendor alias.
 5. A `transfer` names the member's own balance account a cash-out or funding
    descriptor points at (Venmo-style and payout balances are `stored_value`;
    PayPal is read like a card). `transfer_pair` Suggestions stay reviewable on

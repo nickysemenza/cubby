@@ -102,11 +102,39 @@ type KindDecision = Pick<
   "kind" | "kindSource" | "votes" | "counterparty"
 >;
 
+/** The statement text a counterparty rule reads. */
+export type StatementDescriptor = Pick<
+  NonNullable<StatementTransactionJudgment["create"]>,
+  "rawDescription" | "merchant"
+>;
+
+/** Peer-payment rails a person can pay or be paid through. */
+const P2P_RAIL = / (venmo|zelle|cash ?app|square cash) /;
+
+/**
+ * Whether a person can be on the other side of a row: it is on a stored-value
+ * (payment-app) account or its descriptor names a peer-payment rail. Cards and
+ * banks pay people only through a rail; elsewhere a person-like name is a
+ * seller, such as a Square or Shopify shop, or a bill naming the member.
+ */
+export function statementP2PRail(
+  descriptor: StatementDescriptor,
+  counterparty: Pick<StatementCounterparty, "storedValue">,
+) {
+  return (
+    counterparty.storedValue ||
+    P2P_RAIL.test(
+      words(`${descriptor.rawDescription ?? ""} ${descriptor.merchant ?? ""}`),
+    )
+  );
+}
+
 /**
  * The kind a create records, from the sources' votes. An own-account move is
  * a transfer; a confident person label makes an outflow your share of a
  * shared cost (purchase) and an inflow a repayment (income); otherwise two
- * agreeing votes outrank the rule, which outranks the label.
+ * agreeing votes outrank the rule, which outranks the label. Off a
+ * peer-payment rail a person label or history reads as a business.
  */
 export function decideStatementKind(input: {
   /** Cubby convention: positive is money out of the account. */
@@ -114,8 +142,25 @@ export function decideStatementKind(input: {
   votes: StatementKindVotes;
   counterparty: StatementCounterparty;
   transfer: StatementTransactionJudgment["transfer"];
+  descriptor: StatementDescriptor;
 }): KindDecision {
-  const { votes, counterparty, transfer } = input;
+  const { votes, transfer } = input;
+  const counterparty: StatementCounterparty = statementP2PRail(
+    input.descriptor,
+    input.counterparty,
+  )
+    ? input.counterparty
+    : {
+        ...input.counterparty,
+        label:
+          input.counterparty.label === "person"
+            ? "business"
+            : input.counterparty.label,
+        history:
+          input.counterparty.history === "person"
+            ? null
+            : input.counterparty.history,
+      };
   const decided = (
     kind: FinancialTransactionKind,
     kindSource: KindDecision["kindSource"],
@@ -252,5 +297,43 @@ export function ownAccountNamed(
       only!.ledgerPartyId !== null &&
       account.ledgerPartyId !== null &&
       only!.ledgerPartyId !== account.ledgerPartyId,
+  };
+}
+
+/** A household member a descriptor can name. */
+export type HouseholdMember = { ledgerPartyId: string; name: string };
+
+/**
+ * Money between household members, which a LedgerTransfer records rather than
+ * a repayment Credit: a peer-payment row, or a bank row with transfer words,
+ * whose descriptor names a member in full (a member settling a group dinner
+ * the other paid, or a member's account funding household checking). The
+ * other leg's account is unknown, so it waits for its transfer pair.
+ */
+export function householdMemberNamed(
+  descriptor: StatementDescriptor,
+  account: OwnAccount,
+  members: readonly HouseholdMember[],
+): StatementTransactionJudgment["transfer"] {
+  const text = words(
+    `${descriptor.rawDescription ?? ""} ${descriptor.merchant ?? ""}`,
+  );
+  const storedValue = account.kind === "stored_value";
+  if (
+    !statementP2PRail(descriptor, { storedValue }) &&
+    !(BALANCE_KINDS.has(account.kind) && MOVE_WORDS.test(text))
+  )
+    return null;
+  const named = members.filter((member) => {
+    const parts = words(member.name).trim().split(" ");
+    return (
+      parts.length >= 2 &&
+      parts.every((part) => part.length >= 2 && text.includes(` ${part} `))
+    );
+  });
+  if (named.length !== 1) return null;
+  return {
+    accountId: null,
+    ledgerTransfer: named[0]!.ledgerPartyId !== account.ledgerPartyId,
   };
 }

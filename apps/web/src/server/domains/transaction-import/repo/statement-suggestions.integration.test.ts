@@ -2542,10 +2542,10 @@ describe("statement Transaction suggestions", () => {
       const account = (await card(ctx)).output;
       const importScoped = mode === "import";
       const recorded = await record(ctx, [
-        rowInput(),
+        rowInput({ rawDescription: "VENMO SYNTHETIC SHARED COST" }),
         rowInput({
           providerAmount: -19,
-          rawDescription: "SYNTHETIC PERSONAL PAYMENT",
+          rawDescription: "VENMO SYNTHETIC PERSONAL PAYMENT",
         }),
       ]);
       await generate(ctx);
@@ -3941,13 +3941,13 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [
       rowInput({
         merchant: "Sample Friend",
-        rawDescription: "PAYFRIEND FROM SAMPLE FRIEND",
+        rawDescription: "VENMO FROM SAMPLE FRIEND",
         sourceCategory: "Paychecks",
         providerAmount: 40,
       }),
       rowInput({
         merchant: "Sample Friend",
-        rawDescription: "PAYFRIEND *SAMPLE FRIEND",
+        rawDescription: "VENMO *SAMPLE FRIEND",
         sourceCategory: "Shopping",
         providerAmount: -25,
       }),

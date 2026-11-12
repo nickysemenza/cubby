@@ -12,7 +12,7 @@ model. This guide is the import recipe. Every amount below is synthetic.
 | A vendor refund or host reimbursement                           | Negative principal Expense on the same Purchase                                |
 | A non-member repays their share of a cost the household fronted | `reimbursement` Expense (a Credit) on the Purchase it repaid                   |
 | One repayment covering several shared charges                   | Credit on one settle-up Purchase for the trip (vendor: the shared-expense app) |
-| One member repays another member                                | Ledger Transfer between the two Ledger Parties                                 |
+| One member repays another member, including for a group dinner  | Ledger Transfer between the two Ledger Parties                                 |
 | A non-member's own purchase the household never paid            | Nothing; the household's share already nets out of repayments                  |
 
 The project total is then the household's net cost: charges paid, less refunds
@@ -37,8 +37,12 @@ payment rail (a payment app, a bank) is the Financial Account of its transaction
 3. **Statement-only spend.** Venue food, a driver paid by bank transfer, and
    similar charges get a Purchase per vendor with one line per charge.
 4. **Credits.** Book each incoming repayment with `finance.book_transaction` as
-   `reimbursement`: onto the order it repaid when the memo or timing names one
-   (lodging share, ticket share), otherwise onto the trip's settle-up Purchase.
+   `reimbursement`: onto the Purchase it repaid when the memo names exactly one
+   household charge from 14 days before to 2 days after at a plausible share
+   (lodging share, ticket share, a restaurant), otherwise onto the trip's
+   settle-up Purchase, or outside a trip onto that year's settle-up Purchase
+   for the payment app. A 1/n amount alone matches too many charges to link.
+   Re-point a Credit later with the `attach_reimbursement` booking correction.
 5. **Members.** Record member-to-member repayments as Ledger Transfers with the
    transaction as evidence. Funding derives from the card each charge settled
    on, so funders need no tagging.
