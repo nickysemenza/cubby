@@ -99,6 +99,10 @@ const STATEMENT_LABEL_BATCH = 32;
 const STATEMENT_SPENDING_CONCURRENCY = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
+// A SERIALIZABLE run that reads more than 32 pages of a table escalates to a
+// table-wide predicate lock (max_pred_locks_per_transaction 64), and then
+// conflicts with almost every concurrent writer. Small runs stay page-level.
+const STATEMENT_PAGE_RUN_CREATES = 8;
 const log = createLogger("statement-suggestion-labels");
 
 const identityLabel = {
@@ -620,6 +624,8 @@ async function applyPublishedStatementLabels(
   for (let index = 0; index < queue.length;) {
     const run: { target: LabelTarget; selection: AutomaticSelection | null }[] =
       [];
+    let creates = 0;
+    let full = false;
     for (; index < queue.length; index++) {
       const target = queue[index]!;
       const selection = selections.get(receiptOf(target)) ?? null;
@@ -630,6 +636,11 @@ async function applyPublishedStatementLabels(
         )
       )
         break;
+      if (selection && creates === STATEMENT_PAGE_RUN_CREATES) {
+        full = true;
+        break;
+      }
+      if (selection) creates++;
       run.push({ target, selection });
     }
     if (run.length) {
@@ -692,7 +703,7 @@ async function applyPublishedStatementLabels(
         for (const target of alone) await applyAlone(target);
       }
     }
-    if (index < queue.length) await applyAlone(queue[index++]!);
+    if (!full && index < queue.length) await applyAlone(queue[index++]!);
   }
   return { applied, rebuild, excluded };
 }

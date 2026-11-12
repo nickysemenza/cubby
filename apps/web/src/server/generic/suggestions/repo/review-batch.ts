@@ -68,7 +68,8 @@ const replayable = (error: unknown) =>
  * duplicate retirement. A `fallback` item wrote nothing and keeps the
  * single-review path. A write error rolls the applications back to a
  * savepoint and falls every item back; a serialization failure or deadlock
- * replays the page, then falls back. Operation ids are fixed per item, so a
+ * splits the page in half (settle stays with the first half), and a single
+ * item replays, then falls back. Operation ids are fixed per item, so a
  * replayed page is idempotent.
  *
  * `settle` runs last in the same boundary with its own ids locked and
@@ -368,8 +369,32 @@ export async function reviewAutomaticPage<T>(
       if (isWorkflowInterrupted(error) || !replayable(error)) throw error;
       log.warn("Automatic rule page conflicted", {
         attempt,
+        items: items.length,
         sqlState: findPgError(error)?.code,
       });
+      if (items.length > 1) {
+        // A smaller boundary reads fewer pages and conflicts less; replaying
+        // the whole page repeats the same conflict.
+        const middle = Math.ceil(items.length / 2);
+        const first = await reviewAutomaticPage(
+          db,
+          name,
+          context,
+          items.slice(0, middle),
+          options,
+        );
+        const second = await reviewAutomaticPage(
+          db,
+          name,
+          context,
+          items.slice(middle),
+          { statementScope: options.statementScope },
+        );
+        return {
+          outcomes: new Map([...first.outcomes, ...second.outcomes]),
+          settled: first.settled,
+        };
+      }
       if (attempt >= PAGE_ATTEMPTS) return fallback();
     }
   }

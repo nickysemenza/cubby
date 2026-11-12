@@ -324,7 +324,9 @@ the untouched suffix's receipts and inclusive cursor for the next page.
 
 Application walks the page's published receipts in page order. Each run of
 consecutive receipts that no automatic rule matches, or whose rule applies an
-as-is `create` the family can batch, settles in one SERIALIZABLE transaction:
+as-is `create` the family can batch, settles in one SERIALIZABLE transaction
+of at most eight creates, so its predicate locks stay page-level instead of
+escalating to whole tables:
 it fences the Job once, rechecks statement scope once, takes every review,
 transfer-leg, evidence-source and occurrence lock in the single-review
 namespace order (sorted within each namespace), rebuilds the run's proposals
@@ -335,8 +337,8 @@ candidate, copy or hold, Purchase, Vendor nearby spending or category, or a
 Vendor name another charge creates) meets an earlier charge's applies alone
 through its own review, in page order, right after its run. A write error
 rolls the run's applications back to a savepoint and applies each alone; a
-serialization failure or deadlock replays the run up to three times before
-that. Operation ids are fixed per rule revision and Suggestion, so a replayed
+serialization failure or deadlock splits the run in half, and a single charge
+replays up to three times before that. Operation ids are fixed per rule revision and Suggestion, so a replayed
 run is idempotent. Each write's advisory refresh of pending charges near it on
 the account skips charges the same import observes, and runs once at the end
 of the page or label round. Interrupted pages replay their existing
