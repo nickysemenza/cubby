@@ -282,7 +282,7 @@ const publishedRouted = (admitted: readonly WorkSource[], scope: WorkScope) => {
 };
 
 /**
- * Replaces the household publication with the composed sources' current
+ * Reconciles the household publication with the composed sources' current
  * union, deferrals applied. Reads never wait for it; see work-publication.
  */
 export async function insertWorkItems(
@@ -297,20 +297,63 @@ export async function insertWorkItems(
   const deferred = and(
     ...composition.deferrals.map((deferral) => sql`NOT (${deferral})`),
   );
-  await getDb(db).execute(sql`DELETE FROM "WorkItem"`);
   await getDb(db).execute(sql`
     WITH ${withCtes}
     ${membersCte},
     work AS NOT MATERIALIZED (${union}),
-    routed AS NOT MATERIALIZED (${routedWork})
+    routed AS NOT MATERIALIZED (${routedWork}),
+    incoming AS MATERIALIZED (
+      SELECT source, entity, id, name, key, family, executor, reason,
+        reason_keys, owners, exclusive_owner, shared, amount, date,
+        input_incomplete, owner_codes, owner_key, owner_label
+      FROM routed work ${deferred ? sql`WHERE ${deferred}` : sql``}
+    ),
+    removed AS (
+      DELETE FROM "WorkItem" old
+      WHERE NOT EXISTS (SELECT 1 FROM incoming next
+        WHERE next.key=old.key AND next.input_incomplete=old."inputIncomplete")
+    )
     INSERT INTO "WorkItem" (source, entity, id, name, key, family, executor,
       reason, "reasonKeys", owners, "exclusiveOwner", shared, amount, date,
       "inputIncomplete", "ownerCodes", "ownerKey", "ownerLabel")
-    SELECT source, entity, id, name, key, family, executor, reason,
+    SELECT DISTINCT ON (key, input_incomplete)
+      source, entity, id, name, key, family, executor, reason,
       reason_keys, owners, exclusive_owner, shared, amount, date,
       input_incomplete, owner_codes, owner_key, owner_label
-    FROM routed work ${deferred ? sql`WHERE ${deferred}` : sql``}
-    ON CONFLICT DO NOTHING`);
+    FROM incoming next
+    WHERE NOT EXISTS (
+      SELECT 1 FROM "WorkItem" stored
+      WHERE stored.key=next.key AND stored."inputIncomplete"=next.input_incomplete
+        AND (stored.source, stored.entity, stored.id, stored.name,
+          stored.family, stored.executor, stored.reason, stored."reasonKeys",
+          stored.owners, stored."exclusiveOwner", stored.shared, stored.amount,
+          stored.date, stored."ownerCodes", stored."ownerKey", stored."ownerLabel")
+          IS NOT DISTINCT FROM
+          (next.source, next.entity, next.id, next.name,
+          next.family, next.executor, next.reason, next.reason_keys,
+          next.owners, next.exclusive_owner, next.shared, next.amount,
+          next.date, next.owner_codes, next.owner_key, next.owner_label)
+    )
+    ON CONFLICT (key, "inputIncomplete") DO UPDATE SET
+      source=excluded.source, entity=excluded.entity, id=excluded.id,
+      name=excluded.name, family=excluded.family, executor=excluded.executor,
+      reason=excluded.reason, "reasonKeys"=excluded."reasonKeys",
+      owners=excluded.owners, "exclusiveOwner"=excluded."exclusiveOwner",
+      shared=excluded.shared, amount=excluded.amount, date=excluded.date,
+      "ownerCodes"=excluded."ownerCodes", "ownerKey"=excluded."ownerKey",
+      "ownerLabel"=excluded."ownerLabel"
+    WHERE ("WorkItem".source, "WorkItem".entity, "WorkItem".id,
+      "WorkItem".name, "WorkItem".family, "WorkItem".executor,
+      "WorkItem".reason, "WorkItem"."reasonKeys", "WorkItem".owners,
+      "WorkItem"."exclusiveOwner", "WorkItem".shared, "WorkItem".amount,
+      "WorkItem".date, "WorkItem"."ownerCodes", "WorkItem"."ownerKey",
+      "WorkItem"."ownerLabel") IS DISTINCT FROM
+      (excluded.source, excluded.entity, excluded.id,
+      excluded.name, excluded.family, excluded.executor,
+      excluded.reason, excluded."reasonKeys", excluded.owners,
+      excluded."exclusiveOwner", excluded.shared, excluded.amount,
+      excluded.date, excluded."ownerCodes", excluded."ownerKey",
+      excluded."ownerLabel")`);
   const coverage = prepared.flatMap((candidate) =>
     candidate.inputCoverage
       ? [

@@ -2736,8 +2736,9 @@ assignment ledger. An MCP read fences to shared work and work owned only by the 
 before counts and paging; the household UI's Owner filter grants no private access.
 
 Household web reads (`workQueue.queue`) read the published `WorkItem` rows: the full source union
-with deferrals applied and owners routed (member codes, section key and label), replaced in one
-transaction by `publishWorkItems`. Filters, search, sorts, Group by, view counts, summaries and
+with deferrals applied and owners routed (member codes, section key and label). `publishWorkItems`
+reconciles the complete population in one transaction: remove absent keys, insert new keys and update
+changed values; equal rows keep their stored versions. Filters, search, sorts, Group by, view counts, summaries and
 hydration run over that relation. `WorkPublication` records the snapshot instant, the last unread
 member write (`dirtyAt`, set after commit by `recordChange` in a request or member-awaited background
 write), and the last failed attempt with its raw error, which holds off the next attempt for a
