@@ -1,4 +1,5 @@
 import type { CostType } from "@cubby/schemas/expense-fields";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 /**
  * Expense analytics — server-side chart aggregates for the household
  * Expenses tracker (see packages/schemas/src/project.ts's
@@ -41,7 +42,6 @@ import {
   plannedExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { quotedTable } from "~/server/db/helpers/related";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 
 import {
@@ -49,13 +49,7 @@ import {
   prepareExpenseDerivedRead,
   type PreparedExpenseDerivedRead,
 } from "./expense-derived-read";
-import {
-  effectiveExpenseProjectSql,
-  effectiveExpenseTradeSql,
-} from "./expense-inheritance";
-
-const effectiveProjectId = effectiveExpenseProjectSql(quotedTable(expense));
-const effectiveTrade = effectiveExpenseTradeSql(quotedTable(expense));
+import { principalExpenseInheritanceSql } from "./expense-inheritance";
 
 const summaryFields = (cost: SQL<number | null>) => ({
   ...expenseAggregateFields(cost),
@@ -231,26 +225,26 @@ export async function expenseAnalytics(
 export async function expenseTradeAffinity(
   db: Database,
 ): Promise<{ projectId: ProjectShortcode; trade: Trade; count: number }[]> {
-  const rows = await getDb(db)
-    .select({
-      projectShortcode: project.shortcode,
-      trade: effectiveTrade,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(expense)
-    .innerJoin(
-      project,
-      and(eq(effectiveProjectId, project.id), notDeleted(project)),
+  const inherited = principalExpenseInheritanceSql("e", "live_purchase");
+  const { rows } = await getDb(db).execute<{
+    projectShortcode: string;
+    trade: Trade | null;
+    count: number;
+  }>(sql`
+    WITH principal AS MATERIALIZED (
+      SELECT ${inherited.projectId} AS "projectId", ${inherited.trade} AS trade
+      FROM "Expense" e
+      LEFT JOIN "Purchase" live_purchase
+        ON live_purchase."id" = e."purchaseId" AND ${notDeleted("live_purchase")}
+      ${inherited.joins}
+      WHERE ${notDeleted("e")} AND e."lineKind" = ${expenseLineKindSchema.enum.principal}
     )
-    .where(
-      and(
-        notDeleted(expense),
-        isNotNull(effectiveProjectId),
-        isNotNull(effectiveTrade),
-        eq(expense.lineKind, "principal"),
-      ),
-    )
-    .groupBy(project.shortcode, effectiveTrade);
+    SELECT p."shortcode" AS "projectShortcode", principal.trade, count(*)::int AS count
+    FROM principal
+    JOIN "Project" p ON p."id" = principal."projectId" AND ${notDeleted("p")}
+    WHERE principal.trade IS NOT NULL
+    GROUP BY p."shortcode", principal.trade
+  `);
 
   return rows.flatMap((row) =>
     row.trade === null
