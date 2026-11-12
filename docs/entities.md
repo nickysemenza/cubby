@@ -651,16 +651,17 @@ under readable ids:
 - `slot`: the one per-platform hand-written fill, rendered only where a registry provides it
   (`DetailSlotId<E>` / `ListSlotId<E>` in `entity-manifest.ts` type those registries).
 
-Sections are authored for reading; nothing derives from edit groups. Web detail is a two-pane
-workspace: tabs on the left, the side column on the right. `detail.groups: [{ id, title }]` declares
-the tabs in order, and each section's `group` names its tab. An entity without `groups` gets
+Sections are authored for reading; nothing derives from edit groups. Web detail is one scrolling page:
+the side content (Needs you, key facts, the kind explanation) above the section groups, with a
+sticky contents index beside them. `detail.groups: [{ id, title }]` declares the groups in order,
+and each section's `group` names its group. An entity without `groups` gets
 `DEFAULT_DETAIL_GROUPS` (Overview, Work, Evidence, Relations, Activity), and a section without
 `group` joins one from its kind and position: relations join Work, timelines and sections that set
 `overview: false` Evidence, and other sections Overview, while Relations and Activity hold the
 capability-derived Connected records, Relationships and history. The generator refuses a
-`group` that names no tab. Tabs show counts and are deep-linked as `#<group>`; every panel stays
-mounted, inactive panels are `hidden="until-found"`, and a section anchor or a find-in-page match
-selects its tab. Sections render full width in declaration order within their tab.
+`group` that names no declared group. Index entries show counts and every group is deep-linked as
+`#<group>`; a section anchor scrolls to and focuses its section. Sections render full width in
+declaration order within their group.
 `detail.overviewSections` still emits independent `overview` metadata for web and Swift. Native
 keeps its own Contents order and reads no groups, and a board list view marked `webOnly` is omitted
 from Swift. A section's `placement` is `primary` (shares a ruled plane) or `full` (its own plane);
@@ -884,7 +885,7 @@ refuses a detail-slot handoff to an undeclared section; the schema page lists ea
 To move a surface to web, classify it `handoff` in review; to bring it native, build the view and
 flip the status. The `presentation.state` badge and `presentation.progress` meter are the shared
 list cells `state` and `progress` (`SHARED_LIST_RENDERERS`), classified whether or not a
-declaration names them. Native draws neither the detail tabs, header lines, AI summary nor side
+declaration names them. Native draws neither the detail groups, header lines, AI summary nor side
 column. Named renderers are classified by this owner during compilation; whole-row
 renderers declare their minimum consumed inputs beside that disposition. Compiler schema checks do
 not prove executable web or native registration.

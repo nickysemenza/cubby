@@ -10,10 +10,10 @@ import { useDebug } from "~/ui/hooks/use-debug";
 import { Section } from "~/ui/layout";
 
 import {
-  DetailWorkspace,
-  type DetailWorkspaceGroup,
-} from "../../ui/data-table/detail-workspace";
-import type { IndexedSection } from "../../ui/data-table/indexed-sections";
+  type IndexedSection,
+  type IndexedSectionGroup,
+  IndexedSections,
+} from "../../ui/data-table/indexed-sections";
 import JsonRenderer from "../../ui/text/json-renderer";
 import { AuditLogList } from "../audit-log/audit-log-list";
 import {
@@ -54,8 +54,8 @@ export interface DetailSection extends IndexedSection {
   /** Explicit narrative role; there is deliberately no automatic default. */
   placement: DetailPlacement;
   /**
-   * The tab this section sits in. An undeclared supporting group
-   * (relations, activity, evidence) is the Evidence tab, else the last; any
+   * The group this section sits in. An undeclared supporting group
+   * (relations, activity, evidence) is the Evidence group, else the last; any
    * other unknown id, or none, is the first.
    */
   group?: string;
@@ -69,22 +69,23 @@ type DetailGroup = { readonly id: string; readonly title: string };
 interface DetailSectionsProps {
   sections: DetailSection[];
   rawData: unknown;
-  /** The record's tabs, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
+  /** The record's section groups, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
   groups?: readonly DetailGroup[];
-  /** The side column beside the tabs. */
+  /** Needs you, key facts and the kind explanation, above the sections. */
   side?: ReactNode;
 }
 
 /**
- * Each section in its tab; tabs with no sections leave. A section naming a
+ * Each section in its group; groups with no sections leave. A section naming a
  * group the entity did not declare joins Evidence when it is supporting
  * (relations, activity, evidence) and the entity declares one, else the last
- * tab; any other section joins the first.
+ * group; any other section joins the first. Group ids take the
+ * `detail-group-` prefix, so `#<group>` still reaches them.
  */
 function groupSections(
   declared: readonly DetailGroup[],
   sections: readonly DetailSection[],
-): DetailWorkspaceGroup[] {
+): IndexedSectionGroup[] {
   const supporting = new Set(["relations", "activity", "evidence"]);
   const evidence =
     declared.find((tab) => tab.id === "evidence") ?? declared.at(-1);
@@ -101,7 +102,7 @@ function groupSections(
       .filter((entry) => entry.group === tab.id)
       .map((entry) => entry.section);
     return members.length > 0
-      ? [{ id: tab.id, title: tab.title, sections: members }]
+      ? [{ id: `detail-group-${tab.id}`, title: tab.title, sections: members }]
       : [];
   });
 }
@@ -197,7 +198,8 @@ function contextSourceId(
 }
 
 /**
- * A record's body: its sections in tabs beside the side column, plus the
+ * A record's body: the side content above one scrolling page of its section
+ * groups with a sticky contents index, plus the
  * generic Relationships explorer and History when the page brings neither.
  */
 export const DetailSections: FC<DetailSectionsProps> = ({
@@ -224,7 +226,7 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     [pageDetail, sourceId, sections],
   );
   validateDetailSectionIds(sections, relationship, activity);
-  const tabs = groupSections(groups, [
+  const indexed = groupSections(groups, [
     ...sections,
     ...(relationship.ownSection || !relationship.section
       ? []
@@ -232,16 +234,26 @@ export const DetailSections: FC<DetailSectionsProps> = ({
     ...(activity.ownSection || !activity.section ? [] : [activity.section]),
   ]);
   return (
-    <DetailWorkspace
-      groups={tabs}
-      side={side}
-      footer={
-        isDebugEnabled && (
-          <Section headingAs="h2" title="Raw details">
-            <JsonRenderer input={rawData} pretty />
-          </Section>
-        )
-      }
-    />
+    <div className="min-w-0 space-y-4">
+      {side ? (
+        <aside
+          aria-label="Record summary"
+          data-detail-side
+          className="@container/side min-w-0 border-b border-border pt-2 pb-4"
+        >
+          {side}
+        </aside>
+      ) : null}
+      <IndexedSections
+        groups={indexed}
+        footer={
+          isDebugEnabled && (
+            <Section headingAs="h2" title="Raw details">
+              <JsonRenderer input={rawData} pretty />
+            </Section>
+          )
+        }
+      />
+    </div>
   );
 };

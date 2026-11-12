@@ -164,9 +164,9 @@ function NeedsYou<E extends GenericDetailEntity>({
 }
 
 /**
- * The detail side column: Needs you (only when something waits), the key
- * facts from the declared summary cells, the remaining summary cells, and what
- * the record's kind does.
+ * The band above a record's sections: Needs you (only when something waits),
+ * the key facts from the declared summary cells, the remaining summary cells,
+ * and what the record's kind does, side by side on a wide page.
  */
 export function DetailSide<E extends GenericDetailEntity>({
   entity,
@@ -178,7 +178,7 @@ export function DetailSide<E extends GenericDetailEntity>({
   kind: RecordKind | null;
 }) {
   return (
-    <div className="grid min-w-0 gap-4 [&>*+*]:border-t [&>*+*]:border-border [&>*+*]:pt-4 [&>:empty]:hidden">
+    <div className="grid min-w-0 gap-4 @min-[720px]/side:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @min-[720px]/side:gap-x-8 @max-[719px]/side:[&>*+*]:border-t @max-[719px]/side:[&>*+*]:border-border @max-[719px]/side:[&>*+*]:pt-4 [&>:empty]:hidden">
       <NeedsYou entity={entity} record={record} />
       <DetailSummary entity={entity} record={record} layout="side" />
       {kind?.explanation ? (
