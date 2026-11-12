@@ -119,7 +119,7 @@ const P2P_RAIL =
  * name is a seller, such as a Square or Shopify shop, or a bill naming the
  * member.
  */
-export function statementP2PRail(
+function statementP2PRail(
   descriptor: StatementDescriptor,
   counterparty: Pick<StatementCounterparty, "storedValue">,
 ) {
