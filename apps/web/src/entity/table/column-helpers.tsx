@@ -120,6 +120,7 @@ import {
 } from "./editable-cell";
 import { EditableEntityCell } from "./editable-entity-cell";
 import { ImageThumbnail } from "./image-thumbnail";
+import { RowQuickAction } from "./row-quick-action";
 
 const optionalBooleanSchema = z.boolean().nullish();
 
@@ -835,6 +836,8 @@ interface ActionsColumnOptions<T> {
    * that entity's actions for this column to find.
    */
   subject?: (row: T) => EntityActionSubject | null;
+  /** The entity declares `list.quickActions`: the row's quick command leads. */
+  quick?: boolean;
 }
 
 export function createActionsColumn<T extends { id: string | number }>(
@@ -862,6 +865,9 @@ export function createActionsColumn<T extends { id: string | number }>(
         {extraActions?.(row)}
       </>
     ),
+    options?.quick
+      ? (row) => <RowQuickAction entity={entity} row={row} />
+      : undefined,
   );
 }
 
@@ -869,6 +875,8 @@ export function createActionsColumnBase<T extends RowData>(
   columnHelper: ColumnHelper<T>,
   getLinkProps: RowLinkResolver<T>,
   extraActions?: (row: T) => ReactNode,
+  /** A command drawn before the row menu; the column widens to hold it. */
+  leading?: (row: T) => ReactNode,
 ) {
   // One roster: the row's actions menu and its desktop right-click menu.
   const rowMenu = (row: T) => {
@@ -893,9 +901,9 @@ export function createActionsColumnBase<T extends RowData>(
     enableSorting: false,
     enableHiding: false,
     enableCellSelection: false,
-    size: 40,
-    minSize: 40,
-    maxSize: 72,
+    size: leading ? 104 : 40,
+    minSize: leading ? 104 : 40,
+    maxSize: leading ? 120 : 72,
     meta: attachCubbyColumnMeta<T>({
       entityColumnRole: "action",
       mobile: { slot: "actions", priority: 100 },
@@ -903,7 +911,7 @@ export function createActionsColumnBase<T extends RowData>(
     }),
     cell: (info) => {
       const row = info.row.original;
-      return (
+      const menu = (
         <DropdownMenu>
           <MoreMenuTrigger
             aria-label="Row actions"
@@ -919,6 +927,14 @@ export function createActionsColumnBase<T extends RowData>(
             {rowMenu(row)}
           </DropdownMenuContent>
         </DropdownMenu>
+      );
+      return leading ? (
+        <span className="flex items-center justify-end gap-1">
+          {leading(row)}
+          {menu}
+        </span>
+      ) : (
+        menu
       );
     },
   });

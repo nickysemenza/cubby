@@ -707,8 +707,9 @@
   Desktop density. Vertical space is the scarce resource on a fine-pointer
   desktop, so body type and row geometry tighten here. Phones, coarse-pointer
   tablets (iOS zooms inputs under 16px) and hosted native workspaces keep the
-  base scale. ROW_DENSITY reads --table-row-height, so the virtualizer always
-  agrees with the painted rows.
+  base scale. Row geometry lives in --table-row-height and
+  --table-row-height-two-line; density.ts mirrors those values for the
+  virtualizer, so a change here changes both.
 */
 @media (min-width: 48rem) and (hover: hover) and (pointer: fine) {
   :root:not([data-hosted-workspace]) {

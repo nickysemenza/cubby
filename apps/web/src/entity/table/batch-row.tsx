@@ -7,6 +7,7 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { verbDef } from "~/entity/actions/action-verbs";
 import {
@@ -128,7 +129,15 @@ export function BatchRow<TItem extends RowData>({
   const run = async (command: BatchCommand) => {
     setRunning(command.id);
     try {
-      await command.run(batch, new AbortController().signal);
+      const { done, total } = await command.run(
+        batch,
+        new AbortController().signal,
+      );
+      const { label } = verbDef(command.verb);
+      const noun = entities[entity].pluralLabel.toLowerCase();
+      if (done === 0)
+        toast(`${label}: none of the ${total} active ${noun} accept it`);
+      else toast.success(`${label}: ${done} of ${total} ${noun}`);
     } catch (error) {
       showErrorToast(error);
     } finally {
@@ -204,20 +213,20 @@ export function BatchRow<TItem extends RowData>({
       });
     if (meta?.entityColumnRole === "action" && offered.length > 0)
       return (
-        <span className="flex items-center justify-end gap-1">
-          {offered.slice(0, 2).map((command) => {
+        <span className="flex items-center justify-end gap-0.5 opacity-0 group-hover/row:opacity-100 focus-within:opacity-100">
+          {offered.map((command) => {
             const { label, icon: Icon } = verbDef(command.verb);
             return (
               <Button
                 key={command.id}
                 variant="ghost"
-                size="xs"
+                size="icon-xs"
                 disabled={running !== null}
-                aria-label={`${label} ${title}`}
+                aria-label={`${label} every active member of ${title}`}
+                title={`${label} all`}
                 onClick={() => void run(command)}
               >
                 <Icon aria-hidden className="size-3.5" />
-                {label} all
               </Button>
             );
           })}

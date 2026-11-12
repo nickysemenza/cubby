@@ -479,6 +479,11 @@ export interface UseEntityActionsReturn<TRow extends EntityActionRow> {
    * The generic stays on `selectionActions`, where the caller's row type is real.
    */
   rowMenuItems: (row: EntityActionRow) => ReactNode;
+  /**
+   * The row's quick command: the first declared `list.quickActions` verb
+   * available for it, drawn as a button beside the row menu.
+   */
+  rowQuickAction: (row: EntityActionRow) => EntityRowQuickAction | null;
   /** Render once per surface, outside the table. */
   dialogs: ReactNode;
   /**
@@ -631,6 +636,21 @@ export function useEntityActions<TRow extends EntityActionRow>(
       </Fragment>
     ));
 
+  const rowQuickAction = (row: EntityActionRow) => {
+    for (const verb of quickVerbs)
+      for (const { definition, handles } of rowCapable) {
+        const { run } = handles;
+        if (definition.verb !== verb || !run) continue;
+        if (
+          actionAvailability(definition, handles, "row", [row]).status !==
+          "available"
+        )
+          continue;
+        return { verb: definition.verb, run: () => run([row]) };
+      }
+    return null;
+  };
+
   const dialogs = resolved.flatMap(({ definition, handles }) =>
     handles.dialog == null
       ? []
@@ -684,6 +704,7 @@ export function useEntityActions<TRow extends EntityActionRow>(
     selectionActions,
     selectionActionItems,
     rowMenuItems,
+    rowQuickAction,
     dialogs,
     singleRecordActions,
     detailActions,
@@ -701,9 +722,16 @@ export function useEntityActions<TRow extends EntityActionRow>(
  * `entity` so a sub-table of a different entity rendered inside the provider
  * cannot pick up the outer one's items.
  */
+/** A row's quick command and how to run it. */
+export interface EntityRowQuickAction {
+  verb: ActionVerbId;
+  run: () => Promise<BulkActionResult>;
+}
+
 export interface EntityActionsEntry {
   entity: Entity;
   rowMenuItems: (row: EntityActionRow) => ReactNode;
+  rowQuickAction?: (row: EntityActionRow) => EntityRowQuickAction | null;
 }
 
 export type EntityActionsContextValue = readonly EntityActionsEntry[];
@@ -788,6 +816,19 @@ export function EntityActionRowMenuItems({
       {own}
       {subjectItems}
     </>
+  );
+}
+
+/** The row's quick command from the surface's published actions, if any. */
+export function useEntityRowQuickAction(
+  entity: Entity,
+  row: { id: string | number },
+): EntityRowQuickAction | null {
+  const context = useContext(EntityActionsContext);
+  if (!context || !isEntityActionRow(row)) return null;
+  return (
+    context.find((entry) => entry.entity === entity)?.rowQuickAction?.(row) ??
+    null
   );
 }
 

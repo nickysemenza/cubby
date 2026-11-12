@@ -393,6 +393,9 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     list: {
       layoutRevision: 2,
+      // `run.control` verbs; each row's `actionReasons` says which apply.
+      extraActions: ["pause", "resume", "retry", "restart"],
+      quickActions: ["retry", "resume"],
       titleSubtitle: true,
       rail: [{ field: "startedAt" }, { field: "chargedCost" }],
       // Display images borrow from the vendor; they load as list media.
@@ -660,10 +663,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         kind: "timestamp",
         label: "Activity",
-        display: {
-          columnGroup: "Execution",
-          labelPath: "activityAt",
-        },
+        display: { columnGroup: "Execution" },
         validation: readOnly(z.iso.datetime().nullable().default(null)),
       },
       {

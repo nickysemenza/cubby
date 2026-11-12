@@ -367,6 +367,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         extraActions: combinedExtraActions,
         rowLink,
         subject,
+        quick: metadata.summary.list.quickActions.length > 0,
       }),
     };
   }, [
@@ -380,6 +381,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     rowLink,
     subject,
     queryClient,
+    metadata,
   ]);
   const baseColumns = useMemo(
     () =>

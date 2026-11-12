@@ -89,6 +89,8 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
         ...(work
           ? {
               liveProgress: {
+                generation: "fixture",
+                sequence: 1,
                 eventId: `fixture-${id}`,
                 phase: "fixture",
                 currentItem: null,

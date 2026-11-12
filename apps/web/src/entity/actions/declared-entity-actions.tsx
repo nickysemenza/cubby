@@ -1,10 +1,11 @@
 import { productListItemOut } from "@cubby/schemas/entities/product";
 import {
+  runShortcode,
   productShortcode,
   inventoryShortcode,
   locationShortcode,
 } from "@cubby/schemas/identifiers";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -18,6 +19,8 @@ import {
 } from "~/entity/editing/entity-edit-dialog";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { featureRegistry } from "~/entity/feature-registry";
+import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 import { useUpdateMutation } from "../hooks/use-update-mutation";
 import { PRODUCT_DISCARD_READ_FIELDS } from "./action-read-fields";
@@ -187,6 +190,65 @@ function useCompleteTaskAction(): EntityActionHandles {
   };
 }
 
+type RunControlVerb = "pause" | "resume" | "retry" | "restart";
+
+/**
+ * A `run.control` verb. The Run read reports per row whether control would
+ * accept it (`actionReasons`); the command rechecks. A selection needs every
+ * row to accept it; a batch row (no rows) is offered and each member runs the
+ * verb only where its own row accepts it.
+ */
+function useRunControlAction(verb: RunControlVerb): EntityActionHandles {
+  const control = useMutation(runOperations.control.mutationOptions());
+  const accepts = (row: EntityActionRow) =>
+    serverActionState(row, verb)?.enabled === true;
+  const act = async (row: EntityActionRow) => {
+    if (!accepts(row)) return false;
+    await control.mutateAsync({
+      runId: runShortcode.parse(row.id),
+      action: verb,
+    });
+    return true;
+  };
+  return {
+    run: async (rows) => {
+      let success = rows.length > 0;
+      for (const row of rows) success = (await act(row)) && success;
+      return { success };
+    },
+    availability: ({ rows }: EntityActionResolutionContext) => {
+      if (rows.length === 0) return { status: "available" };
+      const refused = rows.find((row) => !accepts(row));
+      if (!refused) return { status: "available" };
+      const reason = serverActionState(refused, verb)?.reason;
+      return reason ? { status: "disabled", reason } : { status: "hidden" };
+    },
+    rowMenuItem: (row) =>
+      accepts(row) ? (
+        <VerbMenuItem
+          verb={verb}
+          onSelect={(event) => {
+            event.stopPropagation();
+            void act(row).catch(showErrorToast);
+          }}
+        />
+      ) : null,
+    dialog: null,
+  };
+}
+
+const runControlAction = (verb: RunControlVerb, priority: number) =>
+  defineEntityAction({
+    id: `run-${verb}`,
+    verb,
+    entities: ["run"],
+    arity: "both",
+    surfaces: ["row", "selection", "inspector"],
+    group: "primary",
+    priority,
+    use: () => useRunControlAction(verb),
+  });
+
 /** The inventory editor's seed reads the nested product and location. */
 const adjustableInventory = z.object({
   id: inventoryShortcode,
@@ -249,6 +311,10 @@ function useAdjustInventoryAmountAction(): EntityActionHandles {
 }
 
 export const declaredEntityActionDefinitions = [
+  runControlAction("pause", 30),
+  runControlAction("resume", 31),
+  runControlAction("retry", 32),
+  runControlAction("restart", 33),
   defineEntityAction({
     verb: "recordSale",
     entities: ["product"],

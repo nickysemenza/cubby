@@ -267,6 +267,7 @@ export const compileDataQuality = (
       checks: checks.map((check) => ({ ...check })),
       displayImage: raw.displayImage,
       exceptions: raw.exceptions,
+      listHidden: raw.listHidden,
       related: [...raw.related],
       inputs: raw.inputs.map((input) => ({ ...input })),
     },

@@ -845,18 +845,19 @@ function TableWithEntityActions({
   entity: Entity;
   children: () => ReactNode;
 }) {
-  const { rowMenuItems, dialogs } = useEntityActions(entity);
+  const { rowMenuItems, rowQuickAction, dialogs } = useEntityActions(entity);
   // Read through a ref, the same way `useListBulkActions` publishes its own:
   // `rowMenuItems` is a fresh closure every render (it reads the current
   // handles), so memoizing the value on it would churn the context and
   // re-render every actions cell, while memoizing without it would capture a
   // stale closure and freeze the dialogs a menu item opens.
-  const latestRowMenuItems = useRef(rowMenuItems);
-  latestRowMenuItems.current = rowMenuItems;
+  const latestRowActions = useRef({ rowMenuItems, rowQuickAction });
+  latestRowActions.current = { rowMenuItems, rowQuickAction };
   const rowActions = useMemo<EntityActionsEntry>(
     () => ({
       entity,
-      rowMenuItems: (row) => latestRowMenuItems.current(row),
+      rowMenuItems: (row) => latestRowActions.current.rowMenuItems(row),
+      rowQuickAction: (row) => latestRowActions.current.rowQuickAction(row),
     }),
     [entity],
   );

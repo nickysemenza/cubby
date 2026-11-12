@@ -19,7 +19,13 @@ export interface BatchCommand {
   verb: ActionVerbId;
   /** Hidden commands are not offered on a batch row. */
   hidden: boolean;
-  run: (batch: ListBatch, signal: AbortSignal) => Promise<BulkActionResult>;
+  run: (batch: ListBatch, signal: AbortSignal) => Promise<BatchCommandResult>;
+}
+
+/** How many members the command reached, of the active members read. */
+export interface BatchCommandResult extends BulkActionResult {
+  done: number;
+  total: number;
 }
 
 /**
@@ -29,7 +35,7 @@ export interface BatchCommand {
  * member list) and sends the existing per-record command to each in turn, so
  * every write takes the ordinary action path and its checks.
  */
-export async function runBatchCommand<TRow>({
+async function runBatchCommand<TRow>({
   batch,
   readMembers,
   run,
@@ -39,18 +45,17 @@ export async function runBatchCommand<TRow>({
   readMembers: BatchMemberReader<TRow>;
   run: (rows: readonly TRow[]) => Promise<BulkActionResult>;
   signal: AbortSignal;
-}): Promise<BulkActionResult> {
+}): Promise<BatchCommandResult> {
   const members = (await readMembers(batch, signal)).slice(
     0,
     LIST_BATCH_COMMAND_LIMIT,
   );
-  let success = members.length > 0;
+  let done = 0;
   for (const member of members) {
-    if (signal.aborted) return { success: false };
-    const result = await run([member]);
-    success &&= result.success;
+    if (signal.aborted) break;
+    if ((await run([member])).success) done += 1;
   }
-  return { success };
+  return { success: done > 0, done, total: members.length };
 }
 
 /** A list's selection commands as batch commands over its batch members. */

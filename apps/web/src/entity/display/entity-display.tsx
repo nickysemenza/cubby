@@ -2064,8 +2064,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
     .fields.update;
   // An undeclared priority is derived: the declared state and progress
   // fields stay on a narrow pane, every other column drops from the end.
-  const roleFields = new Set(
-    [summary.state?.field, summary.progress?.field].filter(Boolean),
+  const roleFields = new Set<string>(
+    [summary.state?.field, summary.progress?.field].filter(
+      (key): key is NonNullable<typeof key> => key !== undefined,
+    ),
   );
   const listFields = orderedListFields(queryClient, entity);
   // Two-line rows draw these under the title, so their columns step aside.
