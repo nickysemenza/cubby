@@ -194,8 +194,8 @@ and workflow; `rustc -V` keys the floating compiler.
 The Rust job uses a pinned `Swatinem/rust-cache` step with prefix `rust-gate-v3`;
 its key also hashes root `Cargo.toml`, because rust-cache omits the virtual
 workspace's profiles. The job installs only the root workspace
-(`workspace-filter: cubby`), which provides Nx without the web packages or their
-generator. Nx targets compile their own dependencies; do not add a separate
+(`workspace-filter: cubby`), which provides Nx without installing the schema
+dependency closure. Automatic postinstall generation skips that selection. Nx targets compile their own dependencies; do not add a separate
 pre-Nx Clippy or `cargo test --no-run` pass, which repeats that compilation even
 when Nx already has a passing result. Only successful jobs save compiler-cache
 entries; a small cache saved by a fully replayed job affects later speed, not
@@ -273,8 +273,8 @@ Manual native E2E (`apps/web/tooling/sim-e2e.ts`) also runs
 `apple:simulator-build`; check it when removing a shared build helper.
 
 `.github/actions/setup-apple` is the native setup every macOS job uses: Xcode
-selection, a workspace installation filtered to the root and web tooling for
-native contract generation, FFI slices, Apple tools,
+selection, a filtered workspace installation for native contract generation,
+FFI slices, Apple tools,
 XcodeGen (skipped by `Apple host tests`) and optional simulator compilation-cache
 restoration. Rustup prepares the repository's compiler before computing the
 FFI fingerprint; an exact FFI-output hit skips target-library installation and
@@ -283,6 +283,14 @@ resolved Cargo graph, local source bytes, build environment, Xcode, targets and
 profile. On a miss, setup verifies the fingerprint again after Rust-cache
 preparation and before building. Archive jobs can run this preparation without
 installing JS dependencies.
+
+CI host and simulator jobs select `cubby @cubby/schemas...`: the root owns the
+generator tools and explicit dependencies used by the canonical web generator,
+and the schema workspace supplies its dependency closure. Generation runs without
+`apps/web/node_modules`, producing the same complete artifact manifest. Journeys
+retain the default `cubby @cubby/web...` selection for their browser harness.
+Postinstall runs generation when web or schema runtime dependencies are installed;
+root-only tooling installations and explicit `generate: false` skip it.
 
 It restores `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones
 used by app builds; the host resolves its smaller package graph directly.

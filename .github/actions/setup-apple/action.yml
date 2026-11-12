@@ -1,7 +1,7 @@
 name: Setup Apple
 description: >-
   Prepare a macOS runner for a native build: select the .xcode-version Xcode, install the
-  web tooling workspace, restore or build the CubbyFFI
+  selected generator dependencies, restore or build the CubbyFFI
   slices, install the Apple tools with an optional SPM clone cache, and restore
   the shared simulator compilation cache.
 inputs:
