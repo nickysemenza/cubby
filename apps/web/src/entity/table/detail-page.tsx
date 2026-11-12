@@ -71,7 +71,7 @@ interface DetailSectionsProps {
   rawData: unknown;
   /** The record's section groups, in order; `DEFAULT_DETAIL_GROUPS` when omitted. */
   groups?: readonly DetailGroup[];
-  /** Needs you, key facts and the kind explanation, above the sections. */
+  /** Needs you and key facts, above the sections. */
   side?: ReactNode;
 }
 

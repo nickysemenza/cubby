@@ -620,9 +620,8 @@ Three optional roles name the fields a record's state, progress and kind come fr
   (`packages/schemas/src/progress.ts`: done, failed, active, stalled, queued, a nullable total, a
   unit and optional parts) and an optional note field drawn beside the meter.
 - `presentation.kind: { field }` names the roster that says what kind of record this is. Its label
-  is a tag in the title cell and detail header, and its option `explanation` (targets, exclusions,
-  effects, dependencies, cost, recovery) is the "What a {label} does" block in the detail side
-  column.
+  is a tag in the title cell and detail header. Its option `explanation` (targets, exclusions,
+  effects, dependencies, cost, recovery) folds behind the native kind tag; web does not draw it.
 
 `display.priority` (`essential`, `default`, `optional`) decides which columns leave a table instead
 of every column truncating: below 1100px of table width optional columns drop, and at any width
@@ -652,7 +651,7 @@ under readable ids:
   (`DetailSlotId<E>` / `ListSlotId<E>` in `entity-manifest.ts` type those registries).
 
 Sections are authored for reading; nothing derives from edit groups. Web detail is one scrolling page:
-the side content (Needs you, key facts, the kind explanation) above the section groups, with a
+the side content (Needs you, key facts) above the section groups, with a
 sticky contents index beside them. `detail.groups: [{ id, title }]` declares the groups in order,
 and each section's `group` names its group. An entity without `groups` gets
 `DEFAULT_DETAIL_GROUPS` (Overview, Work, Evidence, Relations, Activity), and a section without
@@ -761,7 +760,7 @@ field placed once, so it leaves later field sections:
 - `detail.aiSummary` names a stored AI-written summary drawn under the lines, absent until written.
 - `detail.side: { needs? }` fills the side column. `needs` is a `displayItems` field listing what
   waits on a member and shows only when non-empty, followed by the `fields` summary cells as key
-  facts and the kind explanation.
+  facts.
 
 Do not maintain per-entity header maps, a second chart registry or client arithmetic. Empty optional
 relationships may disappear; meaningful unknown values, pending reads and failed reads stay

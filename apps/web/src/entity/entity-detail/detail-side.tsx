@@ -23,8 +23,6 @@ import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { DetailSummary, sideHeading } from "./detail-summary";
-import { KindExplanation } from "./kind-explanation";
-import type { RecordKind } from "./record-header";
 import { QualityIssueLink, useQualityAttention } from "./record-quality";
 
 type Field = EntityFieldModel["fields"][number];
@@ -165,29 +163,20 @@ function NeedsYou<E extends GenericDetailEntity>({
 
 /**
  * The band above a record's sections: Needs you (only when something waits),
- * the key facts from the declared summary cells, the remaining summary cells,
- * and what the record's kind does, side by side on a wide page.
+ * the key facts from the declared summary cells and the remaining summary
+ * cells, side by side on a wide page.
  */
 export function DetailSide<E extends GenericDetailEntity>({
   entity,
   record,
-  kind,
 }: {
   entity: E;
   record: DetailRecordOf<E>;
-  kind: RecordKind | null;
 }) {
   return (
     <div className="grid min-w-0 gap-4 @min-[720px]/side:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] @min-[720px]/side:gap-x-8 @max-[719px]/side:[&>*+*]:border-t @max-[719px]/side:[&>*+*]:border-border @max-[719px]/side:[&>*+*]:pt-4 [&>:empty]:hidden">
       <NeedsYou entity={entity} record={record} />
       <DetailSummary entity={entity} record={record} layout="side" />
-      {kind?.explanation ? (
-        <KindExplanation
-          label={kind.label}
-          description={kind.description}
-          explanation={kind.explanation}
-        />
-      ) : null}
     </div>
   );
 }

@@ -85,8 +85,9 @@ test("taxonomy edits keep product classification paths and labels separate from 
     }),
   ).toBeVisible();
   // Images stay mounted while streamed loading elements are replaced.
+  const images = await showDetailSection(page, "images");
   await expect(
-    page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
+    images.getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
   await expect
     .poll(() =>

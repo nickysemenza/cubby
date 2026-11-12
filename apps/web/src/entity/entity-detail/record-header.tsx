@@ -23,7 +23,6 @@ import { NotRecordedValue } from "~/ui/records/facts";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
-import type { KindExplanationValue } from "./kind-explanation";
 
 type Field = EntityFieldModel["fields"][number];
 
@@ -101,12 +100,11 @@ export function recordStateOf<E extends GenericDetailEntity>(
   };
 }
 
-/** The record's kind from `presentation.kind`: its option and explanation. */
+/** The record's kind from `presentation.kind`: its option. */
 export interface RecordKind {
   label: string;
   description?: string;
   glyph?: { phosphor: string };
-  explanation?: KindExplanationValue;
 }
 
 export function recordKindOf<E extends GenericDetailEntity>(
@@ -133,8 +131,6 @@ export function recordKindOf<E extends GenericDetailEntity>(
         ? option.description
         : undefined,
     glyph: option && "glyph" in option ? option.glyph : undefined,
-    explanation:
-      option && "explanation" in option ? option.explanation : undefined,
   };
 }
 
