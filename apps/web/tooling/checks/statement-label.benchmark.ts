@@ -124,11 +124,15 @@ it.each(sizes)(
         name: "Synthetic benchmark member",
         kind: "member",
       });
+      // A loan account also asks the loan-escrow spending question.
+      const loan = process.env.CUBBY_BENCH_ACCOUNT === "loan";
       const account = await createRepoIdentity(ctx, "financialAccount", {
         name: "Synthetic benchmark card",
         ledgerPartyId: owner.output.id,
 
-        identity: { kind: "credit_card", network: "visa" },
+        identity: loan
+          ? { kind: "loan" }
+          : { kind: "credit_card", network: "visa" },
         sourceAliases: [
           {
             source: "monarch",
@@ -175,8 +179,19 @@ it.each(sizes)(
       const runId = await ensureRun(db, actor, { purpose: "background" });
       const answer = answering({ kind, counterparty: "business" });
       let providerQuestions = 0;
+      // Questions dispatched in one task form one model round; a round's
+      // questions all start before any of them settles.
+      let modelRounds = 0;
+      let roundOpen = false;
       const port: decisionModel.DecisionPort = async (input) => {
         providerQuestions++;
+        if (!roundOpen) {
+          roundOpen = true;
+          modelRounds++;
+          void setImmediate().then(() => {
+            roundOpen = false;
+          });
+        }
         const criteria = input.questions.selection.criteria;
         const labels = Object.values(criteria);
         if (
@@ -333,6 +348,7 @@ it.each(sizes)(
       };
       querySources.clear();
       providerQuestions = 0;
+      modelRounds = 0;
       queuedQuestions = 0;
       queuedPromptBytes = 0;
       heapAtDecisionEntry = 0;
@@ -416,6 +432,7 @@ it.each(sizes)(
         cpuMs: (cpu.user + cpu.system) / 1000,
         ...measured,
         providerQuestions,
+        modelRounds,
         queuedQuestions,
         queuedPromptBytes,
         contextFitsCalls,
@@ -499,7 +516,7 @@ it.each(sizes)(
       writeFileSync(
         resolve(
           output,
-          `measurements-${candidates}-${evidenceBytes}-${kind}-${adviceMode}${profiler ? "-profiled" : ""}.json`,
+          `measurements-${candidates}-${evidenceBytes}-${kind}-${adviceMode}${loan ? "-loan" : ""}${profiler ? "-profiled" : ""}.json`,
         ),
         JSON.stringify(
           {

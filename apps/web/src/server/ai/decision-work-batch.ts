@@ -27,6 +27,17 @@ export async function settleDecisionWork<T, Q, A, V>(
   const waiting: Pending[] = [];
   let active = 0;
   let flushing = false;
+  let scheduled = false;
+  // Questions asked in the same task join one wave, including every branch an
+  // item releases together.
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    queueMicrotask(() => {
+      scheduled = false;
+      pump();
+    });
+  };
 
   const enqueue = (owner: Owner) => {
     if (!owner.queued) {
@@ -107,7 +118,7 @@ export async function settleDecisionWork<T, Q, A, V>(
             owner.phase = "waiting";
             owner.pending++;
             waiting.push({ owner, question, resolve: answer, reject: fail });
-            pump();
+            schedule();
           });
         void Promise.resolve()
           .then(() => work(item, ask))
