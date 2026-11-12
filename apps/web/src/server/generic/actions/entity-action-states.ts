@@ -40,7 +40,7 @@ const firstKey = (path: string) => path.split(/[.[]/u, 1)[0] ?? path;
  * verb can run and the member-facing reason when it cannot; a verb the
  * field omits keeps its declared rule. The server command still rechecks.
  */
-export const ACTION_REASONS_FIELD = "actionReasons";
+const ACTION_REASONS_FIELD = "actionReasons";
 const actionReasons = z.record(z.string(), z.string().nullable());
 
 const readsActionReasons = (entity: Entity) =>

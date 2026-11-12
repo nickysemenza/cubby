@@ -294,14 +294,14 @@ const columnWidths = ["xs", "sm", "md", "lg", "xl"] as const;
  * `optional` leaves the default visible set below the narrow breakpoint, and
  * `default` (also when unset) keeps its declared visibility.
  */
-export const COLUMN_PRIORITIES = ["essential", "default", "optional"] as const;
+const COLUMN_PRIORITIES = ["essential", "default", "optional"] as const;
 export type ColumnPriority = (typeof COLUMN_PRIORITIES)[number];
 /**
  * Where a state option leaves its record: waiting on a member (`needs`),
  * under way (`active`) or over (`finished`). An option without `phase` is
  * `finished` when `closed` and `active` otherwise; `needs` is always declared.
  */
-export const ENTITY_PHASES = ["needs", "active", "finished"] as const;
+const ENTITY_PHASES = ["needs", "active", "finished"] as const;
 export type EntityPhase = (typeof ENTITY_PHASES)[number];
 /**
  * The phase grouping's values in list order. `older` is a finished record
@@ -337,7 +337,7 @@ export const DEFAULT_DETAIL_GROUPS = [
   { id: "activity", title: "Activity" },
 ] as const;
 /** At most this many `detail.lines` sit under a record's title. */
-export const MAX_DETAIL_LINES = 3;
+const MAX_DETAIL_LINES = 3;
 const pivotShares = ["count", "row", "column", "total"] as const;
 const exceptionPolicies = ["inherit", "forbidden"] as const;
 const timelineModes = ["default", "custom"] as const;

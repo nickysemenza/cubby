@@ -3,12 +3,7 @@ import { z } from "zod";
 const count = z.number().int().nonnegative();
 
 /** The state a labelled part of a small population draws in. */
-export const progressPartStates = [
-  "done",
-  "active",
-  "failed",
-  "queued",
-] as const;
+const progressPartStates = ["done", "active", "failed", "queued"] as const;
 
 /**
  * How far a piece of work has come, as counts of `unit`. Every client draws it
