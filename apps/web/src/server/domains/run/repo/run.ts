@@ -3,8 +3,8 @@ import { runRawOut as rawRunOut } from "@cubby/schemas/entity-contracts/run";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   mailResearchRunInput,
+  runDisplayStatus,
   runPurpose,
-  runStatus,
   sweepRunInput,
   VISIBLE_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
@@ -49,6 +49,7 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { runActionReasons } from "../run-control-rules";
 import {
   runOpenItems,
   runOutcomeLine,
@@ -70,7 +71,11 @@ import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
  * The manifest read side of an import run. Writes stay in
  * `run/repo/run-control.ts`; this file only projects the row.
  */
-type RunRow = typeof runTable.$inferSelect;
+// The display status the phrases read, selected beside any projection.
+const DISPLAY_STATUS_INPUT = "displayStatusInput";
+type RunRow = typeof runTable.$inferSelect & {
+  readonly [DISPLAY_STATUS_INPUT]?: unknown;
+};
 // includes-deleted: immutable Run history retains account, actor and lineage identities.
 const runRead = {
   media: true,
@@ -307,7 +312,7 @@ const runRead = {
           : null,
         emailSubjects: link.subjectsOf.get(row.id) ?? [],
         successorCode: successor,
-        displayStatus: runDisplayStatusOf(row, successor !== null),
+        displayStatus: runDisplayStatus.parse(row[DISPLAY_STATUS_INPUT]),
         stalled: rollup?.stalled ?? false,
         outcomeCounts:
           row.purpose === runPurpose.enum.mail_import
@@ -392,7 +397,7 @@ const runRead = {
           successorRunId: true,
           waitingOn: true,
           stalled: true,
-          displayStatus: true,
+          actionReasons: true,
         }),
         (row, { successorOf, rollupOf }) => {
           const successor = successorOf.get(row.id) ?? null;
@@ -403,7 +408,10 @@ const runRead = {
               : null,
             waitingOn: rollup?.waitingOn ?? null,
             stalled: rollup?.stalled ?? false,
-            displayStatus: runDisplayStatusOf(row, successor !== null),
+            actionReasons: runActionReasons({
+              ...row,
+              hasSuccessor: successor !== null,
+            }),
           };
         },
       ),
@@ -475,34 +483,6 @@ function runWorkProgressOf(
   );
 }
 
-/**
- * What a Run reads as. A review stop or failure whose open work a retry
- * successor carried reads `retried` (the successor holds that work; member
- * findings stay on this Run's own sections), and a stop by the AI funding
- * window reads as waiting for funding rather than review or authorization.
- */
-function runDisplayStatusOf(
-  row: Pick<RunRow, "status" | "failureCode" | "purpose" | "progress">,
-  hasSuccessor: boolean,
-) {
-  const status = runStatus.parse(row.status);
-  if (
-    row.purpose === "mail_discovery" &&
-    status === "paused_auth" &&
-    row.failureCode === "execution_limit" &&
-    z.object({ fundingReleasedAt: z.iso.datetime() }).safeParse(row.progress)
-      .success
-  )
-    return "paused" as const;
-  if (
-    row.failureCode === "execution_limit" &&
-    (status === "needs_review" || status === "paused_auth")
-  )
-    return "waiting_for_funding" as const;
-  if (hasSuccessor && (status === "needs_review" || status === "failed"))
-    return "retried" as const;
-  return status;
-}
 const runPurposeSelection = z
   .object({
     purpose: z.unknown().optional(),
@@ -547,7 +527,12 @@ export const runScaffold = listScaffold("run", runTable, {
     needsAttention: listReadValue(() => runNeedsAttentionSql()),
     displayStatus: listReadValue(() => runDisplayStatusSql()),
   },
-  read: { ...runRead, title: sql`${runTable.purpose}` },
+  read: {
+    ...runRead,
+    title: sql`${runTable.purpose}`,
+    // Keys outside the read schema are helper columns the bindings read.
+    columns: { [DISPLAY_STATUS_INPUT]: () => runDisplayStatusSql() },
+  },
 });
 
 const reader = createEntityReader({

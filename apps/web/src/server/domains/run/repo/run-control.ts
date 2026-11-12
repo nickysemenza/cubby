@@ -63,6 +63,10 @@ import {
 } from "~/server/domains/run/repo/purpose-policy";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
+import {
+  isFundingStoppedForReview,
+  runControlRefusal,
+} from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -292,25 +296,6 @@ export async function resumeAuthorizedRuns(
     return [...resumed, ...interrupted];
   });
 }
-
-/**
- * A funding-paused import an older coordinator stopped for review while its
- * targets were still pending. It is waiting for AI funding, not for review:
- * resume and the funding window both continue it.
- *
- * Retry and restart leave the predecessor in `needs_review` with its
- * `execution_limit` code, but its unresolved targets now belong to the
- * successor (photo targets are copied, Mail sources transferred). A
- * predecessor with any successor is therefore never funding-resumable.
- */
-const isFundingStoppedForReview = (row: {
-  status: string;
-  failureCode: string | null;
-  hasSuccessor: boolean;
-}) =>
-  row.status === "needs_review" &&
-  row.failureCode === "execution_limit" &&
-  !row.hasSuccessor;
 
 /** Resume only funding-paused imports; manual and authorization pauses stay stopped. */
 
@@ -581,18 +566,11 @@ export async function controlRun(
     if (locked.ledgerPartyId !== scope.ledgerPartyId)
       throw new Error("Purchase import control owner changed.");
     if (input.action === "restart") {
-      if (
-        !new Set([
-          "completed",
-          "failed",
-          "needs_review",
-          "dispatch_failed",
-        ]).has(locked.status)
-      )
-        throw createAppError(
-          "RUN_CONTROL_REFUSED",
-          `Only a finished run can be started again (${locked.status})`,
-        );
+      const refusal = runControlRefusal("restart", {
+        ...locked,
+        hasSuccessor: false,
+      });
+      if (refusal) throw createAppError("RUN_CONTROL_REFUSED", refusal);
       const lifecycle = await runPurposeLifecycle(locked.purpose);
       if (!lifecycle)
         throw new Error("Only agent import runs can be started again");
@@ -706,14 +684,6 @@ export async function controlRun(
       };
     }
     if (input.action === "retry" || input.action === "escalate_sol") {
-      if (!new Set(["needs_review", "completed", "failed"]).has(locked.status))
-        throw createAppError(
-          "RUN_CONTROL_REFUSED",
-          `Purchase import run is not terminal in ${locked.status}`,
-        );
-      const successorVendorAccountId = locked.vendorAccountId
-        ? vendorAccountId.parse(locked.vendorAccountId)
-        : null;
       const [existingSuccessor] = await tx
         .select({
           id: runTable.id,
@@ -724,6 +694,11 @@ export async function controlRun(
         .where(eq(runTable.predecessorRunId, scope.runId))
         .orderBy(desc(runTable.startedAt))
         .limit(1);
+      const refusal = runControlRefusal("retry", {
+        ...locked,
+        hasSuccessor: existingSuccessor !== undefined,
+      });
+      if (refusal) throw createAppError("RUN_CONTROL_REFUSED", refusal);
       if (existingSuccessor) {
         return {
           publicId: input.runPublicId,
@@ -734,6 +709,9 @@ export async function controlRun(
           created: false,
         };
       }
+      const successorVendorAccountId = locked.vendorAccountId
+        ? vendorAccountId.parse(locked.vendorAccountId)
+        : null;
       const successorId = runEntityId.parse(crypto.randomUUID());
       const dispatchEventId = crypto.randomUUID();
       const lifecycle = await runPurposeLifecycle(locked.purpose);
@@ -832,11 +810,11 @@ export async function controlRun(
       return { publicId: input.runPublicId, status: "failed" as const };
     }
     if (input.action === "pause") {
-      if (locked.status !== "running")
-        throw createAppError(
-          "RUN_CONTROL_REFUSED",
-          `Purchase import run is fenced in ${locked.status}`,
-        );
+      const refusal = runControlRefusal("pause", {
+        ...locked,
+        hasSuccessor: false,
+      });
+      if (refusal) throw createAppError("RUN_CONTROL_REFUSED", refusal);
       await tx
         .update(runTable)
         .set({ status: "paused", updatedAt: new Date() })
@@ -849,28 +827,25 @@ export async function controlRun(
     if (input.action === "resume" || input.action === "run_now_paid") {
       // The recorded `run_now_paid` event is the paid grant
       // (`readPaidGrant`); resuming is the same redispatch.
-      if (
-        !new Set(
-          input.action === "run_now_paid"
-            ? ["paused", "paused_auth"]
-            : ["paused", "paused_auth", "paused_offline"],
-        ).has(locked.status) &&
-        !isFundingStoppedForReview({
-          ...locked,
-          hasSuccessor:
-            (
-              await tx
-                .select({ id: runTable.id })
-                .from(runTable)
-                .where(eq(runTable.predecessorRunId, scope.runId))
-                .limit(1)
-            ).length > 0,
-        })
-      )
-        throw createAppError(
-          "RUN_CONTROL_REFUSED",
-          `Purchase import run is fenced in ${locked.status}`,
-        );
+      const fenced = {
+        ...locked,
+        hasSuccessor:
+          (
+            await tx
+              .select({ id: runTable.id })
+              .from(runTable)
+              .where(eq(runTable.predecessorRunId, scope.runId))
+              .limit(1)
+          ).length > 0,
+      };
+      const refusal =
+        input.action === "resume"
+          ? runControlRefusal("resume", fenced)
+          : ["paused", "paused_auth"].includes(locked.status) ||
+              isFundingStoppedForReview(fenced)
+            ? null
+            : `Purchase import run is fenced in ${locked.status}`;
+      if (refusal) throw createAppError("RUN_CONTROL_REFUSED", refusal);
       const dispatchEventId = crypto.randomUUID();
       await tx
         .update(runTable)

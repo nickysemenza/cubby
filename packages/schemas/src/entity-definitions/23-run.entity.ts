@@ -408,6 +408,9 @@ export const { definition, readSchemas } = defineEntityModel({
               id: "trigger",
               value: ["scheduled", "discovery", "backfill", "ephemeral"],
             },
+            // `isMemberStartedRun`: a member request, or a foreground or
+            // manual trigger, which the trigger list already leaves out.
+            { id: "cause", value: ["__not__:member_request"] },
           ],
         },
       },
@@ -522,6 +525,8 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Results",
           priority: "essential",
+          // Native, which draws no meter yet, prints the current phase's label.
+          labelPath: "workProgress.current.label",
           renderer: { list: "progress" },
         },
         validation: readOnly(progressValueSchema.nullable().default(null)),
@@ -1079,6 +1084,16 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         display: { list: false },
         validation: readOnly(runShortcode.nullable().default(null)),
+      },
+      {
+        // The action-state port: why `run.control` would refuse each row verb, null when it
+        // would run. The control rechecks ownership and the work it carries.
+        key: "actionReasons",
+        kind: "json",
+        display: { detail: false, list: false },
+        validation: readOnly(
+          z.record(z.string(), z.string().nullable()).nullable().default(null),
+        ),
       },
       {
         key: "parentRunId",
