@@ -105,6 +105,24 @@ Ready plans and commit-time validation recheck those dependencies and current
 ownership. A read-only preview group resolves its prospective aggregate Expense
 categories together after preparing every draft. Commit groups prepare fresh
 drafts under their locks and resolve them before any financial write. Persisted booking-lineage fingerprints are unchanged by any of this.
+A booking preview's classification revision covers the live spending
+categories, the Product category mappings and that booking's own Vendors (its
+Vendor and its target Purchase's Vendor); every preview and commit path uses
+that definition, so a policy change to another Vendor never stales a review.
+
+Statement creates and attaches commit one independent layer per serializable
+transaction. The layer's facts (accounts, attach targets, purchaser proof,
+retained payments, Vendor identity and candidates) are read once in that
+transaction. A create is planned on its prospective source and an attach on
+its target with the pending reference, and the written transaction must
+reproduce that plan's snapshot. A charge on an earlier charge's target, or
+whose ready booking shares a Vendor, Purchase, Vendor name (equal or
+contained) or an equal amount within seven days with an earlier charge of the
+layer, is declined as dependent and commits in a later transaction. Every
+refusal, including an unavailable occurrence, is decided before any write; a
+plan that changes after the write raises a divergence error so the caller
+rolls the layer back and applies that charge alone. A layer's new entities
+are written kind by kind, each kind in one insert, with one audit insert.
 
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.

@@ -21,6 +21,8 @@ import {
   type FinancialTransactionShortcode,
   parseShortcodeFor,
   parseEntityId,
+  type VendorId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
@@ -72,6 +74,7 @@ import { allocationDollars } from "~/server/domains/financial-transaction/repo/a
 import {
   financialSourceRefsFor,
   financialSourceRefsIncluding,
+  withFinancialSourceRef,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -82,7 +85,8 @@ import {
   retainedSettlementDiscoveryCouldMatch,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
-import { resolveNames } from "~/server/entity-kernel/resolve";
+import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
+import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
@@ -93,12 +97,15 @@ import {
 } from "~/server/lib/canonical-json";
 
 import {
-  bookFinancialTransactions,
+  bookFreshFinancialTransactions,
+  bookLockedFinancialTransactions,
   bookingGraph,
+  type KnownBookingFacts,
   bookingGraphs,
   digestValue,
   digestCanonicalEvidenceStream,
   loadFinancialBookingLineage,
+  loadFinancialBookingLineages,
   previewFinancialBooking,
 } from "./financial-booking";
 
@@ -363,8 +370,20 @@ export async function prepareFinancialSpendingPage(
       `)
         ).rows
       : [];
+  // Only a fingerprinted booking's existing-spending check reads its lineage.
+  const fingerprinted = transactions.flatMap((row) =>
+    row.bookingExpenseFingerprint
+      ? [parseShortcodeFor("financialTransaction", row.shortcode)]
+      : [],
+  );
   const page = {
     sources,
+    lineages: fingerprinted.length
+      ? await loadFinancialBookingLineages(db, fingerprinted)
+      : new Map<
+          string,
+          Awaited<ReturnType<typeof loadFinancialBookingLineage>>
+        >(),
     retainedSettlement: await prepareRetainedSettlementDiscovery(getDb(db), []),
     candidateBounds,
     candidateAmounts: new Set(amounts),
@@ -379,6 +398,7 @@ export async function prepareFinancialSpendingPage(
     // Promise caching coalesces concurrent identical reads without extending
     // their lifetime beyond this page.
     vendors: new Map<string, ReturnType<typeof resolveSpendingVendors>>(),
+    pendingVendorNames: new Set<string>(),
     graphs: new Map<
       Parameters<typeof bookingGraph>[1],
       ReturnType<typeof loadSpendingGraph>
@@ -424,11 +444,21 @@ export async function prepareFinancialSpendingCandidates(
   const byName = new Map(resolved.map((result) => [result.name, result]));
   for (const result of resolved)
     page.vendors.set(canonicalJson([result.name]), Promise.resolve([result]));
+  // Advice names a matched Vendor by its own name, which a preview resolves
+  // beside the merchant; the first such preview resolves them all at once.
+  for (const result of resolved)
+    if (result.row && !byName.has(result.row.name))
+      page.pendingVendorNames.add(result.row.name);
   const vendorIds = [
     ...new Set(
       resolved.flatMap((result) => (result.row ? [result.row.id] : [])),
     ),
   ];
+  for (const [vendorId, history] of await financialSpendingCategoryHistories(
+    db,
+    vendorIds.filter((vendorId) => !page.categoryHistory.has(vendorId)),
+  ))
+    page.categoryHistory.set(vendorId, Promise.resolve(history));
   const bounds = page.candidateBounds;
   if (bounds && vendorIds.length) {
     const rows = await getDb(db).execute<
@@ -439,6 +469,7 @@ export async function prepareFinancialSpendingCandidates(
         ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
       FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(vendorIds)})
+        AND p.id IN (${vendorCandidateIds(vendorIds, bounds, [...page.candidateAmounts])})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
           OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
       ORDER BY p.id
@@ -958,6 +989,47 @@ function availableCents(
   );
 }
 
+/** `financialSpendingCategoryHistory` for several Vendors in one statement. */
+async function financialSpendingCategoryHistories(
+  db: Database,
+  vendorIds: readonly string[],
+) {
+  const rows = vendorIds.length
+    ? (
+        await getDb(db).execute<{
+          vendorId: string;
+          category: string | null;
+          name: string | null;
+          lines: number;
+        }>(sql`
+    WITH selected_expenses AS (
+      SELECT e.id, e."purchaseId", e."productId", e."spendingCategoryId", e."lineKind", p."vendorId"
+      FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId"
+      WHERE p."vendorId" = ANY(${uuidArrayParam(vendorIds)}) AND ${notDeleted("p")} AND ${notDeleted("e")} AND NOT e.future
+    ), resolved AS (
+      ${effectiveExpenseSpendingCategoriesSql(sql`selected_expenses`)}
+    )
+    SELECT s."vendorId", r."spendingCategoryId" AS category, c.name, count(*)::int AS lines
+    FROM resolved r
+    JOIN selected_expenses s ON s.id=r."expenseId"
+    LEFT JOIN "SpendingCategory" c ON c.id=r."spendingCategoryId" AND ${notDeleted("c")}
+    GROUP BY s."vendorId", r."spendingCategoryId", c.name ORDER BY s."vendorId", category NULLS FIRST
+  `)
+      ).rows
+    : [];
+  const byVendor = groupBy(rows, (row) => String(row.vendorId));
+  return new Map(
+    vendorIds.map((vendorId) => [
+      vendorId,
+      (byVendor[vendorId] ?? []).map(({ category, name, lines }) => ({
+        category,
+        name,
+        lines,
+      })),
+    ]),
+  );
+}
+
 export async function financialSpendingCategoryHistory(
   db: Database,
   vendorId: string,
@@ -1003,19 +1075,28 @@ function reviewedSpendingAdvice(request: Request) {
 export function resolveFinancialSpendingVendors(
   db: Database,
   names: readonly string[],
-  page?: Pick<FinancialSpendingPage, "vendors">,
+  page?: Pick<FinancialSpendingPage, "vendors"> &
+    Partial<Pick<FinancialSpendingPage, "pendingVendorNames">>,
 ) {
   const key = canonicalJson([...names]);
   const cached = page?.vendors.get(key);
   if (cached) return cached;
-  // Each name resolves independently, so cached single names compose.
+  const pending = page?.pendingVendorNames;
+  if (pending && names.some((name) => pending.has(name))) {
+    const deferred = [...pending];
+    pending.clear();
+    const lookup = resolveSpendingVendors(db, deferred);
+    for (const [index, name] of deferred.entries())
+      page.vendors.set(
+        canonicalJson([name]),
+        lookup.then((results) => [results[index]!]),
+      );
+  }
+  // Each name resolves independently, so cached single names compose. A
+  // case-only repeat matches the same rows; callers read rows and candidates,
+  // never the echoed name.
   const parts = names.map((name) => page?.vendors.get(canonicalJson([name])));
-  if (
-    names.length > 1 &&
-    parts.every(Boolean) &&
-    new Set(names.map((name) => name.trim().toLowerCase())).size ===
-      names.length
-  )
+  if (names.length > 1 && parts.every(Boolean))
     return Promise.all(parts).then((results) => results.flatMap((r) => r!));
   const lookup = names.length
     ? resolveSpendingVendors(db, names)
@@ -1142,6 +1223,55 @@ const refundOriginal = (input: CandidateInput) =>
       AND EXISTS (SELECT 1 ${vendorLines} AND e.cost < 0
         AND e."lineKind" = ${expenseLineKindSchema.enum.principal}))`
     : sql`false`;
+/** Purchases with an undated retained payment of one of these amounts. */
+const undatedPaymentIds = (amounts: readonly number[]) => sql`
+  SELECT undated."purchaseId" FROM "PurchasePaymentEvidence" undated
+  WHERE undated."chargedAt"::date IS NULL
+    AND undated."amountMinor" = ANY(${columnArrayParam(amounts)})`;
+
+/**
+ * A superset of the Vendors' candidate Purchases, each arm served by an index:
+ * the nearby date window, Purchases with a positive allocation (partly paid
+ * spending needs one), and undated retained payments of a page amount. The
+ * caller still applies the full candidate predicate, so a serializable read
+ * locks these index ranges instead of every Purchase graph of the Vendor.
+ */
+const vendorCandidateIds = (
+  vendorIds: readonly string[],
+  bounds: { first: string; last: string },
+  amounts: readonly number[],
+) => sql`
+  SELECT nearby.id FROM "Purchase" nearby
+  WHERE nearby."vendorId" = ANY(${uuidArrayParam(vendorIds)})
+    AND nearby.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
+  UNION
+  SELECT paid."purchaseId" FROM "FinancialTransactionAllocation" paid
+  JOIN "Purchase" owner ON owner.id = paid."purchaseId"
+  WHERE owner."vendorId" = ANY(${uuidArrayParam(vendorIds)})
+    AND ${notDeleted("paid")} AND paid."amountMinor" > 0
+  ${amounts.length ? sql`UNION ${undatedPaymentIds(amounts)}` : sql``}`;
+
+/**
+ * `vendorCandidateIds` for one charge, plus its explicit and payment matches:
+ * a dated payment near the charge, or an undated one, which may stand at its
+ * order date. A refund's same-Vendor originals fall in the nearby window.
+ */
+const candidateIds = (input: CandidateInput) => sql`
+  SELECT named.id FROM "Purchase" named WHERE named.shortcode = ${input.purchaseId ?? null}
+  UNION
+  SELECT payment."purchaseId" FROM "PurchasePaymentEvidence" payment
+  WHERE payment."amountMinor" = ${input.amount}
+    AND payment."chargedAt"::date BETWEEN ${input.date}::date-3 AND ${input.date}::date+3
+  UNION ${
+    input.vendorId
+      ? vendorCandidateIds(
+          [input.vendorId],
+          { first: input.date, last: input.date },
+          [input.amount],
+        )
+      : undatedPaymentIds([input.amount])
+  }`;
+
 async function spendingCandidates(
   db: Database,
   input: CandidateInput,
@@ -1171,6 +1301,7 @@ async function spendingCandidates(
           COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(${paymentDate} - ${input.date}::date) <= 3)), false) AS "explicit",
           NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
     WHERE ${notDeleted("p")}
+      AND p.id IN (${candidateIds(input)})
       AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
         AND ${!input.refund}
         AND (${partlyPaidSpending} OR ${undatedPayment([input.amount])})))
@@ -1773,6 +1904,7 @@ async function existingSpendingOutcome(
     facts: Awaited<ReturnType<typeof spendingFacts>>;
     basis: Pick<FinancialSpendingPlan, "request" | "snapshot" | "candidates">;
   },
+  page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan | null> {
   const { row, source, allocations, graphs } = facts;
   const review = (reason: string): FinancialSpendingPlan => ({
@@ -1804,10 +1936,11 @@ async function existingSpendingOutcome(
       row?.bookingExpenseFingerprint &&
       row.bookingExpenseFingerprint !==
         (await digestValue(
-          await loadFinancialBookingLineage(
-            db,
-            parseShortcodeFor("financialTransaction", row.shortcode),
-          ),
+          page?.lineages.get(row.shortcode) ??
+            (await loadFinancialBookingLineage(
+              db,
+              parseShortcodeFor("financialTransaction", row.shortcode),
+            )),
         ))
     )
       return review(
@@ -1998,11 +2131,17 @@ async function prepareFinancialSpendingPreview(
   // Preview an impending reference attachment without duplicating its charge.
   // Commit still requires that reference to exist in retained evidence.
   if (attachment && facts.row) {
-    facts.source.sourceRefs = await financialSourceRefsIncluding(
-      db,
-      facts.row.id,
-      attachment.settlementRef,
-    );
+    // A page's references are the row's retained references read in this snapshot.
+    facts.source.sourceRefs = page
+      ? withFinancialSourceRef(
+          page.references.get(facts.row.id) ?? [],
+          attachment.settlementRef,
+        )
+      : await financialSourceRefsIncluding(
+          db,
+          facts.row.id,
+          attachment.settlementRef,
+        );
   }
   const deferred =
     facts.source.status === "void" ||
@@ -2025,7 +2164,7 @@ async function prepareFinancialSpendingPreview(
         reason:
           "Only observed purchase, fee and refund evidence books spending.",
       };
-    const existing = await existingSpendingOutcome(db, { facts, basis });
+    const existing = await existingSpendingOutcome(db, { facts, basis }, page);
     if (existing) return existing;
   }
   const evidence = await discoverSpendingEvidence(db, request, facts, page);
@@ -2417,42 +2556,6 @@ export async function commitFinancialSpendings(
         tx,
         committed.map((entry) => entry.transactionId),
       );
-      // Retained settlement takes one per-party lock and holds it to commit.
-      // Several in one batch would follow input order and could deadlock a
-      // concurrent batch, so take them all first in sorted order. A single
-      // settlement keeps its own lock inside the settlement writer.
-      const settling = committed.filter(
-        ({ plan }) =>
-          plan.status === "ready" && plan.effect === "settle_existing",
-      );
-      if (settling.length > 1) {
-        const parties = await getDb(txDb)
-          .select({ ledgerPartyId: financialAccount.ledgerPartyId })
-          .from(financialTransaction)
-          .innerJoin(
-            financialAccount,
-            and(
-              eq(financialAccount.id, financialTransaction.accountId),
-              notDeleted(financialAccount),
-            ),
-          )
-          .where(
-            and(
-              inArray(
-                financialTransaction.shortcode,
-                settling.map((entry) => entry.transactionId),
-              ),
-              notDeleted(financialTransaction),
-            ),
-          );
-        await advisoryXactLocks(
-          getDb(txDb),
-          "purchase-settlement",
-          parties.flatMap((row) =>
-            row.ledgerPartyId ? [row.ledgerPartyId] : [],
-          ),
-        );
-      }
       // One page read under the locks serves every recheck; nothing is
       // written until every plan has been rechecked against it.
       const page = await prepareFinancialSpendingPage(txDb, {
@@ -2475,78 +2578,192 @@ export async function commitFinancialSpendings(
         })),
         page,
       );
-      const rechecked = [];
-      for (const [index, { plan }] of committed.entries())
-        rechecked.push(
-          await recheckFinancialSpending(txDb, plan, page, previews[index]!),
-        );
-      const purchases = rechecked.flatMap((outcome) =>
-        "fresh" in outcome && outcome.fresh.purchaseId
-          ? [outcome.fresh.purchaseId]
-          : [],
-      );
-      if (new Set(purchases).size !== purchases.length)
-        return refuse(
-          "Spending plans in one batch settle the same Purchase; apply them separately.",
-        );
-      const booking: {
-        index: number;
-        fresh: Extract<FinancialSpendingPlan, { status: "ready" }>;
-        facts: Awaited<ReturnType<typeof spendingFacts>>;
-        transactionId: FinancialTransactionShortcode;
-      }[] = [];
-      for (const [position, outcome] of rechecked.entries()) {
-        const { index, transactionId } = committed[position]!;
-        if (!("fresh" in outcome)) results[index] = outcome;
-        else if (outcome.fresh.effect === "settle_existing")
-          results[index] = await settleFinancialSpending(
-            txDb,
-            tx,
-            outcome,
-            actor,
-          );
-        else booking.push({ index, transactionId, ...outcome });
-      }
-      const vendors = await resolveBookingVendors(txDb, booking, actor);
-      const booked = await bookFinancialTransactions(
-        txDb,
-        booking.map(({ fresh, facts, transactionId }, position) =>
-          financialBookingInput.parse({
-            transactionId,
-            purchaseId: fresh.purchaseId,
-            vendorId: vendors[position]!,
-            spendingCategoryId: fresh.spendingCategoryId,
-            purchaserId: fresh.purchaserId,
-            costType: financialSpendingCostType(
-              facts.source.kind,
-              fresh.request.costType,
-            ),
-            beneficiaries: fresh.request.beneficiaries,
-          }),
-        ),
+      const written = await writeRecheckedSpendings(
+        tx,
+        committed,
+        previews,
+        page,
         actor,
-        new Set(
-          booking
-            .filter(
-              ({ fresh, facts }) =>
-                (fresh.request.advice?.escrowDisbursement === true ||
-                  facts.source.kind === "refund") &&
-                liveHouseholdLoan(facts.account),
-            )
-            .map(({ transactionId }) => transactionId),
-        ),
       );
-      for (const [position, { index }] of booking.entries()) {
-        const saved = booked[position]!;
-        results[index] = {
-          purchaseIds: [saved.purchaseId],
-          replayed: saved.replayed,
-        };
-      }
+      for (const [position, { index }] of committed.entries())
+        results[index] = written[position]!;
     },
     { isolationLevel: "serializable" },
   );
   return results;
+}
+
+/**
+ * Recheck committed plans against their fresh previews, all from one
+ * pre-write state, then write: retained settlements in sorted party-lock
+ * order, Vendor identities together, and every booking together. The caller
+ * holds each transaction's source locks in this serializable transaction and
+ * previewed `fresh` on `page` there.
+ */
+export async function writeRecheckedSpendings(
+  tx: DrizzleTransaction,
+  committed: readonly {
+    plan: Exclude<
+      FinancialSpendingPlan,
+      { status: "review_required" | "deferred" }
+    >;
+    transactionId: FinancialTransactionShortcode;
+  }[],
+  fresh: readonly FinancialSpendingPlan[],
+  page: FinancialSpendingPage,
+  actor: ActorContext,
+  /** Every committed transaction was created in this layer. */
+  layer?: WriteLayer,
+): Promise<FinancialSpendingResult[]> {
+  const txDb = databaseForTransaction(tx);
+  const results: (FinancialSpendingResult | null)[] = committed.map(() => null);
+  const rechecked = [];
+  for (const [index, { plan }] of committed.entries())
+    rechecked.push(
+      await recheckFinancialSpending(txDb, plan, page, fresh[index]!),
+    );
+  const purchases = rechecked.flatMap((outcome) =>
+    "fresh" in outcome && outcome.fresh.purchaseId
+      ? [outcome.fresh.purchaseId]
+      : [],
+  );
+  if (new Set(purchases).size !== purchases.length)
+    return refuse(
+      "Spending plans in one batch settle the same Purchase; apply them separately.",
+    );
+  // Retained settlement takes one per-party lock and holds it to commit.
+  // Several in one batch would follow input order and could deadlock a
+  // concurrent batch, so take them all first in sorted order. A single
+  // settlement keeps its own lock inside the settlement writer.
+  const settling = rechecked.flatMap((outcome, index) =>
+    "fresh" in outcome && outcome.fresh.effect === "settle_existing"
+      ? [committed[index]!]
+      : [],
+  );
+  if (settling.length > 1) {
+    const parties = await getDb(txDb)
+      .select({ ledgerPartyId: financialAccount.ledgerPartyId })
+      .from(financialTransaction)
+      .innerJoin(
+        financialAccount,
+        and(
+          eq(financialAccount.id, financialTransaction.accountId),
+          notDeleted(financialAccount),
+        ),
+      )
+      .where(
+        and(
+          inArray(
+            financialTransaction.shortcode,
+            settling.map((entry) => entry.transactionId),
+          ),
+          notDeleted(financialTransaction),
+        ),
+      );
+    await advisoryXactLocks(
+      getDb(txDb),
+      "purchase-settlement",
+      parties.flatMap((row) => (row.ledgerPartyId ? [row.ledgerPartyId] : [])),
+    );
+  }
+  const booking: {
+    index: number;
+    fresh: Extract<FinancialSpendingPlan, { status: "ready" }>;
+    facts: Awaited<ReturnType<typeof spendingFacts>>;
+    transactionId: FinancialTransactionShortcode;
+  }[] = [];
+  for (const [index, outcome] of rechecked.entries()) {
+    const { transactionId } = committed[index]!;
+    if (!("fresh" in outcome)) results[index] = outcome;
+    else if (outcome.fresh.effect === "settle_existing")
+      results[index] = await settleFinancialSpending(txDb, tx, outcome, actor);
+    else booking.push({ index, transactionId, ...outcome });
+  }
+  const vendors = await resolveBookingVendors(
+    txDb,
+    booking,
+    actor,
+    layer && { layer, page },
+  );
+  const inputs = booking.map(({ fresh, facts, transactionId }, position) =>
+    financialBookingInput.parse({
+      transactionId,
+      purchaseId: fresh.purchaseId,
+      vendorId: vendors.vendorIds[position]!,
+      spendingCategoryId: fresh.spendingCategoryId,
+      purchaserId: fresh.purchaserId,
+      costType: financialSpendingCostType(
+        facts.source.kind,
+        fresh.request.costType,
+      ),
+      beneficiaries: fresh.request.beneficiaries,
+    }),
+  );
+  // A supported household loan escrow disbursement, or a refund of one, is
+  // the only loan spending a booking may authorize.
+  const loanEscrowIds = new Set(
+    booking
+      .filter(
+        ({ fresh, facts }) =>
+          (fresh.request.advice?.escrowDisbursement === true ||
+            facts.source.kind === "refund") &&
+          liveHouseholdLoan(facts.account),
+      )
+      .map(({ transactionId }) => transactionId),
+  );
+  const booked = layer
+    ? await bookFreshFinancialTransactions(
+        layer,
+        inputs,
+        actor,
+        await knownBookingFacts(page, vendors.ids),
+        loanEscrowIds,
+      )
+    : await bookLockedFinancialTransactions(tx, inputs, actor, loanEscrowIds);
+  for (const [position, { index }] of booking.entries()) {
+    const saved = booked[position]!;
+    results[index] = {
+      purchaseIds: [saved.purchaseId],
+      replayed: saved.replayed,
+    };
+  }
+  return results.map((result) => {
+    if (!result) throw new Error("A spending plan in the batch has no result");
+    return result;
+  });
+}
+
+/** The page's reads, keyed the way a booking preview reads them. */
+async function knownBookingFacts(
+  page: FinancialSpendingPage,
+  vendorIds: ReadonlyMap<string, VendorId>,
+): Promise<KnownBookingFacts> {
+  const categories = new Map<string, typeof spendingCategory.$inferSelect>();
+  for (const loading of page.categories.values()) {
+    const category = await loading;
+    if (category) {
+      categories.set(category.id, category);
+      categories.set(category.shortcode, category);
+    }
+  }
+  const accounts = new Map(
+    [...page.accounts.values()].map((account) => [account.id, account]),
+  );
+  return {
+    transactions: page.transactions,
+    vendorIds,
+    categories,
+    parties: new Map(
+      [...accounts.values()].flatMap((account) =>
+        account.ledgerParty
+          ? [[account.ledgerParty.shortcode, account.ledgerParty] as const]
+          : [],
+      ),
+    ),
+    accounts,
+    purchaserProofs: page.purchaserProofs,
+    fresh: true,
+  };
 }
 
 type RecheckedSpending =
@@ -2657,6 +2874,8 @@ async function resolveBookingVendors(
     facts: Awaited<ReturnType<typeof spendingFacts>>;
   }[],
   actor: ActorContext,
+  /** The page this transaction read the names on, and the layer to mint in. */
+  layered?: { layer: WriteLayer; page: FinancialSpendingPage },
 ) {
   const lookups = bookings.map(({ fresh, facts }) => {
     const merchant = issuerCardFee(facts)
@@ -2685,7 +2904,14 @@ async function resolveBookingVendors(
       results.slice(offset, (offset += names.length)),
     );
   };
-  const checked = await lookup();
+  // The page resolved these names in this snapshot, before any own write.
+  const checked = layered
+    ? await Promise.all(
+        lookups.map(({ names }) =>
+          resolveFinancialSpendingVendors(txDb, names, layered.page),
+        ),
+      )
+    : await lookup();
   for (const [index, { fresh }] of bookings.entries())
     if (
       !fresh.request.vendorId &&
@@ -2732,24 +2958,25 @@ async function resolveBookingVendors(
     return refuse(
       "Spending plans in one batch create the same Vendor; apply them separately.",
     );
-  const created = await resolveNames(
-    txDb,
-    "vendor",
-    creating.map((index) => {
-      const { fresh } = bookings[index]!;
-      const { merchant } = lookups[index]!;
-      return {
-        name: fresh.vendorName,
-        values: async () => ({
-          aliases: merchant && merchant !== fresh.vendorName ? [merchant] : [],
-        }),
-      };
-    }),
-    { create: true, actor },
-  );
+  const misses = creating.map((index) => {
+    const { fresh } = bookings[index]!;
+    const { merchant } = lookups[index]!;
+    return {
+      name: fresh.vendorName,
+      values: async () => ({
+        aliases: merchant && merchant !== fresh.vendorName ? [merchant] : [],
+      }),
+    };
+  });
+  const created = layered
+    ? (await mintNamesInLayer(layered.layer, "vendor", misses, actor)).map(
+        (row) => ({ row, candidates: [] }),
+      )
+    : await resolveNames(txDb, "vendor", misses, { create: true, actor });
   const createdFor = new Map(
     creating.map((index, position) => [index, created[position]]),
   );
+  const ids = new Map<VendorShortcode, VendorId>();
   const vendorIds = bookings.map(({ fresh }, index) => {
     const selectedVendor = fresh.request.vendorId
       ? selected.get(fresh.request.vendorId)
@@ -2763,7 +2990,9 @@ async function resolveBookingVendors(
         : createdFor.get(index);
     if (!resolved?.row || resolved.candidates.length)
       return refuse("The Vendor identity changed before booking.");
-    return parseShortcodeFor("vendor", resolved.row.shortcode);
+    const code = parseShortcodeFor("vendor", resolved.row.shortcode);
+    ids.set(code, parseEntityId("vendor", resolved.row.id));
+    return code;
   });
   const minted = new Set(
     created.flatMap((result) =>
@@ -2787,5 +3016,5 @@ async function resolveBookingVendors(
           "The raw or cleaned Vendor identity changed before booking.",
         );
   }
-  return vendorIds;
+  return { vendorIds, ids };
 }

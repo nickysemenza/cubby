@@ -130,6 +130,12 @@ export const purchaseChildren = [
         on: ["sourceClaimId", "purchaseId", "evidenceIndex"],
       },
       { name: "PurchasePaymentEvidence_purchase_idx", on: ["purchaseId"] },
+      // Spending discovery's retained-payment window (charge day, exact
+      // cents): its serializable range read locks only that day range.
+      {
+        name: "PurchasePaymentEvidence_charged_day_amount_idx",
+        on: [{ sql: "({chargedAt}::date)" }, "amountMinor"],
+      },
     ],
     checks: [
       {

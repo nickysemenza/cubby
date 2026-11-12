@@ -1,4 +1,10 @@
-import { inArray, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  arrayOverlaps,
+  inArray,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 
 /** Normalize lookup input without rewriting retained names or their indexes. */
 const nameMatchKey = (value: string): string => value.trim().toLowerCase();
@@ -29,6 +35,23 @@ export const nameMatchesAnySql = (
 ): SQL => {
   const keys = [...new Set(names.map(nameMatchKey).filter(Boolean))];
   return keys.length ? inArray(sql`lower(${column})`, keys) : sql`false`;
+};
+
+/**
+ * Exact element match on a `text[]` column: true when any lowercased element
+ * equals a request key, as `textArraySomeSql` with `nameMatchesAnySql` does.
+ * The overlap form is served by a `name_match_keys(column)` GIN index where
+ * one is declared (Vendor), so a serializable read locks key pages instead of
+ * the relation.
+ */
+export const textArrayMatchesAnySql = (
+  values: SQLWrapper,
+  names: readonly string[],
+): SQL => {
+  const keys = [...new Set(names.map(nameMatchKey).filter(Boolean))];
+  return keys.length
+    ? arrayOverlaps(sql`name_match_keys(${values})`, keys)
+    : sql`false`;
 };
 
 /** Eligibility, relevance and explanations use identical exact/prefix tiers. */

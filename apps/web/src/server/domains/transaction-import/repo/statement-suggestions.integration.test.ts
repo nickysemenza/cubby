@@ -2624,7 +2624,7 @@ describe("statement Transaction suggestions", () => {
           runId,
           scope: { importId: recorded.batchId },
         }),
-      { statements: 400, parameters: 700 },
+      { statements: 252, parameters: 700 },
     );
     expect(outcome).toMatchObject({ completed: 32, failed: [], next: null });
     expect(
@@ -2653,7 +2653,7 @@ describe("statement Transaction suggestions", () => {
         scope: { importId: retained.batchId },
       });
     expect(
-      await expectStatementBudget(replay, { statements: 450, parameters: 700 }),
+      await expectStatementBudget(replay, { statements: 301, parameters: 700 }),
     ).toMatchObject({ processed: 32, failed: [] });
     await replay();
     expect(

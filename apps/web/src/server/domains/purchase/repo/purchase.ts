@@ -8,11 +8,15 @@ import {
 } from "@cubby/schemas/expense-line-kind";
 import {
   type ExpenseId,
+  type LedgerPartyId,
   type ProductId,
+  type ProjectId,
   type PurchaseId,
   type PurchaseShortcode,
   parseEntityId,
   parseShortcodeFor,
+  type SpendingCategoryId,
+  type VendorAccountId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
 import type {
@@ -157,6 +161,7 @@ import {
   createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
+import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -918,6 +923,78 @@ const resolveOptional = async <
  * one statement, then one identity insert and one audit insert. Rows are
  * created and returned in input order.
  */
+type PurchaseReferences = {
+  vendorId: VendorId;
+  vendorAccountId: VendorAccountId | null;
+  defaultProjectId: ProjectId | null;
+  spendingCategoryId: SpendingCategoryId | null;
+  purchaserOverrideId: LedgerPartyId | null | undefined;
+};
+
+/** A new Purchase's stored values on resolved references. */
+const purchaseInsertValues = (
+  data: PurchaseCreateInput,
+  references: PurchaseReferences,
+) => ({
+  defaultProjectId: references.defaultProjectId,
+  spendingCategoryId: references.spendingCategoryId,
+  spendingCategoryOrigin: data.spendingCategoryId
+    ? ("manual" as const)
+    : ("legacy" as const),
+  itemizationExpectation: data.itemizationExpectation,
+  defaultTrade: data.defaultTrade,
+  vendorId: references.vendorId,
+  vendorAccountId: references.vendorAccountId,
+  purchaserOverrideId: references.purchaserOverrideId,
+  orderId: data.orderId?.trim() || null,
+  displayLabel: data.displayLabel?.trim() || null,
+  date: data.date,
+  statedTotal:
+    data.statedTotal == null
+      ? data.statedTotal
+      : moneyToMinor(data.statedTotal),
+  notes: data.notes,
+});
+
+/**
+ * Bare Purchases in a write layer on references the caller resolved and
+ * locked (a live Vendor, a live member purchaser): `createPurchases`' values
+ * and create audit. Order identities and uploaded documents need the
+ * standalone writer.
+ */
+export function stagePurchases(
+  layer: WriteLayer,
+  items: readonly {
+    data: PurchaseCreateInput;
+    references: PurchaseReferences;
+  }[],
+  actor: ActorContext,
+) {
+  if (
+    items.some(
+      ({ data }) => data.orderId?.trim() || data.pendingImageIds !== undefined,
+    )
+  )
+    throw new Error("Staged Purchases carry no order identity or documents");
+  const staged = layer.stage(
+    "purchase",
+    items.map(({ data, references }) => ({
+      ...purchaseInsertValues(data, references),
+      // Created and settled in this transaction: no later touch is owed.
+      updatedAt: new Date(),
+    })),
+  );
+  layer.audit(
+    actor,
+    staged.map((row) => ({
+      entityKind: "purchase" as const,
+      entityId: row.id,
+      action: "create" as const,
+    })),
+  );
+  return staged;
+}
+
 export async function createPurchases(
   tx: DrizzleTransaction,
   inputs: readonly PurchaseCreateInput[],
@@ -951,26 +1028,15 @@ export async function createPurchases(
   const created = await insertManyWithShortcode(
     tx,
     "purchase",
-    inputs.map((data, index) => ({
-      defaultProjectId: projectIds[index]!,
-      spendingCategoryId: categoryIds[index]!,
-      spendingCategoryOrigin: data.spendingCategoryId
-        ? ("manual" as const)
-        : ("legacy" as const),
-      itemizationExpectation: data.itemizationExpectation,
-      defaultTrade: data.defaultTrade,
-      vendorId: vendorIds[index]!,
-      vendorAccountId: vendorAccountIds[index]!,
-      purchaserOverrideId: purchaserIds[index],
-      orderId: data.orderId?.trim() || null,
-      displayLabel: data.displayLabel?.trim() || null,
-      date: data.date,
-      statedTotal:
-        data.statedTotal == null
-          ? data.statedTotal
-          : moneyToMinor(data.statedTotal),
-      notes: data.notes,
-    })),
+    inputs.map((data, index) =>
+      purchaseInsertValues(data, {
+        vendorId: vendorIds[index]!,
+        vendorAccountId: vendorAccountIds[index]!,
+        defaultProjectId: projectIds[index]!,
+        spendingCategoryId: categoryIds[index]!,
+        purchaserOverrideId: purchaserIds[index],
+      }),
+    ),
   );
   // Claim uploaded documents in the insert transaction so failure leaves no pending files.
   for (const [index, row] of created.entries())

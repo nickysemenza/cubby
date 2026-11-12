@@ -1163,6 +1163,13 @@ export const { definition, readSchemas } = defineEntityModel({
         unique: true,
         where: "{deletedAt} IS NULL",
       },
+      // Name resolution's exact `lower(name)` arm: a serializable lookup
+      // locks index pages for its keys instead of the whole relation.
+      {
+        name: "Vendor_lower_name_live_idx",
+        on: [{ sql: "lower({name})" }],
+        where: "{deletedAt} IS NULL",
+      },
       { on: ["systemKey"], unique: true },
       {
         // A sender lookup under SERIALIZABLE reads index pages, not every Vendor.

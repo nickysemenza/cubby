@@ -1569,9 +1569,11 @@ describe("shared spending booking", () => {
   // The set-based writers must write what the same charges write one at a time.
   it("creates and books a batch exactly as it does one charge at a time", async () => {
     const { account, advice } = await fixture();
-    // Distinct Vendors keep each plan's snapshot independent of the other's booking.
+    // Distinct Vendors keep each plan's snapshot independent of the other's booking;
+    // dates further apart than the candidate window make the page span both.
     await createRepoIdentity(ctx, "vendor", { name: "Synthetic Bakery" });
     const merchants = ["Synthetic Orchard", "Synthetic Bakery"];
+    const days = ["04", "26"];
     const inputs = (prefix: string, month: string) =>
       [19, 23].map((amount, index) =>
         buildEntity("financialTransaction", {
@@ -1579,8 +1581,8 @@ describe("shared spending booking", () => {
           kind: "purchase",
           status: "posted",
           amount,
-          transactionDate: `2026-${month}-04`,
-          postedDate: `2026-${month}-05`,
+          transactionDate: `2026-${month}-${days[index]}`,
+          postedDate: `2026-${month}-${days[index]}`,
           merchant: merchants[index],
           rawDescription: null,
           sourceCategory: null,

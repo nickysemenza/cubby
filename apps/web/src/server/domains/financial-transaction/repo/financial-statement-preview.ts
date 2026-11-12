@@ -30,7 +30,7 @@ import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   sourceObservationColumns,
-  sourceObservationFrom,
+  sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   sourceTransactionRecordExternalId,
@@ -39,6 +39,7 @@ import {
 import { merchantVendorInferences } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 import {
+  financialRowAccounts,
   projectFinancialCandidates,
   projectFinancialRows,
   finishFinancialPreview,
@@ -107,6 +108,10 @@ type FinancialStatementPreviewPreparation = Awaited<
   ReturnType<typeof prepareFinancialStatementPreview>
 >;
 
+// Previews read identity facts only; the state view's history folds would
+// turn these keyed lookups into whole-table scans.
+const observationIdentities = sql`${sourceObservationIdentities} "SourceTransactionRecord"`;
+
 type FileObservationScope = {
   fingerprint: string;
   source: string;
@@ -139,7 +144,7 @@ async function sameFilePositions(
         fingerprint: transactionImport.fingerprint,
         rowPosition: transactionImportRecord.rowPosition,
       })
-      .from(sourceObservationFrom)
+      .from(observationIdentities)
       .innerJoin(
         requested.from,
         sql`requested.source = ${sourceObservationColumns.source} AND requested."externalId" = ${sourceObservationColumns.chargeKey}`,
@@ -295,7 +300,7 @@ async function loadFinancialPreview(
           providerAccountId: sourceObservationColumns.providerAccountId,
           externalId: sourceObservationColumns.chargeKey,
         })
-        .from(sourceObservationFrom)
+        .from(observationIdentities)
         .innerJoin(
           requestedProviders.from,
           sql`requested_provider.source = ${sourceObservationColumns.source}
@@ -351,37 +356,55 @@ async function loadFinancialPreview(
       ON alias.source = requested.source AND alias.value = requested.value
     WHERE alias."historicalTransactionId" IS NOT NULL
   )`;
-  const [preparation, transactions] = await Promise.all([
-    options.preparation ?? prepareFinancialStatementPreview(db),
-    unwrapDb(db)
-      .select({
-        id: financialTransaction.id,
-        shortcode: financialTransaction.shortcode,
-        accountId: financialTransaction.accountId,
-        amount: minorToDollarsSql(
-          financialTransaction.amount,
-          "numeric",
-        ).mapWith(Number),
-        postedDate: financialTransaction.postedDate,
-        transactionDate: financialTransaction.transactionDate,
-        status: financialTransaction.status,
-        merchant: financialTransaction.merchant,
-        rawDescription: financialTransaction.rawDescription,
-      })
-      .from(financialTransaction)
-      .where(
-        and(
-          notDeleted(financialTransaction),
-          // A source ref is global evidence and must survive a later posted-date
-          // correction; the date predicate handles the normal batch efficiently.
-          or(
-            inArray(financialTransaction.postedDate, dates),
-            inArray(financialTransaction.transactionDate, dates),
-            sourceRefLookup,
-          ),
+  const preparation =
+    options.preparation ?? (await prepareFinancialStatementPreview(db));
+  // A date-window candidate must share its row's resolved account, so the
+  // date arm reads only those accounts' (account, date) index ranges.
+  const { accountFor } = financialRowAccounts(
+    options,
+    preparation.accounts,
+    observations,
+  );
+  const rowAccounts = uniq(
+    input.rows.flatMap((row) => {
+      const account = accountFor(row);
+      return account ? [account.id] : [];
+    }),
+  );
+  const transactions = await unwrapDb(db)
+    .select({
+      id: financialTransaction.id,
+      shortcode: financialTransaction.shortcode,
+      accountId: financialTransaction.accountId,
+      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
+        Number,
+      ),
+      postedDate: financialTransaction.postedDate,
+      transactionDate: financialTransaction.transactionDate,
+      status: financialTransaction.status,
+      merchant: financialTransaction.merchant,
+      rawDescription: financialTransaction.rawDescription,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        notDeleted(financialTransaction),
+        // A source ref is global evidence and must survive a later posted-date
+        // correction; the date predicate handles the normal batch efficiently.
+        or(
+          rowAccounts.length
+            ? and(
+                inArray(financialTransaction.accountId, rowAccounts),
+                or(
+                  inArray(financialTransaction.postedDate, dates),
+                  inArray(financialTransaction.transactionDate, dates),
+                ),
+              )
+            : sql`false`,
+          sourceRefLookup,
         ),
       ),
-  ]);
+    );
 
   for (const transaction of transactions)
     preparation.ids.set(transaction.shortcode, transaction.id);

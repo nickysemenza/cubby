@@ -3,6 +3,7 @@ import { declaredClassificationPolicies } from "@cubby/schemas/classification-fi
 import { entityIdentityDropTriggerSql } from "~/server/db/entity-identity-ddl";
 import { entityLinkDropLivenessTriggerSql } from "~/server/db/entity-link-schema";
 import { mailDiscoveryDdl } from "~/server/db/mail-discovery-ddl";
+import { nameMatchDdl } from "~/server/db/name-match-ddl";
 import { shipmentIdentityDdl } from "~/server/db/shipment-identity-ddl";
 
 import { productBrandDdl } from "./product-brand-ddl";
@@ -64,5 +65,5 @@ const classificationConstraintSql = (): string =>
  * this whole script.
  */
 export function renderDerivedDdl(): string {
-  return `${productBrandDdl()}\n\n${mailDiscoveryDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${suggestionHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${shipmentIdentityDdl()}\n`;
+  return `${productBrandDdl()}\n\n${mailDiscoveryDdl()}\n\n${entityIdentityDropTriggerSql()}\n\n${entityLinkDropLivenessTriggerSql()}\n\n${classificationConstraintSql()}\n\n${suggestionHistoryDdl()}\n\n${statementSuggestionDdl()}\n\n${searchPrefixDdl()}\n\n${nameMatchDdl()}\n\n${shipmentIdentityDdl()}\n`;
 }
