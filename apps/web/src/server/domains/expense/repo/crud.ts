@@ -73,6 +73,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
+  logAuditEntries,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
@@ -81,11 +82,12 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   expenseInheritanceReadExtras,
   validateExpenseInheritance,
+  validateExpenseInheritances,
 } from "./expense-inheritance";
 import { assertQuantitySignMatchesCost, expenseAuditChildren } from "./helpers";
 import { expenseScaffold } from "./lookup";
@@ -930,43 +932,101 @@ export const createExpense = defineMutationWriter({
     actor: ActorContext,
     classifyLineRole?: ExpenseLineRoleClassifier,
   ) => {
-    const preflightProductId = data.productId
-      ? await resolveOrThrow(db, "product", data.productId)
-      : null;
-    const lineKind =
-      data.lineKind !== undefined || preflightProductId
+    const { created, priceAffectedProductIds } = await createExpenses(
+      db,
+      [data],
+      actor,
+      classifyLineRole,
+    );
+    return readOutput({
+      entityId: created[0]!.id,
+      shortcode: created[0]!.shortcode,
+      priceAffectedProductIds,
+    });
+  },
+});
+
+/** Optional shortcodes resolved in one statement, in input order. */
+const resolveOptional = async <
+  E extends "product" | "project" | "spendingCategory",
+>(
+  db: Database | DrizzleTransaction,
+  entity: E,
+  codes: readonly (string | null | undefined)[],
+) => {
+  const present = codes.filter((code): code is string => Boolean(code));
+  const ids = await resolveAllOrThrow(db, entity, present);
+  let index = 0;
+  return codes.map((code) => (code ? ids[index++]! : null));
+};
+
+/**
+ * The create path for one or many Expenses: each reference kind, the
+ * inheritance check, the product policy and the audit take one statement for
+ * the whole set, and rows are created and returned in input order. An input
+ * that names no Purchase still resolves its charge on its own.
+ */
+export async function createExpenses(
+  db: Database,
+  inputs: readonly ExpenseCreateInput[],
+  actor: ActorContext,
+  classifyLineRole?: ExpenseLineRoleClassifier,
+) {
+  const preflightProductIds = await resolveOptional(
+    db,
+    "product",
+    inputs.map((data) => data.productId),
+  );
+  const lineKinds: ReturnType<typeof resolveExpenseLineKind>[] = [];
+  for (const [index, data] of inputs.entries())
+    lineKinds.push(
+      data.lineKind !== undefined || preflightProductIds[index]
         ? resolveExpenseLineKind({
             lineKind: data.lineKind,
-            productId: preflightProductId,
+            productId: preflightProductIds[index]!,
           })
-        : await requireLineRoleClassifier(classifyLineRole)(db, actor, data);
-    const result = await withTransaction(db, async (tx) => {
-      // Same transaction as the insert: a vendor or charge created here must not
-      // outlive a failed expense write.
-      // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
-      // the only place it gets checked for liveness — resolving THROUGH
-      // `resolveLivePurchaseId` (live-only) folds in what `assertPurchaseLive`
-      // used to check separately (an FK proves the row exists, not that it
-      // isn't tombstoned).
-      const explicitPurchaseId = data.purchaseId
-        ? await resolveLivePurchaseId(tx, data.purchaseId)
-        : null;
-      const purchaseId =
-        explicitPurchaseId ?? (await resolveCharge(tx, actor, data)) ?? null;
-
-      const explicitProjectId = data.projectId
-        ? await resolveLiveProjectId(tx, data.projectId)
-        : null;
-      const productId = data.productId
-        ? await resolveLiveProductId(tx, data.productId)
-        : null;
-      const projectId = explicitProjectId;
-      if (productId !== preflightProductId) {
+        : await requireLineRoleClassifier(classifyLineRole)(db, actor, data),
+    );
+  return withTransaction(db, async (tx) => {
+    // Same transaction as the insert: a vendor or charge created here must not
+    // outlive a failed expense write.
+    // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
+    // the only place it gets checked for liveness: resolving through the
+    // live-only resolver folds in what `assertPurchaseLive` used to check
+    // separately (an FK proves the row exists, not that it isn't tombstoned).
+    const explicitPurchaseIds = await resolveAllOrThrow(
+      tx,
+      "purchase",
+      inputs.flatMap((data) => (data.purchaseId ? [data.purchaseId] : [])),
+    );
+    let explicit = 0;
+    const purchaseIds: (PurchaseId | null)[] = [];
+    for (const data of inputs)
+      purchaseIds.push(
+        data.purchaseId
+          ? explicitPurchaseIds[explicit++]!
+          : ((await resolveCharge(tx, actor, data)) ?? null),
+      );
+    const projectIds = await resolveOptional(
+      tx,
+      "project",
+      inputs.map((data) => data.projectId),
+    );
+    const productIds = await resolveOptional(
+      tx,
+      "product",
+      inputs.map((data) => data.productId),
+    );
+    const tuples = inputs.map((data, index) => {
+      const productId = productIds[index]!;
+      if (productId !== preflightProductIds[index]) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
           "Expense Product changed while its receipt role was being resolved.",
         );
       }
+      const lineKind = lineKinds[index]!;
+      const projectId = projectIds[index]!;
       assertClassificationPolicies("expense", {
         lineKind,
         lineBasis: data.lineBasis ?? "item_line",
@@ -982,84 +1042,101 @@ export const createExpense = defineMutationWriter({
       }
       assertExpenseDate(data.cost, data.date);
       assertQuantitySignMatchesCost(data.cost, data.productQuantity);
-      await validateExpenseInheritance(tx, {
+      return {
         lineKind,
         projectId,
         productId,
-        purchaseId,
+        purchaseId: purchaseIds[index]!,
         trade: data.trade,
-      });
-      const pricesBefore = await loadEffectiveProductPricesById(
-        tx,
-        pricingProductIds([productId]),
-      );
-
-      const created = await insertWithShortcode(tx, "expense", {
-        spendingCategoryId: data.spendingCategoryId
-          ? await resolveOrThrow(
-              tx,
-              "spendingCategory",
-              data.spendingCategoryId,
-            )
-          : null,
+      };
+    });
+    await validateExpenseInheritances(tx, tuples);
+    const pricesBefore = await loadEffectiveProductPricesById(
+      tx,
+      pricingProductIds(productIds),
+    );
+    const categoryIds = await resolveOptional(
+      tx,
+      "spendingCategory",
+      inputs.map((data) => data.spendingCategoryId),
+    );
+    const created = await insertManyWithShortcode(
+      tx,
+      "expense",
+      inputs.map((data, index) => ({
+        spendingCategoryId: categoryIds[index]!,
         economicRole: data.economicRole,
         name: data.name,
         cost: data.cost,
         date: data.date,
-        lineKind,
+        lineKind: tuples[index]!.lineKind,
         lineBasis: data.lineBasis,
         costType: data.costType,
         trade: data.trade,
         url: data.url,
         notes: data.notes,
         future: data.future,
-        projectId,
-        productId,
+        projectId: tuples[index]!.projectId,
+        productId: tuples[index]!.productId,
         productQuantity: data.productQuantity,
-        purchaseId,
-      });
-      await replaceExpenseAttributionRole(
-        tx,
-        created.id,
-        "beneficiary",
-        data.beneficiaries ?? [],
-      );
-      await replaceExpenseAttributionRole(
-        tx,
-        created.id,
-        "funder",
-        data.funders ?? [],
-      );
-      await replaceLedgerSourceClaims(
-        tx,
-        {
-          expenseId: created.id,
-          targetAmount: data.cost,
-        },
-        data.sourceClaims ?? [],
-      );
-      await logAuditEntry(tx, actor, {
-        entityKind: "expense",
-        entityId: created.id,
-        action: "create",
-      });
-      await validateProductPolicy(tx, { expenseIds: [created.id] });
-      await touchUpdatedAt(tx, product, productId ? [productId] : []);
-      await touchUpdatedAt(tx, purchase, purchaseId ? [purchaseId] : []);
-      return {
-        id: created.id,
-        priceAffectedProductIds: await syncChangedEffectivePrices(
+        purchaseId: tuples[index]!.purchaseId,
+      })),
+    );
+    // A new Expense has no attributions or source claims to replace.
+    for (const [index, data] of inputs.entries()) {
+      const expenseId = created[index]!.id;
+      if (data.beneficiaries?.length)
+        await replaceExpenseAttributionRole(
           tx,
-          pricesBefore,
-        ),
-      };
+          expenseId,
+          "beneficiary",
+          data.beneficiaries,
+        );
+      if (data.funders?.length)
+        await replaceExpenseAttributionRole(
+          tx,
+          expenseId,
+          "funder",
+          data.funders,
+        );
+      if (data.sourceClaims?.length)
+        await replaceLedgerSourceClaims(
+          tx,
+          { expenseId, targetAmount: data.cost },
+          data.sourceClaims,
+        );
+    }
+    await logAuditEntries(
+      tx,
+      actor,
+      created.map((row) => ({
+        entityKind: "expense" as const,
+        entityId: row.id,
+        action: "create" as const,
+      })),
+    );
+    await validateProductPolicy(tx, {
+      expenseIds: created.map((row) => row.id),
     });
-    return readOutput({
-      entityId: result.id,
-      priceAffectedProductIds: result.priceAffectedProductIds,
-    });
-  },
-});
+    await touchUpdatedAt(
+      tx,
+      product,
+      uniq(productIds.filter((id) => id !== null)),
+    );
+    await touchUpdatedAt(
+      tx,
+      purchase,
+      uniq(purchaseIds.filter((id) => id !== null)),
+    );
+    return {
+      created,
+      priceAffectedProductIds: await syncChangedEffectivePrices(
+        tx,
+        pricesBefore,
+      ),
+    };
+  });
+}
 
 export const deleteExpensesWithPurchaseEffects = async (
   db: Database,

@@ -132,6 +132,23 @@ export async function publishGmailEvidence<T>(
     const evaluation = input.evaluation
       ? { ...input.evaluation, observationId }
       : undefined;
+    const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
+    // Shared: removal, admission and correction lock the owner exclusively and
+    // win, while unrelated Emails publish concurrently.
+    const [party] = await tx
+      .select({ id: ledgerParty.id })
+      .from(ledgerParty)
+      .where(and(eq(ledgerParty.id, partyId), notDeleted(ledgerParty)))
+      .for("share");
+    const runIds = [
+      ...new Set(
+        [input.runId, input.expected?.runId].filter((id): id is string =>
+          Boolean(id),
+        ),
+      ),
+    ].map((id) => runEntityId.parse(id));
+    // Requester and captured Runs lock in one sorted statement. Publication
+    // may update a captured Run, so neither holds it shared.
     const guarded = evaluation
       ? await (
           await import("~/server/ai/evaluation/repo/ai-evaluation")
@@ -139,16 +156,17 @@ export async function publishGmailEvidence<T>(
           databaseForTransaction(tx),
           evaluation.id,
           evaluation.token,
-          // Publication below locks this Run FOR UPDATE.
           "no key update",
+          runIds,
         )
       : null;
-    const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
-    const [party] = await tx
-      .select({ id: ledgerParty.id })
-      .from(ledgerParty)
-      .where(and(eq(ledgerParty.id, partyId), notDeleted(ledgerParty)))
-      .for("no key update");
+    if (!evaluation && runIds.length)
+      await tx
+        .select({ id: run.id })
+        .from(run)
+        .where(inArray(run.id, runIds))
+        .orderBy(asc(run.id))
+        .for("no key update");
     const decline = async (
       reason: "removed" | "frozen" | "changed",
       current: typeof emailTable.$inferSelect | null,
@@ -244,20 +262,6 @@ export async function publishGmailEvidence<T>(
       return null;
     };
     if (!party) return decline("removed", null);
-    const runIds = [
-      ...new Set(
-        [input.runId, input.expected?.runId].filter((id): id is string =>
-          Boolean(id),
-        ),
-      ),
-    ].map((id) => runEntityId.parse(id));
-    if (runIds.length)
-      await tx
-        .select({ id: run.id })
-        .from(run)
-        .where(inArray(run.id, runIds))
-        .orderBy(asc(run.id))
-        .for("update");
     const [current] = await tx
       .select()
       .from(emailTable)

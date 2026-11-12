@@ -4,12 +4,15 @@ import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-tra
 import {
   parseEntityId,
   shortcodeSchema,
+  type FinancialTransactionId,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { uniq, uniqBy } from "es-toolkit";
 
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -111,12 +114,15 @@ export async function financialSourceRefsIncluding(
   );
 }
 
-/** Reserve existing transaction commands, then every occurrence, before settlement row locks. */
+/**
+ * Reserve existing transaction commands, then every occurrence, before
+ * settlement row locks. Returns the named transactions' ids, deleted or not.
+ */
 export async function lockFinancialTransactionSources(
   tx: RepositoryQueryTransaction,
   codes: readonly FinancialTransactionShortcode[],
   refs: readonly SourceRef[] = [],
-): Promise<void> {
+): Promise<{ id: FinancialTransactionId }[]> {
   const query = repositoryQueries(tx);
   const targets = codes.length
     ? await query
@@ -162,17 +168,17 @@ export async function lockFinancialTransactionSources(
       .where(where)
       .orderBy(asc(sourceOccurrence.id))
       .for("update");
+  return targets;
 }
 
 /** Call before party, Purchase and FinancialTransaction row locks, including ordinary money edits. */
 export async function lockFinancialSourceOccurrences(
   tx: RepositoryQueryTransaction,
   refs: readonly SourceRef[],
-  transactionId?: string,
+  transactionIds: readonly string[] = [],
 ) {
-  const retainedRefs = transactionId
-    ? ((await financialSourceRefsFor(tx, [transactionId])).get(transactionId) ??
-      [])
+  const retainedRefs = transactionIds.length
+    ? [...(await financialSourceRefsFor(tx, transactionIds)).values()].flat()
     : [];
   await lockFinancialEvidenceKeys(
     tx,
@@ -187,10 +193,10 @@ export async function lockFinancialSourceOccurrences(
   });
   const where = or(
     codes.length ? inArray(sourceOccurrence.shortcode, codes) : undefined,
-    transactionId
-      ? eq(
+    transactionIds.length
+      ? inArray(
           sourceOccurrence.acceptedTransactionId,
-          parseEntityId("financialTransaction", transactionId),
+          transactionIds.map((id) => parseEntityId("financialTransaction", id)),
         )
       : undefined,
   );
@@ -203,129 +209,239 @@ export async function lockFinancialSourceOccurrences(
     .for("update");
 }
 
-export async function assertFinancialSourceRefsAvailable(
+/**
+ * Set-based availability check. Every fact is read up front; the checks then
+ * run in entry and ref order, so the first refusal matches a per-ref check.
+ */
+export async function assertFinancialSourceRefsAvailableFor(
   db: RepositoryQueryInput,
-  refs: readonly SourceRef[],
-  exceptTransactionId?: string,
+  entries: readonly {
+    refs: readonly SourceRef[];
+    exceptTransactionId?: string;
+  }[],
 ): Promise<void> {
   const query = repositoryQueries(db);
-  const retained = exceptTransactionId
-    ? ((await financialSourceRefsFor(db, [exceptTransactionId])).get(
-        exceptTransactionId,
-      ) ?? [])
-    : [];
-  const have = new Set(retained.map(refKey));
-  for (const ref of refs) {
-    const code = occurrenceCode(ref);
-    if (code.success) {
-      const [owner] = await query
-        .select()
-        .from(sourceOccurrence)
-        .where(eq(sourceOccurrence.shortcode, code.data));
-      // Retaining an existing reservation is not a fresh acceptance, even after withdrawal or replacement.
-      if (
-        owner?.source === ref.source &&
-        owner.acceptedTransactionId === exceptTransactionId &&
-        have.has(refKey(ref))
-      )
+  const exceptIds = uniq(
+    entries.flatMap((entry) =>
+      entry.exceptTransactionId ? [entry.exceptTransactionId] : [],
+    ),
+  );
+  const retainedById = exceptIds.length
+    ? await financialSourceRefsFor(db, exceptIds)
+    : new Map<string, SourceRef[]>();
+  const retainedKeys = (exceptTransactionId: string | undefined) =>
+    new Set(
+      (exceptTransactionId
+        ? (retainedById.get(exceptTransactionId) ?? [])
+        : []
+      ).map(refKey),
+    );
+  const codes = uniq(
+    entries.flatMap((entry) =>
+      entry.refs.flatMap((ref) => {
+        const code = occurrenceCode(ref);
+        return code.success ? [code.data] : [];
+      }),
+    ),
+  );
+  const owners = new Map(
+    (codes.length
+      ? await query
+          .select()
+          .from(sourceOccurrence)
+          .where(inArray(sourceOccurrence.shortcode, codes))
+      : []
+    ).map((owner) => [owner.shortcode, owner]),
+  );
+  // The history predicate aliases its own occurrence join as `owner`.
+  const checked = requestedRows(
+    [...owners.values()].map((owner) => ({
+      id: owner.id,
+      accepted: owner.acceptedTransactionId,
+    })),
+    { id: "uuid", accepted: "uuid" },
+    "checked",
+  );
+  const history = new Map(
+    owners.size
+      ? (
+          await query.execute<{ id: string; held: boolean }>(
+            sql`SELECT ${checked.col("id")}::text AS id, ${sourceOccurrenceHasUnresolvedHistory(checked.col("id"), checked.col("accepted"))} AS held
+            FROM ${checked.from}`,
+          )
+        ).rows.map((row) => [row.id, row.held])
+      : [],
+  );
+  const aliasRefs = uniqBy(
+    entries.flatMap((entry) => {
+      const have = retainedKeys(entry.exceptTransactionId);
+      return entry.refs.filter(
+        (ref) => !occurrenceCode(ref).success && !have.has(refKey(ref)),
+      );
+    }),
+    refKey,
+  );
+  const wantedAliases = requestedRows(
+    aliasRefs.map((ref) => ({ source: ref.source, value: ref.externalId })),
+    { source: "text", value: "text" },
+    "wanted",
+  );
+  const aliased = new Set(
+    (aliasRefs.length
+      ? await query
+          .selectDistinct({
+            source: financialEvidenceAlias.source,
+            externalId: financialEvidenceAlias.value,
+          })
+          .from(financialEvidenceAlias)
+          .where(
+            and(
+              sql`(${financialEvidenceAlias.source}, ${financialEvidenceAlias.value}) IN (SELECT ${wantedAliases.col("source")}, ${wantedAliases.col("value")} FROM ${wantedAliases.from})`,
+              or(
+                isNotNull(financialEvidenceAlias.observationId),
+                sql`(${financialEvidenceAlias.deletedAt} IS NULL AND EXISTS(SELECT 1 FROM "FinancialTransaction" bound WHERE bound.id=${financialEvidenceAlias.historicalTransactionId} AND ${notDeleted("bound")}))`,
+              ),
+            ),
+          )
+      : []
+    ).map(refKey),
+  );
+  for (const { refs, exceptTransactionId } of entries) {
+    const have = retainedKeys(exceptTransactionId);
+    for (const ref of refs) {
+      const code = occurrenceCode(ref);
+      if (code.success) {
+        const owner = owners.get(code.data);
+        // Retaining an existing reservation is not a fresh acceptance, even after withdrawal or replacement.
+        if (
+          owner?.source === ref.source &&
+          owner.acceptedTransactionId === exceptTransactionId &&
+          have.has(refKey(ref))
+        )
+          continue;
+        if (
+          !owner ||
+          owner.source !== ref.source ||
+          owner.deletedAt !== null ||
+          owner.reviewState !== "ready" ||
+          owner.currentObservationId === null ||
+          owner.withdrawnAt !== null ||
+          owner.supersededByOccurrenceId !== null ||
+          owner.replacementObservationId !== null ||
+          (owner.acceptedTransactionId !== null &&
+            owner.acceptedTransactionId !== exceptTransactionId)
+        ) {
+          return refuse(
+            "The proven occurrence is unavailable or has a different accepted owner. Refresh its source review.",
+          );
+        }
+        if (history.get(owner.id))
+          refuse(
+            "Unresolved historical bindings require an explicit ownership review before accepting this source occurrence.",
+          );
         continue;
-      if (
-        !owner ||
-        owner.source !== ref.source ||
-        owner.deletedAt !== null ||
-        owner.reviewState !== "ready" ||
-        owner.currentObservationId === null ||
-        owner.withdrawnAt !== null ||
-        owner.supersededByOccurrenceId !== null ||
-        owner.replacementObservationId !== null ||
-        (owner.acceptedTransactionId !== null &&
-          owner.acceptedTransactionId !== exceptTransactionId)
-      ) {
-        return refuse(
-          "The proven occurrence is unavailable or has a different accepted owner. Refresh its source review.",
-        );
       }
-      const history = await query.execute<{ held: boolean }>(
-        sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
-      );
-      if (history.rows[0]?.held)
+      if (have.has(refKey(ref))) continue;
+      // Retired and ambiguous bindings block fresh actions too; alias uniqueness never proves ownership.
+      if (aliased.has(refKey(ref)) || /^v[123]:/.test(ref.externalId))
         refuse(
-          "Unresolved historical bindings require an explicit ownership review before accepting this source occurrence.",
+          "Retained source evidence requires an explicit identity and ownership review before it can authorize a new transaction.",
         );
-      continue;
     }
-    if (have.has(refKey(ref))) continue;
-    const [alias] = await query
-      .select({ id: financialEvidenceAlias.id })
-      .from(financialEvidenceAlias)
-      .where(
-        and(
-          eq(financialEvidenceAlias.source, ref.source),
-          eq(financialEvidenceAlias.value, ref.externalId),
-          or(
-            isNotNull(financialEvidenceAlias.observationId),
-            sql`(${financialEvidenceAlias.deletedAt} IS NULL AND EXISTS(SELECT 1 FROM "FinancialTransaction" bound WHERE bound.id=${financialEvidenceAlias.historicalTransactionId} AND ${notDeleted("bound")}))`,
-          ),
-        ),
-      )
-      .limit(1);
-    // Retired and ambiguous bindings block fresh actions too; alias uniqueness never proves ownership.
-    if (alias || /^v[123]:/.test(ref.externalId))
-      refuse(
-        "Retained source evidence requires an explicit identity and ownership review before it can authorize a new transaction.",
-      );
   }
 }
 
-/** The caller holds every affected occurrence and target lock. Aliases are provenance only. */
-export async function replaceFinancialSourceRefs(
-  tx: RepositoryQueryTransaction,
-  transactionId: string,
-  refs: readonly SourceRef[],
-): Promise<{
+type AcceptedSourceChanges = {
   before: (typeof sourceOccurrence.$inferSelect)[];
   after: (typeof sourceOccurrence.$inferSelect)[];
-}> {
+};
+
+/**
+ * The caller holds every affected occurrence and target lock. Aliases are
+ * provenance only. One owner read, one release and one acceptance statement
+ * across every transaction. An occurrence named
+ * by two transactions refuses before any write.
+ */
+export async function replaceFinancialSourceRefsFor(
+  tx: RepositoryQueryTransaction,
+  entries: readonly { transactionId: string; refs: readonly SourceRef[] }[],
+): Promise<AcceptedSourceChanges> {
+  if (!entries.length) return { before: [], after: [] };
   const query = repositoryQueries(tx);
-  const id = parseEntityId("financialTransaction", transactionId);
-  const [transaction] = await query
-    .select()
-    .from(financialTransaction)
-    .where(
-      and(eq(financialTransaction.id, id), notDeleted(financialTransaction)),
+  const ids = entries.map((entry) =>
+    parseEntityId("financialTransaction", entry.transactionId),
+  );
+  if (new Set(ids).size !== ids.length)
+    throw new Error("One source ref replacement names a transaction twice");
+  const transactions = new Map(
+    (
+      await query
+        .select()
+        .from(financialTransaction)
+        .where(
+          and(
+            inArray(financialTransaction.id, ids),
+            notDeleted(financialTransaction),
+          ),
+        )
     )
-    .then((rows) => rows.map(transactionDollars));
-  if (!transaction)
+      .map(transactionDollars)
+      .map((row) => [row.id, row]),
+  );
+  if (ids.some((id) => !transactions.has(id)))
     return refuse("The accepted transaction is no longer live.");
-  const current =
-    (await financialSourceRefsFor(tx, [transactionId])).get(transactionId) ??
-    [];
-  const wanted = new Set(refs.map(refKey));
-  const have = new Set(current.map(refKey));
-  const codes = refs.flatMap((ref) => {
-    const code = occurrenceCode(ref);
-    return code.success ? [code.data] : [];
-  });
-  const owners = codes.length
+  const currentById = await financialSourceRefsFor(tx, ids);
+  const codesByEntry = entries.map(
+    (entry) =>
+      new Set<string>(
+        entry.refs.flatMap((ref) => {
+          const code = occurrenceCode(ref);
+          return code.success ? [code.data] : [];
+        }),
+      ),
+  );
+  const ownerOf = new Map<string, (typeof ids)[number]>();
+  for (const [index, codes] of codesByEntry.entries())
+    for (const code of codes) {
+      if (ownerOf.has(code))
+        refuse(
+          "The proven occurrence is unavailable or has a different accepted owner. Refresh its source review.",
+        );
+      ownerOf.set(code, ids[index]!);
+    }
+  const owners = ownerOf.size
     ? await query
         .select()
         .from(sourceOccurrence)
-        .where(inArray(sourceOccurrence.shortcode, codes))
+        .where(inArray(sourceOccurrence.shortcode, [...ownerOf.keys()]))
     : [];
-  for (const owner of owners.filter(
-    (owner) => owner.acceptedTransactionId !== id,
-  )) {
-    const [head] = owner.currentObservationId
+  const addedOwners = owners.filter(
+    (owner) => owner.acceptedTransactionId !== ownerOf.get(owner.shortcode),
+  );
+  const headIds = uniq(
+    addedOwners.flatMap((owner) =>
+      owner.currentObservationId ? [owner.currentObservationId] : [],
+    ),
+  );
+  const heads = new Map(
+    (headIds.length
       ? await query
           .select()
           .from(sourceTransactionRecord)
           .where(
             and(
-              eq(sourceTransactionRecord.id, owner.currentObservationId),
+              inArray(sourceTransactionRecord.id, headIds),
               notDeleted(sourceTransactionRecord),
             ),
           )
-      : [];
+      : []
+    ).map((head) => [head.id, head]),
+  );
+  for (const owner of addedOwners) {
+    const transaction = transactions.get(ownerOf.get(owner.shortcode)!)!;
+    const head = owner.currentObservationId
+      ? heads.get(owner.currentObservationId)
+      : undefined;
     if (
       !head ||
       owner.accountId !== transaction.accountId ||
@@ -335,16 +451,30 @@ export async function replaceFinancialSourceRefs(
         "The current source amount or resolved account differs from the accepted transaction. Review the current facts.",
       );
   }
-  await assertFinancialSourceRefsAvailable(tx, refs, transactionId);
+  await assertFinancialSourceRefsAvailableFor(
+    tx,
+    entries.map((entry) => ({
+      refs: entry.refs,
+      exceptTransactionId: entry.transactionId,
+    })),
+  );
   const previousOwners = await query
     .select()
     .from(sourceOccurrence)
-    .where(eq(sourceOccurrence.acceptedTransactionId, id));
+    .where(inArray(sourceOccurrence.acceptedTransactionId, ids));
   const removedOwners = previousOwners.filter(
-    (owner) => !new Set<string>(codes).has(owner.shortcode),
+    (owner) =>
+      !codesByEntry[ids.indexOf(owner.acceptedTransactionId!)]!.has(
+        owner.shortcode,
+      ),
   );
-  const addedOwners = owners.filter(
-    (owner) => owner.acceptedTransactionId !== id,
+  const releasing = requestedRows(
+    removedOwners.map((owner) => ({
+      id: owner.id,
+      accepted: owner.acceptedTransactionId,
+    })),
+    { id: "uuid", accepted: "uuid" },
+    "releasing",
   );
   const released = removedOwners.length
     ? await query
@@ -354,13 +484,7 @@ export async function replaceFinancialSourceRefs(
           version: sql`${sourceOccurrence.version}+1`,
         })
         .where(
-          and(
-            inArray(
-              sourceOccurrence.id,
-              removedOwners.map((owner) => owner.id),
-            ),
-            eq(sourceOccurrence.acceptedTransactionId, id),
-          ),
+          sql`(${sourceOccurrence.id}, ${sourceOccurrence.acceptedTransactionId}) IN (SELECT ${releasing.col("id")}, ${releasing.col("accepted")} FROM ${releasing.from})`,
         )
         .returning()
     : [];
@@ -368,7 +492,13 @@ export async function replaceFinancialSourceRefs(
     ? await query
         .update(sourceOccurrence)
         .set({
-          acceptedTransactionId: id,
+          acceptedTransactionId: sql`CASE ${sourceOccurrence.id} ${sql.join(
+            addedOwners.map(
+              (owner) =>
+                sql`WHEN ${owner.id}::uuid THEN ${ownerOf.get(owner.shortcode)!}::uuid`,
+            ),
+            sql` `,
+          )} END`,
           version: sql`${sourceOccurrence.version}+1`,
         })
         .where(
@@ -389,31 +519,40 @@ export async function replaceFinancialSourceRefs(
     refuse(
       "Accepted source ownership changed while applying the review; refresh and retry.",
     );
-  for (const removed of current.filter(
-    (ref) => !wanted.has(refKey(ref)) && !occurrenceCode(ref).success,
-  ))
-    await query
-      .update(financialEvidenceAlias)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(financialEvidenceAlias.historicalTransactionId, id),
-          eq(financialEvidenceAlias.source, removed.source),
-          eq(financialEvidenceAlias.value, removed.externalId),
-          notDeleted(financialEvidenceAlias),
-        ),
-      );
-  const added = refs.filter(
-    (ref) => !have.has(refKey(ref)) && !occurrenceCode(ref).success,
-  );
+  const added: { ref: SourceRef; id: (typeof ids)[number] }[] = [];
+  let refsDropped = false;
+  for (const [index, entry] of entries.entries()) {
+    const id = ids[index]!;
+    const current = currentById.get(id) ?? [];
+    const wanted = new Set(entry.refs.map(refKey));
+    const have = new Set(current.map(refKey));
+    for (const removed of current.filter(
+      (ref) => !wanted.has(refKey(ref)) && !occurrenceCode(ref).success,
+    ))
+      await query
+        .update(financialEvidenceAlias)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(financialEvidenceAlias.historicalTransactionId, id),
+            eq(financialEvidenceAlias.source, removed.source),
+            eq(financialEvidenceAlias.value, removed.externalId),
+            notDeleted(financialEvidenceAlias),
+          ),
+        );
+    for (const ref of entry.refs)
+      if (!have.has(refKey(ref)) && !occurrenceCode(ref).success)
+        added.push({ ref, id });
+    if (current.some((ref) => !wanted.has(refKey(ref)))) refsDropped = true;
+  }
   if (added.length) {
     await ensureExternalSources(
       tx,
-      added.map((ref) => ref.source),
+      added.map(({ ref }) => ref.source),
     );
     try {
       await query.insert(financialEvidenceAlias).values(
-        added.map((ref) => ({
+        added.map(({ ref, id }) => ({
           source: ref.source,
           kind: "transaction_ref",
           value: ref.externalId,
@@ -434,14 +573,7 @@ export async function replaceFinancialSourceRefs(
       throw error;
     }
   }
-  if (
-    added.length ||
-    previousOwners.some(
-      (owner) => !new Set<string>(codes).has(owner.shortcode),
-    ) ||
-    owners.some((owner) => owner.acceptedTransactionId !== id) ||
-    current.some((ref) => !wanted.has(refKey(ref)))
-  )
+  if (added.length || removedOwners.length || addedOwners.length || refsDropped)
     await recordChange(tx, {
       kind: "source",
       categories: ["financialTransaction"],

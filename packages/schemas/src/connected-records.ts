@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { entityGraphRootSchema } from "./entity-graph";
 import { entitySchema } from "./entity";
+import { imageUrlSummary } from "./image-summary";
 
 export const connectedRecordsInputSchema = z.object({
   source: entityGraphRootSchema,
@@ -21,6 +22,11 @@ export const connectedPathNodeSchema = z.object({
   label: z.string(),
   /** Logical step arriving at this node; storage-only joins stay internal. */
   via: relationshipWitnessSchema.optional(),
+  /**
+   * Canonical cover from the display-image policy. Omitted when the record
+   * has none. Clients read it and do not derive a thumbnail.
+   */
+  image: imageUrlSummary.optional(),
 });
 export type ConnectedPathNode = z.infer<typeof connectedPathNodeSchema>;
 

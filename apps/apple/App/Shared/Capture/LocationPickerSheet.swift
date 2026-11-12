@@ -4,13 +4,13 @@ import SwiftUI
 struct LocationPickerSheet: View {
     @Bindable var capture: CaptureModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
 
     private var filtered: [CaptureModel.LocationOption] {
         guard !query.isEmpty else { return capture.locations }
         return capture.locations.filter {
             $0.name.localizedCaseInsensitiveContains(query)
+                || ($0.path?.localizedCaseInsensitiveContains(query) ?? false)
                 || $0.id.rawValue.localizedCaseInsensitiveContains(query)
         }
     }
@@ -22,43 +22,26 @@ struct LocationPickerSheet: View {
                     capture.select(option)
                     dismiss()
                 } label: {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        DomainMark(.location, style: .symbol, size: 15)
-                            .fieldGuideIconSlot()
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(option.name)
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphite)
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let path = option.path, !path.isEmpty {
-                                Text(path)
-                                    .font(.fieldGuideLabel)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if dynamicTypeSize.isAccessibilitySize {
-                                Text(option.id.rawValue)
-                                    .font(.fieldGuideCode)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            }
-                        }
-                        .layoutPriority(1)
-                        Spacer(minLength: FieldGuideTokens.Space.sm)
-                        if !dynamicTypeSize.isAccessibilitySize {
-                            Text(option.id.rawValue)
-                                .font(.fieldGuideCode)
+                    CoverIdentityRow(
+                        title: option.name, imageURL: option.imageURL,
+                        symbol: EntityCatalog[.location].sfSymbol, code: option.id.rawValue
+                    ) {
+                        if let path = option.path, !path.isEmpty {
+                            Text(path)
+                                .font(.fieldGuideLabel)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                    } trailing: {
                         if option.id == capture.session.location {
                             Image(systemName: "checkmark")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(FieldGuideTokens.interaction)
                         }
                     }
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(option.id == capture.session.location ? .isSelected : [])
                 .accessibilityIdentifier("capture.location.\(option.id.rawValue)")
             }
             .listStyle(.plain)

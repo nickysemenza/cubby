@@ -17,16 +17,21 @@ import {
   financialTransactionStatus,
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
-import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
+import {
+  type FinancialTransactionShortcode,
+  parseShortcodeFor,
+  parseEntityId,
+} from "@cubby/schemas/identifiers";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record-fields";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { groupBy } from "es-toolkit";
+import { groupBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { advisoryXactLocks } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
@@ -54,7 +59,7 @@ import { readExpenseAttributionParties } from "~/server/domains/expense/repo/exp
 import {
   effectiveExpenseSpendingCategoriesSql,
   effectiveExpenseSpendingCategorySql,
-  resolveAggregateExpenseCategory,
+  resolveAggregateExpenseCategories,
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
@@ -87,7 +92,7 @@ import {
 } from "~/server/lib/canonical-json";
 
 import {
-  bookFinancialTransaction,
+  bookFinancialTransactions,
   bookingGraph,
   bookingGraphs,
   digestValue,
@@ -172,7 +177,11 @@ const calendarGap = (left: string, right: string) =>
   Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
   86_400_000;
 
-/** Read-only metadata for one synchronous proposal page; never reuse at commit or across model work. */
+/**
+ * Read-only metadata for one synchronous proposal page, or for one commit's
+ * rechecks under its locks before it writes; never reuse across model work
+ * or past a write.
+ */
 export async function prepareFinancialSpendingPage(
   db: Database,
   input: {
@@ -317,7 +326,7 @@ export async function prepareFinancialSpendingPage(
     purchaserProofs,
     transactions: transactionsById,
     // Promise caching coalesces concurrent identical reads without extending
-    // their lifetime beyond this advisory page. Commit rebuilds without it.
+    // their lifetime beyond this page.
     vendors: new Map<string, ReturnType<typeof resolveSpendingVendors>>(),
     graphs: new Map<
       Parameters<typeof bookingGraph>[1],
@@ -342,18 +351,23 @@ export type FinancialSpendingPage = Awaited<
   ReturnType<typeof prepareFinancialSpendingPage>
 >;
 
-/** Hydrate the candidate union once; each preview still selects its exact evidence. */
+/**
+ * Hydrate the candidate union once; each preview still selects its exact
+ * evidence. `vendorNames` are cleaned names the previews will also resolve.
+ */
 export async function prepareFinancialSpendingCandidates(
   db: Database,
   page: FinancialSpendingPage,
+  vendorNames: readonly string[] = [],
 ) {
   const names = [
-    ...new Set(
-      page.sources.flatMap((source) => {
+    ...new Set([
+      ...page.sources.flatMap((source) => {
         const name = source.merchant?.trim() || source.rawDescription?.trim();
         return name ? [name] : [];
       }),
-    ),
+      ...vendorNames,
+    ]),
   ];
   const resolved = await resolveSpendingVendors(db, names);
   const byName = new Map(resolved.map((result) => [result.name, result]));
@@ -933,6 +947,15 @@ export function resolveFinancialSpendingVendors(
   const key = canonicalJson([...names]);
   const cached = page?.vendors.get(key);
   if (cached) return cached;
+  // Each name resolves independently, so cached single names compose.
+  const parts = names.map((name) => page?.vendors.get(canonicalJson([name])));
+  if (
+    names.length > 1 &&
+    parts.every(Boolean) &&
+    new Set(names.map((name) => name.trim().toLowerCase())).size ===
+      names.length
+  )
+    return Promise.all(parts).then((results) => results.flatMap((r) => r!));
   const lookup = names.length
     ? resolveSpendingVendors(db, names)
     : Promise.resolve([]);
@@ -1045,7 +1068,7 @@ async function spendingCandidates(
 ): Promise<SpendingCandidate[]> {
   const bounds = page?.candidateBounds;
   // The page pool is a superset only for the source dates admitted at construction.
-  // Other callers keep the exact fresh selector, including all commit previews.
+  // Other callers keep the exact fresh selector.
   if (
     !page ||
     !bounds ||
@@ -1182,7 +1205,7 @@ function spendingCategoryForDiscovery(
       : `shortcode:${reference.shortcode}`;
   const cached = page?.categories.get(key);
   if (cached) return cached;
-  // Coalesce concurrent advisory reads, including misses. Commit has no page.
+  // Coalesce concurrent page reads, including misses.
   const lookup = getDb(db)
     .query.spendingCategory.findFirst({
       where: {
@@ -1713,6 +1736,21 @@ async function exactReceiptTarget(
   return competing.rows.length ? undefined : match;
 }
 
+type PreparedFinancialSpendingPreview =
+  | FinancialSpendingPlan
+  | {
+      draft:
+        | Parameters<typeof resolveAggregateExpenseCategories>[1][number]
+        | undefined;
+      finish: (
+        category:
+          | Awaited<
+              ReturnType<typeof resolveAggregateExpenseCategories>
+            >[number]
+          | undefined,
+      ) => Promise<FinancialSpendingPlan>;
+    };
+
 export async function previewFinancialSpending(
   db: Database,
   raw: z.input<typeof financialSpendingRequest>,
@@ -1727,6 +1765,64 @@ export async function previewFinancialSpending(
   },
   page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan> {
+  const [plan] = await previewFinancialSpendings(
+    db,
+    [{ request: raw, attachment }],
+    page,
+  );
+  return plan!;
+}
+
+/** Resolve one category vector after every read-only preview has prepared its draft. */
+export async function previewFinancialSpendings(
+  db: Database,
+  entries: readonly {
+    request: z.input<typeof financialSpendingRequest>;
+    attachment?: Parameters<typeof previewFinancialSpending>[2];
+  }[],
+  page: FinancialSpendingPage | undefined,
+): Promise<FinancialSpendingPlan[]> {
+  const prepared = [];
+  for (const entry of entries)
+    prepared.push(
+      await prepareFinancialSpendingPreview(
+        db,
+        entry.request,
+        entry.attachment,
+        page,
+      ),
+    );
+  const categories = await resolveAggregateExpenseCategories(
+    db,
+    prepared.flatMap((value) =>
+      "finish" in value && value.draft ? [value.draft] : [],
+    ),
+  );
+  let ordinal = 0;
+  const plans = [];
+  for (const value of prepared)
+    plans.push(
+      "finish" in value
+        ? await value.finish(value.draft ? categories[ordinal++] : undefined)
+        : value,
+    );
+  return plans;
+}
+
+async function prepareFinancialSpendingPreview(
+  db: Database,
+  raw: z.input<typeof financialSpendingRequest>,
+  attachment?: {
+    settlementRef: FinancialTransactionSourceRef;
+    fields?: Partial<
+      Pick<
+        z.infer<typeof financialSpendingSource>,
+        "amount" | "status" | "postedDate"
+      >
+    >;
+  },
+  page?: FinancialSpendingPage,
+): Promise<PreparedFinancialSpendingPreview> {
   const request = spendingRequestBoundary.parse(raw);
   const facts = await spendingFacts(db, request, page, attachment?.fields);
   // Preview an impending reference attachment without duplicating its charge.
@@ -1863,7 +1959,6 @@ export async function previewFinancialSpending(
   return prepareReadySpending(db, evidence, target, Boolean(chosen));
 }
 
-// eslint-disable-next-line complexity -- Candidate capacity and creation-only reviewed intent share one admission decision.
 async function prepareReadySpending(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -1873,7 +1968,7 @@ async function prepareReadySpending(
       >["liveCandidates"][number]
     | undefined,
   chosen: boolean,
-): Promise<FinancialSpendingPlan> {
+): Promise<PreparedFinancialSpendingPreview> {
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
   const { row, source } = facts;
@@ -1988,43 +2083,49 @@ async function prepareReadySpending(
     return review(
       "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
     );
-  const effectiveCategory =
+  const draft =
     effect === "create_aggregate"
-      ? await resolveAggregateExpenseCategory(db, {
+      ? {
           purchaseId: target ? parseEntityId("purchase", target.id) : null,
           vendorId: vendor?.id ?? null,
           spendingCategoryId: bookingCategory?.id ?? null,
           name: source.merchant || source.rawDescription || "Reviewed spending",
-        })
+        }
       : undefined;
   const beneficiaries = await readExpenseAttributionParties(
     db,
     basis.request.beneficiaries,
   );
-  return financialSpendingPlan.parse({
-    ...basis,
-    status: "ready",
-    snapshot: await digestValue({
-      snapshot: basis.snapshot,
-      effectiveCategory,
-      ...(basis.request.beneficiaries === undefined ? {} : { beneficiaries }),
-    }),
-    effect,
-    purchaserId: facts.purchaser?.shortcode ?? null,
-    purchaserSnapshot: await digestValue({
-      account: facts.account,
-      purchaserProof: facts.purchaserProof,
-    }),
-    vendorId: vendor?.shortcode ?? null,
-    vendorName: vendor?.name ?? advice!.vendorName,
-    spendingCategoryId: bookingCategory?.shortcode ?? null,
-    categoryOverride:
-      effect === "create_aggregate"
-        ? (bookingCategory?.shortcode ?? null)
-        : null,
-    ...(effectiveCategory ? { effectiveCategory } : {}),
-    purchaseId: target?.shortcode ?? null,
-  });
+  return {
+    draft,
+    finish: async (effectiveCategory) =>
+      financialSpendingPlan.parse({
+        ...basis,
+        status: "ready",
+        snapshot: await digestValue({
+          snapshot: basis.snapshot,
+          effectiveCategory,
+          ...(basis.request.beneficiaries === undefined
+            ? {}
+            : { beneficiaries }),
+        }),
+        effect,
+        purchaserId: facts.purchaser?.shortcode ?? null,
+        purchaserSnapshot: await digestValue({
+          account: facts.account,
+          purchaserProof: facts.purchaserProof,
+        }),
+        vendorId: vendor?.shortcode ?? null,
+        vendorName: vendor?.name ?? advice!.vendorName,
+        spendingCategoryId: bookingCategory?.shortcode ?? null,
+        categoryOverride:
+          effect === "create_aggregate"
+            ? (bookingCategory?.shortcode ?? null)
+            : null,
+        ...(effectiveCategory ? { effectiveCategory } : {}),
+        purchaseId: target?.shortcode ?? null,
+      }),
+  };
 }
 
 /** The outer caller owns a single serializable retry spanning evidence and all effects. */
@@ -2034,186 +2135,432 @@ export async function commitFinancialSpending(
   actor: ActorContext,
   transactionId = plan.request.transactionId,
 ) {
-  if (plan.status === "review_required")
-    return refuse(`Spending needs review: ${plan.reason}`);
-  if (plan.status === "deferred") return null;
-  if (plan.status === "ready" && !plan.purchaserSnapshot)
-    return refuse(
-      "Spending purchaser proof is missing; refresh the booking and review again.",
-    );
-  if (!transactionId)
-    return refuse(
-      "Create the financial transaction before applying its spending plan.",
-    );
-  return withSnapshotWrite(
+  const [result] = await commitFinancialSpendings(
+    db,
+    [{ plan, transactionId }],
+    actor,
+  );
+  return result ?? null;
+}
+
+type FinancialSpendingResult = { purchaseIds: string[]; replayed: boolean };
+
+/**
+ * Commit spending plans in one snapshot write: one source lock statement per
+ * namespace across every transaction, one spending page read under those
+ * locks, every plan rechecked against it in input order before anything is
+ * written, Vendor identities resolved and created together, and every
+ * resulting booking committed together. Deferred plans return null; an
+ * omitted transactionId means the plan's own.
+ *
+ * Every plan is rechecked against the same state, so the caller must exclude
+ * plans that share state within one batch: plans that settle or link the same
+ * existing Purchase, and plans whose merchant or cleaned name another plan's
+ * new Vendor would match. Either case refuses the whole batch.
+ */
+export async function commitFinancialSpendings(
+  db: Database,
+  entries: readonly {
+    plan: FinancialSpendingPlan;
+    transactionId?: FinancialTransactionShortcode | null;
+  }[],
+  actor: ActorContext,
+): Promise<(FinancialSpendingResult | null)[]> {
+  const committed: {
+    index: number;
+    plan: Exclude<
+      FinancialSpendingPlan,
+      { status: "review_required" | "deferred" }
+    >;
+    transactionId: FinancialTransactionShortcode;
+  }[] = [];
+  for (const [index, entry] of entries.entries()) {
+    const { plan } = entry;
+    const transactionId =
+      entry.transactionId === undefined
+        ? plan.request.transactionId
+        : entry.transactionId;
+    if (plan.status === "review_required")
+      return refuse(`Spending needs review: ${plan.reason}`);
+    if (plan.status === "deferred") continue;
+    if (plan.status === "ready" && !plan.purchaserSnapshot)
+      return refuse(
+        "Spending purchaser proof is missing; refresh the booking and review again.",
+      );
+    if (!transactionId)
+      return refuse(
+        "Create the financial transaction before applying its spending plan.",
+      );
+    committed.push({ index, plan, transactionId });
+  }
+  const results: (FinancialSpendingResult | null)[] = entries.map(() => null);
+  if (!committed.length) return results;
+  await withSnapshotWrite(
     db,
     async (tx) => {
       const txDb = databaseForTransaction(tx);
-      await lockFinancialTransactionSources(tx, [transactionId]);
-      const fresh = await previewFinancialSpending(txDb, {
-        ...plan.request,
-        source: undefined,
-        transactionId,
-      });
-      if (fresh.status === "already_booked") {
-        const facts = await spendingFacts(txDb, fresh.request);
-        if (
-          plan.status === "already_booked" &&
-          plan.snapshot !== fresh.snapshot
-        )
-          return refuse(
-            "Booked spending evidence changed; review its identity again.",
-          );
-        if (plan.status === "ready") {
-          const [identity] = await resolveNames(
-            txDb,
-            "vendor",
-            [{ name: plan.vendorName }],
-            { create: false },
-          );
-          const acceptedVendorCode = plan.vendorId;
-          const acceptedVendor = acceptedVendorCode
-            ? await getDb(txDb).query.vendor.findFirst({
-                where: {
-                  RAW: (table: PgTable) =>
-                    relationalSql(
-                      table,
-                      and(
-                        eq(vendorTable.shortcode, acceptedVendorCode),
-                        notDeleted(vendorTable),
-                      ),
-                    ),
-                },
-              })
-            : identity?.row;
-          if (
-            (facts.purchaser?.shortcode ?? null) !== plan.purchaserId ||
-            plan.purchaserSnapshot !==
-              (await digestValue({
-                account: facts.account,
-                purchaserProof: facts.purchaserProof,
-              })) ||
-            !acceptedVendor ||
-            facts.graphs.some(
-              (graph) =>
-                !graph.target || graph.target.vendorId !== acceptedVendor.id,
-            ) ||
-            (plan.purchaseId && !fresh.purchaseIds.includes(plan.purchaseId))
+      const targets = await lockFinancialTransactionSources(
+        tx,
+        committed.map((entry) => entry.transactionId),
+      );
+      // Retained settlement takes one per-party lock and holds it to commit.
+      // Several in one batch would follow input order and could deadlock a
+      // concurrent batch, so take them all first in sorted order. A single
+      // settlement keeps its own lock inside the settlement writer.
+      const settling = committed.filter(
+        ({ plan }) =>
+          plan.status === "ready" && plan.effect === "settle_existing",
+      );
+      if (settling.length > 1) {
+        const parties = await getDb(txDb)
+          .select({ ledgerPartyId: financialAccount.ledgerPartyId })
+          .from(financialTransaction)
+          .innerJoin(
+            financialAccount,
+            and(
+              eq(financialAccount.id, financialTransaction.accountId),
+              notDeleted(financialAccount),
+            ),
           )
-            return refuse(
-              "The accepted spending identity changed; review its purchaser authority and Purchase Vendor.",
-            );
-        }
-        return { purchaseIds: fresh.purchaseIds, replayed: true };
-      }
-      if (fresh.status !== "ready" || fresh.snapshot !== plan.snapshot)
-        return refuse(
-          "Spending evidence changed; refresh the booking and review again.",
-        );
-      const facts = await spendingFacts(txDb, fresh.request);
-      if (fresh.effect === "settle_existing" && fresh.purchaseId) {
-        const purchaseId = await resolveOrThrow(
-          txDb,
-          "purchase",
-          fresh.purchaseId,
-        );
-        const result = await settlePurchaseFromRetainedPayments(tx, {
-          purchaseId,
-          ledgerPartyId: facts.account.ledgerPartyId!,
-          actor,
-        });
-        if (result !== "allocated")
-          return refuse(`Retained settlement needs review: ${result}`);
-        const booked = await previewFinancialSpending(txDb, fresh.request);
-        if (booked.status !== "already_booked")
-          return refuse(
-            "Retained settlement did not establish booked spending; review its Expenses.",
+          .where(
+            and(
+              inArray(
+                financialTransaction.shortcode,
+                settling.map((entry) => entry.transactionId),
+              ),
+              notDeleted(financialTransaction),
+            ),
           );
-        return { purchaseIds: booked.purchaseIds, replayed: false };
-      }
-      const merchant =
-        facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
-      const names = [
-        ...new Set(
-          [merchant, fresh.vendorName].filter((value): value is string =>
-            Boolean(value),
+        await advisoryXactLocks(
+          getDb(txDb),
+          "purchase-settlement",
+          parties.flatMap((row) =>
+            row.ledgerPartyId ? [row.ledgerPartyId] : [],
           ),
+        );
+      }
+      // One page read under the locks serves every recheck; nothing is
+      // written until every plan has been rechecked against it.
+      const page = await prepareFinancialSpendingPage(txDb, {
+        accountIds: [],
+        transactionIds: targets.map((target) => target.id),
+        sources: [],
+      });
+      await prepareFinancialSpendingCandidates(
+        txDb,
+        page,
+        committed.flatMap(({ plan }) => {
+          const name = reviewedSpendingAdvice(plan.request)?.vendorName;
+          return name ? [name] : [];
+        }),
+      );
+      const previews = await previewFinancialSpendings(
+        txDb,
+        committed.map(({ plan, transactionId }) => ({
+          request: { ...plan.request, source: undefined, transactionId },
+        })),
+        page,
+      );
+      const rechecked = [];
+      for (const [index, { plan }] of committed.entries())
+        rechecked.push(
+          await recheckFinancialSpending(txDb, plan, page, previews[index]!),
+        );
+      const purchases = rechecked.flatMap((outcome) =>
+        "fresh" in outcome && outcome.fresh.purchaseId
+          ? [outcome.fresh.purchaseId]
+          : [],
+      );
+      if (new Set(purchases).size !== purchases.length)
+        return refuse(
+          "Spending plans in one batch settle the same Purchase; apply them separately.",
+        );
+      const booking: {
+        index: number;
+        fresh: Extract<FinancialSpendingPlan, { status: "ready" }>;
+        facts: Awaited<ReturnType<typeof spendingFacts>>;
+        transactionId: FinancialTransactionShortcode;
+      }[] = [];
+      for (const [position, outcome] of rechecked.entries()) {
+        const { index, transactionId } = committed[position]!;
+        if (!("fresh" in outcome)) results[index] = outcome;
+        else if (outcome.fresh.effect === "settle_existing")
+          results[index] = await settleFinancialSpending(
+            txDb,
+            tx,
+            outcome,
+            actor,
+          );
+        else booking.push({ index, transactionId, ...outcome });
+      }
+      const vendors = await resolveBookingVendors(txDb, booking, actor);
+      const booked = await bookFinancialTransactions(
+        txDb,
+        booking.map(({ fresh, facts, transactionId }, position) =>
+          financialBookingInput.parse({
+            transactionId,
+            purchaseId: fresh.purchaseId,
+            vendorId: vendors[position]!,
+            spendingCategoryId: fresh.spendingCategoryId,
+            purchaserId: fresh.purchaserId,
+            costType: financialSpendingCostType(
+              facts.source.kind,
+              fresh.request.costType,
+            ),
+            beneficiaries: fresh.request.beneficiaries,
+          }),
         ),
-      ];
-      const checked = await resolveNames(
+        actor,
+      );
+      for (const [position, { index }] of booking.entries()) {
+        const saved = booked[position]!;
+        results[index] = {
+          purchaseIds: [saved.purchaseId],
+          replayed: saved.replayed,
+        };
+      }
+    },
+    { isolationLevel: "serializable" },
+  );
+  return results;
+}
+
+type RecheckedSpending =
+  | FinancialSpendingResult
+  | {
+      fresh: Extract<FinancialSpendingPlan, { status: "ready" }>;
+      facts: Awaited<ReturnType<typeof spendingFacts>>;
+    };
+
+/** Recheck one plan under the batch's locks and page; nothing is written. */
+async function recheckFinancialSpending(
+  txDb: Database,
+  plan: Exclude<
+    FinancialSpendingPlan,
+    { status: "review_required" | "deferred" }
+  >,
+  page: FinancialSpendingPage,
+  fresh: FinancialSpendingPlan,
+): Promise<RecheckedSpending> {
+  if (fresh.status === "already_booked") {
+    const facts = await spendingFacts(txDb, fresh.request, page);
+    if (plan.status === "already_booked" && plan.snapshot !== fresh.snapshot)
+      return refuse(
+        "Booked spending evidence changed; review its identity again.",
+      );
+    if (plan.status === "ready") {
+      const [identity] = await resolveNames(
         txDb,
         "vendor",
-        names.map((name) => ({ name })),
+        [{ name: plan.vendorName }],
         { create: false },
       );
-      if (
-        !fresh.request.vendorId &&
-        checked.some(
-          (result) =>
-            (result.row && result.row.shortcode !== fresh.vendorId) ||
-            result.candidates.some(
-              (candidate) => candidate.shortcode !== fresh.vendorId,
-            ),
-        )
-      )
-        return refuse(
-          "The raw or cleaned Vendor identity changed before booking.",
-        );
-      const selectedVendorCode = fresh.request.vendorId;
-      const selectedVendor = selectedVendorCode
+      const acceptedVendorCode = plan.vendorId;
+      const acceptedVendor = acceptedVendorCode
         ? await getDb(txDb).query.vendor.findFirst({
             where: {
               RAW: (table: PgTable) =>
                 relationalSql(
                   table,
                   and(
-                    eq(vendorTable.shortcode, selectedVendorCode),
+                    eq(vendorTable.shortcode, acceptedVendorCode),
                     notDeleted(vendorTable),
                   ),
                 ),
             },
           })
-        : undefined;
-      const [resolved] = selectedVendor
-        ? [{ row: selectedVendor, candidates: [] }]
-        : fresh.vendorId
-          ? checked.filter((result) => result.row?.shortcode === fresh.vendorId)
-          : await resolveNames(
-              txDb,
-              "vendor",
-              [
-                {
-                  name: fresh.vendorName,
-                  values: async () => ({
-                    aliases:
-                      merchant && merchant !== fresh.vendorName
-                        ? [merchant]
-                        : [],
-                  }),
-                },
-              ],
-              { create: true, actor },
-            );
-      if (!resolved?.row || resolved.candidates.length)
-        return refuse("The Vendor identity changed before booking.");
-      const booked = await bookFinancialTransaction(
-        txDb,
-        financialBookingInput.parse({
-          transactionId,
-          purchaseId: fresh.purchaseId,
-          vendorId: resolved.row.shortcode,
-          spendingCategoryId: fresh.spendingCategoryId,
-          purchaserId: fresh.purchaserId,
-          costType: financialSpendingCostType(
-            facts.source.kind,
-            fresh.request.costType,
+        : identity?.row;
+      if (
+        (facts.purchaser?.shortcode ?? null) !== plan.purchaserId ||
+        plan.purchaserSnapshot !==
+          (await digestValue({
+            account: facts.account,
+            purchaserProof: facts.purchaserProof,
+          })) ||
+        !acceptedVendor ||
+        facts.graphs.some(
+          (graph) =>
+            !graph.target || graph.target.vendorId !== acceptedVendor.id,
+        ) ||
+        (plan.purchaseId && !fresh.purchaseIds.includes(plan.purchaseId))
+      )
+        return refuse(
+          "The accepted spending identity changed; review its purchaser authority and Purchase Vendor.",
+        );
+    }
+    return { purchaseIds: fresh.purchaseIds, replayed: true };
+  }
+  if (fresh.status !== "ready" || fresh.snapshot !== plan.snapshot)
+    return refuse(
+      "Spending evidence changed; refresh the booking and review again.",
+    );
+  return { fresh, facts: await spendingFacts(txDb, fresh.request, page) };
+}
+
+/** Write a rechecked retained settlement; later reads see current state. */
+async function settleFinancialSpending(
+  txDb: Database,
+  tx: DrizzleTransaction,
+  { fresh, facts }: Extract<RecheckedSpending, { fresh: unknown }>,
+  actor: ActorContext,
+): Promise<FinancialSpendingResult> {
+  const purchaseId = await resolveOrThrow(txDb, "purchase", fresh.purchaseId!);
+  const result = await settlePurchaseFromRetainedPayments(tx, {
+    purchaseId,
+    ledgerPartyId: facts.account.ledgerPartyId!,
+    actor,
+  });
+  if (result !== "allocated")
+    return refuse(`Retained settlement needs review: ${result}`);
+  const booked = await previewFinancialSpending(txDb, fresh.request);
+  if (booked.status !== "already_booked")
+    return refuse(
+      "Retained settlement did not establish booked spending; review its Expenses.",
+    );
+  return { purchaseIds: booked.purchaseIds, replayed: false };
+}
+
+/**
+ * Each booking's Vendor: the reviewed one, the one its plan resolved, or one
+ * created now. The raw and cleaned names are checked together before any
+ * Vendor is created and again after, so a Vendor created for one plan that
+ * another plan's names would match refuses the batch.
+ */
+async function resolveBookingVendors(
+  txDb: Database,
+  bookings: readonly {
+    fresh: Extract<FinancialSpendingPlan, { status: "ready" }>;
+    facts: Awaited<ReturnType<typeof spendingFacts>>;
+  }[],
+  actor: ActorContext,
+) {
+  const lookups = bookings.map(({ fresh, facts }) => {
+    const merchant =
+      facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
+    return {
+      merchant,
+      names: [
+        ...new Set(
+          [merchant, fresh.vendorName].filter((value): value is string =>
+            Boolean(value),
           ),
-          beneficiaries: fresh.request.beneficiaries,
-        }),
-        actor,
+        ),
+      ],
+    };
+  });
+  const lookup = async () => {
+    const results = await resolveNames(
+      txDb,
+      "vendor",
+      lookups.flatMap(({ names }) => names.map((name) => ({ name }))),
+      { create: false },
+    );
+    let offset = 0;
+    return lookups.map(({ names }) =>
+      results.slice(offset, (offset += names.length)),
+    );
+  };
+  const checked = await lookup();
+  for (const [index, { fresh }] of bookings.entries())
+    if (
+      !fresh.request.vendorId &&
+      checked[index]!.some(
+        (result) =>
+          (result.row && result.row.shortcode !== fresh.vendorId) ||
+          result.candidates.some(
+            (candidate) => candidate.shortcode !== fresh.vendorId,
+          ),
+      )
+    )
+      return refuse(
+        "The raw or cleaned Vendor identity changed before booking.",
       );
-      return { purchaseIds: [booked.purchaseId], replayed: booked.replayed };
-    },
-    { isolationLevel: "serializable" },
+  const selectedCodes = uniq(
+    bookings.flatMap(({ fresh }) =>
+      fresh.request.vendorId ? [fresh.request.vendorId] : [],
+    ),
   );
+  const selected = new Map(
+    (selectedCodes.length
+      ? await getDb(txDb).query.vendor.findMany({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(vendorTable.shortcode, selectedCodes),
+                  notDeleted(vendorTable),
+                ),
+              ),
+          },
+        })
+      : []
+    ).map((row) => [row.shortcode, row]),
+  );
+  const creating = bookings.flatMap(({ fresh }, index) =>
+    !fresh.request.vendorId && !fresh.vendorId ? [index] : [],
+  );
+  const folded = creating.map((index) =>
+    bookings[index]!.fresh.vendorName.trim().toLowerCase(),
+  );
+  if (new Set(folded).size !== folded.length)
+    return refuse(
+      "Spending plans in one batch create the same Vendor; apply them separately.",
+    );
+  const created = await resolveNames(
+    txDb,
+    "vendor",
+    creating.map((index) => {
+      const { fresh } = bookings[index]!;
+      const { merchant } = lookups[index]!;
+      return {
+        name: fresh.vendorName,
+        values: async () => ({
+          aliases: merchant && merchant !== fresh.vendorName ? [merchant] : [],
+        }),
+      };
+    }),
+    { create: true, actor },
+  );
+  const createdFor = new Map(
+    creating.map((index, position) => [index, created[position]]),
+  );
+  const vendorIds = bookings.map(({ fresh }, index) => {
+    const selectedVendor = fresh.request.vendorId
+      ? selected.get(fresh.request.vendorId)
+      : undefined;
+    const resolved = selectedVendor
+      ? { row: selectedVendor, candidates: [] }
+      : fresh.vendorId
+        ? checked[index]!.find(
+            (result) => result.row?.shortcode === fresh.vendorId,
+          )
+        : createdFor.get(index);
+    if (!resolved?.row || resolved.candidates.length)
+      return refuse("The Vendor identity changed before booking.");
+    return parseShortcodeFor("vendor", resolved.row.shortcode);
+  });
+  const minted = new Set(
+    created.flatMap((result) =>
+      result.row?.created ? [result.row.shortcode] : [],
+    ),
+  );
+  if (minted.size) {
+    const rechecked = await lookup();
+    for (const [index, results] of rechecked.entries())
+      if (
+        results.some((result) =>
+          [result.row, ...result.candidates].some(
+            (row) =>
+              row &&
+              minted.has(row.shortcode) &&
+              row.shortcode !== vendorIds[index],
+          ),
+        )
+      )
+        return refuse(
+          "The raw or cleaned Vendor identity changed before booking.",
+        );
+  }
+  return vendorIds;
 }

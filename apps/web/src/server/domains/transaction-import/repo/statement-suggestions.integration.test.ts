@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/source-transaction-record";
 import {
   STATEMENT_LABEL_REVISION,
+  statementTransactionJudgment,
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
@@ -17,7 +18,7 @@ import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -55,14 +56,12 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
-import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/suggestions/repo/suggestion-list";
 import * as publicationRepo from "~/server/generic/suggestions/repo/suggestion-publication";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
@@ -81,6 +80,7 @@ import {
   updateSourceTransactionRecords,
 } from "./source-transaction-record";
 import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
+import { prepareStatementSpending } from "./statement-spending";
 import { previewStatementSuggestion } from "./statement-suggestion-preview";
 import {
   buildChargeProposals,
@@ -616,21 +616,13 @@ describe("statement Transaction suggestions", () => {
         );
       };
       const shortcut = mode.endsWith("shortcut");
-      const prefix = statementSuggestionsRepo.completeNoActionStatementPrefix;
-      const complete = statementSuggestionsRepo.completeStatementApplications;
-      const prefixSpy = vi
-        .spyOn(statementSuggestionsRepo, "completeNoActionStatementPrefix")
-        .mockImplementation(async (...args) => {
-          const [entry] = args[1];
-          if (entry) await move(entry.suggestionId);
-          return prefix(...args);
-        });
-      const completeSpy = vi
-        .spyOn(statementSuggestionsRepo, "completeStatementApplications")
+      const select = automaticRuleRuntime.selectAutomaticRules;
+      const selectSpy = vi
+        .spyOn(automaticRuleRuntime, "selectAutomaticRules")
         .mockImplementation(async (...args) => {
           const [id] = args[1];
           if (id) await move(id);
-          return complete(...args);
+          return select(...args);
         });
       try {
         const scope = {
@@ -672,8 +664,7 @@ describe("statement Transaction suggestions", () => {
         );
         expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
       } finally {
-        prefixSpy.mockRestore();
-        completeSpy.mockRestore();
+        selectSpy.mockRestore();
       }
     },
   );
@@ -840,8 +831,8 @@ describe("statement Transaction suggestions", () => {
     ).toEqual(before);
   });
 
-  it.each(["regeneration", "application"])(
-    "fences statement scope when accounts change before %s",
+  it.each(["page", "single"])(
+    "fences statement scope when accounts change before %s application",
     async (phase) => {
       const account = (await card(ctx)).output;
       const owner = (
@@ -865,9 +856,13 @@ describe("statement Transaction suggestions", () => {
       if (!source)
         throw new Error("Synthetic application scope source missing");
       const regenerate = statementSuggestionsRepo.regenerateCharges;
+      const applyPage = automaticRuleRuntime.applyAutomaticRulePage;
       const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
       let moved = false;
-      const move = async () => {
+      const move = async (
+        db: typeof ctx.db,
+        charge: statementSuggestionsRepo.ChargeRef,
+      ) => {
         if (moved) return;
         moved = true;
         await updateSourceTransactionRecords(
@@ -881,21 +876,32 @@ describe("statement Transaction suggestions", () => {
           },
           ctx.actor,
         );
+        // A concurrent unscoped refresh may publish reusable labels for B.
+        await regenerate(db, [charge]);
       };
-      const regeneration = vi
-        .spyOn(statementSuggestionsRepo, "regenerateCharges")
+      const page = vi
+        .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
         .mockImplementation(async (...args) => {
-          if (phase === "regeneration") await move();
-          return regenerate(...args);
+          const [selection] = args[1];
+          if (phase === "page" && selection) {
+            const data = z
+              .object({ source: z.string(), chargeKey: z.string() })
+              .parse(selection.row.data);
+            await move(args[0], data);
+          }
+          if (phase === "page") return applyPage(...args);
+          // A page that falls back leaves each charge to its own review.
+          return {
+            outcomes: new Map(
+              args[1].map((selection) => [selection.row.id, "fallback"]),
+            ),
+            settled: null,
+          };
         });
       const application = vi
         .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
         .mockImplementation(async (...args) => {
-          if (phase === "application" && !moved) {
-            await move();
-            // A concurrent unscoped refresh may publish reusable labels for B.
-            await regenerate(args[0], [args[1]]);
-          }
+          if (phase === "single") await move(args[0], args[1]);
           return apply(...args);
         });
       try {
@@ -915,7 +921,7 @@ describe("statement Transaction suggestions", () => {
         );
         expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
       } finally {
-        regeneration.mockRestore();
+        page.mockRestore();
         application.mockRestore();
       }
     },
@@ -2538,10 +2544,10 @@ describe("statement Transaction suggestions", () => {
       const account = (await card(ctx)).output;
       const importScoped = mode === "import";
       const recorded = await record(ctx, [
-        rowInput(),
+        rowInput({ rawDescription: "VENMO SYNTHETIC SHARED COST" }),
         rowInput({
           providerAmount: -19,
-          rawDescription: "SYNTHETIC PERSONAL PAYMENT",
+          rawDescription: "VENMO SYNTHETIC PERSONAL PAYMENT",
         }),
       ]);
       await generate(ctx);
@@ -2589,118 +2595,337 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
-  it("drains only the exact no-action receipt prefix and rolls completion back atomically", async () => {
+  const shop = (prefix: string, index: number, account?: string) =>
+    rowInput({
+      ...(account && { accountDescriptor: account }),
+      providerAmount: -(11 + index * 7),
+      statementDate: new Date(Date.UTC(2026, 4, 1 + index * 3))
+        .toISOString()
+        .slice(0, 10),
+      merchant: `${prefix} Shop ${index}`,
+      rawDescription: `${prefix.toUpperCase()} SHOP ${index}`,
+    });
+
+  it("applies import label and retained-label generation creates within their statement budget", async () => {
     await card(ctx);
-    await record(
+    const recorded = await record(
       ctx,
-      [0, 1, 2, 3].map((index) =>
-        rowInput({
-          providerAmount: -20 - index,
-          rawDescription: `SYNTHETIC PREFIX ${index}`,
-        }),
+      Array.from({ length: 32 }, (_, index) =>
+        shop(`Example ${String(index).padStart(3, "0")}`, index),
       ),
     );
     await generate(ctx);
-    const entries = await completeLabelPublications(ctx);
-    const results =
-      await statementSuggestionsRepo.publishCompleteStatementLabels(
-        ctx.db,
-        entries,
-      );
-    const targets = entries.map((entry) => {
-      const result = results.get(
-        statementSuggestionsRepo.chargeId(entry.proposal.charge),
-      );
-      if (result?.kind !== "ready")
-        throw new Error("Expected retained synthetic receipt");
-      return {
-        suggestionId: result.receipt.suggestionId,
-        charge: entry.proposal.charge,
-        evidenceFingerprint: result.receipt.evidenceFingerprint,
-      };
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const outcome = await expectStatementBudget(
+      () =>
+        labelStatementSuggestions(ctx.db, {
+          port: answering({ kind: "purchase", counterparty: "business" }),
+          runId,
+          scope: { importId: recorded.batchId },
+        }),
+      { statements: 400, parameters: 700 },
+    );
+    expect(outcome).toMatchObject({ completed: 32, failed: [], next: null });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(financialTransaction)
+        .where(notDeleted(financialTransaction)),
+    ).toHaveLength(32);
+    const retained = await record(
+      ctx,
+      Array.from({ length: 32 }, (_, index) =>
+        shop(`Other ${String(index).padStart(3, "0")}`, index),
+      ),
+      { fingerprint: "synthetic-retained-generation-labels" },
+    );
+    await generate(ctx);
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId,
     });
-    const ids = targets.map((entry) => entry.suggestionId);
-    await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-      await transitionSuggestionStates(
-        tx,
-        inArray(suggestionTable.id, ids),
-        (row) => ({
-          data: {
-            ...z.record(z.string(), z.json()).parse(row.data),
-            matchedRules:
-              row.id === targets[2]!.suggestionId
-                ? ["statement_transaction.attach@synthetic"]
-                : row.id === targets[1]!.suggestionId
-                  ? [ruleBase("statement_transaction.book_spending")]
-                  : row.id === targets[3]!.suggestionId
-                    ? ["statement_transaction.book_spending@synthetic-obsolete"]
-                    : [],
-          },
+    const replay = () =>
+      generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
+        runId,
+        after: null,
+        scope: { importId: retained.batchId },
+      });
+    expect(
+      await expectStatementBudget(replay, { statements: 450, parameters: 700 }),
+    ).toMatchObject({ processed: 32, failed: [] });
+    await replay();
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(financialTransaction)
+        .where(notDeleted(financialTransaction)),
+    ).toHaveLength(64);
+  });
+
+  it("writes the same ledger, audit and Feedback on the page and single paths", async () => {
+    const first = await card(ctx);
+    await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic Second Card",
+      ledgerPartyId: first.ledgerPartyId,
+      identity: { kind: "credit_card", network: "visa" },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Synthetic Second Card (...5151)",
+          externalAccountId: "Synthetic Second Card (...5151)",
+        },
+      ],
+    });
+    const uuid =
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+    // Each run names its own merchants and account; everything else,
+    // including Vendor creation, must match after masking identities.
+    type Snapshot = z.infer<typeof jsonSnapshot>;
+    const normalize = (value: Snapshot, key = ""): Snapshot => {
+      if (value === null) return value;
+      if (
+        /(^id|Id|Ids|At|Key|Fingerprint|fingerprint|Refs|shortcode|externalId|cursor)$/.test(
+          key,
+        ) ||
+        ["key", "account", "sourceRef", "decisions"].includes(key)
+      )
+        return "<masked>";
+      if (typeof value === "string")
+        return value
+          .replace(uuid, "<uuid>")
+          .replace(/\b[A-Z]{2,4}-[0-9A-Z]{5}\b/g, "<code>")
+          .replace(/alpha|beta/gi, "X")
+          .replace(/Synthetic (Second )?Card/g, "Card")
+          .replace(/\.\.\.(4242|5151)/g, "...");
+      if (Array.isArray(value))
+        return value
+          .map((item) => normalize(item))
+          .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+      if (typeof value === "object")
+        return Object.fromEntries(
+          Object.entries(value).map(([name, item]) => [
+            name,
+            normalize(item, name),
+          ]),
+        );
+      return value;
+    };
+    const run = async (prefix: string, account: string, single: boolean) => {
+      const recorded = await record(
+        ctx,
+        Array.from({ length: 4 }, (_, index) => shop(prefix, index, account)),
+        { fingerprint: `synthetic-differential-${prefix}` },
+      );
+      await generate(ctx);
+      const { rows: clock } = await getDb(ctx.db).execute<{ since: string }>(
+        sql`SELECT clock_timestamp()::text AS since`,
+      );
+      const since = clock[0]!.since;
+      const page = automaticRuleRuntime.applyAutomaticRulePage;
+      const fallback = vi
+        .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
+        .mockImplementation(async (...args) =>
+          single
+            ? {
+                outcomes: new Map(
+                  args[1].map((selection) => [selection.row.id, "fallback"]),
+                ),
+                settled: null,
+              }
+            : page(...args),
+        );
+      try {
+        expect(
+          await labelStatementSuggestions(ctx.db, {
+            port: answering({ kind: "purchase", counterparty: "business" }),
+            scope: { importId: recorded.batchId },
+          }),
+        ).toMatchObject({ completed: 4, failed: [] });
+      } finally {
+        fallback.mockRestore();
+      }
+      const created = async (table: string) =>
+        (
+          await getDb(ctx.db).execute<{ row: unknown }>(
+            sql`SELECT to_jsonb(t) AS row FROM ${sql.identifier(table)} t WHERE t."createdAt" >= ${since}::timestamptz`,
+          )
+        ).rows.map(({ row }) => jsonSnapshot.parse(row));
+      const decisions = (await readSuggestionDecisions(ctx.db)).filter(
+        (decision) => new Date(decision.createdAt) >= new Date(since),
+      );
+      return normalize(
+        jsonSnapshot.parse({
+          transactions: await created("FinancialTransaction"),
+          allocations: await created("FinancialTransactionAllocation"),
+          purchases: await created("Purchase"),
+          expenses: await created("Expense"),
+          vendors: await created("Vendor"),
+          audit: await created("AuditLog"),
+          feedback: decisions,
         }),
       );
+    };
+    const page = await run("Alpha", "Synthetic Card (...4242)", false);
+    const single = await run("Beta", "Synthetic Second Card (...5151)", true);
+    expect(page).toMatchObject({
+      transactions: expect.arrayContaining([expect.anything()]),
     });
-    const read = () =>
-      getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(inArray(suggestionTable.id, ids))
-        .orderBy(suggestionTable.id);
-    const before = await read();
-    const eventsBefore = await readSuggestionDecisions(ctx.db);
-    await expect(
-      databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
-        expect(
-          await statementSuggestionsRepo.completeNoActionStatementPrefix(
-            tx,
-            targets,
-          ),
-        ).toBe(2);
-        throw new Error("Synthetic outer rollback");
-      }),
-    ).rejects.toThrow("Synthetic outer rollback");
-    expect(await read()).toEqual(before);
-    expect(await readSuggestionDecisions(ctx.db)).toEqual(eventsBefore);
-    expect(
-      await statementSuggestionsRepo.completeNoActionStatementPrefix(ctx.db, [
-        { ...targets[0]!, evidenceFingerprint: "synthetic obsolete evidence" },
-        ...targets.slice(1),
-      ]),
-    ).toBe(0);
-    expect(
-      await statementSuggestionsRepo.completeNoActionStatementPrefix(
-        ctx.db,
-        targets,
-      ),
-    ).toBe(2);
-    const after = await read();
-    for (const [index, target] of targets.entries()) {
-      const row = after.find((row) => row.id === target.suggestionId)!;
-      expect(
-        z.record(z.string(), z.json()).parse(row.data).applicationPending,
-      ).toBe(index < 2 ? undefined : true);
-    }
-    // A paused rule is still a boundary; suffix receipts remain for the ordinary path.
-    expect(
-      await statementSuggestionsRepo.completeNoActionStatementPrefix(
-        ctx.db,
-        targets.slice(2),
-      ),
-    ).toBe(0);
-    expect(
-      await statementSuggestionsRepo.completeNoActionStatementPrefix(
-        ctx.db,
-        targets,
-      ),
-    ).toBe(0);
-    // An obsolete import-only stamp is not proof of the current execution contract.
-    expect(
-      await statementSuggestionsRepo.completeNoActionStatementPrefix(
-        ctx.db,
-        targets.slice(3),
-      ),
-    ).toBe(0);
-    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+    expect(single).toEqual(page);
   });
+
+  async function applyAfterMemberReview(phase: "label" | "generation") {
+    await card(ctx);
+    const vendor = await createRepoIdentity(ctx, "vendor", {
+      name: "Example Shared Vendor",
+    });
+    await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-12",
+    });
+    const recorded = await record(ctx, [
+      shop("Example Plain", 0),
+      // The same new Vendor, named as name resolution folds it, within 3 days.
+      rowInput({
+        providerAmount: -20,
+        statementDate: "2026-05-05",
+        merchant: "Example Twin Shop",
+        rawDescription: "EXAMPLE TWIN SHOP 1",
+      }),
+      rowInput({
+        providerAmount: -31,
+        statementDate: "2026-05-07",
+        merchant: " example twin shop",
+        rawDescription: "EXAMPLE TWIN SHOP 2",
+      }),
+      rowInput({
+        providerAmount: -40,
+        statementDate: "2026-05-09",
+        merchant: "Example Reviewed Shop",
+        rawDescription: "EXAMPLE REVIEWED SHOP",
+      }),
+      // Two payments toward one existing Purchase.
+      rowInput({
+        providerAmount: -20,
+        statementDate: "2026-05-12",
+        merchant: "Example Shared Vendor",
+        rawDescription: "EXAMPLE SHARED VENDOR 1",
+      }),
+      rowInput({
+        providerAmount: -30,
+        statementDate: "2026-05-13",
+        merchant: "Example Shared Vendor",
+        rawDescription: "EXAMPLE SHARED VENDOR 2",
+      }),
+    ]);
+    await generate(ctx);
+    if (phase === "generation")
+      await labelStatementSuggestions(ctx.db, {
+        port: answering({ kind: "purchase", counterparty: "business" }),
+      });
+    const page = automaticRuleRuntime.applyAutomaticRulePage;
+    const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
+    const reviewed: string[] = [];
+    const alone: string[] = [];
+    const descriptionOf = async (
+      charge: statementSuggestionsRepo.ChargeRef,
+    ) => {
+      const { rows } = await getDb(ctx.db).execute<{ description: string }>(
+        sql`SELECT judgment->${"create"}->>${"rawDescription"} AS description FROM "Suggestion" WHERE data->>${"source"} = ${charge.source} AND data->>${"chargeKey"} = ${charge.chargeKey} ORDER BY "createdAt" DESC LIMIT 1`,
+      );
+      return rows[0]?.description ?? "";
+    };
+    const pageSpy = vi
+      .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
+      .mockImplementation(async (...args) => {
+        // A member reviews after selection, before the page's locks. Charge-key
+        // and receipt ordering can put that charge in a later generation run.
+        if (!reviewed.length) {
+          const [row] = await getDb(ctx.db)
+            .select({ id: suggestionTable.id })
+            .from(suggestionTable).where(sql`${suggestionTable.active}
+              AND ${suggestionTable.judgment}->${"create"}->>${"rawDescription"} = ${"EXAMPLE REVIEWED SHOP"}`);
+          if (!row) throw new Error("Expected the reviewed synthetic charge");
+          const selection = (
+            await automaticRuleRuntime.selectAutomaticRules(ctx.db, [row.id], {
+              importClean: true,
+            })
+          ).get(row.id);
+          if (!selection)
+            throw new Error("Expected the reviewed synthetic rule");
+          reviewed.push(selection.row.id);
+          await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+            operationId: "synthetic-member-apply",
+            suggestionId: selection.row.id,
+            verdict: "correct",
+            correction: { present: false },
+            intent: "apply",
+            expectedFingerprint: selection.review.expectedFingerprint,
+            reason: null,
+            evidence: null,
+            application: selection.review.application,
+          });
+        }
+        return page(...args);
+      });
+    const applySpy = vi
+      .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
+      .mockImplementation(async (...args) => {
+        alone.push(await descriptionOf(args[1]));
+        return apply(...args);
+      });
+    try {
+      const outcome =
+        phase === "label"
+          ? await labelStatementSuggestions(ctx.db, {
+              port: answering({ kind: "purchase", counterparty: "business" }),
+              scope: { importId: recorded.batchId },
+            })
+          : await generateStatementSuggestionPage(ctx.db, {
+              servicesFor: buildCrudServices,
+              runId: null,
+              after: null,
+              scope: { importId: recorded.batchId },
+            });
+      expect(outcome).toMatchObject({ failed: [] });
+    } finally {
+      pageSpy.mockRestore();
+      applySpy.mockRestore();
+    }
+    expect(reviewed).toHaveLength(1);
+    // The member's application wins; the page leaves that charge to its own
+    // review, which finds nothing left to apply.
+    expect(alone).toContain("EXAMPLE REVIEWED SHOP");
+    // Of the two charges naming one new Vendor, the later in page order
+    // applies alone after the page.
+    const twinsAlone = alone.filter((description) =>
+      description.startsWith("EXAMPLE TWIN"),
+    );
+    // Generation orders charge keys; labels order their publication receipts.
+    // Either order keeps a colliding create outside the shared write.
+    expect(twinsAlone.length).toBeGreaterThanOrEqual(1);
+    const transactions = (
+      await getDb(ctx.db)
+        .select({ rawDescription: financialTransaction.rawDescription })
+        .from(financialTransaction)
+        .where(notDeleted(financialTransaction))
+    ).map((row) => row.rawDescription);
+    expect(new Set(transactions).size).toBe(transactions.length);
+    expect(transactions).toEqual(
+      expect.arrayContaining([
+        "EXAMPLE PLAIN SHOP 0",
+        "EXAMPLE REVIEWED SHOP",
+        expect.stringMatching(/^EXAMPLE TWIN SHOP/),
+      ]),
+    );
+    // Payments near one existing Purchase stay for review.
+    expect(transactions.filter((row) => row?.includes("SHARED"))).toEqual([]);
+  }
+
+  it.each(["label", "generation"] as const)(
+    "applies alone what a member reviewed or the %s page shares",
+    applyAfterMemberReview,
+  );
 
   it.each(["cancelled", "expired"] as const)(
     "fences no-action receipt completion under %s Job ownership",
@@ -2761,10 +2986,19 @@ describe("statement Transaction suggestions", () => {
               return withWorkflowExecution(
                 { runId: crypto.randomUUID(), attempt: 1, job: context },
                 () =>
-                  statementSuggestionsRepo.completeNoActionStatementPrefix(
-                    ctx.db,
-                    targets,
-                  ),
+                  automaticRuleRuntime.applyAutomaticRulePage(ctx.db, [], {
+                    context: buildCrudServices,
+                    settle: {
+                      ids: [targets[0]!.suggestionId],
+                      run: (tx, rows) =>
+                        statementSuggestionsRepo.completeStatementReceipts(
+                          tx,
+                          targets,
+                          rows,
+                          () => true,
+                        ),
+                    },
+                  }),
               );
             },
           ),
@@ -3483,7 +3717,7 @@ describe("statement Transaction suggestions", () => {
   });
 
   it("books one Transaction for a charge several sources exported", async () => {
-    await card(ctx, ["monarch", "copilot"]);
+    const account = await card(ctx, ["monarch", "copilot"]);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE GROCER 0001" })]);
     await record(
       ctx,
@@ -3495,23 +3729,65 @@ describe("statement Transaction suggestions", () => {
     expect(rest).toEqual([]);
     expect(primary).toMatchObject({ recommended: "create", siblings: 0 });
     await accept(ctx, primary!);
+    const [booked] = await getDb(ctx.db).select().from(financialTransaction);
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      rawDescription: "EXAMPLE GROCER DECOY",
+      sourceRefs: [],
+    });
+    await generate(ctx);
     const [copy] = await readPendingStatements(ctx);
     expect(copy).toMatchObject({
       recommended: "attach",
       clean: true,
       siblings: 0,
-      candidates: [
+      candidates: expect.arrayContaining([
         expect.objectContaining({
           transactionId: expect.stringMatching(/^FTX-/),
         }),
-      ],
+      ]),
     });
+    expect(
+      copy!.candidates.filter(
+        (candidate) => candidate.eligibility !== "context",
+      ),
+    ).toHaveLength(2);
+    const [stored] = await getDb(ctx.db)
+      .select({ judgment: suggestionTable.judgment })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, copy!.suggestionId));
+    const judgment = statementTransactionJudgment.parse(stored!.judgment);
+    // Candidate ranking does not change which Transaction the bank-copy proof names.
+    const reversed = {
+      ...judgment,
+      candidates: [...judgment.candidates].sort(
+        (left, right) =>
+          Number(left.transactionId === judgment.pairedTransactionId) -
+          Number(right.transactionId === judgment.pairedTransactionId),
+      ),
+    };
+    expect(reversed.candidates[0]!.transactionId).not.toBe(
+      judgment.pairedTransactionId,
+    );
+    expect(
+      (await prepareStatementSpending(ctx.db, reversed))?.request.transactionId,
+    ).toBe(booked!.shortcode);
     await accept(ctx, copy!);
     expect(await readPendingStatements(ctx)).toEqual([]);
     const { rows } = await getDb(ctx.db).execute<{ n: number }>(
       sql`SELECT count(*)::int AS n FROM "FinancialTransaction" WHERE "deletedAt" IS NULL`,
     );
-    expect(rows[0]!.n).toBe(1);
+    expect(rows[0]!.n).toBe(2);
+    const accepted = await getDb(ctx.db).execute<{ id: string }>(sql`
+      SELECT DISTINCT "acceptedTransactionId" AS id FROM "SourceOccurrence"
+      WHERE "acceptedTransactionId" IS NOT NULL
+    `);
+    expect(accepted.rows).toEqual([{ id: booked!.id }]);
   });
 
   // Failure mode: pairing by amount alone would fold two real visits into one
@@ -3770,13 +4046,13 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [
       rowInput({
         merchant: "Sample Friend",
-        rawDescription: "PAYFRIEND FROM SAMPLE FRIEND",
+        rawDescription: "VENMO FROM SAMPLE FRIEND",
         sourceCategory: "Paychecks",
         providerAmount: 40,
       }),
       rowInput({
         merchant: "Sample Friend",
-        rawDescription: "PAYFRIEND *SAMPLE FRIEND",
+        rawDescription: "VENMO *SAMPLE FRIEND",
         sourceCategory: "Shopping",
         providerAmount: -25,
       }),
@@ -3794,6 +4070,26 @@ describe("statement Transaction suggestions", () => {
     expect(rows.find((row) => row.amount > 0)).toMatchObject({
       clean: false,
       create: { kind: "purchase", counterparty: { label: "person" } },
+    });
+  });
+
+  // Failure mode: a person label published before the rail rule kept its
+  // stale kind, so applying it refused as changed since review.
+  it("republishes an off-rail person label as a business", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "SQ *SAMPLE PERSON" })]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({
+        judgment: sql`jsonb_set(${suggestionTable.judgment}, '{create,counterparty,label}', '"person"')`,
+      })
+      .where(eq(suggestionTable.active, true));
+    await generate(ctx);
+    const [row] = await readPendingStatements(ctx);
+    expect(row).toMatchObject({
+      create: { counterparty: { label: "business" } },
     });
   });
 

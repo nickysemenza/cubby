@@ -205,7 +205,8 @@ export const MERCHANT_IDENTITY_FEATURE = defineFeature({
   cache: true,
   tier: "fast",
   effort: "low",
-  maxTokens: 400,
+  // The fallback's adaptive thinking shares this cap with the structured answer.
+  maxTokens: 1_500,
   schema: merchantIdentityProposal,
 });
 

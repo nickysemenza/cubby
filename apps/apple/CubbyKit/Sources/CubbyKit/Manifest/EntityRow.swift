@@ -115,14 +115,8 @@ extension EntityDescriptor {
         )
     }
 
-    /// The server owns direct-versus-related precedence and preferred-representation choice.
-    /// Native renders the preferred URL when present, falling back to the original for rows from
-    /// older servers and images whose derivative is not ready.
+    /// Preferred representation, then `url`. See `JSONValue.displayCoverURL`.
     private static func imageURL(from object: JSONValue) -> URL? {
-        guard let first = object.recordValue("displayImages")?[0] else { return nil }
-        let value =
-            first["representations"]?["preferred"]?.stringValue
-            ?? first["url"]?.stringValue
-        return value.flatMap(URL.init(string:))
+        object.displayCoverURL
     }
 }

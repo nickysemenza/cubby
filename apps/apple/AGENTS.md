@@ -187,6 +187,13 @@ None is committed; edit the generator or its inputs, never the output. A missing
 
 ## Verification
 
+Native apps are in scope for redesigns. Their validation is compilation plus
+existing CI: without Computer Use, signing or simulator access, continue with
+the automated checks and report the gap. Delete a native UI journey that only
+tracks presentation rather than repairing its selectors. When `xcode-select -p`
+points at Command Line Tools, run host tests and `xcrun` commands with
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
+
 `pnpm apple check [host|app|lint]` runs native formatting, FFI preparation, CubbyKit host
 tests and simulator compilation; [README](README.md#verification) owns the hosted and
 device lanes and [ITERATION.md](ITERATION.md) the focused loops. Fix formatting with

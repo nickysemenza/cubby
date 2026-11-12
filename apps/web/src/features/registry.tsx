@@ -551,8 +551,6 @@ const workActions: WorkActionTable = {
     },
     productsWithIslandedMappings: { "add-conversion": islandedMappingsAction },
     locationsWithoutAiDescription: { "analyze-all": analyzeLocationsAction },
-    staleLocations: { "start-recount": startRecountAction },
-    neverVerifiedInventory: { "start-recount": startRecountAction },
     unknownParkedItems: { "start-recount": startRecountAction },
   },
 };

@@ -275,19 +275,36 @@ export async function updateSourceObservationJudgments(
     );
   const { notes: _notes, supersededByRowId: _successor, ...financial } = patch;
   const changedOwners: typeof owners = [];
-  for (const owner of owners.filter((owner) =>
+  const judgedOwners = owners.filter((owner) =>
     selected.some((row) => row.occurrenceId === owner.id),
-  )) {
-    const sameOccurrence = successor?.occurrenceId === owner.id;
-    const history = await db.execute<{ held: boolean }>(
-      sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
-      "objects",
+  );
+  if (patch.supersededByRowId === undefined) {
+    const changed = judgedOwners.filter((owner) =>
+      hasChangedValues(financial, owner),
     );
-    const values = {
-      ...financial,
-      ...(patch.supersededByRowId === undefined
-        ? {}
-        : sameOccurrence
+    if (changed.length)
+      changedOwners.push(
+        ...(await db
+          .update(sourceOccurrence)
+          .set({ ...financial, version: sql`${sourceOccurrence.version} + 1` })
+          .where(
+            sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(changed.map((owner) => owner.id))})`,
+          )
+          .returning()),
+      );
+  } else
+    for (const owner of judgedOwners) {
+      const sameOccurrence = successor?.occurrenceId === owner.id;
+      const history =
+        sameOccurrence && owner.reviewState === "revision_order_unknown"
+          ? await db.execute<{ held: boolean }>(
+              sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
+              "objects",
+            )
+          : [];
+      const values = {
+        ...financial,
+        ...(sameOccurrence
           ? {
               currentObservationId: successor.id,
               ...(owner.reviewState === "revision_order_unknown"
@@ -302,22 +319,17 @@ export async function updateSourceObservationJudgments(
               supersededByOccurrenceId: successor?.occurrenceId ?? null,
               replacementObservationId: successor?.id ?? null,
             }),
-    };
-    if (hasChangedValues(values, owner)) {
-      const updated = await db
-        .update(sourceOccurrence)
-        .set({ ...values, version: sql`${sourceOccurrence.version} + 1` })
-        .where(eq(sourceOccurrence.id, owner.id))
-        .returning();
-      changedOwners.push(...updated);
+      };
+      if (hasChangedValues(values, owner)) {
+        const updated = await db
+          .update(sourceOccurrence)
+          .set({ ...values, version: sql`${sourceOccurrence.version} + 1` })
+          .where(eq(sourceOccurrence.id, owner.id))
+          .returning();
+        changedOwners.push(...updated);
+      }
     }
-  }
   for (const observation of selected) {
-    const [annotation] = await db
-      .select()
-      .from(sourceObservationAnnotation)
-      .where(eq(sourceObservationAnnotation.observationId, observation.id))
-      .for("update");
     const values = {
       // Retain the exact reviewed version selection as history without copying financial judgments.
       ...(successor?.occurrenceId === observation.occurrenceId
@@ -325,6 +337,12 @@ export async function updateSourceObservationJudgments(
         : {}),
       notes: patch.notes,
     };
+    if (Object.values(values).every((value) => value === undefined)) continue;
+    const [annotation] = await db
+      .select()
+      .from(sourceObservationAnnotation)
+      .where(eq(sourceObservationAnnotation.observationId, observation.id))
+      .for("update");
     if (!hasChangedValues(values, annotation)) continue;
     if (annotation)
       await db

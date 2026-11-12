@@ -19,6 +19,16 @@ extension JSONValue {
         }
     }
 
+    /// The cover already chosen for this record: `displayImages[0]`, preferred
+    /// representation, then `url`. The server owns direct-versus-related precedence.
+    public var displayCoverURL: URL? {
+        guard let first = recordValue("displayImages")?.arrayValue?.first else { return nil }
+        let value =
+            first["representations"]?["preferred"]?.stringValue
+            ?? first["url"]?.stringValue
+        return value.flatMap(URL.init(string:))
+    }
+
     /// Evaluates a manifest `display.labelPath` / `readPath` against this row: dotted keys, `[n]`
     /// indexing, and a `[]` projection that maps the rest of the path over an array. Mirrors
     /// `apps/web/src/entity/read-path.ts`; a missing link anywhere reads as `nil`. Required wire

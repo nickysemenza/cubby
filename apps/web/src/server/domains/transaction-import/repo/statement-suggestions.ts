@@ -45,13 +45,14 @@ import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { sql, and, eq, inArray, isNull, type SQL } from "drizzle-orm";
+import { sql, inArray, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
+import { advisoryLockKey } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import {
@@ -117,6 +118,7 @@ import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-impo
 import {
   kindAgreed,
   decideStatementKind,
+  offRailPerson,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -135,7 +137,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
   automaticRuleStamp,
-  importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
 import {
@@ -144,10 +145,7 @@ import {
 } from "~/server/generic/suggestions/repo/eligible-targets";
 import { validateStatementCorrection } from "~/server/generic/suggestions/repo/family-correction";
 import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
-import {
-  matchedRulesOf,
-  type SuggestionPublication,
-} from "~/server/generic/suggestions/repo/suggestion";
+import { type SuggestionPublication } from "~/server/generic/suggestions/repo/suggestion";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
@@ -179,7 +177,10 @@ import {
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import {
+  transitionSuggestionStates,
+  type SuggestionStateRow,
+} from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -224,6 +225,9 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * share are capped at 12, so a Sweep keeps most of them free.
  */
 export const STATEMENT_PUBLISH_CONCURRENCY = 4;
+
+// Limit preparation discarded when a later application invalidates its suffix.
+const STATEMENT_GENERATION_REBUILD_SIZE = 8;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -1606,6 +1610,7 @@ export async function buildChargeProposals(
         storedValue: account?.kind === "stored_value",
       },
       transfer,
+      descriptor: canonical,
     });
     const copy = pairCopies(charge, copies.get(chargeId(charge)), candidates, {
       hold: Boolean(hold),
@@ -2045,15 +2050,30 @@ export async function pendingChargesNear(
   accountId: string,
   dates: readonly string[],
 ): Promise<ChargeRef[]> {
-  const sorted = [...dates].sort();
-  if (!sorted.length) return [];
+  const windows: { first: string; last: string }[] = [];
+  for (const date of [...new Set(dates)].sort()) {
+    const last = windows.at(-1);
+    if (
+      last &&
+      plainDateDaysBetween(last.last, date) <= PENDING_POST_WINDOW_DAYS * 2
+    )
+      last.last = date;
+    else windows.push({ first: date, last: date });
+  }
+  if (!windows.length) return [];
   const rows = await unwrapDb(db).execute<ChargeRef>(
     sql`SELECT DISTINCT ${suggestionField("source", STATE)} AS source, ${suggestionField("chargeKey", STATE)} AS "chargeKey"
       FROM "Suggestion" WHERE ${pendingStatementState}
         AND ${suggestionField("accountId", STATE)} = ${accountId}
-        AND (${suggestionField("statementDate", STATE)})::date
-          BETWEEN ${sorted[0]}::date - ${PENDING_POST_WINDOW_DAYS}::int
-          AND ${sorted.at(-1)}::date + ${PENDING_POST_WINDOW_DAYS}::int`,
+        AND (${sql.join(
+          windows.map(
+            ({ first, last }) =>
+              sql`(${suggestionField("statementDate", STATE)})::date
+                BETWEEN ${first}::date - ${PENDING_POST_WINDOW_DAYS}::int
+                AND ${last}::date + ${PENDING_POST_WINDOW_DAYS}::int`,
+          ),
+          sql` OR `,
+        )})`,
     "objects",
   );
   return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
@@ -2074,6 +2094,12 @@ async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
             )`,
     { active: false, status: "superseded" },
   );
+}
+
+function publishedOffRailPerson(judgment: unknown) {
+  const create =
+    suggestionJudgments.statement_transaction.safeParse(judgment).data?.create;
+  return create ? offRailPerson(create) : false;
 }
 
 type ReusablePublication = Pick<
@@ -2478,11 +2504,13 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       );
     return undefined;
   },
-  // A rule re-run retains model labels only while their label revision agrees.
+  // A rule re-run retains model labels only while their label revision agrees,
+  // and republishes a person label the rail rule now reads as a business.
   obsolete: (row, producer) =>
     producer.kind === "rule" &&
     row.producer?.kind === "model" &&
-    row.producer.revision !== STATEMENT_LABEL_REVISION,
+    (row.producer.revision !== STATEMENT_LABEL_REVISION ||
+      publishedOffRailPerson(row.judgment)),
   onUnchanged: "none",
   async prepare(tx, candidate, rows, producer, context) {
     const { proposal } = candidate;
@@ -2518,6 +2546,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
           label: previous.create.counterparty.label,
         },
         transfer: judgment.transfer,
+        descriptor: create,
       }),
     );
     for (const entry of judgment.candidates)
@@ -2821,7 +2850,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         `stmt:${subject.source}:${subject.chargeKey}`,
     );
   },
-  apply: async (db, context, state, input) => {
+  apply: async (db, context, state, input, automatic) => {
     if (input.application?.kind !== "statement_transaction")
       throw new Error(
         "Applying a Transaction suggestion requires the chosen statement action",
@@ -2831,9 +2860,45 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     await applyStatementTransactionSuggestion(db, context, state, {
       application: input.application,
       corrected: input.correction.present,
+      importId: automatic?.statementScope?.importId ?? undefined,
     });
   },
+  applyBatch: {
+    lockKeys: (predictions) =>
+      predictions.flatMap((prediction) =>
+        statementLegKeys(prediction).map((key) =>
+          advisoryLockKey("transfer-pair-leg", key),
+        ),
+      ),
+    apply: async (db, context, entries, automatic) => {
+      const { applyStatementTransactionSuggestions } =
+        await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
+      return applyStatementTransactionSuggestions(db, context, entries, {
+        importId: automatic.statementScope?.importId ?? undefined,
+      });
+    },
+  },
 };
+
+/** The transfer-pair leg keys an application of this prediction reserves. */
+function statementLegKeys(
+  prediction: Pick<typeof suggestionTable.$inferSelect, "subject" | "judgment">,
+) {
+  const judgment = suggestionJudgments.statement_transaction.parse(
+    prediction.judgment,
+  );
+  const subject = suggestionSubjects.statement_transaction.parse(
+    prediction.subject,
+  );
+  return [
+    ...new Set(
+      (
+        judgment.transferPair?.key ??
+        `stmt:${subject.source}:${subject.chargeKey}`
+      ).split("~"),
+    ),
+  ];
+}
 
 type StatementPublishResult =
   | { outcome: "published"; labelsReused: number; suggestionId: string }
@@ -3317,8 +3382,10 @@ async function prepareStatementGenerationPage(
 }
 
 /** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
-export const coalesceChargeRefreshes = <T>(fn: () => Promise<T>) =>
-  withAfterCommitScope(fn);
+export const coalesceChargeRefreshes = <T>(
+  fn: () => Promise<T>,
+  finish?: (flush: () => Promise<void>) => Promise<void>,
+) => withAfterCommitScope(fn, finish);
 
 /** Refresh named charges once after the writing transaction commits. */
 export async function regenerateChargesAfterCommit(
@@ -3379,14 +3446,37 @@ export async function regenerateCharges(
     startedAt,
     scope?.accountIds,
   );
-  for (const proposal of proposals) {
-    if (
+  let failure: Error | undefined;
+  let published = 0;
+  let unchanged = 0;
+  await publishSuggestionBatches(
+    db,
+    statementSuggestions,
+    proposals.flatMap((proposal) =>
       scope?.accountIds?.length &&
       !scope.accountIds.includes(proposal.judgment.accountId)
-    )
-      continue;
-    await publishChargeProposal(db, proposal, ruleProducer(null));
-  }
+        ? []
+        : [{ proposal }],
+    ),
+    ruleProducer(null),
+    {
+      concurrency: STATEMENT_PUBLISH_CONCURRENCY,
+      onOutcome: (_, outcome) => {
+        if (outcome.outcome === "published") published++;
+        else if (outcome.outcome === "unchanged") unchanged++;
+      },
+      onFailure: (_, error) => {
+        failure ??= error;
+      },
+    },
+  );
+  log.info("Statement charge refresh", {
+    charges: charges.length,
+    proposals: proposals.length,
+    published,
+    unchanged,
+  });
+  if (failure) throw failure;
 }
 
 /** Admit a retry in its current scope before repairing any projection. */
@@ -3533,7 +3623,7 @@ export async function retryStatementGenerationRefs(
   return { done, skipped, failed, published, labelsReused, unchanged };
 }
 
-/** Keep the publication proposal graph out of the serial application frame. */
+/** Keep the publication proposal graph out of the application frame. */
 async function publishStatementGenerationPage(
   db: Database,
   charges: readonly ChargeRef[],
@@ -3541,6 +3631,7 @@ async function publishStatementGenerationPage(
   runId: RunId | null,
   failed: RunStepError[],
 ) {
+  const suggestionIds = new Map<string, string[]>();
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
@@ -3587,7 +3678,7 @@ async function publishStatementGenerationPage(
     ),
   });
   // Publish independent charges first; import applications then recheck the
-  // current ledger sequentially, including reused labels on unchanged imports.
+  // current ledger under the guarded batch or single review boundary.
   const producer = ruleProducer(runId);
   await publishSuggestionBatches(
     db,
@@ -3596,7 +3687,14 @@ async function publishStatementGenerationPage(
     producer,
     {
       concurrency: STATEMENT_PUBLISH_CONCURRENCY,
-      onOutcome: (_, result) => {
+      onOutcome: ({ proposal }, result) => {
+        if (result.outcome === "published")
+          suggestionIds.set(chargeId(proposal.charge), [result.suggestionId]);
+        else if (result.outcome === "unchanged")
+          suggestionIds.set(
+            chargeId(proposal.charge),
+            result.rows.map((row) => row.id),
+          );
         const outcome = statementOutcome(result, producer);
         labelsReused += outcome.labelsReused;
         if (outcome.outcome === "published") published++;
@@ -3614,6 +3712,7 @@ async function publishStatementGenerationPage(
   const publishedAt = performance.now();
   return {
     charges: proposals.map(({ charge }) => charge),
+    suggestionIds,
     published,
     labelsReused,
     unchanged,
@@ -3653,7 +3752,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      // Import generation also admits serial money writes before its checkpoint.
+      // Import generation also admits money writes before its checkpoint.
       input.scope?.importId
         ? JOB_PAGE_LIMITS.statementApplicationsPerPage
         : JOB_PAGE_LIMITS.statementGenerationPerPage,
@@ -3676,6 +3775,7 @@ export async function generateStatementSuggestionPage(
   const selectedAt = performance.now();
   const {
     charges: proposalCharges,
+    suggestionIds,
     published,
     labelsReused,
     unchanged,
@@ -3690,38 +3790,148 @@ export async function generateStatementSuggestionPage(
     failed,
   );
   if (input.scope?.importId) {
-    const { applyAutomaticRulesForCharge } =
-      await import("~/server/generic/suggestions/repo/automatic-application");
-    // This page's publication is current until one of its charges applies a
-    // rule; only charges after such a money write regenerate first.
-    let wrote = false;
+    const {
+      applyAutomaticRulePage,
+      applyAutomaticRulesForCharge,
+      selectAutomaticRules,
+    } = await import("~/server/generic/suggestions/repo/automatic-application");
+    const { statementBatchCandidate, STATEMENT_PAGE_RUN_CREATES } =
+      await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
+    const selections = await selectAutomaticRules(
+      db,
+      [...new Set([...suggestionIds.values()].flat())],
+      { importClean: true },
+    );
+    const selectionFor = (charge: ChargeRef) => {
+      const current = (suggestionIds.get(chargeId(charge)) ?? []).flatMap(
+        (id) => (selections.has(id) ? [selections.get(id)!] : []),
+      );
+      const [selection] = current;
+      return current.length === 1 &&
+        selection &&
+        statementBatchCandidate(
+          statementTransactionJudgment.parse(selection.row.judgment),
+        )
+        ? selection
+        : null;
+    };
+    const batchTried = new Set<string>();
+    const batchApplied = new Set<string>();
+    // Single admission rebuilds after a money write or a declined page;
+    // a decline can reveal a new live candidate even before any write commits.
+    let recheck = false;
+    const refreshed = new Set<string>();
+    const invalidateRefreshes = () => {
+      recheck = true;
+      refreshed.clear();
+    };
     // Each write's neighbour refresh joins one page-wide refresh at the end.
     await coalesceChargeRefreshes(async () => {
       for (const [chargeIndex, charge] of proposalCharges.entries()) {
         const ref = `charge:${chargeId(charge)}`;
         if (failed.some((failure) => failure.ref === ref)) continue;
         try {
-          if (wrote) {
+          const key = chargeId(charge);
+          if (!batchTried.has(key)) {
+            const batch = [];
+            for (const next of proposalCharges.slice(
+              chargeIndex,
+              chargeIndex + STATEMENT_PAGE_RUN_CREATES,
+            )) {
+              if (
+                batchTried.has(chargeId(next)) ||
+                failed.some(
+                  (failure) => failure.ref === `charge:${chargeId(next)}`,
+                )
+              )
+                break;
+              const selection = selectionFor(next);
+              if (!selection) break;
+              batch.push({ charge: next, selection });
+            }
+            for (const item of batch) batchTried.add(chargeId(item.charge));
+            if (batch.length > 1) {
+              invalidateRefreshes();
+              try {
+                const applicationStartedAt = performance.now();
+                const page = await applyAutomaticRulePage(
+                  db,
+                  batch.map(({ selection }) => selection),
+                  {
+                    context: input.servicesFor,
+                    statementScope: input.scope,
+                  },
+                );
+                log.info("Statement generation application page", {
+                  charges: batch.length,
+                  applied: [...page.outcomes.values()].filter(
+                    (outcome) => outcome === "applied",
+                  ).length,
+                  wallMs: Math.round(performance.now() - applicationStartedAt),
+                });
+                for (const item of batch) {
+                  if (page.outcomes.get(item.selection.row.id) !== "applied")
+                    continue;
+                  batchApplied.add(chargeId(item.charge));
+                  invalidateRefreshes();
+                }
+              } catch (error) {
+                if (isWorkflowInterrupted(error)) throw error;
+                // A page may have committed a split prefix. The single path re-admits
+                // current evidence and replays its receipts instead of duplicating effects.
+                log.warn("Statement generation page application fell back", {
+                  charges: batch.length,
+                  error: scrubErrorMessage(String(error)),
+                });
+                invalidateRefreshes();
+              }
+            }
+          }
+          if (!batchApplied.has(key)) {
+            if (recheck && !refreshed.has(key)) {
+              // Share rebuilds between this page's applications. Any applied rule
+              // or declined page invalidates the suffix before its next use.
+              const upcoming = proposalCharges
+                .slice(
+                  chargeIndex,
+                  chargeIndex + STATEMENT_GENERATION_REBUILD_SIZE,
+                )
+                .filter(
+                  (next) =>
+                    !batchApplied.has(chargeId(next)) &&
+                    !failed.some(
+                      (failure) => failure.ref === `charge:${chargeId(next)}`,
+                    ),
+                );
+              log.info("Statement generation phase", {
+                phase: "regeneration",
+                chargeIndex,
+                charges: upcoming.length,
+              });
+              try {
+                await regenerateCharges(db, upcoming, input.scope);
+                for (const next of upcoming) refreshed.add(chargeId(next));
+              } catch (error) {
+                if (isWorkflowInterrupted(error)) throw error;
+                // Attribute a failed rebuild to its own charge, not an earlier
+                // charge that shared its reads or publication batch.
+                await regenerateCharges(db, [charge], input.scope);
+              }
+            }
             log.info("Statement generation phase", {
-              phase: "regeneration",
+              phase: "application",
               chargeIndex,
               charges: proposalCharges.length,
             });
-            await regenerateCharges(db, [charge], input.scope);
+            const outcome = await applyAutomaticRulesForCharge(
+              db,
+              charge,
+              input.servicesFor,
+              true,
+              input.scope,
+            );
+            if (outcome.applied.length) invalidateRefreshes();
           }
-          log.info("Statement generation phase", {
-            phase: "application",
-            chargeIndex,
-            charges: proposalCharges.length,
-          });
-          const outcome = await applyAutomaticRulesForCharge(
-            db,
-            charge,
-            input.servicesFor,
-            true,
-            input.scope,
-          );
-          if (outcome.applied.length) wrote = true;
           // Booking a primary republished its copies as attaches; settle the
           // ones this import covers in the same pass.
           for (const copy of await bookedCopies(db, charge))
@@ -3736,9 +3946,10 @@ export async function generateStatementSuggestionPage(
                 )
               ).applied.length
             )
-              wrote = true;
+              invalidateRefreshes();
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
+          invalidateRefreshes();
           failed.push(statementGenerationFailure(ref, error));
         }
       }
@@ -3951,6 +4162,7 @@ export async function recordStatementLabelCheckpoint(
                 votes: create.votes,
                 counterparty: create.counterparty,
                 transfer: merged.judgment.transfer,
+                descriptor: create,
               }),
             );
           }
@@ -3989,149 +4201,70 @@ export async function recordStatementLabelCheckpoint(
     : withTransactionDatabase(db, save);
 }
 
-/** Clear only the receipt whose application settled; a replacement owns its own receipt. */
-export async function completeStatementApplications(
-  db: Database,
-  suggestionIds: readonly string[],
-  scope?: StatementSuggestionScope,
-) {
-  if (!suggestionIds.length) return [];
-  const complete = async (tx: Database) => {
-    await assertWorkflowEffect(tx);
-    // Completion mutates durable receipt/cursor state even when no financial
-    // rule applied. Its write admission must retain the original selection.
-    const scoped = scope
-      ? await statementLabelTargetsInScope(tx, scope, suggestionIds)
-      : null;
-    const admitted = suggestionIds.filter((id) => !scoped || scoped.has(id));
-    if (!admitted.length) return [];
-    await transitionSuggestionStates(
-      tx,
-      inArray(suggestionTable.id, admitted),
-      (row) => {
-        const {
-          applicationPending: _pending,
-          applicationOrder: _order,
-          ...data
-        } = stateData.parse(row.data ?? {});
-        return { data };
-      },
-    );
-    return admitted;
-  };
-  return scope
-    ? withSnapshotWriteDatabase(db, complete, {
-        isolationLevel: "serializable",
-      })
-    : withTransactionDatabase(db, complete);
-}
-
-export const STATEMENT_APPLICATION_PREFIX_LIMIT =
-  JOB_PAGE_LIMITS.suggestionsPerPage;
-
-/** A locked publication without import authority or applicable rule stamps cannot admit an automatic effect.
- * Only the original consecutive prefix is resolved; callers must apply a
- * boundary charge after releasing these locks and reread the remaining suffix.
+/**
+ * Settle the label receipts that no automatic rule applies to, inside the
+ * label page's application boundary. `rows` are the receipts' locked states,
+ * already admitted to the page scope. A receipt whose row moved, gained an
+ * applicable rule or left the pending projection stays for its next page.
  */
-export async function completeNoActionStatementPrefix(
-  db: Database,
+export async function completeStatementReceipts(
+  tx: Database,
   entries: readonly {
     suggestionId: string;
     charge: ChargeRef;
     evidenceFingerprint: string;
   }[],
-  scope?: StatementSuggestionScope,
+  rows: ReadonlyMap<string, SuggestionStateRow>,
+  noRule: (row: SuggestionStateRow) => boolean,
 ) {
-  const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
-  if (!window.length) return 0;
-  if (new Set(window.map((entry) => entry.suggestionId)).size !== window.length)
-    throw new Error("Statement application prefix contains duplicate receipts");
-  // A negative preflight only declines batching; ordinary admission reads fresh.
-  // Positive results prove nothing until the whole prefix is locked and checked.
-  // Import-only rules are inapplicable to this unscoped path regardless of their switch.
-  // Unknown or obsolete stamps remain boundaries; only exact current stamps are excluded.
-  // Import authority executes the import-only rules, so none is excluded.
-  const excluded = scope?.importId ? [] : importOnlyStatementRuleStamps();
-  const hasApplicableRules = (data: SQL) => sql<boolean>`EXISTS (
-    SELECT 1 FROM jsonb_array_elements_text(${matchedRulesOf(data)}) AS matched(value)
-    WHERE matched.value IS NULL${excluded.length ? sql` OR NOT ${inArray(sql`matched.value`, excluded)}` : sql` OR true`})`;
-  const first = window[0]!;
-  const [candidate] = await getDb(db)
-    .select({ id: suggestionTable.id })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.id, first.suggestionId),
-        eq(suggestionTable.family, suggestionFamily.enum.statement_transaction),
-        eq(suggestionTable.active, true),
-        eq(suggestionTable.status, suggestionStatus.enum.pending),
-        isNull(suggestionTable.suppression),
-        sql`${suggestionField("source", STATE)} = ${first.charge.source}`,
-        sql`${suggestionField("chargeKey", STATE)} = ${first.charge.chargeKey}`,
-        sql`${suggestionField("evidenceFingerprint", STATE)} = ${first.evidenceFingerprint}`,
-        sql`${suggestionTable.data}->'applicationPending' = 'true'::jsonb`,
-        sql`NOT ${hasApplicableRules(sql`${suggestionTable.data}`)}`,
-      ),
-    )
-    .limit(1);
-  if (!candidate) return 0;
-  const complete = async (tx: Database) => {
-    await assertWorkflowEffect(tx);
-    const rows = await getDb(tx)
-      .select({
-        id: suggestionTable.id,
-        family: suggestionTable.family,
-        active: suggestionTable.active,
-        status: suggestionTable.status,
-        suppression: suggestionTable.suppression,
-        data: suggestionTable.data,
-        hasRules: hasApplicableRules(sql`${suggestionTable.data}`),
-      })
-      .from(suggestionTable)
-      .where(
-        inArray(
-          suggestionTable.id,
-          window.map((entry) => entry.suggestionId),
-        ),
-      )
-      .orderBy(suggestionTable.id)
-      .for("update");
-    const byId = new Map(rows.map((row) => [row.id, row]));
-    const scoped = scope
-      ? await statementLabelTargetsInScope(
-          tx,
-          scope,
-          rows.map((row) => row.id),
-        )
-      : null;
-    const settled: string[] = [];
-    for (const entry of window) {
-      const row = byId.get(entry.suggestionId);
-      const data = stateData.safeParse(row?.data);
-      if (
-        !row ||
-        (scoped && !scoped.has(entry.suggestionId)) ||
-        row.family !== suggestionFamily.enum.statement_transaction ||
-        !row.active ||
-        row.status !== suggestionStatus.enum.pending ||
-        row.suppression !== null ||
-        row.hasRules ||
-        !data.success ||
-        data.data.source !== entry.charge.source ||
-        data.data.chargeKey !== entry.charge.chargeKey ||
-        data.data.evidenceFingerprint !== entry.evidenceFingerprint ||
-        data.data.applicationPending !== true
-      )
-        break;
-      settled.push(entry.suggestionId);
-    }
-    return (await completeStatementApplications(tx, settled, scope)).length;
-  };
-  return scope
-    ? withSnapshotWriteDatabase(db, complete, {
-        isolationLevel: "serializable",
-      })
-    : withTransactionDatabase(db, complete);
+  const settled = entries.flatMap((entry) => {
+    const row = rows.get(entry.suggestionId);
+    const data = stateData.safeParse(row?.data);
+    return row &&
+      row.family === suggestionFamily.enum.statement_transaction &&
+      row.active &&
+      row.status === suggestionStatus.enum.pending &&
+      row.suppression === null &&
+      noRule(row) &&
+      data.success &&
+      data.data.source === entry.charge.source &&
+      data.data.chargeKey === entry.charge.chargeKey &&
+      data.data.evidenceFingerprint === entry.evidenceFingerprint &&
+      data.data.applicationPending === true
+      ? [entry.suggestionId]
+      : [];
+  });
+  if (!settled.length) return [];
+  await transitionSuggestionStates(
+    tx,
+    inArray(suggestionTable.id, settled),
+    (row) => {
+      const {
+        applicationPending: _pending,
+        applicationOrder: _order,
+        ...data
+      } = stateData.parse(row.data ?? {});
+      return { data };
+    },
+  );
+  return settled;
+}
+
+/** The charges that are not observed by this import. */
+export async function chargesOutsideImport(
+  db: Database,
+  importId: string,
+  charges: readonly ChargeRef[],
+) {
+  if (!charges.length) return [];
+  const own = new Set(
+    (
+      await unwrapDb(db).execute<ChargeRef>(sql`
+        SELECT scoped.source, scoped."chargeKey" FROM (${scopedStatementChargeKeys({ importId }, sql`(o.source, o.shortcode) IN (${tuples(charges)})`)}) scoped
+      `)
+    ).rows.map(chargeId),
+  );
+  return charges.filter((charge) => !own.has(chargeId(charge)));
 }
 
 /**

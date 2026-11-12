@@ -63,13 +63,12 @@ extension CaptureView {
 
 private struct CaptureContent: View {
     @Environment(AppModel.self) private var appModel
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Bindable var capture: CaptureModel
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
     @State private var scanning = false
     @State private var photoSelection: PhotoSelectionBatch?
-    /// Shared by the location glyph column and the chip dividers so both track Dynamic Type.
+    /// Chip dividers track Dynamic Type with the glyph column they sit beside.
     @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 20
 
     var body: some View {
@@ -209,43 +208,29 @@ private struct CaptureContent: View {
                 Button {
                     pickingLocation = true
                 } label: {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: iconSlotWidth)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(capture.location?.name ?? "Choose a location")
-                                .font(.fieldGuideTitle)
-                                .foregroundStyle(
-                                    capture.location == nil
-                                        ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite
-                                )
-                                .fixedSize(horizontal: false, vertical: true)
-                            if let path = capture.location?.path, !path.isEmpty {
-                                Text(path)
-                                    .font(.fieldGuideLabel)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if dynamicTypeSize.isAccessibilitySize, let code = capture.location?.id.rawValue {
-                                Text(code)
-                                    .font(.fieldGuideCode)
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            }
-                        }
-                        .layoutPriority(1)
-                        Spacer(minLength: FieldGuideTokens.Space.sm)
-                        if !dynamicTypeSize.isAccessibilitySize, let code = capture.location?.id.rawValue {
-                            Text(code)
-                                .font(.fieldGuideCode)
+                    CoverIdentityRow(
+                        title: capture.location?.name ?? "Choose a location",
+                        titleFont: .fieldGuideTitle,
+                        titleColor: capture.location == nil
+                            ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite,
+                        titleLineLimit: nil,
+                        imageURL: capture.location?.imageURL,
+                        symbol: EntityCatalog[.location].sfSymbol,
+                        code: capture.location?.id.rawValue,
+                        minHeight: FieldGuideTokens.touchTarget + 8
+                    ) {
+                        if let path = capture.location?.path, !path.isEmpty {
+                            Text(path)
+                                .font(.fieldGuideLabel)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                    } trailing: {
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                     .padding(.horizontal, FieldGuideTokens.Space.md)
-                    .frame(minHeight: FieldGuideTokens.touchTarget + 8)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 if let error = capture.locationError {

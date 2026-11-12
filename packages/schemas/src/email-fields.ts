@@ -160,6 +160,11 @@ export const MAIL_IMPORT_GAP_EXECUTOR = {
   z.infer<typeof mailImportGapCategory>,
   MailImportGapExecutor
 >;
+/**
+ * A member decides an unresolved import only for mail received within this
+ * many days; older history is agent research in the Work queue.
+ */
+export const MAIL_IMPORT_MEMBER_WINDOW_DAYS = 365;
 export const MAIL_IMPORT_GAP_OUTCOME = {
   automatic: "waiting",
   agent: "needs_research",

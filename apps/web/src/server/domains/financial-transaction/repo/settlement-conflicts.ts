@@ -39,16 +39,17 @@ import {
 } from "@cubby/schemas/purchase";
 import { paymentTender } from "@cubby/schemas/purchase-import";
 import { isNull } from "drizzle-orm";
-import { eq, inArray, type SQL, sql } from "drizzle-orm";
+import { inArray, type SQL, sql } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { requestedRows } from "~/server/db/helpers/requested";
 import type {
   RepositoryQueryClient as DrizzleClient,
   RepositoryQueryTransaction as DrizzleTransaction,
 } from "~/server/db/repository-access.boundary";
-import { financialTransaction, purchase } from "~/server/db/retained-tables";
+import { purchase } from "~/server/db/retained-tables";
 import { purchaseMailPartiesSql } from "~/server/domains/email/repo/email-sql";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -337,23 +338,73 @@ export async function transactionSettlementConflicts(
     purchaseIds: readonly PurchaseId[];
   },
 ): Promise<Map<PurchaseId, SettlementConflictKind[]>> {
-  if (input.purchaseIds.length === 0) return new Map();
-  const [charge] = await tx
-    .select({
-      accountId: financialTransaction.accountId,
-      kind: financialTransaction.kind,
-      transactionDate: financialTransaction.transactionDate,
-      postedDate: financialTransaction.postedDate,
-    })
-    .from(financialTransaction)
-    .where(eq(financialTransaction.id, input.transactionId));
-  if (!charge) return new Map();
-  return findSettlementConflicts(tx, {
-    accountId: charge.accountId,
-    kind: financialTransactionKind.parse(charge.kind),
-    transactionDate: charge.transactionDate ?? charge.postedDate,
-    purchaseIds: input.purchaseIds,
-  });
+  return (
+    (await transactionsSettlementConflicts(tx, [input])).get(
+      input.transactionId,
+    ) ?? new Map()
+  );
+}
+
+/**
+ * Conflicts each stored charge's allocation onto each named Purchase would
+ * carry, read in one statement; charges and Purchases with none are omitted.
+ */
+async function transactionsSettlementConflicts(
+  tx: DrizzleTransaction,
+  inputs: readonly {
+    transactionId: FinancialTransactionId;
+    purchaseIds: readonly PurchaseId[];
+  }[],
+) {
+  const found = new Map<
+    FinancialTransactionId,
+    Map<PurchaseId, SettlementConflictKind[]>
+  >();
+  const pairs = inputs.flatMap((input) =>
+    input.purchaseIds.map((purchaseId) => ({
+      transactionId: input.transactionId,
+      purchaseId,
+    })),
+  );
+  if (!pairs.length) return found;
+  const aliases = {
+    purchase: "candidate_purchase",
+    account: "charge_account",
+    transaction: "charge",
+  };
+  const pair = requestedRows(
+    pairs,
+    { transactionId: "uuid", purchaseId: "uuid" },
+    "pair",
+  );
+  const rows = await tx.execute<{
+    transactionId: FinancialTransactionId;
+    purchaseId: PurchaseId;
+    party: boolean;
+    tender: boolean;
+  }>(sql`
+    SELECT ${pair.col("transactionId")} AS "transactionId",
+      candidate_purchase.id AS "purchaseId",
+      ${settlementConflictSql("party", aliases)} AS party,
+      ${settlementConflictSql("tender", aliases)} AS tender
+    FROM ${pair.from}
+    JOIN "FinancialTransaction" conflict_charge_row ON conflict_charge_row.id = ${pair.col("transactionId")}
+    CROSS JOIN LATERAL (
+      SELECT conflict_charge_row.kind::text AS kind,
+        coalesce(conflict_charge_row."transactionDate", conflict_charge_row."postedDate") AS "transactionDate",
+        NULL::date AS "postedDate"
+    ) charge
+    JOIN "Purchase" candidate_purchase ON candidate_purchase.id = ${pair.col("purchaseId")}
+    JOIN "FinancialAccount" charge_account ON charge_account.id = conflict_charge_row."accountId"
+  `);
+  for (const row of rows.rows) {
+    const kinds = settlementConflictKinds.filter((kind) => row[kind]);
+    if (!kinds.length) continue;
+    const conflicts = found.get(row.transactionId) ?? new Map();
+    conflicts.set(row.purchaseId, kinds);
+    found.set(row.transactionId, conflicts);
+  }
+  return found;
 }
 
 const conflictSentence = {
@@ -375,7 +426,35 @@ export async function refuseSettlementConflicts(
     existing?: ReadonlyMap<PurchaseId, readonly SettlementConflictKind[]>;
   },
 ): Promise<void> {
-  const conflicts = await transactionSettlementConflicts(tx, input);
+  await refuseSettlementConflictsFor(tx, [input]);
+}
+
+/**
+ * `refuseSettlementConflicts` for several charges with one conflict read; the
+ * first charge in input order with a new conflict refuses.
+ */
+export async function refuseSettlementConflictsFor(
+  tx: DrizzleTransaction,
+  inputs: readonly {
+    transactionId: FinancialTransactionId;
+    purchaseIds: readonly PurchaseId[];
+    existing?: ReadonlyMap<PurchaseId, readonly SettlementConflictKind[]>;
+  }[],
+): Promise<void> {
+  const found = await transactionsSettlementConflicts(tx, inputs);
+  for (const input of inputs) {
+    const conflicts = found.get(input.transactionId);
+    if (conflicts) await refuseNewConflicts(tx, input, conflicts);
+  }
+}
+
+async function refuseNewConflicts(
+  tx: DrizzleTransaction,
+  input: {
+    existing?: ReadonlyMap<PurchaseId, readonly SettlementConflictKind[]>;
+  },
+  conflicts: Map<PurchaseId, SettlementConflictKind[]>,
+): Promise<void> {
   for (const [purchaseId, kinds] of conflicts) {
     const fresh = kinds.filter(
       (kind) => !input.existing?.get(purchaseId)?.includes(kind),

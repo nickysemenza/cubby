@@ -61,6 +61,8 @@ interface RelationView<K extends string = string> {
   readonly key: K;
   readonly label: string;
   readonly filters: Readonly<Record<string, string | readonly string[]>>;
+  /** The view's order when the request names none; else the list default. */
+  readonly sort?: { orderBy: string; direction: "asc" | "desc" };
 }
 
 type SupportedChoice<K extends string> = GeneratedGroupChoice & {
@@ -356,6 +358,14 @@ export function defineRelationList<
         )
       )
         throw new Error(`View ${view.key} sets undeclared filter ${key}`);
+  for (const view of list.views)
+    if (
+      view.sort &&
+      !list.sorts.some((sort) => sort.key === view.sort?.orderBy)
+    )
+      throw new Error(
+        `View ${view.key} sorts by undeclared ${view.sort.orderBy}`,
+      );
   const groupKeys = list.grouping
     .filter((choice): choice is Extract<C, { reason: null }> => !choice.reason)
     .map((choice) => choice.key);
@@ -409,6 +419,9 @@ export function defineRelationList<
       filterFields,
     ),
   );
+  /** The view's declared order, else the list default. */
+  const defaultSortOf = (view?: string) =>
+    list.views.find((entry) => entry.key === view)?.sort ?? list.defaultSort;
   return {
     ...list,
     /** Filter-only schema for surfaces with their own scope and paging. */
@@ -417,10 +430,14 @@ export function defineRelationList<
     specs: list.filters.map(specOf),
     descriptors: list.filters.map(descriptorOf),
     input,
-    /** The requested sorts, deduplicated, else the declared default. */
-    sortsOf: (sort: readonly { orderBy: string; direction?: string }[] = []) =>
+    defaultSortOf,
+    /** The requested sorts, deduplicated, else the view's or list's default. */
+    sortsOf: (
+      sort: readonly { orderBy: string; direction?: string }[] = [],
+      view?: string,
+    ) =>
       normalizeSorts(
-        (sort.length ? sort : [list.defaultSort]).map((entry) => ({
+        (sort.length ? sort : [defaultSortOf(view)]).map((entry) => ({
           orderBy: entry.orderBy,
           direction: entry.direction === "desc" ? "desc" : "asc",
         })),

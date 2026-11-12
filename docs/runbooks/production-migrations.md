@@ -41,7 +41,7 @@ stale badges do not justify a staged cutover.
 ## Staged destructive migration (rare)
 
 Use this only when a destructive step must wait until the Worker that stops
-reading and writing the retired shape is deployed and verified, and a combined
+reading and writing the retired shape is deployed, and a combined
 migration-plus-deploy would lose data. One operator owns the whole sequence,
 including Actions and local applications.
 
@@ -52,15 +52,13 @@ including Actions and local applications.
 2. Merge the PR. Actions applies migrations through the boundary and deploys the
    Worker. Admit no other `main` merge or Deploy retry until the sequence ends:
    a revision that lacks the new migration folder fails closed.
-3. Verify the deployed Worker, then take a named snapshot (see
-   [Dropping a table](#dropping-a-table-or-deleting-retained-rows)).
-4. Apply the destructive migration from the matching checkout:
+3. Apply the destructive migration from the matching checkout:
 
    ```sh
    pnpm --filter @cubby/web db:migrate --target=production --through=EXACT_FOLDER_NAME
    ```
 
-5. Read back the data and schema, then delete `PRODUCTION_MIGRATION_THROUGH` in
+4. Read back the data and schema, then delete `PRODUCTION_MIGRATION_THROUGH` in
    the same task.
 
 `--through` takes the complete timestamped folder name and is inclusive: every
@@ -140,27 +138,13 @@ owner's request.
 
 ## Dropping a table or deleting retained rows
 
-A table with no member facts, money, evidence, decisions or unfinished paid or
-member-requested work may be dropped without an archive. Deploy and verify the
-Worker with its readers and writers removed first, and run one destructive
-migration at a time. Immediately before the migration, take a named manual
-snapshot and record its id in the PR:
-
-```sh
-neon snapshots create --name drop-<table>-<date>
-```
-
-Keep the snapshot until the final report, which lists it for the owner to
-delete. To recover, restore to a new branch, export the table from there and
-load it into production:
-
-```sh
-neon snapshots restore <id> --name verify-<table>
-```
-
-Never pass `--finalize`, never run `snapshots finalize`, and never reset or
-restore onto the production branch. If table-level recovery would not be enough,
-do not drop the table; stop and report.
+A table or column whose hand trace shows no member facts, money, evidence,
+decisions or unfinished paid or member-requested work may be dropped without an
+archive or snapshot, in the same change that removes its last reader and writer
+([ADR 0025](../adr/0025-radical-simplification-of-background-work.md) decision
+10). Old requests may fail during the cutover. An authoritative table replaced by
+a reshape carries its data through the migration and keeps its preimage in the
+[archive schema](#archive-schema).
 
 ## Snapshot investigation
 
@@ -197,13 +181,10 @@ with production deployment and verify that Neon has applied the complete retired
 journal. Clear any `PRODUCTION_MIGRATION_THROUGH` boundary first; retired tags
 are rejected. Compare a fresh baseline catalog with production using
 `db:check --against-production` and record the retired ledger fingerprint
-read-only. After deployment, verify one baseline bookkeeping row and unchanged
-application data and schema. No reset or manual deletion of production
+read-only. No reset or manual deletion of production
 bookkeeping is part of this procedure. If Neon is behind, apply its missing
 original migrations from the preceding revision before deploying the
-consolidation. Remove tests that locate or replay retired SQL in the
-consolidation PR, and keep domain write and read-back coverage for current
-invariants.
+consolidation.
 
 ### Drizzle v1 history
 

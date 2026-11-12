@@ -2,6 +2,7 @@ import { emailFiltersSchema } from "@cubby/schemas/email";
 import {
   emailImportOutcome,
   MAIL_IMPORT_GAP_OUTCOME,
+  MAIL_IMPORT_MEMBER_WINDOW_DAYS,
 } from "@cubby/schemas/email-fields";
 import { workExecutor } from "@cubby/schemas/work-queue";
 import { and, eq, sql } from "drizzle-orm";
@@ -27,8 +28,9 @@ const OUTCOME = emailImportOutcome.enum;
 
 /**
  * Each Email a Mail import left unresolved is its own item, routed by who
- * settles its gap: an agent researches it, or only the member decides. Gaps
- * Cubby settles by itself (a held source, a transient failure) are no item.
+ * settles its gap: an agent researches it, or the member decides recent mail.
+ * Older mail is history an agent works. Gaps Cubby settles by itself (a held
+ * source, a transient failure) are no item.
  */
 const importGap: WorkSource = {
   id: "email:import-gap",
@@ -47,7 +49,7 @@ const importGap: WorkSource = {
         owners: sql`ARRAY["Email"."ledgerPartyId"]`,
         exclusiveOwner: sql`"Email"."ledgerPartyId"`,
         date: householdDaySql(sql`"Email"."receivedAt"`),
-        executor: sql`CASE ${outcome} WHEN ${MAIL_IMPORT_GAP_OUTCOME.human} THEN ${human} ELSE ${agent} END`,
+        executor: sql`CASE WHEN ${outcome} = ${MAIL_IMPORT_GAP_OUTCOME.human} AND "Email"."receivedAt" >= (now() AT TIME ZONE 'UTC') - make_interval(days => ${MAIL_IMPORT_MEMBER_WINDOW_DAYS}) THEN ${human} ELSE ${agent} END`,
         reason: importGap.reasons[0]!.label,
         reasonKeys: [importGap.id],
       })
@@ -64,8 +66,8 @@ const importGap: WorkSource = {
     };
   },
 };
-/** Only undecided relevance needs the member. Import and preview gaps close
- * through background Mail import, and a missing original needs an agent. */
+/** Email quality gaps never need the member; import and preview gaps close
+ * through background Mail import. */
 export const emailWorkSources: WorkSource[] = [
   {
     ...declaration,
@@ -84,10 +86,12 @@ export const emailWorkSources: WorkSource[] = [
           owners: sql`ARRAY["Email"."ledgerPartyId"]`,
           exclusiveOwner: sql`"Email"."ledgerPartyId"`,
           date: householdDaySql(sql`"Email"."receivedAt"`),
-          // An unpublished Email may still need relevance review.
+          // Deciding relevance is reversible (a correction re-reads the
+          // original), so uncertain or unpublished relevance and a missing
+          // original are an agent's; import and preview gaps wait on Mail import.
           executor: sql`CASE
-            WHEN ${readGap.missingInputs} THEN ${human}
-            WHEN ${readGap.failed("email_relevance_undecided")} THEN ${human}
+            WHEN ${readGap.missingInputs} THEN ${agent}
+            WHEN ${readGap.failed("email_relevance_undecided")} THEN ${agent}
             WHEN ${readGap.failed("email_original_missing")} THEN ${agent}
             ELSE ${automatic} END`,
           ...readGap.columns,

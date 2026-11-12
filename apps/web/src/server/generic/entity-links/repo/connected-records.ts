@@ -10,9 +10,10 @@ import {
   connectedPathVariants,
   connectionCatalog,
 } from "@cubby/schemas/connected-views";
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey, type Entity } from "@cubby/schemas/entity";
 import type { RelationshipWitness } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -20,6 +21,7 @@ import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
+import { resolvePublicEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 
@@ -209,6 +211,41 @@ function connectedPage(target: Entity, value: unknown): ConnectedRecordsOutput {
   });
 }
 
+function withCover(
+  node: PathNode,
+  covers: ReadonlyMap<string, ImageUrlSummary>,
+) {
+  const image = covers.get(entityRefKey(node.entityKind, node.entityId));
+  return image ? { ...node, image } : node;
+}
+
+/**
+ * One display-image read for every record a page names: the target and each
+ * path node. A preview stamps every view together so a detail screen does
+ * not repeat that read once per slot.
+ */
+async function withCanonicalCovers<T extends ConnectedRecordsOutput>(
+  db: Database,
+  pages: readonly T[],
+): Promise<T[]> {
+  const refs = pages.flatMap((page) =>
+    page.items.flatMap((item) => [item.target, ...item.paths.flat()]),
+  );
+  if (refs.length === 0) return [...pages];
+  const covers = await resolvePublicEntityDisplayImages(db, refs);
+  if (covers.size === 0) return [...pages];
+  return pages.map((page) => ({
+    ...page,
+    items: page.items.map((item) => ({
+      ...item,
+      target: withCover(item.target, covers),
+      paths: item.paths.map((path) =>
+        path.map((node) => withCover(node, covers)),
+      ),
+    })),
+  }));
+}
+
 const emptyPage = { totalCount: 0, items: [] };
 const emptyPageQuery = sql`SELECT 0::int AS "totalCount", '[]'::jsonb AS "items"`;
 
@@ -218,9 +255,13 @@ export async function getConnectedRecords(
   input: ConnectedRecordsInput,
 ): Promise<ConnectedRecordsOutput> {
   const plan = await prepareConnectedPage(input);
-  if (!plan.query) return connectedPage(plan.target, emptyPage);
-  const result = await unwrapDb(db).execute(plan.query, "objects");
-  return connectedPage(plan.target, result[0]);
+  const page = plan.query
+    ? connectedPage(
+        plan.target,
+        (await unwrapDb(db).execute(plan.query, "objects"))[0],
+      )
+    : connectedPage(plan.target, emptyPage);
+  return (await withCanonicalCovers(db, [page]))[0] ?? page;
 }
 
 /** Every requested group shares one statement while retaining its own complete count and page. */
@@ -250,18 +291,21 @@ export async function getConnectedRecordsPreview(
   if (rows.length !== views.length)
     throw new Error("Incomplete connected-record preview");
   return {
-    views: rows.map((row) => {
-      const view = views[row.viewIndex];
-      if (!view)
-        throw new Error(
-          `Unknown connected-record preview index ${row.viewIndex}`,
-        );
-      return {
-        ...connectedPage(view.target, row),
-        viewKey: view.key,
-        title: view.title,
-        evidence: view.evidence ?? false,
-      };
-    }),
+    views: await withCanonicalCovers(
+      db,
+      rows.map((row) => {
+        const view = views[row.viewIndex];
+        if (!view)
+          throw new Error(
+            `Unknown connected-record preview index ${row.viewIndex}`,
+          );
+        return {
+          ...connectedPage(view.target, row),
+          viewKey: view.key,
+          title: view.title,
+          evidence: view.evidence ?? false,
+        };
+      }),
+    ),
   };
 }

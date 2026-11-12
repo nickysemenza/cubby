@@ -42,9 +42,10 @@ evidence and photo-group decisions.
    no separate Task table, and `Task` remains the household to-do entity). Run
    execution is one Job kind. Completed Jobs are pruned by retention rather than
    deleted on success. A Run is only a member- or agent-started session worth
-   reviewing; automatic purposes stop creating Runs.
-   Automatic Runs retire only after their NOT NULL AI usage references and
-   background budget check have another owner. Image processing is owned by
+   reviewing. Automatic AI evaluation and field refresh create no Run; automatic
+   mailbox work keeps one: a `mail_discovery` Run started without a member, with
+   each admitted import nested under it as a child Run (`parentRunId`).
+   Image processing is owned by
    `ImageProcessingJob`, with the device wire unchanged.
 4. **Derived values are views, typed snapshots and one scheduled bulk pass.** No
    per-value tickets, fan-out expansion, publication generations, stages or

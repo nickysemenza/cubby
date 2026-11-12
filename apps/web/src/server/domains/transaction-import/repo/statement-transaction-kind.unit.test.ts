@@ -93,6 +93,11 @@ describe("statementTransactionKind", () => {
 });
 
 const noVotes = { rule: null, label: null, history: null } as const;
+const card = { rawDescription: "SYNTHETIC STORE", merchant: "Synthetic Store" };
+const p2p = {
+  rawDescription: "VENMO PAYMENT SYNTHETIC FRIEND",
+  merchant: "Venmo",
+};
 const noCounterparty = {
   label: null,
   history: null,
@@ -108,6 +113,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { ...noVotes, rule: "income", label: "income" },
       counterparty: { ...noCounterparty, label: "person" },
       transfer: null,
+      descriptor: p2p,
     });
     expect(create).toMatchObject({ kind: "income", kindSource: "model" });
     expect(kindAgreed(create, null)).toBe(false);
@@ -119,6 +125,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { rule: "purchase", label: "account_transfer", history: null },
       counterparty: { ...noCounterparty, label: "person" },
       transfer: null,
+      descriptor: p2p,
     });
     expect(create).toMatchObject({ kind: "purchase", kindSource: "model" });
     expect(kindAgreed(create, null)).toBe(false);
@@ -130,6 +137,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { ...noVotes, rule: "purchase", label: "purchase" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(agreed).toMatchObject({ kind: "purchase", kindSource: "rule" });
     expect(kindAgreed(agreed, null)).toBe(true);
@@ -139,6 +147,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { ...noVotes, rule: "purchase" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(kindAgreed(alone, null)).toBe(false);
 
@@ -147,6 +156,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { rule: "income", label: "refund", history: "refund" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(disputed).toMatchObject({ kind: "refund", kindSource: "model" });
     expect(kindAgreed(disputed, null)).toBe(false);
@@ -156,6 +166,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { rule: "purchase", label: "purchase", history: "mixed" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(kindAgreed(mixed, null)).toBe(false);
   });
@@ -170,6 +181,7 @@ describe("decideStatementKind and kindAgreed", () => {
       },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(create).toMatchObject({
       kind: "credit_card_payment",
@@ -188,6 +200,7 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { rule: "purchase", label: "purchase", history: null },
       counterparty: { ...noCounterparty, label: "business", storedValue: true },
       transfer: null,
+      descriptor: p2p,
     });
     expect(kindAgreed(create, null)).toBe(false);
     const known = decideStatementKind({
@@ -199,6 +212,7 @@ describe("decideStatementKind and kindAgreed", () => {
         storedValue: true,
       },
       transfer: null,
+      descriptor: p2p,
     });
     expect(kindAgreed(known, null)).toBe(true);
   });
@@ -209,8 +223,48 @@ describe("decideStatementKind and kindAgreed", () => {
       votes: { rule: "purchase", label: null, history: "purchase" },
       counterparty: noCounterparty,
       transfer: null,
+      descriptor: p2p,
     });
     expect(kindAgreed(create, null)).toBe(false);
+  });
+
+  // A card seller named like a person (a Square shop, a bill naming the
+  // member) once sat in review as a repayment that could never exist.
+  it("reads a counterparty off a peer-payment rail as a business", () => {
+    const seller = decideStatementKind({
+      amount: 69,
+      votes: { rule: "purchase", label: "purchase", history: null },
+      counterparty: { label: "person", history: "person", storedValue: false },
+      transfer: null,
+      descriptor: { rawDescription: "SQ *SAMPLE PERSON", merchant: null },
+    });
+    expect(seller.counterparty).toMatchObject({
+      label: "business",
+      history: null,
+    });
+    expect(kindAgreed(seller, null)).toBe(true);
+    const friend = decideStatementKind({
+      amount: 69,
+      votes: { rule: "purchase", label: "purchase", history: null },
+      counterparty: { ...noCounterparty, label: "person" },
+      transfer: null,
+      descriptor: { rawDescription: "ZELLE TO SAMPLE PERSON", merchant: null },
+    });
+    expect(friend.counterparty.label).toBe("person");
+    for (const rawDescription of [
+      "PAYPAL *SAMPLE FRIEND",
+      "APPLE CASH SENT SAMPLE FRIEND",
+      "CHECK 1042",
+    ])
+      expect(
+        decideStatementKind({
+          amount: 69,
+          votes: { rule: "purchase", label: "purchase", history: null },
+          counterparty: { ...noCounterparty, label: "person" },
+          transfer: null,
+          descriptor: { rawDescription, merchant: null },
+        }).counterparty.label,
+      ).toBe("person");
   });
 
   it("records an own-account move as a transfer whatever the category says", () => {
@@ -223,6 +277,7 @@ describe("decideStatementKind and kindAgreed", () => {
       },
       counterparty: noCounterparty,
       transfer: { accountId: crypto.randomUUID(), ledgerTransfer: false },
+      descriptor: card,
     });
     expect(create).toMatchObject({ kind: "account_transfer" });
     // Failure mode: a descriptor naming an own account made a transfer clean
@@ -302,6 +357,7 @@ describe("decideStatementKind sign rules", () => {
       votes: { rule: null, label: "interest", history: "interest" },
       counterparty: { ...noCounterparty, label: "business" },
       transfer: null,
+      descriptor: card,
     });
     expect(create).toMatchObject({ kind: "refund", kindSource: "sign" });
     expect(kindAgreed(create, null)).toBe(false);

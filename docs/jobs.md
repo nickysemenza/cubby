@@ -323,7 +323,7 @@ item locks, matching source producers.
 `JOB_PAGE_LIMITS` (`packages/shared/src/job-page-limits.ts`) owns application
 page sizes. Statement generation and labeling scoped to an import process at
 most 64 charges per page (`statementApplicationsPerPage`), because each
-admits serial financial applications; unscoped generation selects at most 32
+page applies money under one set of locks; unscoped generation selects at most 32
 (`statementGenerationPerPage`); explicit label limits remain available.
 Retained generation failures use the same limits. Both paths preserve the
 ordered population cursor and all remaining work; only a completed page
@@ -332,13 +332,27 @@ publishes its checkpoint.
 Cooperative label pages stop starting model work and application after
 `cooperativePageBudgetMs` (a quarter of the Job lease); the rest of the lease
 covers work already started. A page settles at least one charge, then leaves
-the untouched suffix's receipts and inclusive cursor for the next page. Charges
-no automatic rule matches settle as one no-action batch until the first rule
-applies. After a rule applies, each later charge on the page regenerates
-current evidence before serial automatic-rule application. Each write's
-advisory refresh of pending charges near it on the account is queued and runs
-once at the end of the page or label round. Interrupted
-pages replay their existing
+the untouched suffix's receipts and inclusive cursor for the next page.
+
+Application walks the page's published receipts in page order. Each run of
+consecutive receipts that no automatic rule matches, or whose rule applies an
+as-is `create` the family can batch, settles in one SERIALIZABLE transaction
+bounded to 32 creates to limit its predicate-lock footprint:
+it fences the Job once, rechecks statement scope once, takes every review,
+transfer-leg, evidence-source and occurrence lock in the single-review
+namespace order (sorted within each namespace), rebuilds the run's proposals
+and spending once, and writes the creates, bookings, Feedback and no-action
+receipt completions together; the Job lock stays at commit. A charge that is
+not a batch candidate, moved since publication, or whose footprint (nearby
+candidate, copy or hold, Purchase, Vendor nearby spending or category, or a
+Vendor name another charge creates) meets an earlier charge's applies alone
+through its own review, in page order, right after its run. A write error
+rolls the run's applications back to a savepoint and applies each alone; a
+serialization failure or deadlock splits the run in half, and a single charge
+replays up to three times before that. Operation ids are fixed per rule revision and Suggestion, so a replayed
+run is idempotent. Each write's advisory refresh of pending charges near it on
+the account skips charges the same import observes, and runs once at the end
+of the page or label round. Interrupted pages replay their existing
 publications and effects through the same guards. Automatic-rule refusals
 return and log scrubbed causal diagnostics (including nested database messages
 and SQLSTATE codes) and leave the suggestion pending.
@@ -831,6 +845,11 @@ Automatic refresh work has no Run: its `runId` is null and its activation is
 the authority. A member stops it from the Work page or `ai.stopAutomaticWork`:
 discovery admits nothing, owed rows are parked, and `leaseStale` fails any
 attempt in flight. It holds until a member resumes. Sweeps keep their Run.
+Admission (`scheduleAutomaticEvaluations`) runs in a short transaction under a
+nonblocking advisory lock (`domains/run/repo/ai-refresh-admission.ts`):
+contention defers the page rather than pinning another origin connection in a
+lock wait, and a full backlog (`AUTOMATIC_EVALUATION_BACKLOG`) defers it too. A
+member's stop takes the same lock blocking, so nothing lands after it.
 
 Nothing queues an evaluation: `AiEvaluation.runAt` is set while the drain owes
 it (`priority` 0 when the owner or an uncancelled requester is a running,
@@ -1292,7 +1311,10 @@ The invocation at 7 a.m. America/Los_Angeles also launches the daily
 `maintenance` Run and recovers missed work. Every daily step is idempotent, and
 the daily pass is keyed by its household date (`Run.clientKey`), so a repeated
 invocation reuses that date's pass even after it finished. Only an earlier
-date's budget-paused pass makes way for a new one. A failed permit send retries
+date's budget-paused pass makes way for a new one. Its ordered steps are declared in
+`server/domains/maintenance/service/maintenance-run.ts`; an EXIF row whose
+original is gone or whose extraction keeps failing gets a terminal
+`Image.metadataOutcome` with its raw error and is listed on Problems. A failed permit send retries
 three times over about five seconds before the hourly cron is its only
 recovery. App-open coalesces recovery and mail discovery. Gmail provider push
 is not implemented.
@@ -1326,7 +1348,9 @@ of the rows marked "session", and rows marked "no Run" can have none.
 Default Run lists and counts omit the retained `ai_suggest` and `background`
 purposes, omit `ai_refresh`, `connection_discovery` and `derived_refresh` once
 they ended, and omit `mail_discovery` once it completed. An explicit purpose
-filter includes them, and direct record reads still work. Automatic work
-creates no Run: AI usage and evaluations can have none. Queue runtime failures
+filter includes them, and direct record reads still work. Automatic AI
+evaluation and field refresh create no Run, so their AI usage and evaluations
+can have none; automatic mailbox discovery keeps its `mail_discovery` Run with
+each admitted import as a child Run. Queue runtime failures
 receive three delivery retries in addition to the durable Job's execution retry
 policy.

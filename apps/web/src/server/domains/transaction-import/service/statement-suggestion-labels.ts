@@ -54,6 +54,10 @@ import {
   prepareStatementSpending,
   prepareStatementSpendingFacts,
 } from "~/server/domains/transaction-import/repo/statement-spending";
+import {
+  statementBatchCandidate,
+  STATEMENT_PAGE_RUN_CREATES,
+} from "~/server/domains/transaction-import/repo/statement-suggestion-apply";
 import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
   buildChargeProposals,
@@ -71,20 +75,20 @@ import {
   type StatementSuggestionScope,
   type LabelCursor,
   recordStatementLabelCheckpoint,
-  completeStatementApplications,
-  completeNoActionStatementPrefix,
-  STATEMENT_APPLICATION_PREFIX_LIMIT,
+  completeStatementReceipts,
   repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";
-import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-application";
 import {
-  importOnlyStatementRuleStamps,
-  matchStatementRules,
-} from "~/server/generic/suggestions/repo/automatic-policy";
+  applyAutomaticRulePage,
+  applyAutomaticRulesForCharge,
+  type AutomaticSelection,
+  selectAutomaticRule,
+  selectAutomaticRules,
+} from "~/server/generic/suggestions/repo/automatic-application";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
@@ -202,6 +206,7 @@ function prepareLabelledJudgment(
             label: previous.judgment.create.counterparty.label,
           },
           transfer: judgment.transfer,
+          descriptor: judgment.create,
         }),
       );
   }
@@ -344,6 +349,7 @@ function prepareLabelledJudgment(
             votes: judgment.create.votes,
             counterparty: judgment.create.counterparty,
             transfer: judgment.transfer,
+            descriptor: judgment.create,
           }),
         );
     },
@@ -483,72 +489,32 @@ function statementLabelCursors(
   };
 }
 
-async function completeNoActionTargets(
+type LabelTarget = {
+  charge: ChargeRef;
+  row: Awaited<ReturnType<typeof suggestionsNeedingLabels>>[number];
+};
+
+/**
+ * Apply a round's published receipts in page order. Consecutive receipts
+ * that no rule applies to, or whose rule a label page can apply together,
+ * settle in one page transaction; any other receipt, and any the page falls
+ * back on, applies alone in its page position.
+ */
+async function applyPublishedStatementLabels(
   db: Database,
   input: {
-    targets: readonly {
-      charge: ChargeRef;
-      row: Awaited<ReturnType<typeof suggestionsNeedingLabels>>[number];
-    }[];
+    targets: readonly LabelTarget[];
     receipts: ReadonlyMap<string, string>;
     published: ReadonlyMap<string, string>;
     skipped: ReadonlySet<string>;
     failedCharges: ReadonlySet<string>;
     completed: Set<string>;
     unfinished: Set<string>;
-    scope?: StatementSuggestionScope;
-  },
-) {
-  // Import authority executes the import-only rules, so none is a no-action stamp.
-  const importAuthority = Boolean(input.scope?.importId);
-  const window = [];
-  const positions: number[] = [];
-  for (const [index, next] of input.targets.entries()) {
-    const key = chargeId(next.charge);
-    // The ordered application loop already treats these charges as settled.
-    // They need no receipt lock and must not split the remaining ready prefix.
-    if (input.skipped.has(key)) continue;
-    const suggestionId = input.receipts.get(key);
-    const evidenceFingerprint = input.published.get(key);
-    if (
-      input.failedCharges.has(key) ||
-      !suggestionId ||
-      !evidenceFingerprint ||
-      // A nonempty hint only declines batching. Absence still needs locked proof.
-      matchStatementRules(next.row.judgment).some(
-        (match) =>
-          importAuthority ||
-          !importOnlyStatementRuleStamps().includes(match.stamp),
-      )
-    )
-      break;
-    window.push({ suggestionId, charge: next.charge, evidenceFingerprint });
-    positions.push(index);
-  }
-  const settled = await completeNoActionStatementPrefix(
-    db,
-    window,
-    input.scope,
-  );
-  const through = settled ? positions[settled - 1]! + 1 : 0;
-  for (const next of input.targets.slice(0, through)) {
-    const key = chargeId(next.charge);
-    if (!input.skipped.has(key)) {
-      input.completed.add(key);
-      next.row.applicationPending = false;
-    }
-    input.unfinished.delete(next.row.cursorId);
-  }
-  return through;
-}
-
-async function applyPublishedStatementLabels(
-  db: Database,
-  input: Parameters<typeof completeNoActionTargets>[1] & {
     scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
     budgetSpent: () => boolean;
+    time: <T>(phase: string, work: () => Promise<T>) => Promise<T>;
   },
 ) {
   const {
@@ -563,19 +529,20 @@ async function applyPublishedStatementLabels(
     reconsidered,
     fail,
     budgetSpent,
+    time,
   } = input;
-  const importId = scope?.importId;
-  // Model work may finish out of order; effects admit only the original
-  // ready prefix. Later publications keep their receipts for durable resume.
+  const importClean = Boolean(scope?.importId);
   const applied = new Set<string>();
-  const settlementTargets: (typeof targets)[number][] = [];
   const rebuild = new Set<string>();
+  const excluded = new Set<string>();
   // A prior-round completion is resolved unless changed evidence required publication again.
   const awaitsPublication = (key: string) =>
     !completed.has(key) || reconsidered.has(key);
-  let applicationBlocked = false;
-  for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
-    const target = targets[targetIndex]!;
+  // Model work may finish out of order; effects admit only the original
+  // ready prefix. Later publications keep their receipts for durable resume.
+  const queue: LabelTarget[] = [];
+  let blocked = false;
+  for (const target of targets) {
     const key = chargeId(target.charge);
     if (skipped.has(key)) {
       unfinished.delete(target.row.cursorId);
@@ -585,73 +552,54 @@ async function applyPublishedStatementLabels(
       // Root retries the original input while attempts remain. After
       // exhaustion next must advance past this failure, not reset its budget.
       unfinished.delete(target.row.cursorId);
-      applicationBlocked = true;
+      blocked = true;
       continue;
     }
     if (!published.has(key)) {
-      if (awaitsPublication(key)) applicationBlocked = true;
+      if (awaitsPublication(key)) blocked = true;
       continue;
     }
-    // Checkpoint completed charges before regenerating the remaining suffix.
+    if (blocked) unfinished.add(target.row.cursorId);
+    else queue.push(target);
+  }
+  const receiptOf = (target: LabelTarget) =>
+    receipts.get(chargeId(target.charge))!;
+  const selections = await selectAutomaticRules(db, queue.map(receiptOf), {
+    importClean,
+  });
+  let settledHere = false;
+  const settle = (target: LabelTarget) => {
+    completed.add(chargeId(target.charge));
+    target.row.applicationPending = false;
+    unfinished.delete(target.row.cursorId);
+    settledHere = true;
+  };
+  let stopped = false;
+  const applyAlone = (target: LabelTarget) =>
+    time("statement_application_alone", () => applyOne(target));
+  const applyOne = async (target: LabelTarget) => {
+    const key = chargeId(target.charge);
     // The budget bounds application too, since its per-charge cost is the
-    // page's largest; the blocked suffix regenerates below if a rule moved evidence.
-    if (budgetSpent() && (settlementTargets.length > 0 || completed.size > 0))
-      applicationBlocked = true;
-    if (applicationBlocked) {
+    // page's largest; a blocked suffix keeps its receipts for the next page.
+    if (stopped || (budgetSpent() && (settledHere || completed.size > 0))) {
+      stopped = true;
       unfinished.add(target.row.cursorId);
-      continue;
+      return;
     }
     try {
-      // A freshly locked prefix with no matching rule needs no effect and no
-      // regeneration; its receipt completion still enforces the full scope.
-      // After an application in this call, ledger evidence may have moved under
-      // the remaining receipts, so import scope regenerates each from here on.
-      const settled =
-        importId && applied.size
-          ? 0
-          : await completeNoActionTargets(db, {
-              targets: targets.slice(
-                targetIndex,
-                targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
-              ),
-              receipts,
-              published,
-              skipped,
-              failedCharges,
-              completed,
-              unfinished,
-              scope,
-            });
-      if (settled) {
-        targetIndex += settled - 1;
-        continue;
-      }
-      if (importId) {
-        log.info("Statement label application phase", {
-          phase: "regeneration",
-          chargeIndex: targetIndex,
-          charges: targets.length,
-        });
-        await regenerateCharges(db, [target.charge], scope);
-      }
-      log.info("Statement label application phase", {
-        phase: "rules",
-        chargeIndex: targetIndex,
-        charges: targets.length,
-      });
+      // Rule selection reads the stored suggestion. A charge the page declined
+      // can have gained a live candidate since publication (for example a
+      // member-recorded transaction), and create terms ignore candidates, so
+      // regenerate first or the clean-create rule would duplicate it.
+      if (importClean) await regenerateCharges(db, [target.charge], scope);
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
         buildCrudServices,
-        Boolean(importId),
+        importClean,
         scope,
       );
       if (outcome.refused.length) {
-        log.info("Statement label application phase", {
-          phase: "refusal_check",
-          chargeIndex: targetIndex,
-          charges: targets.length,
-        });
         const [fresh] = await buildChargeProposals(db, [target.charge]);
         if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
           // An earlier application can consume this charge's candidate.
@@ -659,44 +607,110 @@ async function applyPublishedStatementLabels(
           // an obsolete application receipt forever.
           target.row.applicationPending = false;
           rebuild.add(key);
-          applicationBlocked = true;
-          continue;
+          stopped = true;
+          return;
         }
         throw new Error(
           `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
         );
       }
-      // Newly published rows replaced the selected row; clear the active
-      // receipt only after this charge's ordered application has settled.
-      settlementTargets.push(target);
-      if (outcome.applied.length) applied.add(key);
+      // The application settled the receipt with its state. A receipt whose
+      // rule no longer selects stays for the next page's no-action check.
+      if (outcome.applied.length) {
+        applied.add(key);
+        settle(target);
+      } else unfinished.add(target.row.cursorId);
     } catch (error) {
       fail(target.charge, error);
       unfinished.delete(target.row.cursorId);
-      applicationBlocked = true;
+      stopped = true;
     }
-  }
-  log.info("Statement label application phase", {
-    phase: "completion",
-    charges: settlementTargets.length,
-  });
-  const settled = new Set(
-    await completeStatementApplications(
-      db,
-      settlementTargets.map((target) => receipts.get(chargeId(target.charge))!),
-      scope,
-    ),
-  );
-  const excluded = new Set<string>();
-  for (const target of settlementTargets) {
-    const key = chargeId(target.charge);
-    if (!settled.has(receipts.get(key)!)) {
-      excluded.add(key);
-      continue;
+  };
+  for (let index = 0; index < queue.length;) {
+    const run: { target: LabelTarget; selection: AutomaticSelection | null }[] =
+      [];
+    let creates = 0;
+    let full = false;
+    for (; index < queue.length; index++) {
+      const target = queue[index]!;
+      const selection = selections.get(receiptOf(target)) ?? null;
+      if (
+        selection &&
+        !statementBatchCandidate(
+          statementTransactionJudgment.parse(selection.row.judgment),
+        )
+      )
+        break;
+      if (selection && creates === STATEMENT_PAGE_RUN_CREATES) {
+        full = true;
+        break;
+      }
+      if (selection) creates++;
+      run.push({ target, selection });
     }
-    completed.add(key);
-    target.row.applicationPending = false;
-    unfinished.delete(target.row.cursorId);
+    if (run.length) {
+      if (stopped || (budgetSpent() && (settledHere || completed.size > 0))) {
+        stopped = true;
+        for (const { target } of run) unfinished.add(target.row.cursorId);
+      } else {
+        const none = run.filter(({ selection }) => !selection);
+        log.info("Statement label application phase", {
+          phase: "page",
+          charges: run.length,
+          noAction: none.length,
+        });
+        const page = await time("statement_application_page", () =>
+          applyAutomaticRulePage(
+            db,
+            run.flatMap(({ selection }) => (selection ? [selection] : [])),
+            {
+              context: buildCrudServices,
+              statementScope: scope,
+              settle: {
+                ids: none.map(({ target }) => receiptOf(target)),
+                run: async (tx, rows) => ({
+                  admitted: new Set(rows.keys()),
+                  settled: new Set(
+                    await completeStatementReceipts(
+                      tx,
+                      none.map(({ target }) => ({
+                        suggestionId: receiptOf(target),
+                        charge: target.charge,
+                        evidenceFingerprint: published.get(
+                          chargeId(target.charge),
+                        )!,
+                      })),
+                      rows,
+                      (row) => !selectAutomaticRule(row, { importClean }),
+                    ),
+                  ),
+                }),
+              },
+            },
+          ),
+        );
+        const alone: LabelTarget[] = [];
+        for (const { target, selection } of run) {
+          const key = chargeId(target.charge);
+          const receipt = receiptOf(target);
+          if (!selection) {
+            if (page.settled?.settled.has(receipt)) settle(target);
+            else if (page.settled && !page.settled.admitted.has(receipt))
+              excluded.add(key);
+            else unfinished.add(target.row.cursorId);
+            continue;
+          }
+          const outcome = page.outcomes.get(receipt);
+          if (outcome === "applied") {
+            applied.add(key);
+            settle(target);
+          } else if (outcome === "out_of_scope") excluded.add(key);
+          else alone.push(target);
+        }
+        for (const target of alone) await applyAlone(target);
+      }
+    }
+    if (!full && index < queue.length) await applyAlone(queue[index++]!);
   }
   return { applied, rebuild, excluded };
 }
@@ -1263,22 +1277,25 @@ async function runStatementLabelBatch(
       "statement_application",
       // Each write's neighbour refresh joins one refresh after the round.
       () =>
-        coalesceChargeRefreshes(() =>
-          applyPublishedStatementLabels(db, {
-            targets,
-            receipts,
-            published,
-            skipped,
-            failedCharges,
-            completed,
-            unfinished,
-            scope: input.scope,
-            reconsidered: new Set(
-              ready.map(({ current }) => chargeId(current.charge)),
-            ),
-            fail,
-            budgetSpent,
-          }),
+        coalesceChargeRefreshes(
+          () =>
+            applyPublishedStatementLabels(db, {
+              targets,
+              receipts,
+              published,
+              skipped,
+              failedCharges,
+              completed,
+              unfinished,
+              scope: input.scope,
+              reconsidered: new Set(
+                ready.map(({ current }) => chargeId(current.charge)),
+              ),
+              fail,
+              budgetSpent,
+              time,
+            }),
+          (flush) => time("statement_application_refresh", flush),
         ),
     );
     for (const target of targets) {

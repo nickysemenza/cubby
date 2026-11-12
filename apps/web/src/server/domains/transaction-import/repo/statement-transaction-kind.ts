@@ -102,11 +102,58 @@ type KindDecision = Pick<
   "kind" | "kindSource" | "votes" | "counterparty"
 >;
 
+/** The statement text a counterparty rule reads. */
+export type StatementDescriptor = Pick<
+  NonNullable<StatementTransactionJudgment["create"]>,
+  "rawDescription" | "merchant"
+>;
+
+/** Rails a person can pay or be paid through: payment apps and checks. */
+const P2P_RAIL =
+  / (venmo|zelle|cash ?app|square cash|paypal|apple cash|(check|chk) [0-9]+) /;
+
+/**
+ * Whether a person can be on the other side of a row: it is on a stored-value
+ * (payment-app) account or its descriptor names a payment app or a check.
+ * Cards and banks pay people only through such a rail; elsewhere a person-like
+ * name is a seller, such as a Square or Shopify shop, or a bill naming the
+ * member.
+ */
+function statementP2PRail(
+  descriptor: StatementDescriptor,
+  counterparty: Pick<StatementCounterparty, "storedValue">,
+) {
+  return (
+    counterparty.storedValue ||
+    P2P_RAIL.test(
+      words(`${descriptor.rawDescription ?? ""} ${descriptor.merchant ?? ""}`),
+    )
+  );
+}
+
+/**
+ * A published create whose person label or history the current rail rule
+ * reads as a business, so a republish re-decides it from the votes it holds.
+ */
+export function offRailPerson(
+  create: Pick<
+    NonNullable<StatementTransactionJudgment["create"]>,
+    "rawDescription" | "merchant" | "counterparty"
+  >,
+) {
+  return (
+    (create.counterparty.label === "person" ||
+      create.counterparty.history === "person") &&
+    !statementP2PRail(create, create.counterparty)
+  );
+}
+
 /**
  * The kind a create records, from the sources' votes. An own-account move is
  * a transfer; a confident person label makes an outflow your share of a
  * shared cost (purchase) and an inflow a repayment (income); otherwise two
- * agreeing votes outrank the rule, which outranks the label.
+ * agreeing votes outrank the rule, which outranks the label. Off a
+ * peer-payment rail a person label or history reads as a business.
  */
 export function decideStatementKind(input: {
   /** Cubby convention: positive is money out of the account. */
@@ -114,8 +161,25 @@ export function decideStatementKind(input: {
   votes: StatementKindVotes;
   counterparty: StatementCounterparty;
   transfer: StatementTransactionJudgment["transfer"];
+  descriptor: StatementDescriptor;
 }): KindDecision {
-  const { votes, counterparty, transfer } = input;
+  const { votes, transfer } = input;
+  const counterparty: StatementCounterparty = statementP2PRail(
+    input.descriptor,
+    input.counterparty,
+  )
+    ? input.counterparty
+    : {
+        ...input.counterparty,
+        label:
+          input.counterparty.label === "person"
+            ? "business"
+            : input.counterparty.label,
+        history:
+          input.counterparty.history === "person"
+            ? null
+            : input.counterparty.history,
+      };
   const decided = (
     kind: FinancialTransactionKind,
     kindSource: KindDecision["kindSource"],

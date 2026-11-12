@@ -16,7 +16,8 @@ import {
 /**
  * The household's published Work queue rows: the composed sources' union,
  * deferrals applied and owners routed. Rebuildable from its sources, so a
- * publication replaces every row; filters, counts and paging apply on read.
+ * publication reconciles the complete population without rewriting equal rows;
+ * filters, counts and paging apply on read.
  */
 export const workItem = pgTable(
   "WorkItem",

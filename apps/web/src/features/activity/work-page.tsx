@@ -4,7 +4,10 @@ import {
   type WorkQueueUnit,
   type WorkQueueWait,
 } from "@cubby/schemas/job";
-import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
+import {
+  AGENT_BACKLOG_INPUT,
+  NEEDS_YOU_FILTERS,
+} from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -472,6 +475,29 @@ function NeedsYouQueue() {
   );
 }
 
+/**
+ * Agent work never needs the member, so it is one quiet link with its size
+ * and no badge. It opens the queue's Agent view, newest first.
+ */
+function AgentBacklogLink() {
+  const backlog = useQuery({
+    ...workQueue.queue.queryOptions(AGENT_BACKLOG_INPUT),
+    refetchInterval: false,
+  });
+  const count = backlog.data?.meta.totalCount;
+  return (
+    <Link to="/work-queue" search={{ view: "agent" }}>
+      Agent backlog
+      {count ? (
+        <span className="text-muted-foreground tabular-nums">
+          {" "}
+          <span aria-hidden="true">·</span> {formatCount(count)}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
 /** Automatic AI work has no Run to stop, so its Stop lives here. */
 function useAutomaticWork() {
   const state = useQuery(ai.automaticWork.queryOptions({}));
@@ -570,6 +596,7 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
         aria-label="More work"
         className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"
       >
+        <AgentBacklogLink />
         <Link to="/suggestions">Suggestions</Link>
         <Link to="/suggestions" search={{ status: "automatic" }}>
           Changes by Cubby

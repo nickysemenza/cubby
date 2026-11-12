@@ -28,6 +28,7 @@ import { z } from "zod";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/helpers/query";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 
 const column = (alias: string, key: string) =>
@@ -35,7 +36,7 @@ const column = (alias: string, key: string) =>
 
 export type ExpenseSpendingCategoryResolutionDraft = {
   /** A new Purchase has no stored category or identity yet; its Vendor still supplies context. */
-  prospectivePurchase?: { vendorId: VendorId | null; name: string };
+  prospectivePurchase?: { vendorId: VendorId | null | SQL; name: string | SQL };
   products?: readonly { id: ProductId; categoryId: ProductCategoryId | null }[];
   categories?: readonly {
     id: SpendingCategoryId;
@@ -364,34 +365,57 @@ export const parseExpenseCategoryResolution = (
   value: unknown,
 ): FieldResolution => fieldResolutionSchema.parse(value);
 
-/** The exact principal-line graph booking will create, without storing advice as an override. */
-export async function resolveAggregateExpenseCategory(
+type AggregateExpenseDraft = {
+  purchaseId: PurchaseId | null;
+  vendorId: VendorId | null;
+  spendingCategoryId: SpendingCategoryId | null;
+  name: string;
+};
+
+/**
+ * The category each prospective principal aggregate Expense would resolve to,
+ * read in one statement and returned in input order. A draft without a
+ * Purchase reads its prospective Purchase's Vendor and name.
+ */
+export async function resolveAggregateExpenseCategories(
   db: Database,
-  draft: {
-    purchaseId: PurchaseId | null;
-    vendorId: VendorId | null;
-    spendingCategoryId: SpendingCategoryId | null;
-    name: string;
-  },
-): Promise<FieldResolution> {
+  drafts: readonly AggregateExpenseDraft[],
+): Promise<FieldResolution[]> {
+  if (!drafts.length) return [];
+  const rows = requestedRows(
+    drafts.map((draft, ordinal) => ({ ordinal, ...draft })),
+    {
+      ordinal: "int",
+      purchaseId: "uuid",
+      vendorId: "uuid",
+      spendingCategoryId: "uuid",
+      name: "text",
+    },
+    "draft",
+  );
   const result = await unwrapDb(db).execute(
     sql`
-    WITH candidate AS (SELECT ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}::text AS "lineKind", NULL::uuid AS "productId",
-      ${draft.purchaseId}::uuid AS "purchaseId", ${draft.spendingCategoryId}::uuid AS "spendingCategoryId")
-    SELECT ${expenseSpendingCategoryResolutionSql(
-      "candidate",
-      draft.purchaseId
-        ? undefined
-        : {
-            prospectivePurchase: { vendorId: draft.vendorId, name: draft.name },
-          },
-    )} AS resolution FROM candidate`,
+    WITH candidate AS (SELECT ${rows.col("ordinal")} AS ordinal,
+      ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}::text AS "lineKind", NULL::uuid AS "productId",
+      ${rows.col("purchaseId")} AS "purchaseId", ${rows.col("spendingCategoryId")} AS "spendingCategoryId",
+      ${rows.col("vendorId")} AS "vendorId", ${rows.col("name")} AS name
+      FROM ${rows.from})
+    SELECT candidate.ordinal, CASE WHEN candidate."purchaseId" IS NULL
+      THEN ${expenseSpendingCategoryResolutionSql("candidate", {
+        prospectivePurchase: {
+          vendorId: sql`candidate."vendorId"`,
+          name: sql`candidate.name`,
+        },
+      })}
+      ELSE ${expenseSpendingCategoryResolutionSql("candidate")} END AS resolution
+    FROM candidate ORDER BY candidate.ordinal`,
     "objects",
   );
-  return parseExpenseCategoryResolution(result[0]?.resolution);
+  return drafts.map((_, index) =>
+    parseExpenseCategoryResolution(result[index]?.resolution),
+  );
 }
 
-/** Fresh review fingerprints include live configured policy, not a cached guess. */
 export async function spendingClassificationRevision(
   db: Database,
 ): Promise<string> {

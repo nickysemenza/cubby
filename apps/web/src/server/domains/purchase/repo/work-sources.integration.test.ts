@@ -78,16 +78,6 @@ describe("financial Work sources", () => {
       lineBasis: "item_line",
     });
     await publishAllQualityFixtures(ctx.db);
-    expect(
-      (await read("reconciliation:purchase-unsettled")).items,
-    ).toContainEqual(
-      expect.objectContaining({
-        id: order.shortcode,
-        amount: 23,
-        date: "2026-09-01",
-        executor: "human",
-      }),
-    );
     for (const target of [order, empty])
       await seedFieldSuggestion(
         ctx.db,

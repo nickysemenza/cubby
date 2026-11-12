@@ -14,6 +14,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   sourceObservationFacts,
+  sourceObservationIdentities,
   sourceOccurrenceStates,
   sourceOccurrenceStatesWhere,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -34,19 +35,36 @@ export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 
 /** Scoped direct state, with one row per owner and no observation-state aggregation. */
 export const chargeStateOf = (scope: SQL) =>
-  sourceOccurrenceStatesWhere(sql`EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+  sourceOccurrenceStatesWhere(sql`EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
     WHERE r.source = o.source AND r."chargeKey" = o.shortcode
       AND ${notDeleted("r")} AND (${scope}))`);
 
 export const CHARGE_STATE = sql`(
   SELECT state.* FROM ${sourceOccurrenceStates} state
-  WHERE EXISTS (SELECT 1 FROM ${sourceObservationFacts} r
+  WHERE EXISTS (SELECT 1 FROM ${sourceObservationIdentities} r
     WHERE r.source = state.source AND r."chargeKey" = state."chargeKey"
       AND ${notDeleted("r")})
 )`;
 
 export const OCCURRENCE_IDENTITY_REVIEW =
   "This observation has no ready, proven source occurrence. Automatic financial actions remain blocked; retain its evidence and money unchanged.";
+
+/** A bank-copy proof names its target; candidate ranking cannot replace it. */
+export function statementAttachCandidate(
+  judgment: Pick<
+    StatementTransactionJudgment,
+    "candidates" | "pairedTransactionId"
+  >,
+): StatementTransactionJudgment["candidates"][number] | undefined {
+  const attachable = judgment.candidates.filter(
+    (candidate) => candidate.eligibility !== "context",
+  );
+  return (
+    attachable.find(
+      (candidate) => candidate.transactionId === judgment.pairedTransactionId,
+    ) ?? (attachable.length === 1 ? attachable[0] : undefined)
+  );
+}
 
 /**
  * Book a matched charge, supersede a hold, attach only to a candidate that can

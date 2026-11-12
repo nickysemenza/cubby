@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -7,11 +8,14 @@ import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createPlanting } from "~/server/domains/garden/repo/garden";
+import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import {
+  createImageFixture,
   createPlantFixture,
   createProductIdentityFixture,
+  insertEntityAttachments,
   makeExpenseInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -379,5 +383,49 @@ describe("complete connected record tables", () => {
     });
     expect(afterDelete.totalCount).toBe(1);
     expect(afterDelete.items[0]?.target.entityId).toBe(first.output.id);
+  });
+
+  it("attaches each record's canonical cover and omits it when the record has none", async () => {
+    const meal = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", {
+        date: "2026-11-10",
+        name: "Synthetic stir fried rice cakes",
+      }),
+      ctx.actor,
+    );
+    const photo = await createImageFixture(ctx.db, "meal-evidence", {
+      capturedAt: new Date("2026-11-10T19:36:45.000Z"),
+      filename: "IMG_0019.heic",
+    });
+    const manual = await createImageFixture(ctx.db, "meal-manual", {
+      contentType: "application/pdf",
+      filename: "manual.pdf",
+    });
+    await insertEntityAttachments(ctx.db, [
+      { entityId: meal.entityId, imageId: photo.id, sortOrder: 0 },
+      { entityId: meal.entityId, imageId: manual.id, sortOrder: 1 },
+    ]);
+    const evidence = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "meal", entityId: meal.output.id },
+      viewKey: "relation:images",
+    });
+    const item = evidence.items.find(
+      (row) => row.target.entityId === photo.shortcode,
+    );
+    expect(item?.target.image?.url).toBe(photo.url);
+    expect(
+      item?.paths.flat().find((node) => node.entityKind === "image")?.image
+        ?.url,
+    ).toBe(photo.url);
+    // The meal's canonical cover is the attached photo, so the path chip
+    // carries the same URL.
+    expect(
+      item?.paths.flat().find((node) => node.entityKind === "meal")?.image?.url,
+    ).toBe(photo.url);
+    expect(
+      evidence.items.find((row) => row.target.entityId === manual.shortcode)
+        ?.target.image,
+    ).toBeUndefined();
   });
 });

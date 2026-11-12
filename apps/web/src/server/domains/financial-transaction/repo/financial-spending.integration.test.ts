@@ -4,10 +4,14 @@ import {
   financialSpendingSource,
   financialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type FinancialTransactionId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import { contributionRole } from "@cubby/schemas/ledger-party";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, like, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
+import { buildEntity } from "tooling/factories/build";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -18,11 +22,14 @@ import {
   getDb,
   databaseForTransaction,
   withSnapshotWrite,
+  withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
+  auditLog,
   expense,
   expenseAttribution,
+  financialEvidenceAlias,
   purchase,
   financialAccount,
   ledgerParty,
@@ -45,11 +52,16 @@ import {
 import {
   previewFinancialSpending,
   commitFinancialSpending,
+  commitFinancialSpendings,
   prepareFinancialSpendingPage,
   prepareFinancialSpendingCandidates,
   financialSpendingCategoryHistory,
 } from "./financial-spending";
-import { updateFinancialTransaction } from "./financial-transaction";
+import {
+  createFinancialTransaction,
+  createFinancialTransactions,
+  updateFinancialTransaction,
+} from "./financial-transaction";
 
 // Failure modes: accepting bank evidence adds zero spend; retries mint another
 // Expense; a nearby receipt is double-booked; a missing owner or an unmatched
@@ -1491,6 +1503,183 @@ describe("shared spending booking", () => {
           .from(financialTransactionAllocation)
       ).map((row) => Number(row.amount)),
     ).toEqual([4250]);
+  });
+  // The set-based writers must write what the same charges write one at a time.
+  it("creates and books a batch exactly as it does one charge at a time", async () => {
+    const { account, advice } = await fixture();
+    // Distinct Vendors keep each plan's snapshot independent of the other's booking.
+    await createRepoIdentity(ctx, "vendor", { name: "Synthetic Bakery" });
+    const merchants = ["Synthetic Orchard", "Synthetic Bakery"];
+    const inputs = (prefix: string, month: string) =>
+      [19, 23].map((amount, index) =>
+        buildEntity("financialTransaction", {
+          accountId: account.output.id,
+          kind: "purchase",
+          status: "posted",
+          amount,
+          transactionDate: `2026-${month}-04`,
+          postedDate: `2026-${month}-05`,
+          merchant: merchants[index],
+          rawDescription: null,
+          sourceCategory: null,
+          notes: null,
+          sourceRefs: [
+            { source: "synthetic-bank", externalId: `${prefix}-${index}` },
+          ],
+        }),
+      );
+    const commitPlans = async (
+      ids: FinancialTransactionId[],
+      batch: boolean,
+    ) => {
+      const rows = await getDb(ctx.db)
+        .select({ id: transactionTable.id, code: transactionTable.shortcode })
+        .from(transactionTable)
+        .where(inArray(transactionTable.id, ids));
+      const plans = await Promise.all(
+        ids.map((id, index) =>
+          previewFinancialSpending(ctx.db, {
+            transactionId: parseShortcodeFor(
+              "financialTransaction",
+              rows.find((row) => row.id === id)!.code,
+            ),
+            advice: financialSpendingAdvice.parse({
+              ...advice,
+              vendorName: merchants[index],
+            }),
+          }),
+        ),
+      );
+      expect(plans.map((plan) => plan.status)).toEqual(["ready", "ready"]);
+      if (batch)
+        await commitFinancialSpendings(
+          ctx.db,
+          plans.map((plan) => ({ plan })),
+          ctx.actor,
+        );
+      else
+        for (const plan of plans)
+          await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    };
+    const single: FinancialTransactionId[] = [];
+    for (const input of inputs("single", "02"))
+      single.push(
+        (
+          await createFinancialTransaction.read(
+            ["id"],
+            ctx.db,
+            input,
+            ctx.actor,
+          )
+        ).entityId,
+      );
+    await commitPlans(single, false);
+    await commitPlans(
+      await withTransaction(ctx.db, (tx) =>
+        createFinancialTransactions(tx, inputs("batch", "10"), ctx.actor),
+      ),
+      true,
+    );
+
+    const written = async (prefix: string) => {
+      const db = getDb(ctx.db);
+      const aliases = await db
+        .select()
+        .from(financialEvidenceAlias)
+        .where(like(financialEvidenceAlias.value, `${prefix}-%`));
+      const ids = aliases.map((alias) => alias.historicalTransactionId!);
+      const transactions = await db
+        .select()
+        .from(transactionTable)
+        .where(inArray(transactionTable.id, ids));
+      const allocations = await db
+        .select()
+        .from(financialTransactionAllocation)
+        .where(inArray(financialTransactionAllocation.transactionId, ids));
+      const expenses = await db
+        .select()
+        .from(expense)
+        .where(
+          inArray(
+            expense.bookingTransactionCode,
+            transactions.map((row) => row.shortcode),
+          ),
+        );
+      const purchases = await db
+        .select()
+        .from(purchase)
+        .where(
+          inArray(
+            purchase.id,
+            allocations.map((row) => row.purchaseId),
+          ),
+        );
+      const audits = await db
+        .select({ kind: auditLog.entityKind, action: auditLog.action })
+        .from(auditLog)
+        .where(
+          inArray(auditLog.entityId, [
+            ...ids,
+            ...allocations.map((row) => row.id),
+            ...expenses.map((row) => row.id),
+            ...purchases.map((row) => row.id),
+          ]),
+        );
+      const sorted = (rows: unknown[][]) =>
+        rows.map((row) => JSON.stringify(row)).sort();
+      return {
+        transactions: sorted(
+          transactions.map((row) => [
+            String(row.amount),
+            row.kind,
+            row.status,
+            row.merchant,
+            row.bookingDecisionFingerprint !== null,
+            row.bookingExpenseFingerprint !== null,
+          ]),
+        ),
+        aliases: sorted(
+          aliases.map((row) => [
+            row.value.slice(prefix.length),
+            row.kind,
+            row.provenance,
+          ]),
+        ),
+        allocations: sorted(
+          allocations.map((row) => [
+            String(row.amountMinor),
+            row.confirmsMerchant,
+          ]),
+        ),
+        expenses: sorted(
+          expenses.map((row) => [
+            row.cost,
+            row.name,
+            row.economicRole,
+            row.costType,
+            row.lineKind,
+            row.lineBasis,
+            row.spendingCategoryId,
+          ]),
+        ),
+        purchases: sorted(
+          purchases.map((row) => [
+            row.vendorId,
+            row.displayLabel,
+            row.purchaserOverrideId,
+            row.spendingCategoryId,
+          ]),
+        ),
+        audits: sorted(audits.map((row) => [row.kind, row.action])),
+      };
+    };
+    const expected = await written("single");
+    expect(expected.transactions).toEqual([
+      JSON.stringify(["1900", "purchase", "posted", merchants[0], true, true]),
+      JSON.stringify(["2300", "purchase", "posted", merchants[1], true, true]),
+    ]);
+    expect(expected.expenses).toHaveLength(2);
+    expect(await written("batch")).toEqual(expected);
   });
   // A prospective source must survive creation without identity-only snapshot drift.
   it("commits a prospective source after creation using the same canonical snapshot", async () => {

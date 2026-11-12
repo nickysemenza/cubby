@@ -24,7 +24,12 @@ generic entity mutation.
 Start backlog triage with `activity_read.queue`: it offers the connected
 member's current source/account work plus shared research, filterable by
 `family`, `executor`, `reason` and `owner`. Its household UI is the Work queue
-page, with an Owner filter. Unknown private ownership requires review; queue membership does not
+page, with an Owner filter. Pull agent work newest first with
+`activity_read.queue` `view: "agent"`, settle what the evidence allows, and
+when you cannot decide call `activity.resolve_run_finding` with
+`action: "ask_member"` and one specific `question` (for an Email, resolve it
+unresolved as `member_decision` or `identity_ambiguity`) instead of leaving the
+item open. Unknown private ownership requires review; queue membership does not
 authorize imports, paid execution or access to another member's originals.
 Route paperwork and itemization research by source ownership. Paying for an
 order does not establish access to its originals; settlement reconciliation
@@ -217,6 +222,10 @@ charge is not a settlement until the settlement checks establish the match.
    merchant name another Vendor already answers to; pass that order's
    `vendorId`. `entity_read.resolve {entity:"vendor", names}`
    shows a name's Vendor, or every Vendor sharing it, without creating one.
+   A person-to-person payment-app counterparty is a shared-cost repayment
+   (see [household ledger](references/household-ledger.md)), never a Vendor;
+   never save a person's name or a generic payment-app merchant string as a
+   Vendor or Vendor alias.
 2. Collect one preparation payload per order: stable source identity, header, printed
    grand total and currency, item and adjustment lines, shipment state,
    transaction evidence, and finalized document image shortcodes.

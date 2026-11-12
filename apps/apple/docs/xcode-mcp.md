@@ -20,10 +20,8 @@ a signed client such as Claude Code keeps that grant. `xcrun mcp-server status`
 lists permitted agents, folders, and open workspaces. Opening a workspace starts the server; inspect `xcrun mcp-server --help` for
 the installed toolchain's controls.
 
-If `xcrun` cannot find `simctl` or `mcpbridge`, check `xcode-select -p`.
-When it points at Command Line Tools, set
-`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for the native
-command and its child processes; a machine-wide toolchain change is unnecessary.
+If `xcrun` cannot find `simctl` or `mcpbridge`, set `DEVELOPER_DIR` as
+[Verification](../AGENTS.md#verification) describes.
 
 ## Session bootstrap
 

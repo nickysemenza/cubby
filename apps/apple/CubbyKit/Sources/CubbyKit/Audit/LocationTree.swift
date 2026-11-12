@@ -8,6 +8,17 @@ extension LocationTreeNodeOut {
     public var childNodes: [LocationTreeNodeOut] { children ?? [] }
     public var directItems: Int { directItemCount ?? 0 }
     public var totalItems: Int { totalItemCount ?? 0 }
+
+    /// Canonical cover already resolved on the tree: the bin's own photo, then its
+    /// identity product, then a product stocked inside it.
+    public var coverImageURL: URL? {
+        Self.coverImageURL(from: fields.displayImages)
+    }
+
+    static func coverImageURL(from displayImages: JSONValue) -> URL? {
+        let row: JSONValue = ["fields": ["displayImages": displayImages]]
+        return row.displayCoverURL
+    }
 }
 
 /// The whole location tree with an index built once: parents, ancestors, breadcrumbs, and the
@@ -66,9 +77,11 @@ public struct LocationTree: Sendable, Hashable {
         ancestors(of: id).contains { $0.id == ancestor }
     }
 
-    /// The stops of a walk: the scope and every descendant, depth-first in tree order, that
-    /// holds stock directly. A location with no direct items has no snapshot to reconcile, so
-    /// it is not a stop (its stocked descendants still are).
+    /// The stops of a walk: the scope and every descendant that holds stock directly. A location
+    /// with no direct items has no snapshot to reconcile, so it is not a stop (its stocked
+    /// descendants still are). Ordered stalest first (never recounted, then oldest
+    /// `lastBulkInventory`; ties in tree order) because inventory never auto-decrements, so the
+    /// stalest count is the most likely wrong.
     public func auditableBins(under scope: LocationCode) -> [LocationTreeNode] {
         guard let root = nodesByID[scope] else { return [] }
         var out: [LocationTreeNode] = []
@@ -77,7 +90,14 @@ public struct LocationTree: Sendable, Hashable {
             for child in node.childNodes { visit(child) }
         }
         visit(root)
-        return out
+        return out.enumerated().sorted { a, b in
+            switch (a.element.lastBulkInventory, b.element.lastBulkInventory) {
+            case (nil, nil): return a.offset < b.offset
+            case (nil, _): return true
+            case (_, nil): return false
+            case let (x?, y?): return x != y ? x < y : a.offset < b.offset
+            }
+        }.map(\.element)
     }
 
     /// Every location worth offering as a scope, depth-first with its depth: anything holding

@@ -156,17 +156,21 @@ GROUP BY c.client_id, c.token_endpoint_auth_method, c.require_pkce;
 
 ### PostgreSQL and Hyperdrive
 
-Neon owns the PostgreSQL database. Production compute is autoscaling 0.25–2 CU
-(`max_connections` 901) and keeps scale-to-zero (300 s idle) by choice: the
-first query after an idle gap waits for compute start (about 0.5 s median,
-0.9 s p90), visible as a long `db.connect.phase.startup` on `db.client.connect`.
-This range belongs to the production endpoint: changing the project's default
-compute range does not resize an existing endpoint.
+Neon owns the PostgreSQL database; the Neon console owns the production compute
+range and `max_connections`. Production compute autoscales and keeps
+scale-to-zero (300 s idle) by choice: the first query after an idle gap waits
+for compute start (about 0.5 s median, 0.9 s p90), visible as a long
+`db.connect.phase.startup` on `db.client.connect`. The range belongs to the
+production endpoint: changing the project's default compute range does not
+resize an existing endpoint.
 
 The Hyperdrive origin connection caps are 40 strong + 12 cached + 40
 background. All three configurations share origin compute; the cached pool needs
 headroom for short reads while expensive reads are running. Pool caps are soft
-limits, not interactive connection reservations. Keep them below database
+limits, not interactive connection reservations. An idle database can still leave Hyperdrive
+no origin slots: open and lock-waiting transactions each pin an origin
+connection, so inspect transaction age, `pg_blocking_pids` and advisory lock
+holders before raising capacity. Keep them below database
 capacity and measure origin waits and query execution together before raising
 them; more connections cannot remove expensive query work. Builds and
 deployments do not manage these caps, and neither the caps nor the separate
@@ -327,8 +331,8 @@ Set deployed Worker secrets interactively so their values do not enter shell
 history:
 
 ```bash
-pnpm --dir apps/web exec wrangler secret put NAME --name cubby
-pnpm --dir apps/web exec cf workers secrets list --worker cubby
+cf workers secrets update NAME --worker cubby
+cf workers secrets list --worker cubby
 ```
 
 | Name                   | Storage                        | Purpose                                                                                                                                                                                            |
@@ -501,12 +505,12 @@ AI Gateway state; no provider key belongs in this repository. Verify that every
 model in the checked-in registry is enabled in the gateway before relying on a
 feature that selects it.
 
-### Claude subscriber credits
+### Funding ladder
 
-**Funding ladder.** Every tier-routed chat call climbs the source-first ladder
+Every tier-routed chat call climbs the source-first ladder
 that [ADR 0027](adr/0027-tier-routed-models-on-a-funding-first-ladder.md)
-records and `fundedChatAttempts` implements: Claude subscriber credits, OpenAI
-API credits, the ChatGPT subscription, then paid Unified Billing, each answering
+records and `fundedChatAttempts` implements: OpenAI API credits, Claude
+subscriber credits, the ChatGPT subscription, then paid Unified Billing, each answering
 with its route's model for the call's tier (`CHAT_TIER_MODELS`). A step advances
 only on a funding refusal. Window budgets, the plan budget and their defaults
 live in `apps/web/src/server/ai/budget.ts`; this page owns the provider setup

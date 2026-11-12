@@ -85,6 +85,10 @@ const preparation = new AsyncLocalStorage<{
 export const withFieldSuggestionPreparation = <T>(work: () => Promise<T>) =>
   preparation.run({}, work);
 
+/** Read fresh vocabularies, e.g. a publication's revalidation in its own transaction. */
+export const withoutFieldSuggestionPreparation = <T>(work: () => Promise<T>) =>
+  preparation.exit(work);
+
 function listProductCategoryTreeOptions(db: Database) {
   const current = preparation.getStore();
   return current

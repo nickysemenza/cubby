@@ -116,12 +116,61 @@ Authorized writes still complete their cache invalidation.
 
 ## Operation transport
 
-Every client speaks plain JSON to `/api/operations/<id>`. The browser adds
-`x-cubby-surface: browser`, which selects browser authentication and internal
-operations; the authenticator owns the same-origin cookie rule. Dates cross as
-ISO strings and each operation's schemas restore them; generic entity reads parse
-through their entity's lazily loaded read schema. The envelope is validated once
-per path, and a client-side schema rejection surfaces as an `OperationError`.
+Browser, Apple, CLI and API-key clients call operations through
+`POST /api/operations/{operationId}` with plain JSON. The browser reaches every
+query, mutation and workflow stream; other clients reach only capability and
+view operations, and MCP only capability operations. Use `view` for operations
+Apple or the CLI call that should stay off MCP; `internal` operations are the
+web UI's own and are absent from the generated Swift and CLI catalog. The
+request envelope is `{operation, input?}`; a success is `{ok: true, data}`,
+including `data: null` for a nullable output. Errors return the public
+`ApiError` body with an HTTP status derived from its code; the browser
+transport turns a non-2xx bare error into `{ok: false, error}`. Query batches
+use `batch~` operation paths and stream one `{i, r}` result per item as NDJSON
+with HTTP 200. URLs contain registered operation names, never input values.
+Dates cross as ISO strings and each operation's schemas restore them; generic
+entity reads parse through their entity's lazily loaded read schema. The
+envelope is validated once per path, and a client-side schema rejection
+surfaces as an `OperationError`.
+
+`dispatchOperation` in
+`apps/web/src/server/operation-runtime/operation-dispatch.server.ts` is the one
+entry for the HTTP route, SSR (which calls the route in process) and MCP; the
+Worker routes operation paths to it without loading the React server handler.
+It resolves the id under the principal's channel: browser principals reach
+internal operations and streams, MCP and system principals internal queries and
+mutations, native and CLI principals only external ones. It measures
+selected-handler loading in `start.dispatch.load.<operation>` before the
+execution span; include that load and Worker startup when attributing cold
+latency. The operation boundary chooses the read policy before invoking its
+handler ([read consistency](#read-consistency)).
+
+`authenticate(request, policy)` in `apps/web/src/server/http/authenticate.ts` is
+the single authentication step. The operation route accepts API keys, bearer
+tokens and session cookies. A cookie request with a `Cookie` header must be
+same-origin for POST; bearer and API-key requests are exempt. A request with
+`x-cubby-surface: browser` authenticates under the browser policy, so it audits
+as `web` and accepts no API key; other requests audit as `api`. The runner owns
+input/output validation and the Apple compatibility gate. An outdated
+`cubby-apple` build can read, but its writes receive HTTP 426 with
+`UPGRADE_REQUIRED` before operation input parsing; a changed read response can
+still break an old build.
+
+The MCP adapter remains at `/api/mcp` as an OAuth 2.1 resource server; its
+generated tools come from capability operations ([MCP](../../../docs/agents/mcp.md)).
+The doorbell at `/api/doorbell` has two topics: `household.changed` and
+`imageProcessing.work`. A ring only signals that state may have changed;
+clients read the source of truth through ordinary operations. The Worker edge
+authenticates the WebSocket upgrade, while the Durable Object socket half owns
+subscriber delivery without importing Auth or PostgreSQL. OAuth, Better-Auth
+endpoints, webhooks, signed uploads and calendar feeds keep their
+protocol-specific routes and payloads.
+
+`pnpm generate` emits the operation registry and Apple models, operation
+methods and catalog from capability and view members. Inputs and outputs use
+the JSON projection in `apps/web/src/lib/operation-wire.ts`; unsupported wire
+shapes fail generation unless the contract states an exclusion. E2E helpers in
+`apps/web/tests/e2e/support/entity-api.ts` send the same operation envelope.
 
 Workflow streams POST to the same endpoint and answer with NDJSON result lines
 ending in a data-less success line that carries the read marker; a body without
@@ -392,9 +441,8 @@ finishes before another starts. Own mutations keep their immediate invalidation.
 A hidden tab keeps its socket, drops rings and resynchronizes on return.
 Reconnect and resume resynchronize immediately, bypassing the throttle; initial
 subscription reuses the SSR baseline. Background refetch feedback appears after
-300ms in reserved space, so it never moves content or reads as a first load
-(record suggestions show "Checking suggestions…" only on a question's first
-ask). Native workspace routes have no shell indicator.
+300ms in reserved space, so it never moves content or reads as a first load.
+Native workspace routes have no shell indicator.
 
 **Lease and recovery.** Logout unmounts the subscription; delivery requires
 reauthentication after the five-minute lease, and the next ring after an idle
@@ -582,8 +630,7 @@ the current matrix.
 Passive lists consume published suggestions and indicators for visible rows plus
 a bounded prefetch buffer, keeping successful reads during refresh. A missing
 publication or failed read never calls `ai.suggestFields` or its batch operation;
-explicit evaluation and editor flows keep their decision path.
-`RecordSuggestionsProvider` in tables uses the `publishedOnly` policy. Ordinary
+explicit evaluation and editor flows keep their decision path. Ordinary
 `entity.listEnrichment` reads stay provider-free.
 
 - Proposal badges read pending, active review-family counts from each list row's

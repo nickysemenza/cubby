@@ -86,26 +86,23 @@ struct ScopePickerSheet: View {
         Button {
             Task { await session.start(scope: node.id) }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.md) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(node.name)
-                        .font(.fieldGuideBody)
-                        .foregroundStyle(FieldGuideTokens.graphite)
-                        .lineLimit(1)
-                    if let type = (try? JSONValue(encoding: node.fields.type)).flatMap(FieldEnvelope.init)?
-                        .effectiveValue?.stringValue
-                    {
-                        Eyebrow(type)
-                    }
+            CoverIdentityRow(
+                title: node.name, imageURL: node.coverImageURL,
+                symbol: EntityCatalog[.location].sfSymbol
+            ) {
+                if let type = (try? JSONValue(encoding: node.fields.type)).flatMap(FieldEnvelope.init)?
+                    .effectiveValue?.stringValue
+                {
+                    Eyebrow(type)
                 }
-                Spacer(minLength: FieldGuideTokens.Space.sm)
+            } trailing: {
                 Text("\(node.totalItems)")
                     .font(.fieldGuideData)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.leading, CGFloat(depth) * 14)
-            .frame(minHeight: FieldGuideTokens.touchTarget)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

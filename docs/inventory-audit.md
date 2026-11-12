@@ -79,6 +79,11 @@ Resolution behavior:
 - `relocate` moves the full row, merging with a same-product destination row
   when necessary and cleaning up a collapsed source embedding.
 
+The native recount walk starts with the stalest Location, and a Location never
+recounted comes first. No Problem or Work item reports an overdue recount; the
+Locations list filters by last recount (30, 60 and 90 days) and the Inventory
+Never verified view and `inventory_verified` check remain for audits.
+
 Plain `bulkMove` never stamps `lastBulkInventory`. Skipping a location is
 client-only: it never stamps `verifiedAt` or `lastBulkInventory`.
 

@@ -11,7 +11,7 @@ the repository.
 - [Entities](entities.md) describes the compiled entity architecture,
   workflows, and relationship contracts.
 - [Durable Jobs](jobs.md) owns background execution: lanes, waiting-on,
-  fairness, retries, image processing leases, the queue watchdog and retention.
+  fairness, retries, image processing leases, and retention.
 - [Terminology](guide/terminology.md) defines household and classification
   terms.
 - [Inventory audit](inventory-audit.md), [Garden](garden.md), and [Photos library

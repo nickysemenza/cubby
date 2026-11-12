@@ -152,11 +152,14 @@ describe("activity.queue member routing", () => {
       ledgerPartyId: first.id,
       entityKind: "product",
       entityId: shared.entityId,
-      kind: "other",
+      kind: "duplicate_product",
       summary: "Synthetic private source review",
       evidenceFingerprint: "synthetic-current-owner-finding",
     });
-    const findings = { reason: "finding", owner: CURRENT_MEMBER_FILTER };
+    const findings = {
+      reason: "finding:duplicate_product",
+      owner: CURRENT_MEMBER_FILTER,
+    };
     const visible = await read(ctx.actor.userId, findings);
     expect(visible.items.map((row) => row.key)).toEqual([
       `finding:${finding.id}`,
@@ -165,17 +168,20 @@ describe("activity.queue member routing", () => {
     expect(visible.items[0]?.owners).toEqual([
       expect.objectContaining({ id: first.shortcode }),
     ]);
+    // A merge is a member decision, so the finding needs the member.
     const human = await read(ctx.actor.userId, {
       ...NEEDS_YOU_FILTERS,
       reason: undefined,
     });
-    expect(human.totalCount).toBeGreaterThan(0);
-    expect((await read(otherUser, { reason: "finding" })).totalCount).toBe(0);
+    expect(human.items.map((row) => row.key)).toContain(
+      `finding:${finding.id}`,
+    );
+    expect((await read(otherUser, findings)).totalCount).toBe(0);
     await getDb(ctx.db)
       .update(run)
       .set({ actorUserId: otherUser })
       .where(eq(run.id, findingRun));
     expect((await read(ctx.actor.userId, findings)).totalCount).toBe(0);
-    expect((await read(otherUser, { reason: "finding" })).totalCount).toBe(0);
+    expect((await read(otherUser, findings)).totalCount).toBe(0);
   });
 });

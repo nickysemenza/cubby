@@ -74,7 +74,9 @@ export const purchaseWorkSources = (): WorkSource[] =>
           shared: false,
           executor: deferred
             ? sql`CASE WHEN ${deferred} THEN ${workExecutor.enum.external} ELSE ${workExecutor.enum.human} END`
-            : "human",
+            : source.executor === "dynamic"
+              ? undefined
+              : source.executor,
           reason: deferred
             ? sql`CASE WHEN ${deferred} THEN 'Awaiting posting; recorded settlement amounts differ.' ELSE ${source.reasons[0]!.label} END`
             : source.reasons[0]!.label,

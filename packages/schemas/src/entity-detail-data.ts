@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { entitySchema } from "./entity-core";
 import { entityGraphRootSchema } from "./entity-graph";
+import { imageUrlSummary } from "./image-summary";
 
 export const monthlyExpenseSpendInputSchema = z
   .object({
@@ -35,6 +36,11 @@ export const detailActivityEventSchema = z.object({
   allDay: z.boolean(),
   /** Present only for Expense records; dollars converted to integer cents. */
   amountCents: z.number().int().optional(),
+  /**
+   * Canonical cover of a named record. Omitted when it has none, and on
+   * change events, which name an action rather than another record.
+   */
+  image: imageUrlSummary.optional(),
 });
 export const detailActivityOutputSchema = z.object({
   items: z.array(detailActivityEventSchema),

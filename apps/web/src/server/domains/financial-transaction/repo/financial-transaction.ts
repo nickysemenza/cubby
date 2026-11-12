@@ -19,7 +19,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, getTableColumns, inArray, isNotNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
@@ -55,10 +55,10 @@ import { allocationIntegrityDefectSql } from "~/server/domains/financial-transac
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
-  assertFinancialSourceRefsAvailable,
+  assertFinancialSourceRefsAvailableFor,
   financialSourceRefsFor,
   financialSourceReferenceRows,
-  replaceFinancialSourceRefs,
+  replaceFinancialSourceRefsFor,
   lockFinancialSourceOccurrences,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
@@ -70,11 +70,13 @@ import {
   readAllocations,
   resolveAllocationInputs,
   writeAllocationSet,
+  writeAllocationSets,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { financialTransactionSearch } from "~/server/domains/financial-transaction/repo/search-read-financial-transaction";
 import {
   findSettlementConflicts,
   refuseSettlementConflicts,
+  refuseSettlementConflictsFor,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -83,7 +85,7 @@ import {
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
-import { auditEvidenceRows } from "~/server/domains/transaction-import/repo/intake-audit";
+import { evidenceAuditEntries } from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   financialAllocationItems,
@@ -100,14 +102,11 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
-  logAuditEntry,
+  logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import {
-  resolveAllOrThrow,
-  resolveOrThrow,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -351,19 +350,6 @@ const financialTransactionReader = createEntityReader({
 });
 
 const getFinancialTransactionByID = financialTransactionReader.getByID;
-async function resolveForeignKeys(
-  db: Database | DrizzleTransaction,
-  data: Pick<FinancialTransactionCreateInput, "accountId" | "purchaseId">,
-) {
-  const accountId = await resolveOrThrow(
-    db,
-    "financialAccount",
-    data.accountId,
-  );
-  return {
-    accountId,
-  };
-}
 
 export const createFinancialTransaction = defineMutationWriter({
   entity: "financialTransaction",
@@ -382,72 +368,111 @@ export const createFinancialTransaction = defineMutationWriter({
     data: FinancialTransactionCreateInput,
     actor: ActorContext,
   ) => {
-    const id = await withTransaction(db, async (tx) => {
-      const foreign = await resolveForeignKeys(tx, data);
-      await lockFinancialSourceOccurrences(tx, data.sourceRefs);
-      // One locked occurrence FK owns acceptance; retained aliases never grant it.
-      await assertFinancialSourceRefsAvailable(tx, data.sourceRefs);
-      const { allocations, sourceRefs, ...columns } = data;
-      const created = await insertWithShortcode(tx, "financialTransaction", {
-        ...columns,
-        ...foreign,
-        amount: moneyToMinor(data.amount),
-      });
-      const acceptedSourceChanges = await replaceFinancialSourceRefs(
-        tx,
-        created.id,
-        sourceRefs,
-      );
-      await auditEvidenceRows(
-        tx,
-        actor,
-        "sourceOccurrence",
-        acceptedSourceChanges.before,
-        acceptedSourceChanges.after,
-      );
-      await logAuditEntry(tx, actor, {
-        entityKind: "financialTransaction",
-        entityId: created.id,
-        action: "create",
-      });
-
-      // `purchaseId` is sugar for one allocation of the full amount; the zod
-      // refinement has already rejected a purchaseId/allocations pair that
-      // disagrees, so either source can be taken verbatim here.
-      const requested: AllocationInput[] =
-        allocations.length > 0
-          ? await resolveAllocationInputs(tx, allocations)
-          : data.purchaseId
-            ? await resolveAllocationInputs(tx, [
-                { purchaseId: data.purchaseId, amount: data.amount },
-              ])
-            : [];
-      if (requested.length > 0) {
-        await assertPurchasesLive(
-          tx,
-          requested.map((row) => row.purchaseId),
-        );
-        assertAllocationSetValid({
-          transactionAmount: data.amount,
-          kind: data.kind,
-          next: requested,
-        });
-        await refuseSettlementConflicts(tx, {
-          transactionId: created.id,
-          purchaseIds: requested.map((row) => row.purchaseId),
-        });
-        await writeAllocationSet(tx, created.id, requested, new Map(), actor);
-        await applyAllocationChanges(tx, {
-          transactionIds: [created.id],
-          before: new Map(),
-          actor,
-        });
-      }
-      return created.id;
-    });
-    return readOutput({ entityId: id });
+    const [id] = await withTransaction(db, (tx) =>
+      createFinancialTransactions(tx, [data], actor),
+    );
+    return readOutput({ entityId: id! });
   },
 });
+
+/**
+ * The create path for one or many transactions: one account resolution, one
+ * occurrence lock, one identity insert, one acceptance statement and one
+ * audit insert. Rows are created and returned in input order.
+ */
+export async function createFinancialTransactions(
+  tx: DrizzleTransaction,
+  inputs: readonly FinancialTransactionCreateInput[],
+  actor: ActorContext,
+): Promise<FinancialTransactionId[]> {
+  if (!inputs.length) return [];
+  const accountIds = await resolveAllOrThrow(
+    tx,
+    "financialAccount",
+    inputs.map((data) => data.accountId),
+  );
+  await lockFinancialSourceOccurrences(
+    tx,
+    inputs.flatMap((data) => data.sourceRefs),
+  );
+  // One locked occurrence FK owns acceptance; retained aliases never grant it.
+  await assertFinancialSourceRefsAvailableFor(
+    tx,
+    inputs.map((data) => ({ refs: data.sourceRefs })),
+  );
+  const created = await insertManyWithShortcode(
+    tx,
+    "financialTransaction",
+    inputs.map((data, index) => {
+      const {
+        allocations: _allocations,
+        sourceRefs: _sourceRefs,
+        ...columns
+      } = data;
+      return {
+        ...columns,
+        accountId: accountIds[index]!,
+        amount: moneyToMinor(data.amount),
+      };
+    }),
+  );
+  const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
+    tx,
+    created.map((row, index) => ({
+      transactionId: row.id,
+      refs: inputs[index]!.sourceRefs,
+    })),
+  );
+  await logAuditEntries(tx, actor, [
+    ...evidenceAuditEntries(
+      "sourceOccurrence",
+      acceptedSourceChanges.before,
+      acceptedSourceChanges.after,
+    ),
+    ...created.map((row) => ({
+      entityKind: "financialTransaction" as const,
+      entityId: row.id,
+      action: "create" as const,
+    })),
+  ]);
+
+  for (const [index, data] of inputs.entries()) {
+    const { id } = created[index]!;
+    // `purchaseId` is sugar for one allocation of the full amount; the zod
+    // refinement has already rejected a purchaseId/allocations pair that
+    // disagrees, so either source can be taken verbatim here.
+    const requested: AllocationInput[] =
+      data.allocations.length > 0
+        ? await resolveAllocationInputs(tx, data.allocations)
+        : data.purchaseId
+          ? await resolveAllocationInputs(tx, [
+              { purchaseId: data.purchaseId, amount: data.amount },
+            ])
+          : [];
+    if (requested.length > 0) {
+      await assertPurchasesLive(
+        tx,
+        requested.map((row) => row.purchaseId),
+      );
+      assertAllocationSetValid({
+        transactionAmount: data.amount,
+        kind: data.kind,
+        next: requested,
+      });
+      await refuseSettlementConflicts(tx, {
+        transactionId: id,
+        purchaseIds: requested.map((row) => row.purchaseId),
+      });
+      await writeAllocationSet(tx, id, requested, new Map(), actor);
+      await applyAllocationChanges(tx, {
+        transactionIds: [id],
+        before: new Map(),
+        actor,
+      });
+    }
+  }
+  return created.map((row) => row.id);
+}
 
 const allocationStateFields = [
   "allocations",
@@ -464,21 +489,27 @@ type FinancialTransactionDbRow = FinancialTransactionDollars;
 
 export const lockUpdatePurchases = async (
   tx: DrizzleTransaction,
-  id: FinancialTransactionId,
-  data: FinancialTransactionUpdateData,
+  updates: readonly {
+    id: FinancialTransactionId;
+    data: FinancialTransactionUpdateData;
+  }[],
 ) => {
-  const incomingCodes = [
+  if (!updates.length) return;
+  const incomingCodes = updates.flatMap(({ data }) => [
     ...(data.allocations?.map((row) => row.purchaseId) ?? []),
     ...(data.purchaseId ? [data.purchaseId] : []),
-  ];
-  const current = (await readAllocations(tx, [id])).get(id) ?? [];
-  const incoming =
-    incomingCodes.length > 0
-      ? await resolveAllOrThrow(tx, "purchase", incomingCodes)
-      : [];
+  ]);
+  const current = await readAllocations(
+    tx,
+    updates.map(({ id }) => id),
+  );
+  const incoming = await resolveAllOrThrow(tx, "purchase", incomingCodes);
   await assertPurchasesLive(
     tx,
-    uniq([...current.map((row) => row.purchaseId), ...incoming]),
+    uniq([
+      ...[...current.values()].flat().map((row) => row.purchaseId),
+      ...incoming,
+    ]),
   );
 };
 
@@ -518,9 +549,8 @@ const assertAllocationShorthandAgrees = (
   }
 };
 
-const deriveUpdatedTransactionState = async (
-  tx: DrizzleTransaction,
-  id: FinancialTransactionId,
+const deriveUpdatedTransactionState = (
+  allocationCount: number,
   before: FinancialTransactionDbRow,
   data: FinancialTransactionUpdateData,
 ) => {
@@ -535,7 +565,6 @@ const deriveUpdatedTransactionState = async (
       "Posted financial transactions require a posted date.",
     );
   }
-  const allocationCount = await countLiveAllocations(tx, id);
   const linked =
     data.allocations !== undefined
       ? data.allocations.length > 0
@@ -561,23 +590,26 @@ const deriveUpdatedTransactionState = async (
   return { nextKind, nextAmount, allocationCount, amountChanged };
 };
 
-const requestedUpdateAllocations = async (
-  tx: DrizzleTransaction,
-  id: FinancialTransactionId,
+/** The allocation rows an update names, before resolving their Purchases. */
+const namedUpdateAllocations = (
   data: FinancialTransactionUpdateData,
-  state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
+  state: ReturnType<typeof deriveUpdatedTransactionState>,
+) =>
+  data.allocations !== undefined
+    ? data.allocations
+    : data.purchaseId
+      ? [{ purchaseId: data.purchaseId, amount: state.nextAmount }]
+      : data.purchaseId === null
+        ? []
+        : undefined;
+
+const requestedUpdateAllocations = (
+  id: FinancialTransactionId,
+  state: ReturnType<typeof deriveUpdatedTransactionState>,
   before: Awaited<ReturnType<typeof readAllocations>>,
-): Promise<AllocationInput[] | null> => {
-  if (data.allocations !== undefined) {
-    return resolveAllocationInputs(tx, data.allocations);
-  }
-  if (data.purchaseId !== undefined) {
-    return data.purchaseId
-      ? resolveAllocationInputs(tx, [
-          { purchaseId: data.purchaseId, amount: state.nextAmount },
-        ])
-      : [];
-  }
+  named: AllocationInput[] | undefined,
+): AllocationInput[] | null => {
+  if (named !== undefined) return named;
   if (!state.amountChanged || state.allocationCount !== 1) return null;
   const sole = before.get(id)?.[0];
   return sole
@@ -591,53 +623,87 @@ const requestedUpdateAllocations = async (
     : null;
 };
 
+type AllocationUpdate = {
+  id: FinancialTransactionId;
+  data: FinancialTransactionUpdateData;
+  state: ReturnType<typeof deriveUpdatedTransactionState>;
+  priorCharge: FinancialTransactionDbRow;
+};
+
+/** Every allocation-changing update's set, conflicts and follow-ups together. */
 const applyUpdatedAllocations = async (
   tx: DrizzleTransaction,
-  id: FinancialTransactionId,
-  data: FinancialTransactionUpdateData,
-  state: Awaited<ReturnType<typeof deriveUpdatedTransactionState>>,
+  updates: readonly AllocationUpdate[],
   actor: ActorContext,
   options: FinancialTransactionUpdateOptions,
-  priorCharge: FinancialTransactionDbRow,
 ) => {
-  const before = await readAllocations(tx, [id]);
-  const next = await requestedUpdateAllocations(tx, id, data, state, before);
-  if (next !== null) {
-    await assertPurchasesLive(
-      tx,
-      next.map((row) => row.purchaseId),
-    );
-    assertAllocationSetValid({
-      transactionAmount: state.nextAmount,
-      kind: financialTransactionKind.parse(state.nextKind),
-      next,
-    });
-    await writeAllocationSet(tx, id, next, before, actor);
-  }
+  if (!updates.length) return;
+  const ids = updates.map(({ id }) => id);
+  const before = await readAllocations(tx, ids);
+  const named = updates.map(({ data, state }) =>
+    namedUpdateAllocations(data, state),
+  );
+  const resolved = await resolveAllocationInputs(
+    tx,
+    named.flatMap((rows) => rows ?? []),
+  );
+  let offset = 0;
+  const nexts = updates.map(({ id, state }, index) => {
+    const rows = named[index];
+    const inputs = rows && resolved.slice(offset, (offset += rows.length));
+    return requestedUpdateAllocations(id, state, before, inputs);
+  });
+  await assertPurchasesLive(
+    tx,
+    nexts.flatMap((next) => next?.map((row) => row.purchaseId) ?? []),
+  );
+  for (const [index, next] of nexts.entries())
+    if (next !== null)
+      assertAllocationSetValid({
+        transactionAmount: updates[index]!.state.nextAmount,
+        kind: financialTransactionKind.parse(updates[index]!.state.nextKind),
+        next,
+      });
+  await writeAllocationSets(
+    tx,
+    updates.flatMap(({ id }, index) => {
+      const next = nexts[index];
+      return next === null || next === undefined
+        ? []
+        : [{ transactionId: id, next }];
+    }),
+    before,
+    actor,
+  );
   // Every write that names a purchase or changes the charge's account, kind
   // or dates is checked; a conflict the charge already carried before this
   // write (a statement re-import touching an already-wrong allocation) is
   // not new and stays visible through the Purchase conflict checks instead.
-  const held = (before.get(id) ?? []).map((row) => row.purchaseId);
-  const chargeChanged = (
-    ["accountId", "kind", "transactionDate", "postedDate"] as const
-  ).some((key) => data[key] !== undefined);
-  const named = next?.map((row) => row.purchaseId) ?? held;
-  const recheck = chargeChanged
-    ? named
-    : named.filter((purchaseId) => !held.includes(purchaseId));
-  if (!options.acknowledgeSettlementConflicts)
-    await refuseSettlementConflicts(tx, {
-      transactionId: id,
-      purchaseIds: recheck,
-      existing: await findSettlementConflicts(tx, {
-        accountId: priorCharge.accountId,
-        kind: financialTransactionKind.parse(priorCharge.kind),
-        transactionDate: priorCharge.transactionDate ?? priorCharge.postedDate,
-        purchaseIds: held,
-      }),
-    });
-  await applyAllocationChanges(tx, { transactionIds: [id], before, actor });
+  if (!options.acknowledgeSettlementConflicts) {
+    const checks = [];
+    for (const [index, { id, data, priorCharge }] of updates.entries()) {
+      const held = (before.get(id) ?? []).map((row) => row.purchaseId);
+      const chargeChanged = (
+        ["accountId", "kind", "transactionDate", "postedDate"] as const
+      ).some((key) => data[key] !== undefined);
+      const nextNamed = nexts[index]?.map((row) => row.purchaseId) ?? held;
+      checks.push({
+        transactionId: id,
+        purchaseIds: chargeChanged
+          ? nextNamed
+          : nextNamed.filter((purchaseId) => !held.includes(purchaseId)),
+        existing: await findSettlementConflicts(tx, {
+          accountId: priorCharge.accountId,
+          kind: financialTransactionKind.parse(priorCharge.kind),
+          transactionDate:
+            priorCharge.transactionDate ?? priorCharge.postedDate,
+          purchaseIds: held,
+        }),
+      });
+    }
+    await refuseSettlementConflictsFor(tx, checks);
+  }
+  await applyAllocationChanges(tx, { transactionIds: ids, before, actor });
 };
 
 /** Write-path options only `finance.allocate_settlement` sets. */
@@ -667,82 +733,130 @@ export const updateFinancialTransaction = defineMutationWriter({
     actor: ActorContext,
     options: FinancialTransactionUpdateOptions = {},
   ) => {
-    const id = await resolveOrThrow(db, "financialTransaction", shortcode);
-    const changesAllocationState = allocationStateFields.some(
-      (field) => data[field] !== undefined,
+    const [id] = await updateFinancialTransactions(
+      db,
+      [{ shortcode, data }],
+      actor,
+      options,
     );
-    await withTransaction(db, async (tx) => {
-      await lockFinancialEvidenceKeys(tx, "reviewed-booking", [
-        `transaction:${id}`,
-      ]);
-      const sourceOwners = await lockFinancialSourceOccurrences(
-        tx,
-        data.sourceRefs ?? [],
-        id,
-      );
-      // Funding-evidence advisory keys precede both entity rows and account keys.
-      // Evidence creation uses the same order, so it cannot validate an old row
-      // while this mutation commits a new amount/status/account.
-      // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
-      // operation locks purchases first (lockAndValidateForDelete, the merge) and
-      // reaches FinancialTransaction afterwards via syncSettlementMirror, so
-      // taking the transaction first here would form an ABBA cycle — updating a
-      // transaction while one of its purchases is being deleted would deadlock and
-      // postgres would abort one of them. Keep this order.
-      //
-      // The set locked here must cover every purchase this update could touch —
-      // the ones it already allocates to AND the ones it is about to. Locking only
-      // the current ones would leave a newly named purchase to be locked after the
-      // transaction, reopening the cycle for exactly the interesting case.
-      //
-      // The pre-lock read is unlocked on purpose and is not a race: nothing adds
-      // an allocation to this transaction without holding its FOR UPDATE lock,
-      // which is taken below, and the set is re-read under that lock before
-      // anything is written.
-      if (changesAllocationState) await lockUpdatePurchases(tx, id, data);
-      await tx
-        .select({ id: financialTransaction.id })
-        .from(financialTransaction)
-        .where(
-          and(
-            eq(financialTransaction.id, id),
-            notDeleted(financialTransaction),
-          ),
-        )
-        .for("update");
-      const currentSourceOwners = await tx
-        .select({ id: sourceOccurrence.id })
-        .from(sourceOccurrence)
-        .where(eq(sourceOccurrence.acceptedTransactionId, id));
-      if (
-        currentSourceOwners.some(
-          (owner) => !sourceOwners.some((locked) => locked.id === owner.id),
-        )
+    return readOutput({ entityId: id!, shortcode });
+  },
+});
+
+const transactionColumns = Object.keys(getTableColumns(financialTransaction));
+
+/**
+ * The update path for one or many transactions under one set of locks: each
+ * lock, read and check takes one statement for the whole set, row updates
+ * with the same values share one statement, and allocation follow-ups run
+ * together. Returns ids in input order; a transaction may appear once.
+ */
+export async function updateFinancialTransactions(
+  db: Database,
+  updates: readonly {
+    shortcode: FinancialTransactionShortcode;
+    data: FinancialTransactionUpdateData;
+  }[],
+  actor: ActorContext,
+  options: FinancialTransactionUpdateOptions = {},
+): Promise<FinancialTransactionId[]> {
+  if (!updates.length) return [];
+  if (
+    new Set(updates.map((update) => update.shortcode)).size !== updates.length
+  )
+    throw new Error("One transaction update batch names a transaction twice");
+  const ids = await resolveAllOrThrow(
+    db,
+    "financialTransaction",
+    updates.map((update) => update.shortcode),
+  );
+  await withTransaction(db, async (tx) => {
+    await lockFinancialEvidenceKeys(
+      tx,
+      "reviewed-booking",
+      ids.map((id) => `transaction:${id}`),
+    );
+    const sourceOwners = await lockFinancialSourceOccurrences(
+      tx,
+      updates.flatMap(({ data }) => data.sourceRefs ?? []),
+      ids,
+    );
+    // Funding-evidence advisory keys precede both entity rows and account keys.
+    // Evidence creation uses the same order, so it cannot validate an old row
+    // while this mutation commits a new amount/status/account.
+    // LOCK ORDER: Purchase rows first, THEN the transaction row. Every purchase
+    // operation locks purchases first (lockAndValidateForDelete, the merge) and
+    // reaches FinancialTransaction afterwards via syncSettlementMirror, so
+    // taking the transaction first here would form an ABBA cycle — updating a
+    // transaction while one of its purchases is being deleted would deadlock and
+    // postgres would abort one of them. Keep this order.
+    //
+    // The set locked here must cover every purchase this update could touch —
+    // the ones it already allocates to AND the ones it is about to. Locking only
+    // the current ones would leave a newly named purchase to be locked after the
+    // transaction, reopening the cycle for exactly the interesting case.
+    //
+    // The pre-lock read is unlocked on purpose and is not a race: nothing adds
+    // an allocation to this transaction without holding its FOR UPDATE lock,
+    // which is taken below, and the set is re-read under that lock before
+    // anything is written.
+    const allocating = updates.flatMap(({ data }, index) =>
+      allocationStateFields.some((field) => data[field] !== undefined)
+        ? [{ id: ids[index]!, data }]
+        : [],
+    );
+    await lockUpdatePurchases(tx, allocating);
+    await tx
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        and(
+          inArray(financialTransaction.id, ids),
+          notDeleted(financialTransaction),
+        ),
       )
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Source ownership expanded while locking the transaction; retry with current evidence.",
-        );
-      const before = await tx.query.financialTransaction
-        .findFirst({
+      .orderBy(financialTransaction.id)
+      .for("update");
+    const currentSourceOwners = await tx
+      .select({ id: sourceOccurrence.id })
+      .from(sourceOccurrence)
+      .where(inArray(sourceOccurrence.acceptedTransactionId, ids));
+    if (
+      currentSourceOwners.some(
+        (owner) => !sourceOwners.some((locked) => locked.id === owner.id),
+      )
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "Source ownership expanded while locking the transaction; retry with current evidence.",
+      );
+    const beforeRows = new Map(
+      (
+        await tx.query.financialTransaction.findMany({
           where: {
             RAW: (table: PgTable) =>
               relationalSql(
                 table,
                 and(
-                  eq(financialTransaction.id, id),
+                  inArray(financialTransaction.id, ids),
                   notDeleted(financialTransaction),
                 ),
               ),
           },
         })
-        .then((row) => (row ? transactionDollars(row) : row));
+      ).map((row) => [row.id, transactionDollars(row)]),
+    );
+    const befores = updates.map(({ shortcode }, index) => {
+      const before = beforeRows.get(ids[index]!);
       if (!before)
         throw createAppError(
           "FINANCIAL_TRANSACTION_NOT_FOUND",
           `Financial transaction not found: ${shortcode}`,
         );
-      assertLedgerTransferUpdateAllowed(before, data);
+      return before;
+    });
+    for (const [index, { shortcode, data }] of updates.entries()) {
+      assertLedgerTransferUpdateAllowed(befores[index]!, data);
       if (
         data.kind !== undefined &&
         ![
@@ -772,67 +886,116 @@ export const updateFinancialTransaction = defineMutationWriter({
             "This transaction has booked Expenses. Review its spending correction before changing it to a non-spending kind.",
           );
       }
-      const accountId =
-        data.accountId === undefined
-          ? before.accountId
-          : await resolveOrThrow(tx, "financialAccount", data.accountId);
-      const inspectSourceRefs = data.sourceRefs !== undefined;
-      const beforeSourceRefs = inspectSourceRefs
-        ? ((await financialSourceRefsFor(tx, [id])).get(id) ?? [])
-        : [];
-      const sourceRefs = data.sourceRefs ?? beforeSourceRefs;
-      if (inspectSourceRefs) {
-        await assertFinancialSourceRefsAvailable(tx, sourceRefs, id);
-      }
+    }
+    const accountCodes = updates.flatMap(({ data }) =>
+      data.accountId === undefined ? [] : [data.accountId],
+    );
+    const resolvedAccounts = await resolveAllOrThrow(
+      tx,
+      "financialAccount",
+      accountCodes,
+    );
+    let account = 0;
+    const accountIds = updates.map(({ data }, index) =>
+      data.accountId === undefined
+        ? befores[index]!.accountId
+        : resolvedAccounts[account++]!,
+    );
+    const inspected = updates.flatMap(({ data }, index) =>
+      data.sourceRefs === undefined ? [] : [ids[index]!],
+    );
+    const beforeSourceRefs = await financialSourceRefsFor(tx, inspected);
+    await assertFinancialSourceRefsAvailableFor(
+      tx,
+      updates.flatMap(({ data }, index) =>
+        data.sourceRefs === undefined
+          ? []
+          : [{ refs: data.sourceRefs, exceptTransactionId: ids[index]! }],
+      ),
+    );
 
-      // `purchaseId` is input sugar only — there is no such column any more, so it
-      // never reaches the physical update. `sourceRefs` addresses occurrences or retained evidence aliases.
+    // `purchaseId` is input sugar only — there is no such column any more, so it
+    // never reaches the physical update. `sourceRefs` addresses occurrences or retained evidence aliases.
+    const valuesFor = updates.map(({ data }, index) => {
       const {
         purchaseId: _sugarOnly,
         sourceRefs: _references,
         ...writableData
       } = data;
-      const values = buildPartialUpdateValues({
+      return buildPartialUpdateValues({
         ...writableData,
         amount:
           data.amount === undefined ? undefined : moneyToMinor(data.amount),
-        accountId,
+        accountId: accountIds[index]!,
       });
-
-      // The create input rejects a purchaseId/allocations pair that disagrees;
-      // deriveUpdateData drops that refinement, so the same check belongs here
-      // rather than silently letting one field win.
-      assertAllocationShorthandAgrees(data);
-      const state = changesAllocationState
-        ? await deriveUpdatedTransactionState(tx, id, before, data)
-        : null;
+    });
+    // The create input rejects a purchaseId/allocations pair that disagrees;
+    // deriveUpdateData drops that refinement, so the same check belongs here
+    // rather than silently letting one field win.
+    for (const { data } of updates) assertAllocationShorthandAgrees(data);
+    const allocationCounts = await countLiveAllocations(
+      tx,
+      allocating.map(({ id }) => id),
+    );
+    const states = updates.map(({ data }, index) =>
+      allocationStateFields.some((field) => data[field] !== undefined)
+        ? deriveUpdatedTransactionState(
+            allocationCounts.get(ids[index]!) ?? 0,
+            befores[index]!,
+            data,
+          )
+        : null,
+    );
+    // Updates that write the same column values share one statement.
+    const groups = new Map<string, FinancialTransactionId[]>();
+    const columnValues = valuesFor.map((values) =>
+      Object.fromEntries(
+        Object.entries(values).filter(([key]) =>
+          transactionColumns.includes(key),
+        ),
+      ),
+    );
+    for (const [index, values] of columnValues.entries()) {
+      const key = JSON.stringify(values, (_key, value: unknown) =>
+        typeof value === "bigint" ? `${value}n` : value,
+      );
+      groups.set(key, [...(groups.get(key) ?? []), ids[index]!]);
+    }
+    for (const group of groups.values())
       await tx
         .update(financialTransaction)
-        .set(values)
+        .set(columnValues[ids.indexOf(group[0]!)]!)
         .where(
           and(
-            eq(financialTransaction.id, id),
+            inArray(financialTransaction.id, group),
             notDeleted(financialTransaction),
           ),
         );
-      if (data.sourceRefs !== undefined) {
-        const acceptedSourceChanges = await replaceFinancialSourceRefs(
-          tx,
-          id,
-          data.sourceRefs,
-        );
-        await auditEvidenceRows(
-          tx,
-          actor,
-          "sourceOccurrence",
-          acceptedSourceChanges.before,
-          acceptedSourceChanges.after,
-        );
-      }
-      const beforeState = { ...before, sourceRefs: beforeSourceRefs };
+    const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
+      tx,
+      updates.flatMap(({ data }, index) =>
+        data.sourceRefs === undefined
+          ? []
+          : [{ transactionId: ids[index]!, refs: data.sourceRefs }],
+      ),
+    );
+    const audits = evidenceAuditEntries(
+      "sourceOccurrence",
+      acceptedSourceChanges.before,
+      acceptedSourceChanges.after,
+    );
+    for (const [index, { data }] of updates.entries()) {
+      const id = ids[index]!;
+      const before = befores[index]!;
+      const values = valuesFor[index]!;
+      const beforeState = {
+        ...before,
+        sourceRefs:
+          data.sourceRefs === undefined ? [] : (beforeSourceRefs.get(id) ?? []),
+      };
       // Stored references have no order; compare in the canonical order
       // `financialSourceRefsFor` reads them in, so a reordered resubmission is no diff.
-      const canonicalRefs = sortBy(sourceRefs, [
+      const canonicalRefs = sortBy(data.sourceRefs ?? beforeState.sourceRefs, [
         (ref) => ref.source,
         (ref) => ref.externalId,
       ]);
@@ -847,41 +1010,43 @@ export const updateFinancialTransaction = defineMutationWriter({
         [...entityFieldModels.financialTransaction.audit],
       );
       if (changes)
-        await logAuditEntry(tx, actor, {
+        audits.push({
           entityKind: "financialTransaction",
           entityId: id,
           action: "update",
           changes,
         });
+    }
+    await logAuditEntries(tx, actor, audits);
 
-      // Keep the allocations in step with what just changed, then let the shared
-      // core own the follow-ups. This is the only door for setting a split — there
-      // is deliberately no separate allocations endpoint, because `allocations` is
-      // already part of this input and a second entry point would be a second
-      // place to forget the lock and the invariant. Three triggers, in precedence
-      // order:
-      //   • an explicit `allocations` array — the general case;
-      //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
-      //     slice for the whole amount", or clear it;
-      //   • an amount change on a singly-allocated transaction, where the sole
-      //     legal allocation value is the new amount.
-      if (state)
-        await applyUpdatedAllocations(
-          tx,
-          id,
-          data,
-          state,
-          actor,
-          options,
-          before,
-        );
+    // Keep the allocations in step with what just changed, then let the shared
+    // core own the follow-ups. This is the only door for setting a split — there
+    // is deliberately no separate allocations endpoint, because `allocations` is
+    // already part of this input and a second entry point would be a second
+    // place to forget the lock and the invariant. Three triggers, in precedence
+    // order:
+    //   • an explicit `allocations` array — the general case;
+    //   • an explicit `purchaseId` — the single-Purchase sugar, meaning "one
+    //     slice for the whole amount", or clear it;
+    //   • an amount change on a singly-allocated transaction, where the sole
+    //     legal allocation value is the new amount.
+    await applyUpdatedAllocations(
+      tx,
+      updates.flatMap(({ data }, index) => {
+        const state = states[index];
+        return state
+          ? [{ id: ids[index]!, data, state, priorCharge: befores[index]! }]
+          : [];
+      }),
+      actor,
+      options,
+    );
 
-      // Data-quality targets come from applyAllocationChanges, which knows the
-      // union of before/after purchases; nothing else here can name one.
-    });
-    return readOutput({ entityId: id });
-  },
-});
+    // Data-quality targets come from applyAllocationChanges, which knows the
+    // union of before/after purchases; nothing else here can name one.
+  });
+  return ids;
+}
 
 const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
   "EmailFinancialAssociation.transactionId": {

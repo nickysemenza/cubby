@@ -1,7 +1,6 @@
 import { moneyToMinor } from "@cubby/shared";
-import { uniq } from "es-toolkit";
 
-import { advisoryXactLock } from "~/server/db/advisory-lock";
+import { advisoryXactLocks } from "~/server/db/advisory-lock";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
@@ -14,7 +13,7 @@ import { createAppError } from "~/server/errors/app-error";
  * obtain a unique index.
  *
  * Keys are sorted before locking so two writes carrying the same set in a
- * different order cannot deadlock each other.
+ * different order cannot deadlock each other; one statement takes every key.
  */
 export async function lockFinancialEvidenceKeys(
   tx: DrizzleTransaction,
@@ -27,15 +26,7 @@ export async function lockFinancialEvidenceKeys(
 ): Promise<void> {
   // JSON escaping keeps evidence values containing NUL delimiters valid UTF-8
   // bind parameters while retaining an unambiguous namespace/key boundary.
-  for (const key of uniq(keys).sort((a, b) =>
-    JSON.stringify([namespace, a]) < JSON.stringify([namespace, b])
-      ? -1
-      : JSON.stringify([namespace, a]) > JSON.stringify([namespace, b])
-        ? 1
-        : 0,
-  )) {
-    await advisoryXactLock(unwrapDb(tx), namespace, key);
-  }
+  await advisoryXactLocks(unwrapDb(tx), namespace, keys);
 }
 
 /** Legacy evidence doubles must refuse through the financial constraint boundary. */

@@ -7,17 +7,7 @@ import type {
   UpdateSourceTransactionRecordsInput,
 } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
-import {
-  and,
-  eq,
-  gte,
-  inArray,
-  isNull,
-  lte,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -32,6 +22,7 @@ import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
+  sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
 import { createAppError } from "~/server/errors/app-error";
@@ -39,6 +30,17 @@ import { createAppError } from "~/server/errors/app-error";
 import { updateSourceObservationJudgments } from "./source-occurrence";
 
 const FROM_WITH_REFS = sql`FROM ${sourceObservationFrom}`;
+const observationIdentities = sql`${sourceObservationIdentities} "SourceTransactionRecord"`;
+
+// External aliases retain their immutable observation's source.
+const externalObservationIds = (
+  source: string,
+  externalIds: readonly string[],
+) => sql`
+  SELECT alias."observationId" FROM "FinancialEvidenceAlias" alias
+  WHERE alias.source = ${source} AND alias.kind = 'externalId'
+    AND ${inArray(sql`alias.value`, externalIds)}
+`;
 const matchStateSql = sourceObservationColumns.matchState;
 
 const importFingerprint = sql<string>`(
@@ -325,13 +327,12 @@ const selectorConditions = (selector: SourceTransactionRecordSelector): SQL => {
     return and(
       notDeleted(sourceTransactionRecord),
       eq(sourceTransactionRecord.source, selector.source),
-      or(
-        inArray(sourceObservationColumns.externalId, selector.externalIds),
-        and(
-          eq(sourceObservationColumns.current, true),
-          inArray(sourceObservationColumns.chargeKey, selector.externalIds),
-        ),
-      ),
+      sql`${sourceObservationColumns.id} IN (
+        ${externalObservationIds(selector.source, selector.externalIds)}
+        UNION
+        SELECT owner."currentObservationId" FROM "SourceOccurrence" owner
+        WHERE ${inArray(sql`owner.shortcode`, selector.externalIds)}
+      )`,
     )!;
   const conditions = buildConditions(selector.filter);
   // The schema's non-empty refine is a fast reject, not the guarantee: it can
@@ -359,7 +360,11 @@ export async function updateSourceTransactionRecords(
   return withTransaction(db, async (tx) => {
     const selected = await unwrapDb(tx)
       .select({ id: sourceObservationColumns.id })
-      .from(sourceObservationFrom)
+      .from(
+        "externalIds" in selector
+          ? observationIdentities
+          : sourceObservationFrom,
+      )
       .where(selectorConditions(selector));
     let accountId;
     if (data.accountId !== undefined) {
@@ -394,14 +399,13 @@ export async function updateSourceTransactionRecords(
       else {
         const [successor] = await unwrapDb(tx)
           .select({ id: sourceObservationColumns.id })
-          .from(sourceObservationFrom)
+          .from(observationIdentities)
           .where(
             and(
               eq(sourceTransactionRecord.source, selector.source),
-              eq(
-                sourceObservationColumns.externalId,
-                data.supersededByExternalId,
-              ),
+              sql`${sourceObservationColumns.id} IN (
+                ${externalObservationIds(selector.source, [data.supersededByExternalId])}
+              )`,
               notDeleted(sourceTransactionRecord),
             ),
           )

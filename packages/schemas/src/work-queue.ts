@@ -26,6 +26,29 @@ import {
 export const workExecutor = z.enum(["automatic", "agent", "human", "external"]);
 export type WorkExecutor = z.infer<typeof workExecutor>;
 
+/**
+ * What only a member may decide (ADR 0028 §1): merging or deleting a record,
+ * booking money on a judgment, moving stock, contradicting what a person
+ * recorded, or the member's own authority (a sign-in, a physical errand, a
+ * file only they hold). Every work reason declares which one its resolution
+ * takes, or null when Cubby or an agent can settle it with a reversible write.
+ */
+const memberDecision = z.enum([
+  "merge",
+  "delete",
+  "money",
+  "stock",
+  "contradiction",
+  "personal",
+]);
+export type MemberDecision = z.infer<typeof memberDecision>;
+
+/** Needs you holds member decisions; everything else is the agent backlog. */
+export const decisionExecutor = (
+  decision: MemberDecision | null,
+): Extract<WorkExecutor, "human" | "agent"> =>
+  decision === null ? "agent" : "human";
+
 /** The kind of work a source contributes; Group by Family sections by it. */
 const workFamily = z.enum([
   "research",
@@ -259,7 +282,13 @@ export const workQueueList = defineRelationList({
       label: "Automatic",
       filters: { executor: "automatic" },
     },
-    { key: "agent", label: "Agent", filters: { executor: "agent" } },
+    // Fresh imports are where agent work pays off; newest first.
+    {
+      key: "agent",
+      label: "Agent",
+      filters: { executor: "agent" },
+      sort: { orderBy: "date", direction: "desc" },
+    },
     { key: "human", label: "Review", filters: { executor: "human" } },
     { key: "external", label: "Waiting", filters: { executor: "external" } },
     { key: "problems", label: "Problems", filters: { family: "problem" } },
@@ -296,6 +325,11 @@ export const NEEDS_YOU_FILTERS = {
 export const NEEDS_YOU_INPUT = workQueueInput.parse({
   ...NEEDS_YOU_FILTERS,
   pageSize: 3,
+});
+/** The agent backlog's size for Work's quiet line; it never counts toward a badge. */
+export const AGENT_BACKLOG_INPUT = workQueueInput.parse({
+  view: "agent",
+  pageSize: 0,
 });
 export type WorkQueueInput = z.input<typeof workQueueInput>;
 export type WorkQueueView = NonNullable<

@@ -46,12 +46,24 @@ export async function resolveMemberAssignee(
   tx: DrizzleTransaction,
   shortcode: LedgerPartyShortcode | null | undefined,
 ) {
-  if (shortcode == null) return shortcode;
-  const [party] = await lockLedgerPartiesForReference(tx, [shortcode]);
-  if (!party || party.kind !== "member")
+  const [id] = await resolveMemberAssignees(tx, [shortcode]);
+  return id;
+}
+
+/** `resolveMemberAssignee` for several references with one party lock, in input order. */
+export async function resolveMemberAssignees(
+  tx: DrizzleTransaction,
+  shortcodes: readonly (LedgerPartyShortcode | null | undefined)[],
+): Promise<(LedgerPartyId | null | undefined)[]> {
+  const parties = await lockLedgerPartiesForReference(
+    tx,
+    shortcodes.filter((code) => code != null),
+  );
+  if (parties.some((party) => party.kind !== "member"))
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "An assignee must be a live member ledger party.",
     );
-  return party.id;
+  let index = 0;
+  return shortcodes.map((code) => (code == null ? code : parties[index++]!.id));
 }
