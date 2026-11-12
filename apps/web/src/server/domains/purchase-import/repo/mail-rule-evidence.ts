@@ -278,37 +278,70 @@ export async function readEmailMailKeys(
   db: Database,
   mail: Pick<RetainedMail, "id" | "subject" | "content" | "rawChecksum">,
 ): Promise<MailKeys> {
-  const [stored] = await getDb(db)
-    .select({
-      orderKeys: emailTable.orderKeys,
-      trackingKeys: emailTable.trackingKeys,
-      checksum: emailTable.mailKeysChecksum,
-    })
-    .from(emailTable)
-    .where(eq(emailTable.orderMailId, mail.id))
-    .limit(1);
-  if (
-    stored?.orderKeys &&
-    stored.trackingKeys &&
-    stored.checksum === mail.rawChecksum
-  )
-    return { orderKeys: stored.orderKeys, trackingKeys: stored.trackingKeys };
-  const keys = retainedMailKeys(mail);
-  await getDb(db)
-    .update(emailTable)
-    .set({
-      ...keys,
-      mailKeysChecksum: mail.rawChecksum,
-      // Derived keys are not an Email change: evidence recovery compares
-      // `updatedAt` with the holder's unresolved outcome.
-      updatedAt: sql`${emailTable.updatedAt}`,
-    })
-    .where(
-      and(
-        eq(emailTable.orderMailId, mail.id),
-        eq(emailTable.checksum, mail.rawChecksum),
-      ),
-    );
+  const keys = (await readEmailMailKeysForMails(db, [mail])).get(mail.id);
+  if (!keys) throw new Error("Mail keys were not read");
+  return keys;
+}
+
+/** `readEmailMailKeys` for a page of originals in one stored-key read. */
+export async function readEmailMailKeysForMails(
+  db: Database,
+  mails: readonly Pick<
+    RetainedMail,
+    "id" | "subject" | "content" | "rawChecksum"
+  >[],
+): Promise<Map<string, MailKeys>> {
+  const keys = new Map<string, MailKeys>();
+  if (!mails.length) return keys;
+  const stored = new Map(
+    (
+      await getDb(db)
+        .select({
+          orderMailId: emailTable.orderMailId,
+          orderKeys: emailTable.orderKeys,
+          trackingKeys: emailTable.trackingKeys,
+          checksum: emailTable.mailKeysChecksum,
+        })
+        .from(emailTable)
+        .where(
+          inArray(
+            emailTable.orderMailId,
+            mails.map((mail) => mail.id),
+          ),
+        )
+    ).map((row) => [row.orderMailId, row]),
+  );
+  for (const mail of mails) {
+    const row = stored.get(mail.id);
+    if (
+      row?.orderKeys &&
+      row.trackingKeys &&
+      row.checksum === mail.rawChecksum
+    ) {
+      keys.set(mail.id, {
+        orderKeys: row.orderKeys,
+        trackingKeys: row.trackingKeys,
+      });
+      continue;
+    }
+    const computed = retainedMailKeys(mail);
+    await getDb(db)
+      .update(emailTable)
+      .set({
+        ...computed,
+        mailKeysChecksum: mail.rawChecksum,
+        // Derived keys are not an Email change: evidence recovery compares
+        // `updatedAt` with the holder's unresolved outcome.
+        updatedAt: sql`${emailTable.updatedAt}`,
+      })
+      .where(
+        and(
+          eq(emailTable.orderMailId, mail.id),
+          eq(emailTable.checksum, mail.rawChecksum),
+        ),
+      );
+    keys.set(mail.id, computed);
+  }
   return keys;
 }
 
