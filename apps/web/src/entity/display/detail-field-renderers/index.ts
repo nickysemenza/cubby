@@ -90,8 +90,6 @@ const buildDetailRendererCoverage = () => {
     },
     run: {
       "run-ai-cost": implemented(runDetailFields["run-ai-cost"]),
-      "run-outcome-counts": implemented(runDetailFields["run-outcome-counts"]),
-      "run-waiting-on": implemented(runDetailFields["run-waiting-on"]),
       "run-failure-details": implemented(
         runDetailFields["run-failure-details"],
       ),
