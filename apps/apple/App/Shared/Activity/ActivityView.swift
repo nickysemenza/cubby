@@ -22,8 +22,8 @@ struct ActivityView: View {
                 thisDeviceProcessing: appModel.companionImageActivity.phase == .processing,
                 retry: { await load() })
             localExecution()
-            runSection("In progress", savedView: "in-progress", model: inProgress)
-            runSection("Runs needing attention", savedView: "attention", model: attention)
+            runSection("In progress", phase: "active", model: inProgress)
+            runSection("Runs needing attention", phase: "needs", model: attention)
             // Audit history lives here on every platform; household work continues on web.
             Section {
                 activityDestination(.auditHistory) {
@@ -80,8 +80,8 @@ struct ActivityView: View {
 
     private func load() async {
         guard appModel.phase == .signedIn else { return }
-        if inProgress == nil { inProgress = Self.runs(savedView: "in-progress", client: appModel.client) }
-        if attention == nil { attention = Self.runs(savedView: "attention", client: appModel.client) }
+        if inProgress == nil { inProgress = Self.runs(phase: "active", client: appModel.client) }
+        if attention == nil { attention = Self.runs(phase: "needs", client: appModel.client) }
         async let backlogLoad = Self.attempt { try await DeviceBacklogBanner.load(client: appModel.client) }
         await inProgress?.refresh()
         await attention?.refresh()
@@ -91,34 +91,35 @@ struct ActivityView: View {
         }
     }
 
-    /// A Run manifest saved view (both leave out system AI passes), bounded to 10.
-    private static func runs(savedView: String, client: CubbyClient) -> GenericEntityListModel {
-        let run = EntityCatalog[.run]
-        let view = run.presentation.savedViews.first { $0.id == savedView }
-        return GenericEntityListModel(
-            descriptor: run, client: client, pageSize: 10,
-            sort: view?.sortParameter, filters: view?.filterState ?? EntityFilterState())
+    /// The Run list's opening filters narrowed to one phase (Active, Needs you), flat and bounded
+    /// to 10.
+    private static func phaseFilters(_ phase: String) -> EntityFilterState {
+        var filters = EntityFilterState(filters: EntityCatalog[.run].presentation.initialFilters)
+        filters.set([phase], for: GenericEntityListModel.phaseGroupingKey)
+        return filters
+    }
+
+    private static func runs(phase: String, client: CubbyClient) -> GenericEntityListModel {
+        GenericEntityListModel(
+            descriptor: EntityCatalog[.run], client: client, pageSize: 10, filters: phaseFilters(phase),
+            groupDimensions: [], nested: false)
     }
 
     @ViewBuilder private func runSection(
-        _ title: String, savedView: String, model: GenericEntityListModel?
+        _ title: String, phase: String, model: GenericEntityListModel?
     ) -> some View {
         Section(title) {
             if let model {
                 ForEach(model.rows) { row in
                     activityDestination(.entityDetail(.run, id: row.id)) {
-                        EntityRowView(
-                            key: .run, row: row,
-                            columns: [
-                                "purpose", "status", "waitingOn", "stalled", "startedAt", "chargedCost",
-                            ])
+                        EntityRowView(key: .run, row: row)
                     }
                     .accessibilityIdentifier("activity.run.\(row.id)")
                 }
                 listState(model)
                 // The section shows at most a page; the full saved view opens only when more match.
                 if let total = model.meta?.totalCount, total > model.rows.count {
-                    activityDestination(.entityList(.run, savedView: savedView)) {
+                    activityDestination(.entityList(.run, filters: Self.phaseFilters(phase))) {
                         HStack {
                             Text("Show all")
                             Spacer(minLength: FieldGuideTokens.Space.sm)

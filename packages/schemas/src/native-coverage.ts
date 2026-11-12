@@ -129,14 +129,14 @@ const STRUCTURED_VALUE_RENDERERS = [
 /**
  * Entity-independent list cells any declaration may name: the `presentation.state` badge and
  * the `presentation.progress` meter. They stay classified when no declaration names them;
- * native draws their fields through the generic row from the declared labels.
+ * native draws them as `StateBadge` and `ProgressMeter` from `presentation.state` and `progress`.
  */
 export const SHARED_LIST_RENDERERS = ["state", "progress"] as const;
 
 /**
  * The detail rows for the same two fields: `StateBadge` and a block `ProgressMeter`. The web
  * draws them for the fields `presentation.state` and `presentation.progress` name even when no
- * declaration names the id; native draws those fields through the generic row.
+ * declaration names the id; native draws them in the record header through the same views.
  */
 export const SHARED_DETAIL_RENDERERS = ["state", "progress"] as const;
 

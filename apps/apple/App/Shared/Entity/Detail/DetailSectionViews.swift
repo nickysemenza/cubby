@@ -78,6 +78,8 @@ struct EntityHeroView<Actions: View>: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            let facts = RecordHeaderFacts(descriptor: descriptor, row: row)
+            if facts.hasContent { facts }
             actions
         }
         .onChange(of: imageSubject) { _, _ in showingImageChain = false }
@@ -136,6 +138,16 @@ struct EntityHeroView<Actions: View>: View {
                     .font(media == .tile ? .title3.weight(.semibold) : .headline)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
+            }
+            // The declared kind and state, each drawn once.
+            let kind = descriptor.recordKind(in: row.raw)
+            let state = descriptor.recordState(in: row.raw)
+            if kind != nil || state != nil {
+                WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
+                    if let kind { KindTag(option: kind) }
+                    if let state { StateBadge(state: state, size: .header) }
+                }
+                .padding(.vertical, 2)
             }
             headerMetadata
         }
@@ -338,6 +350,27 @@ struct FieldsSectionView: View {
         if rows.isEmpty {
             Text("Nothing recorded").foregroundStyle(.secondary)
                 .preference(key: DetailSectionEmpty.self, value: true)
+        } else if !summary, case let unrecorded = unrecordedFields, !unrecorded.isEmpty {
+            // Fields without a value fold into one line rather than a row of dashes each.
+            DisclosureGroup("\(unrecorded.count) not recorded") {
+                Text(unrecorded.map(\.label).joined(separator: ", "))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    /// The section's declared fields this record holds no value for.
+    private var unrecordedFields: [FieldDescriptor] {
+        let shown = Set(rows.map(\.key))
+        let placed = Set(descriptor.presentation.summaryFieldKeys).union(descriptor.headerFieldKeys)
+        return keys.compactMap { key in
+            guard let field = descriptor.field(key), key != descriptor.titleField, key != "id",
+                !placed.contains(key), !shown.contains(key)
+            else { return nil }
+            return field
         }
     }
 
@@ -565,8 +598,12 @@ struct FieldsSectionView: View {
     }
 
     private var rows: [FieldDescriptor] {
-        // A field a summary slot shows has its home there; later sections omit it, as on web.
-        let summarized = summary ? [] : Set(descriptor.presentation.summaryFieldKeys)
+        // A field a summary slot or the record header shows has its home there; later sections
+        // omit it, as on web, so no fact appears twice on the screen.
+        let summarized =
+            summary
+            ? descriptor.headerFieldKeys
+            : Set(descriptor.presentation.summaryFieldKeys).union(descriptor.headerFieldKeys)
         return keys.compactMap { key in
             // The hero is the title's and the id's home; repeating them here is a form, not a record.
             guard let field = descriptor.field(key), key != descriptor.titleField, key != "id",
@@ -1190,7 +1227,7 @@ struct RawRecordDisclosure: View {
 
 /// A field's server-composed display rows (`display.itemsPath`): the title, second line, and
 /// trailing figure are the server's words; a row that names a record opens it.
-private struct DetailDisplayRows: View {
+struct DetailDisplayRows: View {
     let label: String
     let rows: [DetailDisplayRow]
 

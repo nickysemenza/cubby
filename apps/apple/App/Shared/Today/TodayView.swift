@@ -474,13 +474,15 @@ struct TodayContent: View {
         switch count {
         case .loading, .known(0): EmptyView()
         case .known(let total):
-            NavigationLink(value: Route.entityList(key, savedView: WorkAttentionModel.savedView)) {
+            NavigationLink(value: Route.entityList(key, filters: WorkAttentionModel.filters(key) ?? .init()))
+            {
                 TodayLinkLabel(title: title, symbol: symbol, count: total)
             }
             .todayRowStyle()
             .accessibilityIdentifier("today.work.\(key.rawValue)")
         case .unavailable:
-            NavigationLink(value: Route.entityList(key, savedView: WorkAttentionModel.savedView)) {
+            NavigationLink(value: Route.entityList(key, filters: WorkAttentionModel.filters(key) ?? .init()))
+            {
                 TodayLinkLabel(title: title, symbol: symbol)
             }
             .todayRowStyle()
