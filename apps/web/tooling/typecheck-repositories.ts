@@ -18,6 +18,7 @@ export const repositoryOwners = [
   "src/server/domains/image-processing/repo/description-policy.ts",
   "src/server/domains/image-processing/repo/processor-policy.ts",
   "src/server/generic/relatedness/repo/scalar-overlap.ts",
+  "src/server/generic/embedding/service/upload-chunks.ts",
   "src/server/generic/problems/repo/problem-filter-semantics.ts",
   "src/server/generic/problems/repo/problem-registry-validation.ts",
   "src/server/wasm.ts",

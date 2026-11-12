@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { test } from "vitest";
 import { sharedDeviceCommand } from "./lib/shared-device-command.ts";
 
@@ -51,11 +53,18 @@ test("simulator commands keep the supplied shared launcher and session", () => {
 
 // A shared target mismatch must fail before simulator boot/install side effects.
 test("simulator rejects a conflicting shared target before setup", () => {
+  const webRoot = path.resolve(import.meta.dirname, "../../web");
   const result = spawnSync(
-    "pnpm",
-    ["--dir", "apps/web", "exec", "tsx", "tooling/sim-e2e.ts"],
+    process.execPath,
+    [
+      "--import",
+      pathToFileURL(
+        createRequire(path.join(webRoot, "package.json")).resolve("tsx"),
+      ).href,
+      "tooling/sim-e2e.ts",
+    ],
     {
-      cwd: path.resolve(import.meta.dirname, "../../.."),
+      cwd: webRoot,
       env: {
         ...process.env,
         CUBBY_SIM_DEVICE: "other-device",
