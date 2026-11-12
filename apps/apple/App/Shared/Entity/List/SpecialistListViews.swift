@@ -277,12 +277,9 @@ struct LocationGalleryListView: View {
                 ForEach(locations.filter { type == "all" || locationType($0) == type }, id: \.id) { node in
                     NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
                         HStack {
-                            let image = FieldEnvelope(wire(node.fields.displayImages))?.effectiveValue?
-                                .arrayValue?.first
-                            let url =
-                                (image?["representations"]?["preferred"]?.stringValue
-                                ?? image?["url"]?.stringValue).flatMap(URL.init(string:))
-                            Thumb(url: url, size: 48, symbol: "shippingbox")
+                            Thumb(
+                                url: node.coverImageURL, size: 48,
+                                symbol: EntityCatalog[.location].sfSymbol)
                             VStack(alignment: .leading) {
                                 Text(node.name)
                                 // The fact reads only `dataQuality`; encoding the whole node would re-encode its

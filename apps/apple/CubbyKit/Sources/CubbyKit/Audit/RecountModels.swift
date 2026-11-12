@@ -68,9 +68,7 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
             barcodes.insert(external.externalId)
         }
         let product = try JSONValue(encoding: out.product)
-        let cover =
-            (product.pathText("displayImages[0].representations.preferred")
-            ?? product.pathText("displayImages[0].url")).flatMap(URL.init(string:))
+        let cover = product.displayCoverURL
         self.init(
             id: out.id,
             amount: amount,

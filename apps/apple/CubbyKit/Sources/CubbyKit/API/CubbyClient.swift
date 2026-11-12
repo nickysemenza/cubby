@@ -611,7 +611,7 @@ public actor CubbyClient {
             items: rows.items.map {
                 LocationChoice(
                     id: LocationCode($0.id), name: $0.raw["name"]?.stringValue ?? $0.title,
-                    parentName: $0.raw["parent"]?["name"]?.stringValue)
+                    parentName: $0.raw["parent"]?["name"]?.stringValue, imageURL: $0.imageURL)
             },
             meta: rows.meta)
     }
@@ -786,4 +786,16 @@ public struct LocationChoice: Identifiable, Sendable, Hashable {
     public let id: LocationCode
     public let name: String
     public let parentName: String?
+    /// Canonical cover from the location list: the bin's own photo, then its
+    /// identity product, then a product stocked inside it.
+    public let imageURL: URL?
+
+    public init(
+        id: LocationCode, name: String, parentName: String?, imageURL: URL? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.parentName = parentName
+        self.imageURL = imageURL
+    }
 }

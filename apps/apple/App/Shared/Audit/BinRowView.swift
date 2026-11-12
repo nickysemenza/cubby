@@ -137,7 +137,10 @@ private struct BinMoveToSheet: View {
         let currentBinID = session.currentBin?.id
         let scoped = all.filter { $0.node.id != currentBinID }
         guard !query.isEmpty else { return scoped }
-        return scoped.filter { $0.node.name.localizedCaseInsensitiveContains(query) }
+        return scoped.filter {
+            $0.node.name.localizedCaseInsensitiveContains(query)
+                || $0.node.id.rawValue.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
@@ -147,19 +150,11 @@ private struct BinMoveToSheet: View {
                     session.stage(.relocate(entry.node.id, name: entry.node.name), for: id)
                     dismiss()
                 } label: {
-                    HStack(spacing: FieldGuideTokens.Space.md) {
-                        Text(entry.node.name)
-                            .font(.fieldGuideBody)
-                            .foregroundStyle(FieldGuideTokens.graphite)
-                            .lineLimit(1)
-                        Spacer(minLength: FieldGuideTokens.Space.sm)
-                        Text(entry.node.id.rawValue)
-                            .font(.fieldGuideCode)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    }
+                    CoverIdentityRow(
+                        title: entry.node.name, imageURL: entry.node.coverImageURL,
+                        symbol: EntityCatalog[.location].sfSymbol, code: entry.node.id.rawValue
+                    )
                     .padding(.leading, CGFloat(entry.depth) * 14)
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
