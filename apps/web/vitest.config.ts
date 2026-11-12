@@ -296,10 +296,10 @@ export default defineConfig({
             // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
             isolate: false,
-            // Four workers reduced the paired-run maximum without slowing the
-            // solo median. Keep the cap aligned across group 0 so one project
-            // cannot starve the others. The environment override supports
-            // uncached tuning measurements and participates in the Nx cache key.
+            // Finish this project before the other Node projects: non-isolated
+            // workers only reuse their module graph within the same project.
+            // Interleaving projects recycles workers and repeats web imports.
+            // The override supports uncached tuning measurements.
             maxWorkers: groupZeroMaxWorkers,
             sequence: { groupOrder: 0 },
           },
@@ -316,7 +316,7 @@ export default defineConfig({
             // test-owned and are still constructed as needed.
             isolate: false,
             maxWorkers: groupZeroMaxWorkers,
-            sequence: { groupOrder: 0 },
+            sequence: { groupOrder: 1 },
           },
         },
         {
@@ -338,7 +338,7 @@ export default defineConfig({
             unstubEnvs: true,
             // Run UI after Node projects so each phase can reuse its own
             // warmed module graph instead of mixing worker environments.
-            sequence: { groupOrder: 1 },
+            sequence: { groupOrder: 2 },
           },
         },
         ...["preview", "capability"].map(
@@ -435,7 +435,10 @@ export default defineConfig({
                 testTimeout: 20_000,
                 retry: serviceRetry,
                 isolate: false,
-                sequence: { groupOrder: 2 },
+                // A shared sequence group requires the Workers project's
+                // single-worker cap in CI as well as local runs.
+                maxWorkers: 1,
+                sequence: { groupOrder: 3 },
               },
             }) satisfies TestProjectConfiguration,
         ),
@@ -448,7 +451,7 @@ export default defineConfig({
             // Larger IntegreSQL pools do not reduce CREATE latency; sequencing
             // stays a distinct serial group so its shared-worker singletons
             // above never interleave with the unit/UI/mcp-contract group.
-            sequence: { groupOrder: 3 },
+            sequence: { groupOrder: 4 },
           },
         },
         {
@@ -477,7 +480,7 @@ export default defineConfig({
             testTimeout: 30_000,
             // Group 0 projects must share one worker cap.
             maxWorkers: groupZeroMaxWorkers,
-            sequence: { groupOrder: 0 },
+            sequence: { groupOrder: 1 },
           },
         },
         {
@@ -487,7 +490,7 @@ export default defineConfig({
             root: join(import.meta.dirname, "../.."),
             include: ["packages/*/src/**/*.test.ts"],
             maxWorkers: groupZeroMaxWorkers,
-            sequence: { groupOrder: 0 },
+            sequence: { groupOrder: 1 },
           },
         },
         {
@@ -515,7 +518,7 @@ export default defineConfig({
             // runner per file; the suite passes under shuffled file orders.
             isolate: false,
             retry: serviceRetry,
-            sequence: { groupOrder: 5 },
+            sequence: { groupOrder: 3 },
           },
         },
         {

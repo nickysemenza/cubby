@@ -24,12 +24,6 @@ import type {
 } from "@cubby/schemas/image-sighting-fields";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import {
-  getImageCaptureState,
-  getImageEmbeddedMetadataForCapture,
-  getLiveSightingsForCapture,
-  setImageCaptureState,
-} from "~/server/domains/image/repo/image";
 
 /** `ImageSource` isn't exported as a standalone type; this mirrors
  * `imageSourceValues` in `18-image.entity.ts`. Not exported — nothing outside
@@ -372,6 +366,12 @@ export async function deriveAndStoreImageCapture(
   tx: Database | DrizzleTransaction,
   imageId: ImageId,
 ): Promise<void> {
+  const {
+    getImageCaptureState,
+    getImageEmbeddedMetadataForCapture,
+    getLiveSightingsForCapture,
+    setImageCaptureState,
+  } = await import("./image");
   const currentRow = await getImageCaptureState(tx, imageId);
   // The image was hard-deleted in the same transaction (e.g. cascaded from
   // a sighting delete that emptied it) — nothing to derive.

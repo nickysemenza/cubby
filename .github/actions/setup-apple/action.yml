@@ -1,17 +1,24 @@
 name: Setup Apple
 description: >-
   Prepare a macOS runner for a native build: select the .xcode-version Xcode, install the
-  workspace, restore or build the CubbyFFI
-  slices, install the Apple tools with the SPM clone cache, and restore the
-  shared simulator DerivedData.
+  web tooling workspace, restore or build the CubbyFFI
+  slices, install the Apple tools with an optional SPM clone cache, and restore
+  the shared simulator compilation cache.
 inputs:
   ffi-targets: { required: true, description: build-rust.sh target set }
   ffi-profile: { default: release, description: build-rust.sh Cargo profile }
   node: { default: "true", description: Install Node and the workspace }
   wasm: { default: "false", description: setup-node-with-deps wasm mode }
+  spm-cache: { default: "true", description: Restore app package clones }
   xcodegen: { default: "true", description: Install XcodeGen }
   sentry-cli: { default: "false", description: Install sentry-cli for archives }
-  build-cache: { default: "false", description: Restore simulator DerivedData }
+  build-cache:
+    { default: "false", description: Restore simulator compilation cache }
+  workspace-filter:
+    {
+      default: "cubby @cubby/web...",
+      description: pnpm workspace filters for native contract generation,
+    }
 outputs:
   toolchain-hash: { value: "${{ steps.toolchain.outputs.hash }}" }
   spm-clones-cache-hit: { value: "${{ steps.spm-cache.outputs.cache-hit }}" }
@@ -24,7 +31,7 @@ outputs:
   cache-hit: { value: "${{ steps.derived-data.outputs.cache-hit }}" }
   save-matched-key:
     {
-      value: "${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v6-') && steps.derived-data.outputs.cache-matched-key || '' }}",
+      value: "${{ startsWith(steps.derived-data.outputs.cache-matched-key, 'xcode-dd-v7-') && steps.derived-data.outputs.cache-matched-key || '' }}",
     }
 runs:
   using: composite
@@ -44,6 +51,7 @@ runs:
       uses: ./.github/actions/setup-node-with-deps
       with:
         wasm: ${{ inputs.wasm }}
+        workspace-filter: ${{ inputs.workspace-filter }}
 
     - name: Configure Apple Rust build
       shell: bash
@@ -70,25 +78,22 @@ runs:
           echo "CARGO_TARGET_DIR=$GITHUB_WORKSPACE/target-$TARGETS-$PROFILE"
           echo "CUBBY_FFI_PROFILE=$PROFILE"
           echo "CUBBY_FFI_TARGETS=$TARGETS"
+          echo "CARGO_INCREMENTAL=${CARGO_INCREMENTAL:-0}"
+          echo "CARGO_PROFILE_DEV_DEBUG=${CARGO_PROFILE_DEV_DEBUG:-0}"
+          echo "CARGO_TERM_COLOR=${CARGO_TERM_COLOR:-always}"
+          echo "RUST_BACKTRACE=${RUST_BACKTRACE:-short}"
+          echo "CARGO_UNSTABLE_SPARSE_REGISTRY=${CARGO_UNSTABLE_SPARSE_REGISTRY:-true}"
+          echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=${CARGO_REGISTRIES_CRATES_IO_PROTOCOL:-sparse}"
           echo "CARGO_BUILD_WARNINGS=${CARGO_BUILD_WARNINGS:-deny}"
         } >> "$GITHUB_ENV"
 
-    - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
-      with:
-        cache: true
-        cache-workspaces: . -> target-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
-        cache-key: apple-ffi-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
-
-    - name: Install requested Apple Rust targets
+    # rustup reads rust-toolchain.toml. Keep the real compiler installed before
+    # fingerprinting, but defer target libraries and Cargo build caches to a miss.
+    - name: Prepare Apple Rust compiler
       shell: bash
       run: |
-        set -euo pipefail
-        case "$CUBBY_FFI_TARGETS" in
-          all) rustup target add aarch64-apple-ios aarch64-apple-ios-sim ;;
-          sim) rustup target add aarch64-apple-ios-sim ;;
-          device) rustup target add aarch64-apple-ios ;;
-          mac) : ;;
-        esac
+        rustup toolchain install --profile minimal --no-self-update
+        rustc -vV
 
     - name: Compute Apple FFI cache key
       id: fingerprint
@@ -110,6 +115,25 @@ runs:
         # Exact keys only: the marker inside the XCFramework must agree with
         # the Rust, Xcode, target, and profile fingerprint before reuse.
         key: ${{ steps.fingerprint.outputs.key }}
+
+    - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      if: steps.ffi-cache.outputs.cache-hit != 'true'
+      with:
+        workspaces: . -> target-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
+        key: apple-ffi-${{ inputs.ffi-targets }}-${{ inputs.ffi-profile }}
+        cache-on-failure: false
+
+    - name: Install requested Apple Rust targets
+      if: steps.ffi-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$CUBBY_FFI_TARGETS" in
+          all) rustup target add aarch64-apple-ios aarch64-apple-ios-sim ;;
+          sim) rustup target add aarch64-apple-ios-sim ;;
+          device) rustup target add aarch64-apple-ios ;;
+          mac) : ;;
+        esac
 
     # CI and journeys install Nx; archive jobs build before installing JS
     # deps. Reuse the shared artifact cache whenever the workspace is available.
@@ -152,6 +176,7 @@ runs:
     # resolver fetches any delta from an advisory dependency clone cache, so a
     # warm cache never reclones Sentry/GRDB/Nuke.
     - name: Restore cached SPM clones
+      if: inputs.spm-cache == 'true'
       id: spm-cache
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
       with:
@@ -177,12 +202,10 @@ runs:
       run: |
         {
           echo 'value<<CACHE_PATHS'
-          echo 'apps/apple/DerivedData'
-          echo '!apps/apple/DerivedData/Logs'
-          echo 'apps/apple/SourcePackages/workspace-state.json'
+          echo 'apps/apple/DerivedData/CompilationCache.noindex'
           echo 'CACHE_PATHS'
         } >> "$GITHUB_OUTPUT"
-    - name: Restore cached DerivedData
+    - name: Restore cached simulator compilation
       id: derived-data
       if: inputs.build-cache == 'true'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
@@ -190,20 +213,8 @@ runs:
         # Must list exactly the save step's paths: the cache version hashes them.
         path: ${{ steps.paths.outputs.value }}
         # The host-test phase leaves .build here; it is not an app source input.
-        # v6 excludes entries published by interrupted or failed builds.
-        key: xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/tooling/apple-check.sh', 'apps/apple/tooling/apple.ts') }}
+        # Only successful compiler cache entries cross runners.
+        key: xcode-dd-v7-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/tooling/apple-check.sh', 'apps/apple/tooling/apple.ts') }}
         # Keep incomplete entries from earlier generations out of the restore.
         restore-keys: |
-          xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-
-          xcode-dd-v6-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-
-
-    # Explicit precompiled modules are keyed without header contents, so a
-    # cache from another package graph reuses a stale binary-package module
-    # (for example a Sentry bump fails with "SentryScope.h has been modified
-    # since the module file was built"). Rebuild them; other products stay warm.
-    - name: Drop precompiled modules from another package graph
-      if: steps.derived-data.outputs.cache-matched-key != '' && !startsWith(steps.derived-data.outputs.cache-matched-key, format('xcode-dd-v6-{0}-{1}-{2}-', runner.os, steps.toolchain.outputs.hash, steps.packages.outputs.hash))
-      shell: bash
-      run: |
-        rm -rf apps/apple/DerivedData/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules \
-          apps/apple/DerivedData/ModuleCache.noindex
+          xcode-dd-v7-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-

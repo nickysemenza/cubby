@@ -9,7 +9,7 @@ import {
   installStartupProfiling,
   SHELL_HYDRATED_MARK,
   startStartupProfile,
-} from "../../tests/e2e/support/navigation-timing";
+} from "./navigation-profiling";
 import { percentile } from "./read-performance-metrics";
 
 const routeSchema = z.object({

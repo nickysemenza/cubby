@@ -12,7 +12,7 @@ import {
   explicitLineDecisions,
   lineExternalIdentity,
   purchaseDateFor,
-} from "./writer";
+} from "./writer-decisions";
 
 const SYNTHETIC_PRODUCT_ID = parseEntityId(
   "product",

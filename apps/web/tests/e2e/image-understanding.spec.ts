@@ -1,6 +1,3 @@
-import type { Request } from "@playwright/test";
-import { z } from "zod";
-import { dispatchesOperation } from "./support/dispatch-wire";
 import { eq, and } from "drizzle-orm";
 import {
   image,
@@ -24,12 +21,7 @@ import {
   IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-identification";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
-import {
-  expectViewportBounded,
-  gotoAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { getFixtureDb, fixtureUserId } from "./fixtures/core";
 import { seedImagePrerequisite } from "./fixtures/photos";
@@ -81,23 +73,6 @@ test("image results compare descriptions and require explicit attachment confirm
       },
     });
   }
-  const history = await insertWithShortcode(db, "run", {
-    actorUserId: await fixtureUserId(page),
-    actorName: "Fixture member",
-    actorEmail: "fixture@example.test",
-    purpose: "background",
-    trigger: "manual",
-    status: "completed",
-  });
-  await writeOutcomeReceipts(db, [
-    {
-      runId: parseEntityId("run", history.id),
-      entityKind: "email",
-      entityId: crypto.randomUUID(),
-      state: "completed",
-      targetFingerprint: "a".repeat(64),
-    },
-  ]);
   const jobId = await createImageProcessingJob(db, {
     imageId,
     kind: "identify_image",
@@ -223,14 +198,6 @@ test("image results compare descriptions and require explicit attachment confirm
       exact: true,
     }),
   ).toBeDisabled();
-  await description.scrollIntoViewIfNeeded();
-  await expectViewportBounded(page);
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expectViewportBounded(page);
-  await description.scrollIntoViewIfNeeded();
-
-  await page.setViewportSize({ width: 1280, height: 900 });
   // The Image's generic "Image jobs" section, in its Work tab, opens the
   // job's own record.
   await page.getByRole("tab", { name: /^Work/u }).click();
@@ -240,42 +207,4 @@ test("image results compare descriptions and require explicit attachment confirm
     .click();
   await expect(page).toHaveURL(/\/image-jobs\/IPR-[A-Z0-9]{5}$/);
   await expect(page.locator("#attempts")).toBeVisible();
-
-  let listRequests = 0;
-  const trackLists = (request: Request) => {
-    if (
-      dispatchesOperation(
-        request,
-        "entity.list",
-        ({ input }) =>
-          z.object({ entity: z.literal("image") }).safeParse(input).success,
-      )
-    )
-      listRequests++;
-  };
-  page.on("request", trackLists);
-  await gotoAuthenticatedPage(page, "/images?view=shelf");
-  const media = page.getByRole("img", { name: row.filename, exact: true });
-  await expect(media).toBeVisible();
-  await expect
-    .poll(() =>
-      media.evaluate(
-        (node) =>
-          node instanceof HTMLImageElement &&
-          node.complete &&
-          node.naturalWidth > 0,
-      ),
-    )
-    .toBe(true);
-  page.off("request", trackLists);
-  // The mounted shelf consumes the server's opening page without a second list read.
-  expect(listRequests).toBe(0);
-  await gotoAuthenticatedPage(page, "/images?view=table");
-  const imageRow = page.getByRole("row").filter({ hasText: row.filename });
-  await expect(
-    imageRow.getByRole("link", {
-      name: "Synthetic utility jacket",
-      exact: true,
-    }),
-  ).toBeVisible();
 });

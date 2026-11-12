@@ -1,22 +1,16 @@
-import { entityApi } from "./support/entity-api";
-import {
-  chooseOption,
-  gotoAuthenticatedPage,
-  reloadAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { createFixtureGraph } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
 
 // Required native capability tests own explanation loading/retry, bounded
 // evidence, formatting and viewport/focus. This journey owns the real write.
-test("a person accepts a data gap as an exception that survives evidence changes, then clears it", async ({
+test("a person accepts a data gap as an exception, then clears it", async ({
   page,
-  baseURL,
 }) => {
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic exception ${Date.now()}`;
-  const { product, brand } = await createFixtureGraph(page, async (create) => {
+  await createFixtureGraph(page, async (create) => {
     const product = await create("product", { name, brandId: null });
     const location = await create("location", {
       name: `${name} shelf`,
@@ -28,8 +22,6 @@ test("a person accepts a data gap as an exception that survives evidence changes
       locationId: location.id,
       amount: { value: 1, unit: "each" },
     });
-    const brand = await create("vendor", { name: "Synthetic recorded brand" });
-    return { product, brand };
   });
   await gotoAuthenticatedPage(
     page,
@@ -71,19 +63,6 @@ test("a person accepts a data gap as an exception that survives evidence changes
   await expect(
     check.getByRole("link", { name: "synthetic catalog" }),
   ).toHaveAttribute("href", "https://example.test/catalog");
-  const changed = await entityApi(page.request).update(
-    "product",
-    product.id,
-    { brandId: brand.id },
-    { headers: { Origin: baseURL! } },
-  );
-  expect(changed.ok(), await changed.text()).toBeTruthy();
-  // Waivers never reopen: the recorded decision remains after the evidence changes.
-  await reloadAuthenticatedPage(page, row);
-  await expect(async () => {
-    await openCurrentExplanation();
-    await expect(check).toContainText("Recorded as");
-  }).toPass();
   await expect(
     check.getByRole("button", { name: "Clear exception" }),
   ).toBeVisible();

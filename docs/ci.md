@@ -242,7 +242,7 @@ lane queue. Workflow concurrency still cancels superseded PR revisions. The
 host job runs the generated `CubbyKit-Package` scheme with `xcodebuild test` on
 the ARM macOS host, with `-onlyUsePackageVersionsFromResolvedFile` to keep the
 committed pins; the library-only `CubbyKit` scheme has no test action. Its
-`xcode-host-v2` cache stores only
+`xcode-host-v3` cache stores only
 `apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex`; SwiftPM outputs
 under `.build` belong to the local CLI build. Xcode's `Build` and `Logs`
 directories are excluded, so tests rebuild products from cached compiler
@@ -264,25 +264,32 @@ compilation cache and its remarks on the command line, so SwiftPM package
 targets (`CubbyAPI`, `CubbyKit`) use it too; results live in
 `DerivedData/CompilationCache.noindex` (simulator) and
 `CubbyKit/.build/xcode/CompilationCache.noindex` (host). This replays compiler
-work when products need rebuilding but compiler inputs are unchanged. Local
-`swift test` does not use this cache.
+work when products need rebuilding but compiler inputs are unchanged. CI bounds each compiler cache to 1 GB; local Xcode builds retain 10 GB. Only
+content-addressed compiler results cross runners, not DerivedData products,
+precompiled module directories or workspace state. Local `swift test` does not
+use this cache.
 
 Manual native E2E (`apps/web/tooling/sim-e2e.ts`) also runs
 `apple:simulator-build`; check it when removing a shared build helper.
 
 `.github/actions/setup-apple` is the native setup every macOS job uses: Xcode
-selection, optional workspace installation, FFI slices, Apple tools, XcodeGen
-(skipped by `Apple host tests`) and optional simulator DerivedData restoration.
+selection, a workspace installation filtered to the root and web tooling for
+native contract generation, FFI slices, Apple tools,
+XcodeGen (skipped by `Apple host tests`) and optional simulator compilation-cache
+restoration. Rustup prepares the repository's compiler before computing the
+FFI fingerprint; an exact FFI-output hit skips target-library installation and
+Cargo build-cache transfer. The fingerprint retains the compiler identity,
+resolved Cargo graph, local source bytes, build environment, Xcode, targets and
+profile. Archive jobs can run this preparation without installing JS dependencies.
+
 It restores `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones
-used by both native jobs; that clone cache is separate from the FFI output
-cache and the host build cache. DerivedData keys exclude the host `.build`
-directory. Dependency declarations live in XcodeGen's included
-`apps/apple/packages.yml`; app versions and build settings stay in the product
-key, so a version bump keeps dependency precompiled modules, while a package
-declaration, local package graph or resolved-pin change invalidates them. App
-pins live in `apps/apple/Package.resolved` and Kit pins in
-`apps/apple/CubbyKit/Package.resolved`; simulator dependency keys include both
-lockfiles and both specs.
+used by app builds; the host resolves its smaller package graph directly.
+That clone cache is separate from the FFI output cache and compiler caches. Simulator compiler keys include the Xcode toolchain,
+package declarations, both resolved-pin files, generated FFI headers, app and
+Kit sources, and build tooling. Partial restores require the same package graph.
+App pins live in `apps/apple/Package.resolved` and Kit pins in
+`apps/apple/CubbyKit/Package.resolved`; dependency declarations live in
+`apps/apple/packages.yml` and the local package manifest.
 
 Compiled Apple caches are published only after successful work, through
 `save-cache-main-only`: any run on `main` saves a new exact key over a partial

@@ -6,6 +6,7 @@ import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   vi.resetModules();
@@ -70,12 +71,16 @@ describe("embedTexts over the AI Gateway", () => {
       "fetch",
       async () => new Response('{"error":"rate limited"}', { status: 429 }),
     );
-    await expect(
-      embedTexts(["synthetic input"], {
-        feature: "entity-embedding",
-        operation: "refresh",
-      }),
-    ).rejects.toThrow(/model: text-embedding-3-small.*operation: refresh/u);
+    vi.useFakeTimers();
+    await Promise.all([
+      expect(
+        embedTexts(["synthetic input"], {
+          feature: "entity-embedding",
+          operation: "refresh",
+        }),
+      ).rejects.toThrow(/model: text-embedding-3-small.*operation: refresh/u),
+      vi.runAllTimersAsync(),
+    ]);
   });
 
   it("pays Unified Billing when OpenAI credit refuses", async () => {
