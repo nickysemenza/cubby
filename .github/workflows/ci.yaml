@@ -380,15 +380,13 @@ jobs:
       - name: Run iOS app checks
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
       # A canceled compile must not permanently populate an exact cache key.
-      - name: Save DerivedData cache
+      - name: Save simulator compilation cache
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}
           key: ${{ steps.apple.outputs.cache-key }}
           cache-hit: ${{ steps.apple.outputs.cache-hit }}
           matched-key: ${{ steps.apple.outputs.save-matched-key }}
-      - name: Measure SPM cache contents
-        run: du -h -d 3 apps/apple/SourcePackages/artifacts
       - name: Save SPM clone cache
         uses: ./.github/actions/save-cache-main-only
         with:
@@ -428,7 +426,7 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           generate: "false"
-          workspace-filter: "cubby @cubby/web..."
+          workspace-filter: "@cubby/web..."
       - name: Download Vitest blobs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
