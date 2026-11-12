@@ -486,7 +486,9 @@ describe("MCP catalog", () => {
       actions: [
         {
           inputSchema: {
-            properties: { operationAction: { enum: ["apply", "dismiss"] } },
+            properties: {
+              operationAction: { enum: ["apply", "dismiss", "ask_member"] },
+            },
           },
         },
       ],
