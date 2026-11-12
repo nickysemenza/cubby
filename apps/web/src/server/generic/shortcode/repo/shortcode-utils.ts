@@ -24,7 +24,10 @@ import {
 } from "drizzle-orm";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
+import type {
+  RepositoryQueryInput,
+  RepositoryQueryTransaction,
+} from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { repositorySavepoint } from "~/server/db/repository-access.boundary";
 import {
@@ -58,13 +61,14 @@ export type ShortcodeRowFor<T extends ShortcodeType> = Omit<
   "shortcode"
 > & { shortcode: ShortcodeFor<T> };
 
+/** Brands the code in place, keeping the table's column order. */
 const parseShortcodeRow = <T extends ShortcodeType>(
   entity: T,
   row: InferSelectModel<ShortcodeTableFor<T>>,
-): ShortcodeRowFor<T> => {
-  const { shortcode, ...rest } = row;
-  return { ...rest, shortcode: parseShortcodeFor(entity, shortcode) };
-};
+): ShortcodeRowFor<T> => ({
+  ...row,
+  shortcode: parseShortcodeFor(entity, row.shortcode),
+});
 
 /**
  * Whether any identity — live, soft-deleted, or hard-deleted — ever held this
@@ -242,4 +246,115 @@ export async function insertManyWithShortcode<T extends ShortcodeType>(
     `Failed to insert ${entity} after ${MAX_RETRIES} shortcode collisions`,
     { cause: lastError },
   );
+}
+
+type StagedIdentity = {
+  entity: ShortcodeType;
+  row: {
+    id: string;
+    shortcode: string;
+    createdAt: Date;
+    deletedAt: Date | null;
+  };
+  reserved: boolean;
+};
+
+/** A staged row: its identity is assigned, its payload not yet inserted. */
+export type StagedRowFor<T extends ShortcodeType> = ShortcodeInsertValues<T> & {
+  id: string;
+  shortcode: ShortcodeFor<T>;
+  createdAt: Date;
+  deletedAt: Date | null;
+};
+
+/**
+ * One write layer's entity creates across kinds. Staging assigns each row's
+ * id and code; the first payload insert reserves every pending identity in
+ * one statement, re-minting any colliding code (no savepoint); each kind's
+ * payload is one insert. Staged rows reference each other by id, never by
+ * code. The caller owns the transaction and abandons it on any other failure.
+ */
+export class EntityInsertLayer {
+  private readonly identities: StagedIdentity[] = [];
+
+  constructor(
+    readonly tx: RepositoryQueryTransaction,
+    private readonly generator: ShortcodeGeneratorPort = productionShortcodeGeneratorPort,
+  ) {}
+
+  stage<T extends ShortcodeType>(
+    entity: T,
+    values: readonly ShortcodeInsertValues<T>[],
+  ): StagedRowFor<T>[] {
+    return values.map((value) => {
+      // SAFETY: the insert model for this entity plus its minted code.
+      const base = value as ShortcodeInsertValues<T> & {
+        id?: string;
+        createdAt?: Date;
+        deletedAt?: Date | null;
+      };
+      // SAFETY: the same insert model with its identity columns filled.
+      const row = {
+        ...base,
+        id: base.id ?? crypto.randomUUID(),
+        shortcode: this.generator.generate(entity),
+        createdAt: base.createdAt ?? new Date(),
+        deletedAt: base.deletedAt ?? null,
+      } as StagedRowFor<T>;
+      this.identities.push({ entity, row, reserved: false });
+      return row;
+    });
+  }
+
+  /** Reserve every pending identity, then insert these staged payloads. */
+  async insert<T extends ShortcodeType>(
+    entity: T,
+    rows: readonly StagedRowFor<T>[],
+  ): Promise<ShortcodeRowFor<T>[]> {
+    if (!rows.length) return [];
+    await this.reserveIdentities();
+    // SAFETY: Drizzle cannot retain the correlation between generic entity T
+    // and the generated table map's indexed union (see insertManyWithShortcode).
+    const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
+    // SAFETY: staged rows are this entity's insert model with identity columns.
+    const values = rows as never[];
+    const created = await unwrapDb(this.tx)
+      .insert(table)
+      .values(values)
+      .returning(getTableColumns(table));
+    // SAFETY: the insert used SHORTCODE_TABLE[entity] and returned every column.
+    const stored = created as InferSelectModel<ShortcodeTableFor<T>>[];
+    return stored.map((row) => parseShortcodeRow(entity, row));
+  }
+
+  private async reserveIdentities() {
+    let pending = this.identities.filter((identity) => !identity.reserved);
+    for (let attempt = 0; pending.length; attempt++) {
+      if (attempt === MAX_RETRIES)
+        throw new Error(
+          `Failed to reserve entity codes after ${MAX_RETRIES} shortcode collisions`,
+        );
+      const reserved = new Set(
+        (
+          await unwrapDb(this.tx)
+            .insert(entityIdentity)
+            .values(
+              pending.map(({ entity, row }) => ({
+                id: row.id,
+                kind: entity,
+                shortcode: row.shortcode,
+                createdAt: row.createdAt,
+                deletedAt: row.deletedAt,
+              })),
+            )
+            .onConflictDoNothing({ target: entityIdentity.shortcode })
+            .returning({ id: entityIdentity.id })
+        ).map((row) => row.id),
+      );
+      for (const identity of pending)
+        if (reserved.has(identity.row.id)) identity.reserved = true;
+        else identity.row.shortcode = this.generator.generate(identity.entity);
+      pending = pending.filter((identity) => !identity.reserved);
+    }
+  }
 }

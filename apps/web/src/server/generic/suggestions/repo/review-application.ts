@@ -179,7 +179,9 @@ export function executeReviewApplication(
           transactionDb,
           and(
             eq(suggestionTable.family, prediction.family),
-            sql`${suggestionTable.subject} = ${JSON.stringify(prediction.subject)}::jsonb`,
+            "liveSubjectRows" in family && family.liveSubjectRows
+              ? family.liveSubjectRows([prediction.subject])
+              : sql`${suggestionTable.subject} = ${JSON.stringify(prediction.subject)}::jsonb`,
             ne(suggestionTable.id, applicableState.id),
             eq(suggestionTable.active, true),
             eq(suggestionTable.status, "pending"),

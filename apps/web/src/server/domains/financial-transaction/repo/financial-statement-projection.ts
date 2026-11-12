@@ -127,56 +127,16 @@ const newAccountFor = (
   };
 };
 
-export function projectFinancialCandidates(
-  input: FinancialTransactionImportPreviewInput,
+/**
+ * Each statement row's account as candidate matching resolves it, from the
+ * stored accounts and provider observations alone: the account a date-window
+ * candidate must share, so the preview reads only those accounts' dates.
+ */
+export function financialRowAccounts(
   options: FinancialStatementPreviewOptions,
-  loaded: FinancialPreviewLoaded,
+  parsedAccounts: FinancialPreviewLoaded["preparation"]["accounts"],
+  observations: FinancialPreviewLoaded["observations"],
 ) {
-  const {
-    sourceRefIds,
-    legacyIds,
-    observations,
-    preparation,
-    transactions,
-    refsByTransaction,
-  } = loaded;
-  const suggestionPolicy = options.candidatePolicy === "suggestion";
-  const providerPairs = input.rows.filter((row) => row.providerTransactionId);
-  const fingerprintCounts = new Map<string, number>();
-  for (const ref of sourceRefIds)
-    fingerprintCounts.set(ref, (fingerprintCounts.get(ref) ?? 0) + 1);
-  const parsedAccounts = preparation.accounts;
-  const parsedTransactions = transactions.map((transaction) => ({
-    ...transaction,
-    sourceRefs: refsByTransaction.get(transaction.id) ?? [],
-  }));
-  // Preserve ledger order and every competitor while avoiding a full-ledger
-  // scan for each input row. Reference identity stays source-scoped.
-  const transactionsByAccount = new Map<string, typeof parsedTransactions>();
-  const transactionsByRef = new Map<string, typeof parsedTransactions>();
-  const transactionsByAlias = new Map<string, typeof parsedTransactions>();
-  for (const transaction of parsedTransactions) {
-    const accountRows = transactionsByAccount.get(transaction.accountId) ?? [];
-    accountRows.push(transaction);
-    transactionsByAccount.set(transaction.accountId, accountRows);
-    for (const key of new Set(
-      transaction.sourceRefs
-        .filter((ref) => ref.externalId.startsWith("SOC-"))
-        .map((ref) => pairKey(ref.source, ref.externalId)),
-    )) {
-      const refRows = transactionsByRef.get(key) ?? [];
-      refRows.push(transaction);
-      transactionsByRef.set(key, refRows);
-    }
-  }
-  for (const transaction of parsedTransactions)
-    for (const ref of transaction.sourceRefs) {
-      const key = pairKey(ref.source, ref.externalId);
-      transactionsByAlias.set(key, [
-        ...(transactionsByAlias.get(key) ?? []),
-        transaction,
-      ]);
-    }
   const observationsByProvider = new Map<string, typeof observations>();
   for (const observation of observations) {
     if (!observation.providerTransactionId) continue;
@@ -191,18 +151,6 @@ export function projectFinancialCandidates(
           pairKey(row.source, row.providerTransactionId),
         ) ?? [])
       : [];
-  const providerInputKey = (row: FinancialTransactionImportRow) =>
-    JSON.stringify([
-      row.source,
-      row.providerTransactionId,
-      row.providerAccountId ?? canonical(row.account),
-    ]);
-  const providerInputCounts = new Map<string, number>();
-  for (const row of providerPairs) {
-    const key = providerInputKey(row);
-    providerInputCounts.set(key, (providerInputCounts.get(key) ?? 0) + 1);
-  }
-
   const accountFor = (row: FinancialTransactionImportRow) => {
     const hinted = options.accountHints?.get(row.key);
     if (hinted) {
@@ -267,6 +215,75 @@ export function projectFinancialCandidates(
           null)
       : null;
   };
+  return { accountFor, providerObservations };
+}
+
+export function projectFinancialCandidates(
+  input: FinancialTransactionImportPreviewInput,
+  options: FinancialStatementPreviewOptions,
+  loaded: FinancialPreviewLoaded,
+) {
+  const {
+    sourceRefIds,
+    legacyIds,
+    observations,
+    preparation,
+    transactions,
+    refsByTransaction,
+  } = loaded;
+  const suggestionPolicy = options.candidatePolicy === "suggestion";
+  const providerPairs = input.rows.filter((row) => row.providerTransactionId);
+  const fingerprintCounts = new Map<string, number>();
+  for (const ref of sourceRefIds)
+    fingerprintCounts.set(ref, (fingerprintCounts.get(ref) ?? 0) + 1);
+  const parsedTransactions = transactions.map((transaction) => ({
+    ...transaction,
+    sourceRefs: refsByTransaction.get(transaction.id) ?? [],
+  }));
+  // Preserve ledger order and every competitor while avoiding a full-ledger
+  // scan for each input row. Reference identity stays source-scoped.
+  const transactionsByAccount = new Map<string, typeof parsedTransactions>();
+  const transactionsByRef = new Map<string, typeof parsedTransactions>();
+  const transactionsByAlias = new Map<string, typeof parsedTransactions>();
+  for (const transaction of parsedTransactions) {
+    const accountRows = transactionsByAccount.get(transaction.accountId) ?? [];
+    accountRows.push(transaction);
+    transactionsByAccount.set(transaction.accountId, accountRows);
+    for (const key of new Set(
+      transaction.sourceRefs
+        .filter((ref) => ref.externalId.startsWith("SOC-"))
+        .map((ref) => pairKey(ref.source, ref.externalId)),
+    )) {
+      const refRows = transactionsByRef.get(key) ?? [];
+      refRows.push(transaction);
+      transactionsByRef.set(key, refRows);
+    }
+  }
+  for (const transaction of parsedTransactions)
+    for (const ref of transaction.sourceRefs) {
+      const key = pairKey(ref.source, ref.externalId);
+      transactionsByAlias.set(key, [
+        ...(transactionsByAlias.get(key) ?? []),
+        transaction,
+      ]);
+    }
+  const { accountFor, providerObservations } = financialRowAccounts(
+    options,
+    preparation.accounts,
+    observations,
+  );
+  const providerInputKey = (row: FinancialTransactionImportRow) =>
+    JSON.stringify([
+      row.source,
+      row.providerTransactionId,
+      row.providerAccountId ?? canonical(row.account),
+    ]);
+  const providerInputCounts = new Map<string, number>();
+  for (const row of providerPairs) {
+    const key = providerInputKey(row);
+    providerInputCounts.set(key, (providerInputCounts.get(key) ?? 0) + 1);
+  }
+
   const statusFor = (
     row: FinancialTransactionImportRow,
     externalId: string,

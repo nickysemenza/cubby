@@ -1264,6 +1264,10 @@ export const { definition, readSchemas } = defineEntityModel(
         { on: ["status"] },
         { on: ["transactionDate"] },
         { on: ["postedDate"] },
+        // Statement preview's date-window candidates share their row's
+        // account; a serializable read locks only that account's date range.
+        { on: ["accountId", "postedDate"], where: "{deletedAt} IS NULL" },
+        { on: ["accountId", "transactionDate"], where: "{deletedAt} IS NULL" },
       ],
       checks: [
         {

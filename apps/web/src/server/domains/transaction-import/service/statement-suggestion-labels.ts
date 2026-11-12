@@ -1,3 +1,7 @@
+import type {
+  FinancialSpendingAdvice,
+  FinancialSpendingPlan,
+} from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
@@ -51,15 +55,12 @@ import {
   statementCandidateSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
-  prepareStatementSpending,
   prepareStatementSpendingFacts,
+  prepareStatementSpendings,
 } from "~/server/domains/transaction-import/repo/statement-spending";
-import {
-  statementBatchCandidate,
-  STATEMENT_PAGE_RUN_CREATES,
-} from "~/server/domains/transaction-import/repo/statement-suggestion-apply";
 import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
+  buildChargeProposalsIsolated,
   buildChargeProposals,
   chargeId,
   coalesceChargeRefreshes,
@@ -75,20 +76,12 @@ import {
   type StatementSuggestionScope,
   type LabelCursor,
   recordStatementLabelCheckpoint,
-  completeStatementReceipts,
   repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";
-import {
-  applyAutomaticRulePage,
-  applyAutomaticRulesForCharge,
-  type AutomaticSelection,
-  selectAutomaticRule,
-  selectAutomaticRules,
-} from "~/server/generic/suggestions/repo/automatic-application";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
@@ -116,44 +109,22 @@ type LabelPreparation = Pick<
   "charge" | "judgment" | "evidenceFingerprint"
 > & { amount: number };
 
-/**
- * A page's proposals in one build: per-charge builds repeat the same
- * account-wide reads, about 20 times the queries for a 20-charge page. A
- * build that throws falls back to one charge at a time, so only the bad
- * charge fails.
- */
+/** A page's proposals in one build; a failing build isolates only its bad charges. */
 async function buildPage(
   db: Database,
   charges: readonly ChargeRef[],
   onFailure: (charge: ChargeRef, error: unknown) => void,
   preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
-  const byCharge = new Map<string, ChargeProposal>();
-  try {
-    for (const proposal of await buildChargeProposals(db, charges, preparation))
-      byCharge.set(chargeId(proposal.charge), proposal);
-  } catch (error) {
-    if (isWorkflowInterrupted(error)) throw error;
-    // SILENT: the per-charge builds below record each failing charge's own error.
-    await forEachConcurrently(
-      charges,
-      STATEMENT_PUBLISH_CONCURRENCY,
-      async (charge) => {
-        try {
-          const [proposal] = await buildChargeProposals(
-            db,
-            [charge],
-            preparation,
-          );
-          if (proposal) byCharge.set(chargeId(charge), proposal);
-        } catch (error) {
-          if (isWorkflowInterrupted(error)) throw error;
-          onFailure(charge, error);
-        }
-      },
-    );
-  }
-  return byCharge;
+  const { proposals } = await buildChargeProposalsIsolated(
+    db,
+    charges,
+    onFailure,
+    preparation,
+  );
+  return new Map(
+    proposals.map((proposal) => [chargeId(proposal.charge), proposal]),
+  );
 }
 
 /** Partial model answers are checkpointed independently of advisory publication. */
@@ -353,28 +324,22 @@ function prepareLabelledJudgment(
           }),
         );
     },
-    async finish(
+    /**
+     * The spending advice this charge plans with, after any model work, or
+     * `undefined` when it plans nothing; the caller plans a wave at once.
+     */
+    async advise(
       page?: FinancialSpendingPage,
       usageFor?: Parameters<typeof adviseSpending>[1]["usageFor"],
-    ) {
+    ): Promise<{ advice: FinancialSpendingAdvice | null } | undefined> {
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
       if (checkpoint.spending && previous)
-        judgment.spending = await prepareStatementSpending(
-          db,
-          judgment,
-          previous.judgment.spending?.request.advice ?? null,
-          page,
-        );
+        return { advice: previous.judgment.spending?.request.advice ?? null };
       if (!checkpoint.spending && !needsSpendingAdvice(judgment)) {
-        judgment.spending = await prepareStatementSpending(
-          db,
-          judgment,
-          null,
-          page,
-        );
         checkpoint.spending = true;
+        return { advice: null };
       }
       if (
         !checkpoint.spending &&
@@ -394,18 +359,16 @@ function prepareLabelledJudgment(
             }),
           );
           for (const call of spending.inputs) recordModel(call.model);
-          const advice = spending.result;
-          judgment.spending = await prepareStatementSpending(
-            db,
-            judgment,
-            advice,
-            page,
-          );
           checkpoint.spending = true;
+          return { advice: spending.result };
         } catch (error) {
           retainError(error);
         }
       }
+      return undefined;
+    },
+    complete(plan?: { spending: FinancialSpendingPlan | null }) {
+      if (plan) judgment.spending = plan.spending;
       judgment.clean = isClean(judgment, current.amount);
       checkpoint.judgment = statementTransactionJudgment.parse(judgment);
       return {
@@ -531,7 +494,6 @@ async function applyPublishedStatementLabels(
     budgetSpent,
     time,
   } = input;
-  const importClean = Boolean(scope?.importId);
   const applied = new Set<string>();
   const rebuild = new Set<string>();
   const excluded = new Set<string>();
@@ -562,155 +524,55 @@ async function applyPublishedStatementLabels(
     if (blocked) unfinished.add(target.row.cursorId);
     else queue.push(target);
   }
-  const receiptOf = (target: LabelTarget) =>
-    receipts.get(chargeId(target.charge))!;
-  const selections = await selectAutomaticRules(db, queue.map(receiptOf), {
-    importClean,
+  const { settleStatementPage } =
+    await import("~/server/domains/transaction-import/repo/statement-settlement");
+  const outcomes = await settleStatementPage(db, {
+    mode: "label",
+    scope,
+    servicesFor: buildCrudServices,
+    entries: queue.map((target) => ({
+      charge: target.charge,
+      suggestionId: receipts.get(chargeId(target.charge))!,
+      evidenceFingerprint: published.get(chargeId(target.charge))!,
+    })),
+    budgetSpent,
+    settledBefore: completed.size > 0,
+    time,
   });
-  let settledHere = false;
-  const settle = (target: LabelTarget) => {
-    completed.add(chargeId(target.charge));
-    target.row.applicationPending = false;
-    unfinished.delete(target.row.cursorId);
-    settledHere = true;
-  };
-  let stopped = false;
-  const applyAlone = (target: LabelTarget) =>
-    time("statement_application_alone", () => applyOne(target));
-  const applyOne = async (target: LabelTarget) => {
+  for (const target of queue) {
     const key = chargeId(target.charge);
-    // The budget bounds application too, since its per-charge cost is the
-    // page's largest; a blocked suffix keeps its receipts for the next page.
-    if (stopped || (budgetSpent() && (settledHere || completed.size > 0))) {
-      stopped = true;
-      unfinished.add(target.row.cursorId);
-      return;
-    }
-    try {
-      // Rule selection reads the stored suggestion. A charge the page declined
-      // can have gained a live candidate since publication (for example a
-      // member-recorded transaction), and create terms ignore candidates, so
-      // regenerate first or the clean-create rule would duplicate it.
-      if (importClean) await regenerateCharges(db, [target.charge], scope);
-      const outcome = await applyAutomaticRulesForCharge(
-        db,
-        target.charge,
-        buildCrudServices,
-        importClean,
-        scope,
-      );
-      if (outcome.refused.length) {
-        const [fresh] = await buildChargeProposals(db, [target.charge]);
-        if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
-          // An earlier application can consume this charge's candidate.
-          // Rebuild through the existing ordered rounds instead of retrying
-          // an obsolete application receipt forever.
-          target.row.applicationPending = false;
-          rebuild.add(key);
-          stopped = true;
-          return;
-        }
-        throw new Error(
-          `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
-        );
-      }
-      // The application settled the receipt with its state. A receipt whose
-      // rule no longer selects stays for the next page's no-action check.
-      if (outcome.applied.length) {
+    const outcome = outcomes.get(key) ?? { kind: "unfinished" };
+    switch (outcome.kind) {
+      case "applied":
         applied.add(key);
-        settle(target);
-      } else unfinished.add(target.row.cursorId);
-    } catch (error) {
-      fail(target.charge, error);
-      unfinished.delete(target.row.cursorId);
-      stopped = true;
-    }
-  };
-  for (let index = 0; index < queue.length;) {
-    const run: { target: LabelTarget; selection: AutomaticSelection | null }[] =
-      [];
-    let creates = 0;
-    let full = false;
-    for (; index < queue.length; index++) {
-      const target = queue[index]!;
-      const selection = selections.get(receiptOf(target)) ?? null;
-      if (
-        selection &&
-        !statementBatchCandidate(
-          statementTransactionJudgment.parse(selection.row.judgment),
-        )
-      )
+        completed.add(key);
+        target.row.applicationPending = false;
+        unfinished.delete(target.row.cursorId);
         break;
-      if (selection && creates === STATEMENT_PAGE_RUN_CREATES) {
-        full = true;
+      case "completed":
+        completed.add(key);
+        target.row.applicationPending = false;
+        unfinished.delete(target.row.cursorId);
         break;
-      }
-      if (selection) creates++;
-      run.push({ target, selection });
+      case "moved":
+        // An earlier write or moved evidence: the next round relabels it on
+        // current evidence, and the cursor stays until it settles.
+        target.row.applicationPending = false;
+        rebuild.add(key);
+        unfinished.add(target.row.cursorId);
+        break;
+      case "out_of_scope":
+        excluded.add(key);
+        break;
+      case "failed":
+        fail(target.charge, outcome.error);
+        unfinished.delete(target.row.cursorId);
+        break;
+      default:
+        // Budget, conflict bound or a rule that no longer selects: the
+        // receipt stays for the next page with an inclusive cursor.
+        unfinished.add(target.row.cursorId);
     }
-    if (run.length) {
-      if (stopped || (budgetSpent() && (settledHere || completed.size > 0))) {
-        stopped = true;
-        for (const { target } of run) unfinished.add(target.row.cursorId);
-      } else {
-        const none = run.filter(({ selection }) => !selection);
-        log.info("Statement label application phase", {
-          phase: "page",
-          charges: run.length,
-          noAction: none.length,
-        });
-        const page = await time("statement_application_page", () =>
-          applyAutomaticRulePage(
-            db,
-            run.flatMap(({ selection }) => (selection ? [selection] : [])),
-            {
-              context: buildCrudServices,
-              statementScope: scope,
-              settle: {
-                ids: none.map(({ target }) => receiptOf(target)),
-                run: async (tx, rows) => ({
-                  admitted: new Set(rows.keys()),
-                  settled: new Set(
-                    await completeStatementReceipts(
-                      tx,
-                      none.map(({ target }) => ({
-                        suggestionId: receiptOf(target),
-                        charge: target.charge,
-                        evidenceFingerprint: published.get(
-                          chargeId(target.charge),
-                        )!,
-                      })),
-                      rows,
-                      (row) => !selectAutomaticRule(row, { importClean }),
-                    ),
-                  ),
-                }),
-              },
-            },
-          ),
-        );
-        const alone: LabelTarget[] = [];
-        for (const { target, selection } of run) {
-          const key = chargeId(target.charge);
-          const receipt = receiptOf(target);
-          if (!selection) {
-            if (page.settled?.settled.has(receipt)) settle(target);
-            else if (page.settled && !page.settled.admitted.has(receipt))
-              excluded.add(key);
-            else unfinished.add(target.row.cursorId);
-            continue;
-          }
-          const outcome = page.outcomes.get(receipt);
-          if (outcome === "applied") {
-            applied.add(key);
-            settle(target);
-          } else if (outcome === "out_of_scope") excluded.add(key);
-          else alone.push(target);
-        }
-        for (const target of alone) await applyAlone(target);
-      }
-    }
-    if (!full && index < queue.length) await applyAlone(queue[index++]!);
   }
   return { applied, rebuild, excluded };
 }
@@ -748,6 +610,8 @@ async function runStatementLabelBatch(
      * counts once (#3397). "Retry failed" clears the set to re-admit them.
      */
     countedFailures?: ReadonlySet<string>;
+    /** When the step recorded its last page: later applications were never refreshed. */
+    recoverSince?: Date | null;
   } = {},
 ): Promise<{
   labelled: number;
@@ -760,6 +624,8 @@ async function runStatementLabelBatch(
   failed: RunStepError[];
   next: LabelCursor | null;
   through: LabelCursor | null;
+  /** `charge:` refs of the page's receipts left for a later page. */
+  unfinishedRefs: string[];
   /** False when the automatic-work switch is off, so nothing was asked. */
   active: boolean;
   waitingUntil: number | null;
@@ -779,6 +645,7 @@ async function runStatementLabelBatch(
     failed: [],
     next: null,
     through: null,
+    unfinishedRefs: [],
     waitingUntil: null,
     paused: null,
   };
@@ -797,6 +664,18 @@ async function runStatementLabelBatch(
     ? Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs
     : null;
   const budgetSpent = () => budgetEnds !== null && Date.now() >= budgetEnds;
+  // Applied receipts leave the label backlog, even on an empty last page;
+  // statement rules apply only under an import, whose charges still name
+  // what a stopped page applied.
+  if (input.scope?.importId) {
+    const { recoverSettlementObligations } =
+      await import("~/server/domains/transaction-import/repo/statement-settlement");
+    await recoverSettlementObligations(db, {
+      since: input.recoverSince ?? null,
+      scope: input.scope,
+      within: { kind: "import", importId: input.scope.importId },
+    });
+  }
   const rows = await time("statement_selection", () =>
     suggestionsNeedingLabels(
       db,
@@ -1074,7 +953,7 @@ async function runStatementLabelBatch(
       };
       const finishWave = (wave: typeof classified) =>
         withFieldSuggestionBatch(async () => {
-          const settled = await settleDecisionWorkItems(
+          const advised = await settleDecisionWorkItems(
             wave,
             async (result) => {
               if (result.status !== "fulfilled") return result;
@@ -1085,7 +964,10 @@ async function runStatementLabelBatch(
                   );
                 return {
                   status: "fulfilled" as const,
-                  value: await result.value.finish(spendingPage, usageFor),
+                  value: {
+                    labels: result.value,
+                    advised: await result.value.advise(spendingPage, usageFor),
+                  },
                 };
               } catch (reason) {
                 return { status: "rejected" as const, reason };
@@ -1093,9 +975,47 @@ async function runStatementLabelBatch(
             },
             STATEMENT_SPENDING_CONCURRENCY,
           );
-          return settled.map((result) =>
-            result.status === "fulfilled" ? result.value : result,
+          // The wave's spending plans resolve as one vector after its advice.
+          const planning = advised.flatMap((result) =>
+            result.status === "fulfilled" &&
+            result.value.status === "fulfilled" &&
+            result.value.value.advised
+              ? [result.value.value]
+              : [],
           );
+          let plans: (FinancialSpendingPlan | null)[] = [];
+          let planFailure: unknown;
+          try {
+            plans = await prepareStatementSpendings(
+              db,
+              planning.map(({ labels, advised }) => ({
+                judgment: labels.judgment,
+                advice: advised!.advice,
+              })),
+              spendingPage,
+            );
+          } catch (reason) {
+            if (isWorkflowInterrupted(reason)) throw reason;
+            planFailure = reason;
+          }
+          const planOf = new Map(
+            planning.map((entry, index) => [entry, plans[index] ?? null]),
+          );
+          return advised.map((result) => {
+            if (result.status !== "fulfilled") return result;
+            const inner = result.value;
+            if (inner.status !== "fulfilled") return inner;
+            if (inner.value.advised && planFailure)
+              return { status: "rejected" as const, reason: planFailure };
+            return {
+              status: "fulfilled" as const,
+              value: inner.value.labels.complete(
+                inner.value.advised
+                  ? { spending: planOf.get(inner.value) ?? null }
+                  : undefined,
+              ),
+            };
+          });
         });
       const computed: Awaited<ReturnType<typeof finishWave>> = [];
       // Batch related field questions within each wave; all started work settles
@@ -1351,6 +1271,15 @@ async function runStatementLabelBatch(
     skippedIds,
     failed,
     ...statementLabelCursors(page, unfinished, rows.length > limit),
+    unfinishedRefs: page.flatMap((row) => {
+      if (!unfinished.has(row.cursorId)) return [];
+      const subject = suggestionSubjects.statement_transaction.safeParse(
+        row.subject,
+      );
+      return subject.success
+        ? [`charge:${subject.data.source}:${subject.data.chargeKey}`]
+        : [];
+    }),
     active: true,
     waitingUntil,
     paused: pauses[0]

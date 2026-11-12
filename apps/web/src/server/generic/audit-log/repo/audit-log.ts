@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/audit";
 import { type ActorContext, type AuditChannel } from "@cubby/schemas/context";
 import { fieldAutomationWatches } from "@cubby/schemas/field-suggestion-policy";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -245,6 +246,31 @@ export async function logAuditEntry(
   }
 }
 
+const auditRecordKeys = [
+  "entityKind",
+  "entityId",
+  "action",
+  "changes",
+  "userId",
+  "channel",
+  "oauthClientId",
+  "deviceId",
+  "runId",
+  "authority",
+  "automationPending",
+] as const satisfies readonly (keyof typeof auditLog.$inferInsert)[];
+const auditRecordColumns = sql.join(
+  auditRecordKeys.map((key) => sql.identifier(auditLog[key].name)),
+  sql`, `,
+);
+const auditRecordTypes = sql.join(
+  auditRecordKeys.map(
+    (key) =>
+      sql`${sql.identifier(auditLog[key].name)} ${sql.raw(auditLog[key].getSQLType())}`,
+  ),
+  sql`, `,
+);
+
 /**
  * Insert multiple audit log entries in a single batch operation.
  * Much more efficient than calling logAuditEntry in a loop (40x faster for 100 items).
@@ -265,13 +291,18 @@ export async function logAuditEntries(
     automationPending: automationPending(entry),
   }));
 
-  const inserted = await unwrapDb(db)
-    .insert(auditLog)
-    .values(auditRecords)
-    .returning({
-      id: auditLog.id,
-      entityKind: auditLog.entityKind,
-    });
+  // One jsonb parameter however many rows: a layer's audit stays within the
+  // per-statement bind budget.
+  const inserted = await unwrapDb(db).execute<{
+    id: string;
+    entityKind: AuditEntityKind;
+  }>(
+    sql`INSERT INTO ${auditLog} (${auditRecordColumns})
+      SELECT ${auditRecordColumns} FROM jsonb_to_recordset(${JSON.stringify(auditRecords)}::jsonb)
+        AS record(${auditRecordTypes})
+      RETURNING ${sql.identifier(auditLog.id.name)} AS id, ${sql.identifier(auditLog.entityKind.name)} AS "entityKind"`,
+    "objects",
+  );
   for (const row of inserted) captureAuditId(row.id);
   await recordChange(db, {
     kind: "source",

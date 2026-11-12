@@ -174,6 +174,20 @@ const labelsOff = {
 const statementCursor = z
   .object({
     after: z.object({ source: z.string(), chargeKey: z.string() }).nullable(),
+    /** Consecutive pages that settled nothing new at this cursor. */
+    stalled: z.number().int().nonnegative().optional(),
+  })
+  .nullable();
+
+/** Pages a conflicted cursor may repeat before its charges become retained failures. */
+const STATEMENT_STALLED_PAGES = 3;
+
+const labelCursor = z
+  .object({
+    createdAt: z.string(),
+    id: z.string(),
+    inclusive: z.boolean().optional(),
+    stalled: z.number().int().nonnegative().optional(),
   })
   .nullable();
 
@@ -198,6 +212,7 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
         scope,
         refs,
         work,
+        recoverSince: step.updatedAt,
       });
       return {
         delta: {
@@ -229,29 +244,55 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
       runId: run.id,
       scope,
       work,
+      recoverSince: step.updatedAt,
     });
+    // Unfinished charges keep an inclusive cursor. A cursor that makes no
+    // progress for a bounded number of pages retains them as failures, so a
+    // persistent conflict can neither stall the step nor be reported complete.
+    const stalled =
+      page.unfinished.length &&
+      JSON.stringify(page.restart) === JSON.stringify(cursor.after)
+        ? (cursor.stalled ?? 0) + 1
+        : 0;
+    const retain =
+      page.unfinished.length > 0 && stalled >= STATEMENT_STALLED_PAGES;
+    const errors = retain
+      ? [
+          ...page.failed,
+          ...page.unfinished.map((charge) => ({
+            at: new Date().toISOString(),
+            ref: `charge:${charge.source}:${charge.chargeKey}`,
+            message:
+              "Statement application kept conflicting with concurrent writes; retry this charge.",
+          })),
+        ]
+      : page.failed;
+    const repeat = page.unfinished.length > 0 && !retain;
     return {
       kind: "progress",
       delta: {
         done: Math.max(
           0,
-          page.processed - page.outOfScope - page.failed.length,
+          (repeat ? page.processed : page.found) -
+            page.outOfScope -
+            errors.length,
         ),
         skipped: page.outOfScope,
-        failed: page.failed.length,
+        failed: errors.length,
       },
-      errors: page.failed,
+      errors,
       tallies: {
         published: page.published,
         labelsReused: page.labelsReused,
       },
       reasons: { out_of_scope: page.outOfScope, unchanged: page.unchanged },
-      cursor: page.next
-        ? {
-            after: page.next,
-          }
-        : null,
-      done: page.next === null,
+      cursor: repeat
+        ? { after: page.restart, stalled }
+        : page.next
+          ? { after: page.next }
+          : null,
+      done: !repeat && page.next === null,
+      ...(repeat ? { waitSeconds: 5 } : {}),
     };
   },
 };
@@ -348,16 +389,8 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
         cooperative: true,
         work,
         countedFailures: new Set(step.meta?.failedRefs ?? []),
-        after: retainedRetry
-          ? null
-          : z
-              .object({
-                createdAt: z.string(),
-                id: z.string(),
-                inclusive: z.boolean().optional(),
-              })
-              .nullable()
-              .parse(step.cursor ?? null),
+        recoverSince: step.updatedAt,
+        after: retainedRetry ? null : labelCursor.parse(step.cursor ?? null),
         scope,
         ...(retainedRetry && { retryCharges: charge ? [charge] : [] }),
       });
@@ -406,18 +439,49 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
         ...waitFor(outcome.waitingUntil),
       };
     }
+    // A cursor that settles nothing for a bounded number of pages, with no
+    // model wait or funding pause to explain it, retains its receipts as
+    // failures and moves past them, as generation does.
+    const stored = labelCursor.parse(step.cursor ?? null);
+    const stalled =
+      !outcome.paused &&
+      outcome.waitingUntil === null &&
+      outcome.completed === 0 &&
+      outcome.failed.length === 0 &&
+      outcome.stale === 0 &&
+      outcome.next !== null &&
+      stored !== null &&
+      outcome.next.createdAt === stored.createdAt &&
+      outcome.next.id === stored.id
+        ? (stored.stalled ?? 0) + 1
+        : 0;
+    const retain =
+      stalled >= STATEMENT_STALLED_PAGES && outcome.unfinishedRefs.length > 0;
+    const errors = retain
+      ? [
+          ...outcome.failed,
+          ...outcome.unfinishedRefs.map((ref) => ({
+            at: new Date().toISOString(),
+            ref,
+            message:
+              "Statement application kept conflicting with concurrent writes; retry this charge.",
+          })),
+        ]
+      : outcome.failed;
     const checkpoint = {
       delta: {
         done: outcome.completed,
         skipped: outcome.stale,
-        failed: outcome.failed.length,
+        failed: errors.length,
       },
-      errors: outcome.failed,
+      errors,
       tallies: {
         labelsReused: outcome.labels.reused,
         labelsGenerated: outcome.labels.generated,
       },
-      cursor: outcome.next,
+      cursor: retain
+        ? outcome.through
+        : outcome.next && { ...outcome.next, ...(stalled && { stalled }) },
     };
     if (outcome.paused)
       return {
@@ -431,8 +495,9 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
       ...checkpoint,
       kind: "progress",
       ...(!outcome.active && labelsOff),
-      done: outcome.next === null,
+      done: checkpoint.cursor === null,
       ...waitFor(outcome.waitingUntil),
+      ...(stalled && !retain ? { waitSeconds: 5 } : {}),
     };
   },
 };

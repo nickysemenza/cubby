@@ -70,6 +70,7 @@ import {
   defineMutationWriter,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
+import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -966,6 +967,156 @@ const resolveOptional = async <
  * the whole set, and rows are created and returned in input order. An input
  * that names no Purchase still resolves its charge on its own.
  */
+type ExpenseReferences = {
+  lineKind: ReturnType<typeof resolveExpenseLineKind>;
+  projectId: ProjectId | null;
+  productId: ProductId | null;
+  purchaseId: PurchaseId | null;
+};
+
+/** One new Expense's classification, date and quantity checks on resolved references. */
+function expenseCreateTuple(
+  data: ExpenseCreateInput,
+  references: ExpenseReferences,
+) {
+  const { lineKind, projectId, productId } = references;
+  assertClassificationPolicies("expense", {
+    lineKind,
+    lineBasis: data.lineBasis ?? "item_line",
+    productId,
+    spendingCategoryId: data.spendingCategoryId ?? null,
+    projectId,
+  });
+  if (data.productQuantity !== null && productId === null) {
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Product quantity requires a linked product.",
+    );
+  }
+  assertExpenseDate(data.cost, data.date);
+  assertQuantitySignMatchesCost(data.cost, data.productQuantity);
+  return { ...references, trade: data.trade };
+}
+
+/** A new Expense's stored values. */
+const expenseInsertValues = (
+  data: ExpenseCreateInput,
+  tuple: ReturnType<typeof expenseCreateTuple>,
+  spendingCategoryId: SpendingCategoryId | null,
+) => ({
+  spendingCategoryId,
+  economicRole: data.economicRole,
+  name: data.name,
+  cost: data.cost,
+  date: data.date,
+  lineKind: tuple.lineKind,
+  lineBasis: data.lineBasis,
+  costType: data.costType,
+  trade: data.trade,
+  url: data.url,
+  notes: data.notes,
+  future: data.future,
+  projectId: tuple.projectId,
+  productId: tuple.productId,
+  productQuantity: data.productQuantity,
+  purchaseId: tuple.purchaseId,
+});
+
+/** A new Expense has no attributions or source claims to replace. */
+async function writeNewExpenseLedgerRows(
+  tx: DrizzleTransaction,
+  inputs: readonly ExpenseCreateInput[],
+  created: readonly { id: ExpenseId }[],
+) {
+  for (const [index, data] of inputs.entries()) {
+    const expenseId = created[index]!.id;
+    if (data.beneficiaries?.length)
+      await replaceExpenseAttributionRole(
+        tx,
+        expenseId,
+        "beneficiary",
+        data.beneficiaries,
+      );
+    if (data.funders?.length)
+      await replaceExpenseAttributionRole(
+        tx,
+        expenseId,
+        "funder",
+        data.funders,
+      );
+    if (data.sourceClaims?.length)
+      await replaceLedgerSourceClaims(
+        tx,
+        { expenseId, targetAmount: data.cost },
+        data.sourceClaims,
+      );
+  }
+}
+
+/**
+ * Principal Expenses without a Product, staged in a write layer on resolved
+ * references: `createExpenses`' checks, values, attribution rows and create
+ * audit. Booking lineage is stored with the row. Insert the layer's
+ * Purchases first: inheritance validation reads them.
+ */
+export function stageExpenses(
+  layer: WriteLayer,
+  items: readonly {
+    data: ExpenseCreateInput;
+    projectId: ProjectId | null;
+    purchaseId: PurchaseId;
+    spendingCategoryId: SpendingCategoryId | null;
+    bookingTransactionCode: string | null;
+  }[],
+) {
+  const tuples = items.map(({ data, projectId, purchaseId }) => {
+    if (data.productId || data.lineKind === undefined)
+      throw new Error("Staged Expenses are classified lines without a Product");
+    return expenseCreateTuple(data, {
+      lineKind: resolveExpenseLineKind({
+        lineKind: data.lineKind,
+        productId: null,
+      }),
+      projectId,
+      productId: null,
+      purchaseId,
+    });
+  });
+  const staged = layer.stage(
+    "expense",
+    items.map((item, index) => ({
+      ...expenseInsertValues(
+        item.data,
+        tuples[index]!,
+        item.spendingCategoryId,
+      ),
+      bookingTransactionCode: item.bookingTransactionCode,
+    })),
+  );
+  return { staged, tuples };
+}
+
+/** Validate and insert staged Expenses, then their attribution rows and audit. */
+export async function insertStagedExpenses(
+  layer: WriteLayer,
+  stagedExpenses: ReturnType<typeof stageExpenses>,
+  inputs: readonly ExpenseCreateInput[],
+  actor: ActorContext,
+) {
+  await validateExpenseInheritances(layer.tx, stagedExpenses.tuples);
+  const created = await layer.insert("expense", stagedExpenses.staged);
+  await writeNewExpenseLedgerRows(layer.tx, inputs, created);
+  layer.audit(
+    actor,
+    created.map((row) => ({
+      entityKind: "expense" as const,
+      entityId: row.id,
+      action: "create" as const,
+    })),
+  );
+  return created;
+}
+
 export async function createExpenses(
   db: Database,
   inputs: readonly ExpenseCreateInput[],
@@ -1025,30 +1176,12 @@ export async function createExpenses(
           "Expense Product changed while its receipt role was being resolved.",
         );
       }
-      const lineKind = lineKinds[index]!;
-      const projectId = projectIds[index]!;
-      assertClassificationPolicies("expense", {
-        lineKind,
-        lineBasis: data.lineBasis ?? "item_line",
-        productId,
-        spendingCategoryId: data.spendingCategoryId ?? null,
-        projectId,
-      });
-      if (data.productQuantity !== null && productId === null) {
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Product quantity requires a linked product.",
-        );
-      }
-      assertExpenseDate(data.cost, data.date);
-      assertQuantitySignMatchesCost(data.cost, data.productQuantity);
-      return {
-        lineKind,
-        projectId,
+      return expenseCreateTuple(data, {
+        lineKind: lineKinds[index]!,
+        projectId: projectIds[index]!,
         productId,
         purchaseId: purchaseIds[index]!,
-        trade: data.trade,
-      };
+      });
     });
     await validateExpenseInheritances(tx, tuples);
     const pricesBefore = await loadEffectiveProductPricesById(
@@ -1063,49 +1196,11 @@ export async function createExpenses(
     const created = await insertManyWithShortcode(
       tx,
       "expense",
-      inputs.map((data, index) => ({
-        spendingCategoryId: categoryIds[index]!,
-        economicRole: data.economicRole,
-        name: data.name,
-        cost: data.cost,
-        date: data.date,
-        lineKind: tuples[index]!.lineKind,
-        lineBasis: data.lineBasis,
-        costType: data.costType,
-        trade: data.trade,
-        url: data.url,
-        notes: data.notes,
-        future: data.future,
-        projectId: tuples[index]!.projectId,
-        productId: tuples[index]!.productId,
-        productQuantity: data.productQuantity,
-        purchaseId: tuples[index]!.purchaseId,
-      })),
+      inputs.map((data, index) =>
+        expenseInsertValues(data, tuples[index]!, categoryIds[index]!),
+      ),
     );
-    // A new Expense has no attributions or source claims to replace.
-    for (const [index, data] of inputs.entries()) {
-      const expenseId = created[index]!.id;
-      if (data.beneficiaries?.length)
-        await replaceExpenseAttributionRole(
-          tx,
-          expenseId,
-          "beneficiary",
-          data.beneficiaries,
-        );
-      if (data.funders?.length)
-        await replaceExpenseAttributionRole(
-          tx,
-          expenseId,
-          "funder",
-          data.funders,
-        );
-      if (data.sourceClaims?.length)
-        await replaceLedgerSourceClaims(
-          tx,
-          { expenseId, targetAmount: data.cost },
-          data.sourceClaims,
-        );
-    }
+    await writeNewExpenseLedgerRows(tx, inputs, created);
     await logAuditEntries(
       tx,
       actor,
@@ -1115,8 +1210,9 @@ export async function createExpenses(
         action: "create" as const,
       })),
     );
+    // The policy constrains Product-linked principal lines only.
     await validateProductPolicy(tx, {
-      expenseIds: created.map((row) => row.id),
+      expenseIds: created.flatMap((row) => (row.productId ? [row.id] : [])),
     });
     await touchUpdatedAt(
       tx,

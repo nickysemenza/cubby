@@ -417,21 +417,10 @@ const conflictSentence = {
  * allocation write; `finance.allocate_settlement` alone may pass an explicit
  * acknowledgement, which records the matching data exception instead.
  */
-export async function refuseSettlementConflicts(
-  tx: DrizzleTransaction,
-  input: {
-    transactionId: FinancialTransactionId;
-    purchaseIds: readonly PurchaseId[];
-    /** Conflicts the charge already carried before this write; not new. */
-    existing?: ReadonlyMap<PurchaseId, readonly SettlementConflictKind[]>;
-  },
-): Promise<void> {
-  await refuseSettlementConflictsFor(tx, [input]);
-}
-
 /**
- * `refuseSettlementConflicts` for several charges with one conflict read; the
- * first charge in input order with a new conflict refuses.
+ * Refuse settlement writes that create a new conflict, for several charges
+ * with one conflict read; the first charge in input order with a new conflict
+ * refuses.
  */
 export async function refuseSettlementConflictsFor(
   tx: DrizzleTransaction,

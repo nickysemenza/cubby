@@ -74,6 +74,7 @@ import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import type { FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
@@ -197,7 +198,10 @@ import {
   type StatementSuggestionScope,
 } from "./statement-input";
 import {
+  changedStatementBooking,
   prepareStatementSpending,
+  prepareStatementSpendings,
+  prepareStatementSpendingFacts,
   prepareStatementSpendingPage,
 } from "./statement-spending";
 
@@ -221,14 +225,11 @@ const SIBLING_WINDOW_DAYS = 3;
 const HISTORY_MIN_TRANSACTIONS = 2;
 
 /**
- * Charges published at once, by generation and label pages alike. Each publish holds a pooled
- * connection for its transaction, and the Hyperdrive pools the app's requests
- * share are capped at 12, so a Sweep keeps most of them free.
+ * Publication transactions in flight, by generation and label pages alike.
+ * Each holds a pooled connection, and a Worker invocation's pool holds two;
+ * more only queue for a connection while holding their slot keys' turn.
  */
-export const STATEMENT_PUBLISH_CONCURRENCY = 4;
-
-// Limit preparation discarded when a later application invalidates its suffix.
-const STATEMENT_GENERATION_REBUILD_SIZE = 8;
+export const STATEMENT_PUBLISH_CONCURRENCY = 2;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -508,10 +509,9 @@ async function supersedeExactTwins(
         { supersededByRowId: twin.successor },
         actor,
       );
-      await retireSettledChargeAdvice(databaseForTransaction(tx), {
-        source: twin.source,
-        chargeKey: twin.thinnerChargeKey,
-      });
+      await retireSettledChargeAdvice(databaseForTransaction(tx), [
+        { source: twin.source, chargeKey: twin.thinnerChargeKey },
+      ]);
     }
     return current;
   });
@@ -746,24 +746,6 @@ async function copyMembersFor(
   return result;
 }
 
-/** The copies a booked primary charge's applied suggestion named. */
-async function bookedCopies(db: Database, charge: ChargeRef) {
-  const rows = await unwrapDb(db).execute<{ copies: unknown }>(
-    sql`
-    SELECT s.judgment->'copies' AS copies FROM "Suggestion" s
-    WHERE s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)}
-      AND s.status = ${suggestionStatus.enum.applied}
-      AND s.data->>${sql.raw("'source'")} = ${charge.source} AND s.data->>${sql.raw("'chargeKey'")} = ${charge.chargeKey}
-    ORDER BY s."updatedAt" DESC LIMIT 1
-  `,
-    "objects",
-  );
-  const parsed = statementTransactionJudgment.shape.copies.safeParse(
-    rows[0]?.copies ?? [],
-  );
-  return parsed.success ? parsed.data : [];
-}
-
 type CopyPairing =
   | { kind: "none" }
   /** Per-source counts differ: repeat charges and copies cannot be told apart. */
@@ -969,19 +951,43 @@ async function merchantHistory(
         AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
         AND sign(ft."amountMinor")::int = p.direction
     ),
+    -- The candidates' source references. An array qual reaches both arms of
+    -- the reference union, so only these owners' references are read.
+    fx AS MATERIALIZED (
+      SELECT reference.owner, reference.source, reference."externalId"
+      FROM ${financialSourceReferenceRows} reference
+      WHERE reference.owner = ANY((SELECT coalesce(array_agg(id), '{}') FROM candidates)::uuid[])
+    ),
+    -- The charges whose Suggestions can name such a reference: the reference
+    -- is the charge key itself, or the external id of an observation whose
+    -- charge key is current or retained as an alias.
+    named AS MATERIALIZED (
+      SELECT fx.source, fx."externalId" AS "chargeKey" FROM fx
+      UNION
+      SELECT own.source, owner.shortcode FROM fx
+      -- includes-deleted: retained observation ids still name their charges.
+      JOIN "FinancialEvidenceAlias" own ON own.source = fx.source AND own.value = fx."externalId"
+      JOIN "SourceTransactionRecord" observation ON observation.id = own."observationId"
+      JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
+      UNION
+      SELECT retained.source, retained.value FROM fx
+      -- includes-deleted: retained aliases keep the keys a charge was published under.
+      JOIN "FinancialEvidenceAlias" own ON own.source = fx.source AND own.value = fx."externalId"
+      JOIN "FinancialEvidenceAlias" retained ON retained."observationId" = own."observationId"
+    ),
     -- Transactions clean creates on these accounts made when accepted as is,
     -- derived once from retained accept decisions and their historical evidence. Ref keys split at the first ':', the
     -- separator suggestionRefKey writes after the source.
     ruled AS MATERIALIZED (
       SELECT DISTINCT fx.owner AS id
-      FROM "Suggestion" s
+      FROM named JOIN "Suggestion" s
+        ON s.family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)}
+        AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) = (named.source, named."chargeKey")
       CROSS JOIN LATERAL jsonb_array_elements(s.decisions) f(event)
       CROSS JOIN LATERAL jsonb_array_elements_text(s.data->'refs') ref(key)
-      JOIN ${financialSourceReferenceRows} fx ON fx.source = split_part(ref.key, ':', 1)
+      JOIN fx ON fx.source = split_part(ref.key, ':', 1)
         AND fx."externalId" = substr(ref.key, length(split_part(ref.key, ':', 1)) + 2)
-      WHERE fx.owner IN (SELECT id FROM candidates)
-        AND s.family = ${suggestionFamily.enum.statement_transaction}
-        AND (s.judgment->>'clean')::boolean
+      WHERE (s.judgment->>'clean')::boolean
         AND s.judgment->>'recommended' = ${statementTransactionAction.enum.create}
         AND s.status = ${suggestionStatus.enum.applied}
         AND (${suggestionField("accountId")})::uuid IN (SELECT account FROM p)
@@ -2285,18 +2291,22 @@ export async function pendingChargesNear(
   return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
 }
 
-/** Complete a previously committed publication's missed retirement check, even without a new proposal. */
-async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
+/** Complete previously committed publications' missed retirement checks, even without a new proposal. */
+async function retireSettledChargeAdvice(
+  db: Database,
+  charges: readonly ChargeRef[],
+) {
+  if (!charges.length) return [];
+  const requested = tuples(charges);
   return transitionSuggestionStates(
     db,
-    sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}
+    sql`${pendingStatementState} AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${requested})
             AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
             AND EXISTS (
-              SELECT 1 FROM ${chargeStateOf(
-                sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
-              )} cs
-              WHERE cs.ignored OR cs.superseded OR
-                (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})
+              SELECT 1 FROM ${chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (${requested})`)} cs
+              WHERE cs.source = ${suggestionField("source", STATE)} AND cs."chargeKey" = ${suggestionField("chargeKey", STATE)}
+                AND (cs.ignored OR cs.superseded OR
+                  (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book}))
             )`,
     { active: false, status: "superseded" },
   );
@@ -2474,22 +2484,36 @@ async function priorStatementPublications(
   return result;
 }
 
-/** Keep the immutable old publication and labels, replacing only its active queue slot. */
+/** Keep the immutable old publications and labels, replacing only their active queue slots. */
 async function retireRetainedStatementAdvice(
   db: Database,
-  proposal: ChargeProposal,
+  proposals: readonly ChargeProposal[],
 ) {
-  if (!proposal.observations.length) return;
+  const observed = proposals.flatMap((proposal) =>
+    proposal.observations.map((row) => ({
+      record: row.id,
+      source: proposal.charge.source,
+      chargeKey: proposal.charge.chargeKey,
+    })),
+  );
+  if (!observed.length) return;
+  const requested = requestedRows(
+    observed,
+    { record: "uuid", source: "text", chargeKey: "text" },
+    "retained",
+  );
   await transitionSuggestionStates(
     db,
     sql`${suggestionTable.family}=${suggestionFamily.enum.statement_transaction}
     AND ${suggestionTable.active} AND ${suggestionTable.status}=${suggestionStatus.enum.pending}
     AND ${inArray(
       suggestionTable.recordId,
-      proposal.observations.map((row) => row.id),
+      observed.map((row) => row.record),
     )}
-    AND ${suggestionTable.data}->>${financialTransactionSourceRef.keyof().enum.source}=${proposal.charge.source}
-    AND ${suggestionTable.data}->>'chargeKey' IS DISTINCT FROM ${proposal.charge.chargeKey}`,
+    AND EXISTS (SELECT 1 FROM ${requested.from}
+      WHERE ${requested.col("record")}=${suggestionTable.recordId}
+        AND ${requested.col("source")}=${suggestionTable.data}->>${financialTransactionSourceRef.keyof().enum.source}
+        AND ${suggestionTable.data}->>'chargeKey' IS DISTINCT FROM ${requested.col("chargeKey")})`,
     { active: false, status: "superseded" },
   );
 }
@@ -2507,6 +2531,47 @@ type ChargeState = ChargeRef & {
   superseded: boolean;
   shortcode: string | null;
 };
+
+/**
+ * Live labelled rows whose booking, replanned from their retained advice with
+ * current facts, no longer matches what they publish. Labelled spending is in
+ * the row fingerprint, but a rule re-run matches the row on unchanged evidence
+ * before replanning, so this is the only place the drift surfaces.
+ */
+async function driftedLabelledBookings(
+  db: Database,
+  rows: readonly ChargePublicationHistory[],
+  page: FinancialSpendingPage | undefined,
+): Promise<ReadonlySet<string>> {
+  const labelled = rows.flatMap((row) => {
+    if (
+      !row.active ||
+      row.status !== suggestionStatus.enum.pending ||
+      row.producer?.kind !== "model"
+    )
+      return [];
+    const judgment = statementTransactionJudgment.safeParse(row.judgment);
+    return judgment.success && judgment.data.spending
+      ? [{ id: row.id, judgment: judgment.data }]
+      : [];
+  });
+  if (!labelled.length) return new Set();
+  const replanned = await prepareStatementSpendings(
+    db,
+    labelled.map(({ judgment }) => ({
+      judgment,
+      advice: judgment.spending?.request.advice ?? null,
+    })),
+    page,
+  );
+  return new Set(
+    labelled.flatMap(({ id, judgment }, index) =>
+      changedStatementBooking(judgment.spending, replanned[index]).length
+        ? [id]
+        : [],
+    ),
+  );
+}
 
 /** Current charge states, read after the slot locks. */
 async function currentChargeStates(
@@ -2558,20 +2623,320 @@ type StatementCandidate = {
   retainedCheckpoint?: StatementLabelCheckpoint;
 };
 
+type StatementPublicationFacts = {
+  states: Map<string, ChargeState>;
+  history: Map<string, ChargePublicationHistory[]>;
+  /** Live labelled rows whose booking replan moved. */
+  drifted: ReadonlySet<string>;
+  /** Charges whose settled booking is still booked. */
+  alreadyBooked: ReadonlySet<string>;
+  /** Rule re-runs that keep paid labels, prepared together. */
+  reused: Map<
+    string,
+    { candidate: StatementCandidate; producer: SuggestionProducer }
+  >;
+};
+
+/**
+ * A rule re-run retains model labels only while their label revision agrees
+ * and their booking still replans the same, and republishes a person label the
+ * rail rule now reads as a business.
+ */
+const obsoleteLabels = (
+  row: ChargePublicationHistory,
+  producer: SuggestionProducer,
+  drifted: ReadonlySet<string> | undefined,
+) =>
+  producer.kind === "rule" &&
+  row.producer?.kind === "model" &&
+  (row.producer.revision !== STATEMENT_LABEL_REVISION ||
+    publishedOffRailPerson(row.judgment) ||
+    drifted?.has(row.id) === true);
+
+/**
+ * Every candidate's shared current reads, and the retirements each precheck
+ * would repeat, once per publication set. Batch and single admission take this
+ * same path, so no candidate defers to a one-at-a-time writer.
+ */
+async function loadStatementPublication(
+  tx: Database,
+  candidates: readonly StatementCandidate[],
+  rows: readonly (readonly ChargePublicationHistory[])[],
+  producer: SuggestionProducer,
+): Promise<StatementPublicationFacts> {
+  const proposals = candidates.map(({ proposal }) => proposal);
+  const states = await currentChargeStates(
+    tx,
+    proposals.map(({ charge }) => charge),
+  );
+  const history = await priorStatementPublications(tx, proposals);
+  // Generic publication skips a suppressed candidate before its precheck.
+  const admitted = candidates.flatMap((candidate, index) => {
+    const { proposal } = candidate;
+    const slot = rows[index] ?? [];
+    return isIdentityHold(proposal.judgment) ||
+      slot.some(
+        (row) =>
+          row.suppression !== null &&
+          revisionSuppresses(row, {
+            fingerprint: proposal.fingerprint,
+            evidenceFingerprint: proposal.evidenceFingerprint,
+          }),
+      )
+      ? []
+      : [{ candidate, slot }];
+  });
+  // One bank event is one Suggestion: its copies wait for this primary, so
+  // advice they published before the pairing retires with this publication.
+  // Retiring every copy first keeps the outcome independent of set order.
+  const copies = uniqueCharges(
+    admitted.flatMap(({ candidate }) => candidate.proposal.judgment.copies),
+  );
+  if (copies.length)
+    await transitionSuggestionStates(
+      tx,
+      sql`${pendingStatementState} AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(copies)})`,
+      { active: false, status: "superseded" },
+    );
+  await retireRetainedStatementAdvice(
+    tx,
+    admitted.flatMap(({ candidate, slot }) =>
+      slot.some(
+        (row) => row.active && row.status === suggestionStatus.enum.pending,
+      )
+        ? [candidate.proposal]
+        : [],
+    ),
+  );
+  // A charge matched, ignored or superseded after it was listed resolves as
+  // settled. A prior commit may have lost its after-commit retirement effect:
+  // replaying that exact charge finishes the effect instead of leaving advice.
+  const settled = admitted.flatMap(({ candidate: { proposal } }) => {
+    const state = states.get(chargeId(proposal.charge));
+    return proposal.judgment.recommended !== "void" &&
+      state &&
+      chargeSettled(state, proposal.judgment)
+      ? [proposal.charge]
+      : [];
+  });
+  await retireSettledChargeAdvice(tx, settled);
+  const settledKeys = new Set(settled.map(chargeId));
+  const live = admitted.filter(
+    ({ candidate }) => !settledKeys.has(chargeId(candidate.proposal.charge)),
+  );
+  const booked = live.filter(({ candidate }) =>
+    isSettledBooking(candidate.proposal.judgment),
+  );
+  const labelled = rows
+    .flat()
+    .filter(
+      (row) =>
+        row.active &&
+        row.status === suggestionStatus.enum.pending &&
+        row.producer?.kind === "model",
+    );
+  const reusable = producer.kind === "rule" ? live : [];
+  // A slot that stays unchanged publishes nothing, so its reuse is only
+  // planned here; the drift check below may still make it obsolete.
+  const reuse = planReusedLabels(reusable, history);
+  // One facts page for every replan in this set, so the drift check, the
+  // reused labels and settled bookings plan against the same snapshot reads.
+  const judgments = [
+    ...booked.map(({ candidate }) => candidate.proposal.judgment),
+    ...labelled.flatMap((row) => {
+      const judgment = statementTransactionJudgment.safeParse(row.judgment);
+      return judgment.success ? [judgment.data] : [];
+    }),
+    ...reuse.map(({ judgment }) => judgment),
+  ];
+  // Reused labels plan with their retained advice, whose Vendor names the
+  // page reads up front with the stored rows' own.
+  const page = judgments.some((judgment) => judgment.create)
+    ? await prepareStatementSpendingFacts(
+        tx,
+        judgments,
+        reuse.flatMap(({ previous }) => {
+          const name = previous.spending?.request.advice?.vendorName;
+          return name ? [name] : [];
+        }),
+      )
+    : undefined;
+  const fresh = await prepareStatementSpendings(
+    tx,
+    booked.map(({ candidate: { proposal } }) => ({
+      judgment: proposal.judgment,
+      advice: proposal.judgment.spending?.request.advice ?? null,
+    })),
+    page,
+  );
+  const drifted = await driftedLabelledBookings(tx, labelled, page);
+  return {
+    states,
+    history,
+    drifted,
+    alreadyBooked: new Set(
+      booked.flatMap(({ candidate }, index) =>
+        fresh[index]?.status === "already_booked"
+          ? [chargeId(candidate.proposal.charge)]
+          : [],
+      ),
+    ),
+    reused: await finishReusedLabels(
+      tx,
+      // A slot that stays unchanged publishes nothing, so needs no replan.
+      reuse.filter(
+        ({ candidate: { proposal }, slot }) =>
+          !slot.some(
+            (row) =>
+              row.active &&
+              !obsoleteLabels(row, producer, drifted) &&
+              (row.fingerprint === proposal.fingerprint ||
+                row.evidenceFingerprint === proposal.evidenceFingerprint),
+          ),
+      ),
+      page,
+      producer,
+    ),
+  };
+}
+
+/**
+ * Retain paid votes, not their old rule/history conclusions: restore each
+ * reusable charge's labels. Evidence still gets a fresh fingerprint and
+ * current apply-time validation.
+ */
+function planReusedLabels(
+  entries: readonly {
+    candidate: StatementCandidate;
+    slot: readonly ChargePublicationHistory[];
+  }[],
+  history: ReadonlyMap<string, ChargePublicationHistory[]>,
+) {
+  return entries.flatMap(({ candidate, slot }) => {
+    const { proposal } = candidate;
+    if (!proposal.judgment.create) return [];
+    const reusable = reusableRuleLabels(
+      [...slot, ...(history.get(chargeId(proposal.charge)) ?? [])],
+      proposal,
+    );
+    if (!reusable) return [];
+    const previous = suggestionJudgments.statement_transaction.safeParse(
+      reusable.judgment,
+    );
+    const previousProducer = reusable.producer;
+    if (
+      !previous.success ||
+      !previous.data.create ||
+      previousProducer?.kind !== "model"
+    )
+      return [];
+    const judgment = structuredClone(proposal.judgment);
+    const create = judgment.create!;
+    Object.assign(
+      create,
+      decideStatementKind({
+        amount: create.amount,
+        votes: { ...create.votes, label: previous.data.create.votes.label },
+        counterparty: {
+          ...create.counterparty,
+          label: previous.data.create.counterparty.label,
+        },
+        transfer: judgment.transfer,
+        descriptor: create,
+      }),
+    );
+    // Equal label inputs carry the same candidates; one that lost its saved
+    // label publishes as rule output that needs labels, never failing the set.
+    const labels = judgment.candidates.map(
+      (entry) =>
+        previous.data.candidates.find(
+          (saved) => saved.transactionId === entry.transactionId,
+        )?.label,
+    );
+    if (labels.some((label) => label === undefined)) return [];
+    for (const [index, entry] of judgment.candidates.entries())
+      entry.label = labels[index]!;
+    judgment.recommended = statementRecommendation(judgment);
+    return [
+      {
+        candidate,
+        slot,
+        judgment,
+        previous: previous.data,
+        previousProducer,
+        checkpoint: reusable.checkpoint,
+      },
+    ];
+  });
+}
+
+/**
+ * Replan reused labels' spending from their retained advice for the whole
+ * set, keeping model provenance where advice or a deferral needs it.
+ */
+async function finishReusedLabels(
+  tx: Database,
+  planned: ReturnType<typeof planReusedLabels>,
+  page: FinancialSpendingPage | undefined,
+  producer: SuggestionProducer,
+): Promise<StatementPublicationFacts["reused"]> {
+  const plans = await prepareStatementSpendings(
+    tx,
+    planned.map(({ judgment, previous }) => ({
+      judgment,
+      advice: previous.spending?.request.advice ?? null,
+    })),
+    page,
+  );
+  const reused: StatementPublicationFacts["reused"] = new Map();
+  for (const [index, entry] of planned.entries()) {
+    const { candidate, judgment, previous, previousProducer } = entry;
+    const { proposal } = candidate;
+    judgment.spending = plans[index] ?? null;
+    judgment.clean = isClean(judgment, proposal.canonical.amount);
+    const labelled = {
+      ...candidate,
+      proposal: await labelledProposal(proposal, judgment),
+    };
+    reused.set(
+      chargeId(proposal.charge),
+      judgment.spending?.status === "deferred" ||
+        previous.spending?.request.advice
+        ? { candidate: labelled, producer: previousProducer }
+        : {
+            candidate: {
+              ...labelled,
+              retainedCheckpoint: statementLabelCheckpoint.parse({
+                revision: STATEMENT_LABEL_REVISION,
+                model: previousProducer.model,
+                models:
+                  statementLabelCheckpoint.nullable().parse(entry.checkpoint)
+                    ?.models ??
+                  (previousProducer.model ? [previousProducer.model] : []),
+                judgment,
+                kind: true,
+                counterparty: true,
+                spending: false,
+              }),
+            },
+            producer,
+          },
+    );
+  }
+  return reused;
+}
+
 /**
  * The `statement_transaction` Suggestion family: one slot per provider
- * charge. Batch admission defers anything that needs the one-at-a-time
- * writer's repairs (settled advice, reused labels) to that writer.
+ * charge. Batch and single admission share one load, so settled advice,
+ * settled bookings and reused labels never defer to a one-at-a-time writer.
  */
 export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transaction"> &
   SuggestionFamily<
     StatementCandidate,
     ChargePublicationHistory,
     "settled" | "held",
-    {
-      states: Map<string, ChargeState> | null;
-      history: Map<string, ChargePublicationHistory[]>;
-    }
+    StatementPublicationFacts
   > = {
   family: suggestionFamily.enum.statement_transaction,
   applicationKind: "statement_transaction",
@@ -2619,81 +2984,32 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       tx,
       candidates.map(({ proposal }) => proposal),
     ),
-  load: async (tx, candidates, batch) => ({
-    states: batch
-      ? await currentChargeStates(
-          tx,
-          candidates.map(({ proposal }) => proposal.charge),
-        )
-      : null,
-    history: await priorStatementPublications(
-      tx,
-      candidates.map(({ proposal }) => proposal),
-    ),
-  }),
-  batchable: ({ proposal }) =>
-    proposal.judgment.recommended !== "void" &&
-    !isSettledBooking(proposal.judgment),
-  async precheck(tx, { proposal, labelPublication }, rows, _producer, context) {
+  load: (tx, candidates, _batch, rows, producer) =>
+    loadStatementPublication(tx, candidates, rows, producer),
+  batchable: ({ proposal }) => proposal.judgment.recommended !== "void",
+  async precheck(
+    _tx,
+    { proposal, labelPublication },
+    rows,
+    _producer,
+    context,
+  ) {
     const { charge, judgment } = proposal;
     // Source identity review owns an unproven occurrence; a Suggestion that can
     // only be dismissed would duplicate that queue.
     if (isIdentityHold(judgment)) return { kind: "retire", reason: "held" };
-    // One bank event is one Suggestion: its copies wait for this primary, so
-    // advice they published before the pairing retires with this publication.
-    if (judgment.copies.length)
-      await transitionSuggestionStates(
-        tx,
-        sql`${pendingStatementState} AND (${sql.join(
-          judgment.copies.map(
-            (copy) =>
-              sql`(${suggestionField("source", STATE)}=${copy.source} AND ${suggestionField("chargeKey", STATE)}=${copy.chargeKey})`,
-          ),
-          sql` OR `,
-        )})`,
-        { active: false, status: "superseded" },
-      );
-    if (
-      rows.some(
-        (row) => row.active && row.status === suggestionStatus.enum.pending,
-      )
-    )
-      await retireRetainedStatementAdvice(tx, proposal);
-    if (context.batch) {
-      const state = context.loaded.states?.get(chargeId(charge));
-      return !state || chargeSettled(state, judgment)
-        ? { kind: "defer" }
-        : undefined;
-    }
     // A charge matched, ignored or superseded after it was listed (an accept or
-    // an import-page attach in between) needs no suggestion; a ref inserted
-    // before publication never reaches the retiring trigger. Holds are the
-    // exception: their charge is matched by the hold transaction itself.
-    if (judgment.recommended !== "void") {
-      const settled = await getDb(tx).execute(
-        sql`
-        SELECT 1 FROM ${chargeStateOf(
-          sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
-        )} cs
-        WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
-      `,
-        "objects",
-      );
-      if (settled.length) {
-        // A prior commit may have lost its after-commit retirement effect.
-        // Replaying that exact charge must finish the effect, not leave stale advice.
-        await retireSettledChargeAdvice(tx, charge);
-        return { kind: "resolved", reason: "settled" };
-      }
-    }
-    if (isSettledBooking(judgment)) {
-      const fresh = await prepareStatementSpending(tx, judgment);
-      if (fresh?.status === "already_booked")
-        return {
-          kind: "retire",
-          reason: "settled",
-        };
-    }
+    // an import-page attach in between) needs no suggestion; its advice retired
+    // with the batch's load. Holds are matched by the hold transaction itself.
+    const state = context.loaded.states.get(chargeId(charge));
+    if (
+      judgment.recommended !== "void" &&
+      state &&
+      chargeSettled(state, judgment)
+    )
+      return { kind: "resolved", reason: "settled" };
+    if (context.loaded.alreadyBooked.has(chargeId(charge)))
+      return { kind: "retire", reason: "settled" };
     // Complete labels publish their checkpoint in this transaction instead of
     // first rewriting the rule row. Preserve that writer's active-input fence.
     if (
@@ -2712,88 +3028,17 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   },
   // A rule re-run retains model labels only while their label revision agrees,
   // and republishes a person label the rail rule now reads as a business.
-  obsolete: (row, producer) =>
-    producer.kind === "rule" &&
-    row.producer?.kind === "model" &&
-    (row.producer.revision !== STATEMENT_LABEL_REVISION ||
-      publishedOffRailPerson(row.judgment)),
+  // A booking whose replan from its retained advice moved (another writer's
+  // Purchase, Vendor or category) republishes rather than refusing every pass.
+  obsolete: (row, producer, loaded) =>
+    obsoleteLabels(row, producer, loaded?.drifted),
   onUnchanged: "none",
-  async prepare(tx, candidate, rows, producer, context) {
-    const { proposal } = candidate;
-    const history = [
-      ...rows,
-      ...(context.loaded.history.get(chargeId(proposal.charge)) ?? []),
-    ];
-    if (context.batch)
-      return reusableRuleLabels(history, proposal)
-        ? "defer"
-        : { candidate, producer };
-    if (producer.kind !== "rule" || !proposal.judgment.create)
-      return { candidate, producer };
-    // Retain the paid votes, not their old rule/history conclusions. Evidence
-    // still gets a fresh fingerprint and current apply-time validation.
-    const reusable = reusableRuleLabels(history, proposal);
-    if (!reusable) return { candidate, producer };
-    const previous = suggestionJudgments.statement_transaction.parse(
-      reusable.judgment,
-    );
-    const previousProducer = reusable.producer;
-    if (!previous.create || previousProducer?.kind !== "model")
-      return { candidate, producer };
-    const judgment = structuredClone(proposal.judgment);
-    const create = judgment.create!;
-    Object.assign(
-      create,
-      decideStatementKind({
-        amount: create.amount,
-        votes: { ...create.votes, label: previous.create.votes.label },
-        counterparty: {
-          ...create.counterparty,
-          label: previous.create.counterparty.label,
-        },
-        transfer: judgment.transfer,
-        descriptor: create,
-      }),
-    );
-    for (const entry of judgment.candidates)
-      entry.label = previous.candidates.find(
-        (saved) => saved.transactionId === entry.transactionId,
-      )!.label;
-    judgment.recommended = statementRecommendation(judgment);
-    judgment.spending = await prepareStatementSpending(
-      tx,
-      judgment,
-      previous.spending?.request.advice ?? null,
-    );
-    judgment.clean = isClean(judgment, proposal.canonical.amount);
-    const labelled = {
-      ...candidate,
-      proposal: await labelledProposal(proposal, judgment),
-    };
-    if (
-      judgment.spending?.status === "deferred" ||
-      previous.spending?.request.advice
-    )
-      return { candidate: labelled, producer: previousProducer };
-    return {
-      candidate: {
-        ...labelled,
-        retainedCheckpoint: statementLabelCheckpoint.parse({
-          revision: STATEMENT_LABEL_REVISION,
-          model: previousProducer.model,
-          models:
-            statementLabelCheckpoint.nullable().parse(reusable.checkpoint)
-              ?.models ??
-            (previousProducer.model ? [previousProducer.model] : []),
-          judgment,
-          kind: true,
-          counterparty: true,
-          spending: false,
-        }),
-      },
+  // Paid labels a rule re-run keeps were prepared for the whole set at load.
+  prepare: async (_tx, candidate, _rows, producer, context) =>
+    context.loaded.reused.get(chargeId(candidate.proposal.charge)) ?? {
+      candidate,
       producer,
-    };
-  },
+    },
   publication(
     { proposal, labelPublication, retainedCheckpoint },
     rows,
@@ -2834,44 +3079,20 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       checkpoint,
     );
   },
-  async afterPublish(tx, published, context) {
-    for (const { candidate } of published)
-      await retireRetainedStatementAdvice(tx, candidate.proposal);
-    if (context.batch) {
-      // Reference writers use evidence-key locks. Their transaction may commit
-      // after our admission read but before these new states become visible.
-      // Finish the same retirement check before acknowledging the whole batch.
-      await enrollStatementPublicationRetirement(tx, {
-        charges: tuples(
-          published.map(({ candidate }) => candidate.proposal.charge),
-        ),
-        suggestionIds: published.map(({ suggestionId }) => suggestionId),
-      });
-      return;
-    }
-    for (const { suggestionId, candidate } of published) {
-      const { charge, judgment } = candidate.proposal;
-      // A ref writer holds evidence keys, not this charge's lock: one that
-      // committed between the settled check and this commit has a trigger that
-      // could not see the new row. Recheck once both are committed.
-      if (judgment.recommended !== "void")
-        await runAfterCommit(tx, (committed) =>
-          withTransactionDatabase(committed, async (retirement) => {
-            await assertWorkflowEffect(retirement);
-            await transitionSuggestionStates(
-              retirement,
-              sql`${suggestionTable.id} = ${suggestionId}::uuid AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
-                AND EXISTS (
-                  SELECT 1 FROM ${chargeStateOf(
-                    sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
-                  )} cs
-                  WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
-                )`,
-              { active: false, status: "superseded" },
-            );
-          }),
-        );
-    }
+  async afterPublish(tx, published) {
+    await retireRetainedStatementAdvice(
+      tx,
+      published.map(({ candidate }) => candidate.proposal),
+    );
+    // Reference writers use evidence-key locks. Their transaction may commit
+    // after our admission read but before these new states become visible.
+    // Finish the same retirement check before acknowledging the publications.
+    await enrollStatementPublicationRetirement(tx, {
+      charges: tuples(
+        published.map(({ candidate }) => candidate.proposal.charge),
+      ),
+      suggestionIds: published.map(({ suggestionId }) => suggestionId),
+    });
   },
   labelBacklog: sql`${pendingSuggestion()} AND ${sourceSuggestionAutomaticEligible("s", true)} AND ((s.data->>'needsLabel')::boolean
     OR coalesce((s.data->>'applicationPending')::boolean, false))`,
@@ -3039,6 +3260,18 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     return `Statement transaction: ${decision.recommended}`;
   },
   isolationLevel: "serializable",
+  // One active row per charge (Suggestion_statement_charge_key), so the slot
+  // key names exactly the rows a whole-subject comparison would.
+  liveSubjectRows: (subjects) =>
+    sql`${suggestionTable.family} = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)}
+      AND ${suggestionTable.active}
+      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(
+        subjects.map((subject) => {
+          const { source, chargeKey } =
+            suggestionSubjects.statement_transaction.parse(subject);
+          return { source, chargeKey };
+        }),
+      )})`,
   lockForApply: async (db, prediction) => {
     const judgment = suggestionJudgments.statement_transaction.parse(
       prediction.judgment,
@@ -3345,7 +3578,7 @@ async function publishCompleteLabelBatch(
         state &&
         chargeSettled(state, proposal.judgment)
       ) {
-        await retireSettledChargeAdvice(tx, proposal.charge);
+        await retireSettledChargeAdvice(tx, [proposal.charge]);
         outcomes.set(id, { kind: "resolved", reason: "settled" });
         continue;
       }
@@ -3554,37 +3787,45 @@ const statementGenerationFailure = (
   message: runFailureText(error instanceof Error ? error : String(error)),
 });
 
-/** A failed batch read isolates malformed evidence without slowing healthy preparation. */
-async function prepareStatementGenerationPage(
+/**
+ * A page's proposals in as few builds as its evidence allows. A build that
+ * throws splits in half, so healthy charges keep one shared build and only a
+ * malformed charge fails, with its own error. `built` names every charge whose
+ * build completed, the only charges a rebuild may retire advice for.
+ */
+export async function buildChargeProposalsIsolated(
   db: Database,
   charges: readonly ChargeRef[],
-  failed: RunStepError[],
-) {
-  try {
-    return await buildChargeProposals(db, charges);
-  } catch (error) {
-    if (isWorkflowInterrupted(error)) throw error;
-    const prepared = new Map<string, ChargeProposal>();
-    await forEachConcurrently(
-      charges,
-      STATEMENT_PUBLISH_CONCURRENCY,
-      async (charge) => {
-        try {
-          const [proposal] = await buildChargeProposals(db, [charge]);
-          if (proposal) prepared.set(chargeId(charge), proposal);
-        } catch (itemError) {
-          if (isWorkflowInterrupted(itemError)) throw itemError;
-          failed.push(
-            statementGenerationFailure(`charge:${chargeId(charge)}`, itemError),
-          );
-        }
-      },
-    );
-    return charges.flatMap((charge) => {
-      const proposal = prepared.get(chargeId(charge));
-      return proposal ? [proposal] : [];
-    });
-  }
+  onFailure: (charge: ChargeRef, error: Error) => void,
+  preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+): Promise<{ proposals: ChargeProposal[]; built: ChargeRef[] }> {
+  const proposals: ChargeProposal[] = [];
+  const built: ChargeRef[] = [];
+  const build = async (slice: readonly ChargeRef[]): Promise<void> => {
+    if (!slice.length) return;
+    try {
+      proposals.push(...(await buildChargeProposals(db, slice, preparation)));
+      built.push(...slice);
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      if (slice.length === 1)
+        return onFailure(
+          slice[0]!,
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      const middle = Math.ceil(slice.length / 2);
+      await build(slice.slice(0, middle));
+      await build(slice.slice(middle));
+    }
+  };
+  await build(charges);
+  const order = new Map(
+    charges.map((charge, index) => [chargeId(charge), index]),
+  );
+  proposals.sort(
+    (a, b) => order.get(chargeId(a.charge))! - order.get(chargeId(b.charge))!,
+  );
+  return { proposals, built };
 }
 
 /** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
@@ -3739,6 +3980,7 @@ export async function retryStatementGenerationRefs(
     scope?: StatementSuggestionScope;
     refs: readonly string[];
     work?: PageWork;
+    recoverSince?: Date | null;
   },
 ) {
   const failed: RunStepError[] = [];
@@ -3784,17 +4026,19 @@ export async function retryStatementGenerationRefs(
         );
       const admitted: ChargeRef[] = [];
       for (const charge of mapped) {
-        const inScope = await withTransactionDatabase(db, async (tx) => {
+        // Admission only reads; generation rechecks scope at write admission.
+        // The charge's publication key covers the repair alone, not the
+        // account preview, so publications of the same charge wait briefly.
+        if (!(await admitRetriedCharge(db, charge, input.scope ?? {})))
+          continue;
+        await withTransactionDatabase(db, async (tx) => {
           await assertWorkflowEffect(tx);
           await getDb(tx).execute(
             sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`},0))`,
           );
-          if (!(await admitRetriedCharge(tx, charge, input.scope ?? {})))
-            return false;
-          await retireSettledChargeAdvice(tx, charge);
-          return true;
+          await retireSettledChargeAdvice(tx, [charge]);
         });
-        if (inScope) admitted.push(charge);
+        admitted.push(charge);
       }
       if (!admitted.length) {
         skipped++;
@@ -3809,15 +4053,22 @@ export async function retryStatementGenerationRefs(
         after: null,
         retryCharges: admitted,
         work: input.work,
+        recoverSince: input.recoverSince,
       });
       published += page.published;
       labelsReused += page.labelsReused;
       unchanged += page.unchanged;
-      if (page.failed.length)
+      if (page.failed.length || page.unfinished.length)
         failed.push(
           statementGenerationFailure(
             ref,
-            new Error(JSON.stringify(page.failed)),
+            new Error(
+              JSON.stringify(
+                page.failed.length
+                  ? page.failed
+                  : "Statement application kept conflicting with concurrent writes",
+              ),
+            ),
           ),
         );
       else done++;
@@ -3848,13 +4099,15 @@ async function publishStatementGenerationPage(
   });
   const startedAt = await rebuildStartedAt(db);
   const publishable = await publishableCharges(db, charges, accountIds);
-  const built = await prepareStatementGenerationPage(db, publishable, failed);
-  const failedRefs = new Set(failed.map((failure) => failure.ref));
+  const { proposals: built, built: completed } =
+    await buildChargeProposalsIsolated(db, publishable, (charge, error) =>
+      failed.push(
+        statementGenerationFailure(`charge:${chargeId(charge)}`, error),
+      ),
+    );
   await retireUnproposedCharges(
     db,
-    publishable.filter(
-      (charge) => !failedRefs.has(`charge:${chargeId(charge)}`),
-    ),
+    completed,
     built.map((proposal) => proposal.charge),
     startedAt,
     accountIds,
@@ -3942,6 +4195,8 @@ export async function generateStatementSuggestionPage(
     work?: PageWork;
     /** Retained item failures only; never advance or restart the population cursor. */
     retryCharges?: readonly ChargeRef[];
+    /** When the step recorded its last page: later applications were never refreshed. */
+    recoverSince?: Date | null;
   },
 ): Promise<{
   found: number;
@@ -3953,6 +4208,10 @@ export async function generateStatementSuggestionPage(
   outOfScope: number;
   failed: RunStepError[];
   next: ChargeRef | null;
+  /** Charges conflicts or the budget left unsettled; `restart` re-reads them. */
+  unfinished: ChargeRef[];
+  /** The exclusive cursor that re-reads the first unfinished charge. */
+  restart: ChargeRef | null;
 }> {
   const limit = Math.max(
     1,
@@ -3995,169 +4254,49 @@ export async function generateStatementSuggestionPage(
     input.runId,
     failed,
   );
+  const unfinished: ChargeRef[] = [];
   if (input.scope?.importId) {
-    const {
-      applyAutomaticRulePage,
-      applyAutomaticRulesForCharge,
-      selectAutomaticRules,
-    } = await import("~/server/generic/suggestions/repo/automatic-application");
-    const { statementBatchCandidate, STATEMENT_PAGE_RUN_CREATES } =
-      await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
-    const selections = await selectAutomaticRules(
-      db,
-      [...new Set([...suggestionIds.values()].flat())],
-      { importClean: true },
-    );
-    const selectionFor = (charge: ChargeRef) => {
-      const current = (suggestionIds.get(chargeId(charge)) ?? []).flatMap(
-        (id) => (selections.has(id) ? [selections.get(id)!] : []),
-      );
-      const [selection] = current;
-      return current.length === 1 &&
-        selection &&
-        statementBatchCandidate(
-          statementTransactionJudgment.parse(selection.row.judgment),
-        )
-        ? selection
-        : null;
-    };
-    const batchTried = new Set<string>();
-    const batchApplied = new Set<string>();
-    // Single admission rebuilds after a money write or a declined page;
-    // a decline can reveal a new live candidate even before any write commits.
-    let recheck = false;
-    const refreshed = new Set<string>();
-    const invalidateRefreshes = () => {
-      recheck = true;
-      refreshed.clear();
-    };
+    const { recoverSettlementObligations, settleStatementPage } =
+      await import("~/server/domains/transaction-import/repo/statement-settlement");
+    // A replayed page's applied charges left the selection; its range still
+    // covers them, and a short page covers everything after the cursor.
+    await recoverSettlementObligations(db, {
+      since: input.recoverSince ?? null,
+      scope: input.scope,
+      within: input.retryCharges
+        ? { kind: "charges", charges: input.retryCharges }
+        : {
+            kind: "range",
+            after: input.after,
+            through: charges.length === limit ? charges.at(-1)! : null,
+          },
+    });
     // Each write's neighbour refresh joins one page-wide refresh at the end.
     await coalesceChargeRefreshes(async () => {
-      for (const [chargeIndex, charge] of proposalCharges.entries()) {
-        const ref = `charge:${chargeId(charge)}`;
-        if (failed.some((failure) => failure.ref === ref)) continue;
-        try {
-          const key = chargeId(charge);
-          if (!batchTried.has(key)) {
-            const batch = [];
-            for (const next of proposalCharges.slice(
-              chargeIndex,
-              chargeIndex + STATEMENT_PAGE_RUN_CREATES,
-            )) {
-              if (
-                batchTried.has(chargeId(next)) ||
-                failed.some(
-                  (failure) => failure.ref === `charge:${chargeId(next)}`,
-                )
-              )
-                break;
-              const selection = selectionFor(next);
-              if (!selection) break;
-              batch.push({ charge: next, selection });
-            }
-            for (const item of batch) batchTried.add(chargeId(item.charge));
-            if (batch.length > 1) {
-              invalidateRefreshes();
-              try {
-                const applicationStartedAt = performance.now();
-                const page = await applyAutomaticRulePage(
-                  db,
-                  batch.map(({ selection }) => selection),
-                  {
-                    context: input.servicesFor,
-                    statementScope: input.scope,
-                  },
-                );
-                log.info("Statement generation application page", {
-                  charges: batch.length,
-                  applied: [...page.outcomes.values()].filter(
-                    (outcome) => outcome === "applied",
-                  ).length,
-                  wallMs: Math.round(performance.now() - applicationStartedAt),
-                });
-                for (const item of batch) {
-                  if (page.outcomes.get(item.selection.row.id) !== "applied")
-                    continue;
-                  batchApplied.add(chargeId(item.charge));
-                  invalidateRefreshes();
-                }
-              } catch (error) {
-                if (isWorkflowInterrupted(error)) throw error;
-                // A page may have committed a split prefix. The single path re-admits
-                // current evidence and replays its receipts instead of duplicating effects.
-                log.warn("Statement generation page application fell back", {
-                  charges: batch.length,
-                  error: scrubErrorMessage(String(error)),
-                });
-                invalidateRefreshes();
-              }
-            }
-          }
-          if (!batchApplied.has(key)) {
-            if (recheck && !refreshed.has(key)) {
-              // Share rebuilds between this page's applications. Any applied rule
-              // or declined page invalidates the suffix before its next use.
-              const upcoming = proposalCharges
-                .slice(
-                  chargeIndex,
-                  chargeIndex + STATEMENT_GENERATION_REBUILD_SIZE,
-                )
-                .filter(
-                  (next) =>
-                    !batchApplied.has(chargeId(next)) &&
-                    !failed.some(
-                      (failure) => failure.ref === `charge:${chargeId(next)}`,
-                    ),
-                );
-              log.info("Statement generation phase", {
-                phase: "regeneration",
-                chargeIndex,
-                charges: upcoming.length,
-              });
-              try {
-                await regenerateCharges(db, upcoming, input.scope);
-                for (const next of upcoming) refreshed.add(chargeId(next));
-              } catch (error) {
-                if (isWorkflowInterrupted(error)) throw error;
-                // Attribute a failed rebuild to its own charge, not an earlier
-                // charge that shared its reads or publication batch.
-                await regenerateCharges(db, [charge], input.scope);
-              }
-            }
-            log.info("Statement generation phase", {
-              phase: "application",
-              chargeIndex,
-              charges: proposalCharges.length,
-            });
-            const outcome = await applyAutomaticRulesForCharge(
-              db,
-              charge,
-              input.servicesFor,
-              true,
-              input.scope,
-            );
-            if (outcome.applied.length) invalidateRefreshes();
-          }
-          // Booking a primary republished its copies as attaches; settle the
-          // ones this import covers in the same pass.
-          for (const copy of await bookedCopies(db, charge))
-            if (
-              (
-                await applyAutomaticRulesForCharge(
-                  db,
-                  copy,
-                  input.servicesFor,
-                  true,
-                  input.scope,
-                )
-              ).applied.length
+      const outcomes = await settleStatementPage(db, {
+        mode: "generation",
+        scope: input.scope,
+        servicesFor: input.servicesFor,
+        entries: proposalCharges.flatMap((charge) => {
+          const [suggestionId] = suggestionIds.get(chargeId(charge)) ?? [];
+          return suggestionId &&
+            !failed.some(
+              (failure) => failure.ref === `charge:${chargeId(charge)}`,
             )
-              invalidateRefreshes();
-        } catch (error) {
-          if (isWorkflowInterrupted(error)) throw error;
-          invalidateRefreshes();
-          failed.push(statementGenerationFailure(ref, error));
-        }
+            ? [{ charge, suggestionId, evidenceFingerprint: null }]
+            : [];
+        }),
+      });
+      for (const charge of proposalCharges) {
+        const outcome = outcomes.get(chargeId(charge));
+        if (outcome?.kind === "failed")
+          failed.push(
+            statementGenerationFailure(
+              `charge:${chargeId(charge)}`,
+              outcome.error,
+            ),
+          );
+        else if (outcome?.kind === "unfinished") unfinished.push(charge);
       }
     });
   }
@@ -4187,16 +4326,24 @@ export async function generateStatementSuggestionPage(
       ),
     },
   });
+  // An unfinished charge keeps its place: the next page re-reads it.
+  const first = unfinished.length
+    ? charges.findIndex(
+        (charge) => chargeId(charge) === chargeId(unfinished[0]!),
+      )
+    : -1;
   return {
     found: charges.length,
     published,
-    processed: charges.length,
+    processed: first < 0 ? charges.length : first,
     labelsReused,
     unchanged,
     outOfScope,
     failed,
     next:
       !input.retryCharges && charges.length === limit ? charges.at(-1)! : null,
+    unfinished,
+    restart: first > 0 ? charges[first - 1]! : input.after,
   };
 }
 
@@ -4409,9 +4556,12 @@ export async function recordStatementLabelCheckpoint(
 
 /**
  * Settle the label receipts that no automatic rule applies to, inside the
- * label page's application boundary. `rows` are the receipts' locked states,
- * already admitted to the page scope. A receipt whose row moved, gained an
- * applicable rule or left the pending projection stays for its next page.
+ * label page's application boundary, in page order. `rows` are the receipts'
+ * locked states admitted to the page scope and `outside` the locked receipts
+ * it excludes, which do not split the prefix. Only the proven prefix clears:
+ * the first receipt that is missing, moved, rule-bearing or out of the
+ * pending projection stops it, and it and every later receipt stay for their
+ * next page.
  */
 export async function completeStatementReceipts(
   tx: Database,
@@ -4421,25 +4571,30 @@ export async function completeStatementReceipts(
     evidenceFingerprint: string;
   }[],
   rows: ReadonlyMap<string, SuggestionStateRow>,
+  outside: ReadonlySet<string>,
   noRule: (row: SuggestionStateRow) => boolean,
 ) {
-  const settled = entries.flatMap((entry) => {
+  const settled: string[] = [];
+  for (const entry of entries) {
+    if (outside.has(entry.suggestionId)) continue;
     const row = rows.get(entry.suggestionId);
     const data = stateData.safeParse(row?.data);
-    return row &&
-      row.family === suggestionFamily.enum.statement_transaction &&
-      row.active &&
-      row.status === suggestionStatus.enum.pending &&
-      row.suppression === null &&
-      noRule(row) &&
-      data.success &&
-      data.data.source === entry.charge.source &&
-      data.data.chargeKey === entry.charge.chargeKey &&
-      data.data.evidenceFingerprint === entry.evidenceFingerprint &&
-      data.data.applicationPending === true
-      ? [entry.suggestionId]
-      : [];
-  });
+    if (
+      !row ||
+      row.family !== suggestionFamily.enum.statement_transaction ||
+      !row.active ||
+      row.status !== suggestionStatus.enum.pending ||
+      row.suppression !== null ||
+      !noRule(row) ||
+      !data.success ||
+      data.data.source !== entry.charge.source ||
+      data.data.chargeKey !== entry.charge.chargeKey ||
+      data.data.evidenceFingerprint !== entry.evidenceFingerprint ||
+      data.data.applicationPending !== true
+    )
+      break;
+    settled.push(entry.suggestionId);
+  }
   if (!settled.length) return [];
   await transitionSuggestionStates(
     tx,

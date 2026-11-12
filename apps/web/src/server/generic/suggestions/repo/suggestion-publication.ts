@@ -121,11 +121,13 @@ export type SuggestionFamily<
   unapplicable?(candidate: Candidate): Reason | null;
   /** Before slot locks, over every candidate the transaction admits. */
   admit?(tx: Database, candidates: readonly Candidate[]): Promise<void>;
-  /** After slot locks: current reads the prechecks share. */
+  /** After slot locks: current reads the prechecks share, given each slot's locked rows. */
   load?(
     tx: Database,
     candidates: readonly Candidate[],
     batch: boolean,
+    rows: readonly (readonly Row[])[],
+    producer: SuggestionProducer,
   ): Promise<Loaded>;
   precheck?(
     tx: Database,
@@ -134,8 +136,12 @@ export type SuggestionFamily<
     producer: SuggestionProducer,
     context: SuggestionContext<Loaded>,
   ): Promise<SuggestionPrecheck<Reason> | undefined>;
-  /** A row that never counts as unchanged, such as an obsolete label revision. */
-  obsolete?(row: Row, producer: SuggestionProducer): boolean;
+  /**
+   * A row that never counts as unchanged, such as an obsolete label revision
+   * or a booking whose current replan differs. `loaded` is absent outside
+   * {@link publishLocked}.
+   */
+  obsolete?(row: Row, producer: SuggestionProducer, loaded?: Loaded): boolean;
   /** `reconfirm` moves unchanged rows to the producer's Run under its cause. */
   onUnchanged: "none" | { reconfirm: string };
   /**
@@ -283,13 +289,14 @@ export async function unchangedSuggestions<
   rows: readonly Row[],
   candidate: Candidate,
   producer: SuggestionProducer,
+  loaded?: Loaded,
 ): Promise<Row[]> {
   const fingerprint = await family.fingerprint(candidate);
   const evidenceFingerprint = await family.evidenceFingerprint(candidate);
   return rows.filter(
     (row) =>
       row.active &&
-      !family.obsolete?.(row, producer) &&
+      !family.obsolete?.(row, producer, loaded) &&
       (row.fingerprint === fingerprint ||
         (producer.kind === "rule" &&
           row.evidenceFingerprint === evidenceFingerprint)),
@@ -493,7 +500,13 @@ async function publishLocked<
   const context: SuggestionContext<Loaded> = {
     batch,
     // SAFETY: a family without `load` keeps the default `Loaded = undefined`.
-    loaded: (await family.load?.(tx, candidates, batch)) as Loaded,
+    loaded: (await family.load?.(
+      tx,
+      candidates,
+      batch,
+      history,
+      producer,
+    )) as Loaded,
   };
   const suppresses = family.suppresses ?? (() => true);
   const outcomes: SuggestionOutcome<Candidate, Row, Reason>[] = [];
@@ -548,6 +561,7 @@ async function publishLocked<
       rows,
       candidate,
       producer,
+      context.loaded,
     );
     if (unchanged.length) {
       // The state follows the Run that last confirmed it, so a later

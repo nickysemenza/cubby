@@ -17,8 +17,10 @@ import {
   type FinancialTransactionId,
   type FinancialTransactionShortcode,
   parseShortcodeFor,
+  type PurchaseId,
+  type PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
-import { moneyToMinor } from "@cubby/shared";
+import { minorToMoney, moneyToMinor } from "@cubby/shared";
 import { and, getTableColumns, inArray, isNotNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { capitalize, sortBy, uniq } from "es-toolkit";
@@ -55,27 +57,31 @@ import { allocationIntegrityDefectSql } from "~/server/domains/financial-transac
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
+  acceptFreshFinancialSources,
   assertFinancialSourceRefsAvailableFor,
   financialSourceRefsFor,
   financialSourceReferenceRows,
+  lockFreshFinancialSources,
+  refuseFreshFinancialSource,
   replaceFinancialSourceRefsFor,
   lockFinancialSourceOccurrences,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   type AllocationInput,
+  type AllocationSnapshot,
+  allocationChangeAudits,
+  allocationConfirmsMerchant,
   applyAllocationChanges,
   assertAllocationSetValid,
   assertPurchasesLive,
   countLiveAllocations,
   readAllocations,
   resolveAllocationInputs,
-  writeAllocationSet,
   writeAllocationSets,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import { financialTransactionSearch } from "~/server/domains/financial-transaction/repo/search-read-financial-transaction";
 import {
   findSettlementConflicts,
-  refuseSettlementConflicts,
   refuseSettlementConflictsFor,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -99,6 +105,7 @@ import {
   defineRepository,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
+import { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -106,7 +113,6 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -377,8 +383,9 @@ export const createFinancialTransaction = defineMutationWriter({
 
 /**
  * The create path for one or many transactions: one account resolution, one
- * occurrence lock, one identity insert, one acceptance statement and one
- * audit insert. Rows are created and returned in input order.
+ * locked occurrence proof, one identity insert, one acceptance statement and
+ * one audit insert. Named allocations follow as one set. Rows are created and
+ * returned in input order.
  */
 export async function createFinancialTransactions(
   tx: DrizzleTransaction,
@@ -391,39 +398,136 @@ export async function createFinancialTransactions(
     "financialAccount",
     inputs.map((data) => data.accountId),
   );
-  await lockFinancialSourceOccurrences(
+  const created = await createFinancialTransactionRows(
     tx,
-    inputs.flatMap((data) => data.sourceRefs),
+    inputs.map((data, index) => ({ data, accountId: accountIds[index]! })),
+    actor,
   );
+  const named = await resolveAllocationInputs(
+    tx,
+    inputs.flatMap((data) =>
+      data.allocations.length > 0
+        ? data.allocations
+        : data.purchaseId
+          ? [{ purchaseId: data.purchaseId, amount: data.amount }]
+          : [],
+    ),
+  );
+  if (named.length) {
+    // `purchaseId` is sugar for one allocation of the full amount; the zod
+    // refinement has already rejected a purchaseId/allocations pair that
+    // disagrees, so either source can be taken verbatim here.
+    let offset = 0;
+    const sets = inputs.flatMap((data, index) => {
+      const count =
+        data.allocations.length > 0
+          ? data.allocations.length
+          : data.purchaseId
+            ? 1
+            : 0;
+      const next = named.slice(offset, (offset += count));
+      return count ? [{ transactionId: created[index]!.id, data, next }] : [];
+    });
+    await assertPurchasesLive(
+      tx,
+      sets.flatMap(({ next }) => next.map((row) => row.purchaseId)),
+    );
+    for (const { data, next } of sets)
+      assertAllocationSetValid({
+        transactionAmount: data.amount,
+        kind: data.kind,
+        next,
+      });
+    await refuseSettlementConflictsFor(
+      tx,
+      sets.map(({ transactionId, next }) => ({
+        transactionId,
+        purchaseIds: next.map((row) => row.purchaseId),
+      })),
+    );
+    await writeAllocationSets(tx, sets, new Map(), actor);
+    await applyAllocationChanges(tx, {
+      transactionIds: sets.map(({ transactionId }) => transactionId),
+      before: new Map(),
+      actor,
+    });
+  }
+  return created.map((row) => row.id);
+}
+
+/**
+ * Insert fresh transactions on resolved accounts and accept their sources:
+ * the occurrence proof and row locks precede the insert, acceptance and the
+ * create and evidence audits follow it. Returns the stored rows in input order.
+ */
+export async function createFinancialTransactionRows(
+  tx: DrizzleTransaction,
+  inputs: readonly {
+    data: Omit<FinancialTransactionCreateInput, "accountId">;
+    accountId: FinancialTransactionDbRow["accountId"];
+  }[],
+  actor: ActorContext,
+) {
+  if (!inputs.length) return [];
   // One locked occurrence FK owns acceptance; retained aliases never grant it.
-  await assertFinancialSourceRefsAvailableFor(
+  const proof = await lockFreshFinancialSources(
     tx,
-    inputs.map((data) => ({ refs: data.sourceRefs })),
-  );
-  const created = await insertManyWithShortcode(
-    tx,
-    "financialTransaction",
-    inputs.map((data, index) => {
-      const {
-        allocations: _allocations,
-        sourceRefs: _sourceRefs,
-        ...columns
-      } = data;
-      return {
-        ...columns,
-        accountId: accountIds[index]!,
-        amount: moneyToMinor(data.amount),
-      };
-    }),
-  );
-  const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
-    tx,
-    created.map((row, index) => ({
-      transactionId: row.id,
-      refs: inputs[index]!.sourceRefs,
+    inputs.map(({ data, accountId }) => ({
+      refs: data.sourceRefs,
+      accountId,
+      amount: data.amount,
     })),
   );
-  await logAuditEntries(tx, actor, [
+  if (proof.refusal) return refuseFreshFinancialSource(proof.refusal);
+  const layer = new WriteLayer(tx);
+  const created = await insertFreshFinancialTransactions(
+    layer,
+    inputs,
+    proof.owners,
+    actor,
+  );
+  await layer.flushAudits();
+  return created;
+}
+
+/**
+ * Insert proven fresh transactions in the layer, accept their sources and
+ * stage the create and evidence audits.
+ */
+export async function insertFreshFinancialTransactions(
+  layer: WriteLayer,
+  inputs: readonly {
+    data: Omit<FinancialTransactionCreateInput, "accountId">;
+    accountId: FinancialTransactionDbRow["accountId"];
+  }[],
+  owners: Awaited<ReturnType<typeof lockFreshFinancialSources>>["owners"],
+  actor: ActorContext,
+) {
+  if (!inputs.length) return [];
+  const created = await layer.insert(
+    "financialTransaction",
+    layer.stage(
+      "financialTransaction",
+      inputs.map(({ data, accountId }) => {
+        const {
+          allocations: _allocations,
+          sourceRefs: _sourceRefs,
+          purchaseId: _purchaseId,
+          ...columns
+        } = data;
+        return { ...columns, accountId, amount: moneyToMinor(data.amount) };
+      }),
+    ),
+  );
+  const acceptedSourceChanges = await acceptFreshFinancialSources(
+    layer.tx,
+    created.map((row, index) => ({
+      transactionId: row.id,
+      refs: inputs[index]!.data.sourceRefs,
+    })),
+    owners,
+  );
+  layer.audit(actor, [
     ...evidenceAuditEntries(
       "sourceOccurrence",
       acceptedSourceChanges.before,
@@ -435,43 +539,7 @@ export async function createFinancialTransactions(
       action: "create" as const,
     })),
   ]);
-
-  for (const [index, data] of inputs.entries()) {
-    const { id } = created[index]!;
-    // `purchaseId` is sugar for one allocation of the full amount; the zod
-    // refinement has already rejected a purchaseId/allocations pair that
-    // disagrees, so either source can be taken verbatim here.
-    const requested: AllocationInput[] =
-      data.allocations.length > 0
-        ? await resolveAllocationInputs(tx, data.allocations)
-        : data.purchaseId
-          ? await resolveAllocationInputs(tx, [
-              { purchaseId: data.purchaseId, amount: data.amount },
-            ])
-          : [];
-    if (requested.length > 0) {
-      await assertPurchasesLive(
-        tx,
-        requested.map((row) => row.purchaseId),
-      );
-      assertAllocationSetValid({
-        transactionAmount: data.amount,
-        kind: data.kind,
-        next: requested,
-      });
-      await refuseSettlementConflicts(tx, {
-        transactionId: id,
-        purchaseIds: requested.map((row) => row.purchaseId),
-      });
-      await writeAllocationSet(tx, id, requested, new Map(), actor);
-      await applyAllocationChanges(tx, {
-        transactionIds: [id],
-        before: new Map(),
-        actor,
-      });
-    }
-  }
-  return created.map((row) => row.id);
+  return created;
 }
 
 const allocationStateFields = [
@@ -636,27 +704,32 @@ const applyUpdatedAllocations = async (
   updates: readonly AllocationUpdate[],
   actor: ActorContext,
   options: FinancialTransactionUpdateOptions,
+  /** Read and share-locked by the caller in this transaction. */
+  prepared?: { before: AllocationSnapshot; resolved: AllocationInput[] },
 ) => {
   if (!updates.length) return;
   const ids = updates.map(({ id }) => id);
-  const before = await readAllocations(tx, ids);
+  const before = prepared?.before ?? (await readAllocations(tx, ids));
   const named = updates.map(({ data, state }) =>
     namedUpdateAllocations(data, state),
   );
-  const resolved = await resolveAllocationInputs(
-    tx,
-    named.flatMap((rows) => rows ?? []),
-  );
+  const resolved =
+    prepared?.resolved ??
+    (await resolveAllocationInputs(
+      tx,
+      named.flatMap((rows) => rows ?? []),
+    ));
   let offset = 0;
   const nexts = updates.map(({ id, state }, index) => {
     const rows = named[index];
     const inputs = rows && resolved.slice(offset, (offset += rows.length));
     return requestedUpdateAllocations(id, state, before, inputs);
   });
-  await assertPurchasesLive(
-    tx,
-    nexts.flatMap((next) => next?.map((row) => row.purchaseId) ?? []),
-  );
+  if (!prepared)
+    await assertPurchasesLive(
+      tx,
+      nexts.flatMap((next) => next?.map((row) => row.purchaseId) ?? []),
+    );
   for (const [index, next] of nexts.entries())
     if (next !== null)
       assertAllocationSetValid({
@@ -705,6 +778,129 @@ const applyUpdatedAllocations = async (
   }
   await applyAllocationChanges(tx, { transactionIds: ids, before, actor });
 };
+
+/**
+ * A booking's settlement: each live transaction allocates its full amount to
+ * one Purchase. The caller holds the transactions' source and reviewed-booking
+ * locks; this takes the Purchase share locks, then the transaction rows, and
+ * shares the update path's validation, conflict check and follow-ups.
+ */
+export async function allocateFinancialBookings(
+  tx: DrizzleTransaction,
+  bookings: readonly {
+    row: FinancialTransactionDbRow;
+    allocation: {
+      purchaseId: PurchaseShortcode;
+      amount: number;
+      confirmsMerchant?: boolean;
+    };
+  }[],
+  actor: ActorContext,
+): Promise<FinancialTransactionId[]> {
+  if (!bookings.length) return [];
+  const ids = bookings.map(({ row }) => row.id);
+  const resolved = await resolveAllocationInputs(
+    tx,
+    bookings.map(({ allocation }) => allocation),
+  );
+  const before = await readAllocations(tx, ids);
+  // LOCK ORDER: Purchase rows first, THEN the transaction rows.
+  await assertPurchasesLive(
+    tx,
+    uniq([
+      ...[...before.values()].flat().map((row) => row.purchaseId),
+      ...resolved.map((row) => row.purchaseId),
+    ]),
+  );
+  await tx
+    .select({ id: financialTransaction.id })
+    .from(financialTransaction)
+    .where(
+      and(
+        inArray(financialTransaction.id, ids),
+        notDeleted(financialTransaction),
+      ),
+    )
+    .orderBy(financialTransaction.id)
+    .for("update");
+  await applyUpdatedAllocations(
+    tx,
+    bookings.map(({ row, allocation }) => {
+      const data: FinancialTransactionUpdateData = {
+        allocations: [allocation],
+      };
+      return {
+        id: row.id,
+        data,
+        state: deriveUpdatedTransactionState(
+          before.get(row.id)?.length ?? 0,
+          row,
+          data,
+        ),
+        priorCharge: row,
+      };
+    }),
+    actor,
+    {},
+    { before, resolved },
+  );
+  return ids;
+}
+
+/**
+ * Fresh bookings in a write layer: each transaction the layer created
+ * allocates its full amount to one Purchase the layer created, so neither
+ * side has prior allocations, competing settlements or another locker. The
+ * update path's validation and allocation audit, with one allocation insert.
+ */
+export async function allocateFreshFinancialBookings(
+  layer: WriteLayer,
+  bookings: readonly {
+    row: FinancialTransactionDbRow;
+    purchase: { id: PurchaseId; shortcode: PurchaseShortcode };
+    amount: number;
+    confirmsMerchant?: boolean;
+  }[],
+  actor: ActorContext,
+) {
+  if (!bookings.length) return;
+  const after: AllocationSnapshot = new Map();
+  const sets = bookings.map(({ row, purchase, amount, confirmsMerchant }) => {
+    const state = deriveUpdatedTransactionState(0, row, {
+      allocations: [{ purchaseId: purchase.shortcode, amount }],
+    });
+    const next = [
+      { purchaseId: purchase.id, amount: state.nextAmount, confirmsMerchant },
+    ];
+    assertAllocationSetValid({
+      transactionAmount: state.nextAmount,
+      kind: financialTransactionKind.parse(state.nextKind),
+      next,
+    });
+    after.set(row.id, [
+      {
+        purchaseId: purchase.id,
+        purchaseShortcode: purchase.shortcode,
+        amount: minorToMoney(moneyToMinor(state.nextAmount)),
+        confirmsMerchant: allocationConfirmsMerchant(
+          undefined,
+          next[0]!,
+          actor,
+        ),
+      },
+    ]);
+    return { transactionId: row.id, next };
+  });
+  await writeAllocationSets(layer.tx, sets, new Map(), actor);
+  layer.audit(
+    actor,
+    allocationChangeAudits(
+      sets.map(({ transactionId }) => transactionId),
+      new Map(),
+      after,
+    ).audits,
+  );
+}
 
 /** Write-path options only `finance.allocate_settlement` sets. */
 export type FinancialTransactionUpdateOptions = {

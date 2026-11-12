@@ -1,4 +1,3 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
 import { type AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { systemActor } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
@@ -14,7 +13,6 @@ import {
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
-import { sqlEnumConstant } from "~/server/db/sql-enum";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type {
   EntityKernelContext,
@@ -30,7 +28,6 @@ import {
   type AutomaticPageOutcome,
   reviewAutomaticPage,
 } from "~/server/generic/suggestions/repo/review-batch";
-import { matchedRulesOf } from "~/server/generic/suggestions/repo/suggestion";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { reviewKey } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
@@ -280,6 +277,7 @@ export async function applyAutomaticRulePage<T>(
       run: (
         tx: Database,
         rows: ReadonlyMap<string, SuggestionStateRow>,
+        outside: ReadonlySet<string>,
       ) => Promise<T>;
     };
   },
@@ -308,29 +306,4 @@ export async function applyAutomaticRulePage<T>(
     if (!page.outcomes.has(selection.row.id))
       page.outcomes.set(selection.row.id, "fallback");
   return page;
-}
-
-/** After decision labels publish a charge: its current pending suggestion. */
-export async function applyAutomaticRulesForCharge(
-  db: Database,
-  charge: { source: string; chargeKey: string },
-  servicesFor: KernelServicesFor,
-  importClean = false,
-  statementScope?: StatementSuggestionScope,
-) {
-  const rows = await unwrapDb(db).execute<{ id: string }>(
-    sql`
-    SELECT id FROM "Suggestion"
-    WHERE family = ${sqlEnumConstant(suggestionFamily, suggestionFamily.enum.statement_transaction)} AND active
-      AND status = ${suggestionStatus.enum.pending}
-      AND data->>${sql.raw("'source'")} = ${charge.source} AND data->>${sql.raw("'chargeKey'")} = ${charge.chargeKey}
-      AND jsonb_array_length(${matchedRulesOf(sql`data`)}) > 0
-  `,
-    "objects",
-  );
-  return applyAutomaticRules(
-    db,
-    rows.map((row) => row.id),
-    { context: servicesFor, importClean, statementScope },
-  );
 }

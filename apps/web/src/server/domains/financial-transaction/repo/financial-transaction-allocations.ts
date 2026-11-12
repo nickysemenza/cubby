@@ -130,13 +130,37 @@ export async function applyAllocationChanges(
     return { changedTransactionIds: [], affectedPurchaseIds: [] };
 
   const after = await readAllocations(tx, ids);
+  const { changedTransactionIds, audits } = allocationChangeAudits(
+    ids,
+    opts.before,
+    after,
+  );
+  await logAuditEntries(tx, opts.actor, audits);
 
+  const affectedPurchaseIds = uniq(
+    ids.flatMap((id) => [
+      ...(opts.before.get(id) ?? []).map((row) => row.purchaseId),
+      ...(after.get(id) ?? []).map((row) => row.purchaseId),
+    ]),
+  );
+  if (affectedPurchaseIds.length > 0)
+    await touchUpdatedAt(tx, purchase, affectedPurchaseIds);
+
+  return { changedTransactionIds, affectedPurchaseIds };
+}
+
+/** The allocation audit each changed transaction owes, from its before and after sets. */
+export function allocationChangeAudits(
+  ids: readonly FinancialTransactionId[],
+  before: AllocationSnapshot,
+  after: AllocationSnapshot,
+) {
   const changedTransactionIds: FinancialTransactionId[] = [];
   const audits: AuditEntryInput[] = [];
   for (const id of ids) {
-    const from = allocationAuditRows(opts.before.get(id) ?? []);
+    const from = allocationAuditRows(before.get(id) ?? []);
     const to = allocationAuditRows(after.get(id) ?? []);
-    const confirmedBefore = (opts.before.get(id) ?? [])
+    const confirmedBefore = (before.get(id) ?? [])
       .filter((row) => row.confirmsMerchant)
       .map((row) => row.purchaseShortcode)
       .sort();
@@ -161,18 +185,7 @@ export async function applyAllocationChanges(
       },
     });
   }
-  await logAuditEntries(tx, opts.actor, audits);
-
-  const affectedPurchaseIds = uniq(
-    ids.flatMap((id) => [
-      ...(opts.before.get(id) ?? []).map((row) => row.purchaseId),
-      ...(after.get(id) ?? []).map((row) => row.purchaseId),
-    ]),
-  );
-  if (affectedPurchaseIds.length > 0)
-    await touchUpdatedAt(tx, purchase, affectedPurchaseIds);
-
-  return { changedTransactionIds, affectedPurchaseIds };
+  return { changedTransactionIds, audits };
 }
 
 /**
@@ -322,10 +335,7 @@ async function writeChangedAllocations(
   );
   for (const row of next) {
     const prior = existingByPurchase.get(row.purchaseId);
-    // Automation preserves independent confirmation but cannot create it by default.
-    const memberDecision = actor.channel !== "system" && actor.runId === null;
-    const confirmsMerchant =
-      prior?.confirmsMerchant || (row.confirmsMerchant ?? memberDecision);
+    const confirmsMerchant = allocationConfirmsMerchant(prior, row, actor);
     if (!prior) {
       inserts.push({
         transactionId,
@@ -355,6 +365,16 @@ async function writeChangedAllocations(
         );
   }
   return inserts;
+}
+
+/** Automation preserves independent confirmation but cannot create it by default. */
+export function allocationConfirmsMerchant(
+  prior: { confirmsMerchant: boolean } | undefined,
+  row: { confirmsMerchant?: boolean },
+  actor: ActorContext,
+) {
+  const memberDecision = actor.channel !== "system" && actor.runId === null;
+  return prior?.confirmsMerchant || (row.confirmsMerchant ?? memberDecision);
 }
 
 /** Resolve caller-supplied `PUR-` codes to ids, preserving order. */

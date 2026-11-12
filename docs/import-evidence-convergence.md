@@ -105,6 +105,24 @@ Ready plans and commit-time validation recheck those dependencies and current
 ownership. A read-only preview group resolves its prospective aggregate Expense
 categories together after preparing every draft. Commit groups prepare fresh
 drafts under their locks and resolve them before any financial write. Persisted booking-lineage fingerprints are unchanged by any of this.
+A booking preview's classification revision covers the live spending
+categories, the Product category mappings and that booking's own Vendors (its
+Vendor and its target Purchase's Vendor); every preview and commit path uses
+that definition, so a policy change to another Vendor never stales a review.
+
+Statement creates and attaches commit one independent layer per serializable
+transaction. The layer's facts (accounts, attach targets, purchaser proof,
+retained payments, Vendor identity and candidates) are read once in that
+transaction. A create is planned on its prospective source and an attach on
+its target with the pending reference, and the written transaction must
+reproduce that plan's snapshot. A charge on an earlier charge's target, or
+whose ready booking shares a Vendor, Purchase, Vendor name (equal or
+contained) or an equal amount within seven days with an earlier charge of the
+layer, is declined as dependent and commits in a later transaction. Every
+refusal, including an unavailable occurrence, is decided before any write; a
+plan that changes after the write raises a divergence error so the caller
+rolls the layer back and applies that charge alone. A layer's new entities
+are written kind by kind, each kind in one insert, with one audit insert.
 
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.
@@ -1123,10 +1141,14 @@ does not recreate or restamp labels. Resumed application receipts repeat that
 exact retirement check before application, including recovery from a crash
 before the after-commit callback started. Automatic financial application
 admits only the original ready prefix. Import generation and label pages apply
-compatible creates through the same guarded batches of at most 32. Each
-batch rebuilds current evidence under its locks, preserves per-charge receipts
-and rejects overlapping write footprints; declined items use single admission.
-Generation settles the booked charge's in-scope copies in the same pass. An
+compatible creates through the same guarded transactions of at most 32, one
+dependency layer each ([statement pages](jobs.md#statement-pages)). Each
+rebuilds current evidence under its locks and preserves per-charge receipts;
+declined items use single admission.
+A booked primary's copies come from other sources, so no import scope admits
+them; the neighbour refresh republishes their paired attach for the pass that
+owns them. Before any application on a generation page, its own rule
+selection decides which charges need admission. An
 as-is attach uses its proven paired Transaction even beside other candidates;
 an unpaired ambiguous attach requires an explicit target. Preview, stale-term
 comparison, spending preparation and application use that same target. Charges already skipped by
@@ -1137,12 +1159,10 @@ their charge/evidence, active pending state and absent rule descriptors, then
 clear only the proven prefix through the projection writer. A missing, replaced
 or rule-bearing receipt stops the batch (current
 import-only rules cannot execute outside import admission, so their stamps do
-not). Single-item import admissions regenerate after an applied rule on the same
-page, since regeneration can introduce actionable rules. Generation shares that
-rebuild across bounded groups while no application has changed the ledger;
-every applied rule, copy, declined page or application failure invalidates the
-prepared group before its next admission. A failed grouped rebuild falls back
-to the current charge so failures retain their own references. Statement application and booking request only
+not). Single-item import admissions regenerate first once the page has written,
+since regeneration can introduce actionable rules, and the page's charges a
+write affects are republished together before their admission. A failed
+proposal build bisects so failures retain their own references. Statement application and booking request only
 identity output from their mutation writers when they consume only IDs; the
 writers keep validation, locks, audits, allocations and receipts.
 

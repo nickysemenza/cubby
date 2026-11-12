@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
@@ -13,6 +14,8 @@ import { describe, expect, it, vi } from "vitest";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
+  financialAccount as financialAccountTable,
+  purchase as purchaseTable,
   suggestionTable,
   sourceTransactionRecord,
   sourceOccurrence,
@@ -31,6 +34,8 @@ import {
   replaceJobGeneration,
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
@@ -855,6 +860,165 @@ describe("statement spending review and re-import", () => {
       ),
     ).toEqual([installment.output.id]);
   });
+  it.each(["before", "after"] as const)(
+    "admits only current terms for clean spending that drifted %s publication",
+    async (drift) => {
+      const { account, advice: merchantAdvice, input } = await fixture();
+      // The advice names a Vendor the merchant text alone does not resolve to,
+      // so adviceless rule evidence cannot see that Vendor's spending.
+      await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic Grove Holdings",
+      });
+      const advice = financialSpendingAdvice.parse({
+        ...merchantAdvice,
+        vendorName: "Synthetic Grove Holdings",
+      });
+      const recorded = await recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: { ...input.import, fingerprint: "synthetic-spending-grove" },
+          rows: [
+            {
+              ...input.rows[0]!,
+              statementDate: "2026-05-11",
+              providerAmount: -17.25,
+              merchant: "SQ SYNTH GRV 042",
+              rawDescription: "SQ *SYNTH GRV 042",
+              rowPosition: 2,
+            },
+          ],
+        }),
+        ctx.actor,
+      );
+      await labelAndRefreshReads(advice);
+      const published = async () => {
+        const [state] = await getDb(ctx.db)
+          .select({
+            id: suggestionTable.id,
+            producer: suggestionTable.producer,
+            judgment: suggestionTable.judgment,
+            data: suggestionTable.data,
+          })
+          .from(suggestionTable)
+          .where(
+            sql`${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
+            AND ${suggestionTable.data}->>'statementDate' = '2026-05-11'`,
+          );
+        return state!;
+      };
+      const before = await published();
+      expect(before.judgment).toMatchObject({
+        spending: { status: "ready", effect: "create_aggregate" },
+      });
+      const pass = () =>
+        generateStatementSuggestionPage(ctx.db, {
+          servicesFor: buildCrudServices,
+          after: null,
+          runId: null,
+          scope: { importId: recorded.batchId },
+        });
+      const scenarios = {
+        // The member moves the card to another cardholder after the pass
+        // published: its page declines the charge and its own review refuses
+        // the published terms, so the pass admits the republished terms.
+        after: async () => {
+          const cardholder = await createRepoEntity(ctx, "ledgerParty", {
+            name: "Synthetic second cardholder",
+            kind: "member",
+          });
+          const select = automaticRuleRuntime.selectAutomaticRules;
+          let moved = false;
+          const selecting = vi
+            .spyOn(automaticRuleRuntime, "selectAutomaticRules")
+            .mockImplementation(async (...args) => {
+              if (!moved) {
+                moved = true;
+                await updateFinancialAccount(
+                  ctx.db,
+                  account.output.id,
+                  { ledgerPartyId: cardholder.output.id },
+                  ctx.actor,
+                );
+              }
+              return select(...args);
+            });
+          try {
+            expect(await pass()).toMatchObject({
+              processed: 1,
+              failed: [],
+              unfinished: [],
+            });
+          } finally {
+            selecting.mockRestore();
+          }
+          expect(moved).toBe(true);
+          expect(await total()).toBe(17.25);
+          // The money comes from the republished terms, not the refused ones.
+          expect(
+            await getDb(ctx.db)
+              .select({ id: suggestionTable.id })
+              .from(suggestionTable)
+              .where(eq(suggestionTable.status, suggestionStatus.enum.applied)),
+          ).toEqual([{ id: expect.not.stringMatching(before.id) }]);
+        },
+        before: async () => {
+          // Another writer leaves an open Purchase for the same Vendor afterwards.
+          const vendor = await getDb(ctx.db).query.vendor.findFirst({
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  eq(vendorTable.name, "Synthetic Grove Holdings"),
+                ),
+            },
+          });
+          const receipt = await createRepoEntity(ctx, "purchase", {
+            vendorId: vendor!.shortcode,
+            date: "2026-03-01",
+          });
+          await createRepoEntity(ctx, "expense", {
+            purchaseId: receipt.output.id,
+            name: "Synthetic older receipt",
+            cost: 40,
+            trade: "other",
+          });
+          await createRepoEntity(ctx, "financialTransaction", {
+            accountId: account.output.id,
+            kind: "purchase",
+            status: "posted",
+            amount: 10,
+            postedDate: "2026-03-01",
+            allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
+          });
+          const refusals = vi.spyOn(
+            statementApplication,
+            "currentStatementApplication",
+          );
+          try {
+            expect(await pass()).toMatchObject({ published: 1, failed: [] });
+            // Converged: the next pass leaves the republished booking unchanged.
+            expect(await pass()).toMatchObject({ published: 0, failed: [] });
+            // The drifted booking is republished with current terms, keeping the
+            // paid advice and model provenance; it is never admitted as published.
+            const after = await published();
+            expect(after.id).not.toBe(before.id);
+            expect(after.producer).toMatchObject({ kind: "model" });
+            expect(after.judgment).not.toMatchObject({
+              spending: { status: "ready", effect: "create_aggregate" },
+            });
+            expect(after.judgment).toMatchObject({
+              spending: { request: { advice } },
+            });
+            expect(refusals).not.toHaveBeenCalled();
+            expect(await total()).toBe(40);
+          } finally {
+            refusals.mockRestore();
+          }
+        },
+      };
+      await scenarios[drift]();
+    },
+  );
   it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
     const observed = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
@@ -1028,75 +1192,111 @@ describe("statement spending review and re-import", () => {
   });
   // Creating one Vendor must not invalidate other independent clean charges
   // or strand paid advice outside the label queue across import pages.
-  it("books independent new Vendors across import pages and reuses unchanged advice", async () => {
-    const { input, advice } = await fixture();
-    const names = [
-      "Juniper Books",
-      "Cobalt Cycles",
-      "Amber Bakery",
-      "Willow Hardware",
-      "Lotus Cinema",
-    ];
-    const batch = recordSourceTransactionRecordsInput.parse({
-      ...input,
-      import: { ...input.import, fingerprint: "synthetic-five-vendors" },
-      rows: names.map((merchant, index) => ({
-        ...input.rows[0],
-        merchant,
-        rawDescription: merchant.toUpperCase(),
-        providerAmount: -(index + 1) * 11,
-        rowPosition: index + 1,
-      })),
-    });
-    const saved = await recordSourceTransactionRecords(
-      ctx.db,
-      batch,
-      ctx.actor,
-    );
-    const generateImport = async () => {
-      let after: Parameters<
-        typeof generateStatementSuggestionPage
-      >[1]["after"] = null;
-      do {
-        const page = await generateStatementSuggestionPage(ctx.db, {
-          servicesFor: buildCrudServices,
-          after,
-          runId: null,
-          scope: { importId: saved.batchId! },
-        });
-        after = page.next;
-      } while (after);
-    };
-    await generateImport();
-    let after: Awaited<ReturnType<typeof labelStatementSuggestions>>["next"] =
-      null;
-    do {
-      const labelled = await labelStatementSuggestions(ctx.db, {
-        after,
-        port: answering({ kind: "purchase", counterparty: "business" }),
-        spendingAdvice: async ({ judgment }) => ({
-          ...advice,
-          vendorName: judgment.create!.merchant,
-        }),
-        scope: { importId: saved.batchId! },
+  it.each(["member", "household"] as const)(
+    "books independent new Vendors across import pages on a %s card and reuses unchanged advice",
+    async (owner) => {
+      const { input, advice, account } = await fixture(null, owner);
+      // A household card with no authorized user that day books its live
+      // member primary cardholder as the purchaser.
+      const cardholder = await createRepoEntity(ctx, "ledgerParty", {
+        name: "Synthetic primary cardholder",
+        kind: "member",
       });
-      expect(labelled.failed).toEqual([]);
-      after = labelled.next;
-    } while (after);
-    expect(await total()).toBe(165);
-    const audit = await listAutomaticDecisions(ctx.db, {
-      family: "statement_transaction",
-      limit: 20,
-    });
-    expect(
-      audit.items.filter((row) =>
-        row.automaticRule?.startsWith("statement_transaction.book_spending@"),
-      ).length,
-    ).toBe(5);
-    expect(
-      (await recordSourceTransactionRecords(ctx.db, batch, ctx.actor)).inserted,
-    ).toBe(0);
-    await generateImport();
-    expect(await total()).toBe(165);
-  });
+      if (owner === "household")
+        await updateFinancialAccount(
+          ctx.db,
+          account.output.id,
+          { primaryCardholderId: cardholder.output.id, authorizedUsers: [] },
+          ctx.actor,
+        );
+      const single = vi.spyOn(automaticRuleRuntime, "applyAutomaticRules");
+      const names = [
+        "Juniper Books",
+        "Cobalt Cycles",
+        "Amber Bakery",
+        "Willow Hardware",
+        "Lotus Cinema",
+      ];
+      const batch = recordSourceTransactionRecordsInput.parse({
+        ...input,
+        import: { ...input.import, fingerprint: "synthetic-five-vendors" },
+        rows: names.map((merchant, index) => ({
+          ...input.rows[0],
+          merchant,
+          rawDescription: merchant.toUpperCase(),
+          providerAmount: -(index + 1) * 11,
+          rowPosition: index + 1,
+        })),
+      });
+      const saved = await recordSourceTransactionRecords(
+        ctx.db,
+        batch,
+        ctx.actor,
+      );
+      const generateImport = async () => {
+        let after: Parameters<
+          typeof generateStatementSuggestionPage
+        >[1]["after"] = null;
+        do {
+          const page = await generateStatementSuggestionPage(ctx.db, {
+            servicesFor: buildCrudServices,
+            after,
+            runId: null,
+            scope: { importId: saved.batchId! },
+          });
+          after = page.next;
+        } while (after);
+      };
+      await generateImport();
+      let after: Awaited<ReturnType<typeof labelStatementSuggestions>>["next"] =
+        null;
+      try {
+        do {
+          const labelled = await labelStatementSuggestions(ctx.db, {
+            after,
+            port: answering({ kind: "purchase", counterparty: "business" }),
+            spendingAdvice: async ({ judgment }) => ({
+              ...advice,
+              vendorName: judgment.create!.merchant,
+            }),
+            scope: { importId: saved.batchId! },
+          });
+          expect(labelled.failed).toEqual([]);
+          after = labelled.next;
+        } while (after);
+        // Every create shares the page's guarded transaction.
+        expect(single).not.toHaveBeenCalled();
+      } finally {
+        single.mockRestore();
+      }
+      expect(await total()).toBe(165);
+      const [card] = await getDb(ctx.db)
+        .select({ ledgerPartyId: financialAccountTable.ledgerPartyId })
+        .from(financialAccountTable);
+      const purchaser =
+        owner === "household"
+          ? await resolveOrThrow(ctx.db, "ledgerParty", cardholder.output.id)
+          : card!.ledgerPartyId;
+      expect(
+        await getDb(ctx.db)
+          .select({ purchaser: purchaseTable.purchaserOverrideId })
+          .from(purchaseTable),
+      ).toEqual(Array.from({ length: 5 }, () => ({ purchaser })));
+      const audit = await listAutomaticDecisions(ctx.db, {
+        family: "statement_transaction",
+        limit: 20,
+      });
+      expect(
+        audit.items.filter((row) =>
+          row.automaticRule?.startsWith("statement_transaction.book_spending@"),
+        ).length,
+      ).toBe(5);
+      expect(
+        (await recordSourceTransactionRecords(ctx.db, batch, ctx.actor))
+          .inserted,
+      ).toBe(0);
+      await generateImport();
+      expect(await total()).toBe(165);
+    },
+  );
 });
