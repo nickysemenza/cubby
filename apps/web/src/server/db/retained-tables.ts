@@ -222,6 +222,13 @@ export const entityEmbedding = pgTable(
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
       ),
+    // Work status asks for deletions that exhausted their attempts
+    // (`JOB_NEEDS_ATTENTION_ATTEMPTS`); the table holds the vectors' text.
+    index("EntityEmbedding_deletion_exhausted_idx")
+      .on(table.updatedAt)
+      .where(
+        sql`${table.deletionId} IS NULL AND ${table.deletionAttempts} >= 5`,
+      ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
       table.provider,
@@ -285,6 +292,12 @@ export const searchDocument = pgTable(
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("SearchDocument_entity_fk", table),
+    // Work status asks for refreshes that exhausted their attempts.
+    index("SearchDocument_embedding_exhausted_idx")
+      .on(table.updatedAt)
+      .where(
+        sql`${table.embeddingAttempts} >= 5 AND ${table.deletedAt} IS NULL`,
+      ),
     index("SearchDocument_embedding_due_idx")
       .on(table.embeddingDueAt)
       .where(sql`${table.embeddingDueAt} IS NOT NULL`),

@@ -75,11 +75,13 @@ export function pendingSuggestionRecordsSql(
         ]
       : []),
     // An explicit correction its Suggestion never applied stays a manual notice.
+    // The non-empty test matches Suggestion_member_decision_idx.
     ...(admits(UNAPPLIED_CORRECTION_REASON)
       ? [
           sql`SELECT ${UNAPPLIED_CORRECTION_REASON}::text AS family, s.entity, s."recordId"::text AS token
       FROM "Suggestion" s
       WHERE s.status = ${suggestionStatus.enum.superseded}
+        AND s.decisions <> '[]'::jsonb
         AND s.decisions @> ${JSON.stringify([{ authority: "member", correction: { present: true } }])}::jsonb
         ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`,
         ]
