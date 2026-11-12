@@ -501,10 +501,15 @@ export async function loadCarrierHistory(
   // each use its index: an OR with the package EXISTS scans every email body.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- content is a retained source JSON key.
   const captureText = sql`upper(regexp_replace(coalesce(${shipmentSourceCapture.originalContent}->>'bodyText', '') || ' ' || coalesce(${shipmentSourceCapture.originalContent}->>'bodyHtml', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'content', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'url', ''), '[[:space:]]', '', 'g'))`;
-  const mentions = scope.references.map(
-    (number) =>
-      sql`${captureText} LIKE ${`%${escapeLike(normalizeTrackingNumber(number))}%`}`,
-  );
+  // Real tracking numbers are at least eight characters and never one repeated
+  // character. A shorter or degenerate reference matches nearly every body, which
+  // the trigram index cannot narrow (tens of seconds over all captures).
+  const mentions = scope.references.flatMap((number) => {
+    const normalized = normalizeTrackingNumber(number);
+    return normalized.length < 8 || /^(.)\1*$/u.test(normalized)
+      ? []
+      : [sql`${captureText} LIKE ${`%${escapeLike(normalized)}%`}`];
+  });
   const candidates = sql.join(
     [
       sql`SELECT c.id FROM ${shipmentSourceCapture} c JOIN ${shipmentSourcePackage} p ON p."sourceKey" = c."sourceKey" WHERE p."shipmentId" = ${shipmentId}::uuid`,

@@ -98,6 +98,13 @@ export async function publishWorkItems(
         ),
       );
     if (backoff) return false;
+    // A caller that read the publication stale may start after the holder it
+    // lost to has committed: that publication is current, so it ends here.
+    const [current] = await getDb(tx)
+      .select()
+      .from(workPublication)
+      .where(eq(workPublication.id, PUBLICATION_ID));
+    if (current && !workPublicationStale(current)) return false;
     const record = (
       values: Omit<PgInsertValue<typeof workPublication>, "id">,
     ) =>

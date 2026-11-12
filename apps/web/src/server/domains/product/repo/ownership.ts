@@ -17,7 +17,7 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { QueryBuilder } from "drizzle-orm/pg-core";
+import { type PgColumn, QueryBuilder } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
@@ -68,12 +68,19 @@ export const zeroCostOwnershipExitExpensePredicate = (): SQL =>
  */
 export const ownershipExitExpensePredicate = (): SQL =>
   or(
-    and(
-      lt(expense.cost, 0),
-      inArray(expense.purchaseId, disposalPurchaseIds()),
-    ),
+    and(lt(expense.cost, 0), purchaseNetsNegative(expense.purchaseId)),
     zeroCostOwnershipExitExpensePredicate(),
   )!;
+
+/**
+ * `disposalPurchaseIds` for one Expense's Purchase. The correlated sum reads
+ * that Purchase's lines through the purchaseId index; the uncorrelated set
+ * scans every Expense, which also takes a relation-wide read in SERIALIZABLE
+ * transactions.
+ */
+const purchaseNetsNegative = (purchaseId: SQL | PgColumn): SQL =>
+  sql`(SELECT sum(net."cost") FROM ${expense} net
+    WHERE net."purchaseId" = ${purchaseId} AND ${notDeleted("net")} AND net."future" = false) < 0`;
 
 type OwnershipLoadOptions = {
   today?: string;
