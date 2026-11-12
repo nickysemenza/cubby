@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ListNesting } from "@cubby/schemas/pagination";
 import { type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -37,3 +38,19 @@ export function nestSearchValue(
     return undefined;
   return nested ? "on" : "off";
 }
+
+/** Whether a tree folds automatic siblings into batch rows (`list.tree.batch`). */
+export const listTreeBatches = (queryClient: QueryClient, entity: Entity) =>
+  Boolean(entityMetadata(queryClient, entity).summary.list.tree?.batch);
+
+/**
+ * A nested list's roots scope. SSR and the mounted list share it, so both
+ * read one query key.
+ */
+export const listRootsScope = (
+  queryClient: QueryClient,
+  entity: Entity,
+): ListNesting =>
+  listTreeBatches(queryClient, entity)
+    ? { scope: "roots", batches: true }
+    : { scope: "roots" };

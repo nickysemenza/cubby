@@ -3,7 +3,7 @@ import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ReactNode } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
-import { ROW_DENSITY } from "~/ui/data-table/density";
+import { rowDensity } from "~/ui/data-table/density";
 
 interface ImageThumbnailProps {
   images: Array<ImageUrlSummary & { id?: string; filename?: string }>;
@@ -36,7 +36,7 @@ export const ImageThumbnail = ({
         entity={entity}
         fallback={fallback}
         preview={preview}
-        size={ROW_DENSITY.rowHeight}
+        size={rowDensity().row}
         className="thumbnail-ring"
       />
     </div>

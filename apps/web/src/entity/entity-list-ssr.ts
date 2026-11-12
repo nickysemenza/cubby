@@ -4,8 +4,8 @@ import type { QueryClient } from "@tanstack/react-query";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityMetadata, ensureEntityMetadata } from "~/entity/metadata";
 
-import { PIVOT_VIEW_ID } from "./entity-list/list-grouping";
-import { listNested } from "./entity-list/list-nesting";
+import { listGroupingFor, PIVOT_VIEW_ID } from "./entity-list/list-grouping";
+import { listNested, listRootsScope } from "./entity-list/list-nesting";
 import {
   declaredListReadProjection,
   listReadNeedsCount,
@@ -23,8 +23,6 @@ import {
 } from "./filters";
 import type { ListEntity } from "./model/list-contracts";
 import { entityListDefaultSort } from "./sortable-fields";
-
-const ROOTS_SCOPE = { scope: "roots" } as const;
 
 type EntityListLoaderArgs = {
   context: { queryClient: QueryClient };
@@ -111,11 +109,20 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
       includeCount,
       nesting:
         options.nested && projection.nesting !== "flat"
-          ? ROOTS_SCOPE
+          ? listRootsScope(options.queryClient, options.entity)
           : undefined,
       // Timeline owns its arrangement; retained URL dimensions must not
       // preload a grouped query the mounted renderer never consumes.
-      groupBy: view === "timeline" ? [] : undefined,
+      groupBy:
+        view === "timeline"
+          ? []
+          : [
+              ...listGroupingFor(
+                options.queryClient,
+                options.entity,
+                openingSearch,
+              ),
+            ],
     }),
     // Initial rendering must not hold the primary read behind the batch timer.
     { batch: false },

@@ -22,6 +22,7 @@ import {
   listGroupingMenuKey,
 } from "~/entity/metadata";
 import { DisplayRow } from "~/entity/table/display-menu";
+import { Picker } from "~/ui/combobox/picker";
 import { ListFieldTypeMark } from "~/ui/data-table/column-presentation";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
@@ -38,7 +39,13 @@ import {
   DropdownMenuSubmenuContent,
 } from "~/ui/primitives/dropdown-menu";
 
-import { listGroupBy, PIVOT_VIEW_ID, pivotAvailable } from "./list-grouping";
+import {
+  groupBySearchValue,
+  listGroupingFor,
+  PIVOT_VIEW_ID,
+  pivotAvailable,
+} from "./list-grouping";
+import { listHasSecondLine, listRowLines } from "./list-rows";
 import { useEntityListCardDensity, useListSearch } from "./list-search";
 import { resolveListView } from "./resolve-list-view";
 
@@ -61,13 +68,14 @@ const groupLevelLabel = (level: number) =>
 function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { density, setDensity } = useEntityListCardDensity();
-  const { views, view } = resolveListView(useQueryClient(), entity, search);
   const grouping = useEntityMetadata(entity).listFields.grouping;
+  const { views, view } = resolveListView(useQueryClient(), entity, search);
   const isMobile = useIsMobile();
   // Pivot is built in on desktop wherever two choices can group.
   const pivot = !isMobile && pivotAvailable(grouping);
 
-  const dimensions = listGroupBy(search) ?? [];
+  const queryClient = useQueryClient();
+  const dimensions = listGroupingFor(queryClient, entity, search);
   const pivotReason =
     dimensions.length < 2
       ? "Group by two fields first: rows, then columns."
@@ -215,9 +223,11 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
     density !== "contact-sheet" &&
     (view === "timeline" ||
       (typeof view === "object" && view.id === "calendar"));
-  const dimensions = timeline ? [] : (listGroupBy(search) ?? []);
-  const apply = (next: ListGroupBy[]) =>
-    navigate({ groupBy: next.length ? next : undefined });
+  const dimensions = timeline
+    ? []
+    : listGroupingFor(queryClient, entity, search);
+  const apply = (next: readonly ListGroupBy[]) =>
+    navigate({ groupBy: groupBySearchValue(queryClient, entity, next) });
   const update = (index: number, next: ListGroupBy) =>
     apply(
       dimensions.map((item, position) => (position === index ? next : item)),
@@ -464,6 +474,36 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
   );
 }
 
+/**
+ * Single or two-line table rows, on a list whose entity declares a second
+ * line under the title. Single is the default and stays out of the URL.
+ */
+function ListRowsMenu({ entity }: { entity: BrowserRoutedEntity }) {
+  const queryClient = useQueryClient();
+  const { search, navigate } = useListSearch();
+  const { view } = resolveListView(queryClient, entity, search);
+  useEntityMetadata(entity);
+  if (view !== "table" || !listHasSecondLine(queryClient, entity)) return null;
+  const lines = listRowLines(queryClient, entity, search);
+  return (
+    <DisplayRow label="Rows">
+      <Picker
+        mode="segmented"
+        label="Rows"
+        value={lines}
+        options={[
+          { value: "single", label: "Single line" },
+          { value: "double", label: "Two lines" },
+        ]}
+        onValueChange={(value) => {
+          if (value === "single" || value === "double")
+            navigate({ rowLines: value === "double" ? 2 : undefined });
+        }}
+      />
+    </DisplayRow>
+  );
+}
+
 /** The Display popover's layout and grouping rows, from the entity's manifest. */
 export function ListDisplaySections({
   entity,
@@ -473,6 +513,7 @@ export function ListDisplaySections({
   return (
     <>
       <ListViewMenu entity={entity} />
+      <ListRowsMenu entity={entity} />
       <ListGroupMenu entity={entity} />
     </>
   );

@@ -1,4 +1,5 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import type { ColumnPriority } from "@cubby/schemas/entity-definitions/definition";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
 import { humanize, type NumberRange } from "@cubby/shared";
@@ -9,6 +10,7 @@ import type { PickerRecordSource } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 
 import type { ColumnCellData } from "./cell-data";
+import type { ColumnKind } from "./column-kind-widths";
 import type { CubbyDefaultTableLayout } from "./column-layout";
 import type { FilterBarField, FilterValueType } from "./filter-bar-core";
 import type { CubbyColumn, CubbyTable } from "./table-features";
@@ -162,6 +164,15 @@ export interface CubbyColumnMeta<TData = CellData> {
   rendersBlank?: (row: TData) => boolean;
   /** Public refs rendered by this column, collected once at the table owner. */
   entityRefs?: (row: TData) => readonly EntityRef[];
+  /**
+   * The width class a shared renderer draws (`COLUMN_KIND_WIDTHS`); other
+   * columns derive theirs from cell kind and role.
+   */
+  widthKind?: ColumnKind;
+  /** The field's `display.priority`: which columns leave a narrow pane first. */
+  priority?: ColumnPriority;
+  /** The row's second line in two-line mode: this column hides from the grid. */
+  secondLine?: boolean;
 }
 
 /**

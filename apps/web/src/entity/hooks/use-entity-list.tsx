@@ -1,7 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
+  ListBatch,
   ListGroupBy,
+  ListGroupMembership,
   ListGroupSummary,
   ListGroupMetric,
   ListNesting,
@@ -29,6 +31,10 @@ import {
   ListMetricValue,
 } from "~/entity/entity-list/list-evidence-summary";
 import {
+  listRootsScope,
+  listTreeBatches,
+} from "~/entity/entity-list/list-nesting";
+import {
   listReadNeedsCount,
   listReadVisibility,
   type ListReadProjection,
@@ -50,6 +56,8 @@ import { useInfiniteTableList } from "~/entity/hooks/use-infinite-table-list";
 import {
   serverTreeRowCanExpand,
   type ServerTreeRow,
+  serverTreeBatchId,
+  serverTreeBatchOf,
   serverTreeStatusOf,
   useServerTreeChildren,
 } from "~/entity/hooks/use-server-tree-children";
@@ -60,6 +68,7 @@ import {
 } from "~/entity/metadata";
 import { listEntities } from "~/entity/model/list-contracts";
 import { useProblemContinuation } from "~/entity/problems/problem-continuation";
+import { useBatchCommands } from "~/entity/table/batch-command";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
 import { problemWorklistState } from "~/entity/table/problem-worklist";
@@ -77,6 +86,7 @@ import {
   type BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
 import { reconcileRowSelection } from "~/ui/data-table/row-selection";
+import { SectionPhaseMark } from "~/ui/data-table/section-header";
 import type { CubbyColumnCollection } from "~/ui/data-table/table-features";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { useTableConfig } from "~/ui/data-table/use-table-config";
@@ -126,7 +136,55 @@ function fixedPreviewEntity(
 // Router search also carries typed dialog and pagination state, not just filters.
 const routeSearchSchema = z.record(z.string(), z.json().optional());
 const ROOTS_SCOPE: ListNesting = { scope: "roots" };
-const isServerTreeRecord = (row: { id: string }) => !serverTreeStatusOf(row);
+/**
+ * Phase sections carry their role mark; the finished section names its
+ * window and reaches older records while the phase filter leaves them out.
+ */
+function phaseSections(
+  state: { field: string; recentDays?: number } | null,
+  groupBy: readonly ListGroupBy[] | undefined,
+  columnFilters: readonly { id: string; value: unknown }[],
+) {
+  const phaseFilter = columnFilters.find(({ id }) => id === "phase")?.value;
+  return {
+    phaseGrouped: state !== null && groupBy?.[0]?.key === "phase",
+    recentDays: state?.recentDays,
+    hidesOlder: Array.isArray(phaseFilter) && !phaseFilter.includes("older"),
+  };
+}
+
+/**
+ * A first roots page lists its batch rows; a grouped list files each by its
+ * most urgent member phase, or by its batch value under that grouping.
+ */
+function useBatchMemberships(
+  loaded: readonly ListGroupMembership[] | undefined,
+  groupBy: readonly ListGroupBy[] | undefined,
+  rootBatches: readonly ListBatch[] | undefined,
+  batchBy: string | undefined,
+): readonly ListGroupMembership[] {
+  return useMemo(() => {
+    const dimension = groupBy?.length === 1 ? groupBy[0] : undefined;
+    if (!dimension || !rootBatches?.length) return loaded ?? [];
+    return [
+      ...(loaded ?? []),
+      ...rootBatches.flatMap((batch) => {
+        const value =
+          dimension.key === "phase"
+            ? BATCH_PHASE_ORDER.find((phase) => (batch.phases[phase] ?? 0) > 0)
+            : dimension.key === batchBy
+              ? batch.value
+              : undefined;
+        return value ? [{ id: serverTreeBatchId(batch), path: [value] }] : [];
+      }),
+    ];
+  }, [batchBy, groupBy, loaded, rootBatches]);
+}
+
+/** A batch files under its most urgent member phase. */
+const BATCH_PHASE_ORDER = ["needs", "active", "finished", "older"] as const;
+const isServerTreeRecord = (row: { id: string }) =>
+  !serverTreeStatusOf(row) && !serverTreeBatchOf(row);
 const serverTreeRowOffersExpansion = (row: { original: unknown }) =>
   serverTreeRowCanExpand(row.original);
 // SAFETY: a server tree's table rows are exactly `attach`'s output.
@@ -628,7 +686,7 @@ export function useEntityList<
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,
-    nesting: serverTree ? ROOTS_SCOPE : undefined,
+    nesting: serverTree ? listRootsScope(queryClient, entity) : undefined,
     resultMembership,
     summaryOnly,
     // A counted page reports its unresolved membership, and only a result filter
@@ -648,8 +706,20 @@ export function useEntityList<
     refreshControls,
   } = infiniteResult;
   const { setColumnFilters, columnFilters } = tableState;
+  const rootBatches = infiniteResult.pages?.[0]?.meta.batches;
+  const memberships = useBatchMemberships(
+    infiniteResult.memberships,
+    groupBy,
+    rootBatches,
+    metadata.summary.list.tree?.batch?.by,
+  );
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
+  );
+  const { phaseGrouped, recentDays, hidesOlder } = phaseSections(
+    metadata.summary.state,
+    groupBy,
+    columnFilters,
   );
   const groupConfig = useMemo((): GroupConfig | undefined => {
     if (!groupChoice || !groups) return undefined;
@@ -664,7 +734,7 @@ export function useEntityList<
     return {
       choice: groupChoice,
       groups,
-      memberships: infiniteResult.memberships ?? [],
+      memberships,
       collapsed: new Set(
         groups
           .filter((group) =>
@@ -734,14 +804,44 @@ export function useEntityList<
       },
       header: (group) => ({
         labelContent: (
-          <GroupValueLabel
-            depth={group.path.length - 1}
-            value={group.path.at(-1) ?? ""}
-            label={group.label}
-          />
+          <PhaseSectionLabel
+            phase={phaseGrouped ? group.path.at(-1) : undefined}
+          >
+            <GroupValueLabel
+              depth={group.path.length - 1}
+              value={group.path.at(-1) ?? ""}
+              label={group.label}
+            />
+          </PhaseSectionLabel>
         ),
+        actions:
+          phaseGrouped && group.path.at(-1) === "finished" && hidesOlder ? (
+            <button
+              type="button"
+              className="rounded-sm px-1.5 py-0.5 text-xs font-medium text-link hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+              onClick={() =>
+                setColumnFilters((previous) =>
+                  previous.map((filter) =>
+                    filter.id === "phase" && Array.isArray(filter.value)
+                      ? { ...filter, value: [...filter.value, "older"] }
+                      : filter,
+                  ),
+                )
+              }
+            >
+              Show older
+            </button>
+          ) : undefined,
         aside: (
           <>
+            {phaseGrouped &&
+            group.path.at(-1) === "finished" &&
+            hidesOlder &&
+            recentDays ? (
+              <span className="text-muted-foreground">
+                last {recentDays === 1 ? "24 hours" : `${recentDays} days`}
+              </span>
+            ) : null}
             <ListEvidenceSummary
               definitions={metadata.summary.list.evidenceMetrics}
               metrics={group.metrics}
@@ -785,9 +885,12 @@ export function useEntityList<
     columnFilters,
     collapsedGroups,
     groupBy,
-    infiniteResult.memberships,
+    memberships,
     queryClient,
     metadata,
+    phaseGrouped,
+    hidesOlder,
+    recentDays,
   ]);
 
   const groupSummary = useMemo((): GroupSummaryModel | undefined => {
@@ -924,6 +1027,7 @@ export function useEntityList<
   // own filters and sort; the loaded root pages are never nested locally.
   const treeChildren = useServerTreeChildren<TRow>({
     enabled: serverTree,
+    batches: listTreeBatches(queryClient, entity),
     scope: infiniteResult.scope,
     planFor: infiniteResult.scopedPlan,
   });
@@ -932,10 +1036,18 @@ export function useEntityList<
   // `mappingsMap`, the select-all-matching count — keeps reading the root
   // `data`. Only `nest` may return a different row shape, and it is typed to.
   const attachChildren = treeChildren.attach;
+  const batchCommands = useBatchCommands<TRow>(
+    presentationState.listBulkActions.selectionCommands,
+    serverTree ? treeChildren.readBatchMembers : undefined,
+  );
   const tableData = useMemo(
     (): TData[] =>
-      tree ? tree.nest(data) : serverTree ? attachChildren(data) : data,
-    [data, tree, serverTree, attachChildren],
+      tree
+        ? tree.nest(data)
+        : serverTree
+          ? attachChildren(data, rootBatches)
+          : data,
+    [data, tree, serverTree, attachChildren, rootBatches],
   );
   const getSubRows =
     tree?.getSubRows ?? (serverTree ? serverTreeSubRows<TData> : undefined);
@@ -1192,6 +1304,7 @@ export function useEntityList<
       refreshControls,
       groupConfig,
       nestToggle,
+      batchCommands,
       // A sheet inspector owns the phone tap; do not synthesize a detail link.
       navigation:
         previewOptions?.mobileBehavior === "sheet"
@@ -1215,4 +1328,24 @@ export function useEntityList<
     inspection,
     groupSummary,
   };
+}
+
+const SECTION_PHASES = ["needs", "active", "finished"] as const;
+
+/** A phase section's label after its role mark; other sections pass through. */
+function PhaseSectionLabel({
+  phase,
+  children,
+}: {
+  phase: string | undefined;
+  children: ReactNode;
+}) {
+  const known = SECTION_PHASES.find((candidate) => candidate === phase);
+  if (!known) return children;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <SectionPhaseMark phase={known} />
+      {children}
+    </span>
+  );
 }

@@ -11,14 +11,38 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
-import { ROW_DENSITY } from "./density";
+import { rowDensity } from "./density";
 
 /**
  * The band's fixed height in px at or above `md`, border included. It tracks the
  * row height (`--table-row-height`). The desktop virtualizer budgets this size
  * without measuring, so the band must not grow.
  */
-export const sectionHeaderHeight = () => ROW_DENSITY.rowHeight;
+export const sectionHeaderHeight = () => rowDensity().row;
+
+/** A phase section's square mark: Needs you, Active, Recently finished. */
+export function SectionPhaseMark({
+  phase,
+}: {
+  phase: "needs" | "active" | "finished";
+}) {
+  return (
+    <span
+      aria-hidden
+      data-phase-mark={phase}
+      className={cn(
+        "grid size-2.25 shrink-0 place-items-center rounded-[2px]",
+        phase === "needs" && "bg-needs",
+        phase === "active" && "bg-running",
+        phase === "finished" && "bg-positive",
+      )}
+    >
+      {phase === "needs" ? (
+        <span className="size-0.75 rounded-[1px] bg-needs-foreground" />
+      ) : null}
+    </span>
+  );
+}
 
 /** A section total drawn under its own column. */
 export interface SectionColumnTotal {

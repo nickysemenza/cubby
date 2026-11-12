@@ -74,12 +74,14 @@ import { Button } from "~/ui/primitives/button";
 import { EntityShelf } from "./entity-shelf";
 import { GroupLabelsProvider } from "./group-value-label";
 import {
-  listGroupBy,
+  groupBySearchValue,
+  listGroupingFor,
   PIVOT_VIEW_ID,
   pivotAvailable,
   pivotShare,
 } from "./list-grouping";
 import { listNested, nestSearchValue } from "./list-nesting";
+import { listRowLines } from "./list-rows";
 export { listGroupBy } from "./list-grouping";
 import { ListDisplaySections } from "./list-display-sections";
 import {
@@ -519,9 +521,15 @@ function ServerListBody({
           },
     [entity, navigate, queryClient, context.search, readProjection, parts.tree],
   );
+  // Absent rather than empty, so SSR and the client share one query key.
+  const grouping = listGroupingFor(queryClient, entity, context.search);
+  const groupBy = grouping.length > 0 ? [...grouping] : undefined;
   const onGroupByChange = useCallback(
-    (key: string | null) => navigate({ groupBy: key ? [{ key }] : undefined }),
-    [navigate],
+    (key: string | null) =>
+      navigate({
+        groupBy: groupBySearchValue(queryClient, entity, key ? [{ key }] : []),
+      }),
+    [entity, navigate, queryClient],
   );
   const filterOptions = useFilterOptions({ ...parts.list?.filterOptions });
   // Cards and Compact keep the same query, filtering, ordering, and page as
@@ -569,7 +577,7 @@ function ServerListBody({
     serverTree: nested,
     nestToggle,
     // Timeline is already arranged by date, so it reads the list flat.
-    groupBy: view === "timeline" ? undefined : listGroupBy(context.search),
+    groupBy: view === "timeline" ? undefined : groupBy,
     onGroupByChange: view === "timeline" ? undefined : onGroupByChange,
     summaryOnly: view === PIVOT_VIEW_ID,
   });
@@ -676,6 +684,7 @@ function ServerListBody({
               currentRowId={preview?.rowKey ?? preview?.id}
               desktopInspector={dockedInspector}
               inspectorToggle={inspectorToggle}
+              rowLines={listRowLines(queryClient, entity, context.search)}
               {...workbenchProps}
               contextualStatus={null}
               footerContent={isMobile ? undefined : footerContent}
@@ -770,7 +779,7 @@ function ServerListBody({
                 ...entityMetadata(queryClient, entity).summary.list
                   .evidenceMetrics,
               ]}
-              labels={(listGroupBy(context.search) ?? []).map(
+              labels={listGroupingFor(queryClient, entity, context.search).map(
                 (dimension) =>
                   entityMetadata(queryClient, entity).listFields.grouping.find(
                     (choice) => choice.key === dimension.key,

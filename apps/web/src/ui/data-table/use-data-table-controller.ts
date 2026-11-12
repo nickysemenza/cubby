@@ -8,8 +8,14 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 
 import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
-import { columnWidthVariables, emptyColumnIds } from "./column-layout";
-import { ROW_DENSITY } from "./density";
+import { priorityDroppedColumns } from "./column-kind-widths";
+import {
+  columnWidthVariables,
+  emptyColumnIds,
+  isLockedColumn,
+  resolvedTableColumnWidths,
+} from "./column-layout";
+import { rowDensity, type RowLines, useRowDensity } from "./density";
 import { useTableVirtualizer } from "./hooks/use-table-virtualizer";
 import { useInfinitePrefetch } from "./infinite-prefetch";
 import type { CubbyTable as ITable, CubbyRow as Row } from "./table-features";
@@ -37,7 +43,7 @@ function useScrollEdges(
     const update = () => {
       element.parentElement?.style.setProperty(
         "--table-fade-top",
-        `${element.offsetTop + ROW_DENSITY.rowHeight}px`,
+        `${element.offsetTop + rowDensity().row}px`,
       );
       const start = element.scrollLeft > 0;
       const end =
@@ -72,6 +78,7 @@ export function useDataTableController<TItem extends RowData>({
   retainedItemKey,
   verticalAlign,
   onRowClick,
+  rowLines = "single",
 }: {
   /** Page lists fold all-empty and grouped columns away; a record's own tables keep them for reading and inline edits. */
   foldColumns?: boolean;
@@ -84,6 +91,8 @@ export function useDataTableController<TItem extends RowData>({
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
+  /** Two-line rows hide the columns their second line draws (`secondLine`). */
+  rowLines?: RowLines;
 }) {
   const { isDebugEnabled } = useDebug();
   const isMobile = useIsMobile();
@@ -93,7 +102,7 @@ export function useDataTableController<TItem extends RowData>({
   // empty/data state and mismatch SSR (CUBBY-3J / CUBBY-3). Keep showing the
   // loading row until hydrated so the first client render matches SSR.
   const hydrated = useHydrated();
-  const dConfig = ROW_DENSITY;
+  const dConfig = useRowDensity({ lines: rowLines, embedded: !foldColumns });
 
   const hasNextPage = infiniteScroll?.hasNextPage ?? false;
   const isFetchingNextPage = infiniteScroll?.isFetchingNextPage ?? false;
@@ -146,14 +155,24 @@ export function useDataTableController<TItem extends RowData>({
     () => (emptyKey ? emptyKey.split(",") : []),
     [emptyKey],
   );
-  // Painted nowhere: the empty columns, and those section headers already state.
-  const unpaintedColumns = useMemo<ReadonlySet<string>>(
+  const secondLineKey =
+    dConfig.lines === "double"
+      ? table
+          .getAllLeafColumns()
+          .filter((column) => column.columnDef.meta?.secondLine)
+          .map((column) => column.id)
+          .join(",")
+      : "";
+  // Painted nowhere: the empty columns, those section headers already state,
+  // and those a two-line row draws on its second line.
+  const foldedColumns = useMemo<ReadonlySet<string>>(
     () =>
       new Set([
         ...emptyColumns,
         ...(foldColumns && groupedKey ? groupedKey.split(",") : []),
+        ...(secondLineKey ? secondLineKey.split(",") : []),
       ]),
-    [emptyColumns, foldColumns, groupedKey],
+    [emptyColumns, foldColumns, groupedKey, secondLineKey],
   );
   const revealEmptyColumns = useCallback((columnIds: readonly string[]) => {
     setRevealedEmpty((previous) => new Set([...previous, ...columnIds]));
@@ -207,7 +226,7 @@ export function useDataTableController<TItem extends RowData>({
     rowCount: rows.length,
     rowKeys,
     groupedItems,
-    rowHeight: dConfig.rowHeight,
+    rowHeight: dConfig.row,
     isMobile,
     trailingSentinel: hasDesktopInfiniteSentinel,
     initialOffset: restorationEntry?.scrollY,
@@ -238,6 +257,82 @@ export function useDataTableController<TItem extends RowData>({
     observer.observe(pane);
     return () => observer.disconnect();
   }, [isMobile, tableContainerRef]);
+
+  // A narrow page pane drops low-priority columns instead of truncating
+  // every column; a column the member showed in this session stays.
+  const renderedWidths = useRenderedColumnWidths(
+    table,
+    tableContainerRef,
+    fitScope,
+    !isMobile && hydrated,
+  );
+  const visibilityKey = JSON.stringify(table.state.columnVisibility ?? {});
+  const columnSizesKey = table
+    .getVisibleLeafColumns()
+    .map((column) => `${column.id}:${column.getSize()}`)
+    .join(",");
+  const droppedKey = useMemo(() => {
+    if (!foldColumns || isMobile) return "";
+    const defaults = table.options.meta?.defaultLayout?.columnVisibility ?? {};
+    const sized = new Set(userSizedKey ? userSizedKey.split(",") : []);
+    const columns = table
+      .getVisibleLeafColumns()
+      .filter((column) => !foldedColumns.has(column.id));
+    // Default columns drop only where the entity ranks its columns.
+    const ranked = columns.some(
+      (column) => column.columnDef.meta?.priority === "essential",
+    );
+    const { widths } = resolvedTableColumnWidths(
+      columns,
+      tableContainerWidth,
+      sized,
+      renderedWidths,
+    );
+    return [
+      ...priorityDroppedColumns(
+        columns.map((column) => {
+          const priority = column.columnDef.meta?.priority ?? "default";
+          return {
+            id: column.id,
+            width: widths[column.id] ?? column.getSize(),
+            priority:
+              priority === "default" && !ranked ? "essential" : priority,
+            kept:
+              isLockedColumn(column) ||
+              column.columnDef.meta?.entityColumnRole === "identity" ||
+              Boolean(column.getIsPinned()) ||
+              Boolean(column.getIsSorted()) ||
+              column.getIsFiltered() ||
+              sized.has(column.id) ||
+              defaults[column.id] === false,
+          };
+        }),
+        tableContainerWidth,
+      ),
+    ]
+      .sort()
+      .join(",");
+    // oxlint-disable-next-line react/exhaustive-deps -- scalar signatures stand in for TanStack's fresh column array
+  }, [
+    foldColumns,
+    isMobile,
+    foldedColumns,
+    tableContainerWidth,
+    renderedWidths,
+    userSizedKey,
+    visibilityKey,
+    columnSizesKey,
+    table.state.sorting,
+    table.state.columnFilters,
+    table.state.columnPinning,
+  ]);
+  const unpaintedColumns = useMemo<ReadonlySet<string>>(
+    () =>
+      droppedKey
+        ? new Set([...foldedColumns, ...droppedKey.split(",")])
+        : foldedColumns,
+    [droppedKey, foldedColumns],
+  );
 
   // Spreadsheet-style cell selection (desktop only). Maps a flat row index into
   // the virtualizer's index space before scrolling — grouped tables interleave
@@ -283,17 +378,7 @@ export function useDataTableController<TItem extends RowData>({
     .filter((c) => !unpaintedColumns.has(c.id))
     .map((c) => c.id)
     .join(",");
-  const columnSizesKey = table
-    .getVisibleLeafColumns()
-    .map((column) => `${column.id}:${column.getSize()}`)
-    .join(",");
   const desktopLayout = !isMobile && hydrated;
-  const renderedWidths = useRenderedColumnWidths(
-    table,
-    tableContainerRef,
-    fitScope,
-    desktopLayout,
-  );
   useCellSpill(tableContainerRef, desktopLayout);
   useScrollEdges(tableContainerRef, desktopLayout);
   const columnSizeVars = useMemo(

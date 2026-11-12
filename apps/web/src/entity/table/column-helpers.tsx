@@ -23,7 +23,7 @@ import { Link } from "@tanstack/react-router";
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
 import { uniqBy } from "es-toolkit";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode, useContext } from "react";
 import { z } from "zod";
 
 import {
@@ -94,7 +94,7 @@ import {
   textCellData,
   timestampCellData,
 } from "../../ui/data-table/cell-data";
-import { ROW_DENSITY } from "../../ui/data-table/density";
+import { rowDensity, RowLinesContext } from "../../ui/data-table/density";
 import { nameLabel } from "../../ui/data-table/name-label";
 import type {
   CubbyCellContext as CellContext,
@@ -191,6 +191,51 @@ export const rowImages = <T extends ImageRow>(row: T) =>
       isDisplayableImageFile({ ...img, contentType: img.contentType }),
   );
 
+/**
+ * The title with its declared kind tag and second line. Single rows put the
+ * tag after the title and drop it on a narrow pane; two-line rows draw the
+ * tag and the second line's values, joined by " · ", under the title.
+ */
+function IdentityLines({
+  children,
+  kindTag,
+  secondLine,
+}: {
+  children: ReactNode;
+  kindTag: ReactNode;
+  secondLine: readonly { key: string; node: ReactNode }[];
+}) {
+  const lines = useContext(RowLinesContext);
+  if (lines === "double") {
+    const parts = [
+      ...(kindTag ? [{ key: "kind", node: kindTag }] : []),
+      ...secondLine,
+    ];
+    return (
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="min-w-0 truncate font-medium">{children}</span>
+        {parts.length > 0 ? (
+          <span className="flex min-w-0 items-center gap-1 overflow-hidden text-xs whitespace-nowrap text-muted-foreground">
+            {parts.map((part, index) => (
+              <Fragment key={part.key}>
+                {index > 0 ? <span aria-hidden>·</span> : null}
+                <span className="min-w-0 shrink truncate">{part.node}</span>
+              </Fragment>
+            ))}
+          </span>
+        ) : null}
+      </span>
+    );
+  }
+  if (!kindTag) return children;
+  return (
+    <Row align="center" gap="xs" className="min-w-0">
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      <span className="shrink-0 [[data-table-narrow]_&]:hidden">{kindTag}</span>
+    </Row>
+  );
+}
+
 export function createNameColumn<T extends BaseRow>(
   columnHelper: ColumnHelper<T>,
   entity: Entity,
@@ -218,6 +263,10 @@ export function createNameColumn<T extends BaseRow>(
     header?: string;
     nameSuffix?: (row: T) => ReactNode;
     namePrefix?: (row: T) => ReactNode;
+    /** The declared kind tag, after the title on a full-width pane. */
+    kindTag?: (row: T) => ReactNode;
+    /** The declared second line's values by field; drawn under the title in two-line rows. */
+    secondLine?: (row: T) => readonly { key: string; node: ReactNode }[];
     expandable?: boolean;
     emptyLabel?: (row: T) => string;
     rowLink?: RowLinkResolver<T>;
@@ -323,6 +372,18 @@ export function createNameColumn<T extends BaseRow>(
           nameEl
         );
 
+      const withLines = (nameEl: ReactNode) =>
+        options?.kindTag || options?.secondLine ? (
+          <IdentityLines
+            kindTag={options.kindTag?.(info.row.original)}
+            secondLine={options.secondLine?.(info.row.original) ?? []}
+          >
+            {nameEl}
+          </IdentityLines>
+        ) : (
+          nameEl
+        );
+
       // Tree affordance: depth indent + chevron toggle. Only applied when the
       // `expandable` option is set (opt-in per table), so non-tree tables emit
       // no extra markup. The indent is data-driven (row.depth), so an inline
@@ -396,15 +457,19 @@ export function createNameColumn<T extends BaseRow>(
             config={{ type: "text" }}
             trigger="pencil"
             renderValue={(v) =>
-              wrapWithSuffix(
-                <Tooltip>
-                  <TooltipTrigger render={<span className="block truncate" />}>
-                    {linkName(v || value)}
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs">
-                    {v || value}
-                  </TooltipContent>
-                </Tooltip>,
+              withLines(
+                wrapWithSuffix(
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={<span className="block truncate" />}
+                    >
+                      {linkName(v || value)}
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs">
+                      {v || value}
+                    </TooltipContent>
+                  </Tooltip>,
+                ),
               )
             }
           />,
@@ -412,15 +477,17 @@ export function createNameColumn<T extends BaseRow>(
       }
 
       return wrapExpandable(
-        wrapWithSuffix(
-          <Tooltip>
-            <TooltipTrigger render={<span className="block truncate" />}>
-              {linkName(value)}
-            </TooltipTrigger>
-            <TooltipContent side="top" className="max-w-xs">
-              {value}
-            </TooltipContent>
-          </Tooltip>,
+        withLines(
+          wrapWithSuffix(
+            <Tooltip>
+              <TooltipTrigger render={<span className="block truncate" />}>
+                {linkName(value)}
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs">
+                {value}
+              </TooltipContent>
+            </Tooltip>,
+          ),
         ),
       );
     },
@@ -534,7 +601,7 @@ export function createImageColumn<T extends object>(
   return columnHelper.accessor((row) => getImages(row), {
     id: options.id ?? "image",
     // The structural divider occupies one pixel beside the full-height cover.
-    size: ROW_DENSITY.rowHeight + 1,
+    size: rowDensity().row + 1,
     header: () => <ImageIcon className="size-3 text-muted-foreground" />,
     enableSorting: false,
     enableHiding: false,

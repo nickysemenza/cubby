@@ -169,6 +169,8 @@ export function useListBulkActions<TData extends { id: string }>({
      * resolve its own — `RTable` only falls back when nobody does.
      */
     rowActions,
+    /** The same instance's selection commands, which a batch row sends per member. */
+    selectionCommands: registered.selectionActionItems,
     actionDialogs: registered.dialogs,
   };
 }

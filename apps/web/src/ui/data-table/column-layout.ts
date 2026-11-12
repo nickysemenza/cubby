@@ -26,6 +26,12 @@ import {
 import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 
 import {
+  type ColumnKind,
+  columnKindOf,
+  columnKindWidth,
+  isNarrowTable,
+} from "./column-kind-widths";
+import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
   type CubbyColumnDef,
@@ -472,6 +478,7 @@ type TableWidthColumn = {
       code?: boolean;
       linksTo?: string;
       cellData?: { kind: string };
+      widthKind?: ColumnKind;
     };
   };
 };
@@ -662,10 +669,26 @@ export function resolvedTableColumnWidths(
   collapsed: ReadonlySet<string> = new Set(),
 ) {
   const widths: Record<string, number> = {};
+  const narrow = isNarrowTable(availableWidth);
   for (const column of columns) {
     const fit = measured[column.id];
-    const width =
-      !isLockedColumn(column) && !userSized.has(column.id) && fit !== undefined
+    // A narrow pane steps each kinded column down to its kind's width; a
+    // full-width pane fits measured content as every other column does.
+    const kind = columnKindOf(column.columnDef.meta);
+    const kinded =
+      kind !== null &&
+      narrow &&
+      !isLockedColumn(column) &&
+      !userSized.has(column.id)
+        ? columnKindWidth(kind)
+        : null;
+    const width = kinded
+      ? fit !== undefined
+        ? Math.min(fit, kinded.fitMax)
+        : kinded.size
+      : !isLockedColumn(column) &&
+          !userSized.has(column.id) &&
+          fit !== undefined
         ? Math.min(fit, columnFitMax(column))
         : column.getSize();
     widths[column.id] = collapsed.has(column.id)

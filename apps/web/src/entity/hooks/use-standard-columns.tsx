@@ -7,13 +7,19 @@ import { useCallback, useMemo, useRef } from "react";
 import { z } from "zod";
 
 import type { EntityActionSubject } from "~/entity/actions/entity-actions";
-import { createEntityDisplayColumns } from "~/entity/display/entity-display";
+import {
+  createEntityDisplayColumns,
+  identitySecondLineFields,
+  renderCompactFieldValue,
+} from "~/entity/display/entity-display";
+import { fieldOptions } from "~/entity/display/list-renderers/generic-state";
 import { browserEntityDefinition, getSortableFields } from "~/entity/entities";
 import { identityWidthClassName } from "~/entity/entity-list/identity-list-config";
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { useEntityMetadata, listFieldPresentation } from "~/entity/metadata";
+import { readPathValue } from "~/entity/read-path";
 import {
   createActionsColumn,
   createImageColumn,
@@ -32,6 +38,7 @@ import {
   type CubbyColumnHelper as ColumnHelper,
 } from "~/ui/data-table/table-features";
 import { type FilterConfig } from "~/ui/data-table/table-meta";
+import { KindTag } from "~/ui/records/kind-tag";
 
 /** Filter definition for use in useEntityList options */
 interface FilterDef {
@@ -56,6 +63,10 @@ interface BaseListRow {
 }
 
 const titleValueSchema = z.string().nullish().catch(null);
+const kindValueSchema = z.string().nullish().catch(null);
+
+const isEmptyValue = (value: unknown) =>
+  value == null || value === "" || (Array.isArray(value) && value.length === 0);
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
   entity: BrowserRoutedEntity;
@@ -221,6 +232,47 @@ export function useStandardColumns<TData extends BaseListRow>({
     [],
   );
   const hasMappings = mappingsMap !== null;
+  // The title cell's declared kind tag and second line, read per row.
+  const identityLines = useMemo(() => {
+    const kind = metadata.summary.kind;
+    const kindOptions = kind
+      ? fieldOptions(queryClient, entity, kind.field)
+      : [];
+    const lineFields = identitySecondLineFields(queryClient, entity).flatMap(
+      (key) => metadata.fields.fields.filter((field) => field.key === key),
+    );
+    return {
+      kindTag: kind
+        ? (row: TData) => {
+            const value = readRecordField(row, kind.field, kindValueSchema);
+            const option = kindOptions.find(
+              (candidate) => candidate.value === value,
+            );
+            return option ? <KindTag option={option} /> : null;
+          }
+        : undefined,
+      secondLine:
+        lineFields.length > 0
+          ? (row: TData) =>
+              lineFields.flatMap((field) =>
+                isEmptyValue(readPathValue(row, field.readKey ?? field.key))
+                  ? []
+                  : [
+                      {
+                        key: field.key,
+                        node: renderCompactFieldValue(
+                          queryClient,
+                          entity,
+                          row,
+                          field,
+                          { singleLine: true },
+                        ),
+                      },
+                    ],
+              )
+          : undefined,
+    };
+  }, [entity, metadata, queryClient]);
   // Paging can replace action resolvers without changing the name editor.
   // Its component function owns the draft, so give it its own lifetime.
   const identityDefinition = useMemo(
@@ -239,6 +291,8 @@ export function useStandardColumns<TData extends BaseListRow>({
         namePrefix,
         expandable,
         rowLink,
+        kindTag: identityLines.kindTag,
+        secondLine: identityLines.secondLine,
         getValue: (row: TData) =>
           readRecordField(row, titleField, titleValueSchema) ?? null,
       }),
@@ -255,6 +309,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       namePrefix,
       expandable,
       rowLink,
+      identityLines,
     ],
   );
   // Related/custom metadata can also change the collection. Standard renderers

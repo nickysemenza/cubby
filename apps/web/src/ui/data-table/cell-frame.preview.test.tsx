@@ -22,10 +22,10 @@ import { NoneValue } from "~/ui/text/none-value";
 
 import { CellEditTrigger } from "./cell-edit-trigger";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "./cell-frame";
-import { ROW_DENSITY } from "./density";
+import { rowLineClasses } from "./density";
 
 const DESKTOP = { width: 1440, height: 900 } as const;
-const CELL = ROW_DENSITY.cellClass;
+const CELL = rowLineClasses("single").cellClass;
 
 function Grid({ cells }: { cells: ReactNode[] }) {
   return (

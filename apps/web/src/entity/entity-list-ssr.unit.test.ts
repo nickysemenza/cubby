@@ -141,6 +141,8 @@ describe("ensureEntityListSsr", () => {
             updatedAt: false,
           }),
           includeCount: true,
+          // A list that declares `presentation.state` opens grouped by phase.
+          groupBy: [{ key: "phase" }],
         },
       ),
     );

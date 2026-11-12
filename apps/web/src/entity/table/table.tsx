@@ -44,6 +44,7 @@ import { CurrencyValue } from "~/ui/values/currency-value";
 import type { BulkActionPreview } from "../../ui/data-table/bulk-actions.types";
 import { tableMoneyTotals } from "../../ui/data-table/bulk/table-money";
 import { CellSelectionContext } from "../../ui/data-table/cell-selection-context";
+import { isNarrowTable } from "../../ui/data-table/column-kind-widths";
 import {
   columnOffsetValue,
   columnWidthValue,
@@ -51,6 +52,7 @@ import {
   spacerWidthValue,
 } from "../../ui/data-table/column-layout";
 import { DataTablePagination } from "../../ui/data-table/data-table-pagination";
+import { type RowLines, RowLinesContext } from "../../ui/data-table/density";
 import {
   createRowActivityStore,
   RowActivityStoreContext,
@@ -82,7 +84,12 @@ import {
 } from "../actions/entity-actions";
 import { EntityDisplayImagesProvider } from "../entity-media/entity-display-images";
 import type { InfiniteScrollControls } from "../hooks/use-infinite-table-list";
-import { serverTreeStatusOf } from "../hooks/use-server-tree-children";
+import {
+  serverTreeBatchOf,
+  serverTreeStatusOf,
+} from "../hooks/use-server-tree-children";
+import type { BatchCommand } from "./batch-command";
+import { BatchRow } from "./batch-row";
 import { DataTableToolbar } from "./data-table-toolbar";
 import { DesktopDataRow as DataRow } from "./desktop-data-row";
 import { TableEmptyState } from "./entity-empty-states";
@@ -231,6 +238,13 @@ export interface RTableProps<TItem extends RowData> {
   };
   /** A server tree's nested/flat switch. */
   nestToggle?: NestToggle;
+  /** A server tree's batch-row commands, each sent to every active member. */
+  batchCommands?: readonly BatchCommand[];
+  /**
+   * Single rows, or the title over the entity's declared secondary line.
+   * Embedded tables are always single.
+   */
+  rowLines?: RowLines;
   /**
    * Extra per-row classes (desktop). Must be a pure function of `row.original`
    * so memoized rows stay stable — e.g. tint estimated rows. Returns undefined
@@ -1037,6 +1051,7 @@ function DesktopTableView<TItem extends RowData>({
     scrollRestorationId,
     styles,
     tableContainerRef,
+    tableContainerWidth,
   } = controller;
   const declaresTotals = useListQuery(entity)?.declaresTotals ?? false;
   if (isMobile) return null;
@@ -1098,6 +1113,11 @@ function DesktopTableView<TItem extends RowData>({
             tabIndex={0}
             ref={tableContainerRef}
             data-scroll-restoration-id={scrollRestorationId}
+            // Cells that step down on a narrow pane (the title's kind tag)
+            // read this instead of measuring.
+            data-table-narrow={
+              isNarrowTable(tableContainerWidth) ? "" : undefined
+            }
             aria-label={`${ariaLabel} keyboard navigation`}
             className="min-h-0 flex-1 overflow-auto bg-card outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset data-[cell-dragging]:select-none"
             {...cellSelectionContainerProps}
@@ -1279,6 +1299,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     groupConfig,
     rowDetail,
     nestToggle,
+    rowLines = "single",
+    batchCommands,
     getRowClassName,
     verticalAlign = "middle",
     embedded = false,
@@ -1315,6 +1337,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     detailRowIds: rowDetail?.openIds,
     verticalAlign,
     onRowClick,
+    rowLines,
   });
   const pageIdentity = usePageIdentity();
   const workbenchTarget = usePageWorkbenchTarget();
@@ -1490,7 +1513,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
 
     const bottomSpacerStyle = infiniteScroll
       ? undefined
-      : ghostRowsStyle(dConfig.rowHeight);
+      : ghostRowsStyle(dConfig.row);
 
     const renderVirtualRow = (virtualRow: VirtualItem) => {
       const item = resolveIndex(virtualRow.index);
@@ -1591,6 +1614,20 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             </TableCell>
           </TableRow>
         );
+      const batch = serverTreeBatchOf(row.original);
+      if (batch && entity)
+        return (
+          <BatchRow
+            key={item.occurrenceKey ?? row.id}
+            entity={entity}
+            row={row}
+            batch={batch}
+            height={`${virtualRow.size}px`}
+            cellClassName={styles.cell}
+            unpaintedColumns={unpaintedColumns}
+            commands={batchCommands}
+          />
+        );
       return (
         <VirtualSelectionRow
           key={item.occurrenceKey ?? row.id}
@@ -1639,7 +1676,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           className="border-0 p-0"
           style={{
             height: `${height}px`,
-            ...(bottom ? bottomSpacerStyle : ghostRowsStyle(dConfig.rowHeight)),
+            ...(bottom ? bottomSpacerStyle : ghostRowsStyle(dConfig.row)),
           }}
         />
       </tr>
@@ -1655,7 +1692,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       bodyRows.push(spacer("gap-bottom", totalSize - cursor, true));
     return (
       <RowActivityStoreContext value={rowActivity}>
-        {bodyRows}
+        <RowLinesContext value={dConfig.lines}>{bodyRows}</RowLinesContext>
       </RowActivityStoreContext>
     );
   };
