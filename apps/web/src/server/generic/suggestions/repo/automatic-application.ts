@@ -277,6 +277,7 @@ export async function applyAutomaticRulePage<T>(
       run: (
         tx: Database,
         rows: ReadonlyMap<string, SuggestionStateRow>,
+        outside: ReadonlySet<string>,
       ) => Promise<T>;
     };
   },

@@ -2550,12 +2550,21 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
-  it.each(["import"])(
-    "completes no-action labels with %s scope and preserves its admission path",
+  it.each(["untouched", "conflicted rule", "replaced receipt"] as const)(
+    "completes import no-action labels only through their proven prefix (%s)",
     async (mode) => {
-      const account = (await card(ctx)).output;
-      const importScoped = mode === "import";
+      await card(ctx);
       const recorded = await record(ctx, [
+        ...(mode === "conflicted rule"
+          ? [
+              rowInput({
+                providerAmount: -11,
+                statementDate: "2026-05-01",
+                merchant: "Example Ahead Shop",
+                rawDescription: "EXAMPLE AHEAD SHOP",
+              }),
+            ]
+          : []),
         rowInput({ rawDescription: "VENMO SYNTHETIC SHARED COST" }),
         rowInput({
           providerAmount: -19,
@@ -2563,42 +2572,109 @@ describe("statement Transaction suggestions", () => {
         }),
       ]);
       await generate(ctx);
-      const admission = vi.spyOn(automaticRuleRuntime, "applyAutomaticRules");
-      try {
-        expect(
-          await labelStatementSuggestions(ctx.db, {
-            port: answering({ kind: "purchase", counterparty: "person" }),
-            runId: await ensureRun(ctx.db, ctx.actor, {
-              purpose: "background",
-            }),
-            scope: importScoped
-              ? { importId: recorded.batchId }
-              : mode === "account/date"
-                ? {
-                    accountIds: [
-                      await resolveOrThrow(
-                        ctx.db,
-                        "financialAccount",
-                        account.id,
-                      ),
-                    ],
-                    since: "2026-05-01",
-                  }
-                : {},
-          }),
-        ).toMatchObject({
-          completed: 2,
-          failed: [],
-          next: null,
+      // The rule-bearing charge leads the page's application order.
+      await getDb(ctx.db)
+        .update(suggestionTable)
+        .set({ createdAt: new Date(Date.UTC(2026, 0, 1)) })
+        .where(
+          sql`${suggestionTable.active} AND ${suggestionTable.judgment}->${"create"}->>${"rawDescription"} = ${"EXAMPLE AHEAD SHOP"}`,
+        );
+      const port: DecisionPort = (request) =>
+        answering({
+          kind: "purchase",
+          counterparty: request.state.includes("VENMO") ? "person" : "business",
+        })(request);
+      const labelPage = (
+        after?: NonNullable<
+          Parameters<typeof labelStatementSuggestions>[1]
+        >["after"],
+      ) =>
+        labelStatementSuggestions(ctx.db, {
+          port,
+          scope: { importId: recorded.batchId },
+          after,
         });
+      const admission = vi.spyOn(automaticRuleRuntime, "applyAutomaticRules");
+      const page = automaticRuleRuntime.applyAutomaticRulePage;
+      const pageSpy = vi
+        .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
+        .mockImplementation(async (...args) => {
+          const [, selections, options] = args;
+          // The leading rule's page transaction exhausts its replays.
+          if (mode === "conflicted rule" && selections.length)
+            return {
+              outcomes: new Map(
+                selections.map((selection) => [
+                  selection.row.id,
+                  "unfinished" as const,
+                ]),
+              ),
+              settled: null,
+            };
+          // A concurrent publication replaces the first receipt before the
+          // receipt transaction locks it.
+          const [first] = options.settle?.ids ?? [];
+          if (mode === "replaced receipt" && first)
+            await getDb(ctx.db)
+              .update(suggestionTable)
+              .set({ active: false })
+              .where(eq(suggestionTable.id, first));
+          return page(...args);
+        });
+      // Nothing after an unsettled charge completes: every later receipt
+      // waits for the inclusive cursor.
+      const unsettled = {
+        completed: 0,
+        next: expect.objectContaining({ inclusive: true }),
+      };
+      const expected = {
+        untouched: { completed: 2, next: null, pending: [] },
+        "conflicted rule": {
+          ...unsettled,
+          pending: [
+            "EXAMPLE AHEAD SHOP",
+            "VENMO SYNTHETIC PERSONAL PAYMENT",
+            "VENMO SYNTHETIC SHARED COST",
+          ],
+        },
+        "replaced receipt": {
+          ...unsettled,
+          pending: [expect.stringMatching(/^VENMO SYNTHETIC/)],
+        },
+      }[mode];
+      try {
+        const outcome = await labelPage();
         expect(admission).toHaveBeenCalledTimes(0);
+        expect(outcome).toMatchObject({
+          completed: expected.completed,
+          failed: [],
+          next: expected.next,
+        });
+        const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          10,
+        );
         expect(
-          await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
-        ).toBe(0);
+          pending.map((entry) => entry.judgment.create?.rawDescription).sort(),
+        ).toEqual(expected.pending);
+        expect(pending.every((entry) => entry.applicationPending)).toBe(true);
         expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
           [],
         );
+        if (mode !== "conflicted rule") return;
+        pageSpy.mockRestore();
+        expect(await labelPage(outcome.next)).toMatchObject({
+          completed: 3,
+          failed: [],
+          next: null,
+        });
+        expect(
+          await getDb(ctx.db)
+            .select({ rawDescription: financialTransaction.rawDescription })
+            .from(financialTransaction),
+        ).toEqual([{ rawDescription: "EXAMPLE AHEAD SHOP" }]);
       } finally {
+        pageSpy.mockRestore();
         admission.mockRestore();
       }
     },
@@ -3013,11 +3089,12 @@ describe("statement Transaction suggestions", () => {
                     context: buildCrudServices,
                     settle: {
                       ids: [targets[0]!.suggestionId],
-                      run: (tx, rows) =>
+                      run: (tx, rows, outside) =>
                         statementSuggestionsRepo.completeStatementReceipts(
                           tx,
                           targets,
                           rows,
+                          outside,
                           () => true,
                         ),
                     },

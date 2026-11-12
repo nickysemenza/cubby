@@ -538,7 +538,7 @@ export type KnownBookingFacts = {
   vendorIds: ReadonlyMap<string, VendorId>;
   /** Live categories by code and by id. */
   categories: ReadonlyMap<string, typeof spendingCategory.$inferSelect>;
-  /** Live parties by code. */
+  /** The accounts' live parties by code; a purchaser may be another party. */
   parties: ReadonlyMap<string, typeof ledgerParty.$inferSelect>;
   /** Accounts with their LedgerParty, by id. */
   accounts: ReadonlyMap<
@@ -1322,14 +1322,17 @@ export async function bookFreshFinancialTransactions(
     )
   )
     return commitFinancialBookings(layer.tx, previews, actor, true, rows);
-  await lockLedgerPartiesForReference(
-    layer.tx,
-    previews.flatMap((review) => [
-      ...(review.purchaserId ? [review.purchaserId] : []),
-      ...(review.beneficiaries?.flatMap((share) =>
-        share.partyId ? [share.partyId] : [],
-      ) ?? []),
-    ]),
+  // A purchaser can be a card's cardholder rather than its owner, so its id
+  // comes from this lock, not from the page's account parties.
+  const referenced = previews.flatMap((review) => [
+    ...(review.purchaserId ? [review.purchaserId] : []),
+    ...(review.beneficiaries?.flatMap((share) =>
+      share.partyId ? [share.partyId] : [],
+    ) ?? []),
+  ]);
+  const locked = await lockLedgerPartiesForReference(layer.tx, referenced);
+  const partyIds = new Map(
+    referenced.map((code, index) => [code, locked[index]!.id]),
   );
   const purchases = stagePurchases(
     layer,
@@ -1349,7 +1352,7 @@ export async function bookFreshFinancialTransactions(
           defaultProjectId: null,
           spendingCategoryId: null,
           purchaserOverrideId: data.purchaserOverrideId
-            ? known.parties.get(data.purchaserOverrideId)!.id
+            ? partyIds.get(data.purchaserOverrideId)!
             : null,
         },
       };

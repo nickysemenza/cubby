@@ -154,10 +154,10 @@ export type SettlementEntry = {
 /**
  * - `applied`: its money committed (or its operation's receipt replayed).
  * - `completed`: a no-action receipt cleared.
- * - `moved`: a page write or a refusal republished it; it wrote no money and
- *   re-enters fresh admission.
- * - `unfinished`: the budget or the conflict bound stopped it; it keeps its
- *   receipt and an inclusive cursor.
+ * - `moved`: a label receipt a page write or a refusal moved; it wrote no
+ *   money and relabels on current evidence.
+ * - `unfinished`: the budget, the conflict bound or a replacement it could
+ *   not admit stopped it; it keeps its receipt and an inclusive cursor.
  * - `none`: nothing to apply or complete.
  */
 export type SettlementOutcome =
@@ -168,6 +168,19 @@ export type SettlementOutcome =
   | { kind: "out_of_scope" }
   | { kind: "none" }
   | { kind: "failed"; error: Error };
+
+/** Outcomes that settle a charge's place in the page's application order. */
+const PROVEN: ReadonlySet<SettlementOutcome["kind"]> = new Set([
+  "applied",
+  "completed",
+  "out_of_scope",
+]);
+
+/**
+ * How many times a generation page re-admits a charge whose own review
+ * refused published terms and republished current ones.
+ */
+const ALONE_REPLACEMENTS = 1;
 
 type Barrier = {
   accountId: string;
@@ -371,8 +384,9 @@ export async function settleStatementPage(
     for (const item of affected) {
       const fresh = now.get(chargeId(item.entry.charge));
       if (fresh?.suggestionId === item.entry.suggestionId) continue;
+      // A charge left without a publication has nothing to admit.
       if (fresh) replaced.push(fresh);
-      else settle(item, { kind: "moved" });
+      else settle(item, { kind: "none" });
     }
     if (!replaced.length) return;
     const reread = new Map(
@@ -418,7 +432,10 @@ export async function settleStatementPage(
       const fresh = (await current([item.entry.charge])).get(
         chargeId(item.entry.charge),
       );
-      if (!fresh) return settle(item, { kind: "moved" });
+      if (!fresh)
+        return settle(item, {
+          kind: input.mode === "label" ? "moved" : "none",
+        });
       if (fresh.suggestionId !== item.entry.suggestionId) {
         const [reread] = await read([fresh]);
         // A label receipt replaced by rule output waits for its next page.
@@ -429,43 +446,51 @@ export async function settleStatementPage(
         target = reread;
       }
     }
-    if (!target.selection) return settle(item, { kind: "none" });
-    const outcome = await time("statement_application_alone", () =>
-      automatic.applyAutomaticRules(db, [target.entry.suggestionId], {
-        context: input.servicesFor,
-        importClean,
-        statementScope: input.scope,
-      }),
-    );
-    if (outcome.applied.length) {
-      written = true;
-      settle(item, { kind: "applied" });
-      return target;
+    for (let replaced = 0; ; replaced++) {
+      if (!target.selection) return settle(item, { kind: "none" });
+      const outcome = await time("statement_application_alone", () =>
+        automatic.applyAutomaticRules(db, [target.entry.suggestionId], {
+          context: input.servicesFor,
+          importClean,
+          statementScope: input.scope,
+        }),
+      );
+      if (outcome.applied.length) {
+        written = true;
+        settle(item, { kind: "applied" });
+        return target;
+      }
+      if (!outcome.refused.length) return settle(item, { kind: "none" });
+      // Moved evidence relabels in the label page's next round, fenced by
+      // this receipt, so it is not republished here.
+      if (input.mode === "label" && target.entry.evidenceFingerprint !== null) {
+        const [rebuilt] = await buildChargeProposals(db, [item.entry.charge]);
+        if (rebuilt?.evidenceFingerprint !== target.entry.evidenceFingerprint)
+          return settle(item, { kind: "moved" });
+      }
+      // A booking that drifted since publication republishes its current
+      // terms; an unchanged refusal fails.
+      await regenerateCharges(db, [item.entry.charge], input.scope);
+      const fresh = (await current([item.entry.charge])).get(
+        chargeId(item.entry.charge),
+      );
+      if (fresh?.suggestionId === target.entry.suggestionId)
+        return settle(item, {
+          kind: "failed",
+          error: new Error(
+            `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
+          ),
+        });
+      if (!fresh) return settle(item, { kind: "none" });
+      // A label receipt's replacement waits for its next page. A generation
+      // page admits it here, and a charge whose terms keep moving keeps its
+      // place for the next page, never counted as processed.
+      if (input.mode === "label" || replaced === ALONE_REPLACEMENTS)
+        return settle(item, { kind: "unfinished" });
+      const [reread] = await read([fresh]);
+      if (!reread) return settle(item, { kind: "unfinished" });
+      target = reread;
     }
-    if (!outcome.refused.length) return settle(item, { kind: "none" });
-    // Moved evidence relabels in the label page's next round, fenced by this
-    // receipt, so it is not republished here.
-    if (input.mode === "label" && target.entry.evidenceFingerprint !== null) {
-      const [rebuilt] = await buildChargeProposals(db, [item.entry.charge]);
-      if (rebuilt?.evidenceFingerprint !== target.entry.evidenceFingerprint)
-        return settle(item, { kind: "moved" });
-    }
-    // A booking that drifted since publication republishes its current terms
-    // and re-enters fresh admission; an unchanged refusal fails.
-    await regenerateCharges(db, [item.entry.charge], input.scope);
-    const fresh = (await current([item.entry.charge])).get(
-      chargeId(item.entry.charge),
-    );
-    if (fresh?.suggestionId !== target.entry.suggestionId)
-      return settle(item, {
-        kind: input.mode === "label" ? "unfinished" : "moved",
-      });
-    return settle(item, {
-      kind: "failed",
-      error: new Error(
-        `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
-      ),
-    });
   };
 
   const stop = () =>
@@ -525,14 +550,21 @@ export async function settleStatementPage(
   for (const item of items)
     if (open(item) && item.selection) settle(item, { kind: "unfinished" });
 
-  // No-action receipts complete together in their own transaction, only when
-  // no write on this page affected them (those were republished above).
-  const receipts = items.flatMap((item) => {
+  // No-action receipts complete together in their own transaction, only in
+  // the page's proven prefix: an earlier charge that has not settled may
+  // still write what they rest on, and a write on this page that affected
+  // one already moved it.
+  const receipts: {
+    item: Item;
+    entry: SettlementEntry & { evidenceFingerprint: string };
+  }[] = [];
+  for (const item of items) {
+    const outcome = outcomes.get(chargeId(item.entry.charge));
+    if (outcome && PROVEN.has(outcome.kind)) continue;
     const { evidenceFingerprint } = item.entry;
-    return open(item) && !item.selection && evidenceFingerprint !== null
-      ? [{ item, entry: { ...item.entry, evidenceFingerprint } }]
-      : [];
-  });
+    if (outcome || evidenceFingerprint === null) break;
+    receipts.push({ item, entry: { ...item.entry, evidenceFingerprint } });
+  }
   if (input.mode === "label" && receipts.length && !stop()) {
     const page = await time("statement_application_receipts", () =>
       automatic.applyAutomaticRulePage(db, [], {
@@ -540,13 +572,14 @@ export async function settleStatementPage(
         statementScope: input.scope,
         settle: {
           ids: receipts.map(({ entry }) => entry.suggestionId),
-          run: async (tx, rows) => ({
-            admitted: new Set(rows.keys()),
+          run: async (tx, rows, outside) => ({
+            outside,
             settled: new Set(
               await completeStatementReceipts(
                 tx,
                 receipts.map(({ entry }) => entry),
                 rows,
+                outside,
                 (row) => !selectAutomaticRule(row, { importClean }),
               ),
             ),
@@ -557,7 +590,7 @@ export async function settleStatementPage(
     for (const { item, entry } of receipts) {
       const id = entry.suggestionId;
       if (page.settled?.settled.has(id)) settle(item, { kind: "completed" });
-      else if (page.settled && !page.settled.admitted.has(id))
+      else if (page.settled?.outside.has(id))
         settle(item, { kind: "out_of_scope" });
       else settle(item, { kind: "unfinished" });
     }

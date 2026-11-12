@@ -4556,9 +4556,12 @@ export async function recordStatementLabelCheckpoint(
 
 /**
  * Settle the label receipts that no automatic rule applies to, inside the
- * label page's application boundary. `rows` are the receipts' locked states,
- * already admitted to the page scope. A receipt whose row moved, gained an
- * applicable rule or left the pending projection stays for its next page.
+ * label page's application boundary, in page order. `rows` are the receipts'
+ * locked states admitted to the page scope and `outside` the locked receipts
+ * it excludes, which do not split the prefix. Only the proven prefix clears:
+ * the first receipt that is missing, moved, rule-bearing or out of the
+ * pending projection stops it, and it and every later receipt stay for their
+ * next page.
  */
 export async function completeStatementReceipts(
   tx: Database,
@@ -4568,25 +4571,30 @@ export async function completeStatementReceipts(
     evidenceFingerprint: string;
   }[],
   rows: ReadonlyMap<string, SuggestionStateRow>,
+  outside: ReadonlySet<string>,
   noRule: (row: SuggestionStateRow) => boolean,
 ) {
-  const settled = entries.flatMap((entry) => {
+  const settled: string[] = [];
+  for (const entry of entries) {
+    if (outside.has(entry.suggestionId)) continue;
     const row = rows.get(entry.suggestionId);
     const data = stateData.safeParse(row?.data);
-    return row &&
-      row.family === suggestionFamily.enum.statement_transaction &&
-      row.active &&
-      row.status === suggestionStatus.enum.pending &&
-      row.suppression === null &&
-      noRule(row) &&
-      data.success &&
-      data.data.source === entry.charge.source &&
-      data.data.chargeKey === entry.charge.chargeKey &&
-      data.data.evidenceFingerprint === entry.evidenceFingerprint &&
-      data.data.applicationPending === true
-      ? [entry.suggestionId]
-      : [];
-  });
+    if (
+      !row ||
+      row.family !== suggestionFamily.enum.statement_transaction ||
+      !row.active ||
+      row.status !== suggestionStatus.enum.pending ||
+      row.suppression !== null ||
+      !noRule(row) ||
+      !data.success ||
+      data.data.source !== entry.charge.source ||
+      data.data.chargeKey !== entry.charge.chargeKey ||
+      data.data.evidenceFingerprint !== entry.evidenceFingerprint ||
+      data.data.applicationPending !== true
+    )
+      break;
+    settled.push(entry.suggestionId);
+  }
   if (!settled.length) return [];
   await transitionSuggestionStates(
     tx,

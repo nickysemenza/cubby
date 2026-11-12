@@ -104,7 +104,8 @@ const replayable = (error: unknown) =>
  * budget. Operation ids are fixed per item, so a replayed page is idempotent.
  *
  * `settle` runs last in the same boundary with its own ids locked and
- * scope-checked alongside the reviews; it must not write before the reviews.
+ * scope-checked alongside the reviews, receiving the admitted rows and the
+ * locked ids the scope excludes; it must not write before the reviews.
  */
 export async function reviewAutomaticPage<T>(
   db: Database,
@@ -118,6 +119,7 @@ export async function reviewAutomaticPage<T>(
       run: (
         tx: Database,
         rows: ReadonlyMap<string, SuggestionStateRow>,
+        outside: ReadonlySet<string>,
       ) => Promise<T>;
     };
   } = {},
@@ -402,6 +404,11 @@ export async function reviewAutomaticPage<T>(
               const row = locked.get(id);
               return row && (!admitted || admitted.has(id)) ? [[id, row]] : [];
             }),
+          ),
+          new Set(
+            settle.ids.filter(
+              (id) => locked.has(id) && admitted && !admitted.has(id),
+            ),
           ),
         )
       : null;
