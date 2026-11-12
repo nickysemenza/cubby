@@ -64,6 +64,7 @@ struct ConnectedRecordRow: View {
             NavigationLink(value: Route.entityDetail(item.target.entityKind, id: item.target.entityId)) {
                 RecordListRow(
                     title: item.target.label,
+                    imageURL: item.target.imageURL,
                     symbol: EntityCatalog[item.target.entityKind].sfSymbol
                 ) {
                     Text(EntityCatalog[item.target.entityKind].singular)

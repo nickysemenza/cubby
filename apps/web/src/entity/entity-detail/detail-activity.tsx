@@ -164,7 +164,7 @@ function DetailActivityContent({ entity, id }: { entity: Entity; id: string }) {
                           entityKind={event.entity}
                           entityId={event.shortcode}
                           name={title}
-                          displayImage={null}
+                          displayImage={event.image ?? null}
                           layout="row"
                         />
                       ) : (

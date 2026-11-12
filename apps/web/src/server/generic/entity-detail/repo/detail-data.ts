@@ -1,5 +1,5 @@
 import { connectionCatalog } from "@cubby/schemas/connected-views";
-import type { Entity } from "@cubby/schemas/entity";
+import { entityRefKey, entitySchema, type Entity } from "@cubby/schemas/entity";
 import {
   detailActivityEventSchema,
   detailActivityInputSchema,
@@ -14,6 +14,7 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import {
   endOfMonth,
@@ -30,6 +31,7 @@ import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expenseMonthlySummary } from "~/server/domains/expense/repo/analytics";
+import { resolvePublicEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compiledConnectedRoutes } from "~/server/generic/entity-links/repo/connected-records";
 import { jsonCursor } from "~/server/lib/json-cursor";
@@ -211,9 +213,27 @@ export async function getDetailActivity(
     subtitle: row.subtitle ?? undefined,
     amountCents: row.amountCents ?? undefined,
   }));
+  const recordRefs = items.flatMap((item) => {
+    if (item.kind !== "record" || !item.shortcode) return [];
+    const entityKind = entitySchema.safeParse(item.entity);
+    return entityKind.success
+      ? [{ entityKind: entityKind.data, entityId: item.shortcode }]
+      : [];
+  });
+  const covers: ReadonlyMap<string, ImageUrlSummary> =
+    recordRefs.length === 0
+      ? new Map()
+      : await resolvePublicEntityDisplayImages(db, recordRefs);
   const last = items.at(-1);
   return detailActivityOutputSchema.parse({
-    items,
+    items: items.map((item) => {
+      if (item.kind !== "record" || !item.shortcode) return item;
+      const entityKind = entitySchema.safeParse(item.entity);
+      const image = entityKind.success
+        ? covers.get(entityRefKey(entityKind.data, item.shortcode))
+        : undefined;
+      return image ? { ...item, image } : item;
+    }),
     nextCursor:
       rows.length > input.limit && last
         ? activityCursor.encode({ date: last.date, id: last.id })

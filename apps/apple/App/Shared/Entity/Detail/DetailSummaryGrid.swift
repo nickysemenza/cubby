@@ -165,6 +165,7 @@ private struct SummaryRecordsCell: View {
     let source: EntityRef
     let viewKey: String
     @Environment(AppModel.self) private var appModel
+    @Environment(\.detailRefreshToken) private var detailRefreshToken
     @State private var page: ConnectedRecordsOutput?
     @State private var failure: String?
 
@@ -188,7 +189,9 @@ private struct SummaryRecordsCell: View {
             }
         }
         .preference(key: SummaryCellEmpty.self, value: page?.totalCount == 0 && failure == nil)
-        .task(id: "\(source.stableKey)|\(viewKey)|\(appModel.entityMutationRevision)") { await load() }
+        .task(id: "\(source.stableKey)|\(viewKey)|\(appModel.entityMutationRevision)|\(detailRefreshToken)") {
+            await load()
+        }
     }
 
     private func others(_ page: ConnectedRecordsOutput) -> [ConnectedRecord] {

@@ -22,6 +22,9 @@ struct EntityDetailView: View {
     @State private var actions: RecordActionPresenter?
     @State private var quickField: InlineEditSession?
     @State private var showingRunEvidence = false
+    /// Pull-to-refresh. Summary record cells and activity load on their own
+    /// tasks, so a pull has to change something they watch.
+    @State private var detailRefreshToken = 0
     #if os(iOS)
         @State private var showingConnections = false
     #endif
@@ -76,7 +79,10 @@ struct EntityDetailView: View {
                 else { return }
                 await refresh()
             }
-            .refreshControl { await refresh() }
+            .refreshControl {
+                await pullToRefresh()
+            }
+            .environment(\.detailRefreshToken, detailRefreshToken)
             .userActivity(NSUserActivityTypeBrowsingWeb, isActive: model?.row != nil) { activity in
                 guard let row = model?.row else { return }
                 activity.webpageURL = appModel.webHandoff.url(.record(key: key, id: row.id))
@@ -374,6 +380,13 @@ struct EntityDetailView: View {
         await suggestions?.load()
     }
 
+    /// Pull-to-refresh is a `@Sendable` closure, so the token bump stays on the
+    /// main actor beside the reload.
+    private func pullToRefresh() async {
+        detailRefreshToken += 1
+        await refresh()
+    }
+
     private func refresh() async {
         guard let model else { return }
         let survivorID = model.row?.id ?? id
@@ -457,6 +470,7 @@ struct EntityDetailContent: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
     @Environment(\.detailSuggestions) private var suggestions
+    @Environment(\.detailRefreshToken) private var detailRefreshToken
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
@@ -495,6 +509,14 @@ struct EntityDetailContent: View {
     }
 
     var body: some View {
+        screen
+            .onChange(of: detailRefreshToken) { _, token in
+                guard token > 0 else { return }
+                Task { await loadActivity(replacing: false) }
+            }
+    }
+
+    @ViewBuilder private var screen: some View {
         #if os(macOS)
             macBody
         #else
@@ -931,10 +953,12 @@ struct EntityDetailContent: View {
         connectedRecords?.preview?.views.contains(where: { $0.totalCount > 0 }) ?? false
     }
 
-    private func loadActivity() async {
+    private func loadActivity(replacing: Bool = true) async {
         guard !presentation.activityRelations.isEmpty else { return }
-        activityError = nil
-        activityLoaded = false
+        if replacing {
+            activityError = nil
+            activityLoaded = false
+        }
         do {
             let output = try await appModel.client.detailActivity(
                 .init(
@@ -942,6 +966,7 @@ struct EntityDetailContent: View {
             activityEvents = output.items
             activityCursor = output.nextCursor
             activityLoaded = true
+            activityError = nil
         } catch {
             activityError = error.userMessage
         }
@@ -984,6 +1009,12 @@ private struct EntityDetailDiagnostics: Encodable {
         formatter.maximumUnitCount = 1
         return formatter
     }()
+}
+
+extension EnvironmentValues {
+    /// Bumped by a record detail's pull-to-refresh. Cells that load on their
+    /// own task watch it; a mutation still uses `entityMutationRevision`.
+    @Entry var detailRefreshToken = 0
 }
 
 #Preview {
