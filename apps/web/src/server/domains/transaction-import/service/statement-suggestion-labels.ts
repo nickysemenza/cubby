@@ -87,12 +87,12 @@ import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-// A label page includes merchant discovery in addition to batched decisions.
-// Keep its retry/checkpoint unit small enough to settle within a live Job claim.
-const STATEMENT_LABEL_BATCH = 32;
+// Page time is dominated by sequential batched model round trips, which cost
+// about the same for 32 or 128 charges; the cooperative budget bounds the claim.
+const STATEMENT_LABEL_BATCH = 128;
 // Admit one default page together so a slow merchant does not serialize four waves.
 // Larger explicit pages still retain a bounded wave and the cooperative budget.
-const STATEMENT_SPENDING_CONCURRENCY = 32;
+export const STATEMENT_SPENDING_CONCURRENCY = 128;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
