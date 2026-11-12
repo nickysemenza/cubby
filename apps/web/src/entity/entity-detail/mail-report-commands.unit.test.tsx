@@ -5,7 +5,10 @@ import {
 import { fireEvent, render, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 
-import { referenceTitleQueryOptions } from "~/entity/components/ref-link/reference-title";
+import {
+  referenceTitleQueryOptions,
+  type ReferenceTitle,
+} from "~/entity/components/ref-link/reference-title";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
@@ -37,10 +40,11 @@ it("imports a shipment without an order ID and links every server-created Run", 
   for (const [index, ref] of ["RUN-4K7M", "RUN-5K8N"].entries()) {
     const queryKey = referenceTitleQueryOptions("run", ref).queryKey;
     harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
-    harness.queryClient.setQueryData(queryKey, {
+    const label: ReferenceTitle = {
       title: `Synthetic import ${index + 1}`,
       emoji: null,
-    });
+    };
+    harness.queryClient.setQueryData(queryKey, label);
   }
   const restore = overrideOperationDispatch(async (operation, input) => {
     if (operation !== "purchaseImport.emailImport")
