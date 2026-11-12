@@ -1,3 +1,5 @@
+import { memoizeInRequest } from "~/server/http/request-memo";
+
 /** Better Auth owns cookie signatures, expiry, and authoritative session lookup. */
 interface HttpSessionResult {
   response: {
@@ -13,6 +15,24 @@ export type HttpSessionReader = (options: {
   returnHeaders: true;
 }) => Promise<HttpSessionResult>;
 
+/**
+ * One session lookup per credential and read mode within an inbound request:
+ * the SSR route guard and each in-process operation present the same cookie,
+ * and an expired cookie cache would otherwise read the session and user rows
+ * once per caller.
+ */
+export const requestScopedSession =
+  (getSession: HttpSessionReader): HttpSessionReader =>
+  (options) =>
+    memoizeInRequest(
+      JSON.stringify([
+        options.headers.get("authorization"),
+        options.headers.get("cookie"),
+        options.query ?? null,
+      ]),
+      () => getSession(options),
+    );
+
 const sessionTokenCookie =
   /^(?:__Secure-)?better-auth\.session_token(?:\.\d+)?$/u;
 
@@ -23,6 +43,7 @@ export async function authenticateHttpSession(options: {
   /** Read the stored session, never the cookie cache, and leave its expiry alone. */
   fresh?: boolean;
 }): Promise<HttpSessionResult> {
+  const getSession = requestScopedSession(options.getSession);
   const fresh = options.fresh
     ? { disableCookieCache: true as const, disableRefresh: true as const }
     : undefined;
@@ -57,7 +78,7 @@ export async function authenticateHttpSession(options: {
     else headers.delete("cookie");
   }
 
-  let result = await options.getSession(
+  let result = await getSession(
     fresh
       ? { headers, query: fresh, returnHeaders: true }
       : { headers, returnHeaders: true },
@@ -69,7 +90,7 @@ export async function authenticateHttpSession(options: {
   ) {
     // The installed Better Auth version validates the cache signature but does
     // not bind its cached session to the bearer token injected by the plugin.
-    result = await options.getSession({
+    result = await getSession({
       headers,
       query: fresh ?? { disableCookieCache: true },
       returnHeaders: true,
