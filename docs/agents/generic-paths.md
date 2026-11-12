@@ -257,6 +257,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 
 ## AI
 
+- Cost: a new or changed AI call follows
+  [ADR 0027](../adr/0027-tier-routed-models-on-a-funding-first-ladder.md):
+  fast tier first, one escalation question, flex for unattended work.
+
 - Semantic classification: new or revised judgments about what evidence means
   use a declared Decision feature through `runDecisionChoice`, registered in
   `decisionCatalogRows`. Supply source context, confidence and uncertainty;

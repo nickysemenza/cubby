@@ -17,18 +17,15 @@ totals and search documents with their own hashes; display images resolved
 per page; and AI evaluations queued as one row per input fingerprint, with
 supersede and reopen chains.
 
-The cost showed up in two ways. About half of the background-work PRs merged
-between 2026-10-21 and 2026-10-25 patched these mechanisms rather than
-behavior: duplicate fingerprint rows (#3305, #3295, #3176), shared family
-contention and restart starvation (#3302, #3281, #3301), and a stored versus
-live quality split (#3193, #3205, #3214, #3217). Lists also stayed slow: the
-read-layer work (#3291, #3304) measured Location and Inventory pages at 7 and
-6 sequential round trips, and Product price, Project dates, Expense project and
-display images at 170–730 ms each, and named a stored projection as the fix.
-Progressive list loading exists only to defer these columns.
-
-Earlier derived fanout triggers walked dependents inside the save transaction
-and turned one Product save into a 115–147 second rollback; #2855 removed them.
+The cost showed up in two ways. About half of recent background-work changes
+patched these mechanisms rather than behavior: duplicate fingerprint rows,
+shared family contention and restart starvation, and a stored versus live
+quality split. Lists also stayed slow: Location and Inventory pages took 6 to 7
+sequential round trips, and Product price, Project dates, Expense project and
+display images took 170–730 ms each, with a stored projection named as the fix.
+Progressive list loading exists only to defer these columns. Derived fanout
+triggers that walked dependents inside the save transaction had turned one
+Product save into a 115–147 second rollback.
 
 ## Decision
 

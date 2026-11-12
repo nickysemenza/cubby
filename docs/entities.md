@@ -17,7 +17,7 @@ HTTP, MCP and server artifacts. Load the one section a task needs:
 - [Background derived data](#background-derived-data): Stored results, SQL views, the hourly pass, completeness
 - [Runtime interface](#runtime-interface), [Workflows](#workflows), [Transports](#transports), [Browser cache policy](#browser-cache-policy): Kernel entry point, workflow runtime, operation dispatch, cache tags
 - [Child storage](#child-storage): Child and module tables, storage retention
-- [Data quality](#data-quality): Stored checks, scores, exceptions, Research and Work queue
+- [Data quality](#data-quality): Stored checks, statuses, exceptions, Research and Work queue
 - [Relations, deletion, and merge](#relations-deletion-and-merge): Relationship authorship, lifecycle, delete and merge
 - [Connected records and graph](#connected-records-and-graph): Graph exploration, connection catalog, merchant labels, [Product connections](#product-relationship-route)
 - [Identity, attachments, and the physical graph](#identity-attachments-and-the-physical-graph): `Entity` rows, attachments, links, external ids, [collection changes](#collection-changes)
@@ -1775,30 +1775,11 @@ their own `locationPath`.
 
 Timing evidence comes from `pnpm --dir apps/web exec tsx tooling/checks/read-performance.ts
 --origin <origin> --output <artifact.json>` with `CUBBY_READ_AUTHORIZATION` or `CUBBY_READ_COOKIE`
-in the environment; the script's options own sample counts, entity selection, concurrency,
-`--input`, `--mode`, `--first-invocation` and `--caldav`. Credentials, response bodies, values, ids,
-search text, paths and diagnostic text are never written; request ids and error codes appear only in
-private raw output, and input fingerprints identify equal inputs without anonymizing them. Resource
-GET pagination uses `page=1` and structured input `pageIndex=0`; keep compared populations
-equivalent. SQL count, acquisition, query and client-queue times come from the `Server-Timing`
-collector; absent, malformed, duplicate and streamed metrics stay null. Wall times do not establish
-Worker CPU, decoded-row timing does not prove paint time, and the harness never infers cold starts.
-Target warm usable lists below 500 ms (300 ms stretch), comparing full enrichment separately;
-placement stays unchanged unless isolated repeated comparisons show gains without regressions.
-
-`--mode list` records one `entity.list` per page; `--mode complete` measures the supplied resource
-GET; `--mode operations --input <request.json>` measures the browser dispatch wire with a plain
-`{ operation, input }` or `{ batch: [...] }` (2–20 registered queries), one transport attempt per
-sample without batch fallback. Schema-5 artifacts separate HTTP, transport, dispatch, protocol and
-RPC failures, report per-operation settlement separately from complete-response timing, and record
-`requestedReads` and `workloadContext` (requested contracts, not observed work). Missing, duplicate,
-out-of-range and unterminated result lines fail the sample; failed requests never enter success
-latency statistics; any observed failure writes an artifact and exits nonzero (a correctness signal,
-not a performance gate). Successful `entity.list` results record returned-row, total, unresolved and
-incomplete-total counts, never row contents. `--context <context.json>` takes strict assertions
-(`environment` local/ci/staging/production, `population` synthetic, `scale` 0–1e9, `cache`
-warm/cold/mixed, `revision` the measured deployment's full 40-character SHA); missing fields are
-null, extra keys are refused, and assertions prove nothing about scale, cache or provenance.
+in the environment; the script's options own modes, sample counts, inputs and artifact fields.
+Credentials, response bodies, values, ids, search text, paths and diagnostic text are never written.
+Wall times do not establish Worker CPU, decoded-row timing does not prove paint time, and the harness
+never infers cold starts. Target warm usable lists below 500 ms (300 ms stretch), comparing full
+enrichment separately.
 
 ## Filters and search
 
@@ -2520,34 +2501,8 @@ The browser client, HTTP API and MCP are adapters over that implementation and h
 logic; there is no per-transport `*-browser.server.ts` module. Removing an operation has no
 deployment shim: a tab loaded before the deployment must reload before calling it.
 
-Browser calls POST the same plain JSON operation envelope Apple uses to
-`/api/operations/<operation>`, marked `x-cubby-surface: browser`. Concurrent reads share a
-`/api/operations/batch~<operation>,<operation>` request and stream results independently. URLs
-contain registered operation names, never input values; the server rejects a path/body mismatch. The
-Worker routes these paths directly to the dispatcher without loading the React server handler; SSR
-invokes the dispatcher in-process. Every operation runs the Apple version gate on its principal, so
-an outdated hosted WebView keeps its reads and cannot write. This transport keeps query coalescing
-and independent settlement, which the framework server-function transport lacks across operations.
-
-All query requests share the concurrency limit, including singleton reads and items retried after a
-broken batch stream. Only recognized transient database failures receive bounded backoff; mutations
-are never replayed. Terminal failures include preceding failed attempts and their diagnostics.
-
-The dispatcher measures selected-handler loading in `start.dispatch.load.<operation>` before the
-execution span; include that load and Worker startup when attributing cold latency. Deployed Worker
-timers advance only after I/O, so module initialization can appear as zero-duration loading charged
-to the next I/O interval, and a long query span does not prove slow database execution (see
-[Cloudflare's timer contract](https://developers.cloudflare.com/workers/runtime-apis/performance/)).
-Compare matching platform profiles and origin evidence; label local profiles separately from
-production. Focused Problems reads dispatch through their canonical source before loading entity
-readers or unrelated diagnostics.
-
-The operation boundary chooses the read policy before invoking its handler.
-`apps/web/src/server/db/read-policy.ts` owns it: interactive display operations use the bounded-stale
-binding, subject to the member's read-your-writes marker; authentication, financial decisions and
-mutation authority keep strong reads; no read performs a freshness RPC
-([read consistency](../apps/web/docs/web-runtime.md#read-consistency)). Specialized
-snapshot/external-service readers select their own sources; transport methods never determine policy.
+[Operation transport](../apps/web/docs/web-runtime.md#operation-transport) owns the wire
+envelope, batching, dispatch and authentication.
 
 The MCP surface is generated from `capability` contract members plus the entity-kernel verbs declared
 in `apps/web/src/contracts/mcp-tools.ts` ([MCP exposure](agents/mcp.md#exposure)). `pnpm generate`
@@ -2624,9 +2579,9 @@ share it, and category summaries are bounded to the selected Products.
 ## Data quality
 
 `capabilities.dataQuality` (`entityDataQualityMetadataSchema` in `definition.ts`) declares
-`checks[{id, facet, kind, weight, scoreCap?, label, satisfiedLabel, message, placement}]`,
-`exceptions` (true where the entity may record `DataException` rows), `related` (other scored
-entities whose gaps roll up into this one) and `listOrder`. `id` is globally unique (it doubles as the
+`checks[{id, facet, kind, scoring, exceptions, label, satisfiedLabel, message, placement}]`,
+`displayImage`, `exceptions` (true where the entity may record `DataException` rows), `related`
+(other scored entities whose gaps roll up into this one), `inputs` and `listOrder`. `id` is globally unique (it doubles as the
 `dataGap` filter value). `satisfiedLabel` describes a passed check positively; `label` stays the
 gap/filter label. `placement` names one owning `{field}` or `{section}` for contextual web results
 (null uses the unplaced fallback); the compiler checks that field owners render in a detail fields
@@ -2635,12 +2590,12 @@ section and section owners exist. Placement changes presentation only.
 The compiler (`apps/web/generator/entities/data-quality.ts`) synthesizes two model fields
 (`dataQuality`, `dataGaps`) with the `data-quality` list renderer, the `dataStatus`/`dataGap` filter
 descriptors and a `dataQuality` sort entry sharing the column id, so the "Data quality" header sorts
-by score. **Declaration wins**: hand-spelling `dataQuality`, `dataGaps` or a `dataQuality` sort field
+by gap count. **Declaration wins**: hand-spelling `dataQuality`, `dataGaps` or a `dataQuality` sort field
 anywhere else in the manifest is a compile error — the block is the single source, as `filters.audit`
 owns `createdAt`/`updatedAt`. A cross-entity pass enforces check-id uniqueness and turns each
 `related` entity's check ids into `dataGap` options on the rolling-up entity. The generated leaf
 (`packages/schemas/src/generated/data-quality-checks.gen.ts`) exports `dataCheck`,
-`dataChecksByEntity`, the per-check facet/kind/weight/label/message maps, `dataCheckPresentation`,
+`dataChecksByEntity`, the per-check facet/kind/label/message maps, `dataCheckPresentation`,
 `dataQualityFacets`, `relatedDataQualityEntities`, `dataQualityExceptionEntities` and
 `scoredEntities`; `data-quality.ts` composes the public schema from it.
 
@@ -2651,7 +2606,7 @@ Every scored repository declares one `defineStoredEntityChecks` entry in `read.q
 loader produces records consumed by pure `qualityCheck` builders (`required`, `observed`,
 `hasRelated`, `hasImage`, `when`). Its type requires one function per declared check
 (`generic/data-quality/repo/checks/<entity>.ts`, typechecked against the generated check union).
-Declarations in `packages/schemas` own check identity, weighting and placement. A record's quality
+Declarations in `packages/schemas` own check identity, scoring and placement. A record's quality
 is the list of its unresolved checks; `data-quality-score.ts` owns the status derived from them.
 `qualityCheck.records(entity, table, columns)` owns ordinary loader identity, liveness, bounded ids
 and display-image presence; checks with joins or aggregates keep entity-specific loaders. Checks
@@ -2682,9 +2637,9 @@ once by entity id, kind and key, keeping missing-publication and fresh record-re
 rollups and complete reason membership under negative filters.
 
 Each scored entity's `dataQuality` block declares the rows its evaluator reads beyond its own row;
-waivers, attachments and attached images' integrity are inputs of every scored entity. Writes enroll
-quality through transactional source registration; the hourly pass revisits the full declared
-population, so a rules-version change republishes every record without a migration and catches
+waivers, attachments and attached images' integrity are inputs of every scored entity. A change to a
+declared input marks the record's stored quality for recompute; the hourly pass revisits the full
+declared population, so a rules-version change republishes every record without a migration and catches
 undeclared reads. Old publications stay readable until republished. Tombstoning removes stored
 quality. Reads never repair it. Exception mutation responses evaluate the saved decision live
 without publishing. Compact entity facts, including board cards, use the shared quality value and
@@ -2696,28 +2651,24 @@ zero-width space is content). Rule versions invalidate affected publications. Th
 also owns trimming for grouping keys, graph label fallbacks and Brand matching; merchant/title
 canonicalization is separate.
 
-### Scores and exceptions
+### Statuses and exceptions
 
-Each check yields pass, gap, waived or not applicable. The score is `100 × satisfied expected
-weight / expected weight`, limited by the lowest `scoreCap` of an applicable unresolved check; a cap
-also applies to an unscored integrity diagnostic, so supporting evidence never turns a known defect
-into perfect quality. Any unresolved check caps at 99, so rounding never shows 100 with a gap. Caps
-and importance weights belong in the declaration; applicability and validity stay in check
-functions. No applicable weighted evidence and no active cap produces a null score, **Not assessed**,
-never an automatic 100; SQL sorts unassessed last in either direction. Active exceptions count as
-accepted evidence, but an otherwise complete record is **Complete with exceptions**, distinct from
-full evidence. Every weighted missing check must be closable through supported data entry or an
-allowed exception; optional planning fields and inactivity are not completeness requirements. Actual
-zero or negative costs are valid. Core identity, classification, usable evidence and financial
-consistency outweigh optional imagery and descriptions. Explanations name deductions and caps.
-Related gaps stay separate from the owner's score and never propagate through recursive chains.
+Each check yields pass, gap, waived or not applicable; `qualityStatusOf` in
+`packages/schemas/src/data-quality-score.ts` derives the record's status from them, and
+`statusFromStates` in `generic/data-quality/repo/sql.ts` spells the same rule in SQL. An `unscored`
+diagnostic alone never makes a record assessed: with nothing unresolved and no assessed check
+applying, the record is **Not assessed**, never complete. Active exceptions count as accepted
+evidence, but an otherwise complete record is **Complete with exceptions**, distinct from full
+evidence. Every missing check must be closable through supported data entry or an allowed exception;
+optional planning fields and inactivity are not completeness requirements. Actual zero or negative
+costs are valid. Related gaps stay separate from the owner's status and never propagate through
+recursive chains.
 
 Scored entities receive a shared, unscored display-image check by default; an evidence-only
 declaration can set `displayImage: false` (Shipment does). Without a usable direct or declared
 related image the check lists as missing and cannot be waived; it uses the thumbnail resolver's
 presence predicate, so deleted images, PDFs, failed renders and unavailable files never qualify.
-Entities without applicable weighted checks stay unassessed when it passes; an absent image supplies
-the 99 cap.
+Entities without applicable weighted checks stay unassessed when it passes.
 
 A waiver (`DataException`, via `data_exception.set_exception`/`clear_exception`) records entity,
 check, reason and note, keyed by an `Entity(id, kind)` FK, for entities whose declaration sets
@@ -2740,42 +2691,8 @@ Do not create another entity-specific category column or allocation renderer.
 
 ### Entity rules
 
-**Product** (rules version 1). One loader reads a bounded id page's identity, category liveness,
-inventory, acquisition, external identifier, orphan-retention and displayability facts, then
-delegates one batched price read to `loadProductPricing`. Kit-pricing rules stay authoritative: zero
-is known, ancestors contribute weighted acquisition prices, misc buckets and services (category
-feature service) have no price expectation, services have no identifier expectation, and unstocked
-historical Products are never charged a missing price. Core identity checks apply to every catalog
-record: name and known price weigh 3, Brand and identifier evidence 2, category 3 with an unresolved
-cap of 69. Any non-null Brand, including Generic / Unbranded, satisfies Brand presence. One nonblank
-model or live nonblank external identifier of any source and kind satisfies identifier evidence;
-missing both is one Identifier gap. The check keeps the key `product_external_id` so accepted
-exceptions keep their basis; model-only exceptions do not establish an external identifier's
-absence. A known explicit or derived price, zero included, earns credit; an unknown price is required
-only for stocked Products outside misc buckets. Catalog inactivity is an unscored diagnostic. A
-Product's `commodity` flag marks interchangeable goods with no single listing and removes brand,
-Identifier and ASIN checks; it is a member decision, never inferred from an unknown or Generic Brand.
-Lists, dataStatus/dataGap filters, score sorts, Research views, related Purchase rollups and Work
-research branches read the published value; non-quality price-presence views (including optional
-misc bucket valuations) read the canonical price SQL and its availability, never quality
-applicability or `readFacts.workFacts.priced`. Product, Expense, inventory, brand/vendor, category,
-kit link and attachment rows are declared inputs; image integrity reaches attached Products through a
-join path, and a kit's acquisition lines reach its components.
-
-**Email** (rules version 2). One loader reads only its id page's classification, retained-text and
-attachment presence, current preview, accepted/link evidence and completed same-member Mail import
-membership; bodies are never selected. Automated relevance decisions are final: no check asks for
-member review, and a linked or imported Email is never undecided. Checks keep current-checksum
-preview rules, live Purchase/account ownership fences and JSON source containment (historical source
-JSON allows extra fields, excludes missing keys and malformed arrays, and distinguishes explicit
-null). The completed-import check matches a live completed Mail import Run of the same member with
-the original in its source list. List facets, score sorts and the Email Work branch read stored
-outcomes; no mailbox-wide relation runs on those reads. The Email Work branch routes rows by gap:
-undecided relevance is member work, a missing original agent work, and import and preview gaps close
-through Mail import. An Email without a publication stays possible member work, reported as
-unassessed. Gap counts read only currently declared checks. Bulk Email review checks read
-`EmailReview` for the current checksum and owner: only member labels count, the latest wins, and a
-correct verdict without a correction stored the prediction's classification.
+Each scored entity's checks live in `generic/data-quality/repo/checks/<entity>.ts`; its loader and
+declared inputs are beside them.
 
 Email `status` is `pending`, `researching`, `completed`, `unsettled`, `deleted` or `excluded`. An
 `unsettled` related Email that an import attempt left without accepted or linked evidence keeps its
@@ -2786,76 +2703,13 @@ are exact-linking inputs, not read fields. Storage-only `importAttempts` counts 
 evidence revision (checksum plus the admitting Run's recheck revision), bounding re-admission at
 three.
 
-Email metadata, original/attachment persistence, candidate/classification observations,
-`EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import Run/source-roster
-changes enroll quality transactionally; Run source changes enroll quality even when other families
-ignore Run execution metadata, while progress-only projections enroll nothing. Email metadata
-persistence registers source intent only when it creates an Email, changes stored metadata, or
-excludes a pending eligible legacy copy of the same message; a replay doing none of those leaves the
-Email and refresh Job tuples unchanged. Explicit member search renews acquisition expiry and
-registers source intent. This never reclassifies evidence, resolves historical ownership or replaces
-member decisions; member waivers survive evidence changes.
-
-**Expense** (rules version 1). One page-scoped loader reads scalar fields, shared allocation and
-category completeness, product-expectation policy and display-image presence; SQL helpers keep
-sibling allocation weights, inherited Purchase/Project/category precedence, liveness and rounding.
-Checks keep incurred-only cost/category/quantity rules, known zero costs and product expectations on
-planned merchandise. Problems detectors have no direct Expense quality predicate. Expense, Purchase,
-Project, vendor and category edits enroll broad quality intent through audit registration;
-allocation/settlement links and attachments use their source-change registrations. The family scans
-current Expenses, including descendants affected by inherited inputs, without mutation-time
-traversal.
-
-**Purchase** (rules version 1). One loader scopes Expense and settlement-allocation aggregates to the
-id page, reusing the evidence and settlement policy owners. Paperwork compares vendor lines only
-(planned included); settlement compares every incurred Expense (reimbursements included) with posted
-or outstanding evidence. Known zero costs, cent tolerance and posted-refund explanations are kept.
-Lists, filters, sorts, Research and reconciliation Work branches, Problems membership and related
-Product rollups read published rows; detail reconciliation shows current money and evidence.
-Purchase, Expense, vendor and attachment rows are declared inputs; settlement evidence no column path
-reaches converges through hourly reconciliation. All Purchase waivers (paperwork, settlement amount,
-party and tender) stay until cleared.
-
-**FinancialAccount, FinancialTransaction, Run and Task** (rules version 1). Each loader scopes reads
-to one id page. FinancialTransaction reuses the signed allocation and Purchase evidence owners; Task
-reuses declared trade inheritance and checks its date window; FinancialAccount keeps cash
-self-evidence, source aliases and live settlement references as claim evidence. Published rows own
-list filters and sorts; record reads evaluate live. Audited financial, account and task writes and
-source-record import changes enroll quality transactionally. Run creation, terminal step transitions
-and photo completion register source changes; step progress stays projection metadata, and
-derived-refresh Run telemetry registers projection changes so a pass cannot invalidate itself.
-
-**Run** uses the shared score, filters, sorting and explanation; its list includes quality and media
-in one page request. Checks assess recorded actor attribution, a consistent timeline, and terminal
-target outcomes for completed Mail import and photo inventory runs (and historical validation and
-enrichment runs). A skipped or unavailable target needs a recorded reason; running or paused work
-needs no finished targets; execution status stays separate from quality. Browser captures are
-required by their commit contract, not universal Run quality. Image jobs (`imageJob`) are an unscored
-entity. Scored and unscored web renderer coverage is type-checked against the generated list shape.
-
-**Shipment** is a stored-quality kind with `displayImage: false`. Quality requires a known
-incoming/outgoing purpose and a resolved Purchase association (a live Purchase link, or a
-member-reviewed null association for a non-purchase shipment; a reviewed link to a deleted Purchase
-fails); each unresolved part lists as its own check beside tracking evidence. Purchase/Expense quality
-owns itemization and Product completeness. Its loader reconciles current observations once, sharing
-`reconcileShipmentTimeline`, `shipmentEventSummary` and `shipmentMilestones` with the tracking
-report. Chronology follows `shipmentMilestones`: conflicting exact delivery times and reversed exact
-possession/delivery milestones are defects; coarse calendar-day intervals and other movement kinds
-establish none, and missing or coarse timing affects only dates/span checks. Observations distinguish
-stated event dates, date-only notification fallbacks and estimates with `timeBasis`; missing
-provenance stays unknown and retained extraction JSON is never rewritten. First/last dates and event
-counts include dated observations (forecasts included); quality evaluates the non-estimate timeline,
-and notification dates cannot establish exact elapsed milestones. Timeline readback exposes revision
-successors and each supporting capture's source identity without copying bodies; an unchanged
-observation keeps its original attribution when a refreshed capture adds support.
-
 **Vendor and Vendor Account.** A Vendor Account has no stored or editable name: its title is always
 `<Vendor> · <member>` from current parent names (`vendorAccountLabelSql` in `server/db/computed/`),
 shared by reads, search and sort, reference lookups, Run labels, filter options and the entity
 graph. Every Purchase expects a Vendor Account; a missing one is an identity gap in the Purchase's
 Research queue, while attribution stays nullable. Account purchase previews follow that link (three
-newest live purchases and the full count). Vendor Accounts have no quality score until they have
-actionable checks; no checks does not mean 100. Every live Vendor expects a displayable logo,
+newest live purchases and the full count). Vendor Accounts stay unassessed until they have
+actionable checks. Every live Vendor expects a displayable logo,
 including Vendors without purchases or accounts; the gap appears once in the Work queue as shared
 Research work, and an `unavailable` waiver closes it. Order-evidence and website checks keep their
 purchase-based applicability.
@@ -3783,8 +3637,7 @@ immutable-key replay check also owns the field Sweep write.
 ### AI field refresh
 
 The deployed AI refresh manifest compares exact per-feature prompt/policy versions, including
-rollbacks; the [AI refresh runbook](runbooks/ai-refresh.md) owns activation, observation and recovery,
-and [Jobs](jobs.md#ai-evaluation-drains) owns the drain. Its Run-backed `AiEvaluation` ledger targets
+rollbacks; [Jobs](jobs.md#ai-evaluation-drains) owns activation, admission and the drain. Its Run-backed `AiEvaluation` ledger targets
 fields and Emails and admits one queued slot per feature, entity, record and field. Changing evidence
 updates queued input and its Job in place; executing input stays frozen with at most one queued
 successor; settled reverts create a new attempt served by the AI response cache. Declined attempts

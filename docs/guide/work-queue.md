@@ -46,8 +46,6 @@ incomplete. Publication makes the ordinary read complete without a read repair.
 Suggestion candidates read pending `Suggestion` rows and current authority gates
 directly. Work does not capture suggestion evidence, enroll refreshes or
 reconstruct eligibility on read.
-This consumer switch requires the matching producer registration and publication
-cutover; it must not deploy independently of that integration.
 
 The Work queue derives work from records, gaps, findings, execution, review
 state and Problems detectors. Each domain declares its Work sources (reasons,

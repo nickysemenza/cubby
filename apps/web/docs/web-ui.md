@@ -146,8 +146,8 @@ Use `InspectableValue` (`ui/values/inspectable-value.tsx`) for explicitly chosen
 readable/raw pairs: the readable label stays visible with a dotted underline,
 hover or focus reveals the exact raw value, and click keeps the popover open for
 selection and Copy. Pass the exact technical string. Do not hide essential facts,
-wrap existing buttons or links, or make every field inspectable. Run types and
-run timeline reason, phase and input-mode labels use it.
+wrap existing buttons or links, or make every field inspectable. Run timeline reason, phase and input-mode labels
+use it.
 
 ## Value pickers
 
@@ -502,11 +502,6 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   stuck or the count is behind, a static warning glyph; the collapsed rail shows
   one dot with the same label. Healthy work shows nothing at any backlog size, a
   failed read stays silent, and the read never polls.
-- Run types is the "What does each Run do?" reference: targets, exclusions,
-  effects, dependencies, cost and recovery, with ordered steps reusing
-  declaration labels. Static definitions forecast; Run and Job evidence stays
-  canonical. Execution details sit behind a technical disclosure, and Job/Run
-  headers link to their definitions.
 - Settings → Maintenance keeps the daily pass and repair tools behind a closed
   disclosure, so opening Settings reads no maintenance status. Recipe re-parsing
   and alias pruning require a successful preview before Apply; each

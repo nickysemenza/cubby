@@ -176,16 +176,9 @@ Start streams   →  cancellable workflow streams
   cooldowns. ChatGPT subscription traffic bypasses Gateway admission. Local
   integrations, live evaluations and production share `cubby`, with environment
   metadata retaining attribution. Pi's funding order is documented in
-  [Infrastructure](infrastructure.md#claude-subscriber-credits). [ChatGPT setup](runbooks/chatgpt-plan.md) explains
+  [Infrastructure](infrastructure.md#funding-ladder). [ChatGPT setup](runbooks/chatgpt-plan.md) explains
   local authorization, the read-only account model catalog, limitations, and
   how each `AiUsage` row records its transport.
-
-The interactive `/ai` Smoke tests tab covers every active AI feature. Mailbox
-triage and relevance probes use synthetic original mail; research source support
-compares a proposed fact with a synthetic retained catalog observation. These
-probes share production request builders and feature/subscription settings;
-the AI budgets and background funding waits at credit and paid admission are
-verified by their PostgreSQL and Worker contracts separately.
 
 ## Commands
 
@@ -377,80 +370,23 @@ native PostgreSQL installation remain owned by their existing runners.
   rather than copying or symlinking another worktree's output.
   The workspace `Cargo.lock` is tracked so worktrees share a key. Commit its
   churn after a parser bump.
-- `pnpm dev` gives each checkout its own database and Worker namespace on free
-  ports. Discover the session with `pnpm dev status --json`.
-  Local development defaults to Apple `container` on macOS and Docker on Linux;
-  select Docker on macOS with `CUBBY_DEV_SERVICES=docker`. See
-  [local development](local-development.md#start-and-discover) for database and
-  runtime ownership. Test services use their separate setting below.
-- To sign in locally, click **Continue as local dev user** on the sign-in page,
-  or open `<origin>/__dev/login?next=/some/path`. Both sign in the seeded
-  synthetic dev user (`apps/web/tooling/dev/state.ts`) through better-auth.
-  The route exists only in the local dev Worker entry and the button only in
-  Vite dev builds; `check-client-bundle` rejects `/__dev/` in production output.
-- Every worktree's database, browser tests and local development share one
-  container IntegreSQL (`cubby-test-<config>-integresql`) on the same
-  PostgreSQL as local development (`cubby-dev-pg`,
-  `apps/web/tooling/dev-services/shared-postgres.ts`), started on first use and reused
-  afterwards. A common migration-keyed base template feeds each checkout's
-  namespaced test pools and the shared dev-corpus template.
-  Offline browser journeys run the real provider-free derived frontier in
-  their Node harness; queue peers still drop provider work. Fixture creators
-  settle SQL projections before returning, serialized with that pump; fixtures
-  that require populated Recipe totals compute them after their input writes
-  settle. The corpus settles
-  its initial SQL projections before becoming a cloneable template.
-  Template election, setup failure cleanup, finalization and readiness belong
-  to the existing IntegreSQL client. There is no Cubby initializer recovery,
-  PID marker or successor-hash protocol. A killed initializer can leave its
-  template pending: stop every client of that shared test service, then run
+- Dev sessions, discovery, sign-in and checkout databases are in
+  [local development](local-development.md#checkout-runtime).
+- Every worktree's tests and local development share one container IntegreSQL
+  (`cubby-test-<config>-integresql`) on the local development PostgreSQL;
+  `apps/web/tooling/dev-services/shared-postgres.ts` and
+  `apps/web/tooling/test-database-lease.ts` own startup, run records, template
+  election and recycling. A killed initializer can leave its template pending:
+  stop every client of that shared test service, then run
   `pnpm test:services:down` and restart through the managed runner. External
-  service owners restart their own service. Do not discard a pending template
-  while another client may still initialize it.
-  Seeded fixture run records remain scoped by service URL and incarnation so
-  cleanup cannot target another service's templates. Managed startup derives
-  `CUBBY_TEMPLATE_SERVICE_ID` from both container start identities; external
-  services supply a fresh shared ID after either service restarts. Process-birth
-  checks protect live fixture runs; an unverifiable run is not cleanup authority.
-  Local development clones that corpus to its stable `cubby_dev_*` name
-  ([database lifetime](local-development.md#checkout-runtime)). One capped server (1.5 GB, 4 CPUs, durability off) replaces a
-  second VM: Virtualization.framework guests never return freed memory to
-  macOS. A test reset selects a fixed
-  server session set, protects its registered clients across pools on the same
-  actual host, port and database, and waits for those sockets to close. Unknown
-  sessions fail before any termination: close and drain separate-process runtimes
-  and borrowed clients before reset. Clients opened after server selection are
-  outside that termination set. Expected termination handlers survive checkout
-  until socket closure; other database errors remain failures. Workers, peers and Playwright
-  listen on OS-assigned ports, so worktrees never collide. Startup runs under
-  the machine-wide `/tmp/cubby-test-services.lock`, and each live run records
-  itself in `/tmp/cubby-test-services/runs`. Record creation and command-group
-  adoption use atomic rename; temporary files are not published records.
-  Unreadable or invalid records remain intact and block startup/teardown before
-  any service changes. Stop the record's clients and verify its owners are gone
-  before manually repairing/removing it; automatic pruning requires a proven
-  absent wrapper and command group. IntegreSQL a live run uses is never
-  removed, an idle one of a superseded configuration (or an earlier revision's
-  `cubby-test-<config>-postgres`) is removed, and idle IntegreSQL holding more
-  than 100 databases is recreated with its `integresql_*` databases dropped.
-  This is an idle-start recycling threshold, not a hard database cap: a managed
-  run sharing the service defers it, and external mode bypasses it. Each distinct
-  corpus hash (including explicit reseeds) retains its template and pool until
-  that recycling/teardown; continuous sharing or externally owned services can
-  accumulate beyond 100. Superseded templates are retained because another
-  initializer/lease may still use them; external owners manage that lifetime.
-  Apple container is the macOS default; Docker is the Linux default and can be
-  selected on macOS with `CUBBY_DEV_SERVICES=docker`. Docker publishes IntegreSQL
-  on an assigned loopback port; IntegreSQL and PostgreSQL communicate on the
-  `cubby-local` Docker network.
+  service owners restart their own service. Keep a pending template while
+  another client may still initialize it.
   - `CUBBY_TEST_SERVICES=managed` is the local default.
     `CUBBY_TEST_SERVICES=external` connects to services already running; it
     does not start a container runtime. CI uses this mode with Docker services;
     `docker compose -p cubby up -d` also supports explicit external local runs. For another
     service, override `INTEGRESQL_URL`, `INTEGRESQL_DATABASE_HOST` and
     `INTEGRESQL_DATABASE_PORT` together.
-  - A killed run's record is ignored once its PID is gone; a reused PID is
-    conservatively treated as live.
 - Parallelism overrides: `VITEST_MAX_WORKERS` for Vitest and Playwright's
   `--workers` flag (for example, `pnpm test:e2e --workers=2`).
 - In dev, `await __jsProfile(5000)` in the browser console summarizes the
@@ -489,49 +425,22 @@ native PostgreSQL installation remain owned by their existing runners.
   configuration dependencies. Runtime/local adapters use `server/worker-identity.ts`.
   Keep resource IDs, binding declarations, placement and DO lifecycle in native config;
   generated Env inference remains authoritative. DO named exports preserve namespaces.
-- **Background queue messages wake durable Jobs** on `cubby-background`. The shared deadline scheduler wakes future Jobs; daily and app-open
-  recovery repair exceptional missed wakes; domain consumers retain per-message ack/retry.
-  Unknown transport queues are rejected before message parsing or DB access.
-  - Daily maintenance at 7 a.m. household time is a `maintenance` Run (cron `scheduled`, Activity's
-    Advanced maintenance Run now `manual`; one active pass at a time) whose steps
-    (`domains/maintenance/service/maintenance-run.ts`) drain every backlog page
-    by page: image-processing repair, EXIF/GPS, embeddings, stale recipe
-    totals, abandoned uploads, Run housekeeping, original disposal, vector
-    reconcile, calendar, mail discovery, then the image-processing backfill.
-    The backfill runs each image's describe/identify/cutout jobs inline and
-    pauses the Run at the AI budget until its window ends. An EXIF row whose
-    original is gone (404) or whose extraction fails three times gets a
-    terminal `Image.metadataOutcome` with its raw error, leaves the backlog
-    and is listed on Problems; a step's Retry failed re-admits its failed refs.
-    Failed image jobs are never re-queued silently.
-  - App-open recovery (`requestCatchUp`) admits mail discovery and wakes due
-    durable Jobs. Stopped work still requires explicit retry.
-  - Financial generation publishes first-time rule recommendations in bounded
-    batches, sharing charge admission reads and immutable Assessment inserts.
-    Existing decisions, paid labels and suppressions retain the ordinary
-    per-charge writer. Vendor-name resolution is shared only within a read-only
-    preview page; committing spending reloads it. A failed batch falls back to individual admission;
-    the post-commit settlement check finishes before acknowledging its items.
-  - A financial Sweep's generation-step Retry failed re-admits only its retained
-    charge references, in bounded pages through the current-evidence planner.
-    It does not restart the population cursor or label healthy charges again.
-    A publication committed before an after-commit failure is safely reused;
-    stale pending advice is retired if that charge has since settled.
-  - Image processing always accepts uploads and queued work; historical
-    enabled/paused settings are ignored. Device availability and capability
-    still determine which companion work can execute. Exceptional repair tools
-    live in Work's Advanced maintenance view; Settings contains connection diagnostics. The read-only
-    `/api/debug/timing` endpoint requires a member session in every environment
-    and returns private, non-cacheable timings and individual errors for the
-    database, active USDA release, and UPCitemdb. The UPC probe uses a synthetic
-    code, spends one upstream lookup per run when upstream access is enabled,
-    and writes no product/cache data.
+- **Background work.** Queue wakes, the hourly cron, the daily `maintenance`
+  Run and app-open recovery are in
+  [Durable Jobs](jobs.md#deadline-scheduling-and-idle-recovery).
+  Exceptional repair tools live in Work's Advanced maintenance view; Settings
+  contains connection diagnostics. The read-only `/api/debug/timing` endpoint
+  requires a member session in every environment and returns private,
+  non-cacheable timings and individual errors for the database, active USDA
+  release, and UPCitemdb. The UPC probe uses a synthetic code, spends one
+  upstream lookup per run when upstream access is enabled, and writes no
+  product/cache data.
 - Ordinary Inventory and Location reads consume published valuations. Explicit
   live reports and background preparation retain the canonical computations.
   Search projections are published by the existing derived drain after input
   changes, rather than rebuilt inside ordinary reads or source writes.
-- Secrets are set with `wrangler secret put NAME --name cubby`. Production is the only deployed
-  environment.
+- Production is the only deployed environment; secrets are in
+  [Infrastructure](infrastructure.md#secrets-and-plaintext-variables).
 
 `build:cf` runs the Cloudflare Vite plugin v2 build. The native
 `cloudflare.config.ts` supplies typed bindings, exports and triggers; the plugin
@@ -567,9 +476,7 @@ global declaration's importer graph against backend implementations.
 Programmatic tests read the same Build Output through Cloudflare's public
 reader and config converter. Wrangler remains behind `tooling/test-runtime.ts`
 for its test harness, including Workflow introspection, Durable Object eviction
-and structured logs; it also supplies live tail and interactive single-secret
-operations and the name-based queue maintenance commands in the migration
-runbook. It does not own builds, deployment or local dev startup.
+and structured logs, and supplies live tail. It does not own builds, deployment or local dev startup.
 
 ## Local scripting
 
@@ -641,60 +548,6 @@ cause from a status alone or switch credential types to work around it.
 
 ## Operation transport
 
-Browser, Apple, CLI and API-key clients call operations through
-`POST /api/operations/{operationId}`. The browser reaches every query,
-mutation and workflow stream; other clients reach only capability and view
-operations, and MCP only capability operations. Use `view` for operations
-Apple or the CLI call that should stay off MCP; `internal` operations are the
-web UI's own and are absent from the generated Swift and CLI catalog. The
-request envelope is `{operation, input?}`; a success
-is `{ok: true, data}`, including `data: null` for a nullable output. Errors
-return the public `ApiError` body with an HTTP status derived from its code.
-Every client speaks plain JSON; the browser transport turns a non-2xx bare error
-into `{ok: false, error}`. Query batches use `batch~` operation paths and stream
-one `{i, r}` result per item as NDJSON with HTTP 200. A workflow stream answers
-its own operation path with NDJSON result envelopes and ends with a data-less
-success envelope carrying the final read marker, or a failure envelope.
-`dispatchOperation` in
-`apps/web/src/server/operation-runtime/operation-dispatch.server.ts` is the one
-entry for the HTTP route, SSR (which calls the route in process) and MCP. It
-resolves the id under the principal's channel: browser principals reach
-internal operations and streams, MCP and system principals internal queries and
-mutations, native and CLI principals only external ones.
-
-`authenticate(request, policy)` in
-`apps/web/src/server/http/authenticate.ts` is the single authentication step.
-The operation route accepts API keys, bearer tokens and session cookies. A
-cookie request with a `Cookie` header must be same-origin for POST; bearer and
-API-key requests are exempt. A request with `x-cubby-surface: browser`
-authenticates under the browser policy, so it audits as `web` and accepts no API key; other
-requests audit as `api`. The runner owns input/output validation and the
-Apple compatibility gate. An outdated `cubby-apple` build can read, but its
-writes receive HTTP 426 with `UPGRADE_REQUIRED` before operation input parsing;
-a changed read response can still break an old build.
-
-The MCP adapter remains at `/api/mcp` as an OAuth 2.1 resource server. Its
-generated tools come from capability operations and their descriptions; the
-`describe` action publishes selected action schemas. View and internal
-operations stay off MCP. The hand-authored entity and entity-read tools retain
-their kernel schemas. The MCP server is described in [MCP](agents/mcp.md).
-
-The doorbell at `/api/doorbell` has two topics: `household.changed` and
-`imageProcessing.work`. A ring only signals that state may have changed;
-clients read the source of truth through ordinary operations. The Worker edge
-authenticates the WebSocket upgrade, while the Durable Object socket half
-owns subscriber delivery without importing Auth or PostgreSQL.
-
-OAuth, Better-Auth endpoints, webhooks, workflow streams, signed uploads and
-calendar feeds keep their protocol-specific routes and payloads. They do not
-use the operation envelope.
-
-`pnpm generate` emits the operation registry and Apple models, operation
-methods and catalog from capability and view members. Inputs and outputs use
-the JSON projection in `apps/web/src/lib/operation-wire.ts`; unsupported wire
-shapes fail generation unless the contract states an exclusion. E2E helpers in
-`apps/web/tests/e2e/support/entity-api.ts` send the same operation envelope.
-
-The MCP usage dashboard service receives its catalog and aggregate ports from
-the browser operation adapter. Only the adapter loads the production MCP server;
-unit checks of usage aggregation do not initialize the complete tool runtime.
+[Web runtime](../apps/web/docs/web-runtime.md#operation-transport) owns the
+operation envelope, dispatch, authentication, the doorbell and generated
+operation catalogs. [MCP](agents/mcp.md) owns the MCP server.

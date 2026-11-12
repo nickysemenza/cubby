@@ -118,93 +118,24 @@ remain clues for review.
 The statement does not identify an item, and a photo does not prove where it
 was bought. A delivered email and a card charge do not receive inventory.
 
-### Coverage and remaining work
-
-The [local journey coverage map](../agents/core-journey-e2e.md) owns executable
-checks and their limits; the [GitHub Issues](https://github.com/nickysemenza/cubby/issues) owns remaining software
-and live acceptance. A deterministic import test does not verify live Gmail,
-retailer changes, model quality or physical-device background behavior.
-
 The [shared photo skill](../../.agents/skills/photo-inventory-import/SKILL.md)
 and [purchase skill](../../.agents/skills/purchase-import/SKILL.md) apply to
-the import-run agent, Codex, and Claude. They encode source boundaries and review rules, not
-one model's private prompt.
+the import-run agent, Codex and Claude alike.
 
 ### Photo inventory review
 
-Choose **Cubby / Pi** or **Claude / Codex** for each photo Run. Cubby starts
-grouping after all admitted upload batches finish and required descriptions
-settle. The external path provides a copyable prompt once the photos are ready;
-it does not start Pi. Neither path creates Products or receives inventory until
-the member approves proposals.
+Choose **Cubby / Pi** or **Claude / Codex** for each photo Run. Neither path
+creates Products or receives inventory until the member approves proposals.
+[Review and approve](wardrobe-import.md#4-review-and-approve) owns the review
+steps, candidate checks and what applying a group writes. **Not this one**
+rejects a candidate Product for those photos, and the rejection follows the
+photos through combine and split. Adding photos to a Cubby Run regroups only
+unapproved agent proposals; member-edited, approved and discarded groups stay.
 
-Review groups in one continuous scroll. The item index jumps to a group;
-**Select all ready items** selects eligible proposals, and **Apply selected items** confirms and applies each group in one transaction.
-The server records the confirming member and time with the Product, photos,
-inventory, and settled proposal; failed groups roll back independently. Blocked groups stay in review with the server's `blockedReason`. Server-projected
-`steps` order Product, Right one?/Details, Own it now?, and Apply for both clients.
-The identity step stays open until apply; pending input alone does not block a
-ready group. Only `blockedReason` gates batch eligibility.
-Applying a ready group needs no separate identity confirmation. A real agent
-concern blocks apply; Product/draft edits preserve it. Explicit resolution keeps
-the original concern, optional reply, resolving member, and time in history.
-The former synthetic identity warning is not a concern. Descriptions
-and recognized label text are available under disclosure rather than filling
-the main review surface.
-Candidate checks retain each group's saved revision in the browser query cache.
-Only new or revised proposed groups request the full ranked candidate set, in
-batches of at most six; conversation updates and unrelated Run progress reuse
-unchanged results. Product, inventory, purchase, expense and image evidence
-changes still refresh candidates. Not this one refreshes suppression through the
-recommendation cache ripple, and Retry rechecks the failed group.
-Discarded groups do not scan; applied groups check possible duplicates only
-when their Review possible matches disclosure is opened. Each server batch
-shares one image-evidence snapshot with its proposal view.
-Model cache inputs use observed name and extracted identifiers,
-not joined OCR prose. Each group reports ready or failed with raw diagnostics;
-failure supports Retry and never gates apply. Strong duplicate signals require
-an exact identifier or the same manufacturer and matching model/name (at least
-80% of identity terms and two shared terms for the name path). Ranking scores
-are not probabilities. Selected-Product evidence loads independently of ranking:
-latest three purchase lines and total count, vendor and price, Ordered Purchase
-date or Paid standalone Expense date, on-hand quantities/locations, and own
-photos with capture times.
-
-Not this one records a Wrong decision with explicit suppression. The
-recommendation subject is the Run, scoped to each constituent photo and candidate
-Product key, so rejections follow photos through combine/split. Rejected Products
-are returned separately and excluded from suggestions.
-
-Correctness marks use a dedicated tokenizer that preserves short width letters,
-numeric sizes, decimals and fractions. Only literal OCR/label matches produce
-agreement; model colour/size relations produce unknown or disagreement. Name,
-manufacturer, model and identifier checks are independent. Model claims travel
-with their selected analysis provenance; member-corrected prose has no model
-claims, and missing current-source evidence is explicit. Retained analyses hydrate
-older Runs without rewriting them. Unfinished edits remain after scrolling away. Approved and discarded details stay collapsed until opened.
-
-Proposal values name their last recorded writer. Photo field proposals use the
-shared Suggestion decision history without a model confidence score; they are
-not Jev/Clef model judgments. Photo review exposes their opaque child handles
-for provenance; Product, Vendor and Image references remain shortcodes. Product pairs come from deterministic import-time matching and agent proposals (`product_enrichment` propose); no model scans the catalogue for duplicates. The review queue reads at most 200 open stored pair Suggestions after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Pair records with unknown fingerprints remain immutable history; rows carrying obsolete rule or model policies stay outside current queues. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. The Workbench match card reads each pair's stored `signals.variantEvidence` for its colour and size relations, showing Unknown only when no grounded evidence was stored. Its suggested keeper is the purchase side, then the higher Product data-quality score, then the older record. A disabled Review merge states its reason beneath the actions and as the button's description: an identity conflict quotes the stored conflicting verified models or variant literals (falling back to the stored evidence text), and a missing fingerprint says a side has no current identity snapshot. Related pairs can share a group, but review applies one pair at a time. Older proposals whose
-writer was not recorded say so. Manufacturer is text on a Product, not a
-separate record; existing-name counts help reuse the catalogue's spelling.
-Category and destination pickers show the selected record's representative
-image before another search is needed.
-
-Adding a new batch to a Cubby Run replaces unapproved agent proposals when
-regrouping. Member-edited groups and their images stay intact, as do approved
-and discarded groups. State this
-next to the add-photos action. Claude/Codex Runs wait for that session to regroup.
-Completed Runs can accept new batches. If a Cubby grouping session has been
-archived, start a new import instead; its approved Products remain available
-for matching.
-Skipped photos retain their original Image and Run evidence, with a visible
-reason; approval does not attach them to the Product or count them as inventory. A failed
-description can be retried, or explicitly skipped to continue with other photos.
-
-**Import results** lists distinct created and matched Products and their
-inventory outcomes. The Changes section keeps the separate chronological audit.
+Possible duplicate Products come from import-time matching and agent proposals;
+no model scans the catalogue. Review merge suggests a keeper and applies one
+pair at a time; when merging is blocked, it says why, quoting the conflicting
+variant evidence.
 
 ```mermaid
 flowchart LR
@@ -282,38 +213,3 @@ sequenceDiagram
     end
     Note over Cubby: Inventory changes only after an explicit receive decision
 ```
-
-## Evidence traps from a synthetic wardrobe case
-
-The [regression corpus](../../apps/web/tests/fixtures/product-identity-evidence.ts)
-uses the fictional **ForgeWear** black small pocket tee.
-Its own label has a fit mark and a separate boxed size. The catalog also has
-navy small, white small, and black medium variants. A saved retailer page is
-duplicated, an earlier trial order lists the same item, and the trial's final
-email lists that item among the returns while charging for other retained
-items. A later two-item order has an email subject without the brand, and
-overlapping card exports repeat a combined charge. Another nearby charge has
-the same amount. An order-page listing or trial charge alone cannot establish
-that the photographed item was purchased in the trial.
-
-The expected result: black small ranks above the other variants even if it
-already has an own photo; the reviewer can attach the new photo to that
-Product; the duplicate page creates no duplicate Purchase; the trial order
-does not establish ownership for a returned trial item; repeated statement
-rows create no duplicate transaction; and settlement remains unresolved until
-the specific charge and order relationship is supported. This scenario is
-fictionalized from local evidence. Raw exports and saved pages stay outside
-the repository.
-
-## How to check the journey
-
-The [local journey coverage map](../agents/core-journey-e2e.md) names each
-executable Product path, its actual synthetic input, the few seeded
-prerequisites, and its remaining gap. The wardrobe check carries uploaded
-photos, synthetic retailer HTML, and normalized financial observations through grouping, approval, purchase import,
-settlement, and Product merge. A separate browser check creates a Product from
-item and label files without an import run. On iPhone, repeat direct photo and
-new Product paths in a disposable local database; inspect candidate order,
-taps, review language, and final Product detail. Record a simulator or browser
-video when interaction quality is the question. Keep real household evidence
-in local analysis only.

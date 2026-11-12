@@ -11,6 +11,10 @@ and [source-transaction-record.ts](../../../packages/schemas/src/source-transact
 building requests. That schema owns field names and batch limits. This skill
 does not write back to Monarch. Pi integration is deferred.
 
+A person-to-person payment-app counterparty is a shared-cost repayment, never a
+Vendor; never save a person's name or a generic payment-app merchant string as a
+Vendor or Vendor alias.
+
 Cubby owns durable scheduling, matching, suggestions, booking and guarded
 corrections. Record evidence and inspect its receipts; do not chain transaction
 creation, reference attachment, Expense booking or account merges after intake.
@@ -177,7 +181,8 @@ read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
 
-When resolving statement Suggestions, read
+When working the Transaction suggestion backlog, follow
+[statement backlog](references/statement-backlog.md); read
 [Reviewing statement outcomes](../../../docs/import-evidence-convergence.md#reviewing-statement-outcomes)
 for optional inspection, current write validation and corrections. When resuming
 held cases or replaying a committed booking, follow its retained-hold and receipt

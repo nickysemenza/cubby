@@ -34,7 +34,7 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
 ## Production changes
 
 The [production migration runbook](../runbooks/production-migrations.md) owns
-the cutover sequence, locks and post-deploy read-back. Merging to `main` applies
+the cutover sequence, locks and retained queue work. Merging to `main` applies
 pending committed migrations, then deploys; a migration ships with the code and
 clients that need it in one PR.
 
@@ -73,6 +73,12 @@ A stored-shape transform accompanying schema work is a custom migration
 correction, use a transactional update and verify preservation and read-back;
 keep the script outside the repository and add no migration or schema guard
 solely to route it through migrations.
+
+A new singleton or settings row inserted by a migration gets a freshly
+generated random UUID; a hand-picked literal id can collide with a live or
+retired production row. A reshape migration carries known legacy or orphaned
+shapes forward (deactivate or archive them) instead of aborting, so Deploy is
+not the first probe of production data.
 
 Dropping a column removes its `schema.ts` declaration in the same change: the
 relational query builder selects every declared column, so the declaration is
@@ -177,6 +183,14 @@ matrix exercises their real block, detach or cascade behavior.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
+
+Take as few locks as possible: coordinate through a constraint or a
+compare-and-set update. When a lock is needed, make it narrow, shared
+(`FOR SHARE`/`FOR KEY SHARE`) and short, on the owning row; a lock table is a
+smell. Cubby never hard-deletes entity rows, so a liveness guard needs no
+exclusive lock. Keep serializable transactions small: past about 32 pages of
+one table, PostgreSQL escalates their predicate locks to the whole relation and
+concurrent writers fail with `40001`.
 
 `Product.tags` (and any future `control.suggest.mode: "prune"` text-array) is
 compatibility/ecosystem tokens only — never the Brand name, a classification
@@ -336,6 +350,10 @@ missing exports is the tell; rebuild.
 On workerd, wall clocks omit synchronous CPU: use CPU-time/sampling for WASM or
 JS hot paths. WASM hot-path tracing stays `trace, skip_all`; a global INFO
 subscriber accumulates in reused isolates.
+
+Required Worker bindings and Durable Objects are always present: use them
+directly and delete missing-binding fallbacks. Paid fallbacks, such as
+embeddings through Unified Billing, just work; add no gate in front of them.
 
 ## Error diagnostics
 

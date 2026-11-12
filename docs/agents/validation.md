@@ -23,6 +23,7 @@ Publication does not require loading every test, native-stack or performance rul
 | Commit, push, inspect CI or assess merge readiness | [Commit, push, and merge](#commit-push-and-merge)                                 |
 | Capture UI evidence                                | [PR screenshots](#pr-screenshots)                                                 |
 | Publish dependent PRs                              | [Native PR stacks](#native-pr-stacks)                                             |
+| Brief or run parallel lanes                        | [Parallel lanes](#parallel-lanes)                                                 |
 | Evaluate a performance change                      | [Performance review](#performance-review)                                         |
 | Run a broad local diagnostic                       | [Explicit local diagnostics](#explicit-local-diagnostics)                         |
 
@@ -57,7 +58,8 @@ harness for one lane or spec. Keep local iteration narrow: run the affected
 file or one journey locally, and let CI run the full catalog with cached passes.
 Delete redundant tests as coverage earns trust: once a journey demonstrably
 catches a regression, remove the tests that duplicate it or merely freeze
-internal structure.
+internal structure. When the suite is slow, delete slow or low-value tests
+rather than adding sequencers, balancers or runners.
 
 Choose the cheapest boundary that can expose the failure. Classify individual
 cases in mixed service-backed suites: SQL elsewhere in a file does not make
@@ -92,15 +94,17 @@ If that case is not established, make no test change. Report the existing
 checks and any deliberate coverage gap. Disposable probes can establish a
 refinement without becoming permanent coverage.
 
-Apart from the Suggestion touching query plan-shape test for 50 records, do not assert SQL statement or query counts, timing budgets, or ratchets in
-tests: they fail on unrelated additive changes and protect cost, not data.
-Find N+1 work with [performance review](#performance-review) measurements.
+A journey's statement and bound-parameter ceilings go through
+`expectStatementBudget` (`apps/web/tooling/statement-budget.ts`), the CI gate
+for per-row database work ([performance review](#performance-review)). Assert
+no other query counts, timing budgets or ratchets in tests.
 Keep load generation and throughput sampling out of correctness regressions:
 use the smallest fixture graph that crosses the relevant page or batch boundary,
 force external admission refusals at the provider seam, and assert committed
-outcomes and forbidden work directly. A test reported flaky twice is fixed or
-deleted in the next PR; `test.fixme`, `skip` and quarantine count as deletion
-and are removed ([CI retry mechanics](validation-tests.md#vitest-projects-and-ci-retries)).
+outcomes and forbidden work directly. Fix a flake by waiting on the real
+condition or delete the test; never add a retry. A test reported flaky twice is
+fixed or deleted in the next PR; `test.fixme`, `skip` and quarantine count as
+deletion and are removed ([CI retry mechanics](validation-tests.md#vitest-projects-and-ci-retries)).
 
 Delete a test when it duplicates a retained journey, freezes internal
 structure (declarations, constants, mocks, call order, copy, file layout),
@@ -146,7 +150,8 @@ only to expose its internals.
 Rebase onto freshly fetched `origin/main` before running any typecheck,
 generator, or test, and again before pushing: results from a stale base miss
 migrations, generated artifacts, and ratchets (schema budgets) that main has
-since changed, so they are not evidence for the merge.
+since changed, so they are not evidence for the merge. When the rebase brings a
+lockfile or dependency change, run `pnpm install` before trusting a typecheck.
 
 While iterating, run the named affected files or one affected E2E scenario;
 [test tiers](validation-tests.md#choosing-and-running-tests) own the commands,
@@ -194,10 +199,9 @@ test-lane cache keys broad.
 
 ## Before opening a PR
 
-Open a reviewable PR after the implementation, owning docs, and focused local
-checks are ready; a pending CI run is compatible with a ready-for-review PR.
-Merge still requires the final content's `CI passed`. Publication itself adds
-no checks.
+Correctness and the final content's green `CI passed` are the bar; PR size and
+reviewability never limit scope. A pending CI run is compatible with a
+ready-for-review PR, and publication itself adds no checks.
 
 Choose local evidence by the changed behavior:
 
@@ -216,9 +220,8 @@ Choose local evidence by the changed behavior:
 - Native wire shapes or decoding: focused host/contract coverage. Compile
   locally when the change has a specific native compilation risk; CI always
   covers changed native inputs before merge.
-- Hand-written Swift behavior: the affected host tests or app target. Native
-  navigation/interaction additionally needs the changed interaction exercised;
-  compiling a simulator target does not require booting a simulator.
+- Hand-written Swift behavior: compile the affected target; existing CI owns
+  the rest ([native validation](../../apps/apple/AGENTS.md#verification)).
 - Signing, entitlements or release configuration: the relevant archive/release
   check. TestFlight builds are not an ordinary pre-PR requirement.
 
@@ -230,19 +233,34 @@ formatting. The server client-version gate test is relevant when changing
 compatibility behavior, not merely because generated Swift changed.
 
 CI selects broad tiers from their declared inputs and replays unchanged tasks
-from the Nx cache; do not repeat the full PostgreSQL, fast, lint, Knip, or build
-suites locally as a gate. While iterating, lint the edited paths with
+from the Nx cache; do not repeat the full PostgreSQL, lint, or build suites
+locally as a gate. While iterating, lint the edited paths with
 `pnpm exec oxlint <paths>` rather than `pnpm lint`; the commit hook owns staged
-lint/format. Run the full configured Knip check for changed entry points or
-dependencies and removed consumers; a dependency-only check misses orphaned
-files and exports. Run generator validation for changed declarations and
-`actionlint` for CI workflow changes.
+lint/format. Before pushing, run CI's own Knip target
+(`pnpm exec nx run cubby-checks:knip`) and the fast unit suite (`pnpm test`);
+a bare local `knip` or a dependency-only check reports differently from CI.
+Run generator validation for changed declarations and `actionlint` for CI
+workflow changes. After a dependency change, `rg registry-gateway pnpm-lock.yaml`
+and strip any `tarball:` field it finds: CI rejects private registry-gateway
+tarball URLs.
 
 One root agent owns any broad validation the change needs. A subagent runs only
 focused tests and returns the result, command, duration, relevant output and
 limits. Reuse valid results at handoff; choose checks for the changed behavior
 rather than a blanket `pnpm check` or affected suite. Keep expensive local gates
 sequential, including across active sessions on a constrained host.
+
+## Parallel lanes
+
+Default to 3–4 lanes in parallel, at most about 5, each editing disjoint files.
+Give broad multi-part lanes the stronger model and narrow mechanical lanes
+Terra. Every lane brief carries an explicit done-list and the toolchain setup
+([local development](../local-development.md#toolchain), plus `DEVELOPER_DIR`
+for [Apple](../../apps/apple/AGENTS.md#verification) lanes). A lane pushes its
+branch before long checks. A test already failing at the lane's base is
+reported and does not stop the lane. The root agent watches for lanes waiting
+on a question, sends partial returns back to finish their done-list, and owns
+final validation.
 
 ## PR screenshots
 
@@ -300,7 +318,10 @@ reintroduce already-merged changes into the next PR.
 
 When a shell call runs a check before dependent Git operations, stop on failure
 with `set -e` or use separate calls. A failed check must not be followed by a
-commit, push, or rebase continuation in the same call.
+commit, push, or rebase continuation in the same call. Read a check's exit
+status from the check itself, never through a pipe (`| tail` reports `tail`'s).
+Stage explicit paths (or `git add -u` plus named new files), never
+`git add -A apps`: checkouts can hold stale untracked Apple artifacts.
 
 Commits run only staged-file Oxlint/Oxfmt through installed lint-staged;
 `pnpm check:staged` runs the same entrypoint and preserves partial staging.
@@ -336,18 +357,32 @@ validation, and a green earlier commit with different content is not evidence.
 `main` runs CI after deployment starts, so post-merge CI does not replace this
 gate. A PR that adds a migration follows the
 [production change rules](domain-rules.md#production-changes), including
-compatibility with the code running while the release applies it.
+compatibility with the code running while the release applies it. After merge,
+confirm only that the Deploy workflow succeeded, plus any check a migration
+runbook or the member asks for; PR text promises no other post-deploy
+read-back.
 
 ## Performance review
 
-AI review owns performance judgment. Measurements feed that review; they do not
-introduce universal timing or query-count CI gates. The Suggestion touching query has one plan-shape test for indexed access to Suggestion across 50 records. Retain
-correctness regressions and the final-content CI merge gate above.
+Speed is a goal: work that takes hours is broken. Fix every efficiency angle
+in one push rather than one bottleneck per round, and reject an optimization
+whose measured win is small against the layer it adds. Statement count is the
+throughput budget: each Postgres round trip from a placed Worker costs about
+13 ms, so batch statements per page;
+[`expectStatementBudget`](#test-retention) is the CI gate, and there are no
+timing gates.
 
-Performance changes provide a non-blocking before/after evidence report using
-the [existing read harness](../entities.md#list-reads): requested fields and
-dependencies versus loaded work, SQL calls and plan work at representative
-synthetic scale, response bytes, decoded operation failures, and time until
+Measure read-only on real production, not a copy or a synthetic fixture: open
+`BEGIN READ ONLY` with a `statement_timeout`, compare `pg_stat_statements`
+deltas, sample `pg_locks`, and read Worker traces with `cf --profile personal`.
+Never print the database URL; ask the member for it when you have no access.
+Judge a fix by whole-database load over a clean window on new code only
+(background pages keep the code they started with), not by the target's own
+spans. A synthetic fixture beating a target does not close an issue.
+
+Performance changes report before/after evidence. For read paths, the
+[existing read harness](../entities.md#list-reads) adds requested fields and
+dependencies versus loaded work, SQL calls and plan work, response bytes, decoded operation failures, and time until
 useful data is available. Label the revision, environment, workload, cache
 state, and unavailable measurements. Unsupported shape metadata and unprovided
 operator context stay null.
@@ -355,8 +390,7 @@ operator context stay null.
 - Never use an input fingerprint as anonymization or copy arbitrary input keys
   into evidence, including private samples.
 - Captured SQL can contain data-dependent dictionaries and resolved ID sets.
-  Rebind them against the comparison database and pass the same bindings to
-  both variants.
+  Pass the same bindings to both variants.
 - A query timing does not establish page latency, and HTTP success does not
   establish RPC success.
 - Deployed Workers advance `performance.now()` and `Date.now()` only after I/O,

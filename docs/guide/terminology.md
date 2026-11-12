@@ -389,9 +389,7 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     | `NULL`           | unknown; contributes nothing, reported as uncertainty | old receipt with no count                                       |
 
     Zero is legal **only** on a negative-cost line — the one direction where
-    "money without units" is a real event. It was banned outright until
-    2026-08-17, which forced that class to borrow `NULL` and report a known
-    quantity as data-entry debt.
+    "money without units" is a real event.
 
     A discard carries **no Purchase** — there is no vendor charge behind
     throwing something away, so `purchaseId` stays null rather than attaching

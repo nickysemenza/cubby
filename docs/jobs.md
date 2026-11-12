@@ -828,6 +828,11 @@ Automatic refresh work has no Run: its `runId` is null and its activation is
 the authority. A member stops it from the Work page or `ai.stopAutomaticWork`:
 discovery admits nothing, owed rows are parked, and `leaseStale` fails any
 attempt in flight. It holds until a member resumes. Sweeps keep their Run.
+Admission (`scheduleAutomaticEvaluations`) runs in a short transaction under a
+nonblocking advisory lock (`domains/run/repo/ai-refresh-admission.ts`):
+contention defers the page rather than pinning another origin connection in a
+lock wait, and a full backlog (`AUTOMATIC_EVALUATION_BACKLOG`) defers it too. A
+member's stop takes the same lock blocking, so nothing lands after it.
 
 Nothing queues an evaluation: `AiEvaluation.runAt` is set while the drain owes
 it (`priority` 0 when the owner or an uncancelled requester is a running,
@@ -1225,7 +1230,10 @@ The invocation at 7 a.m. America/Los_Angeles also launches the daily
 `maintenance` Run and recovers missed work. Every daily step is idempotent, and
 the daily pass is keyed by its household date (`Run.clientKey`), so a repeated
 invocation reuses that date's pass even after it finished. Only an earlier
-date's budget-paused pass makes way for a new one. A failed permit send retries
+date's budget-paused pass makes way for a new one. Its ordered steps are declared in
+`server/domains/maintenance/service/maintenance-run.ts`; an EXIF row whose
+original is gone or whose extraction keeps failing gets a terminal
+`Image.metadataOutcome` with its raw error and is listed on Problems. A failed permit send retries
 three times over about five seconds before the hourly cron is its only
 recovery. App-open coalesces recovery and mail discovery. Gmail provider push
 is not implemented.
@@ -1258,7 +1266,9 @@ of the rows marked "session", and rows marked "no Run" can have none.
 Default Run lists and counts omit the retained `ai_suggest` and `background`
 purposes, omit `ai_refresh`, `connection_discovery` and `derived_refresh` once
 they ended, and omit `mail_discovery` once it completed. An explicit purpose
-filter includes them, and direct record reads still work. Automatic work
-creates no Run: AI usage and evaluations can have none. Queue runtime failures
+filter includes them, and direct record reads still work. Automatic AI
+evaluation and field refresh create no Run, so their AI usage and evaluations
+can have none; automatic mailbox discovery keeps its `mail_discovery` Run with
+each admitted import as a child Run. Queue runtime failures
 receive three delivery retries in addition to the durable Job's execution retry
 policy.
