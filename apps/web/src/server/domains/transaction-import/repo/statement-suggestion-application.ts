@@ -122,6 +122,17 @@ export function withPublishedLabels(
   return judgment;
 }
 
+const defaultAttachCandidate = (judgment: StatementTransactionJudgment) => {
+  const attachable = judgment.candidates.filter(
+    (candidate) => candidate.eligibility !== "context",
+  );
+  return (
+    attachable.find(
+      (candidate) => candidate.transactionId === judgment.pairedTransactionId,
+    ) ?? (attachable.length === 1 ? attachable[0] : undefined)
+  );
+};
+
 /**
  * What applying `application` writes: the money and dates of a create, or the
  * one Transaction an attach, supersede, void or book touches. Other candidates,
@@ -131,7 +142,7 @@ export function withPublishedLabels(
 function statementApplicationTerms(
   judgment: StatementTransactionJudgment,
   action: StatementTransactionApplication["action"],
-  /** The attach target's id; null attaches to the only candidate. */
+  /** The attach target's id; null uses a proven pair or the only candidate. */
   targetId: string | null,
 ) {
   const base = {
@@ -172,13 +183,7 @@ function statementApplicationTerms(
         ? judgment.candidates.find(
             (candidate) => candidate.transactionId === targetId,
           )
-        : judgment.candidates.filter(
-              (candidate) => candidate.eligibility !== "context",
-            ).length === 1
-          ? judgment.candidates.find(
-              (candidate) => candidate.eligibility !== "context",
-            )
-          : undefined;
+        : defaultAttachCandidate(judgment);
       return {
         ...base,
         "attach.transactionId": target?.transactionId ?? null,
@@ -386,7 +391,8 @@ export async function statementApplicationSelection(
       const attachable = judgment.candidates.filter(
         (candidate) => candidate.eligibility !== "context",
       );
-      if (!application.transactionId && attachable.length > 1)
+      const preferred = defaultAttachCandidate(judgment);
+      if (!application.transactionId && !preferred && attachable.length > 1)
         throw refuseStatementApplication(
           `Name the transaction to attach to: ${attachable.map((candidate) => codeOf(candidate.transactionId)).join(", ")}.`,
         );
@@ -395,7 +401,7 @@ export async function statementApplicationSelection(
             (candidate) =>
               codeOf(candidate.transactionId) === application.transactionId,
           )
-        : attachable[0];
+        : preferred;
       if (!target || !judgment.create)
         throw refuseStatementApplication(
           "The chosen transaction is no longer a candidate for this charge. Review again.",

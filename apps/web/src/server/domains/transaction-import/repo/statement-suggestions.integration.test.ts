@@ -3709,7 +3709,7 @@ describe("statement Transaction suggestions", () => {
   });
 
   it("books one Transaction for a charge several sources exported", async () => {
-    await card(ctx, ["monarch", "copilot"]);
+    const account = await card(ctx, ["monarch", "copilot"]);
     await record(ctx, [rowInput({ rawDescription: "EXAMPLE GROCER 0001" })]);
     await record(
       ctx,
@@ -3721,23 +3721,45 @@ describe("statement Transaction suggestions", () => {
     expect(rest).toEqual([]);
     expect(primary).toMatchObject({ recommended: "create", siblings: 0 });
     await accept(ctx, primary!);
+    const [booked] = await getDb(ctx.db).select().from(financialTransaction);
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      rawDescription: "EXAMPLE GROCER DECOY",
+      sourceRefs: [],
+    });
+    await generate(ctx);
     const [copy] = await readPendingStatements(ctx);
     expect(copy).toMatchObject({
       recommended: "attach",
       clean: true,
       siblings: 0,
-      candidates: [
+      candidates: expect.arrayContaining([
         expect.objectContaining({
           transactionId: expect.stringMatching(/^FTX-/),
         }),
-      ],
+      ]),
     });
+    expect(
+      copy!.candidates.filter(
+        (candidate) => candidate.eligibility !== "context",
+      ),
+    ).toHaveLength(2);
     await accept(ctx, copy!);
     expect(await readPendingStatements(ctx)).toEqual([]);
     const { rows } = await getDb(ctx.db).execute<{ n: number }>(
       sql`SELECT count(*)::int AS n FROM "FinancialTransaction" WHERE "deletedAt" IS NULL`,
     );
-    expect(rows[0]!.n).toBe(1);
+    expect(rows[0]!.n).toBe(2);
+    const accepted = await getDb(ctx.db).execute<{ id: string }>(sql`
+      SELECT DISTINCT "acceptedTransactionId" AS id FROM "SourceOccurrence"
+      WHERE "acceptedTransactionId" IS NOT NULL
+    `);
+    expect(accepted.rows).toEqual([{ id: booked!.id }]);
   });
 
   // Failure mode: pairing by amount alone would fold two real visits into one

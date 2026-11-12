@@ -142,7 +142,7 @@ const projectedNullableDate = (key: string) =>
     value === null ? null : new Date(value),
   );
 
-/** Select only from sourceObservations, never use projected fields as stored columns. */
+/** Select projected fields from a relation that supplies them, not the stored table. */
 const factColumns = getTableColumns(sourceTransactionRecord);
 // SAFETY: Every key preserves its own column decoder; SQL wrappers allow selecting the same facts from a derived relation.
 const projectedFacts = Object.fromEntries(
