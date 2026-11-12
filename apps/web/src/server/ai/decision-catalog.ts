@@ -26,6 +26,7 @@ import {
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
+  LOAN_ESCROW_DISBURSEMENT_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
 } from "~/server/ai/policy/features";
 import {
@@ -103,6 +104,16 @@ function featureRows(): CatalogRow[] {
       ),
   );
   return [
+    featureRow(
+      LOAN_ESCROW_DISBURSEMENT_FEATURE.feature,
+      "Loan escrow disbursement",
+      "Identify a property tax or homeowners insurance payment from escrow",
+      LOAN_ESCROW_DISBURSEMENT_FEATURE,
+      LOAN_ESCROW_DISBURSEMENT_FEATURE.prompt(
+        JSON.stringify({ description: "COUNTY TAX PMT", amount: 100 }),
+      ),
+      { options: plainOptions(LOAN_ESCROW_DISBURSEMENT_FEATURE.choices) },
+    ),
     featureRow(
       UPC_OFFER_COMPARABILITY_FEATURE.feature,
       "UPC offer comparability",

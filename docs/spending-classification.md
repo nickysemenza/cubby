@@ -10,6 +10,8 @@ purchase evidence supports; a mixed retailer's name alone does not establish
 its basket contents. Keep unresolved money visible in totals.
 Card fees use the issuing account's Vendor; a shared fee description does not
 establish a shared merchant or category default.
+Household loan escrow disbursements use the tax or insurance payee as Vendor and
+the supported spending category, with no inferred purchaser.
 
 Later itemization can refine historical allocation when the resulting lines have
 no explicit category override. A lump's saved category is currently copied to

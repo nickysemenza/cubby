@@ -212,7 +212,7 @@ const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily
  * renaming the revision, which the automatic attach rule's measured windows
  * are keyed by.
  */
-const STATEMENT_CLEAN_POLICY = "2026-10-29.3";
+const STATEMENT_CLEAN_POLICY = "2026-11-12.1";
 const STATEMENT_SUGGESTION_PAGE = FINANCIAL_STATEMENT_IMPORT_MAX_ROWS;
 /** A hold's posted twin lands within this window, and a vanished hold is judged after it. */
 const PENDING_POST_WINDOW_DAYS = 7;
@@ -1359,6 +1359,198 @@ async function assertProviderIdentityPublication(
   }
 }
 
+type PreparedChargePreviews = NonNullable<
+  Awaited<ReturnType<typeof prepareChargePreviews>>
+>;
+type LoanPaymentEvidence = {
+  accountId: string;
+  amount: number;
+  date: string;
+  key: string;
+};
+
+async function loanEvidence(
+  db: Database,
+  accounts: readonly OwnAccount[],
+  accountIds: readonly string[],
+  grouped: PreparedChargePreviews["grouped"],
+  previewByKey: ReadonlyMap<
+    string,
+    PreparedChargePreviews["preview"]["rows"][number]
+  >,
+  ids: ReadonlyMap<string, string>,
+) {
+  const allLoanIds = accounts
+    .filter((account) => account.kind === "loan")
+    .map((account) => account.id);
+  const loanPayments: {
+    accountId: string;
+    amount: number;
+    date: string;
+    key: string;
+  }[] = allLoanIds.length
+    ? (
+        await unwrapDb(db).execute<{
+          accountId: string;
+          amount: string;
+          date: string;
+          key: string;
+        }>(sql`
+        SELECT s.judgment->>'accountId' AS "accountId", s.judgment->${statementTransactionAction.enum.create}->>'amount' AS amount,
+          s.judgment->>'statementDate' AS date,
+          'stmt:' || (s.data->>${"source"}) || ':' || (s.data->>'chargeKey') AS key
+        FROM "Suggestion" s
+        WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}
+          AND s.judgment->>'accountId' = ANY(${textArrayParam(allLoanIds)})
+          AND upper(trim(coalesce(s.judgment->${statementTransactionAction.enum.create}->>'rawDescription', s.judgment->${statementTransactionAction.enum.create}->>'merchant'))) = 'PAYMENT'
+          AND (s.judgment->${statementTransactionAction.enum.create}->>'amount')::numeric < 0
+        UNION ALL
+        SELECT ft."accountId"::text, (ft."amountMinor"::numeric / 100)::text,
+          coalesce(ft."postedDate", ft."transactionDate")::text, 'ftx:' || ft.shortcode
+        FROM "FinancialTransaction" ft
+        WHERE ft."accountId" = ANY(${uuidArrayParam(allLoanIds)}) AND ${notDeleted("ft")}
+          AND ft.status <> ${financialTransactionStatus.enum.void} AND ft.kind = ${financialTransactionKind.enum.account_transfer} AND ft."amountMinor" < 0
+          AND coalesce(ft."postedDate", ft."transactionDate") IS NOT NULL
+          AND upper(trim(coalesce(ft."rawDescription", ft.merchant))) = 'PAYMENT'
+      `)
+      ).rows.map((row) => ({ ...row, amount: Number(row.amount) }))
+    : [];
+  for (const { charge, canonical } of grouped) {
+    const row = previewByKey.get(chargeId(charge));
+    const accountId = row?.accountId ? ids.get(row.accountId) : undefined;
+    if (
+      accountId &&
+      row &&
+      allLoanIds.includes(accountId) &&
+      row.proposed.amount < 0 &&
+      (canonical.rawDescription ?? canonical.merchant ?? "")
+        .trim()
+        .toUpperCase() === "PAYMENT"
+    )
+      loanPayments.push({
+        accountId,
+        amount: row.proposed.amount,
+        date: canonical.statementDate,
+        key: `stmt:${chargeId(charge)}`,
+      });
+  }
+  // An unlinked escrow credit is income only when neither recorded nor
+  // pending spending on the loan could be its original disbursement.
+  const loans = accounts
+    .filter(
+      (account) => account.kind === "loan" && accountIds.includes(account.id),
+    )
+    .map((account) => account.id);
+  const loansWithPossibleOriginal = new Set(
+    loans.length
+      ? (
+          await unwrapDb(db).execute<{ id: string }>(sql`
+          SELECT loan.id FROM unnest(${uuidArrayParam(loans)}) AS loan(id)
+          WHERE EXISTS (SELECT 1 FROM "FinancialTransaction" ft
+            WHERE ft."accountId" = loan.id AND ${notDeleted("ft")}
+              AND ft.status <> ${financialTransactionStatus.enum.void} AND ft.kind = ${financialTransactionKind.enum.purchase} AND ft."amountMinor" > 0)
+          OR EXISTS (SELECT 1 FROM "Suggestion" s
+            WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND s.active AND s.status = ${suggestionStatus.enum.pending}
+              AND s.judgment->>'accountId' = loan.id::text
+              AND (s.judgment->${statementTransactionAction.enum.create}->>'amount')::numeric > 0
+              AND upper(trim(coalesce(s.judgment->${statementTransactionAction.enum.create}->>'rawDescription', s.judgment->${statementTransactionAction.enum.create}->>'merchant', ''))) <> 'PAYMENT')
+        `)
+        ).rows.map((row) => row.id)
+      : [],
+  );
+  for (const { charge, canonical } of grouped) {
+    const row = previewByKey.get(chargeId(charge));
+    const accountId = row?.accountId ? ids.get(row.accountId) : undefined;
+    if (
+      accountId &&
+      loans.includes(accountId) &&
+      row!.proposed.amount > 0 &&
+      (canonical.rawDescription ?? canonical.merchant ?? "")
+        .trim()
+        .toUpperCase() !== "PAYMENT"
+    )
+      loansWithPossibleOriginal.add(accountId);
+  }
+  return { loanPayments, loansWithPossibleOriginal };
+}
+
+function loanStatementDecision(input: {
+  account: OwnAccount | undefined;
+  accountId: string;
+  canonical: Observation;
+  statementAmount: number;
+  loansWithPossibleOriginal: ReadonlySet<string>;
+  loanPayments: readonly LoanPaymentEvidence[];
+  accounts: readonly OwnAccount[];
+  pair: StatementTransactionJudgment["transferPair"];
+}) {
+  const {
+    account,
+    accountId,
+    canonical,
+    statementAmount,
+    loansWithPossibleOriginal,
+    loanPayments,
+    accounts,
+    pair,
+  } = input;
+  let reviewReason: string | null = null;
+  const descriptor = (canonical.rawDescription ?? canonical.merchant ?? "")
+    .trim()
+    .toUpperCase();
+  const loanCredit = account?.kind === "loan" && statementAmount < 0;
+  const escrowKind =
+    loanCredit && descriptor === "INTEREST ON ESC"
+      ? ("interest" as const)
+      : loanCredit &&
+          descriptor === "ESCROW REFUND" &&
+          !loansWithPossibleOriginal.has(accountId)
+        ? ("income" as const)
+        : null;
+  const rule = escrowKind
+    ? { kind: escrowKind, kindSource: "rule" as const }
+    : statementTransactionKind({
+        sourceCategory: canonical.sourceCategory,
+        amount: statementAmount,
+        accountKind: account?.kind,
+        rawDescription: canonical.rawDescription,
+      });
+  const matchingLoanPayments =
+    account?.kind === "bank_account" &&
+    account.ledgerPartyId &&
+    statementAmount > 0
+      ? loanPayments.filter(
+          (payment) =>
+            accounts.find((loan) => loan.id === payment.accountId)
+              ?.ledgerPartyId === account.ledgerPartyId &&
+            cents(payment.amount) === -cents(statementAmount) &&
+            Math.abs(
+              plainDateDaysBetween(payment.date, canonical.statementDate),
+            ) <= 5,
+        )
+      : [];
+  if (
+    matchingLoanPayments.length &&
+    (!pair?.clean ||
+      !matchingLoanPayments.some((payment) =>
+        pair.key.split("~").includes(payment.key),
+      ))
+  )
+    reviewReason =
+      "A matching loan payment needs its transfer pair resolved before this checking entry can be recorded.";
+  const transfer = account
+    ? isLoanPayment(account, canonical)
+      ? { accountId: null, ledgerTransfer: false }
+      : matchingLoanPayments.length
+        ? {
+            accountId: matchingLoanPayments[0]!.accountId,
+            ledgerTransfer: false,
+          }
+        : ownAccountNamed(canonical.rawDescription, account, accounts)
+    : null;
+  return { rule, transfer, reviewReason };
+}
+
 export async function buildChargeProposals(
   db: Database,
   charges: readonly ChargeRef[],
@@ -1413,6 +1605,14 @@ export async function buildChargeProposals(
     ),
     ledgerPartyId: account.ledgerPartyId,
   }));
+  const { loanPayments, loansWithPossibleOriginal } = await loanEvidence(
+    db,
+    accounts,
+    accountIds,
+    grouped,
+    previewByKey,
+    ids,
+  );
   const [pendingTransactions, siblings, eligibility, history, copies] =
     await Promise.all([
       statementPendingTransactions(db, accountIds),
@@ -1494,7 +1694,7 @@ export async function buildChargeProposals(
     const priorTransaction = matchedCode
       ? accepted.get(matchedCode)
       : undefined;
-    const reviewReason = providerFacts.get(chargeId(charge))?.unresolved
+    let reviewReason = providerFacts.get(chargeId(charge))?.unresolved
       ? PROVIDER_IDENTITY_REVIEW
       : !matchedCode && !hasStatementOccurrence(canonical)
         ? OCCURRENCE_IDENTITY_REVIEW
@@ -1584,16 +1784,19 @@ export async function buildChargeProposals(
     const hold = holds.find((pending) =>
       candidates.some((c) => c.transactionId === pending.id),
     );
-    const rule = statementTransactionKind({
-      sourceCategory: canonical.sourceCategory,
-      amount: statementAmount,
-    });
     const account = accountById.get(accountId);
-    const transfer = account
-      ? isLoanPayment(account, canonical)
-        ? { accountId: null, ledgerTransfer: false }
-        : ownAccountNamed(canonical.rawDescription, account, accounts)
-      : null;
+    const loanDecision = loanStatementDecision({
+      account,
+      accountId,
+      canonical,
+      statementAmount,
+      loansWithPossibleOriginal,
+      loanPayments,
+      accounts,
+      pair: pairsByCharge.get(chargeId(charge)) ?? null,
+    });
+    const { rule, transfer } = loanDecision;
+    reviewReason ??= loanDecision.reviewReason;
     const past = history.get(chargeId(charge));
     const decision = decideStatementKind({
       amount: statementAmount,

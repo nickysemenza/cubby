@@ -64,6 +64,7 @@ import {
 import {
   accountPurchaserKey,
   liveHouseholdSpendingAccount,
+  liveHouseholdLoan,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -106,6 +107,17 @@ function refuse(message: string): never {
 }
 
 type Request = z.infer<typeof financialSpendingRequest>;
+export async function financialSpendingAccountIdentity(
+  db: Database,
+  id: string,
+) {
+  return (
+    await getDb(db)
+      .select({ identity: financialAccount.identity })
+      .from(financialAccount)
+      .where(eq(financialAccount.id, parseEntityId("financialAccount", id)))
+  )[0];
+}
 const spendingRequestBoundary = z.union([
   financialSpendingRequest.extend({
     transactionId: financialSpendingRequest.shape.transactionId.unwrap(),
@@ -126,7 +138,29 @@ function spendingBlocker(input: {
   const { facts, advice } = input;
   if (issuerCardFee(facts) && !input.vendorResolved)
     return "The card account needs a live issuer Vendor before booking this fee.";
-  if (!facts.purchaser && !liveHouseholdSpendingAccount(facts.account))
+  const escrow =
+    liveHouseholdLoan(facts.account) &&
+    facts.source.kind === "purchase" &&
+    facts.source.amount > 0 &&
+    !/^(payment|loan payment|mortgage payment)$/i.test(
+      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
+    ) &&
+    advice?.escrowDisbursement === true;
+  const escrowRefund =
+    liveHouseholdLoan(facts.account) &&
+    facts.source.kind === "refund" &&
+    facts.source.amount < 0 &&
+    /^(escrow refund)$/i.test(
+      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
+    );
+  if (facts.account.identity.kind === "loan" && !escrow && !escrowRefund)
+    return "Only a supported household loan escrow disbursement can book spending.";
+  if (
+    !facts.purchaser &&
+    !liveHouseholdSpendingAccount(facts.account) &&
+    !escrow &&
+    !escrowRefund
+  )
     return "A confirmed member-owned account or household card, bank or stored-value account is required before booking spending.";
   if (
     !(facts.source.transactionDate ?? facts.source.postedDate) ||
@@ -648,6 +682,7 @@ async function loadSpendingGraphBatch(
         await getDb(db).execute<{
           purchaseId: string;
           transactionId: string;
+          accountId: string;
           transactionCode: string;
           amount: number;
           kind: string;
@@ -660,7 +695,7 @@ async function loadSpendingGraphBatch(
           transaction: unknown;
           account: unknown;
           owner: unknown;
-        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+        }>(sql`SELECT a."purchaseId", a."transactionId", f."accountId", f.shortcode AS "transactionCode", (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     (${minorToDollarsSql(sql`f."amountMinor"`, "float8")}) AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
     (SELECT sum(${minorToDollarsSql(sql`coverage."amountMinor"`, "float8")}) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
@@ -1998,6 +2033,34 @@ async function prepareFinancialSpendingPreview(
   return prepareReadySpending(db, evidence, target, Boolean(chosen));
 }
 
+function loanRefundOriginalReason(
+  evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
+  target:
+    | Awaited<
+        ReturnType<typeof discoverSpendingEvidence>
+      >["liveCandidates"][number]
+    | undefined,
+  loanRefund: boolean,
+) {
+  if (!loanRefund) return null;
+  if (!target)
+    return "Identify the original loan escrow disbursement before booking this refund.";
+  const original = evidence.candidateEvidence.find(
+    (entry) => entry.id === target.id,
+  );
+  const sameAccount = original?.graph.settlements.some(
+    (settlement) =>
+      settlement.kind === "purchase" &&
+      settlement.amount > 0 &&
+      settlement.status !== "void" &&
+      settlement.deletedAt === null &&
+      settlement.accountId === evidence.facts.account.id,
+  );
+  return sameAccount
+    ? null
+    : "The original Purchase needs a live disbursement from this loan account.";
+}
+
 async function prepareReadySpending(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -2011,6 +2074,8 @@ async function prepareReadySpending(
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
   const { row, source } = facts;
+  const loanRefund =
+    liveHouseholdLoan(facts.account) && source.kind === "refund";
   // Category uncertainty must not invent a classification or prevent otherwise
   // supported spending. Missing effective categories enter the existing Work queue.
   const bookingCategory =
@@ -2029,6 +2094,8 @@ async function prepareReadySpending(
     status: "review_required",
     reason,
   });
+  const loanReason = loanRefundOriginalReason(evidence, target, loanRefund);
+  if (loanReason) return review(loanReason);
   let effect: Extract<FinancialSpendingPlan, { status: "ready" }>["effect"] =
     "create_aggregate";
   if (target) {
@@ -2097,6 +2164,7 @@ async function prepareReadySpending(
               status: source.status,
               postedDate: source.postedDate,
             },
+            advice?.escrowDisbursement === true || loanRefund,
           );
           if (checked.action !== effect)
             return review("The selected Purchase's booking capacity changed.");
@@ -2350,6 +2418,16 @@ export async function commitFinancialSpendings(
           }),
         ),
         actor,
+        new Set(
+          booking
+            .filter(
+              ({ fresh, facts }) =>
+                (fresh.request.advice?.escrowDisbursement === true ||
+                  facts.source.kind === "refund") &&
+                liveHouseholdLoan(facts.account),
+            )
+            .map(({ transactionId }) => transactionId),
+        ),
       );
       for (const [position, { index }] of booking.entries()) {
         const saved = booked[position]!;

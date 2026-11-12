@@ -97,6 +97,19 @@ export function liveHouseholdSpendingAccount(
   );
 }
 
+/** Loan escrow can spend household funds without identifying a purchaser. */
+export function liveHouseholdLoan(
+  account: Parameters<typeof liveHouseholdSpendingAccount>[0],
+): boolean {
+  return (
+    !!account &&
+    !account.deletedAt &&
+    account.identity.kind === financialAccountIdentityKind.enum.loan &&
+    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
+    !account.ledgerParty.deletedAt
+  );
+}
+
 // Loans and other liabilities hold payments, not spending.
 const householdSpendingKinds = new Set<string>([
   financialAccountIdentityKind.enum.credit_card,

@@ -118,6 +118,109 @@ describe("shared spending booking", () => {
     });
     return { owner, account, vendor, category, transaction, advice };
   }
+  it("books supported household loan escrow with no purchaser and rejects other loan spending", async () => {
+    const household = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    const account = await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic loan",
+      identity: { kind: "loan" },
+      ledgerPartyId: household.output.id,
+    });
+    const vendor = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic county",
+    });
+    const category = await createEntity(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      "spendingCategory",
+      { name: "Synthetic property tax" },
+    );
+    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 250,
+      postedDate: "2026-05-05",
+      merchant: "Synthetic county",
+      rawDescription: "COUNTY TAX PMT",
+      sourceRefs: [{ source: "synthetic-bank", externalId: "escrow-tax" }],
+    });
+    const advice = financialSpendingAdvice.parse({
+      vendorName: "Synthetic county",
+      vendorConfidence: "high",
+      counterparty: "business",
+      spendingCategoryId: category.id,
+      categoryConfidence: "high",
+    });
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status: "review_required" });
+    const payment = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 250,
+      postedDate: "2026-05-05",
+      merchant: "Synthetic lender",
+      rawDescription: "PAYMENT",
+      sourceRefs: [{ source: "synthetic-bank", externalId: "loan-payment" }],
+    });
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: payment.output.id,
+        advice: { ...advice, escrowDisbursement: true },
+      }),
+    ).toMatchObject({ status: "review_required" });
+    const plan = await previewFinancialSpending(ctx.db, {
+      transactionId: transaction.output.id,
+      advice: { ...advice, escrowDisbursement: true },
+    });
+    expect(plan).toMatchObject({
+      status: "ready",
+      purchaserId: null,
+      vendorId: vendor.output.id,
+    });
+    const booked = await commitFinancialSpending(ctx.db, plan, ctx.actor);
+    if (!booked) throw new Error("Expected escrow spending to be booked");
+    const [saved] = await getDb(ctx.db)
+      .select({ purchaserId: purchase.purchaserOverrideId })
+      .from(purchase);
+    expect(saved?.purchaserId).toBeNull();
+    const refund = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "refund",
+      status: "posted",
+      amount: -25,
+      postedDate: "2026-06-05",
+      merchant: "Synthetic county",
+      rawDescription: "ESCROW REFUND",
+      sourceRefs: [{ source: "synthetic-bank", externalId: "escrow-refund" }],
+    });
+    const refundPlan = await previewFinancialSpending(ctx.db, {
+      transactionId: refund.output.id,
+      purchaseId: booked.purchaseIds[0],
+      advice: {
+        ...advice,
+        spendingCategoryId: null,
+        categoryConfidence: "low",
+      },
+    });
+    expect(refundPlan).toMatchObject({
+      status: "ready",
+      spendingCategoryId: category.id,
+    });
+    await commitFinancialSpending(ctx.db, refundPlan, ctx.actor);
+    const lines = await getDb(ctx.db)
+      .select({ cost: expense.cost, category: expense.spendingCategoryId })
+      .from(expense)
+      .orderBy(expense.cost);
+    expect(lines.map((line) => line.cost)).toEqual([-25, 250]);
+    expect(lines[0]?.category).toBe(lines[1]?.category);
+  });
   it("books the card issuer for a generic fee on each card", async () => {
     const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic member",

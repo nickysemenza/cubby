@@ -64,12 +64,20 @@ export const foldProviderCategory = (category: string) =>
  */
 export function statementTransactionKind(input: {
   sourceCategory: string | null;
+  accountKind?: FinancialAccountIdentity["kind"];
+  rawDescription?: string | null;
   /** Cubby convention: positive is money out of the account. */
   amount: number;
 }): StatementTransactionKind {
   const direction = input.amount > 0 ? "outflow" : "inflow";
   const signKind: FinancialTransactionKind =
     direction === "outflow" ? "purchase" : "refund";
+  if (
+    direction === "inflow" &&
+    input.accountKind === "bank_account" &&
+    /\binterest\b/i.test(input.rawDescription ?? "")
+  )
+    return { kind: "interest", kindSource: "rule" };
   if (!input.sourceCategory) return { kind: signKind, kindSource: "sign" };
   const rule = CATEGORY_RULES.get(foldProviderCategory(input.sourceCategory));
   if (rule && (!rule.direction || rule.direction === direction)) {
@@ -229,14 +237,13 @@ export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
   MONEY_MOVES.has(kind);
 
 /**
- * Whether a create's kind is bulk-acceptable: at least two sources name it and
- * none disagrees, nobody says the counterparty is a person, and the model has
- * said it is a business (history must, on a stored-value account). A transfer
- * or card payment uses the transfer family's unique, same-owner opposite-leg
- * evidence instead of votes. A descriptor's account hint is insufficient.
+ * Spending needs agreeing evidence and a supported business counterparty.
+ * An undisputed non-spending rule or confident label can record a standalone
+ * transaction. A discovered pair must be clean; person-to-person rails and
+ * cross-owner movements still require their own evidence and review.
  */
 export function kindAgreed(
-  create: KindDecision,
+  create: KindDecision & Partial<StatementDescriptor>,
   /** The judgment's own-account move, stored or as listed. */
   transfer: Pick<
     NonNullable<StatementTransactionJudgment["transfer"]>,
@@ -248,15 +255,49 @@ export function kindAgreed(
   > | null = null,
 ): boolean {
   const { votes, counterparty } = create;
-  if (isMoneyMoveKind(create.kind)) return pair?.clean === true;
-  if (transfer) return false;
+  if (isMoneyMoveKind(create.kind)) {
+    if (pair) return pair.clean;
+    if (transfer?.ledgerTransfer) return false;
+    if (
+      create.rawDescription !== undefined &&
+      statementP2PRail(
+        {
+          rawDescription: create.rawDescription,
+          merchant: create.merchant ?? null,
+        },
+        counterparty,
+      )
+    )
+      return false;
+  } else if (transfer) return false;
   const cast = [votes.rule, votes.label, votes.history].filter(
     (vote) => vote !== null,
   );
-  if (cast.length < 2 || cast.some((vote) => vote !== create.kind))
-    return false;
+  if (cast.some((vote) => vote !== create.kind)) return false;
   if (counterparty.label === "person" || counterparty.history === "person")
     return false;
+  const nonSpending = [
+    "interest",
+    "income",
+    "account_transfer",
+    "credit_card_payment",
+    "adjustment",
+  ].includes(create.kind);
+  if (
+    nonSpending &&
+    (votes.rule === create.kind || votes.label === create.kind) &&
+    (counterparty.label === "business" || Boolean(transfer)) &&
+    create.rawDescription !== undefined &&
+    !statementP2PRail(
+      {
+        rawDescription: create.rawDescription,
+        merchant: create.merchant ?? null,
+      },
+      counterparty,
+    )
+  )
+    return true;
+  if (cast.length < 2) return false;
   if (counterparty.storedValue) return counterparty.history === "business";
   return counterparty.label === "business";
 }

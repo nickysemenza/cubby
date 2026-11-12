@@ -10,6 +10,16 @@ import {
 } from "./statement-transaction-kind";
 
 describe("statementTransactionKind", () => {
+  it("recognizes earned bank interest filed under a generic income category", () => {
+    expect(
+      statementTransactionKind({
+        sourceCategory: "Other Income",
+        amount: -8,
+        accountKind: "bank_account",
+        rawDescription: "INTEREST PAYMENT",
+      }),
+    ).toEqual({ kind: "interest", kindSource: "rule" });
+  });
   it("recognizes the loan payment entry without treating escrow tax as a payment", () => {
     expect(
       isLoanPayment(
@@ -206,7 +216,7 @@ describe("decideStatementKind and kindAgreed", () => {
       kind: "credit_card_payment",
       kindSource: "model",
     });
-    expect(kindAgreed(create, null)).toBe(false);
+    expect(kindAgreed(create, null)).toBe(true);
     expect(kindAgreed(create, { ledgerTransfer: true })).toBe(false);
   });
 
