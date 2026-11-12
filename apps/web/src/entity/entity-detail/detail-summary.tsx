@@ -102,7 +102,7 @@ function summarySlotFields(
 /**
  * The fields the full page's header and side column draw: the declared lines,
  * AI summary and needs, the state badge's fields, the kind tag and the
- * header's `hero.when` date.
+ * header's `hero` chip and date.
  */
 function headerPlacedFields(
   queryClient: QueryClient,
@@ -118,6 +118,7 @@ function headerPlacedFields(
       detail.aiSummary,
       detail.side?.needs,
       detail.hero.when?.field,
+      detail.hero.chip,
       state?.field,
       state?.reason,
       state?.wait,
@@ -198,10 +199,31 @@ export function detailSectionFields<E extends GenericDetailEntity>(
   );
 }
 
+/** The field a `relation:<key>` view follows directly (`Task.projectId`), if any. */
+function referenceFieldOf(
+  queryClient: QueryClient,
+  entity: GenericDetailEntity,
+  viewKey: string,
+): string | undefined {
+  if (!viewKey.startsWith("relation:")) return undefined;
+  const relationship = entityMetadata(
+    queryClient,
+    entity,
+  ).descriptor.relationships.find(
+    (candidate) => candidate.key === viewKey.slice("relation:".length),
+  );
+  const provenance = relationship?.provenance;
+  if (provenance?.kind !== "local-path" || provenance.steps.length !== 1)
+    return undefined;
+  const [step] = provenance.steps;
+  return step?.direction === "outgoing" ? step.edge.split(".")[1] : undefined;
+}
+
 /**
  * Whether a side-column report or records cell repeats a section the page
- * draws: a report slot named `<entity>.<section id>`, or a records cell over a
- * relation a section lists. The section keeps the whole content.
+ * draws: a report slot named `<entity>.<section id>`, a records cell over a
+ * relation a section lists, or one over a reference field a fields section
+ * shows. The section keeps the whole content.
  */
 function repeatsSection<E extends GenericDetailEntity>(
   queryClient: QueryClient,
@@ -211,15 +233,20 @@ function repeatsSection<E extends GenericDetailEntity>(
 ): boolean {
   if (slot.kind !== "report" && slot.kind !== "records") return false;
   const slots = detailSlotsFor(entity);
+  const relationField =
+    slot.kind === "records"
+      ? referenceFieldOf(queryClient, entity, slot.viewKey)
+      : undefined;
   const sections: CompiledEntityPresentation["detail"]["sections"] =
     entityMetadata(queryClient, entity).summary.detail.sections;
   return sections.some((section) => {
     if (!onDetailSurface(section, "web")) return false;
     if (slot.kind === "records")
-      return (
-        section.kind === "relation" &&
-        slot.viewKey === `relation:${section.relation}`
-      );
+      return section.kind === "relation"
+        ? slot.viewKey === `relation:${section.relation}`
+        : section.kind === "fields" &&
+            relationField !== undefined &&
+            section.fields.includes(relationField);
     if (section.kind !== "slot" || slot.slot !== `${entity}.${section.id}`)
       return false;
     const fill = slots?.[section.id];

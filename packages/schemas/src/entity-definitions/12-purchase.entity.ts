@@ -159,6 +159,7 @@ export const { definition, readSchemas } = defineEntityModel({
           title: "Products",
           relation: "products",
           filter: { descriptor: "related:product.purchases" },
+          columns: ["name", "brandId", "categoryId", "expenseTotal"],
         },
         {
           kind: "slot",
