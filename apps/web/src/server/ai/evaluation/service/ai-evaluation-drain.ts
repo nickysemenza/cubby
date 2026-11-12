@@ -79,7 +79,11 @@ export type AiEvaluationExecution = {
   pauseRun(db: Database, runId: string, message: string): Promise<void>;
   runPaused(db: Database, runId: string): Promise<boolean>;
   /** The page runs once its funding window opened: resume Runs a budget stop paused. */
-  resumeFundingStopped(db: Database, runIds: readonly string[]): Promise<void>;
+  resumeFundingStopped(
+    db: Database,
+    runIds: readonly string[],
+  ): Promise<void> /** Scope around one page's items, so they share read-only preparation. */;
+  withPage?<T>(work: () => Promise<T>): Promise<T>;
 };
 
 /** Items per Job page; the rest stay owed and rejoin fair selection after this page's checkpoint. */
@@ -184,41 +188,46 @@ async function prepareItems(
   entries: Map<string, Entry>,
 ) {
   const limiter = createConcurrencyLimiter(ITEM_CONCURRENCY);
-  await Promise.allSettled(
-    runnable.map((target) =>
-      limiter.run(async () => {
-        try {
-          const claimed = await claimAiEvaluation(context, target.item);
-          if (!claimed) {
-            entries.set(target.item.ref, { kind: "skip" });
-            return;
+  const page = execution.withPage ?? ((work) => work());
+  await page(() =>
+    Promise.allSettled(
+      runnable.map((target) =>
+        limiter.run(async () => {
+          try {
+            const claimed = await claimAiEvaluation(context, target.item);
+            if (!claimed) {
+              entries.set(target.item.ref, { kind: "skip" });
+              return;
+            }
+            await execution.execute(db, claimed, {
+              ...context,
+              // Every effect of this item commits only while its own row is held.
+              // The cause interrupts the item's workflow; the item itself skips.
+              fence: async (tx) => {
+                if (
+                  !(await aiEvaluationAttemptHeld(
+                    tx,
+                    claimed.id,
+                    context.attemptToken,
+                  ))
+                )
+                  throw new AiEvaluationAttemptObsoleteError({
+                    cause: new JobSupersededError(),
+                  });
+              },
+            });
+            const [settled] = await readAiEvaluations(db, [claimed.id]);
+            // A re-marked item keeps its newer ticket, so this never clears it.
+            if (settled && PENDING_AI_STATES.includes(settled.state))
+              throw new Error(
+                "AI evaluation returned without a durable outcome",
+              );
+            entries.set(target.item.ref, { kind: "settled" });
+          } catch (error) {
+            await settle(target, error);
           }
-          await execution.execute(db, claimed, {
-            ...context,
-            // Every effect of this item commits only while its own row is held.
-            // The cause interrupts the item's workflow; the item itself skips.
-            fence: async (tx) => {
-              if (
-                !(await aiEvaluationAttemptHeld(
-                  tx,
-                  claimed.id,
-                  context.attemptToken,
-                ))
-              )
-                throw new AiEvaluationAttemptObsoleteError({
-                  cause: new JobSupersededError(),
-                });
-            },
-          });
-          const [settled] = await readAiEvaluations(db, [claimed.id]);
-          // A re-marked item keeps its newer ticket, so this never clears it.
-          if (settled && PENDING_AI_STATES.includes(settled.state))
-            throw new Error("AI evaluation returned without a durable outcome");
-          entries.set(target.item.ref, { kind: "settled" });
-        } catch (error) {
-          await settle(target, error);
-        }
-      }, context.signal),
+        }, context.signal),
+      ),
     ),
   );
   if (context.signal.aborted) throw context.signal.reason;

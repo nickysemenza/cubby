@@ -125,6 +125,9 @@ export async function guardAiEvaluation(
   // A caller that later locks the Run itself must hold it exclusively here:
   // two shared holders that both upgrade deadlock.
   runLock: "share" | "no key update" = "share",
+  // Runs the caller also needs, locked in the same sorted statement so every
+  // writer takes its Runs in one total order. They never authorize the item.
+  callerRunIds: readonly (typeof run.$inferSelect.id)[] = [],
 ) {
   await (
     await import("~/server/workflows/runs/execution")
@@ -142,23 +145,28 @@ export async function guardAiEvaluation(
   // requester may stop while another live requester still wants publication.
   // A share lock still blocks that stop, but lets sibling items of one Run
   // publish concurrently instead of queueing behind each other's transaction.
-  const owners = await getDb(tx)
+  const requesters = !read.runId
+    ? sql`false`
+    : read.executionKind === "ai_refresh"
+      ? eq(run.id, read.runId)
+      : liveAiRequestRunIds(read.runId, id);
+  const locked = await getDb(tx)
     .select({
       id: run.id,
       status: run.status,
       deletedAt: run.deletedAt,
       retiredAt: run.retiredAt,
+      requester: sql<boolean>`(${requesters})`.mapWith(Boolean),
     })
     .from(run)
     .where(
-      !read.runId
-        ? sql`false`
-        : read.executionKind === "ai_refresh"
-          ? eq(run.id, read.runId)
-          : liveAiRequestRunIds(read.runId, id),
+      callerRunIds.length
+        ? or(requesters, inArray(run.id, [...callerRunIds]))
+        : requesters,
     )
     .orderBy(run.id)
     .for(runLock);
+  const owners = locked.filter((entry) => entry.requester);
   const [row] = await getDb(tx)
     .select()
     .from(aiEvaluation)

@@ -132,10 +132,12 @@ A classifier-version refresh defers Emails already assigned to a frozen import
 Run, including ambiguous historical assignments, before fetching from Gmail.
 Their status, Run assignment, checksum, retained content and historical prediction
 metadata survive unchanged; the refresh emits no model work or admission.
-Provider and model calls finish before publication. Publication locks the owner,
-captured Runs and Email in that order, then rechecks the captured routing state.
-A concurrent import admission or member correction wins, including a correction
-that keeps the same message checksum; the stale classifier publishes no content,
+Provider and model calls finish before publication. Publication locks the owner
+shared, then its requester and captured Runs in one sorted statement, then the
+Email, and rechecks the captured routing state. Unrelated Emails publish
+concurrently; admission, correction and member removal lock the owner
+exclusively. A concurrent import admission or member correction wins,
+including a correction that keeps the same message checksum; the stale classifier publishes no content,
 disposition or candidate preview. Explicit correction uses the same owner-first
 lock order. Ordinary durable ingestion keeps its existing attachment policy;
 the bounded transient-read and correction limits do not apply to that path.

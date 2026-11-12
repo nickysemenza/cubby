@@ -117,6 +117,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { mailReadContent } from "./gmail/read-content";
 import {
   readEmailMailKeys,
+  readEmailMailKeysForMails,
   readMailRuleCandidates,
 } from "./mail-rule-evidence";
 import {
@@ -397,7 +398,14 @@ const memberStoppedHolder = sql`coalesce(${run.failureCode}, '') IN (${sql.join(
   sql`, `,
 )})`;
 
-const outcomeFreeAttempt = (sourceChanged: boolean, newEvidenceAt?: Date) =>
+/** A page passes its per-row instant as SQL; admission passes a Date. */
+const evidenceInstant = (at: Date | SQL) =>
+  at instanceof Date ? sql`${at.toISOString()}::timestamp` : at;
+
+const outcomeFreeAttempt = (
+  sourceChanged: boolean,
+  newEvidenceAt?: Date | SQL,
+) =>
   sql`(${run.endedAt} IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "RunOperation" outcome
     WHERE outcome."runId" = ${run.id} AND outcome.kind = ${"target_outcome"}
@@ -405,9 +413,12 @@ const outcomeFreeAttempt = (sourceChanged: boolean, newEvidenceAt?: Date) =>
   AND EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(${run.input}->'sources', '[]'::jsonb)) frozen
     WHERE frozen->>'orderMailId' = ${emailTable.orderMailId}::text
       AND frozen->>'checksum' ${sourceChanged ? sql`<>` : sql`=`} ${emailTable.checksum})
-  AND ${newEvidenceAt ? sql`${run.endedAt} < ${newEvidenceAt.toISOString()}::timestamp` : sql`true`})`;
+  AND ${newEvidenceAt ? sql`${run.endedAt} < ${evidenceInstant(newEvidenceAt)}` : sql`true`})`;
 
-const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
+const unresolvedOutcome = (
+  sourceChanged: boolean,
+  newEvidenceAt?: Date | SQL,
+) =>
   sql`EXISTS (
   SELECT 1 FROM "RunOperation" outcome
   WHERE outcome."runId" = ${run.id}
@@ -428,7 +439,7 @@ const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
       WHERE newer."runId" = outcome."runId" AND newer.kind = outcome.kind
         AND newer.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
         AND newer."completedAt" > outcome."completedAt")
-    AND ${newEvidenceAt ? sql`outcome."completedAt" < ${newEvidenceAt.toISOString()}::timestamp` : sql`true`}
+    AND ${newEvidenceAt ? sql`outcome."completedAt" < ${evidenceInstant(newEvidenceAt)}` : sql`true`}
 )`;
 
 /**
@@ -441,7 +452,7 @@ const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
  */
 const untouchedAutomaticUnresolved = (
   sourceChanged = false,
-  newEvidenceAt?: Date,
+  newEvidenceAt?: Date | SQL,
   /** Evidence recovery's page defers the member-stop check to admission. */
   memberStop = true,
 ) => sql`(${unresolvedOutcome(sourceChanged, newEvidenceAt)} OR ${outcomeFreeAttempt(sourceChanged, newEvidenceAt)}) AND ${
@@ -450,7 +461,7 @@ const untouchedAutomaticUnresolved = (
         sourceChanged
           ? sql`true`
           : newEvidenceAt
-            ? sql`${run.endedAt} < ${newEvidenceAt.toISOString()}::timestamp`
+            ? sql`${run.endedAt} < ${evidenceInstant(newEvidenceAt)}`
             : sql`false`
       })`
     : sql`true`
@@ -1055,6 +1066,9 @@ const newestHolderOutcome = sql`SELECT o.result, o."completedAt" FROM "RunOperat
         AND newer."completedAt" > o."completedAt")
   ORDER BY o."completedAt" DESC, o.id DESC LIMIT 1`;
 
+/** `sha256Hex(JSON.stringify(["waiting-on", outcomeId]))`, admission's waitRecheck revision. */
+const waitRecheckRevisionSql = sql`encode(sha256(convert_to('["waiting-on",' || to_json(newest.result #>> '{mailOutcome,id}')::text || ']', 'UTF8')), 'hex')`;
+
 /**
  * When the source an unresolved outcome waits on last settled: a live,
  * owner-eligible Purchase holding the awaited order (at the awaited Vendor
@@ -1289,6 +1303,10 @@ export async function importPendingEmails(db: Database) {
           notDeleted(emailTable),
           retainedEmailImportContentCondition(),
           sql`settled.at > newest."completedAt"`,
+          // Admission's own eligibility: without it, a row admission refuses
+          // is re-admitted on every discovery pass.
+          untouchedAutomaticUnresolved(false, sql`settled.at`),
+          unattemptedSenderMapping(waitRecheckRevisionSql),
         ),
       )
       .orderBy(asc(emailTable.createdAt), asc(emailTable.id))
@@ -1392,9 +1410,15 @@ export async function importPendingEmails(db: Database) {
           ),
         )
         .innerJoin(run, eq(run.id, emailTable.runId))
+        // Normalize each sender once. As a join filter it ran for every
+        // Email × identity pair.
+        .innerJoin(
+          sql`LATERAL (SELECT lower(trim(coalesce(substring(${emailTable.sender} from '<([^>]+)>'), ${emailTable.sender}))) AS sender OFFSET 0) email_sender`,
+          sql`true`,
+        )
         .innerJoin(
           sql`jsonb_to_recordset(${JSON.stringify(recheckIdentities)}::jsonb) AS sender_identity(sender text, "vendorId" text, revision text)`,
-          sql`lower(trim(coalesce(substring(${emailTable.sender} from '<([^>]+)>'), ${emailTable.sender}))) = sender_identity.sender`,
+          sql`email_sender.sender = sender_identity.sender`,
         )
         .where(
           and(
@@ -1431,15 +1455,15 @@ export async function importPendingEmails(db: Database) {
         ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
         orderMailIds: page.map((row) => row.id),
       });
-      const identifiers = new Map<string, string[]>();
-      for (const original of originals) {
+      const complete = originals.filter((original) => {
         const content = mailReadContent(original.content, {});
-        if (!content.truncated && content.nextByteOffset === null)
-          identifiers.set(
-            original.id,
-            (await readEmailMailKeys(db, original)).orderKeys,
-          );
-      }
+        return !content.truncated && content.nextByteOffset === null;
+      });
+      const identifiers = new Map(
+        [...(await readEmailMailKeysForMails(db, complete))].map(
+          ([id, keys]) => [id, keys.orderKeys],
+        ),
+      );
       const imported = await importedPurchaseRechecks(
         db,
         target.ledgerPartyId,

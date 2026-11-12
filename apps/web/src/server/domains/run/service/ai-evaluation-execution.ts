@@ -6,6 +6,7 @@ import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-ev
  * each requester Run's workflow context, and requester authority (pause,
  * status, funding resume). The drain itself lives in `ai/evaluation`.
  */
+import { withFieldSuggestionPreparation } from "~/server/ai/field-suggest/registry";
 import { resumeFundingStoppedRuns } from "~/server/ai/funding-wait";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
@@ -36,6 +37,9 @@ export const runAiEvaluationExecution = (
   },
   runPaused: async (db, runId) =>
     (await readRunStatus(db, runEntityId.parse(runId))) === "paused",
+  // Field items of one page share their reference rosters; each project roster
+  // read aggregates every project's allocations.
+  withPage: withFieldSuggestionPreparation,
   resumeFundingStopped: async (db, runIds) => {
     await resumeFundingStoppedRuns(
       db,
