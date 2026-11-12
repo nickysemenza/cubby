@@ -24,8 +24,8 @@ export type ColumnKind =
  */
 const COLUMN_KIND_WIDTHS = {
   text: [220, 104],
-  progress: [200, 140],
-  state: [200, 136],
+  progress: [200, 160],
+  state: [200, 188],
   activity: [56, 48],
   date: [88, 64],
   money: [88, 72],
