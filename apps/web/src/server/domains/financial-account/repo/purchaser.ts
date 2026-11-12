@@ -105,7 +105,7 @@ const householdSpendingKinds = new Set<string>([
 ]);
 
 /** Household-card authority does not identify an individual purchaser. */
-export function liveHouseholdCard(
+function liveHouseholdCard(
   account: typeof financialAccount.$inferSelect & {
     ledgerParty: typeof ledgerParty.$inferSelect | null;
   },
