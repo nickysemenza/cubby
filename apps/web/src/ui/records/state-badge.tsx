@@ -181,7 +181,9 @@ export function StateBadge({
   return (
     <span
       data-state-role={role}
-      className="grid min-w-0 gap-0.5"
+      // Bounded by the cell, not its inline wrappers: a narrow column clipped
+      // the reason mid-word instead of ending it in an ellipsis.
+      className="grid max-w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5"
       title={trailing ? `${label} · ${trailing}` : label}
     >
       <span className="flex min-w-0 items-center gap-1.5">

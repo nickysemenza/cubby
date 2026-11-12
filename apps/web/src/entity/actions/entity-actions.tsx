@@ -849,7 +849,8 @@ export function EntityActionButtons({
   surface?: "detail" | "inspector";
   /**
    * The declared `detail.quickActions`: each available one renders as a
-   * leading primary button, ahead of the primary verb and the overflow.
+   * leading button (the first primary, the rest secondary), ahead of the
+   * primary verb and the overflow.
    */
   quickVerbs?: readonly string[];
   /**
@@ -890,11 +891,13 @@ export function EntityActionButtons({
 
   return (
     <>
-      {quick.map(({ action }) => (
+      {/* The first available quick verb is the page's primary command; the
+          rest sit beside it as secondary buttons. */}
+      {quick.map(({ action }, index) => (
         <VerbButton
           key={action.id}
           verb={action.verb}
-          variant="default"
+          variant={index === 0 ? "default" : "outline"}
           onClick={() => action.run(record)}
         />
       ))}

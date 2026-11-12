@@ -358,6 +358,8 @@ export const nativeCoverage = {
     // selection-wide edit has no row to anchor to on a detail screen.
     // Native uses one Fetch or refresh logo operation for both states.
     ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo"]),
+    // Run control verbs: the native `run.import-controls` slot draws them.
+    ...ownedElsewhere(["pause", "resume", "retry", "restart"]),
   },
   /**
    * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`

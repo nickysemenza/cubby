@@ -100,6 +100,15 @@ const lifecycles = {
 } satisfies Record<AgentImportRunPurpose, () => Promise<RunPurposeLifecycle>>;
 
 /** The owning domain's lifecycle, or null for a purpose without a coordinator. */
+/** Target states a retry carries to its successor. */
+export const UNRESOLVED_TARGET_STATES: ReadonlySet<string> = new Set([
+  "pending",
+  "prepared",
+  "unresolved",
+  "needs_evidence",
+  "unavailable",
+]);
+
 export async function runPurposeLifecycle(
   purpose: RunPurpose | string,
 ): Promise<RunPurposeLifecycle | null> {

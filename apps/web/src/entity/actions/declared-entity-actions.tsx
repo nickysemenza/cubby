@@ -243,7 +243,7 @@ const runControlAction = (verb: RunControlVerb, priority: number) =>
     verb,
     entities: ["run"],
     arity: "both",
-    surfaces: ["row", "selection", "inspector"],
+    surfaces: ["row", "selection", "inspector", "detail"],
     group: "primary",
     priority,
     use: () => useRunControlAction(verb),

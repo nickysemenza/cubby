@@ -206,7 +206,10 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       hero: {
         breadcrumb: "vendorAccountId",
+        // `run.control` verbs; the read's `actionReasons` says which apply.
+        extraActions: ["retry", "resume", "restart", "pause"],
       },
+      quickActions: ["retry", "resume", "restart", "pause"],
       sections: [
         // What the run did, newest state first.
         {

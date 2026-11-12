@@ -191,8 +191,10 @@ export function ProgressMeter({
     <span
       data-progress-meter=""
       title={title}
+      // Bounded by the cell, not its inline wrappers, so a narrow column ends
+      // the note, then the count, in an ellipsis instead of clipping.
       className={cn(
-        "flex min-w-0",
+        "flex max-w-full min-w-0",
         variant === "row"
           ? "items-center gap-2"
           : "flex-col items-stretch gap-1.25",

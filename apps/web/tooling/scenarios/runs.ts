@@ -355,7 +355,12 @@ export async function seedRunPatterns(context: KernelContext): Promise<void> {
     cause: "member_request",
     status: "paused",
     startedMinutesAgo: 50,
-    work: { label: "Paused", unit: "products", processed: 40, total: 120 },
+    work: {
+      label: "Checking products",
+      unit: "products",
+      processed: 40,
+      total: 120,
+    },
   });
   await seed({
     purpose: "mail_import",

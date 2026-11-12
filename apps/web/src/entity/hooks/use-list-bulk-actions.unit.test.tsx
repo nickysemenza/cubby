@@ -125,9 +125,9 @@ describe("useListBulkActions", () => {
     expect(resolve).toHaveBeenCalledWith(["PRJ-SYNTHETIC"]);
   });
   it("offers Copy codes on a shortcode entity with no other actions", () => {
-    // Read-only Runs isolate Copy codes from the mutable entity actions.
+    // Read-only Image jobs isolate Copy codes from the mutable entity actions.
     const { result } = renderHook(
-      () => useListBulkActions<TestRow>({ entity: "run" }),
+      () => useListBulkActions<TestRow>({ entity: "imageJob" }),
       { wrapper },
     );
 

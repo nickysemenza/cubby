@@ -41,7 +41,7 @@ export function RecordWorkQueueRow({ row }: { row: WorkQueueRow }) {
       </div>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <WorkActions actions={row.actions} target={{ scope: "item", row }} />
-        <OwnerPill {...row} />
+        <OwnerPill owners={row.owners} shared={row.shared} />
       </div>
     </div>
   );
@@ -82,7 +82,7 @@ export function RecordWorkQueue({ id }: { id: string }) {
               />
             </LedgerCell>
             <LedgerCell as="div" slot="trailing">
-              <OwnerPill {...row} />
+              <OwnerPill owners={row.owners} shared={row.shared} />
             </LedgerCell>
           </LedgerRow>
         ))}

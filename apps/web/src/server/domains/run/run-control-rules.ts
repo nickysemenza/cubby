@@ -17,6 +17,11 @@ type RunControlRow = {
   failureCode: string | null;
   /** A live retry or restart successor names this Run. */
   hasSuccessor: boolean;
+  /**
+   * Targets a retry would carry, when the read loaded them; control counts
+   * them again inside its transaction.
+   */
+  unresolvedTargets?: number;
 };
 
 /**
@@ -38,7 +43,12 @@ const AGENT_FINISHED = new Set([
   "needs_review",
   "dispatch_failed",
 ]);
-const AGENT_RETRYABLE = new Set(["needs_review", "completed", "failed"]);
+/** Statuses an agent import retries from. */
+export const AGENT_RETRYABLE: ReadonlySet<string> = new Set([
+  "needs_review",
+  "completed",
+  "failed",
+]);
 const AGENT_RESUMABLE = new Set(["paused", "paused_auth", "paused_offline"]);
 
 /** Why `run.control` refuses `verb` on this Run, or null when it proceeds. */
@@ -81,9 +91,11 @@ export function runControlRefusal(
       if (!AGENT_RETRYABLE.has(row.status))
         return `Purchase import run is not terminal in ${row.status}`;
       // A retried Run answers with its existing successor.
-      return coordinated || row.hasSuccessor
-        ? null
-        : "Only agent import runs can be retried";
+      if (row.hasSuccessor) return null;
+      if (!coordinated) return "Only agent import runs can be retried";
+      return row.unresolvedTargets === 0
+        ? "This Run has no unresolved targets to retry"
+        : null;
     case "restart":
       if (!AGENT_FINISHED.has(row.status))
         return `Only a finished run can be started again (${row.status})`;

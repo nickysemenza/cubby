@@ -1,6 +1,6 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
 import { runRawOut as rawRunOut } from "@cubby/schemas/entity-contracts/run";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor, runEntityId } from "@cubby/schemas/identifiers";
 import {
   mailResearchRunInput,
   runDisplayStatus,
@@ -49,7 +49,7 @@ import {
 } from "~/server/generic/list/repo/list-projection";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { runActionReasons } from "../run-control-rules";
+import { AGENT_RETRYABLE, runActionReasons } from "../run-control-rules";
 import {
   runOpenItems,
   runOutcomeLine,
@@ -60,6 +60,10 @@ import {
   runWhyLine,
   type RunPhraseContext,
 } from "../run-phrases";
+import {
+  runPurposeLifecycle,
+  UNRESOLVED_TARGET_STATES,
+} from "./purpose-lifecycle";
 import { listRunStepsForRuns } from "./run-step";
 import {
   emptyMailRunOutcomeCounts,
@@ -186,8 +190,33 @@ const runRead = {
       for (const entry of successors)
         if (entry.predecessorRunId && !successorOf.has(entry.predecessorRunId))
           successorOf.set(entry.predecessorRunId, entry.shortcode);
+      // Retry carries only unresolved targets; a row offers it only when
+      // there are some, so the action is disabled rather than refused.
+      const unresolvedOf = new Map<string, number>();
+      await Promise.all(
+        rows
+          .filter(
+            (row) =>
+              AGENT_RETRYABLE.has(row.status) && !successorOf.has(row.id),
+          )
+          .map(async (row) => {
+            const lifecycle = await runPurposeLifecycle(row.purpose);
+            if (!lifecycle) return;
+            const targets = await lifecycle.targets(
+              unwrapDb(db),
+              runEntityId.parse(row.id),
+            );
+            unresolvedOf.set(
+              row.id,
+              targets.filter((target) =>
+                UNRESOLVED_TARGET_STATES.has(target.state),
+              ).length,
+            );
+          }),
+      );
       return {
         successorOf,
+        unresolvedOf,
         rollupOf: new Map(rollups.map((rollup) => [rollup.runId, rollup])),
       };
     });
@@ -399,7 +428,7 @@ const runRead = {
           stalled: true,
           actionReasons: true,
         }),
-        (row, { successorOf, rollupOf }) => {
+        (row, { successorOf, unresolvedOf, rollupOf }) => {
           const successor = successorOf.get(row.id) ?? null;
           const rollup = rollupOf.get(parseShortcodeFor("run", row.shortcode));
           return {
@@ -411,6 +440,7 @@ const runRead = {
             actionReasons: runActionReasons({
               ...row,
               hasSuccessor: successor !== null,
+              unresolvedTargets: unresolvedOf.get(row.id),
             }),
           };
         },

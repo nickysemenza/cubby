@@ -79,6 +79,10 @@ export function FactsDensityProvider({
   return <FactsDensityContext value={density}>{children}</FactsDensityContext>;
 }
 
+/** Whether values sit in a compact fact list (a side column, an inspector). */
+export const useCompactFacts = () =>
+  useContext(FactsDensityContext) === "compact";
+
 const FactsAddContext = createContext<(() => void) | null>(null);
 
 /**

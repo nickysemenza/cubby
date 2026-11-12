@@ -56,7 +56,10 @@ import {
   loadRunControlScopeByShortcode,
 } from "~/server/domains/run/repo/control-scope";
 import { dispatchStartedRun } from "~/server/domains/run/repo/coordinator-dispatch";
-import { runPurposeLifecycle } from "~/server/domains/run/repo/purpose-lifecycle";
+import {
+  runPurposeLifecycle,
+  UNRESOLVED_TARGET_STATES,
+} from "~/server/domains/run/repo/purpose-lifecycle";
 import {
   readRunPurpose,
   runPurposePolicy,
@@ -502,14 +505,6 @@ export async function recordRunControlEvent(
   if (!event) throw new Error("Import run control event was not recorded");
   return event;
 }
-
-const UNRESOLVED_TARGET_STATES: ReadonlySet<string> = new Set([
-  "pending",
-  "prepared",
-  "unresolved",
-  "needs_evidence",
-  "unavailable",
-]);
 
 export async function controlRun(
   db: Database,

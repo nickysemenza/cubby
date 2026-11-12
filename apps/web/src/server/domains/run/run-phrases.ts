@@ -286,7 +286,7 @@ const joined = (parts: readonly (string | null | false)[]) =>
 
 /**
  * What the Run changed, from its recorded counts and end state: "2 imported ·
- * 1 needs you · failed". While it runs the last phrase says "so far".
+ * 1 needs you before it failed". While it runs the last phrase says "so far".
  */
 export function runOutcomeLine(
   row: RunPhraseRow,
@@ -339,7 +339,10 @@ export function runOutcomeLine(
       failures > 0 && `${failures.toLocaleString("en-US")} failed`,
     ]);
   }
-  if (FAILED.has(row.status)) return joined([counts, "failed"]);
+  if (FAILED.has(row.status))
+    return counts
+      ? `${counts} before it failed`
+      : "Nothing changed before it failed";
   if (!counts) return ended ? "Nothing changed" : "Nothing changed yet";
   return ended ? counts : `${counts} so far`;
 }

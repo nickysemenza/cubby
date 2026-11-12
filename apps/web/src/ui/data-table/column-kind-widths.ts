@@ -16,23 +16,30 @@ export type ColumnKind =
 
 /**
  * Widths belong to the column kind, never the entity: `[full, narrow]` px.
- * State and progress keep their content (`CONTENT_KINDS`): they start at
- * their kind's width and a measured value may grow to the rendered-fit cap,
- * so a reason or a progress label does not truncate while a lower-priority
- * column could leave instead.
+ * State and progress (`CONTENT_KINDS`) always take their kind's width and fit
+ * their content up to it; a longer reason or progress note ends in an
+ * ellipsis. Dates, ages and money fit their content (`NATURAL_KINDS`): the
+ * kind width is where they start, never a cap. The record identity takes
+ * whatever the pane leaves (`column-layout.ts`).
  */
 const COLUMN_KIND_WIDTHS = {
   text: [220, 104],
-  progress: [240, 140],
-  state: [240, 136],
-  activity: [72, 64],
+  progress: [200, 140],
+  state: [200, 136],
+  activity: [56, 48],
   date: [88, 64],
   money: [88, 72],
 } as const satisfies Record<ColumnKind, readonly [number, number]>;
 
 const CONTENT_KINDS: ReadonlySet<ColumnKind> = new Set(["progress", "state"]);
+const NATURAL_KINDS: ReadonlySet<ColumnKind> = new Set([
+  "activity",
+  "date",
+  "money",
+]);
 
 type KindedMeta = {
+  entityColumnRole?: string;
   widthKind?: ColumnKind;
   prose?: boolean;
   code?: boolean;
@@ -45,6 +52,8 @@ type KindedMeta = {
  * its own fit and pane slack (`column-layout.ts`).
  */
 export function columnKindOf(meta: KindedMeta | undefined): ColumnKind | null {
+  // A narrow text cap held a 120px title at 104px on a 912px pane.
+  if (meta?.entityColumnRole === "identity") return null;
   if (meta?.widthKind) return meta.widthKind;
   const kind = meta?.cellData?.kind;
   if (kind === "timestamp") return "activity";
@@ -58,15 +67,11 @@ export function columnKindOf(meta: KindedMeta | undefined): ColumnKind | null {
 /** A kinded column's starting width, and the most a measured value may claim. */
 export function columnKindWidth(kind: ColumnKind, narrow: boolean) {
   const [full, small] = COLUMN_KIND_WIDTHS[kind];
+  const size = narrow ? small : full;
   return {
-    size: narrow ? small : full,
-    // Narrow text truncates at its narrow width; a longer date, amount or
-    // age may still reach the full width rather than clip.
-    fitMax: CONTENT_KINDS.has(kind)
-      ? CONTENT_FIT_MAX
-      : narrow && kind === "text"
-        ? small
-        : full,
+    size,
+    // A date or amount clipped to "1w agc" says less than a wider column.
+    fitMax: NATURAL_KINDS.has(kind) ? Number.POSITIVE_INFINITY : size,
   };
 }
 
@@ -77,9 +82,6 @@ export function columnKindWidth(kind: ColumnKind, narrow: boolean) {
  */
 export const columnUsesKindWidth = (kind: ColumnKind, narrow: boolean) =>
   narrow || CONTENT_KINDS.has(kind);
-
-/** The most a state reason or progress label claims before it truncates. */
-const CONTENT_FIT_MAX = 320;
 
 /** Whether a pane is narrow; an unmeasured pane (0) draws full widths. */
 export const isNarrowTable = (availableWidth: number) =>

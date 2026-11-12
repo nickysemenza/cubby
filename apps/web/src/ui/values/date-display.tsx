@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import { useId, useState } from "react";
+import { useContext, useId, useState } from "react";
 
 import {
   formatCompactRelative,
@@ -15,7 +15,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
-import { StackedValue, useDenseCell } from "~/ui/values/stacked-value";
+import { useCompactFacts } from "~/ui/records/facts";
+import {
+  DenseCellContext,
+  StackedValue,
+  useDenseCell,
+} from "~/ui/values/stacked-value";
 
 type DateDisplayProps = {
   className?: string;
@@ -84,6 +89,10 @@ export function DateDisplay(props: DateDisplayProps) {
   const now = useDisplayNow() ?? Date.now();
   const today = householdLocalDate(new Date(now));
   const stacked = useDenseCell(props.stacked);
+  const inCell = useContext(DenseCellContext) !== null;
+  // A compact fact list is narrow: an instant reads "Nov 11, 4:25 PM" on one
+  // line, its distance in the tooltip.
+  const compactFact = useCompactFacts();
   const tooltipId = useId();
   const [open, setOpen] = useState(false);
 
@@ -94,12 +103,16 @@ export function DateDisplay(props: DateDisplayProps) {
       : { primary: full.label, secondary: full.relative };
     const last = props.end ?? props.start;
     const overdue = props.due === true && last !== null && last < today;
+    // A compact fact keeps the day on one line; its distance stays in the
+    // title unless the date is overdue.
     const parts = overdue
       ? {
           ...span,
           secondary: span.secondary && overdueDistance(span.secondary),
         }
-      : span;
+      : compactFact && !stacked
+        ? { ...span, secondary: null }
+        : span;
     const relative =
       overdue && full.relative ? overdueDistance(full.relative) : full.relative;
     return (
@@ -119,8 +132,37 @@ export function DateDisplay(props: DateDisplayProps) {
   const relative = stacked
     ? formatCompactRelative(date, now)
     : formatRelative(date, now);
+  // A list cell's instant is its age alone ("15h", "now"); the day and exact
+  // time stay in the tooltip and accessible name.
+  if (stacked && inCell && !props.clock)
+    return (
+      <Tooltip open={open} onOpenChange={setOpen}>
+        <TooltipTrigger
+          render={
+            <button type="button" aria-label={formatTimestamp(date, now)} />
+          }
+          aria-describedby={open ? tooltipId : undefined}
+          className={cn(
+            "block max-w-full min-w-0 cursor-default truncate text-left tabular-nums",
+            props.className,
+          )}
+        >
+          <time dateTime={date.toISOString()} suppressHydrationWarning>
+            {relative.replace(/ ago$/, "")}
+          </time>
+        </TooltipTrigger>
+        <TooltipContent id={tooltipId} role="tooltip">
+          <p>{formatInstant(date, "timestampExact")}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
   const year = formatInstant(date, "monthYear").slice(-4);
-  const clock = props.clock && !stacked ? props.clock : null;
+  const clock =
+    props.clock && !stacked
+      ? props.clock
+      : compactFact && !stacked
+        ? "day"
+        : null;
   const secondary = clock
     ? null
     : stacked && year !== today.slice(0, 4)

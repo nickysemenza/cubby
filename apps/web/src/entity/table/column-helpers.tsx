@@ -194,7 +194,7 @@ export const rowImages = <T extends ImageRow>(row: T) =>
 
 /**
  * The title with its declared kind tag and second line. Single rows put the
- * tag after the title and drop it on a narrow pane; two-line rows draw the
+ * tag after the title, which truncates first so the tag stays; two-line rows draw the
  * tag and the second line's values, joined by " · ", under the title.
  */
 function IdentityLines({
@@ -232,7 +232,7 @@ function IdentityLines({
   return (
     <Row align="center" gap="xs" className="min-w-0">
       <span className="min-w-0 flex-1 truncate">{children}</span>
-      <span className="shrink-0 [[data-table-narrow]_&]:hidden">{kindTag}</span>
+      <span className="shrink-0">{kindTag}</span>
     </Row>
   );
 }

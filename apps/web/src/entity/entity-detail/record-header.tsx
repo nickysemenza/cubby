@@ -171,7 +171,8 @@ function lineValue<E extends GenericDetailEntity>(
 
 /**
  * The declared `detail.lines`, each label with its drawn value. A number
- * field's line is a figure: lines carrying figures draw as key facts.
+ * field's line is a figure: lines carrying figures draw as key facts. A line
+ * with nothing recorded is left out; the header never prints "Not recorded".
  */
 export function headerLinesOf<E extends GenericDetailEntity>(
   queryClient: QueryClient,
@@ -184,7 +185,8 @@ export function headerLinesOf<E extends GenericDetailEntity>(
   ).summary;
   return detail.lines.flatMap((line) => {
     const field = fieldOf(queryClient, entity, line.field);
-    return field
+    const raw = field ? readField(record, field) : undefined;
+    return field && raw !== null && raw !== undefined && raw !== ""
       ? [
           {
             label: line.label,

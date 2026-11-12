@@ -820,7 +820,7 @@ export function renderDetailFieldValue<TRecord extends object>(
           items={reference.items}
           limit={field.display.referencePreviewLimit}
           renderItem={(item) => (
-            <span className="flex items-center gap-2">
+            <span className="flex max-w-full min-w-0 items-center gap-2">
               {referenceLink(reference.entity, item)}
               {item.amount !== undefined && (
                 <span className="tabular-nums">
