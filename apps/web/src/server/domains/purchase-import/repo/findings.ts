@@ -14,11 +14,14 @@ import {
   type ResolveRunFindingInput,
 } from "@cubby/schemas/problems";
 import {
+  runFindingEntity,
   storedImportFix,
   type ProposedImportFix,
+  type RunFindingRoutingKind,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { cents } from "@cubby/shared";
+import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   count,
@@ -507,6 +510,12 @@ export async function resolveRunFinding(
   actor: ActorContext,
 ) {
   const input = resolveRunFindingInput.parse(rawInput);
+  const question = input.action === "ask_member" ? input.question : undefined;
+  if (input.action === "ask_member" && !question)
+    throw createAppError(
+      "REQUIRED_FIELD_MISSING",
+      "ask_member needs the one question the member must answer.",
+    );
   return withTransaction(db, async (tx) => {
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
@@ -584,6 +593,33 @@ export async function resolveRunFinding(
           await assertRunProvenance(tx, finding);
         await applyFix(tx, fix, actor, finding.ledgerPartyId, finding.runId);
       }
+    }
+    if (question) {
+      // The question replaces the finding; answering it is the member's
+      // dismiss once they have acted.
+      const filed = await publishRunFinding(tx, {
+        runId: finding.runId,
+        ledgerPartyId: finding.ledgerPartyId,
+        entityKind: runFindingEntity.parse(finding.entityKind),
+        entityId: finding.entityId,
+        kind: "member_question" satisfies RunFindingRoutingKind,
+        summary: question,
+        proposedFix: null,
+        evidenceFingerprint: await sha256Hex(
+          `member-question:${finding.id}:${question}`,
+        ),
+      });
+      await resolveRunFindingRow(tx, finding.id, {
+        verdict: "asked_member",
+        intent: "history",
+        actorUserId: actor.userId,
+        metadata: { questionId: filed.id },
+        status: "superseded",
+      });
+      return resolveRunFindingOut.parse({
+        id: finding.id,
+        status: runFindingStatus.enum.dismissed,
+      });
     }
     const applied = input.action === "apply";
     await resolveRunFindingRow(tx, finding.id, {

@@ -1,3 +1,5 @@
+import { PROBLEM_DECISION } from "@cubby/schemas/problems";
+import { decisionExecutor } from "@cubby/schemas/work-queue";
 import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -17,7 +19,7 @@ import {
 const source: WorkSource = {
   id: "incompleteTransactionImports",
   family: "account",
-  executor: "human",
+  executor: decisionExecutor(PROBLEM_DECISION.incompleteTransactionImports),
   entity: null,
   link: { kind: "reason" },
   reasons: [

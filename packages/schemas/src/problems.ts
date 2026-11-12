@@ -52,6 +52,7 @@ import {
   projectAttentionItemSchema,
 } from "./project";
 import { proposedImportFix } from "./purchase-import";
+import type { MemberDecision } from "./work-queue";
 import { imageMetadataOutcome } from "./image-capture-fields";
 
 const publicEntityIdSchema = anyShortcodeSchema(
@@ -630,10 +631,16 @@ export const runFindingProblemSchema = z.object({
   createdAt: dateTime,
 });
 
+/**
+ * `ask_member` is an agent's handoff: it closes the finding and files one
+ * specific question for the member on the same record, routed to Needs you.
+ */
 export const resolveRunFindingInput = z.object({
   reviewedFingerprint: z.string().optional(),
   id: z.uuid(),
-  action: z.enum(["apply", "dismiss"]),
+  action: z.enum(["apply", "dismiss", "ask_member"]),
+  /** Required with `ask_member`: the one question the member must answer. */
+  question: z.string().trim().min(1).max(1_000).optional(),
 });
 export type ResolveRunFindingInput = z.infer<typeof resolveRunFindingInput>;
 
@@ -942,12 +949,6 @@ export const rawProblemDetectors = {
     problemRowSchema,
     "ingredientsWithoutProduct",
   ),
-  staleLocations: detector(
-    "views",
-    "coverage",
-    problemRowSchema,
-    "staleLocations",
-  ),
   productsWithoutMappings: detector(
     "views",
     "defect",
@@ -958,12 +959,6 @@ export const rawProblemDetectors = {
   // already partitions them out for exactly this reason; classing them here is
   // what finally keeps them out of the total.
   unvaluedBucketProducts: detector("views", "coverage", problemRowSchema),
-  neverVerifiedInventory: detector(
-    "views",
-    "coverage",
-    problemRowSchema,
-    "neverVerifiedInventory",
-  ),
   locationsWithoutAiDescription: detector("views", "defect", problemRowSchema),
   // Recorded exits exceed recorded acquisitions, but acquisition history is
   // intentionally incomplete for goods owned before Cubby's ledger began.
@@ -1219,6 +1214,64 @@ const problemClasses = mapDetectors(
   (entry) => entry.problemClass,
 ) as { [K in ProblemKey]: Detectors[K]["problemClass"] };
 export { problemClasses as PROBLEM_CLASS };
+
+/**
+ * The member decision each Problem's resolution takes (ADR 0028 §1); null
+ * routes its rows to the agent backlog. A new detector must declare one.
+ */
+export const PROBLEM_DECISION = {
+  runFindings: null,
+  duplicateInventory: "stock",
+  duplicateProductIdentities: "merge",
+  orphanedProducts: "delete",
+  unconnectedEntities: "delete",
+  partiallyImportedCookbooks: null,
+  soldButStillStocked: "stock",
+  kitsCountedTwice: "stock",
+  unlinkedExitExpenses: null,
+  purchaselessExitExpenses: null,
+  toolsUsedOutsideOwnership: "contradiction",
+  imageProcessingIssues: null,
+  imageMetadataOutcomes: null,
+  understatedCostMeals: null,
+  unknownParkedItems: "stock",
+  inventoryWithoutPricePath: null,
+  weightSoldProducts: null,
+  duplicateVendors: "merge",
+  purchasesNotReconciling: "money",
+  purchaseFinancialSettlementMismatches: "money",
+  duplicateSpendCandidates: "delete",
+  duplicateFinancialTransactionSourceRefs: "merge",
+  duplicateFinancialAccountSourceAliases: "merge",
+  productIdentifiersOutsideIssuer: null,
+  financialTransactionAllocationDefects: "money",
+  invalidFinancialJson: null,
+  referentialLivenessViolations: null,
+  dependencyCycles: "contradiction",
+  // The statement file is the member's own; an agent cannot re-import it.
+  incompleteTransactionImports: "personal",
+  ingredientsWithPartialCoverage: null,
+  productsWithIslandedMappings: null,
+  productsWithTitleDerivableSize: null,
+  productsWithBetterUpcData: null,
+  // Tasks, Projects and their budgets are a person's plans.
+  overdueTasks: "contradiction",
+  stalledProjects: "contradiction",
+  projectsMissingBudget: "personal",
+  projectsSpendBelowEstimate: "personal",
+  pastDuePlannedExpenses: "contradiction",
+  unclassifiedExpenses: null,
+  blockedWorkProjects: "contradiction",
+  projectsWithDateDrift: "contradiction",
+  ingredientsWithoutProduct: null,
+  productsWithoutMappings: null,
+  productsMissingPrice: null,
+  unvaluedBucketProducts: null,
+  locationsWithoutAiDescription: null,
+  negativeExpectedQuantity: "stock",
+  unusedIngredientsWithProduct: "delete",
+  unusedIngredientsWithoutProduct: "delete",
+} as const satisfies Record<ProblemKey, MemberDecision | null>;
 
 type CoverageProblemKey = {
   [K in ProblemKey]: Detectors[K]["problemClass"] extends "coverage"

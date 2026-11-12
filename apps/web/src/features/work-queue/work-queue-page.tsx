@@ -466,6 +466,7 @@ function WorkQueueRoute() {
   return (
     <WorkQueue
       layout={search.layout}
+      view={search.view}
       groupBy={
         search.group ?? (search.view === PROBLEMS_VIEW ? "reason" : undefined)
       }
@@ -480,12 +481,15 @@ export function WorkQueue({
   scope: fixedScope,
   groupBy,
   layout: routeLayout,
+  view: routeView,
   label = "Work queue",
   onMeta,
 }: {
   scope?: QueueFilters;
   groupBy?: string;
   layout?: z.infer<typeof workQueueLayout>;
+  /** The route's view, whose declared order the table opens with. */
+  view?: WorkQueueView;
   label?: string;
   /** Reports the unfiltered population, for a caller that frames this queue. */
   onMeta?: (meta: WorkQueueMeta) => void;
@@ -514,9 +518,10 @@ export function WorkQueue({
   // backfills, Open in list) live; `none` keeps an explicit ungrouping.
   const group = embedded ? embeddedGroup : groupBy;
   const inspection = useEntityPreview(undefined, PREVIEW_OPTIONS);
+  const openingSort = workQueueList.defaultSortOf(routeView);
   const tableState = useTableState({
-    initialSort: workQueueList.defaultSort.orderBy,
-    initialSortDesc: workQueueList.defaultSort.direction === "desc",
+    initialSort: openingSort.orderBy,
+    initialSortDesc: openingSort.direction === "desc",
     filterSpecs: FILTER_SPECS,
     urlSync: !embedded,
     readUrlState: !embedded,
@@ -767,11 +772,16 @@ export function WorkQueue({
   }, [meta, hasFilters, onMeta]);
   const viewCounts = firstPage?.meta.viewCounts;
   const view = buildQueueFilters(tableState).view;
-  const setView = (next: WorkQueueView | undefined) =>
+  const setView = (next: WorkQueueView | undefined) => {
+    const sort = workQueueList.defaultSortOf(next);
+    tableState.setSorting([
+      { id: sort.orderBy, desc: sort.direction === "desc" },
+    ]);
     tableState.setColumnFilters((previous) => [
       ...previous.filter((filter) => filter.id !== "view"),
       ...(next ? [{ id: "view", value: next }] : []),
     ]);
+  };
   const tabsTarget = usePageWorkbenchTarget("tabs", !embedded);
   const PreviewSheet = inspection.PreviewSheet;
   const layoutPicker = (

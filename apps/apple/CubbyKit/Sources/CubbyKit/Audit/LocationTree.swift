@@ -66,9 +66,11 @@ public struct LocationTree: Sendable, Hashable {
         ancestors(of: id).contains { $0.id == ancestor }
     }
 
-    /// The stops of a walk: the scope and every descendant, depth-first in tree order, that
-    /// holds stock directly. A location with no direct items has no snapshot to reconcile, so
-    /// it is not a stop (its stocked descendants still are).
+    /// The stops of a walk: the scope and every descendant that holds stock directly. A location
+    /// with no direct items has no snapshot to reconcile, so it is not a stop (its stocked
+    /// descendants still are). Ordered stalest first (never recounted, then oldest
+    /// `lastBulkInventory`; ties in tree order) because inventory never auto-decrements, so the
+    /// stalest count is the most likely wrong.
     public func auditableBins(under scope: LocationCode) -> [LocationTreeNode] {
         guard let root = nodesByID[scope] else { return [] }
         var out: [LocationTreeNode] = []
@@ -77,7 +79,14 @@ public struct LocationTree: Sendable, Hashable {
             for child in node.childNodes { visit(child) }
         }
         visit(root)
-        return out
+        return out.enumerated().sorted { a, b in
+            switch (a.element.lastBulkInventory, b.element.lastBulkInventory) {
+            case (nil, nil): return a.offset < b.offset
+            case (nil, _): return true
+            case (_, nil): return false
+            case let (x?, y?): return x != y ? x < y : a.offset < b.offset
+            }
+        }.map(\.element)
     }
 
     /// Every location worth offering as a scope, depth-first with its depth: anything holding

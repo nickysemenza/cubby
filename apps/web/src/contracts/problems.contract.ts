@@ -61,7 +61,7 @@ export const problemsContract = defineContract(
     resolveRunFinding: mutation({
       exposure: "capability",
       description:
-        "Apply or dismiss one Run finding by id; apply requires its reviewedFingerprint when it carries one.",
+        'Apply or dismiss one Run finding by id; apply requires its reviewedFingerprint when it carries one. When you cannot decide, use `action: "ask_member"` with `question` (one specific question, at most 1000 characters): it closes the finding and files a member question on the same record for Needs you.',
       command: {
         label: "Resolve finding",
         confirmation: null,

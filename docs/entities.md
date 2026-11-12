@@ -2725,6 +2725,11 @@ The Research queue ([terminology](guide/terminology.md#purchase-research)) is no
 checks research can close, sorted by `dataQuality` ascending. A `DataException` closes a gap until
 cleared.
 
+Needs you holds only member decisions (`memberDecision` in `work-queue.ts`: merge, delete, money,
+stock, contradiction, personal); every work reason declares its decision (`PROBLEM_DECISION`,
+`RUN_FINDING_ROUTING`, `MAIL_IMPORT_GAP_EXECUTOR`) and `decisionExecutor(null)` is `agent`. The
+Agent saved view is the agent backlog.
+
 The `/work-queue` page composes those predicates with Problems, Email attention, findings,
 Suggestions and account work as Work sources ([work queue](guide/work-queue.md)). Each domain exports
 its sources from `server/domains/<domain>/repo/work-sources.ts`; `server/domains/work` composes them
@@ -2759,7 +2764,8 @@ as the pair.
 Family, Executor and Reason filter and group it; Date and Amount carry unsupported reasons. Group
 keys are filter values with absent values last; Owner sections have no exact filter because a
 member's filter also matches shared work. Saved views (Automatic, Agent, Review, Waiting, Problems)
-are `{key, label, filters}` (ADR 0022); view counts are computed before the active view applies. A
+are `{key, label, filters}` (ADR 0022) and may declare a default `sort` (Agent is newest first)
+that applies when a request names none; view counts are computed before the active view applies. A
 zero-page-size read returns no rows and supplies full-filter Reason × Type cells plus distinct Type
 margins in `meta.summary`: reasons use all memberships, duplicate keys in one item count once, and
 the grand total and Type margins count each item once. Summary and Pivot reuse the same eligibility,

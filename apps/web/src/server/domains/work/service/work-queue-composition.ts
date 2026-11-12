@@ -11,10 +11,7 @@ import { productWorkSources } from "~/server/domains/product/repo/work-sources";
 import { projectWorkContext } from "~/server/domains/project/repo/work-context";
 import { projectWorkSources } from "~/server/domains/project/repo/work-sources";
 import { findingWorkSources } from "~/server/domains/purchase-import/repo/work-sources";
-import {
-  purchaseSettlementWorkSource,
-  plannedPurchaseWorkDeferral,
-} from "~/server/domains/purchase/repo/work-settlement";
+import { plannedPurchaseWorkDeferral } from "~/server/domains/purchase/repo/work-deferral";
 import { purchaseWorkSources } from "~/server/domains/purchase/repo/work-sources";
 import { recipeWorkSources } from "~/server/domains/recipe/repo/work-sources";
 import { runWorkSources } from "~/server/domains/run/repo/work-sources";
@@ -48,7 +45,6 @@ export const workQueueComposition = async (): Promise<WorkQueueComposition> => {
       ...runWorkSources,
       ...findingWorkSources,
       ...transactionImportWorkSources,
-      purchaseSettlementWorkSource,
       transferWorkSource,
       pendingSuggestionsWorkSource,
       ...diagnostics.sources,

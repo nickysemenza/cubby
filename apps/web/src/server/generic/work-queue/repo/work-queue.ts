@@ -552,7 +552,7 @@ async function queryWorkQueue(
           ]
         : []),
       ...workQueueList
-        .sortsOf(input.sort)
+        .sortsOf(input.sort, input.view)
         .map(
           (sort) =>
             sql`${Object.entries(sortExpressions).find(([key]) => key === sort.orderBy)?.[1] ?? sql`name`} ${sort.direction === "desc" ? sql`DESC` : sql`ASC`} NULLS LAST`,

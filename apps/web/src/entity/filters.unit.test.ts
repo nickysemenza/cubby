@@ -43,17 +43,14 @@ describe("buildFiltersFromManifest", () => {
     const filters = buildFiltersFromManifest(
       specs,
       getter({
-        reason: [
-          "product_category",
-          "__not__:reconciliation:purchase-unsettled",
-        ],
+        reason: ["product_category", "__not__:finding:sum_mismatch"],
         entity: [FILTER_NONE],
         owner: [CURRENT_MEMBER_FILTER],
       }),
     );
     expect(workQueueInput.parse(filters)).toMatchObject({
       reason: ["product_category"],
-      reasonExclude: ["reconciliation:purchase-unsettled"],
+      reasonExclude: ["finding:sum_mismatch"],
       entityPresence: "none",
       owner: [CURRENT_MEMBER_FILTER],
     });

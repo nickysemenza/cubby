@@ -14,7 +14,9 @@ import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/prob
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { oneOrManyValues } from "@cubby/schemas/pagination";
+import { PROBLEM_DECISION } from "@cubby/schemas/problems";
 import {
+  decisionExecutor,
   workQueueGapViews,
   type WorkAction,
   type WorkSourceActionId,
@@ -371,7 +373,7 @@ export const entityProblemSources = (
     const source: WorkSource = {
       id: definition.key,
       family: "problem",
-      executor: "human",
+      executor: decisionExecutor(PROBLEM_DECISION[definition.key]),
       entity,
       link: { kind: "record" },
       reasons: [{ key: definition.key, label: definition.title }],

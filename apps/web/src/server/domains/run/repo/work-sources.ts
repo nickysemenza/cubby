@@ -69,6 +69,9 @@ const execution: WorkSource = {
       ),
   }),
 };
+const pendingPhotoProposals = sql`("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
+  SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
+))`;
 const account: WorkSource = {
   id: "account:run",
   family: "account",
@@ -84,7 +87,14 @@ const account: WorkSource = {
       owners: workRunReviewRead().owners,
       exclusiveOwner: sql`"Run"."ledgerPartyId"`,
       date: householdDaySql(sql`"Run"."startedAt"`),
-      executor: sql`CASE WHEN "Run".status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN ${workExecutor.enum.external} ELSE ${workExecutor.enum.human} END`,
+      // Photo groups wait on the member's approval; a pause on its cause; a
+      // failure is Background work's, which lists and retries it; any other
+      // stop is an agent's to inspect and settle.
+      executor: sql`CASE
+        WHEN ${pendingPhotoProposals} THEN ${workExecutor.enum.human}
+        WHEN "Run".status IN (${runStatus.enum.paused}, ${runStatus.enum.paused_auth}, ${runStatus.enum.paused_offline}) THEN ${workExecutor.enum.external}
+        WHEN "Run".status IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN ${workExecutor.enum.automatic}
+        ELSE ${workExecutor.enum.agent} END`,
       reason: account.reasons[0]!.label,
       reasonKeys: [account.id],
     })
@@ -94,9 +104,7 @@ const account: WorkSource = {
           sql`${notDeleted(alias(run, "Run"))} AND NOT ${memberStoppedRunPredicate(sql`"Run"."failureCode"`)} AND (
         (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND NOT ${historicalRoutineRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), trigger: outer(run.trigger), endedAt: outer(run.endedAt), failureCode: outer(run.failureCode) })} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode) })} AND NOT ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
-        OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
-          SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
-        ))
+        OR ${pendingPhotoProposals}
       )`,
           recordScope(scope, sql`"Run".shortcode`),
         ),

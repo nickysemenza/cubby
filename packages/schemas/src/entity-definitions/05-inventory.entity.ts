@@ -271,14 +271,6 @@ export const { definition, readSchemas } = defineEntityModel(
             ],
             // Oldest first — the longest-unverified entries lead.
             sort: [{ id: "createdAt", desc: false }],
-            problem: {
-              key: "neverVerifiedInventory",
-              title: "Inventory never confirmed by a recount",
-              description:
-                "Entries whose count has never been checked against the shelf (oldest first). Recount the location they live in to clear them. `verifiedAt` only started being stamped when audit sessions landed, so most of the inventory starts here — this is a backlog to work down, not a list of mistakes.",
-              emptyMessage:
-                "Every inventory entry has been verified at least once.",
-            },
           },
         ],
         totals: [
@@ -1144,7 +1136,6 @@ export const { definition, readSchemas } = defineEntityModel(
             facet: "provenance",
             label: "Verified",
             message: "This stock entry has never been verified.",
-            coverage: "neverVerifiedInventory",
           },
         ],
       },
