@@ -133,6 +133,13 @@ const STRUCTURED_VALUE_RENDERERS = [
  */
 export const SHARED_LIST_RENDERERS = ["state", "progress"] as const;
 
+/**
+ * The detail rows for the same two fields: `StateBadge` and a block `ProgressMeter`. The web
+ * draws them for the fields `presentation.state` and `presentation.progress` name even when no
+ * declaration names the id; native draws those fields through the generic row.
+ */
+export const SHARED_DETAIL_RENDERERS = ["state", "progress"] as const;
+
 /** Whether a structured editor needs an input schema, including fields native hands off to web. */
 export const drawsFromValueSchema = (
   entity: string,
@@ -318,6 +325,7 @@ export const nativeCoverage = {
       "financial-transaction-vendor-inference",
       "ledger-transfer-classification",
     ]),
+    ...generic(SHARED_DETAIL_RENDERERS),
     ...implemented([
       "recipe-source",
       "expense-spending-category",

@@ -22,6 +22,7 @@ import { ledgerTransferDetailFields } from "./ledger-transfer";
 import { productDetailFields } from "./product";
 import { recipeDetailFields } from "./recipe";
 import { runDetailFields } from "./run";
+import { isSharedDetailRenderer, sharedDetailRenderer } from "./shared";
 import { shipmentDetailFields } from "./shipment";
 import { renderSpendingCategorySummary } from "./spending-category-summary";
 
@@ -34,7 +35,7 @@ type DetailRendererEntity = {
 
 type EntityDetailRendererCoverage<E extends DetailRendererEntity> = Readonly<
   Record<
-    DetailRendererId<E>,
+    Exclude<DetailRendererId<E>, "state" | "progress">,
     PresentationCoverage<DetailFieldRenderer<DetailRecordOf<E>>>
   >
 >;
@@ -184,7 +185,11 @@ const detailCoverageFor = (
   }
 };
 
-/** The renderers for one entity, read through the erased map the page walks. */
+/**
+ * The renderers for one entity, read through the erased map the page walks.
+ * The shared `state` and `progress` rows come from the runtime, for a declared
+ * id or the field `presentation.state`/`progress` names.
+ */
 export const detailFieldRenderersFor = (
   queryClient: QueryClient,
   entity: GenericDetailEntity,
@@ -192,8 +197,15 @@ export const detailFieldRenderersFor = (
   const coverage = detailCoverageFor(entity);
   const entries = entityMetadata(queryClient, entity).fields.fields.flatMap(
     (field) => {
+      const shared = sharedDetailRenderer(queryClient, entity, field);
+      if (shared) return [[field.key, shared] as const];
       const renderer = field.display.renderer?.detail;
-      if (renderer === null || renderer === undefined) return [];
+      if (
+        renderer === null ||
+        renderer === undefined ||
+        isSharedDetailRenderer(renderer)
+      )
+        return [];
       const disposition = coverage?.[renderer];
       if (disposition === undefined) {
         throw new Error(`No web detail renderer coverage for ${renderer}`);

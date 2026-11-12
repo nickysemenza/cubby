@@ -20,20 +20,25 @@ type StateRole =
   | "running"
   | "queued"
   | "paused"
-  | "done";
+  | "done"
+  | "ended";
 
 /**
  * Role decides the treatment. Needs-you, stalled and failed are filled pills;
- * running, queued, paused and done are a dot or glyph and a label. A wait
- * refines an active state into queued or paused.
+ * running, queued, paused, done and ended are a dot or glyph and a label. A
+ * wait refines an active state into queued or paused. A finished option is
+ * done (positive) only when its declared colour is positive; any other
+ * finished option (retried, cancelled, archived) ends neutral.
  */
 function stateRole({
   phase,
+  color,
   stalled,
   failed,
   wait,
 }: {
   phase: EntityPhase;
+  color?: string;
   stalled?: boolean;
   failed?: boolean;
   wait?: RunWaitingOn;
@@ -41,7 +46,10 @@ function stateRole({
   if (failed) return "failed";
   if (stalled) return "stalled";
   if (phase === "needs") return "needs";
-  if (phase === "finished") return "done";
+  if (phase === "finished")
+    return color === "positive" || color === "var(--positive)"
+      ? "done"
+      : "ended";
   if (wait?.reason === "paused") return "paused";
   if (wait && wait.reason !== "in_progress") return "queued";
   return "running";
@@ -79,8 +87,8 @@ const pillBase =
 
 /**
  * One state, drawn the same on a list row, the detail header and a batch row.
- * `phase` is the option's `optionPhase`; `reason` is muted text after the
- * label; `wait` adds the queue position and estimate; `failed` is true for a
+ * `option.color` is the option's declared tone and `phase` its `optionPhase`;
+ * `reason` is muted text after the label; `wait` adds the queue position and estimate; `failed` is true for a
  * failure outcome. `size="header"` draws the larger pill and the wait's detail
  * lines.
  */
@@ -93,7 +101,7 @@ export function StateBadge({
   failed,
   size = "row",
 }: {
-  option: { label: string };
+  option: { label: string; color?: string };
   phase: EntityPhase;
   reason?: string | null;
   wait?: RunWaitingOn;
@@ -101,7 +109,13 @@ export function StateBadge({
   failed?: boolean;
   size?: "row" | "header";
 }) {
-  const role = stateRole({ phase, stalled, failed, wait });
+  const role = stateRole({
+    phase,
+    color: option.color,
+    stalled,
+    failed,
+    wait,
+  });
   const waitText = useWaitText(wait);
   const label = role === "stalled" ? "Stalled" : option.label;
   const trailing =
@@ -156,6 +170,7 @@ export function StateBadge({
               role === "running" && "bg-running",
               role === "done" && "bg-positive",
               role === "queued" && "border-[1.5px] border-queued",
+              role === "ended" && "bg-muted-foreground",
             )}
           />
         )}

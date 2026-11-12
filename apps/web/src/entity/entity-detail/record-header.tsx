@@ -48,7 +48,7 @@ function optionOf(field: Field, raw: unknown) {
 
 /** What `StateBadge` draws for the record's declared `presentation.state`. */
 export interface RecordState {
-  option: { label: string };
+  option: { label: string; color?: string };
   phase: EntityPhase;
   reason: string | null;
   wait: RunWaitingOn | undefined;
@@ -90,7 +90,7 @@ export function recordStateOf<E extends GenericDetailEntity>(
       ? undefined
       : runWaitingOn.safeParse(valueOf(state.wait));
   return {
-    option: { label: option?.label ?? raw },
+    option: { label: option?.label ?? raw, color: option?.color },
     phase: option ? optionPhase(option) : "active",
     reason: text(state.reason),
     wait: wait?.success ? wait.data : undefined,
@@ -104,6 +104,7 @@ export function recordStateOf<E extends GenericDetailEntity>(
 /** The record's kind from `presentation.kind`: its option and explanation. */
 export interface RecordKind {
   label: string;
+  description?: string;
   glyph?: { phosphor: string };
   explanation?: KindExplanationValue;
 }
@@ -125,6 +126,12 @@ export function recordKindOf<E extends GenericDetailEntity>(
   if (typeof raw !== "string") return null;
   return {
     label: option?.label ?? raw,
+    description:
+      option &&
+      "description" in option &&
+      typeof option.description === "string"
+        ? option.description
+        : undefined,
     glyph: option && "glyph" in option ? option.glyph : undefined,
     explanation:
       option && "explanation" in option ? option.explanation : undefined,
@@ -162,12 +169,15 @@ function lineValue<E extends GenericDetailEntity>(
   return renderDetailFieldValue(queryClient, entity, record, field);
 }
 
-/** The declared `detail.lines`, each label with its drawn value. */
+/**
+ * The declared `detail.lines`, each label with its drawn value. A number
+ * field's line is a figure: lines carrying figures draw as key facts.
+ */
 export function headerLinesOf<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
-): { label: string; value: ReactNode }[] {
+): { label: string; value: ReactNode; figure: boolean }[] {
   const { detail }: CompiledEntityPresentation = entityMetadata(
     queryClient,
     entity,
@@ -179,6 +189,7 @@ export function headerLinesOf<E extends GenericDetailEntity>(
           {
             label: line.label,
             value: lineValue(queryClient, entity, record, field),
+            figure: field.kind === "number",
           },
         ]
       : [];

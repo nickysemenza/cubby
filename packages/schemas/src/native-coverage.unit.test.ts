@@ -19,6 +19,7 @@ import {
   nativeCollectionActionPlans,
   nativeCoverage,
   nativeHeroActionPlans,
+  SHARED_DETAIL_RENDERERS,
   SHARED_LIST_RENDERERS,
   type NativeCoverageEntry,
   type NativeCoverageKind,
@@ -44,7 +45,10 @@ const vocabulary = {
     ...fieldRenderers((field) => field.display.renderer?.list),
     ...SHARED_LIST_RENDERERS,
   ]),
-  detail: fieldRenderers((field) => field.display.renderer?.detail),
+  detail: used([
+    ...fieldRenderers((field) => field.display.renderer?.detail),
+    ...SHARED_DETAIL_RENDERERS,
+  ]),
   heroAction: used(
     entityKeys.flatMap((key) => entitySummary[key].detail.hero.actions),
   ),
