@@ -423,8 +423,9 @@ declarations/WASM, creates and retains fresh uniquely named databases, and
 never resets databases, starts services or calls providers. Results go under
 ignored `artifacts/statement-label-benchmark/`. Tune it with `CUBBY_BENCH_SIZES`,
 `CUBBY_BENCH_CANDIDATES`, `CUBBY_BENCH_BYTES`, `CUBBY_BENCH_KIND=purchase` with
-`CUBBY_BENCH_ADVICE=decision-port`, and `CUBBY_BENCH_PROFILE=1` (see
-`statement-label.benchmark.ts`). Heap samples are Node phase observations, not
+`CUBBY_BENCH_ADVICE=decision-port`, `CUBBY_BENCH_ACCOUNT=loan` (adds the
+loan-escrow question), and `CUBBY_BENCH_PROFILE=1` (see
+`statement-label.benchmark.ts`); `modelRounds` counts sequential model waves. Heap samples are Node phase observations, not
 Worker heap; query-active intervals are not PostgreSQL server CPU. The same
 directory's `statement-label-regressions.config.ts` runs existing statement
 service regressions against fresh retained databases; the ordinary integration

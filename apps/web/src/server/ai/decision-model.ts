@@ -390,6 +390,52 @@ export function settleDecisionWorkItems<T, V>(
   );
 }
 
+/**
+ * Two branches of one work item whose questions join the same wave: a branch's
+ * question waits until the other branch asks or ends. Every started branch
+ * settles before the first failure surfaces, in branch order.
+ */
+export async function settleDecisionBranches<A, B>(
+  first: () => Promise<A>,
+  second: () => Promise<B>,
+): Promise<[A, B]> {
+  const ask = preparingAiInputs() ? undefined : decisionWork.getStore();
+  let open = 2;
+  const held: {
+    args: DecisionChoiceArgs;
+    settle(result: Promise<DecisionChoiceResult>): void;
+  }[] = [];
+  const release = () => {
+    if (open || !ask) return;
+    for (const question of held.splice(0)) question.settle(ask(question.args));
+  };
+  const branch = <V>(run: () => Promise<V>) => {
+    if (!ask) return run();
+    let arrived = false;
+    const arrive = () => {
+      if (arrived) return;
+      arrived = true;
+      open--;
+      release();
+    };
+    return decisionWork.run(
+      (args) => {
+        const result = new Promise<DecisionChoiceResult>((resolve) => {
+          held.push({ args, settle: resolve });
+        });
+        arrive();
+        release();
+        return result;
+      },
+      () => run().finally(arrive),
+    );
+  };
+  const [a, b] = await Promise.allSettled([branch(first), branch(second)]);
+  if (a.status === "rejected") throw a.reason;
+  if (b.status === "rejected") throw b.reason;
+  return [a.value, b.value];
+}
+
 export async function runDecisionChoices(
   args: readonly DecisionChoiceArgs[],
 ): Promise<DecisionChoiceResult[]> {

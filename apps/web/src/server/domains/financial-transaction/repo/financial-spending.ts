@@ -9,6 +9,7 @@ import {
   financialSpendingRequest,
   financialSpendingSource,
   financialSpendingCostType,
+  type FinancialSpendingAdvice,
   type FinancialSpendingPlan,
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
@@ -454,39 +455,7 @@ export async function prepareFinancialSpendingCandidates(
       resolved.flatMap((result) => (result.row ? [result.row.id] : [])),
     ),
   ];
-  for (const [vendorId, history] of await financialSpendingCategoryHistories(
-    db,
-    vendorIds.filter((vendorId) => !page.categoryHistory.has(vendorId)),
-  ))
-    page.categoryHistory.set(vendorId, Promise.resolve(history));
-  const bounds = page.candidateBounds;
-  if (bounds && vendorIds.length) {
-    const rows = await getDb(db).execute<
-      VendorCandidate & { vendorId: string }
-    >(
-      sql`
-      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
-      FROM "Purchase" p
-      WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(vendorIds)})
-        AND p.id IN (${vendorCandidateIds(vendorIds, bounds, [...page.candidateAmounts])})
-        AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
-      ORDER BY p.id
-    `,
-      "objects",
-    );
-    const byVendor = groupBy(rows, (row) => row.vendorId);
-    for (const vendorId of vendorIds)
-      page.vendorCandidates.set(
-        vendorId,
-        Promise.resolve(
-          (byVendor[vendorId] ?? []).map(
-            ({ vendorId: _vendorId, ...row }) => row,
-          ),
-        ),
-      );
-  }
+  await prepareVendorCandidates(db, page, vendorIds);
   const ids = new Set(
     [...page.allocations.values()].flatMap((rows) =>
       rows.map((row) => row.purchaseId),
@@ -513,6 +482,124 @@ export async function prepareFinancialSpendingCandidates(
     getDb(db),
     [...ids],
   );
+}
+
+/** Each Vendor's category history and candidate pool, read once for the page. */
+async function prepareVendorCandidates(
+  db: Database,
+  page: FinancialSpendingPage,
+  vendorIds: readonly string[],
+) {
+  for (const [vendorId, history] of await financialSpendingCategoryHistories(
+    db,
+    vendorIds.filter((vendorId) => !page.categoryHistory.has(vendorId)),
+  ))
+    page.categoryHistory.set(vendorId, Promise.resolve(history));
+  const bounds = page.candidateBounds;
+  const pooled = vendorIds.filter(
+    (vendorId) => !page.vendorCandidates.has(vendorId),
+  );
+  if (!bounds || !pooled.length) return;
+  const rows = await getDb(db).execute<VendorCandidate & { vendorId: string }>(
+    sql`
+      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
+        ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
+      FROM "Purchase" p
+      WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(pooled)})
+        AND p.id IN (${vendorCandidateIds(pooled, bounds, [...page.candidateAmounts])})
+        AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
+          OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
+      ORDER BY p.id
+    `,
+    "objects",
+  );
+  const byVendor = groupBy(rows, (row) => row.vendorId);
+  for (const vendorId of pooled)
+    page.vendorCandidates.set(
+      vendorId,
+      Promise.resolve(
+        (byVendor[vendorId] ?? []).map(
+          ({ vendorId: _vendorId, ...row }) => row,
+        ),
+      ),
+    );
+}
+
+/**
+ * Before a page previews advised spending in sequence, read once what each
+ * preview would otherwise read alone: advised and deferred Vendor names, their
+ * histories and candidate pools, every pooled candidate's receipt graph and
+ * payments, and advised categories. Previews still select their own evidence;
+ * a missing graph is left for the preview to refuse. Call it outside a write
+ * transaction: it reads the whole pool, not one preview's candidates.
+ */
+export async function prepareAdvisedFinancialSpending(
+  db: Database,
+  page: FinancialSpendingPage,
+  advice: readonly (FinancialSpendingAdvice | null)[],
+) {
+  const names = [
+    ...new Set([
+      ...page.pendingVendorNames,
+      ...advice.flatMap((entry) =>
+        entry?.vendorName ? [entry.vendorName] : [],
+      ),
+    ]),
+  ].filter((name) => name.trim() && !page.vendors.has(canonicalJson([name])));
+  page.pendingVendorNames.clear();
+  const resolved = names.length ? await resolveSpendingVendors(db, names) : [];
+  for (const [index, name] of names.entries())
+    page.vendors.set(
+      canonicalJson([name]),
+      Promise.resolve([resolved[index]!]),
+    );
+  await prepareVendorCandidates(db, page, [
+    ...new Set(
+      resolved.flatMap((result) => (result.row ? [result.row.id] : [])),
+    ),
+  ]);
+  const pooled = [
+    ...Object.values(page.paymentCandidates).flat(),
+    ...(await Promise.all(page.vendorCandidates.values())).flat(),
+  ].map((candidate) => parseEntityId("purchase", candidate.id));
+  const graphIds = [...new Set(pooled)].filter((id) => !page.graphs.has(id));
+  const paymentIds = [...new Set(pooled)].filter(
+    (id) => !page.payments.has(id),
+  );
+  const codes = [
+    ...new Set(
+      advice.flatMap((entry) =>
+        entry?.spendingCategoryId ? [entry.spendingCategoryId] : [],
+      ),
+    ),
+  ].filter((code) => !page.categories.has(`shortcode:${code}`));
+  const [graphs, payments, categories] = await Promise.all([
+    loadSpendingGraphs(db, graphIds),
+    purchasePayments(db, paymentIds),
+    codes.length
+      ? getDb(db).query.spendingCategory.findMany({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(spendingCategory.shortcode, codes),
+                  notDeleted(spendingCategory),
+                ),
+              ),
+          },
+        })
+      : [],
+  ]);
+  for (const [id, graph] of graphs) page.graphs.set(id, Promise.resolve(graph));
+  const paid = groupBy(payments, (row) => row.purchaseId);
+  for (const id of paymentIds)
+    page.payments.set(id, Promise.resolve(paid[id] ?? []));
+  for (const code of codes)
+    page.categories.set(
+      `shortcode:${code}`,
+      Promise.resolve(categories.find((row) => row.shortcode === code)),
+    );
 }
 
 async function spendingFacts(

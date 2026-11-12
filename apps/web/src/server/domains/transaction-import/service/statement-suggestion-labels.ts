@@ -42,7 +42,10 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import type { FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
+import {
+  prepareAdvisedFinancialSpending,
+  type FinancialSpendingPage,
+} from "~/server/domains/financial-transaction/repo/financial-spending";
 import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
   adviseSpending,
@@ -986,6 +989,12 @@ async function runStatementLabelBatch(
           let plans: (FinancialSpendingPlan | null)[] = [];
           let planFailure: unknown;
           try {
+            if (spendingPage && planning.length > 1)
+              await prepareAdvisedFinancialSpending(
+                db,
+                spendingPage,
+                planning.map(({ advised }) => advised!.advice),
+              );
             plans = await prepareStatementSpendings(
               db,
               planning.map(({ labels, advised }) => ({
