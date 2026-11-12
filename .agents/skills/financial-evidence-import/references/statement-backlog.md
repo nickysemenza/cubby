@@ -45,7 +45,8 @@ group by group, filtering a group with
    creates.
 4. A person counterparty on a payment app is a shared-cost repayment, never a
    Vendor, and is never clean. Only a payment-app row (a stored-value account,
-   or a Venmo, Zelle or Cash App descriptor) can have a person counterparty;
+   or a Venmo, Zelle, Cash App, PayPal, Apple Cash or check descriptor) can
+   have a person counterparty;
    elsewhere a person label or history reads as a business, such as a Square
    shop named after its owner or a bill naming the member. A payment to or from
    a household member is not a person counterparty: record it as a transfer

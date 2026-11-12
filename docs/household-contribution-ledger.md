@@ -88,7 +88,7 @@ establish that a descriptor describes a movement. A pair is clean only when:
 
 Generic payment or deposit, ACH, checks and repayments require review unless
 stronger context identifies an account move. Only a payment-app row (a
-stored-value account or a peer-payment descriptor) can have a person
+stored-value account, or a payment-app or check descriptor) can have a person
 counterparty, and a payment between household members is a Ledger Transfer,
 never a repayment Credit. Model confidence never supplies
 apply authority, and pairs between different owners always require member

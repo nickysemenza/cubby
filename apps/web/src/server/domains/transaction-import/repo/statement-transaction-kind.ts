@@ -108,14 +108,16 @@ export type StatementDescriptor = Pick<
   "rawDescription" | "merchant"
 >;
 
-/** Peer-payment rails a person can pay or be paid through. */
-const P2P_RAIL = / (venmo|zelle|cash ?app|square cash) /;
+/** Rails a person can pay or be paid through: payment apps and checks. */
+const P2P_RAIL =
+  / (venmo|zelle|cash ?app|square cash|paypal|apple cash|(check|chk) [0-9]+) /;
 
 /**
  * Whether a person can be on the other side of a row: it is on a stored-value
- * (payment-app) account or its descriptor names a peer-payment rail. Cards and
- * banks pay people only through a rail; elsewhere a person-like name is a
- * seller, such as a Square or Shopify shop, or a bill naming the member.
+ * (payment-app) account or its descriptor names a payment app or a check.
+ * Cards and banks pay people only through such a rail; elsewhere a person-like
+ * name is a seller, such as a Square or Shopify shop, or a bill naming the
+ * member.
  */
 export function statementP2PRail(
   descriptor: StatementDescriptor,

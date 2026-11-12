@@ -251,6 +251,20 @@ describe("decideStatementKind and kindAgreed", () => {
       descriptor: { rawDescription: "ZELLE TO SAMPLE PERSON", merchant: null },
     });
     expect(friend.counterparty.label).toBe("person");
+    for (const rawDescription of [
+      "PAYPAL *SAMPLE FRIEND",
+      "APPLE CASH SENT SAMPLE FRIEND",
+      "CHECK 1042",
+    ])
+      expect(
+        decideStatementKind({
+          amount: 69,
+          votes: { rule: "purchase", label: "purchase", history: null },
+          counterparty: { ...noCounterparty, label: "person" },
+          transfer: null,
+          descriptor: { rawDescription, merchant: null },
+        }).counterparty.label,
+      ).toBe("person");
   });
 
   it("records an own-account move as a transfer whatever the category says", () => {
