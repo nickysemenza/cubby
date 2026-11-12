@@ -92,12 +92,13 @@ test("a planting journal entry persists and appears in its location relation", a
   const { growingBedName, growingBed, existingPlanting } =
     await seedGarden(page);
   const gardenEntriesSection = page.locator("#garden-entries");
-  await gotoAuthenticatedPage(page, `/plantings/${existingPlanting.id}`);
-  // The Journal relation section's create button opens the generic garden
-  // entry dialog seeded with this planting's id.
-  await page
-    .getByRole("button", { name: "Show Journal, nothing recorded" })
-    .click();
+  // The Journal section's anchor selects its tab and unfolds it while empty;
+  // its create button opens the generic garden entry dialog seeded with this
+  // planting's id.
+  await gotoAuthenticatedPage(
+    page,
+    `/plantings/${existingPlanting.id}#garden-history`,
+  );
   await page.getByRole("button", { name: "Log entry...", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("New Garden Entry")).toBeVisible();

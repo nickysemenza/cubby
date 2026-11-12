@@ -5,7 +5,7 @@ import {
   seedWardrobePrerequisites,
 } from "./fixtures/catalog";
 import { createEntityFixture } from "./fixtures/core";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { gotoAuthenticatedPage, openFoldedFacts } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Wardrobe is the generic Inventory list narrowed to an owner and the apparel
@@ -60,6 +60,11 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   // can remain missing until the bulk pass. Household is an explicit decision.
   await page
     .getByRole("button", { name: "Use inherited", exact: true })
+    .click();
+  // With no stored owner the row folds under the not-recorded list.
+  await openFoldedFacts(page, "Owner");
+  await page
+    .getByRole("button", { name: "How owner is determined", exact: true })
     .click();
   await expect(
     page.getByText("Following inherited values", { exact: true }),

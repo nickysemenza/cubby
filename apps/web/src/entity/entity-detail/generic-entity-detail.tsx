@@ -22,6 +22,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
@@ -615,6 +616,12 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const status = headerStatus(queryClient, entity, record);
   const kind = recordKindOf(queryClient, entity, record);
   const summary = aiSummaryOf(queryClient, entity, record);
+  // A hosted native workspace confines navigation to this record; list links
+  // in the trail would be dead there.
+  const hosted = useSearch({
+    from: "__root__",
+    select: (search) => search.nativeWorkspace !== undefined,
+  });
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -886,7 +893,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
       <Page
         variant="detail"
         entity={entity}
-        wayfinding={detailWayfinding(entity, record)}
+        wayfinding={hosted ? false : detailWayfinding(entity, record)}
         title={
           <span className="flex min-w-0 items-center gap-2">
             {((!heroImages?.length && !heroDisplayImage) || emoji) && (

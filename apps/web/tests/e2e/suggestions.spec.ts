@@ -33,6 +33,7 @@ import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.f
 import { dispatchesOperation } from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
+  openFoldedFacts,
   uniqueName,
   waitForAppHydration,
 } from "./support/e2e-helpers";
@@ -450,7 +451,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   await expect(page).toHaveURL(/\/runs\/RUN-/);
   await page.locator("section#steps").scrollIntoViewIfNeeded();
   await expect(
-    page.getByRole("heading", { name: "Execution steps", exact: true }),
+    page.getByRole("heading", { name: "What the run did", exact: true }),
   ).toBeVisible();
 });
 
@@ -540,6 +541,11 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
   // The empty field's picker lists Cubby's guess first, never selected.
   await gotoAuthenticatedPage(page, `/products/${openProduct.id}`);
   await expect(page.getByText(guessedName, { exact: true })).toHaveCount(0);
+  // An absent key fact folds under the side column's not-recorded list.
+  await openFoldedFacts(
+    page.getByRole("region", { name: "Key facts" }),
+    "Brand",
+  );
   await page.getByRole("button", { name: "Edit vendor", exact: true }).click();
   const guess = page.getByRole("option", {
     name: /Cubby's guess, 62% sure/,

@@ -231,7 +231,9 @@ test("image results compare descriptions and require explicit attachment confirm
   await description.scrollIntoViewIfNeeded();
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  // The Image's generic "Image jobs" section opens the job's own record.
+  // The Image's generic "Image jobs" section, in its Work tab, opens the
+  // job's own record.
+  await page.getByRole("tab", { name: /^Work/u }).click();
   await page
     .getByRole("link", { name: /^Image identification · / })
     .first()

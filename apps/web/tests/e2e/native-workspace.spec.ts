@@ -140,7 +140,10 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   const pilotURL = page.url();
   const runsLink = page.getByRole("link", { name: "Runs", exact: true });
   await expect(runsLink).toHaveCount(0);
-  const productLink = page.locator(`a[href^="/products/${product.id}"]`);
+  // Every tab stays mounted; the pilot's link is the one in Evidence.
+  const productLink = page
+    .getByRole("tabpanel", { name: /^Evidence/u })
+    .locator(`a[href^="/products/${product.id}"]`);
   await expect(productLink).toContainText("Workspace drill");
   await expect(productLink).toBeVisible();
   await productLink.click();

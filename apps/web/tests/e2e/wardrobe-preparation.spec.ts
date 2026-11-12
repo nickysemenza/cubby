@@ -6,7 +6,10 @@ import {
   attachProductImagePrerequisite,
   seedImagePrerequisite,
 } from "./fixtures/photos";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  showDetailSection,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 test("taxonomy edits keep product classification paths and labels separate from covers", async ({
@@ -117,8 +120,7 @@ test("taxonomy edits keep product classification paths and labels separate from 
       ),
     )
     .toBe(true);
-  const labels = page.locator("#labels");
-  await labels.scrollIntoViewIfNeeded();
+  const labels = await showDetailSection(page, "labels");
   await expect(
     labels.getByRole("img", { name: `${labelImageName}.png` }),
   ).toBeVisible();

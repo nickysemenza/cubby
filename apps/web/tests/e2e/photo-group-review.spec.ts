@@ -18,6 +18,7 @@ import { seedPhotoGroupReviewRun } from "./fixtures/photos";
 import {
   chooseOption,
   gotoAuthenticatedPage,
+  showDetailSection,
   uniqueName,
   waitForFormHydration,
 } from "./support/e2e-helpers";
@@ -66,7 +67,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}#work`,
+    `/runs/${seed.runId}#photo-batch`,
     page.getByRole("heading", { name: "Photo review", exact: true }),
   );
 
@@ -231,7 +232,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}#work`,
+    `/runs/${seed.runId}#photo-batch`,
     page.getByRole("heading", { name: "Photo review" }),
   );
 
@@ -409,7 +410,7 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
   expect(saved.ok(), await saved.text()).toBeTruthy();
   await gotoAuthenticatedPage(
     page,
-    `/runs/${seed.runId}#work`,
+    `/runs/${seed.runId}#photo-batch`,
     page.getByRole("heading", { name: "Photo review" }),
   );
   const entryPicker = page
@@ -485,16 +486,15 @@ test("a member creates a Product from own item and label photos without an impor
     },
   });
   expect(saved).toBeDefined();
-  await gotoAuthenticatedPage(page, `/products/${saved!.shortcode}`);
-  await page.locator("#images").scrollIntoViewIfNeeded();
+  await gotoAuthenticatedPage(page, `/products/${saved!.shortcode}#images`);
   await expect(
     page
       .locator("#images")
       .getByRole("img", { name: "synthetic-wardrobe-shirt.png" }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(
-    page
-      .locator("#labels")
-      .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
+    (await showDetailSection(page, "labels")).getByRole("img", {
+      name: "synthetic-wardrobe-label.png",
+    }),
   ).toBeVisible();
 });
