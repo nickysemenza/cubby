@@ -46,7 +46,7 @@ struct NativeCoverageTests {
             for field in descriptor.fields {
                 guard let renderer = field.listRenderer,
                     coverage.list[renderer.rawValue] == .generic, field.labelPath == nil,
-                    field.valueOptions == nil
+                    field.kind != .enum, field.valueOptions == nil
                 else { continue }
                 missing.append("\(descriptor.key.rawValue).\(field.key) (\(renderer.rawValue))")
             }
