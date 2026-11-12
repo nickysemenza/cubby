@@ -2617,7 +2617,7 @@ describe("statement Transaction suggestions", () => {
           runId,
           scope: { importId: recorded.batchId },
         }),
-      { statements: 1150, parameters: 200 },
+      { statements: 300, parameters: 200 },
     );
     expect(outcome).toMatchObject({ completed: 8, failed: [], next: null });
     expect(

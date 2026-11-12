@@ -4,6 +4,7 @@ import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-tra
 import {
   parseEntityId,
   shortcodeSchema,
+  type FinancialTransactionId,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
@@ -113,12 +114,15 @@ export async function financialSourceRefsIncluding(
   );
 }
 
-/** Reserve existing transaction commands, then every occurrence, before settlement row locks. */
+/**
+ * Reserve existing transaction commands, then every occurrence, before
+ * settlement row locks. Returns the named transactions' ids, deleted or not.
+ */
 export async function lockFinancialTransactionSources(
   tx: RepositoryQueryTransaction,
   codes: readonly FinancialTransactionShortcode[],
   refs: readonly SourceRef[] = [],
-): Promise<void> {
+): Promise<{ id: FinancialTransactionId }[]> {
   const query = repositoryQueries(tx);
   const targets = codes.length
     ? await query
@@ -164,17 +168,17 @@ export async function lockFinancialTransactionSources(
       .where(where)
       .orderBy(asc(sourceOccurrence.id))
       .for("update");
+  return targets;
 }
 
 /** Call before party, Purchase and FinancialTransaction row locks, including ordinary money edits. */
 export async function lockFinancialSourceOccurrences(
   tx: RepositoryQueryTransaction,
   refs: readonly SourceRef[],
-  transactionId?: string,
+  transactionIds: readonly string[] = [],
 ) {
-  const retainedRefs = transactionId
-    ? ((await financialSourceRefsFor(tx, [transactionId])).get(transactionId) ??
-      [])
+  const retainedRefs = transactionIds.length
+    ? [...(await financialSourceRefsFor(tx, transactionIds)).values()].flat()
     : [];
   await lockFinancialEvidenceKeys(
     tx,
@@ -189,10 +193,10 @@ export async function lockFinancialSourceOccurrences(
   });
   const where = or(
     codes.length ? inArray(sourceOccurrence.shortcode, codes) : undefined,
-    transactionId
-      ? eq(
+    transactionIds.length
+      ? inArray(
           sourceOccurrence.acceptedTransactionId,
-          parseEntityId("financialTransaction", transactionId),
+          transactionIds.map((id) => parseEntityId("financialTransaction", id)),
         )
       : undefined,
   );
@@ -203,16 +207,6 @@ export async function lockFinancialSourceOccurrences(
     .where(where)
     .orderBy(asc(sourceOccurrence.id))
     .for("update");
-}
-
-export async function assertFinancialSourceRefsAvailable(
-  db: RepositoryQueryInput,
-  refs: readonly SourceRef[],
-  exceptTransactionId?: string,
-): Promise<void> {
-  await assertFinancialSourceRefsAvailableFor(db, [
-    { refs, exceptTransactionId },
-  ]);
 }
 
 /**
@@ -362,18 +356,10 @@ type AcceptedSourceChanges = {
   after: (typeof sourceOccurrence.$inferSelect)[];
 };
 
-/** The caller holds every affected occurrence and target lock. Aliases are provenance only. */
-export async function replaceFinancialSourceRefs(
-  tx: RepositoryQueryTransaction,
-  transactionId: string,
-  refs: readonly SourceRef[],
-): Promise<AcceptedSourceChanges> {
-  return replaceFinancialSourceRefsFor(tx, [{ transactionId, refs }]);
-}
-
 /**
- * Set-based {@link replaceFinancialSourceRefs}: one owner read, one release
- * and one acceptance statement across every transaction. An occurrence named
+ * The caller holds every affected occurrence and target lock. Aliases are
+ * provenance only. One owner read, one release and one acceptance statement
+ * across every transaction. An occurrence named
  * by two transactions refuses before any write.
  */
 export async function replaceFinancialSourceRefsFor(
