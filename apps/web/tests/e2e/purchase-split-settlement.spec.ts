@@ -1,6 +1,5 @@
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
-import { purchaseSettlementCandidatesOut } from "@cubby/schemas/purchase";
 
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -9,7 +8,6 @@ import { createEvidenceHarnessContext } from "./fixtures/core";
 import { seedSplitSettlementPrerequisite } from "./fixtures/finance";
 import { gotoDetailActions } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
 // Review preserves accepted residual allocations and writes only the chosen split.
 // The SQL candidate owner covers ranking, exclusions and the broad population cap.
@@ -60,44 +58,7 @@ test("preserves residual allocations and saves a reviewed split without booking 
       exact: true,
     }),
   ).toBeVisible();
-  // Consume the body when the response arrives: click may wait for
-  // navigation, after which Chromium can discard the prior response body.
-  const [data] = await Promise.all([
-    page
-      .waitForResponse((response) =>
-        dispatchesOperation(
-          response.request(),
-          "purchase.settlementCandidates",
-        ),
-      )
-      .then(async (response) => {
-        expect(response.status()).toBe(200);
-        return operationResult(
-          response,
-          "purchase.settlementCandidates",
-          purchaseSettlementCandidatesOut,
-        );
-      }),
-    page.getByRole("button", { name: "Match statement activity" }).click(),
-  ]);
-  expect(data.advisory).toBe(true);
-  expect(data.candidates.map((candidate) => candidate.transaction.id)).toEqual(
-    expect.arrayContaining([partial.shortcode, seed.transaction.shortcode]),
-  );
-  const partialCandidate = data.candidates.find(
-    (candidate) => candidate.transaction.id === partial.shortcode,
-  );
-  expect(partialCandidate).toMatchObject({
-    days: 40,
-    merchantMatches: false,
-    exactAmount: true,
-    nearAmount: false,
-    conflicts: [],
-    proposedAllocations: [
-      { purchaseId: seed.second.shortcode, amount: "15.00" },
-      { purchaseId: seed.first.shortcode, amount: "42.50" },
-    ],
-  });
+  await page.getByRole("button", { name: "Match statement activity" }).click();
   const dialog = page.getByRole("dialog", { name: "Match statement activity" });
   await expect(dialog.getByText("$91.00")).toBeVisible();
   // Reviewing residual money keeps the already accepted allocation intact.

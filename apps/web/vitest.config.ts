@@ -225,11 +225,11 @@ const webTestEnv = {
   BETTER_AUTH_SECRET: "synthetic-test-signing-secret",
 };
 const sharedIsolationSeed = testShuffleSeed();
-const groupZeroMaxWorkers = Number.parseInt(
+const nodeMaxWorkers = Number.parseInt(
   process.env.VITEST_MAX_WORKERS ?? "4",
   10,
 );
-if (!Number.isSafeInteger(groupZeroMaxWorkers) || groupZeroMaxWorkers < 1) {
+if (!Number.isSafeInteger(nodeMaxWorkers) || nodeMaxWorkers < 1) {
   throw new Error("VITEST_MAX_WORKERS must be a positive integer");
 }
 export default defineConfig({
@@ -300,7 +300,7 @@ export default defineConfig({
             // workers only reuse their module graph within the same project.
             // Interleaving projects recycles workers and repeats web imports.
             // The override supports uncached tuning measurements.
-            maxWorkers: groupZeroMaxWorkers,
+            maxWorkers: nodeMaxWorkers,
             sequence: { groupOrder: 0 },
           },
         },
@@ -315,7 +315,7 @@ export default defineConfig({
             // worker receives more than one file; server instances remain
             // test-owned and are still constructed as needed.
             isolate: false,
-            maxWorkers: groupZeroMaxWorkers,
+            maxWorkers: nodeMaxWorkers,
             sequence: { groupOrder: 1 },
           },
         },
@@ -332,7 +332,7 @@ export default defineConfig({
             // and env between tests, so workers can share one jsdom graph.
             pool: "threads",
             isolate: false,
-            maxWorkers: groupZeroMaxWorkers,
+            maxWorkers: nodeMaxWorkers,
             clearMocks: true,
             unstubGlobals: true,
             unstubEnvs: true,
@@ -437,8 +437,9 @@ export default defineConfig({
                 isolate: false,
                 // A shared sequence group requires the Workers project's
                 // single-worker cap in CI as well as local runs.
-                maxWorkers: 1,
-                sequence: { groupOrder: 3 },
+                ...(name === "capability"
+                  ? { maxWorkers: 1, sequence: { groupOrder: 3 } }
+                  : { sequence: { groupOrder: 5 } }),
               },
             }) satisfies TestProjectConfiguration,
         ),
@@ -478,8 +479,8 @@ export default defineConfig({
             ],
             pool: "forks",
             testTimeout: 30_000,
-            // Group 0 projects must share one worker cap.
-            maxWorkers: groupZeroMaxWorkers,
+            // Projects in a shared sequence group use the same worker cap.
+            maxWorkers: nodeMaxWorkers,
             sequence: { groupOrder: 1 },
           },
         },
@@ -489,7 +490,7 @@ export default defineConfig({
             name: "packages",
             root: join(import.meta.dirname, "../.."),
             include: ["packages/*/src/**/*.test.ts"],
-            maxWorkers: groupZeroMaxWorkers,
+            maxWorkers: nodeMaxWorkers,
             sequence: { groupOrder: 1 },
           },
         },

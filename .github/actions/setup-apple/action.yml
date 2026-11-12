@@ -141,6 +141,10 @@ runs:
       if: steps.ffi-cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
+        if [[ "$(node scripts/ensure.ts apple-ffi --fingerprint)" != "$CUBBY_FFI_SETUP_FINGERPRINT" ]]; then
+          echo "::error::Rust setup changed the Apple FFI build fingerprint"
+          exit 1
+        fi
         if node --input-type=module -e 'import.meta.resolve("nx/bin/nx.js")' >/dev/null 2>&1; then
           node scripts/ensure.ts apple-ffi
         else
@@ -188,8 +192,7 @@ runs:
 
     # App version/build settings affect products, not dependency module identity.
     # The generated CubbyFFI header is a module input like a binary package: a
-    # changed FFI surface must drop precompiled modules, or a restored
-    # CubbyFFI_FFI module replays without the new functions.
+    # changed FFI surface must miss compiled entries for the old functions.
     - name: Hash the package graph
       id: packages
       if: inputs.build-cache == 'true'
@@ -212,7 +215,7 @@ runs:
       with:
         # Must list exactly the save step's paths: the cache version hashes them.
         path: ${{ steps.paths.outputs.value }}
-        # The host-test phase leaves .build here; it is not an app source input.
+        # Generated host products are not simulator compilation inputs.
         # Only successful compiler cache entries cross runners.
         key: xcode-dd-v7-${{ runner.os }}-${{ steps.toolchain.outputs.hash }}-${{ steps.packages.outputs.hash }}-${{ hashFiles('apps/apple/project.yml', 'apps/apple/App/**', 'apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/tooling/apple-check.sh', 'apps/apple/tooling/apple.ts') }}
         # Keep incomplete entries from earlier generations out of the restore.

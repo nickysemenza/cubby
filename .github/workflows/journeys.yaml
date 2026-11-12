@@ -73,7 +73,7 @@ jobs:
           key: ${{ steps.test-runner.outputs.cache-key }}
           cache-hit: ${{ steps.test-runner.outputs.cache-hit }}
           matched-key: ${{ steps.test-runner.outputs.matched-key }}
-      - name: Save DerivedData cache
+      - name: Save simulator compilation cache
         uses: ./.github/actions/save-cache-main-only
         with:
           path: ${{ steps.apple.outputs.cache-paths }}

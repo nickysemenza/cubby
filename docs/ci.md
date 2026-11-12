@@ -280,7 +280,9 @@ restoration. Rustup prepares the repository's compiler before computing the
 FFI fingerprint; an exact FFI-output hit skips target-library installation and
 Cargo build-cache transfer. The fingerprint retains the compiler identity,
 resolved Cargo graph, local source bytes, build environment, Xcode, targets and
-profile. Archive jobs can run this preparation without installing JS dependencies.
+profile. On a miss, setup verifies the fingerprint again after Rust-cache
+preparation and before building. Archive jobs can run this preparation without
+installing JS dependencies.
 
 It restores `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones
 used by app builds; the host resolves its smaller package graph directly.
@@ -398,8 +400,8 @@ because `Test report` does not wait for it.
 ### Test report
 
 `Test report` waits for Validation and the test lanes (not Rust or Apple),
-installs without postinstall generation, and merges every Vitest and Playwright
-shard blob into one report (`vitest --merge-reports`, `playwright merge-reports`):
+installs the web workspace dependency closure without postinstall generation,
+and merges every Vitest and Playwright shard blob into one report (`vitest --merge-reports`, `playwright merge-reports`):
 an index page linking the Vitest and Playwright HTML reports. It publishes that
 directory to the Nx cache Worker, which serves it at `/reports/{run}/{attempt}/`,
 and uploads it as a 14-day artifact. Uploads share an eight-request limit and
