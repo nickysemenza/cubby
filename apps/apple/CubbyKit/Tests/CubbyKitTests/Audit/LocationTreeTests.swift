@@ -46,6 +46,55 @@ struct LocationTreeTests {
         #expect(tree.auditableBins(under: LocationCode("LOC-9ABC")).isEmpty)
     }
 
+    @Test func coverImageURLReadsTheEnvelopeAndSkipsAMissingOne() throws {
+        let tree = try Self.tree()
+        #expect(tree[LocationCode("LOC-2345")]?.coverImageURL == nil)
+
+        let preferred: JSONValue = [
+            "current": [
+                "assignment": .null,
+                "controls": ["kind": "readonly", "reason": "computed"],
+            ],
+            "result": [
+                "kind": "live",
+                "decision": [
+                    "outcome": [
+                        "kind": "value",
+                        "value": [
+                            [
+                                "id": "IMG-1",
+                                "url": "https://images.example/original.heic",
+                                "representations": ["preferred": "https://images.example/cutout.png"],
+                            ]
+                        ],
+                    ],
+                    "provenance": ["kind": "computed"],
+                ],
+            ],
+        ]
+        let originalOnly: JSONValue = [
+            "current": [
+                "assignment": .null,
+                "controls": ["kind": "readonly", "reason": "computed"],
+            ],
+            "result": [
+                "kind": "live",
+                "decision": [
+                    "outcome": [
+                        "kind": "value",
+                        "value": [["id": "IMG-2", "url": "https://images.example/original.jpg"]],
+                    ]
+                ],
+            ],
+        ]
+        #expect(
+            LocationTreeNode.coverImageURL(from: preferred)
+                == URL(string: "https://images.example/cutout.png"))
+        #expect(
+            LocationTreeNode.coverImageURL(from: originalOnly)
+                == URL(string: "https://images.example/original.jpg"))
+    }
+
     @Test func scopeCandidatesSkipTheEmptyUnknown() throws {
         let tree = try Self.tree()
         let candidates = tree.scopeCandidates()

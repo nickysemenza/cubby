@@ -130,6 +130,7 @@ private struct BinMoveToSheet: View {
     let session: RecountSession
     let id: InventoryEntryCode
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var query = ""
 
     private var candidates: [(node: LocationTreeNode, depth: Int)] {
@@ -137,7 +138,10 @@ private struct BinMoveToSheet: View {
         let currentBinID = session.currentBin?.id
         let scoped = all.filter { $0.node.id != currentBinID }
         guard !query.isEmpty else { return scoped }
-        return scoped.filter { $0.node.name.localizedCaseInsensitiveContains(query) }
+        return scoped.filter {
+            $0.node.name.localizedCaseInsensitiveContains(query)
+                || $0.node.id.rawValue.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var body: some View {
@@ -148,14 +152,30 @@ private struct BinMoveToSheet: View {
                     dismiss()
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
-                        Text(entry.node.name)
-                            .font(.fieldGuideBody)
-                            .foregroundStyle(FieldGuideTokens.graphite)
-                            .lineLimit(1)
+                        Thumb(
+                            url: entry.node.coverImageURL, size: 40,
+                            symbol: EntityCatalog[.location].sfSymbol)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(entry.node.name)
+                                .font(.fieldGuideBody)
+                                .foregroundStyle(FieldGuideTokens.graphite)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if dynamicTypeSize.isAccessibilitySize {
+                                Text(entry.node.id.rawValue)
+                                    .font(.fieldGuideCode)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                            }
+                        }
+                        .layoutPriority(1)
                         Spacer(minLength: FieldGuideTokens.Space.sm)
-                        Text(entry.node.id.rawValue)
-                            .font(.fieldGuideCode)
-                            .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                        if !dynamicTypeSize.isAccessibilitySize {
+                            Text(entry.node.id.rawValue)
+                                .font(.fieldGuideCode)
+                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
                     }
                     .padding(.leading, CGFloat(entry.depth) * 14)
                     .frame(minHeight: FieldGuideTokens.touchTarget)

@@ -8,6 +8,21 @@ extension LocationTreeNodeOut {
     public var childNodes: [LocationTreeNodeOut] { children ?? [] }
     public var directItems: Int { directItemCount ?? 0 }
     public var totalItems: Int { totalItemCount ?? 0 }
+
+    /// Canonical cover already resolved on the tree: the bin's own photo, then its
+    /// identity product, then a product stocked inside it.
+    public var coverImageURL: URL? {
+        Self.coverImageURL(from: fields.displayImages)
+    }
+
+    static func coverImageURL(from displayImages: JSONValue) -> URL? {
+        let row: JSONValue = ["fields": ["displayImages": displayImages]]
+        guard let first = row.recordValue("displayImages")?.arrayValue?.first else { return nil }
+        let value =
+            first["representations"]?["preferred"]?.stringValue
+            ?? first["url"]?.stringValue
+        return value.flatMap(URL.init(string:))
+    }
 }
 
 /// The whole location tree with an index built once: parents, ancestors, breadcrumbs, and the

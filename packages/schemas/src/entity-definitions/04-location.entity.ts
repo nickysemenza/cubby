@@ -1006,6 +1006,11 @@ Rules:
           {
             relationPath: ["product"],
           },
+          // What is stocked here. An incoming collection is not the borrowed
+          // default; a bin is recognized by the things inside it.
+          {
+            relationPath: ["inventory", "product"],
+          },
         ],
         ingress: [
           { kind: "self", routeId: "location-self", choice: "primary" },

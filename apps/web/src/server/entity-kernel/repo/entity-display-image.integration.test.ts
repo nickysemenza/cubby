@@ -954,6 +954,80 @@ describe("entity display image resolver", () => {
         expectedDisplayImage(productImg),
       ]);
     });
+
+    it("borrows a stocked product's cover when the bin has no photo of its own", async () => {
+      const stocked = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic hex bits" }),
+        ctx.actor,
+      );
+      const stockedImg = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: stocked.entityId,
+        imageId: stockedImg.id,
+        sortOrder: 0,
+      });
+      const identity = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic packout drawer" }),
+        ctx.actor,
+      );
+      const identityImg = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: identity.entityId,
+        imageId: identityImg.id,
+        sortOrder: 0,
+      });
+      const bin = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Synthetic bits drawer" }),
+        ctx.actor,
+      );
+      const drawer = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({
+          name: "Synthetic named drawer",
+          productId: identity.id,
+        }),
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: bin.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      await createInventoryFixture(
+        ctx.db,
+        {
+          productId: stocked.id,
+          locationId: drawer.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+
+      const rows = await withDisplayImages(
+        ctx.db,
+        "location",
+        [{ id: bin.entityId }, { id: drawer.entityId }],
+        (row) => ({ id: row.id }),
+      );
+
+      expect(rows.map((row) => row.id)).toEqual([
+        bin.entityId,
+        drawer.entityId,
+      ]);
+      expect(rows[0]?.displayImages[0]).toEqual(
+        expectedDisplayImage(stockedImg),
+      );
+      const drawerImages = rows[1]?.displayImages ?? [];
+      expect(drawerImages[0]).toEqual(expectedDisplayImage(identityImg));
+      expect(drawerImages).toContainEqual(expectedDisplayImage(stockedImg));
+    });
   });
 
   describe("vendor", () => {

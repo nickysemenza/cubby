@@ -210,8 +210,9 @@ private struct CaptureContent: View {
                     pickingLocation = true
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
-                        DomainMark(.location, style: .symbol, size: 15)
-                            .frame(width: iconSlotWidth)
+                        Thumb(
+                            url: capture.location?.imageURL, size: 40,
+                            symbol: EntityCatalog[.location].sfSymbol)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(capture.location?.name ?? "Choose a location")
                                 .font(.fieldGuideTitle)
@@ -238,6 +239,8 @@ private struct CaptureContent: View {
                             Text(code)
                                 .font(.fieldGuideCode)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         Image(systemName: "chevron.right")
                             .font(.caption.weight(.semibold))

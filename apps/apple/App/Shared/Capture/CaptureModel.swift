@@ -20,6 +20,7 @@ final class CaptureModel {
         let id: LocationCode
         let name: String
         let path: String?
+        let imageURL: URL?
     }
 
     let session: ScanSession
@@ -44,7 +45,8 @@ final class CaptureModel {
         guard let code = session.location else { return nil }
         if let option = locations.first(where: { $0.id == code }) { return option }
         return LocationOption(
-            id: code, name: tree?[code]?.name ?? code.rawValue, path: tree?.parent(of: code)?.name)
+            id: code, name: tree?[code]?.name ?? code.rawValue,
+            path: tree?.parent(of: code)?.name, imageURL: tree?[code]?.coverImageURL)
     }
 
     func select(_ location: LocationOption?) {
@@ -64,7 +66,9 @@ final class CaptureModel {
         defer { loadingLocations = false }
         do {
             let page = try await client.locationOptions(page: 1, pageSize: 200)
-            locations = page.items.map { LocationOption(id: $0.id, name: $0.name, path: $0.parentName) }
+            locations = page.items.map {
+                LocationOption(id: $0.id, name: $0.name, path: $0.parentName, imageURL: $0.imageURL)
+            }
             let loadedTree = try await client.locationTree()
             tree = loadedTree
             session.restoreLocation { loadedTree[$0] != nil }
@@ -87,7 +91,7 @@ final class CaptureModel {
                 missingBins = nil
                 return
             }
-            select(LocationOption(id: LocationCode(label.code), name: label.code, path: nil))
+            select(LocationOption(id: LocationCode(label.code), name: label.code, path: nil, imageURL: nil))
             return
         }
         session.submit(value)

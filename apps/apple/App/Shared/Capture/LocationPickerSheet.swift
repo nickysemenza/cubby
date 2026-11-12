@@ -11,6 +11,7 @@ struct LocationPickerSheet: View {
         guard !query.isEmpty else { return capture.locations }
         return capture.locations.filter {
             $0.name.localizedCaseInsensitiveContains(query)
+                || ($0.path?.localizedCaseInsensitiveContains(query) ?? false)
                 || $0.id.rawValue.localizedCaseInsensitiveContains(query)
         }
     }
@@ -23,12 +24,14 @@ struct LocationPickerSheet: View {
                     dismiss()
                 } label: {
                     HStack(spacing: FieldGuideTokens.Space.md) {
-                        DomainMark(.location, style: .symbol, size: 15)
-                            .fieldGuideIconSlot()
+                        Thumb(
+                            url: option.imageURL, size: 40,
+                            symbol: EntityCatalog[.location].sfSymbol)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(option.name)
                                 .font(.fieldGuideBody)
                                 .foregroundStyle(FieldGuideTokens.graphite)
+                                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                                 .fixedSize(horizontal: false, vertical: true)
                             if let path = option.path, !path.isEmpty {
                                 Text(path)
@@ -48,6 +51,8 @@ struct LocationPickerSheet: View {
                             Text(option.id.rawValue)
                                 .font(.fieldGuideCode)
                                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
                         }
                         if option.id == capture.session.location {
                             Image(systemName: "checkmark")
@@ -59,6 +64,7 @@ struct LocationPickerSheet: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(option.id == capture.session.location ? .isSelected : [])
                 .accessibilityIdentifier("capture.location.\(option.id.rawValue)")
             }
             .listStyle(.plain)

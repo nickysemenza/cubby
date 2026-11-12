@@ -7,6 +7,7 @@ import SwiftUI
 /// rest of the audit screens, this is never presented as a sheet.
 struct ScopePickerSheet: View {
     let session: RecountSession
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var code = ""
     @State private var codeError: String?
 
@@ -86,22 +87,28 @@ struct ScopePickerSheet: View {
         Button {
             Task { await session.start(scope: node.id) }
         } label: {
-            HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.md) {
+            HStack(spacing: FieldGuideTokens.Space.md) {
+                Thumb(
+                    url: node.coverImageURL, size: 40, symbol: EntityCatalog[.location].sfSymbol)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(node.name)
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphite)
-                        .lineLimit(1)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let type = (try? JSONValue(encoding: node.fields.type)).flatMap(FieldEnvelope.init)?
                         .effectiveValue?.stringValue
                     {
                         Eyebrow(type)
                     }
                 }
+                .layoutPriority(1)
                 Spacer(minLength: FieldGuideTokens.Space.sm)
                 Text("\(node.totalItems)")
                     .font(.fieldGuideData)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .padding(.leading, CGFloat(depth) * 14)
             .frame(minHeight: FieldGuideTokens.touchTarget)
