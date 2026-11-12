@@ -513,6 +513,7 @@ async function applyPublishedStatementLabels(
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
     budgetSpent: () => boolean;
+    time: <T>(phase: string, work: () => Promise<T>) => Promise<T>;
   },
 ) {
   const {
@@ -527,6 +528,7 @@ async function applyPublishedStatementLabels(
     reconsidered,
     fail,
     budgetSpent,
+    time,
   } = input;
   const importClean = Boolean(scope?.importId);
   const applied = new Set<string>();
@@ -572,7 +574,9 @@ async function applyPublishedStatementLabels(
     settledHere = true;
   };
   let stopped = false;
-  const applyAlone = async (target: LabelTarget) => {
+  const applyAlone = (target: LabelTarget) =>
+    time("statement_application_alone", () => applyOne(target));
+  const applyOne = async (target: LabelTarget) => {
     const key = chargeId(target.charge);
     // The budget bounds application too, since its per-charge cost is the
     // page's largest; a blocked suffix keeps its receipts for the next page.
@@ -654,33 +658,35 @@ async function applyPublishedStatementLabels(
           charges: run.length,
           noAction: none.length,
         });
-        const page = await applyAutomaticRulePage(
-          db,
-          run.flatMap(({ selection }) => (selection ? [selection] : [])),
-          {
-            context: buildCrudServices,
-            statementScope: scope,
-            settle: {
-              ids: none.map(({ target }) => receiptOf(target)),
-              run: async (tx, rows) => ({
-                admitted: new Set(rows.keys()),
-                settled: new Set(
-                  await completeStatementReceipts(
-                    tx,
-                    none.map(({ target }) => ({
-                      suggestionId: receiptOf(target),
-                      charge: target.charge,
-                      evidenceFingerprint: published.get(
-                        chargeId(target.charge),
-                      )!,
-                    })),
-                    rows,
-                    (row) => !selectAutomaticRule(row, { importClean }),
+        const page = await time("statement_application_page", () =>
+          applyAutomaticRulePage(
+            db,
+            run.flatMap(({ selection }) => (selection ? [selection] : [])),
+            {
+              context: buildCrudServices,
+              statementScope: scope,
+              settle: {
+                ids: none.map(({ target }) => receiptOf(target)),
+                run: async (tx, rows) => ({
+                  admitted: new Set(rows.keys()),
+                  settled: new Set(
+                    await completeStatementReceipts(
+                      tx,
+                      none.map(({ target }) => ({
+                        suggestionId: receiptOf(target),
+                        charge: target.charge,
+                        evidenceFingerprint: published.get(
+                          chargeId(target.charge),
+                        )!,
+                      })),
+                      rows,
+                      (row) => !selectAutomaticRule(row, { importClean }),
+                    ),
                   ),
-                ),
-              }),
+                }),
+              },
             },
-          },
+          ),
         );
         const alone: LabelTarget[] = [];
         for (const { target, selection } of run) {
@@ -1285,6 +1291,7 @@ async function runStatementLabelBatch(
             ),
             fail,
             budgetSpent,
+            time,
           }),
         ),
     );
