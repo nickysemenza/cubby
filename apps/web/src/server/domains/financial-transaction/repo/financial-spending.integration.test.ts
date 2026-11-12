@@ -703,7 +703,7 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it.each(["missing owner", "guest owner", "deleted owner", "bank"])(
+  it.each(["missing owner", "guest owner", "deleted owner", "loan"])(
     "holds household purchaser admission for %s",
     async (mode) => {
       const { transaction, advice, account, other } = await householdCard(true);
@@ -724,12 +724,9 @@ describe("shared spending booking", () => {
             ...(mode === "guest owner"
               ? { ledgerPartyId: other.entityId }
               : {}),
-            ...(mode === "bank"
+            ...(mode === "loan"
               ? {
-                  identity: {
-                    kind: "bank_account" as const,
-                    accountType: "checking" as const,
-                  },
+                  identity: { kind: "other" as const },
                   primaryCardholderId: null,
                   authorizedUsers: [],
                 }
