@@ -97,6 +97,14 @@
 .ledger[data-ledger="facts"] > .ledger-row:first-child {
   border-top: 0;
 }
+/* A fact's record pill keeps one line and ends in an ellipsis; a narrow facts
+   track wrapped its name over two or three lines. The link owning the pill
+   names the record accessibly. */
+.ledger[data-ledger="facts"] [data-entity-pill] > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 /* Field explanations stay one hover or focus away; an open explanation, a
    touch screen, or keyboard focus keeps its button visible. */

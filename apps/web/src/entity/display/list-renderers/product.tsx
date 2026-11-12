@@ -37,8 +37,10 @@ const tagLinks: ListRenderer<"product"> = (helper) =>
     add(
       helper.accessor(
         (row) => {
-          const effectiveRowTags = fieldValueOf(row.fields.tags);
-          return effectiveRowTags ?? [];
+          // SAFETY: a row from a narrower projection (a relation preview, a
+          // search hit) carries no tags field; it reads as no tags.
+          const tags = row.fields.tags as typeof row.fields.tags | undefined;
+          return (tags && fieldValueOf(tags)) ?? [];
         },
         {
           id: "tags",

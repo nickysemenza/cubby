@@ -23,7 +23,7 @@ export interface BatchCommand {
 }
 
 /** How many members the command reached, of the active members read. */
-export interface BatchCommandResult extends BulkActionResult {
+interface BatchCommandResult extends BulkActionResult {
   done: number;
   total: number;
 }

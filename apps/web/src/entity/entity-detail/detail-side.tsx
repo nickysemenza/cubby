@@ -5,6 +5,7 @@ import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { readRecordState } from "~/entity/display/list-renderers/generic-state";
 import {
   entities,
   entityDetailParams,
@@ -79,6 +80,10 @@ function NeedsYou<E extends GenericDetailEntity>({
   ).summary;
   const declared = detail.side?.needs;
   const items = declaredNeedsOf(queryClient, entity, record);
+  // Declared items carry no tone of their own; on a record whose state is a
+  // failure they are what the failure left, so they take its mark.
+  const itemsFailed =
+    readRecordState(queryClient, entity, record)?.failed === true;
   const queue = useRecordWorkQueue(record.id, declared === undefined);
   const rows = declared === undefined ? queue.rows : [];
   const named = new Set(
@@ -107,7 +112,7 @@ function NeedsYou<E extends GenericDetailEntity>({
               key={`${item.entity}:${item.id}:${item.title}`}
               clip={false}
               stacked
-              leading={needsMark(false)}
+              leading={needsMark(itemsFailed)}
               primary={
                 target.success &&
                 item.id &&

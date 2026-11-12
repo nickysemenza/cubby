@@ -760,6 +760,7 @@ export const { definition, readSchemas } = defineEntityModel({
             value,
             label: RUN_PURPOSE_LABEL[value],
             glyph: RUN_PURPOSE_GLYPH[value],
+            description: RUN_KINDS[value].description,
             explanation: RUN_KINDS[value].explanation,
           })),
         },
