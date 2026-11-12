@@ -137,9 +137,12 @@ export function runStalledSql(now = new Date()): SQL<boolean> {
 
 /** Member stops and retirement stay in history; successors take over stopped work. */
 export function runNeedsAttentionSql(): SQL<boolean> {
+  // `IS NOT NULL` lets the planner read the few successor rows through
+  // `Run_predecessorRunId_idx`; without it a list-wide OR hashes every live Run.
   const successor = related(
     run,
-    (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
+    (next) =>
+      sql`${next.predecessorRunId} = ${outer(run.id)} AND ${next.predecessorRunId} IS NOT NULL`,
   ).exists();
   return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)} AND NOT ${retiredRunPredicate(sql`${run.retiredAt}`)}
     AND NOT ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, failureCode: sql`${run.failureCode}`, progress: sql`${run.progress}` })}
@@ -499,7 +502,7 @@ export async function readStoppedRuns(db: Database, now: Date) {
         AND ${run.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed})
         AND ${run.endedAt} > ${stamp(new Date(now.getTime() - FAILURE_LOOKBACK_DAYS * 24 * 60 * MINUTE_MS))}
         AND NOT EXISTS (SELECT 1 FROM "Run" next
-          WHERE next."predecessorRunId" = ${run.id} AND ${notDeleted("next")})`,
+          WHERE next."predecessorRunId" = ${run.id} AND next."predecessorRunId" IS NOT NULL AND ${notDeleted("next")})`,
     )
     .orderBy(desc(run.endedAt));
   const failedPurposes = [...new Set(failed.map((row) => row.purpose))];

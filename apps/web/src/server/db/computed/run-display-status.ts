@@ -7,7 +7,9 @@
  * rather than review or authorization. A mail discovery pass the funding
  * window already released reads `paused` until it resumes.
  *
- * The successor probe reads `Run_predecessorRunId_idx`.
+ * The successor probe reads `Run_predecessorRunId_idx`. Its `IS NOT NULL`
+ * is redundant to the equality but keeps the planner from hashing every live
+ * Run when the probe sits inside a list-wide OR.
  */
 import {
   runDisplayStatus,
@@ -44,7 +46,7 @@ export const runDisplayStatusSql = (): SQL<RunDisplayStatus> => {
       THEN ${display.waiting_for_funding}::text
     WHEN ${status} IN (${needs_review}, ${failed}) AND EXISTS (
       SELECT 1 FROM "Run" successor
-      WHERE successor."predecessorRunId" = ${outer(run.id)} AND ${notDeleted("successor")})
+      WHERE successor."predecessorRunId" = ${outer(run.id)} AND successor."predecessorRunId" IS NOT NULL AND ${notDeleted("successor")})
       THEN ${display.retried}::text
     ELSE ${status} END)`;
 };

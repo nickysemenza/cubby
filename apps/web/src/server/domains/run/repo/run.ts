@@ -20,7 +20,7 @@ import {
   runSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.run.gen";
 import { formatDuration } from "~/lib/format-duration";
-import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
+import { aiChargedCostSql } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
 import { readRunAiSummaries } from "~/server/db/computed/run-ai-summary";
 import { runDisplayStatusSql } from "~/server/db/computed/run-display-status";
@@ -125,7 +125,7 @@ const runRead = {
     const costs = bind.batch(async ({ db, rows }) => {
       const values = rows.length
         ? await unwrapDb(db)
-            .select({ runId: aiUsage.runId, ...aiCostSummarySql() })
+            .select({ runId: aiUsage.runId, ...aiChargedCostSql() })
             .from(aiUsage)
             .where(
               and(
