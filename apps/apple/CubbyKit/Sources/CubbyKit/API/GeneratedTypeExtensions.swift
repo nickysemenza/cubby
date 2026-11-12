@@ -75,6 +75,20 @@ extension EntityGraphNode: Identifiable {
     public var imageURL: URL? { image.flatMap { URL(string: $0.url) } }
 }
 
+extension ConnectedPathNode {
+    /// `url` is already the preferred representation. `preferred` wins if a
+    /// payload still carries the original in `url`.
+    public var imageURL: URL? {
+        image.flatMap { URL(string: $0.representations?.preferred ?? $0.url) }
+    }
+}
+
+extension DetailActivityEvent {
+    public var imageURL: URL? {
+        image.flatMap { URL(string: $0.representations?.preferred ?? $0.url) }
+    }
+}
+
 extension EntityGraphBranch: Identifiable {
     public var id: String { "\(root.stableKey)|\(relationshipKey)" }
 }

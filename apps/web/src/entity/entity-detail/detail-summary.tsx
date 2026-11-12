@@ -700,6 +700,7 @@ function SummaryRecords({
                   entity={item.target.entityKind}
                   id={item.target.entityId}
                   name={item.target.label}
+                  displayImage={item.target.image ?? null}
                   emoji={null}
                 />
               ) : (

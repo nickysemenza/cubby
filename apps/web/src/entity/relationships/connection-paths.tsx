@@ -42,8 +42,9 @@ export function ConnectionRecordLink({
       entity={node.entityKind}
       id={node.entityId}
       name={disambiguate ? `${node.label} · ${node.entityId}` : node.label}
-      // The batched provider supplies covers; a per-chip emoji lookup would
-      // spend one request per path node.
+      displayImage={node.image ?? null}
+      // A missing cover still joins the page batch. A per-chip emoji lookup
+      // would spend one request per path node.
       emoji={null}
     />
   );

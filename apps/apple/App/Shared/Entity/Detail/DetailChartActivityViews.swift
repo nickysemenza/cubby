@@ -155,6 +155,7 @@ struct DetailActivitySection: View {
         let subtitle = isRecord ? event.subtitle : changedFieldLabels(event)
         return RecordListRow(
             title: title,
+            imageURL: isRecord ? event.imageURL : nil,
             symbol: entity.sfSymbol,
             thumbnailSize: 22
         ) {

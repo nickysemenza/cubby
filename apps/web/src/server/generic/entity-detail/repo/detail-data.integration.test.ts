@@ -3,6 +3,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -11,8 +12,11 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import {
+  createImageFixture,
   createProductIdentityFixture,
+  insertEntityAttachments,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -305,5 +309,38 @@ describe("declared detail data", () => {
     expect(
       (await getDetailActivity(ctx.db, { source, entity: "expense" })).items,
     ).toEqual(all.items.filter((event) => event.entity === "expense"));
+  });
+
+  it("gives a named record its canonical cover and leaves change events without one", async () => {
+    const meal = await createMealWithEntityId(
+      ctx.db,
+      buildEntity("meal", {
+        date: "2026-11-10",
+        name: "Synthetic pictured supper",
+      }),
+      ctx.actor,
+    );
+    const photo = await createImageFixture(ctx.db, "meal-activity", {
+      capturedAt: new Date("2026-11-10T19:36:45.000Z"),
+      filename: "IMG_0019.heic",
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: meal.entityId,
+      imageId: photo.id,
+      sortOrder: 0,
+    });
+    const page = await getDetailActivity(ctx.db, {
+      source: { entityKind: "meal", entityId: meal.output.id },
+      limit: 50,
+    });
+    const pictured = page.items.find(
+      (event) => event.kind === "record" && event.shortcode === photo.shortcode,
+    );
+    expect(pictured?.image?.url).toBe(photo.url);
+    expect(
+      page.items
+        .filter((event) => event.kind === "change")
+        .every((event) => event.image === undefined),
+    ).toBe(true);
   });
 });
