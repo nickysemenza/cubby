@@ -367,8 +367,11 @@ async function refreshStatementNeighbours(
   });
 }
 
+// Bound SERIALIZABLE create runs to keep their predicate-lock footprint small.
+export const STATEMENT_PAGE_RUN_CREATES = 8;
+
 /**
- * A published create a label page can apply with others: no transfer, hold,
+ * A published create an import page can apply with others: no transfer, hold,
  * copy or live candidate, and spending that settles without booking or books
  * one new aggregate. Anything else keeps its own review.
  */

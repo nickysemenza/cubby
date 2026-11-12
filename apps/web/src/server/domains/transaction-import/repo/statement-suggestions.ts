@@ -3620,7 +3620,7 @@ export async function retryStatementGenerationRefs(
   return { done, skipped, failed, published, labelsReused, unchanged };
 }
 
-/** Keep the publication proposal graph out of the serial application frame. */
+/** Keep the publication proposal graph out of the application frame. */
 async function publishStatementGenerationPage(
   db: Database,
   charges: readonly ChargeRef[],
@@ -3628,6 +3628,7 @@ async function publishStatementGenerationPage(
   runId: RunId | null,
   failed: RunStepError[],
 ) {
+  const suggestionIds = new Map<string, string[]>();
   let published = 0;
   let labelsReused = 0;
   let unchanged = 0;
@@ -3674,7 +3675,7 @@ async function publishStatementGenerationPage(
     ),
   });
   // Publish independent charges first; import applications then recheck the
-  // current ledger sequentially, including reused labels on unchanged imports.
+  // current ledger under the guarded batch or single review boundary.
   const producer = ruleProducer(runId);
   await publishSuggestionBatches(
     db,
@@ -3683,7 +3684,14 @@ async function publishStatementGenerationPage(
     producer,
     {
       concurrency: STATEMENT_PUBLISH_CONCURRENCY,
-      onOutcome: (_, result) => {
+      onOutcome: ({ proposal }, result) => {
+        if (result.outcome === "published")
+          suggestionIds.set(chargeId(proposal.charge), [result.suggestionId]);
+        else if (result.outcome === "unchanged")
+          suggestionIds.set(
+            chargeId(proposal.charge),
+            result.rows.map((row) => row.id),
+          );
         const outcome = statementOutcome(result, producer);
         labelsReused += outcome.labelsReused;
         if (outcome.outcome === "published") published++;
@@ -3701,6 +3709,7 @@ async function publishStatementGenerationPage(
   const publishedAt = performance.now();
   return {
     charges: proposals.map(({ charge }) => charge),
+    suggestionIds,
     published,
     labelsReused,
     unchanged,
@@ -3740,7 +3749,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      // Import generation also admits serial money writes before its checkpoint.
+      // Import generation also admits money writes before its checkpoint.
       input.scope?.importId
         ? JOB_PAGE_LIMITS.statementApplicationsPerPage
         : JOB_PAGE_LIMITS.statementGenerationPerPage,
@@ -3763,6 +3772,7 @@ export async function generateStatementSuggestionPage(
   const selectedAt = performance.now();
   const {
     charges: proposalCharges,
+    suggestionIds,
     published,
     labelsReused,
     unchanged,
@@ -3777,38 +3787,121 @@ export async function generateStatementSuggestionPage(
     failed,
   );
   if (input.scope?.importId) {
-    const { applyAutomaticRulesForCharge } =
-      await import("~/server/generic/suggestions/repo/automatic-application");
-    // This page's publication is current until one of its charges applies a
-    // rule; only charges after such a money write regenerate first.
-    let wrote = false;
+    const {
+      applyAutomaticRulePage,
+      applyAutomaticRulesForCharge,
+      selectAutomaticRules,
+    } = await import("~/server/generic/suggestions/repo/automatic-application");
+    const { statementBatchCandidate, STATEMENT_PAGE_RUN_CREATES } =
+      await import("~/server/domains/transaction-import/repo/statement-suggestion-apply");
+    const selections = await selectAutomaticRules(
+      db,
+      [...new Set([...suggestionIds.values()].flat())],
+      { importClean: true },
+    );
+    const selectionFor = (charge: ChargeRef) => {
+      const current = (suggestionIds.get(chargeId(charge)) ?? []).flatMap(
+        (id) => (selections.has(id) ? [selections.get(id)!] : []),
+      );
+      const [selection] = current;
+      return current.length === 1 &&
+        selection &&
+        statementBatchCandidate(
+          statementTransactionJudgment.parse(selection.row.judgment),
+        )
+        ? selection
+        : null;
+    };
+    const batchTried = new Set<string>();
+    const batchApplied = new Set<string>();
+    // Single admission rebuilds after a money write or a declined page;
+    // a decline can reveal a new live candidate even before any write commits.
+    let recheck = false;
     // Each write's neighbour refresh joins one page-wide refresh at the end.
     await coalesceChargeRefreshes(async () => {
       for (const [chargeIndex, charge] of proposalCharges.entries()) {
         const ref = `charge:${chargeId(charge)}`;
         if (failed.some((failure) => failure.ref === ref)) continue;
         try {
-          if (wrote) {
+          const key = chargeId(charge);
+          if (!batchTried.has(key)) {
+            const batch = [];
+            for (const next of proposalCharges.slice(
+              chargeIndex,
+              chargeIndex + STATEMENT_PAGE_RUN_CREATES,
+            )) {
+              if (
+                batchTried.has(chargeId(next)) ||
+                failed.some(
+                  (failure) => failure.ref === `charge:${chargeId(next)}`,
+                )
+              )
+                break;
+              const selection = selectionFor(next);
+              if (!selection) break;
+              batch.push({ charge: next, selection });
+            }
+            for (const item of batch) batchTried.add(chargeId(item.charge));
+            if (batch.length > 1) {
+              recheck = true;
+              try {
+                const applicationStartedAt = performance.now();
+                const page = await applyAutomaticRulePage(
+                  db,
+                  batch.map(({ selection }) => selection),
+                  {
+                    context: input.servicesFor,
+                    statementScope: input.scope,
+                  },
+                );
+                log.info("Statement generation application page", {
+                  charges: batch.length,
+                  applied: [...page.outcomes.values()].filter(
+                    (outcome) => outcome === "applied",
+                  ).length,
+                  wallMs: Math.round(performance.now() - applicationStartedAt),
+                });
+                for (const item of batch) {
+                  if (page.outcomes.get(item.selection.row.id) !== "applied")
+                    continue;
+                  batchApplied.add(chargeId(item.charge));
+                  recheck = true;
+                }
+              } catch (error) {
+                if (isWorkflowInterrupted(error)) throw error;
+                // A page may have committed a split prefix. The single path re-admits
+                // current evidence and replays its receipts instead of duplicating effects.
+                log.warn("Statement generation page application fell back", {
+                  charges: batch.length,
+                  error: scrubErrorMessage(String(error)),
+                });
+                recheck = true;
+              }
+            }
+          }
+          if (!batchApplied.has(key)) {
+            if (recheck) {
+              log.info("Statement generation phase", {
+                phase: "regeneration",
+                chargeIndex,
+                charges: proposalCharges.length,
+              });
+              await regenerateCharges(db, [charge], input.scope);
+            }
             log.info("Statement generation phase", {
-              phase: "regeneration",
+              phase: "application",
               chargeIndex,
               charges: proposalCharges.length,
             });
-            await regenerateCharges(db, [charge], input.scope);
+            const outcome = await applyAutomaticRulesForCharge(
+              db,
+              charge,
+              input.servicesFor,
+              true,
+              input.scope,
+            );
+            if (outcome.applied.length) recheck = true;
           }
-          log.info("Statement generation phase", {
-            phase: "application",
-            chargeIndex,
-            charges: proposalCharges.length,
-          });
-          const outcome = await applyAutomaticRulesForCharge(
-            db,
-            charge,
-            input.servicesFor,
-            true,
-            input.scope,
-          );
-          if (outcome.applied.length) wrote = true;
           // Booking a primary republished its copies as attaches; settle the
           // ones this import covers in the same pass.
           for (const copy of await bookedCopies(db, charge))
@@ -3823,7 +3916,7 @@ export async function generateStatementSuggestionPage(
                 )
               ).applied.length
             )
-              wrote = true;
+              recheck = true;
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
           failed.push(statementGenerationFailure(ref, error));
