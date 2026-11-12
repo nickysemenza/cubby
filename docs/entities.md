@@ -207,6 +207,10 @@ Browser metadata is generated separately and contains no executable schemas: the
 the generated browser loader imports them lazily, never declarations or compiler closures. Document
 QueryClients own admitted bundles; see
 [metadata transport](../apps/web/docs/web-runtime.md#entity-metadata-transport).
+Descriptor, summary and field catalogs import data-only per-entity projection leaves. Full metadata
+slices import those same leaves, preserving object identity without making a catalog evaluate full
+metadata slices or making one entity admission load another entity's slice.
+Field suggestion policy reads a generated scalar projection instead of the full field catalogs.
 
 Install runs generation before generated files exist, so static generator inputs cannot execute
 schemas that consume generated output. Shared presentation vocabulary such as `activity-fields.ts`

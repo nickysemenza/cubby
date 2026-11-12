@@ -22,6 +22,7 @@ import {
   postponeEmbeddingRefresh,
   type EmbeddingRefreshStore,
 } from "~/server/generic/embedding/repo/embedding-work";
+import { uploadChunks } from "~/server/generic/embedding/service/upload-chunks";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobRetryableError,
@@ -36,9 +37,6 @@ import {
 const PAGE_LIMIT = 100;
 /** With the 15-minute backoff cap, about 24 hours of failing before it stops. */
 const EMBEDDING_MAX_ATTEMPTS = 100;
-const REQUEST_ITEM_LIMIT = 2048;
-const REQUEST_BYTES_LIMIT = 300_000;
-const INPUT_BYTES_LIMIT = 8_192;
 const VISIBILITY_POLL_MS = 5_000;
 const VISIBILITY_DEADLINE_MS = 2 * 60_000;
 const EMBEDDING_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
@@ -51,35 +49,6 @@ const checkSignal = (signal: AbortSignal) => {
       ? signal.reason
       : new JobSupersededError();
 };
-
-function uploadChunks<T extends { text: string }>(items: readonly T[]) {
-  const chunks: T[][] = [];
-  let current: T[] = [];
-  let bytes = 0;
-  const flush = () => {
-    if (current.length) chunks.push(current);
-    current = [];
-    bytes = 0;
-  };
-  for (const item of items) {
-    const size = new TextEncoder().encode(item.text).length;
-    if (
-      current.length &&
-      (current.length >= REQUEST_ITEM_LIMIT ||
-        bytes + size > REQUEST_BYTES_LIMIT)
-    )
-      flush();
-    if (size > INPUT_BYTES_LIMIT) {
-      flush();
-      chunks.push([item]);
-      continue;
-    }
-    current.push(item);
-    bytes += size;
-  }
-  flush();
-  return chunks;
-}
 
 async function prepareRefreshPage(
   port: EmbeddingRefreshPort,

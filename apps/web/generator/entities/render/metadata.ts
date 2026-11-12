@@ -364,43 +364,105 @@ export const renderEntityMetadataArtifacts = (
     names,
     typeOnly: true,
   });
-  const projection = (name: string, property: string) => ({
-    imports: entities.map(({ key }, index) => ({
-      from: `./entity-metadata.${key}.gen`,
-      names: [`metadata as metadata${index}`],
-    })),
-    consts: [
-      {
-        name,
-        value: Object.fromEntries(
-          entities.map(({ key }, index) => [
-            key,
-            tsReference(`metadata${index}`, property),
-          ]),
-        ),
-      },
-    ],
-  });
+  // Catalogs and full slices share these data-only leaves. Neither a catalog
+  // nor admitting one slice needs to evaluate another entity's full metadata.
+  const metadataProjections = [
+    {
+      property: "descriptor",
+      name: "generatedEntityManifest",
+      type: "EntityDescriptor",
+      from: "../entity-manifest",
+      values: Object.fromEntries(
+        entities.map((entity) => [entity.key, entity.descriptor]),
+      ),
+    },
+    {
+      property: "summary",
+      name: "entitySummary",
+      type: "EntitySummary",
+      from: "../entity-summary-types",
+      values: Object.fromEntries(
+        entities.map((entity) => [
+          entity.key,
+          {
+            ...entity.inspector,
+            primarySearch: resolvedPrimarySearch(entity),
+            bulkUpdate: bulkUpdateFor(entity),
+            merge: entity.operationOwners.merge === "kernel",
+          },
+        ]),
+      ),
+    },
+    {
+      property: "fields",
+      name: "generatedEntityFieldModels",
+      type: "GeneratedEntityFieldModel",
+      from: "../entity-projection-types",
+      values: fieldModels,
+    },
+  ] as const;
+  const projectionPath = (property: string, key: string) =>
+    `./entity-metadata-${property}.${key}.gen`;
+  const projection = (
+    property: (typeof metadataProjections)[number]["property"],
+  ) => {
+    const definition = metadataProjections.find(
+      (entry) => entry.property === property,
+    );
+    if (!definition)
+      throw new EntityDeclarationError(
+        `Unknown metadata projection ${property}`,
+      );
+    return {
+      imports: entities.map(({ key }, index) => ({
+        from: projectionPath(property, key),
+        names: [`${property} as projection${index}`],
+      })),
+      consts: [
+        {
+          name: definition.name,
+          value: Object.fromEntries(
+            entities.map(({ key }, index) => [
+              key,
+              tsReference(`projection${index}`),
+            ]),
+          ),
+        },
+      ],
+    };
+  };
   return [
+    ...metadataProjections.flatMap(({ property, type, from, values }) =>
+      entities.map(({ key }) =>
+        artifact(
+          `packages/schemas/src/generated/entity-metadata-${property}.${key}.gen.ts`,
+          {
+            imports: [{ from, names: [type], typeOnly: true }],
+            consts: [{ name: property, value: values[key], satisfies: type }],
+          },
+        ),
+      ),
+    ),
     ...entities.map((entity) =>
       artifact(
         `packages/schemas/src/generated/entity-metadata.${entity.key}.gen.ts`,
         {
-          imports: [typeImport(["EntityMetadataSlice"])],
+          imports: [
+            typeImport(["EntityMetadataSlice"]),
+            ...metadataProjections.map(({ property }) => ({
+              from: projectionPath(property, entity.key),
+              names: [property],
+            })),
+          ],
           consts: [
             {
               name: "metadata",
               value: {
                 entity: entity.key,
                 dependencies: metadataDependencies[entity.key],
-                descriptor: entity.descriptor,
-                summary: {
-                  ...entity.inspector,
-                  primarySearch: resolvedPrimarySearch(entity),
-                  bulkUpdate: bulkUpdateFor(entity),
-                  merge: entity.operationOwners.merge === "kernel",
-                },
-                fields: fieldModels[entity.key],
+                descriptor: tsReference("descriptor"),
+                summary: tsReference("summary"),
+                fields: tsReference("fields"),
                 envelopeFields: governedFields(entity).map(
                   ({ readKey, key }) => readKey ?? key,
                 ),
@@ -577,12 +639,12 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-manifest-data.gen.ts", {
-      ...projection("generatedEntityManifest", "descriptor"),
+      ...projection("descriptor"),
     }),
     artifact("packages/schemas/src/generated/entity-summary.gen.ts", {
-      imports: projection("entitySummary", "summary").imports,
+      imports: projection("summary").imports,
       consts: [
-        ...projection("entitySummary", "summary").consts,
+        ...projection("summary").consts,
         {
           name: "entityReadDependents",
           value: entityReadDependents(entities),
@@ -615,9 +677,9 @@ export const renderEntityMetadataArtifacts = (
       ],
     }),
     artifact("packages/schemas/src/generated/entity-field-model.gen.ts", {
-      ...projection("generatedEntityFieldModels", "fields"),
+      ...projection("fields"),
       consts: [
-        ...projection("generatedEntityFieldModels", "fields").consts,
+        ...projection("fields").consts,
         { name: "suggestFieldKeys", value: suggestFieldKeys },
       ],
       exports: [
@@ -643,6 +705,33 @@ export const renderEntityMetadataArtifacts = (
         },
       ],
     }),
+    artifact(
+      "packages/schemas/src/generated/entity-field-suggestion-policy.gen.ts",
+      {
+        consts: [
+          {
+            name: "generatedFieldSuggestionPolicies",
+            value: entities.flatMap(({ key, fieldModel }) =>
+              fieldModel.fields.flatMap((field) => {
+                const suggest = field.control?.suggest;
+                return suggest
+                  ? [
+                      {
+                        entity: key,
+                        field: field.key,
+                        apply: suggest.apply,
+                        mode: suggest.mode,
+                        undecided: suggest.undecided ?? null,
+                        financeContext: suggest.financeReview?.context ?? null,
+                      },
+                    ]
+                  : [];
+              }),
+            ),
+          },
+        ],
+      },
+    ),
     artifact("packages/schemas/src/generated/entity-edit-intents.gen.ts", {
       consts: [
         {

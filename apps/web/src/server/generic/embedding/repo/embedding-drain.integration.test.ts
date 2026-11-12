@@ -1,5 +1,5 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -339,15 +339,14 @@ describe("embedding refresh and cleanup drains", () => {
     ).toEqual([]);
   });
 
-  it("chunks provider requests by byte limits and isolates a long input", async () => {
-    // This boundary needs 300 KB of real source text, not forty create workflows.
-    // Admission and its effects are exercised by the other drain scenarios.
+  it("isolates a rejected long input while selecting valid sources", async () => {
+    const longNotes = "synthetic long input text ".repeat(360);
     const subjects = await insertManyWithShortcode(ctx.db, "product", [
-      ...Array.from({ length: 39 }, (_, index) => ({
+      ...Array.from({ length: 2 }, (_, index) => ({
         name: `Synthetic byte fixture ${index}`,
-        notes: "x".repeat(7_800),
+        notes: "Synthetic valid embedding text",
       })),
-      { name: "Synthetic long input fixture", notes: "y".repeat(9_000) },
+      { name: "Synthetic long input fixture", notes: longNotes },
     ]);
     const refs: SearchableEntityRef[] = subjects.map((subject) => ({
       entityKind: "product",
@@ -360,17 +359,13 @@ describe("embedding refresh and cleanup drains", () => {
     const port = embeddingPort(remote.store, calls, () => config, true);
 
     await advanceRefresh(ctx.db, port);
-    expect(calls.length).toBeGreaterThan(1);
-    expect(calls.every((batch) => batch.length <= 2048)).toBe(true);
+    expect(calls.flat()).toHaveLength(3);
     expect(
-      calls.every(
-        (batch) =>
-          batch.reduce(
-            (total, text) => total + new TextEncoder().encode(text).length,
-            0,
-          ) <= 300_000,
+      calls.find((batch) =>
+        batch.some((text) => text.includes(longNotes.trim())),
       ),
-    ).toBe(true);
+    ).toHaveLength(1);
+    expect(remote.upserted.flat()).toHaveLength(2);
     const longItem = await embeddingWorkFor(ctx.db, [long.id]);
     expect(longItem).toHaveLength(1);
     expect(longItem[0]?.attempts).toBe(1);
@@ -379,7 +374,32 @@ describe("embedding refresh and cleanup drains", () => {
         ctx.db,
         refs.slice(0, -1).map((ref) => ref.entityId),
       ),
-    ).toHaveLength(39);
+    ).toMatchObject([{ attempts: 0 }, { attempts: 0 }]);
+
+    // Poll successful uploads while preserving the rejected input's backoff.
+    await getDb(ctx.db)
+      .update(searchDocument)
+      .set({ embeddingDueAt: new Date(0) })
+      .where(
+        inArray(
+          searchDocument.entityId,
+          refs.slice(0, -1).map((ref) => ref.entityId),
+        ),
+      );
+    await embeddingRefreshDrain(port).page(ctx.db, "embedding.refresh");
+    expect(await embeddingWorkFor(ctx.db, [long.id])).toMatchObject([
+      { attempts: 1 },
+    ]);
+    expect(
+      await embeddingWorkFor(
+        ctx.db,
+        refs.slice(0, -1).map((ref) => ref.entityId),
+      ),
+    ).toEqual([]);
+    for (const subject of subjects.slice(0, -1))
+      expect(await selectArtifacts(ctx.db, subject.id)).toMatchObject([
+        { artifactState: "selected" },
+      ]);
   });
 
   // Failure mode: an exhausted OpenAI credit balance fails embeddings, spends

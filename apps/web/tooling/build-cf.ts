@@ -16,7 +16,6 @@ const run = (command: string, args: string[], env = process.env) => {
 
 async function buildCloudflare() {
   run(process.execPath, ["../../scripts/ensure.ts", "wasm"]);
-  run(process.execPath, ["../../scripts/ensure.ts", "generate"]);
   rmSync(path.join(webRoot, ".cloudflare/output"), {
     recursive: true,
     force: true,

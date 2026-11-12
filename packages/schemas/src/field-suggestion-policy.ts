@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { type EntityFieldModel, entityFieldModels } from "./entity-fields";
+import { generatedFieldSuggestionPolicies } from "./generated/entity-field-suggestion-policy.gen";
 import type { ShortcodeEntity } from "./entity-manifest";
 
 export type SuggestApplyPolicy = "auto" | "review" | "offer";
@@ -11,20 +11,18 @@ export function suggestApplyPolicy(
   field: string,
 ): SuggestApplyPolicy {
   return (
-    entityFieldModels[entity].fields.find((item) => item.key === field)?.control
-      ?.suggest?.apply ?? "auto"
+    generatedFieldSuggestionPolicies.find(
+      (policy) => policy.entity === entity && policy.field === field,
+    )?.apply ?? "auto"
   );
 }
 
 /** Each field's declared `suggest.undecided` placeholder, keyed `entity.field`. */
 const undecidedPlaceholders = new Map<string, string>(
-  Object.entries(entityFieldModels).flatMap(([entity, model]) =>
-    model.fields.flatMap((field: EntityFieldModel["fields"][number]) => {
-      const suggest = field.control?.suggest;
-      return suggest && "undecided" in suggest && suggest.undecided
-        ? [[`${entity}.${field.key}`, suggest.undecided] as const]
-        : [];
-    }),
+  generatedFieldSuggestionPolicies.flatMap((policy) =>
+    policy.undecided
+      ? [[`${policy.entity}.${policy.field}`, policy.undecided] as const]
+      : [],
   ),
 );
 const blankValue = z.union([z.null(), z.undefined(), z.literal("")]);
@@ -48,15 +46,8 @@ export function undecidedFieldValue(
 
 /** Entities with at least one field Cubby may evaluate after a write. */
 const automatedEntities = new Set<string>(
-  Object.entries(entityFieldModels).flatMap(([entity, model]) =>
-    model.fields.some(
-      (field: EntityFieldModel["fields"][number]) =>
-        field.control?.suggest &&
-        field.control.suggest.mode !== "prune" &&
-        field.control.suggest.apply !== "review",
-    )
-      ? [entity]
-      : [],
+  generatedFieldSuggestionPolicies.flatMap((policy) =>
+    policy.mode !== "prune" && policy.apply !== "review" ? [policy.entity] : [],
   ),
 );
 
@@ -64,19 +55,17 @@ const automatedEntities = new Set<string>(
 export const fieldAutomationWatches = (entity: string) =>
   automatedEntities.has(entity);
 
-type FieldModels = typeof entityFieldModels;
-
-/** Every declared `control.suggest.financeReview`, read off the generated field models. */
-type FinanceReviewDeclaration = {
-  [E in keyof FieldModels]: FieldModels[E]["fields"][number] extends infer F
-    ? F extends {
-        key: infer K;
-        control: { suggest: { financeReview: { context: infer C } } };
+/** Every declared spending review, preserving its entity/field/context correlation. */
+type FinanceReviewDeclaration =
+  (typeof generatedFieldSuggestionPolicies)[number] extends infer Policy
+    ? Policy extends {
+        entity: infer E;
+        field: infer K;
+        financeContext: infer C extends string;
       }
       ? { entity: E; field: K; context: C }
       : never
     : never;
-}[keyof FieldModels];
 export type FinanceReviewContext = FinanceReviewDeclaration["context"];
 export type FinanceReviewEntity<
   C extends FinanceReviewContext = FinanceReviewContext,
@@ -89,13 +78,16 @@ const declaredFinanceReviews: readonly {
   entity: string;
   field: string;
   context: FinanceReviewContext;
-}[] = Object.entries(entityFieldModels).flatMap(([entity, model]) =>
-  model.fields.flatMap((field: EntityFieldModel["fields"][number]) => {
-    const review = field.control?.suggest?.financeReview;
-    return review
-      ? [{ entity, field: field.key, context: review.context }]
-      : [];
-  }),
+}[] = generatedFieldSuggestionPolicies.flatMap((policy) =>
+  policy.financeContext
+    ? [
+        {
+          entity: policy.entity,
+          field: policy.field,
+          context: policy.financeContext,
+        },
+      ]
+    : [],
 );
 
 /** A saved-record spending review field's declared context, or null. */
