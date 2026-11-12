@@ -7,9 +7,12 @@ import {
 } from "@cubby/shared/apple-app-identity";
 import { createAuthClient } from "better-auth/react";
 
+import { sessionSeededFetch } from "~/lib/session-seed";
+
 export const createCubbyAuthClient = (callbackScheme: NativeCallbackScheme) =>
   createAuthClient({
     baseURL: import.meta.env.VITE_APP_URL || "",
+    fetchOptions: { customFetchImpl: sessionSeededFetch },
     // oauthProviderClient is a fetch hook, not just typing: it copies the signed
     // `oauth_query` out of window.location.search into every non-GET auth
     // request, which is what carries authorize-flow state through the sign-in

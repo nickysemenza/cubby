@@ -9,11 +9,15 @@ interface HttpSessionResult {
   headers: Headers;
 }
 
-export type HttpSessionReader = (options: {
+type SessionReadOptions = {
   headers: Headers;
   query?: { disableCookieCache: true; disableRefresh?: true };
   returnHeaders: true;
-}) => Promise<HttpSessionResult>;
+};
+
+export type HttpSessionReader = (
+  options: SessionReadOptions,
+) => Promise<HttpSessionResult>;
 
 /**
  * One session lookup per credential and read mode within an inbound request:
@@ -22,8 +26,8 @@ export type HttpSessionReader = (options: {
  * once per caller.
  */
 export const requestScopedSession =
-  (getSession: HttpSessionReader): HttpSessionReader =>
-  (options) =>
+  <Result>(getSession: (options: SessionReadOptions) => Promise<Result>) =>
+  (options: SessionReadOptions) =>
     memoizeInRequest(
       JSON.stringify([
         options.headers.get("authorization"),
