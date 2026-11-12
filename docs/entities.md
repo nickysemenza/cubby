@@ -911,8 +911,9 @@ humanized key); unit-mapping operands keep stored keys `a` and `b` while reading
 to. A variant starts with no case chosen, so a new account must pick its identity kind. Validation
 stays server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on native and the
 nested form path on web. A new structured field needs only its Zod input schema, a renderer in that
-list or a `structuredField` entry, and a vector. `.meta({ createOnly: true })` locks a value on edit
-(the server refuses a change too); `.meta({ notice })` shows a caution with it.
+list or a `structuredField` entry, and a vector. `.meta({ createOnly: true })` locks a value on edit;
+the server validates identity changes, allowing an unspecified FinancialAccount to be identified as a loan.
+`.meta({ notice })` shows a caution with it.
 
 A source claim is edited under the identity its read exposes: the read carries `sourceKey` (a hash
 of the provider id or the evidence, so the provider id is unrecoverable) and the input accepts it

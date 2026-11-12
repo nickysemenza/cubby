@@ -267,8 +267,22 @@ export async function applyStatementTransactionSuggestion(
       ...application.booking,
       advice: published.spending?.request.advice ?? null,
     });
+    const kind = application.kindOverride ?? judgment.create?.kind;
+    if (
+      kind &&
+      [
+        "interest",
+        "income",
+        "account_transfer",
+        "credit_card_payment",
+        "adjustment",
+      ].includes(kind) &&
+      spending.status !== "deferred"
+    )
+      throw refused(
+        "The matched transaction would book spending for non-spending evidence; review its kind first.",
+      );
     if (spending.status === "deferred") {
-      const kind = application.kindOverride ?? judgment.create?.kind;
       if (
         judgment.providerStatus === "posted" &&
         kind &&

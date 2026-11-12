@@ -64,6 +64,7 @@ import {
 import {
   accountPurchaserKey,
   liveHouseholdSpendingAccount,
+  liveHouseholdLoan,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -106,6 +107,17 @@ function refuse(message: string): never {
 }
 
 type Request = z.infer<typeof financialSpendingRequest>;
+export async function financialSpendingAccountIdentity(
+  db: Database,
+  id: string,
+) {
+  return (
+    await getDb(db)
+      .select({ identity: financialAccount.identity })
+      .from(financialAccount)
+      .where(eq(financialAccount.id, parseEntityId("financialAccount", id)))
+  )[0];
+}
 const spendingRequestBoundary = z.union([
   financialSpendingRequest.extend({
     transactionId: financialSpendingRequest.shape.transactionId.unwrap(),
@@ -124,7 +136,31 @@ function spendingBlocker(input: {
   ambiguous: boolean;
 }) {
   const { facts, advice } = input;
-  if (!facts.purchaser && !liveHouseholdSpendingAccount(facts.account))
+  if (issuerCardFee(facts) && !input.vendorResolved)
+    return "The card account needs a live issuer Vendor before booking this fee.";
+  const escrow =
+    liveHouseholdLoan(facts.account) &&
+    facts.source.kind === "purchase" &&
+    facts.source.amount > 0 &&
+    !/^(payment|loan payment|mortgage payment)$/i.test(
+      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
+    ) &&
+    advice?.escrowDisbursement === true;
+  const escrowRefund =
+    liveHouseholdLoan(facts.account) &&
+    facts.source.kind === "refund" &&
+    facts.source.amount < 0 &&
+    /^(escrow refund)$/i.test(
+      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
+    );
+  if (facts.account.identity.kind === "loan" && !escrow && !escrowRefund)
+    return "Only a supported household loan escrow disbursement can book spending.";
+  if (
+    !facts.purchaser &&
+    !liveHouseholdSpendingAccount(facts.account) &&
+    !escrow &&
+    !escrowRefund
+  )
     return "A confirmed member-owned account or household card, bank or stored-value account is required before booking spending.";
   if (
     !(facts.source.transactionDate ?? facts.source.postedDate) ||
@@ -141,11 +177,26 @@ function spendingBlocker(input: {
   )
     return "The merchant needs a supported business name before a Vendor can be created.";
   if (
-    advice?.counterparty === "person" ||
-    advice?.counterparty === "payment_processor"
+    !issuerCardFee(facts) &&
+    (advice?.counterparty === "person" ||
+      advice?.counterparty === "payment_processor")
   )
     return "The counterparty does not identify a business Vendor.";
   return null;
+}
+
+/** Standard card fee descriptions identify the issuer, not a merchant. */
+function issuerCardFee(facts: Awaited<ReturnType<typeof spendingFacts>>) {
+  if (
+    facts.account.identity.kind !== "credit_card" ||
+    facts.source.kind !== "fee"
+  )
+    return false;
+  return [facts.source.merchant, facts.source.rawDescription].some((value) =>
+    /^(foreign transaction fee|annual membership fee|renewal membership fee|membership fee|return payment fee|monthly service fee)$/i.test(
+      value?.trim() ?? "",
+    ),
+  );
 }
 
 const resolveSpendingVendors = (db: Database, names: readonly string[]) =>
@@ -631,6 +682,7 @@ async function loadSpendingGraphBatch(
         await getDb(db).execute<{
           purchaseId: string;
           transactionId: string;
+          accountId: string;
           transactionCode: string;
           amount: number;
           kind: string;
@@ -643,7 +695,7 @@ async function loadSpendingGraphBatch(
           transaction: unknown;
           account: unknown;
           owner: unknown;
-        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+        }>(sql`SELECT a."purchaseId", a."transactionId", f."accountId", f.shortcode AS "transactionCode", (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     (${minorToDollarsSql(sql`f."amountMinor"`, "float8")}) AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
     (SELECT sum(${minorToDollarsSql(sql`coverage."amountMinor"`, "float8")}) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
@@ -1236,11 +1288,29 @@ async function discoverSpendingEvidence(
 ) {
   const { row, source, account, allocations, graphs } = facts;
   let advice = reviewedSpendingAdvice(request);
+  const issuerFee = issuerCardFee(facts);
+  const issuer =
+    issuerFee && account.providerVendorId
+      ? await getDb(db).query.vendor.findFirst({
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(vendorTable.id, account.providerVendorId!),
+                  notDeleted(vendorTable),
+                ),
+              ),
+          },
+        })
+      : undefined;
   const names = [
     ...new Set(
       [
-        source.merchant?.trim() || source.rawDescription?.trim(),
-        advice?.vendorName,
+        issuerFee
+          ? issuer?.name
+          : source.merchant?.trim() || source.rawDescription?.trim(),
+        issuerFee ? undefined : advice?.vendorName,
       ].filter((value): value is string => Boolean(value)),
     ),
   ];
@@ -1272,7 +1342,11 @@ async function discoverSpendingEvidence(
     : undefined;
   const vendor =
     selectedVendor ??
-    (vendors.size === 1 ? [...vendors.values()][0] : undefined);
+    (issuerFee
+      ? issuer
+      : vendors.size === 1
+        ? [...vendors.values()][0]
+        : undefined);
   let category = advice?.spendingCategoryId
     ? await spendingCategoryForDiscovery(
         db,
@@ -1959,6 +2033,34 @@ async function prepareFinancialSpendingPreview(
   return prepareReadySpending(db, evidence, target, Boolean(chosen));
 }
 
+function loanRefundOriginalReason(
+  evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
+  target:
+    | Awaited<
+        ReturnType<typeof discoverSpendingEvidence>
+      >["liveCandidates"][number]
+    | undefined,
+  loanRefund: boolean,
+) {
+  if (!loanRefund) return null;
+  if (!target)
+    return "Identify the original loan escrow disbursement before booking this refund.";
+  const original = evidence.candidateEvidence.find(
+    (entry) => entry.id === target.id,
+  );
+  const sameAccount = original?.graph.settlements.some(
+    (settlement) =>
+      settlement.kind === "purchase" &&
+      settlement.amount > 0 &&
+      settlement.status !== "void" &&
+      settlement.deletedAt === null &&
+      settlement.accountId === evidence.facts.account.id,
+  );
+  return sameAccount
+    ? null
+    : "The original Purchase needs a live disbursement from this loan account.";
+}
+
 async function prepareReadySpending(
   db: Database,
   evidence: Awaited<ReturnType<typeof discoverSpendingEvidence>>,
@@ -1972,6 +2074,8 @@ async function prepareReadySpending(
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
   const { row, source } = facts;
+  const loanRefund =
+    liveHouseholdLoan(facts.account) && source.kind === "refund";
   // Category uncertainty must not invent a classification or prevent otherwise
   // supported spending. Missing effective categories enter the existing Work queue.
   const bookingCategory =
@@ -1990,6 +2094,8 @@ async function prepareReadySpending(
     status: "review_required",
     reason,
   });
+  const loanReason = loanRefundOriginalReason(evidence, target, loanRefund);
+  if (loanReason) return review(loanReason);
   let effect: Extract<FinancialSpendingPlan, { status: "ready" }>["effect"] =
     "create_aggregate";
   if (target) {
@@ -2058,6 +2164,7 @@ async function prepareReadySpending(
               status: source.status,
               postedDate: source.postedDate,
             },
+            advice?.escrowDisbursement === true || loanRefund,
           );
           if (checked.action !== effect)
             return review("The selected Purchase's booking capacity changed.");
@@ -2311,6 +2418,16 @@ export async function commitFinancialSpendings(
           }),
         ),
         actor,
+        new Set(
+          booking
+            .filter(
+              ({ fresh, facts }) =>
+                (fresh.request.advice?.escrowDisbursement === true ||
+                  facts.source.kind === "refund") &&
+                liveHouseholdLoan(facts.account),
+            )
+            .map(({ transactionId }) => transactionId),
+        ),
       );
       for (const [position, { index }] of booking.entries()) {
         const saved = booked[position]!;
@@ -2435,8 +2552,9 @@ async function resolveBookingVendors(
   actor: ActorContext,
 ) {
   const lookups = bookings.map(({ fresh, facts }) => {
-    const merchant =
-      facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
+    const merchant = issuerCardFee(facts)
+      ? undefined
+      : facts.source.merchant?.trim() || facts.source.rawDescription?.trim();
     return {
       merchant,
       names: [

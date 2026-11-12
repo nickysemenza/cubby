@@ -16,6 +16,7 @@ import {
 } from "~/server/ai/field-suggest/suggest-fields";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
+  LOAN_ESCROW_DISBURSEMENT_FEATURE,
   MERCHANT_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_SUPPORT_FEATURE,
 } from "~/server/ai/policy/features";
@@ -24,6 +25,7 @@ import type { Database } from "~/server/db";
 
 import {
   financialSpendingCategoryHistory,
+  financialSpendingAccountIdentity,
   resolveFinancialSpendingVendors,
   type FinancialSpendingPage,
 } from "../repo/financial-spending";
@@ -50,13 +52,48 @@ export async function adviseSpending(
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
     usageFor?: SuggestFieldsPorts["usageFor"];
-    preparation?: Pick<FinancialSpendingPage, "categoryHistory" | "vendors">;
+    preparation?: Pick<
+      FinancialSpendingPage,
+      "accounts" | "categoryHistory" | "vendors"
+    >;
   },
 ) {
   const create = input.judgment.create;
   if (!create || !needsSpendingAdvice(input.judgment)) return null;
   if (input.spendingAdvice)
     return financialSpendingAdvice.parse(await input.spendingAdvice(input));
+  const account =
+    input.preparation?.accounts.get(input.judgment.accountId) ??
+    (await financialSpendingAccountIdentity(db, input.judgment.accountId));
+  let escrowDisbursement = false;
+  if (
+    account?.identity.kind === "loan" &&
+    create.kind === "purchase" &&
+    create.amount > 0
+  ) {
+    const feature = LOAN_ESCROW_DISBURSEMENT_FEATURE;
+    const decision = await runDecisionChoice({
+      feature,
+      ...feature.prompt(
+        JSON.stringify({
+          merchant: create.merchant,
+          description: create.rawDescription,
+          sourceCategory: create.sourceCategory,
+          amount: create.amount,
+        }),
+      ),
+      choices: feature.choices,
+      port: input.port,
+      decisionModel: input.model,
+      usage: {
+        db,
+        ...input.owner,
+        operation: "spending.loanEscrowDisbursement",
+      },
+    });
+    escrowDisbursement =
+      decision.selectedIndex === 0 && decision.confidence === "high";
+  }
   const merchant = create.merchant?.trim() || create.rawDescription?.trim();
   if (!merchant) return financialSpendingAdvice.parse({});
   const [named] = await resolveFinancialSpendingVendors(
@@ -142,6 +179,7 @@ export async function adviseSpending(
   );
   const category = result.suggestions.spendingCategoryId;
   return financialSpendingAdvice.parse({
+    ...(escrowDisbursement ? { escrowDisbursement: true } : {}),
     spendingCategoryId: category?.value ?? null,
     categoryConfidence: category?.confidence ?? "low",
     vendorName: identity.name,

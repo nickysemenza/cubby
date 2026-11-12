@@ -26,13 +26,15 @@ type FactsOf = {
 };
 
 /**
- * Clean kinds that settle without spending. Money moves are clean only with a
- * clean opposite leg, which their create books as a pair.
+ * Clean kinds that settle without spending. A supported opposite leg is
+ * booked through the transfer-pair owner.
  */
 const SETTLEMENT_ONLY_KINDS: readonly string[] = [
   "income",
   "account_transfer",
   "credit_card_payment",
+  "interest",
+  "adjustment",
 ];
 
 /** What an automatic application does, before the family's review input. */
@@ -75,13 +77,16 @@ export const AUTOMATIC_RULES = {
     family: "statement_transaction",
     execution: "import_clean",
     description:
-      "Book clean supported spending, create clean income, transfers and card payments from imports automatically, and attach another source's copy of a booked bank event to its Transaction.",
+      "Book clean supported spending and non-spending statement transactions, and attach supported evidence to an existing Transaction.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
     match: (judgment) =>
       judgment.recommended === "attach"
         ? !judgment.reviewReason &&
           judgment.clean &&
-          judgment.pairedTransactionId !== null
+          (judgment.pairedTransactionId !== null ||
+            (judgment.create !== null &&
+              SETTLEMENT_ONLY_KINDS.includes(judgment.create.kind) &&
+              judgment.spending?.status === "deferred"))
         : !judgment.reviewReason &&
           judgment.clean &&
           (judgment.spending?.status === "ready" ||

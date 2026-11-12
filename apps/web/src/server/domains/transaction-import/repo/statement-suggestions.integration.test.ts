@@ -56,6 +56,7 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
+import { matchStatementRules } from "~/server/generic/suggestions/repo/automatic-policy";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import {
   acceptCleanSuggestions,
@@ -3528,11 +3529,9 @@ describe("statement Transaction suggestions", () => {
     );
   });
 
-  // Failure mode: the model picks `interest` for interest earned, which the
-  // settlement sign rule refuses, so the accept could never apply.
-  it("ignores a model kind the transaction could not be created as", async () => {
+  it("recognizes earned interest without requiring purchase settlement", async () => {
     await card(ctx);
-    await record(ctx, [
+    const recorded = await record(ctx, [
       rowInput({
         providerAmount: 8.66,
         merchant: "Example Bank",
@@ -3541,15 +3540,83 @@ describe("statement Transaction suggestions", () => {
       }),
     ]);
     await generate(ctx);
-    await label(ctx, answering({ kind: "interest", counterparty: "business" }));
-    const [suggestion] = await readPendingStatements(ctx);
-    expect(suggestion!.create).toMatchObject({
-      amount: -8.66,
-      kind: "refund",
-      kindSource: "sign",
-      votes: { label: "interest" },
+    await labelStatementSuggestions(ctx.db, {
+      port: answering({ kind: "interest", counterparty: "business" }),
+      scope: { importId: recorded.batchId },
     });
-    expect(suggestion!.clean).toBe(false);
+    expect(await readPendingStatements(ctx)).toHaveLength(0);
+    const transactions = await getDb(ctx.db)
+      .select({ kind: financialTransaction.kind })
+      .from(financialTransaction);
+    expect(transactions).toEqual([{ kind: "interest" }]);
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
+  });
+
+  it("holds checking-side loan payments for pairing and classifies loan credits", async () => {
+    const household = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic household",
+      kind: "household",
+    });
+    for (const [alias, identity] of [
+      ["Synthetic Checking", { kind: "bank_account", accountType: "checking" }],
+      ["Synthetic Loan", { kind: "loan" }],
+    ] as const) {
+      await createRepoIdentity(ctx, "financialAccount", {
+        name: alias,
+        identity,
+        ledgerPartyId: household.output.id,
+        sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
+      });
+    }
+    await record(ctx, [
+      rowInput({
+        accountDescriptor: "Synthetic Checking",
+        providerAmount: -500,
+        merchant: "Synthetic lender",
+        rawDescription: "SYNTHETIC LENDER PAYMENT",
+        sourceCategory: "Housing",
+      }),
+      rowInput({
+        accountDescriptor: "Synthetic Loan",
+        providerAmount: 500,
+        merchant: "Synthetic lender",
+        rawDescription: "PAYMENT",
+        sourceCategory: "Payment",
+      }),
+      rowInput({
+        accountDescriptor: "Synthetic Loan",
+        providerAmount: 3,
+        merchant: "Synthetic lender",
+        rawDescription: "INTEREST ON ESC",
+        sourceCategory: "Other Income",
+      }),
+      rowInput({
+        accountDescriptor: "Synthetic Loan",
+        providerAmount: 7,
+        merchant: "Synthetic lender",
+        rawDescription: "ESCROW REFUND",
+        sourceCategory: "Other Income",
+      }),
+    ]);
+    await generate(ctx);
+    const rows = await readPendingStatements(ctx);
+    expect(
+      rows.find((row) => row.rawDescription === "SYNTHETIC LENDER PAYMENT"),
+    ).toMatchObject({
+      clean: false,
+      create: { kind: "account_transfer" },
+      reviewReason: expect.stringContaining("transfer pair"),
+    });
+    expect(rows.find((row) => row.rawDescription === "PAYMENT")).toMatchObject({
+      create: { kind: "account_transfer" },
+    });
+    expect(
+      rows.find((row) => row.rawDescription === "INTEREST ON ESC"),
+    ).toMatchObject({ create: { kind: "interest" } });
+    expect(
+      rows.find((row) => row.rawDescription === "ESCROW REFUND"),
+    ).toMatchObject({ create: { kind: "income" } });
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
   });
 
   // Failure mode: every recorded chunk regenerates the whole ledger.
@@ -4093,10 +4160,7 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  // Failure mode: a card payment labelled clean under the earlier rule keeps
-  // its evidence fingerprint (labels ride on top of it), so "Accept clean"
-  // would still create it with no opposite leg.
-  it("leaves a money move labelled clean by an earlier rule out of Accept clean", async () => {
+  it("accepts an unpaired card payment as a non-spending transaction", async () => {
     const account = (await card(ctx)).output;
     // A clean attach beside it: its create alternative never decides it.
     await createRepoIdentity(ctx, "financialTransaction", {
@@ -4127,16 +4191,10 @@ describe("statement Transaction suggestions", () => {
     const payment = listed.find((row) => row.recommended === "create");
     const attach = listed.find((row) => row.recommended === "attach");
     expect(payment).toMatchObject({
-      clean: false,
+      clean: true,
       create: { kind: "credit_card_payment" },
     });
     expect(attach).toMatchObject({ clean: true });
-    // Reproduce an older successful publication's clean selection operands.
-    // The action must recheck current advice even when bulk selects this row.
-    await getDb(ctx.db).execute(
-      sql`UPDATE "Suggestion" SET data = jsonb_set(data, '{clean}', 'true') WHERE id = ${payment!.suggestionId}::uuid`,
-    );
-    // Refused with a reason, so the page skips it instead of stopping.
     expect(
       await acceptCleanSuggestions(ctx.db, kernelCtx(ctx), {
         filters: { family: "statement_transaction" },
@@ -4145,8 +4203,8 @@ describe("statement Transaction suggestions", () => {
       expect.arrayContaining([
         expect.objectContaining({
           suggestionId: payment!.suggestionId,
-          ok: false,
-          error: expect.stringContaining("No longer clean"),
+          ok: true,
+          applied: true,
         }),
         expect.objectContaining({
           suggestionId: attach!.suggestionId,
@@ -4156,14 +4214,19 @@ describe("statement Transaction suggestions", () => {
       ]),
     );
     expect(await stateOf(ctx, payment!.suggestionId)).toMatchObject({
-      status: "pending",
+      status: "applied",
     });
+    expect(
+      await getDb(ctx.db)
+        .select({ kind: financialTransaction.kind })
+        .from(financialTransaction),
+    ).toEqual(expect.arrayContaining([{ kind: "credit_card_payment" }]));
+    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(1);
   });
 
   // Failure modes: a cash-out from the member's own balance account is read
   // as income from its provider category; a move between two owners is bulk
-  // accepted without its LedgerTransfer; a named own account makes a move
-  // clean before its opposite leg is seen.
+  // accepted without its LedgerTransfer.
   it("reads a cash-out naming an own balance account as a transfer", async () => {
     const member = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Avery Example",
@@ -4235,7 +4298,7 @@ describe("statement Transaction suggestions", () => {
     );
     const rows = await readPendingStatements(ctx);
     expect(rows.find((row) => row.merchant === "PayFriend")).toMatchObject({
-      clean: false,
+      clean: true,
       create: {
         kind: "account_transfer",
         votes: { rule: "account_transfer", label: null },
@@ -4341,5 +4404,13 @@ describe("statement Transaction suggestions", () => {
         votes: { rule: null, label: "adjustment", history: "adjustment" },
       },
     });
+    const adjustment = rows.find((row) => row.amount < 0)!;
+    const [saved] = await getDb(ctx.db)
+      .select({ judgment: suggestionTable.judgment })
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, adjustment.suggestionId));
+    expect(
+      matchStatementRules(statementTransactionJudgment.parse(saved!.judgment)),
+    ).toHaveLength(1);
   });
 });

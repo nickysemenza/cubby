@@ -30,7 +30,10 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import {
+  isMoneyMoveKind,
+  kindAgreed,
+} from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import {
   automaticApplicationRule,
   matchedRulesOf,
@@ -408,6 +411,12 @@ export function isClean(
   statementAmount: number,
 ): boolean {
   if (judgment.reviewReason || judgment.siblings.length) return false;
+  if (
+    judgment.create &&
+    judgment.transferPair &&
+    (!judgment.transferPair.clean || !isMoneyMoveKind(judgment.create.kind))
+  )
+    return false;
   if (
     judgment.create !== null &&
     ["purchase", "refund", "fee"].includes(judgment.create.kind) &&

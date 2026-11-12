@@ -19,10 +19,13 @@ Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
 Clean purchases and fees book spending automatically; uncertain work remains in
-the shared Suggestions queue. Transfers, card payments and ordinary income
-remain settlement-only: clean ones are created automatically without Expenses,
-and a money move is clean only with its clean opposite leg, created as a pair.
-All money continues to be `SUM(Expense.cost)`.
+the shared Suggestions queue. Transfers, card payments, earned interest and ordinary income
+remain settlement-only: clean ones are created automatically without Expenses.
+A uniquely supported opposite leg is created as a pair; an unpaired movement
+with supported kind evidence can be recorded alone. Ambiguous pairings remain
+in review.
+All money continues to be `SUM(Expense.cost)`. Interest earned is recorded as
+`interest` with an inflow; interest linked to a Purchase remains an outflow.
 
 Pending or unknown provider status does not prevent an otherwise supported
 booking, and spending advice is generated for pending and observed spending
@@ -48,7 +51,12 @@ live, household-owned credit card, bank account or stored-value account books
 with an unknown individual purchaser, including shared access or missing
 primary-cardholder evidence. A household is never stored as a member purchaser
 override. Missing/deleted owners, guest owners, deleted accounts and household
-loan or other accounts remain guarded. Explicit
+other accounts remain guarded. A household loan books only a supported escrow
+disbursement for property tax or homeowners insurance, with an unknown purchaser;
+loan payments are transfers, and a checking entry matching a loan payment waits
+for its transfer pair. Escrow interest is interest. An escrow refund uses the
+original disbursement's category when identified; without a possible original,
+it is income. Explicit
 member choices and an existing Purchase's overrides and inherited
 receipt/order/member evidence remain authoritative. Funding attribution remains
 its own dated contract.
@@ -125,6 +133,8 @@ and acknowledge conflicting category history while correcting a held booking.
 Reviewed category and new business-name choices are kept separately from model
 advice. Booking corrections use the server's retained advice and explicit
 reviewed fields; clients cannot submit replacement model evidence.
+Standard card-fee descriptions use the card account's live issuer Vendor;
+the generic fee description is not a Vendor alias. A missing issuer needs review.
 
 ### Settling existing Purchases and refunds
 
@@ -184,7 +194,7 @@ stay disjoint. Refreshes coalesce within a page and use the shared Suggestion
 batch publisher, preserving unchanged advice, paid labels and member decisions.
 
 The clean import booking rule (clean spending creates, books and supersedes,
-clean income, transfer and card-payment creates, and paired copy attaches) is fixed code and always on; there is no member
+clean non-spending creates, and supported non-spending or paired copy attaches) is fixed code and always on; there is no member
 switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
 Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
