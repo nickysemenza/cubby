@@ -3968,6 +3968,26 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
+  // Failure mode: a person label published before the rail rule kept its
+  // stale kind, so applying it refused as changed since review.
+  it("republishes an off-rail person label as a business", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput({ rawDescription: "SQ *SAMPLE PERSON" })]);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({
+        judgment: sql`jsonb_set(${suggestionTable.judgment}, '{create,counterparty,label}', '"person"')`,
+      })
+      .where(eq(suggestionTable.active, true));
+    await generate(ctx);
+    const [row] = await readPendingStatements(ctx);
+    expect(row).toMatchObject({
+      create: { counterparty: { label: "business" } },
+    });
+  });
+
   // Failure mode: a card payment labelled clean under the earlier rule keeps
   // its evidence fingerprint (labels ride on top of it), so "Accept clean"
   // would still create it with no opposite leg.

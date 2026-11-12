@@ -1060,7 +1060,9 @@ votes and candidate labels, and recompute kind and clean status from current
 rules, history and transfer evidence. Changed model inputs or candidates retire
 the old labels atomically with the replacement; suppressed or settled charges
 remain excluded. Paid labels may be reused across aliases only when their exact
-model inputs and policy still agree. Acceptance always validates the current
+model inputs and policy still agree. A rule re-run republishes a published
+person label that is off a payment rail, re-deciding its kind from the votes it
+already holds, without asking the model again. Acceptance always validates the current
 broader evidence fingerprint.
 
 **Pages.** Generation and labeling commit bounded pages of independent charges;

@@ -118,6 +118,7 @@ import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-impo
 import {
   kindAgreed,
   decideStatementKind,
+  offRailPerson,
   type OwnAccount,
   ownAccountNamed,
   statementTransactionKind,
@@ -2092,6 +2093,12 @@ async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
   );
 }
 
+function publishedOffRailPerson(judgment: unknown) {
+  const create =
+    suggestionJudgments.statement_transaction.safeParse(judgment).data?.create;
+  return create ? offRailPerson(create) : false;
+}
+
 type ReusablePublication = Pick<
   typeof suggestionTable.$inferSelect,
   "active" | "fingerprint"
@@ -2494,11 +2501,13 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       );
     return undefined;
   },
-  // A rule re-run retains model labels only while their label revision agrees.
+  // A rule re-run retains model labels only while their label revision agrees,
+  // and republishes a person label the rail rule now reads as a business.
   obsolete: (row, producer) =>
     producer.kind === "rule" &&
     row.producer?.kind === "model" &&
-    row.producer.revision !== STATEMENT_LABEL_REVISION,
+    (row.producer.revision !== STATEMENT_LABEL_REVISION ||
+      publishedOffRailPerson(row.judgment)),
   onUnchanged: "none",
   async prepare(tx, candidate, rows, producer, context) {
     const { proposal } = candidate;
