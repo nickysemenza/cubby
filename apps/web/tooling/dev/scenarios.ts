@@ -140,6 +140,11 @@ export async function seedLocalFixturePack(
       });
       return;
     }
+    case "runs": {
+      const { seedRunPatterns } = await import("../scenarios/runs");
+      await seedRunPatterns(context);
+      return;
+    }
     case "problems": {
       await seedLocalProblemWork(pool, userId, baseURL);
       await create("product", {

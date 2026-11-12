@@ -278,10 +278,6 @@ export function useDataTableController<TItem extends RowData>({
     const columns = table
       .getVisibleLeafColumns()
       .filter((column) => !foldedColumns.has(column.id));
-    // Default columns drop only where the entity ranks its columns.
-    const ranked = columns.some(
-      (column) => column.columnDef.meta?.priority === "essential",
-    );
     const { widths } = resolvedTableColumnWidths(
       columns,
       tableContainerWidth,
@@ -291,12 +287,11 @@ export function useDataTableController<TItem extends RowData>({
     return [
       ...priorityDroppedColumns(
         columns.map((column) => {
-          const priority = column.columnDef.meta?.priority ?? "default";
           return {
             id: column.id,
             width: widths[column.id] ?? column.getSize(),
-            priority:
-              priority === "default" && !ranked ? "essential" : priority,
+            // Structural and custom columns without a field keep their place.
+            priority: column.columnDef.meta?.priority ?? "essential",
             kept:
               isLockedColumn(column) ||
               column.columnDef.meta?.entityColumnRole === "identity" ||

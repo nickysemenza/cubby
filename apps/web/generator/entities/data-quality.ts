@@ -39,7 +39,7 @@ const STATUS_OPTIONS = [
   { value: "not_assessed", label: "Not assessed", color: "var(--slate)" },
 ] as const;
 
-const qualityField = (entityKey: string): EntityField => ({
+const qualityField = (entityKey: string, listHidden = false): EntityField => ({
   key: DATA_QUALITY_FIELD,
   kind: "json",
   dateRange: null,
@@ -73,6 +73,7 @@ const qualityField = (entityKey: string): EntityField => ({
     columnId: DATA_QUALITY_FIELD,
     detailOrder: null,
     listOrder: -1,
+    listHidden,
     renderer: { list: DATA_QUALITY_LIST_RENDERER, detail: null },
     valueOptions: [...STATUS_OPTIONS],
   }),
@@ -168,7 +169,7 @@ export const compileDataQuality = (
     kind: "derived" as const,
     sources: [{ entity: entityKey, relation: null, label: null }],
   };
-  const dataQualityField = qualityField(entityKey);
+  const dataQualityField = qualityField(entityKey, raw.listHidden);
   const dataGapsField: EntityField = {
     key: DATA_GAPS_FIELD,
     kind: "json",

@@ -10,6 +10,7 @@ export const LOCAL_FIXTURE_PACKS = [
   "garden",
   "calendar",
   "problems",
+  "runs",
   "performance",
   "performance-production",
 ] as const;

@@ -505,8 +505,9 @@ const runOpenedPopulationSql = () =>
 
 /**
  * The Runs a fresh Runs list shows: the opened population under the list's
- * `initialFilter` (no ephemeral grouping Runs, no routine kinds or passes).
- * The AI summary admission covers exactly these.
+ * `initialFilter` (no ephemeral grouping Runs, no routine kinds or passes),
+ * without its phase bound, which only hides Runs finished before the
+ * Recently finished window. The AI summary admission covers exactly these.
  */
 export const runDefaultPopulationSql = () =>
   sql`${runOpenedPopulationSql()} AND ${runTable.trigger} <> ${"ephemeral"}

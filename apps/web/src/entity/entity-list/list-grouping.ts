@@ -23,7 +23,7 @@ export const listGroupBy = (search: unknown) =>
  * The grouping a list opens with: by phase (Needs you, Active, Recently
  * finished) where the entity declares `presentation.state`, else none.
  */
-export function defaultListGroupBy(
+function defaultListGroupBy(
   queryClient: QueryClient,
   entity: Entity,
 ): readonly ListGroupBy[] {

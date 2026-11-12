@@ -620,9 +620,12 @@ Three optional roles name the fields a record's state, progress and kind come fr
   effects, dependencies, cost, recovery) is the "What a {label} does" block in the detail side
   column.
 
-`display.priority` (`essential`, `default`, `optional`) decides which columns leave the default
-visible set below 1100px of table width: optional columns drop, essential columns never do, and a
-column the member shows in the session stays.
+`display.priority` (`essential`, `default`, `optional`) decides which columns leave a table instead
+of every column truncating: below 1100px of table width optional columns drop, and at any width
+default columns drop from the trailing end while the rest overflow. Essential columns never drop,
+and a column the member shows, sorts, filters, pins or resizes in the session stays. An undeclared
+priority is derived, so no entity has to declare one: the title column and the
+`presentation.state` and `presentation.progress` fields are essential, every other column default.
 
 A select option's `description` is the tooltip of its pill wherever the value renders. A `number`
 field whose provenance is `derived` from one `{ entity, relation }` source links to that target's

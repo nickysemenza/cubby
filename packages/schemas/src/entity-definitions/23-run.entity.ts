@@ -447,8 +447,10 @@ export const { definition, readSchemas } = defineEntityModel({
       // are scheduler passes (`RUN_KINDS[*].routine`), and a routine run is a
       // scheduled pass that found nothing; a person opens the list for work
       // somebody started or that changed something. Clearing the filter
-      // shows all three.
+      // shows all three. The phase filter bounds Recently finished to
+      // `state.recentDays`; Show older adds `older`.
       initialFilter: [
+        { id: "phase", value: ["needs", "active", "finished"] },
         {
           id: "trigger",
           value: ["foreground", "discovery", "manual", "backfill", "scheduled"],
@@ -461,24 +463,6 @@ export const { definition, readSchemas } = defineEntityModel({
   model: {
     hierarchy: { parentField: "parentRunId", maxDepth: 100 },
     fields: [
-      {
-        key: "workProgress",
-        provenance: {
-          kind: "derived",
-          sources: [{ label: "Recorded work samples and step counters" }],
-        },
-        kind: "json",
-        label: "Work",
-        // Installed native builds read `workProgress.current` through this
-        // path; `progressMeter` is the record's progress everywhere else.
-        display: {
-          columnGroup: "Results",
-          detail: false,
-          listHidden: true,
-          labelPath: "workProgress.current.label",
-        },
-        validation: readOnly(runWorkProgress.nullable().default(null)),
-      },
       {
         key: "whyLine",
         kind: "json",
@@ -505,6 +489,24 @@ export const { definition, readSchemas } = defineEntityModel({
           detailLabelPath: "whyLine.title",
         },
         validation: readOnly(displayItem.nullable().default(null)),
+      },
+      {
+        key: "workProgress",
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Recorded work samples and step counters" }],
+        },
+        kind: "json",
+        label: "Work",
+        // Installed native builds read `workProgress.current` through this
+        // path; `progressMeter` is the record's progress everywhere else.
+        display: {
+          columnGroup: "Results",
+          detail: false,
+          listHidden: true,
+          labelPath: "workProgress.current.label",
+        },
+        validation: readOnly(runWorkProgress.nullable().default(null)),
       },
       {
         key: "progressMeter",
@@ -1661,6 +1663,7 @@ export const { definition, readSchemas } = defineEntityModel({
     // The run service and import writers own every write.
     lifecycle: "readOnly",
     dataQuality: {
+      listHidden: true,
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
       inputs: [
         {

@@ -2058,9 +2058,15 @@ export function createEntityDisplayColumns<TRecord extends object>(
     onSaveFields && data.applyPaste
       ? { ...data, rowWrite: { field, save: onSaveFields } }
       : data;
-  const titleField = entityMetadata(queryClient, entity).summary.titleField;
+  const { summary } = entityMetadata(queryClient, entity);
+  const titleField = summary.titleField;
   const updateFields: readonly string[] = entityMetadata(queryClient, entity)
     .fields.update;
+  // An undeclared priority is derived: the declared state and progress
+  // fields stay on a narrow pane, every other column drops from the end.
+  const roleFields = new Set(
+    [summary.state?.field, summary.progress?.field].filter(Boolean),
+  );
   const listFields = orderedListFields(queryClient, entity);
   // Two-line rows draw these under the title, so their columns step aside.
   const secondLineFields = new Set(
@@ -2093,7 +2099,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
         );
         if (field.display.columnGroup)
           meta.columnGroup = field.display.columnGroup;
-        if (field.display.priority) meta.priority = field.display.priority;
+        meta.priority =
+          field.display.priority ??
+          (roleFields.has(field.key) ? "essential" : "default");
         if (secondLineFields.has(field.key)) meta.secondLine = true;
         meta.valueKind = isMoneyField(field)
           ? "money"

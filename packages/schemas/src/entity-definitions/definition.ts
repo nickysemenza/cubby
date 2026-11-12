@@ -292,7 +292,9 @@ const columnWidths = ["xs", "sm", "md", "lg", "xl"] as const;
 /**
  * Whether a list column survives a narrow table: `essential` never drops,
  * `optional` leaves the default visible set below the narrow breakpoint, and
- * `default` (also when unset) keeps its declared visibility.
+ * `default` columns leave from the trailing end while the rest overflow.
+ * Unset derives it: the title and the `presentation.state` and `progress`
+ * fields are essential, every other column is default.
  */
 const COLUMN_PRIORITIES = ["essential", "default", "optional"] as const;
 export type ColumnPriority = (typeof COLUMN_PRIORITIES)[number];
@@ -1968,8 +1970,10 @@ const buildMetadataSchemas = () => {
         /** Replaces the subtitle inferred from mobile card placement. */
         shelfSubtitleOverride: z.array(fieldKey).optional(),
         /**
-         * Native presentation may show the first populated shelf subtitle.
-         * Web RTable identity columns always contain only the name.
+         * The entity has a second row line: its `mobile.slot: "subtitle"`
+         * fields. Native shows the first populated one; web single-line rows
+         * draw only the name and two-line rows (Display › Rows) draw the
+         * subtitle fields under it.
          */
         titleSubtitle: z.boolean().optional().default(false),
         /**
@@ -2668,6 +2672,8 @@ const buildMetadataSchemas = () => {
     inputs: z.array(derivedInputSchema).optional().default([]),
     /** Where the synthesized `dataQuality` list column sits; unordered = last. */
     listOrder: z.number().int().nonnegative().optional(),
+    /** Leaves the `dataQuality` column out of the default columns; Display still offers it. */
+    listHidden: flag(false),
   });
 
   const classificationFieldPolicyMetadataSchema = z.strictObject({

@@ -490,14 +490,17 @@ Skullet boxes supply placeholders without rendering hidden data readers.
   group is collapsed. The virtualizer owns scroll offset and pane measurement: do
   not add row observers, scroll listeners or resize cycles for read scheduling.
 - An entity with `presentation.state` opens grouped by the `phase` grouping
-  (Needs you, Active, Recently finished). The default view filters `phase` to
-  those three, so "Recently finished" is bounded by the declared `recentDays`
-  rather than paged; a group's "Show all" clears that filter and sets
-  `phase=finished,older`. Group counts come from the group summaries.
+  (Needs you, Active, Recently finished). Its `list.initialFilter` filters
+  `phase` to those three, so "Recently finished" is bounded by the declared
+  `recentDays` rather than paged; the finished section's "Show older" adds
+  `older` to that filter. Group counts come from the group summaries.
 - With `nesting.batches`, the first page of a scope also returns `batches`:
   automatic members of one kind under one parent (or at the root) that number
-  two or more leave the paged rows and arrive as one `ListBatch` each, placed
-  at the top of their worst-phase group. A batch's rollup uses only counts the
+  two or more leave the paged rows and arrive as one `ListBatch` each. A list
+  requests batches only where a batch row has a section: ungrouped, grouped by
+  `phase` (the top of its worst-phase group) or by the batch's own `by` field
+  (its value's group); under any other grouping the members list unbatched in
+  their own sections (`listTreeBatches`). A batch's rollup uses only counts the
   server can address (phase counts and latest activity), never progress summed
   client-side. Expanding a batch pages the `batch` nesting scope
   (`{scope: "batch", parentId, value}`) with the normal sort and paging.

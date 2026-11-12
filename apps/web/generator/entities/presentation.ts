@@ -12,6 +12,7 @@ import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import {
   DEFAULT_DETAIL_GROUPS,
+  PHASE_GROUPING_KEY,
   listViewId,
 } from "@cubby/schemas/entity-definitions/definition";
 import { relationSectionPlanSchema } from "@cubby/schemas/entity-definitions/relation-plan";
@@ -836,6 +837,7 @@ const checkList = (
   timelineSection: boolean,
   lookup: FieldLookup,
   hierarchy: EntityFieldModel["hierarchy"],
+  stateDeclared: boolean,
 ) => {
   const { context } = lookup;
   const viewIds = new Set<string>();
@@ -850,7 +852,10 @@ const checkList = (
   for (const key of list.shelf?.subtitle ?? [])
     lookup.read(key, "list.shelf.subtitle");
   for (const filter of list.initialFilter)
-    lookup.read(filter.id, "list.initialFilter");
+    // `presentation.state` compiles the phase filter (Needs you, Active,
+    // Recently finished, older).
+    if (!(stateDeclared && filter.id === PHASE_GROUPING_KEY))
+      lookup.read(filter.id, "list.initialFilter");
   if (list.tree !== null) {
     if (hierarchy === null)
       throw new EntityDeclarationError(
@@ -1235,6 +1240,7 @@ export const compilePresentation = (
     timelineSection,
     listLookup,
     fieldModel.hierarchy,
+    presentation.state !== null,
   );
   if ((capabilities.timeline === "custom") !== (ports.timeline !== null))
     throw new EntityDeclarationError(

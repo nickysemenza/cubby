@@ -686,7 +686,9 @@ export function useEntityList<
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,
-    nesting: serverTree ? listRootsScope(queryClient, entity) : undefined,
+    nesting: serverTree
+      ? listRootsScope(queryClient, entity, groupBy ?? [])
+      : undefined,
     resultMembership,
     summaryOnly,
     // A counted page reports its unresolved membership, and only a result filter
@@ -1027,7 +1029,7 @@ export function useEntityList<
   // own filters and sort; the loaded root pages are never nested locally.
   const treeChildren = useServerTreeChildren<TRow>({
     enabled: serverTree,
-    batches: listTreeBatches(queryClient, entity),
+    batches: listTreeBatches(queryClient, entity, groupBy ?? []),
     scope: infiniteResult.scope,
     planFor: infiniteResult.scopedPlan,
   });

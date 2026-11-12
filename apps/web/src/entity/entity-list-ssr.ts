@@ -102,6 +102,18 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
       openingSearch,
     ).map(({ id }) => id),
   );
+  // Timeline owns its arrangement; retained URL dimensions must not
+  // preload a grouped query the mounted renderer never consumes.
+  const groupBy =
+    view === "timeline"
+      ? []
+      : [
+          ...listGroupingFor(
+            options.queryClient,
+            options.entity,
+            openingSearch,
+          ),
+        ];
   const query = entityListFor(options.entity).browserInfiniteQueryOptions(
     compileEntityListInput(options.queryClient, options.entity, openingSearch, {
       defaultSort,
@@ -109,20 +121,9 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
       includeCount,
       nesting:
         options.nested && projection.nesting !== "flat"
-          ? listRootsScope(options.queryClient, options.entity)
+          ? listRootsScope(options.queryClient, options.entity, groupBy)
           : undefined,
-      // Timeline owns its arrangement; retained URL dimensions must not
-      // preload a grouped query the mounted renderer never consumes.
-      groupBy:
-        view === "timeline"
-          ? []
-          : [
-              ...listGroupingFor(
-                options.queryClient,
-                options.entity,
-                openingSearch,
-              ),
-            ],
+      groupBy,
     }),
     // Initial rendering must not hold the primary read behind the batch timer.
     { batch: false },

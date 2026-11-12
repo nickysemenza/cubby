@@ -4,7 +4,7 @@ import type { ColumnPriority } from "@cubby/schemas/entity-definitions/definitio
  * A table pane narrower than this steps every kinded column to its narrow
  * width and drops low-priority columns; 912px content panes are first-class.
  */
-export const NARROW_TABLE_WIDTH = 1100;
+const NARROW_TABLE_WIDTH = 1100;
 
 export type ColumnKind =
   | "text"
@@ -21,7 +21,7 @@ export type ColumnKind =
  * so a reason or a progress label does not truncate while a lower-priority
  * column could leave instead.
  */
-export const COLUMN_KIND_WIDTHS = {
+const COLUMN_KIND_WIDTHS = {
   text: [220, 104],
   progress: [240, 140],
   state: [240, 136],
@@ -94,18 +94,21 @@ type PriorityColumn = {
 };
 
 /**
- * The columns a narrow pane leaves out: every optional column, then default
- * columns from the trailing end while the rest still overflow. Essential
- * columns never drop; a full-width pane drops nothing.
+ * The columns a pane leaves out instead of truncating every column: on a
+ * narrow pane every optional column, then at any width default columns from
+ * the trailing end while the rest still overflow. Essential columns never
+ * drop; an unmeasured pane drops nothing.
  */
 export function priorityDroppedColumns(
   columns: readonly PriorityColumn[],
   availableWidth: number,
 ): ReadonlySet<string> {
   const dropped = new Set<string>();
-  if (!isNarrowTable(availableWidth)) return dropped;
-  for (const column of columns)
-    if (!column.kept && column.priority === "optional") dropped.add(column.id);
+  if (availableWidth <= 0) return dropped;
+  if (isNarrowTable(availableWidth))
+    for (const column of columns)
+      if (!column.kept && column.priority === "optional")
+        dropped.add(column.id);
   let total = columns
     .filter((column) => !dropped.has(column.id))
     .reduce((sum, column) => sum + column.width, 0);

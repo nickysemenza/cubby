@@ -365,9 +365,12 @@ jump; section headers match it. `DesktopDataRow` clips every cell to the height.
   `ui/data-table/column-kind-widths.ts`: a full width and a narrow one), never
   the entity. A table pane of 1100px or wider draws the full width class; a
   narrower one steps each kind to its narrow width and optional columns leave
-  the default visible set. `display.priority` (`essential`, `default`,
-  `optional`) decides which columns drop; essential never drop, and a column
-  the member shows in the session wins. Priority is not persisted.
+  the default visible set; at any width default columns leave from the
+  trailing end while the rest overflow. `display.priority` (`essential`,
+  `default`, `optional`; undeclared: title, state and progress fields
+  essential, the rest default) decides which columns drop; essential never
+  drop, and a column the member shows in the session wins. Priority is not
+  persisted.
 - An undeclared width comes from the cell kind (`defaultColumnSize`).
   Read-only enum, boolean, date and timestamp fields carry their own kind so
   they size like editable twins. A field declares `display.width` only when its
