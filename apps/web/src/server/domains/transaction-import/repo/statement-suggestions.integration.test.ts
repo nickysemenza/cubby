@@ -2750,7 +2750,7 @@ describe("statement Transaction suggestions", () => {
 
   it("writes the same ledger, audit and Feedback on the page and single paths", async () => {
     const first = await card(ctx);
-    await createRepoIdentity(ctx, "financialAccount", {
+    const second = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic Second Card",
       ledgerPartyId: first.ledgerPartyId,
       identity: { kind: "credit_card", network: "visa" },
@@ -2796,7 +2796,35 @@ describe("statement Transaction suggestions", () => {
         );
       return value;
     };
-    const run = async (prefix: string, account: string, single: boolean) => {
+    const run = async (
+      prefix: string,
+      account: string,
+      accountId: string,
+      single: boolean,
+    ) => {
+      // A nearby Purchase of one charge's Vendor that another posted charge
+      // of a different amount fully settles is a different bank event.
+      const vendor = await createRepoIdentity(ctx, "vendor", {
+        name: `${prefix} Shop 1`,
+      });
+      const settled = await createRepoIdentity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        date: "2026-05-03",
+      });
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: settled.output.id,
+        name: "Synthetic settled order",
+        cost: 30,
+        trade: "other",
+      });
+      await createRepoIdentity(ctx, "financialTransaction", {
+        accountId,
+        kind: "purchase",
+        status: "posted",
+        amount: 30,
+        postedDate: "2026-05-03",
+        allocations: [{ purchaseId: settled.output.id, amount: 30 }],
+      });
       const recorded = await record(
         ctx,
         [
@@ -2872,10 +2900,22 @@ describe("statement Transaction suggestions", () => {
         }),
       );
     };
-    const page = await run("Alpha", "Synthetic Card (...4242)", false);
-    const single = await run("Beta", "Synthetic Second Card (...5151)", true);
+    const page = await run(
+      "Alpha",
+      "Synthetic Card (...4242)",
+      first.output.id,
+      false,
+    );
+    const single = await run(
+      "Beta",
+      "Synthetic Second Card (...5151)",
+      second.output.id,
+      true,
+    );
     expect(page).toMatchObject({
-      transactions: expect.arrayContaining([expect.anything()]),
+      transactions: expect.arrayContaining([
+        expect.objectContaining({ rawDescription: "X SHOP 1" }),
+      ]),
     });
     expect(single).toEqual(page);
   });
