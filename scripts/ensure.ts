@@ -40,11 +40,16 @@ function runNxTarget(target: string, args: string[] = []) {
 }
 
 if (target === "generate") {
+  // Full web installs and native schema-only installs both own generation.
+  // Root-only tooling installs leave the schema runtime dependencies absent.
   if (
     mode === "--postinstall" &&
-    !existsSync(join(ROOT, "apps/web/node_modules"))
+    !existsSync(join(ROOT, "apps/web/node_modules")) &&
+    !existsSync(join(ROOT, "packages/schemas/node_modules"))
   ) {
-    console.log("generate: skipped (filtered install without apps/web)");
+    console.log(
+      "generate: skipped (filtered install without generator dependencies)",
+    );
   } else if (
     mode === "--postinstall" &&
     process.env.CUBBY_SKIP_POSTINSTALL_GENERATE === "1"

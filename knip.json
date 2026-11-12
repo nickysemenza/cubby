@@ -28,6 +28,14 @@
         "concurrently",
         "agent-device",
         "@neon/env",
+        // Root postinstall runs the web-owned generator during native installs
+        // without web node_modules; these ancestor dependency links are required.
+        "@cubby/schemas",
+        "@cubby/usda",
+        "@faker-js/faker",
+        "@phosphor-icons/react",
+        "cf",
+        "drizzle-orm",
         // scripts/tsc.ts resolves its bin through import.meta.resolve.
         "tsrs"
       ],

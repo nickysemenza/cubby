@@ -6,7 +6,7 @@ import { statementTransactionApplication } from "@cubby/schemas/statement-sugges
 import { eq, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -64,11 +64,11 @@ describe("statement spending review and re-import", () => {
     providerTransactionId: string | null = null,
     ownerKind: "member" | "household" = "member",
   ) {
-    const owner = await createRepoEntity(ctx, "ledgerParty", {
+    const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
       kind: ownerKind,
     });
-    const account = await createRepoEntity(ctx, "financialAccount", {
+    const account = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic statement card",
       identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.output.id,
@@ -81,7 +81,7 @@ describe("statement spending review and re-import", () => {
         },
       ],
     });
-    await createRepoEntity(ctx, "vendor", { name: "Synthetic Orchard" });
+    await createRepoIdentity(ctx, "vendor", { name: "Synthetic Orchard" });
     const category = await createEntity(
       buildKernelContext(ctx.db, ctx.actor.userId),
       "spendingCategory",
@@ -508,7 +508,7 @@ describe("statement spending review and re-import", () => {
   it("refuses ambiguous attach drafts and preserves selected identity, allocations and projected fields", async () => {
     const { account, advice } = await fixture();
     const makeTransaction = () =>
-      createRepoEntity(ctx, "financialTransaction", {
+      createRepoIdentity(ctx, "financialTransaction", {
         accountId: account.output.id,
         kind: "purchase",
         status: "pending",
@@ -525,7 +525,7 @@ describe("statement spending review and re-import", () => {
           relationalSql(table, isNull(vendorTable.systemKey)),
       },
     });
-    const purchase = await createRepoEntity(ctx, "purchase", {
+    const purchase = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor!.shortcode,
       date: "2026-05-04",
       statedTotal: 42.5,
@@ -594,7 +594,7 @@ describe("statement spending review and re-import", () => {
   });
   it("retains existing allocations when previewing attachment to an already booked transaction", async () => {
     const { account, advice } = await fixture();
-    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -759,7 +759,7 @@ describe("statement spending review and re-import", () => {
         ctx.actor,
       );
     }
-    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -820,18 +820,18 @@ describe("statement spending review and re-import", () => {
           relationalSql(table, eq(vendorTable.name, "Synthetic Orchard")),
       },
     });
-    const receipt = await createRepoEntity(ctx, "purchase", {
+    const receipt = await createRepoIdentity(ctx, "purchase", {
       vendorId: vendor!.shortcode,
       date: "2026-03-01",
     });
-    await createRepoEntity(ctx, "expense", {
+    await createRepoIdentity(ctx, "expense", {
       purchaseId: receipt.output.id,
       name: "Synthetic older receipt",
       cost: 40,
       trade: "other",
     });
     // An installment-style first payment leaves the older receipt open.
-    const installment = await createRepoEntity(ctx, "financialTransaction", {
+    const installment = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -866,7 +866,7 @@ describe("statement spending review and re-import", () => {
       const { account, advice: merchantAdvice, input } = await fixture();
       // The advice names a Vendor the merchant text alone does not resolve to,
       // so adviceless rule evidence cannot see that Vendor's spending.
-      await createRepoEntity(ctx, "vendor", {
+      await createRepoIdentity(ctx, "vendor", {
         name: "Synthetic Grove Holdings",
       });
       const advice = financialSpendingAdvice.parse({
@@ -922,7 +922,7 @@ describe("statement spending review and re-import", () => {
         // published: its page declines the charge and its own review refuses
         // the published terms, so the pass admits the republished terms.
         after: async () => {
-          const cardholder = await createRepoEntity(ctx, "ledgerParty", {
+          const cardholder = await createRepoIdentity(ctx, "ledgerParty", {
             name: "Synthetic second cardholder",
             kind: "member",
           });
@@ -972,17 +972,17 @@ describe("statement spending review and re-import", () => {
                 ),
             },
           });
-          const receipt = await createRepoEntity(ctx, "purchase", {
+          const receipt = await createRepoIdentity(ctx, "purchase", {
             vendorId: vendor!.shortcode,
             date: "2026-03-01",
           });
-          await createRepoEntity(ctx, "expense", {
+          await createRepoIdentity(ctx, "expense", {
             purchaseId: receipt.output.id,
             name: "Synthetic older receipt",
             cost: 40,
             trade: "other",
           });
-          await createRepoEntity(ctx, "financialTransaction", {
+          await createRepoIdentity(ctx, "financialTransaction", {
             accountId: account.output.id,
             kind: "purchase",
             status: "posted",
@@ -1033,7 +1033,7 @@ describe("statement spending review and re-import", () => {
       },
       ctx.actor,
     );
-    await createRepoEntity(ctx, "financialTransaction", {
+    await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -1141,7 +1141,7 @@ describe("statement spending review and re-import", () => {
       },
       ctx.actor,
     );
-    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -1198,7 +1198,7 @@ describe("statement spending review and re-import", () => {
       const { input, advice, account } = await fixture(null, owner);
       // A household card with no authorized user that day books its live
       // member primary cardholder as the purchaser.
-      const cardholder = await createRepoEntity(ctx, "ledgerParty", {
+      const cardholder = await createRepoIdentity(ctx, "ledgerParty", {
         name: "Synthetic primary cardholder",
         kind: "member",
       });

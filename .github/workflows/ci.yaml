@@ -338,6 +338,7 @@ jobs:
         uses: ./.github/actions/setup-apple
         with:
           ffi-targets: mac
+          workspace-filter: "cubby @cubby/schemas..."
           xcodegen: "false"
           spm-cache: "false"
       # Build products are disposable; unchanged compiler inputs replay through
@@ -376,6 +377,7 @@ jobs:
         id: apple
         with:
           ffi-targets: sim
+          workspace-filter: "cubby @cubby/schemas..."
           build-cache: "true"
       - name: Run iOS app checks
         run: pnpm exec nx run apple:simulator-build --outputStyle=stream
