@@ -50,7 +50,7 @@ type SpendingAdvice = Pick<
 >;
 
 /** One fresh charge to create and, when it is spending, book. */
-export type FinancialNewItem = {
+type FinancialNewItem = {
   /** The caller's stable key (its Suggestion id). Core mints no operation id. */
   key: string;
   kind?: "create";
@@ -65,7 +65,7 @@ export type FinancialNewItem = {
 };
 
 /** One occurrence attached to an existing transaction, then booked like it. */
-export type FinancialAttachItem = {
+type FinancialAttachItem = {
   key: string;
   kind: "attach";
   transactionId: FinancialTransactionId;
@@ -126,7 +126,7 @@ export class FinancialCreateDivergenceError extends Error {
   }
 }
 
-export const DEPENDENT_CREATE =
+const DEPENDENT_CREATE =
   "dependent: shares a transaction, Vendor, Purchase, name or equal amount within 7 days with an earlier charge in this layer";
 
 const isAttach = (item: FinancialCreateItem): item is FinancialAttachItem =>
