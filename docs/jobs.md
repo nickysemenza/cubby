@@ -334,28 +334,41 @@ Cooperative label pages stop starting model work and application after
 covers work already started. A page settles at least one charge, then leaves
 the untouched suffix's receipts and inclusive cursor for the next page.
 
-Application walks the page's published receipts in page order. Each run of
-consecutive receipts that no automatic rule matches, or whose rule applies an
-as-is `create` the family can batch, settles in one SERIALIZABLE transaction
-bounded to 32 creates to limit its predicate-lock footprint:
-it fences the Job once, rechecks statement scope once, takes every review,
-transfer-leg, evidence-source and occurrence lock in the single-review
-namespace order (sorted within each namespace), rebuilds the run's proposals
-and spending once, and writes the creates, bookings, Feedback and no-action
-receipt completions together; the Job lock stays at commit. A charge that is
-not a batch candidate, moved since publication, or whose footprint (nearby
-candidate, copy or hold, Purchase, Vendor nearby spending or category, or a
-Vendor name another charge creates) meets an earlier charge's applies alone
-through its own review, in page order, right after its run. A write error
-rolls the run's applications back to a savepoint and applies each alone; a
-serialization failure or deadlock splits the run in half, and a single charge
-replays up to three times before that. Operation ids are fixed per rule revision and Suggestion, so a replayed
-run is idempotent. Each write's advisory refresh of pending charges near it on
-the account skips charges the same import observes, and runs once at the end
-of the page or label round. Interrupted pages replay their existing
-publications and effects through the same guards. Automatic-rule refusals
-return and log scrubbed causal diagnostics (including nested database messages
-and SQLSTATE codes) and leave the suggestion pending.
+Generation and label pages settle through one module
+(`statement-settlement.ts`). It walks the page's published receipts in page
+order. Independent as-is `create` rules commit together in one SERIALIZABLE
+transaction of at most 32 creates, one dependency layer per transaction: a
+create whose footprint (nearby candidate, copy or hold, Purchase, Vendor
+nearby spending or category, or a Vendor name another charge creates) meets an
+earlier charge's waits for a later transaction with a fresh snapshot. The
+transaction fences the Job once, rechecks statement scope once, takes every
+review, transfer-leg, evidence-source and occurrence lock in the
+single-review namespace order (sorted within each namespace), rebuilds its
+charges' proposals and spending under those locks, and writes the creates,
+bookings and Feedback together; the Job lock stays at commit. Any other rule
+applies alone through its own review in page order; creates it cannot affect
+may commit before it. A charge the page declined before writing applies alone
+in its own transaction. A divergence after writes rolls the transaction back
+to a savepoint, keeps the diverged charge for its own review and admits the
+rest again. One money transaction is in flight at a time.
+
+After each commit, the page's charges the writes affect are never admitted
+on what they published: generation republishes and re-admits them, and a
+label page relabels them in its next round, fenced by the receipt each
+replaces. Untouched no-action receipts complete afterwards in their own
+SERIALIZABLE transaction. A serialization failure or deadlock replays a page
+transaction once as two halves; a boundary that still conflicts ends
+`unfinished`, keeps its receipts and an inclusive cursor, and the page waits
+before the next attempt. After three pages make no progress at one cursor,
+its charges become retained failures and the cursor advances. Operation ids
+are fixed per rule revision and Suggestion, so a replayed transaction is
+idempotent. Each write's advisory refresh of pending charges near it on the
+account skips charges the same import observes, and runs once at the end of
+the page or label round. Interrupted pages replay their existing publications
+and effects through the same guards. Automatic-rule refusals return and log
+scrubbed causal diagnostics (including nested database messages and SQLSTATE
+codes); a refusal whose evidence or booking moved republishes current terms,
+and any other leaves the suggestion pending.
 
 Page caches and streamed fingerprints keep existing fingerprint bytes and never
 cross a money write; commit re-reads its evidence. None of these bounds is a

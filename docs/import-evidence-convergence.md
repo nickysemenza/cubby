@@ -1141,10 +1141,14 @@ does not recreate or restamp labels. Resumed application receipts repeat that
 exact retirement check before application, including recovery from a crash
 before the after-commit callback started. Automatic financial application
 admits only the original ready prefix. Import generation and label pages apply
-compatible creates through the same guarded batches of at most 32. Each
-batch rebuilds current evidence under its locks, preserves per-charge receipts
-and rejects overlapping write footprints; declined items use single admission.
-Generation settles the booked charge's in-scope copies in the same pass. An
+compatible creates through the same guarded transactions of at most 32, one
+dependency layer each ([statement pages](jobs.md#statement-pages)). Each
+rebuilds current evidence under its locks and preserves per-charge receipts;
+declined items use single admission.
+A booked primary's copies come from other sources, so no import scope admits
+them; the neighbour refresh republishes their paired attach for the pass that
+owns them. Before any application on a generation page, its own rule
+selection decides which charges need admission. An
 as-is attach uses its proven paired Transaction even beside other candidates;
 an unpaired ambiguous attach requires an explicit target. Preview, stale-term
 comparison, spending preparation and application use that same target. Charges already skipped by
@@ -1155,12 +1159,10 @@ their charge/evidence, active pending state and absent rule descriptors, then
 clear only the proven prefix through the projection writer. A missing, replaced
 or rule-bearing receipt stops the batch (current
 import-only rules cannot execute outside import admission, so their stamps do
-not). Single-item import admissions regenerate after an applied rule on the same
-page, since regeneration can introduce actionable rules. Generation shares that
-rebuild across bounded groups while no application has changed the ledger;
-every applied rule, copy, declined page or application failure invalidates the
-prepared group before its next admission. A failed grouped rebuild falls back
-to the current charge so failures retain their own references. Statement application and booking request only
+not). Single-item import admissions regenerate first once the page has written,
+since regeneration can introduce actionable rules, and the page's charges a
+write affects are republished together before their admission. A failed
+proposal build bisects so failures retain their own references. Statement application and booking request only
 identity output from their mutation writers when they consume only IDs; the
 writers keep validation, locks, audits, allocations and receipts.
 

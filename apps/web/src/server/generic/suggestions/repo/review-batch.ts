@@ -43,7 +43,11 @@ import {
 
 const log = createLogger("automatic-rules");
 
-/** A page replays a serialization failure or deadlock this many times. */
+/**
+ * A page spends at most this many attempts on serialization failures or
+ * deadlocks: the whole page, then each half once. A smaller boundary reads
+ * less and conflicts less; replaying the same boundary repeats its conflict.
+ */
 const PAGE_ATTEMPTS = 3;
 
 export type AutomaticPageItem = {
@@ -54,7 +58,32 @@ export type AutomaticPageItem = {
   rule: AutomaticReview["rule"];
 };
 
-export type AutomaticPageOutcome = "applied" | "fallback" | "out_of_scope";
+/**
+ * `fallback` wrote nothing and keeps its own review; `retry` wrote nothing
+ * because another item diverged after its writes, so it is admitted again in a
+ * fresh transaction; `unfinished` exhausted the page's conflict replays.
+ */
+export type AutomaticPageOutcome =
+  | "applied"
+  | "fallback"
+  | "out_of_scope"
+  | "retry"
+  | "unfinished";
+
+/**
+ * A family batch hook throws this after its writes began when one entry's
+ * current plan diverged from what it admitted: the savepoint releases every
+ * write, that entry keeps its own review and the rest are admitted again.
+ */
+export class AutomaticBatchDivergence extends Error {
+  constructor(
+    readonly suggestionId: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AutomaticBatchDivergence";
+  }
+}
 
 const replayable = (error: unknown) =>
   ["40001", "40P01"].includes(findPgError(error)?.code ?? "");
@@ -67,10 +96,12 @@ const replayable = (error: unknown) =>
  * family's `applyBatch` writes what it accepts; this owns Feedback and the
  * duplicate retirement. A `fallback` item wrote nothing and keeps the
  * single-review path. A write error rolls the applications back to a
- * savepoint and falls every item back; a serialization failure or deadlock
- * splits the page in half (settle stays with the first half), and a single
- * item replays, then falls back. Operation ids are fixed per item, so a
- * replayed page is idempotent.
+ * savepoint: a typed {@link AutomaticBatchDivergence} falls back only its item
+ * and leaves the rest to `retry`, any other error falls every item back. A
+ * serialization failure or deadlock replays the page once as two halves
+ * (settle stays with the first); a boundary that still conflicts ends
+ * `unfinished`, and a lone item or settle replays up to the same attempt
+ * budget. Operation ids are fixed per item, so a replayed page is idempotent.
  *
  * `settle` runs last in the same boundary with its own ids locked and
  * scope-checked alongside the reviews; it must not write before the reviews.
@@ -114,10 +145,14 @@ export async function reviewAutomaticPage<T>(
     await import("~/server/generic/suggestions/repo/automatic-application");
   const { assertWorkflowEffect, isWorkflowInterrupted } =
     await import("~/server/workflows/runs/execution");
-  const page = async (tx: Database) => {
+  const page = async (
+    tx: Database,
+    items: readonly AutomaticPageItem[],
+    settle: typeof options.settle,
+  ) => {
     await assertWorkflowEffect(tx);
     const outcomes = new Map<string, AutomaticPageOutcome>();
-    const settleIds = options.settle?.ids ?? [];
+    const settleIds = settle?.ids ?? [];
     const ids = [
       ...new Set([...items.map((item) => item.suggestionId), ...settleIds]),
     ];
@@ -295,11 +330,15 @@ export async function reviewAutomaticPage<T>(
             savepoint,
             and(
               eq(suggestionTable.family, name),
-              sql`${suggestionTable.subject} = ANY(${textArrayParam(
-                applied.map(({ prediction }) =>
-                  JSON.stringify(prediction.subject),
-                ),
-              )}::jsonb[])`,
+              family.liveSubjectRows
+                ? family.liveSubjectRows(
+                    applied.map(({ prediction }) => prediction.subject),
+                  )
+                : sql`${suggestionTable.subject} = ANY(${textArrayParam(
+                    applied.map(({ prediction }) =>
+                      JSON.stringify(prediction.subject),
+                    ),
+                  )}::jsonb[])`,
               notInArray(
                 suggestionTable.id,
                 applied.map(({ item }) => item.suggestionId),
@@ -337,21 +376,29 @@ export async function reviewAutomaticPage<T>(
         });
       } catch (error) {
         if (isWorkflowInterrupted(error) || replayable(error)) throw error;
-        // The savepoint released every application; each item retries alone
-        // and reports its own refusal.
-        log.warn("Automatic rule page fell back to single applications", {
+        // The savepoint released every application. A named divergence keeps
+        // only its item for its own review; anything else retries each alone.
+        const diverged =
+          error instanceof AutomaticBatchDivergence ? error.suggestionId : null;
+        log.warn("Automatic rule page fell back", {
           items: entries.length,
+          diverged: diverged !== null,
           error: scrubErrorMessage(String(error)),
         });
         for (const entry of entries)
-          outcomes.set(entry.item.suggestionId, "fallback");
+          outcomes.set(
+            entry.item.suggestionId,
+            diverged === null || entry.item.suggestionId === diverged
+              ? "fallback"
+              : "retry",
+          );
       }
     }
-    const settled = options.settle
-      ? await options.settle.run(
+    const settled = settle
+      ? await settle.run(
           tx,
           new Map(
-            options.settle.ids.flatMap((id) => {
+            settle.ids.flatMap((id) => {
               const row = locked.get(id);
               return row && (!admitted || admitted.has(id)) ? [[id, row]] : [];
             }),
@@ -360,42 +407,45 @@ export async function reviewAutomaticPage<T>(
       : null;
     return { outcomes, settled };
   };
-  for (let attempt = 1; ; attempt++) {
+  const attempt = async (
+    boundary: readonly AutomaticPageItem[],
+    settle: typeof options.settle,
+  ) => {
     try {
-      return await withTransactionDatabase(db, page, {
-        isolationLevel: "serializable",
-      });
+      return await withTransactionDatabase(
+        db,
+        (tx) => page(tx, boundary, settle),
+        { isolationLevel: "serializable" },
+      );
     } catch (error) {
       if (isWorkflowInterrupted(error) || !replayable(error)) throw error;
       log.warn("Automatic rule page conflicted", {
-        attempt,
-        items: items.length,
+        items: boundary.length,
         sqlState: findPgError(error)?.code,
+        detail: scrubErrorMessage(findPgError(error)?.detail ?? ""),
       });
-      if (items.length > 1) {
-        // A smaller boundary reads fewer pages and conflicts less; replaying
-        // the whole page repeats the same conflict.
-        const middle = Math.ceil(items.length / 2);
-        const first = await reviewAutomaticPage(
-          db,
-          name,
-          context,
-          items.slice(0, middle),
-          options,
-        );
-        const second = await reviewAutomaticPage(
-          db,
-          name,
-          context,
-          items.slice(middle),
-          { statementScope: options.statementScope },
-        );
-        return {
-          outcomes: new Map([...first.outcomes, ...second.outcomes]),
-          settled: first.settled,
-        };
-      }
-      if (attempt >= PAGE_ATTEMPTS) return fallback();
+      return null;
     }
+  };
+  const unfinished = (boundary: readonly AutomaticPageItem[]) =>
+    new Map(boundary.map((item) => [item.suggestionId, "unfinished" as const]));
+  const whole = await attempt(items, options.settle);
+  if (whole) return whole;
+  if (items.length > 1) {
+    const middle = Math.ceil(items.length / 2);
+    const first = await attempt(items.slice(0, middle), options.settle);
+    const second = await attempt(items.slice(middle), undefined);
+    return {
+      outcomes: new Map([
+        ...(first?.outcomes ?? unfinished(items.slice(0, middle))),
+        ...(second?.outcomes ?? unfinished(items.slice(middle))),
+      ]),
+      settled: first?.settled ?? null,
+    };
   }
+  for (let attempts = 1; attempts < PAGE_ATTEMPTS; attempts++) {
+    const replay = await attempt(items, options.settle);
+    if (replay) return replay;
+  }
+  return { outcomes: unfinished(items), settled: null };
 }

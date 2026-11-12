@@ -3,6 +3,7 @@ import {
   type FinancialTransactionUpdateData,
 } from "@cubby/schemas/financial-transaction";
 import {
+  parseEntityId,
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
@@ -28,6 +29,13 @@ import {
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { suggestionTable } from "~/server/db/schema";
+import {
+  applyFinancialCreates,
+  FinancialCreateDivergenceError,
+  type FinancialCreateItem,
+  loadFinancialCreateFacts,
+  planFinancialCreates,
+} from "~/server/domains/financial-transaction/repo/financial-create-batch";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   lockFinancialTransactionSources,
@@ -35,16 +43,11 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
   previewFinancialSpending,
-  previewFinancialSpendings,
   commitFinancialSpending,
-  commitFinancialSpendings,
-  prepareFinancialSpendingCandidates,
-  prepareFinancialSpendingPage,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { nearbyStatementCandidate } from "~/server/domains/financial-transaction/repo/financial-statement-projection";
 import {
   createFinancialTransaction,
-  createFinancialTransactions,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import {
@@ -52,10 +55,7 @@ import {
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import {
-  prepareStatementSpending,
-  prepareStatementSpendingFacts,
-} from "~/server/domains/transaction-import/repo/statement-spending";
+import { statementAttachCandidate } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   buildChargeProposals,
   chargeId,
@@ -70,14 +70,15 @@ import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statem
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import type { AutomaticBatchEntry } from "~/server/generic/suggestions/repo/review";
+import { AutomaticBatchDivergence } from "~/server/generic/suggestions/repo/review-batch";
 import {
   suggestionStateData,
   type SuggestionStateRow,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 
+import { changedStatementBooking } from "./statement-spending";
 import {
-  changedStatementBooking,
   changedStatementTerms,
   currentStatementApplication,
   loadStatementApplication,
@@ -88,6 +89,19 @@ import {
 } from "./statement-suggestion-application";
 
 const log = createLogger("statement-suggestions");
+
+/** Evidence of these kinds records a transaction but never books spending. */
+const NON_SPENDING_KINDS: ReadonlySet<string> = new Set([
+  "interest",
+  "income",
+  "account_transfer",
+  "credit_card_payment",
+  "adjustment",
+]);
+
+/** Whether a plan would book spending for non-spending evidence. */
+const booksNonSpending = (kind: string | undefined, status: string) =>
+  Boolean(kind && NON_SPENDING_KINDS.has(kind) && status !== "deferred");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
@@ -268,17 +282,7 @@ export async function applyStatementTransactionSuggestion(
       advice: published.spending?.request.advice ?? null,
     });
     const kind = application.kindOverride ?? judgment.create?.kind;
-    if (
-      kind &&
-      [
-        "interest",
-        "income",
-        "account_transfer",
-        "credit_card_payment",
-        "adjustment",
-      ].includes(kind) &&
-      spending.status !== "deferred"
-    )
+    if (booksNonSpending(kind, spending.status))
       throw refused(
         "The matched transaction would book spending for non-spending evidence; review its kind first.",
       );
@@ -328,12 +332,11 @@ function appliedStatementState(row: SuggestionStateRow) {
 }
 
 /**
- * These writes change the candidates, claims, holds and copies of pending
- * charges near them on each account; refresh them after commit rather than
- * leaving them to refuse at apply until a whole-ledger pass. An import label
+ * The pending charges these writes can change: each write's copies and the
+ * charges near it on its account (nearby candidates, claims, holds). An import
  * page skips charges of its own import, which it rebuilds itself.
  */
-async function refreshStatementNeighbours(
+export async function statementNeighbours(
   db: Database,
   applied: readonly {
     charge: ChargeRef;
@@ -342,35 +345,44 @@ async function refreshStatementNeighbours(
   }[],
   importId: string | undefined,
 ) {
+  const own = new Set(applied.map(({ charge }) => chargeId(charge)));
+  const accounts = new Map<string, string[]>();
+  for (const { judgment, dates } of applied)
+    accounts.set(judgment.accountId, [
+      ...(accounts.get(judgment.accountId) ?? []),
+      ...dates,
+    ]);
+  const neighbours: ChargeRef[] = applied.flatMap(
+    ({ judgment }) => judgment.copies,
+  );
+  for (const [accountId, dates] of accounts)
+    neighbours.push(...(await pendingChargesNear(db, accountId, dates)));
+  const others = [
+    ...new Map(
+      neighbours
+        .filter((other) => !own.has(chargeId(other)))
+        .map((other) => [chargeId(other), other]),
+    ).values(),
+  ];
+  return importId ? chargesOutsideImport(db, importId, others) : others;
+}
+
+/**
+ * Refresh these writes' neighbours after commit rather than leaving them to
+ * refuse at apply until a whole-ledger pass. A page that stops before this
+ * runs re-derives the same set from its committed decisions on replay.
+ */
+async function refreshStatementNeighbours(
+  db: Database,
+  applied: Parameters<typeof statementNeighbours>[1],
+  importId: string | undefined,
+) {
   if (!applied.length) return;
   await runAfterCommit(db, async (committed) => {
     try {
-      const own = new Set(applied.map(({ charge }) => chargeId(charge)));
-      const accounts = new Map<string, string[]>();
-      for (const { judgment, dates } of applied)
-        accounts.set(judgment.accountId, [
-          ...(accounts.get(judgment.accountId) ?? []),
-          ...dates,
-        ]);
-      const neighbours: ChargeRef[] = applied.flatMap(
-        ({ judgment }) => judgment.copies,
-      );
-      for (const [accountId, dates] of accounts)
-        neighbours.push(
-          ...(await pendingChargesNear(committed, accountId, dates)),
-        );
-      const others = [
-        ...new Map(
-          neighbours
-            .filter((other) => !own.has(chargeId(other)))
-            .map((other) => [chargeId(other), other]),
-        ).values(),
-      ];
       await regenerateChargesAfterCommit(
         committed,
-        importId
-          ? await chargesOutsideImport(committed, importId, others)
-          : others,
+        await statementNeighbours(committed, applied, importId),
       );
     } catch (error) {
       // SILENT: advisory refresh only; the apply committed and each
@@ -416,12 +428,45 @@ export function statementBatchCandidate(
   return spending?.status === "ready" && spending.effect === "create_aggregate";
 }
 
+/**
+ * A published as-is attach a page can apply with others: a bank copy attaching
+ * to the Transaction its pairing proved, with no transfer, hold or correction,
+ * whose spending is booked already, books as published, or still defers.
+ */
+export function statementBatchAttach(judgment: StatementTransactionJudgment) {
+  const create = judgment.create;
+  if (
+    judgment.recommended !== "attach" ||
+    !create ||
+    judgment.reviewReason ||
+    judgment.transferPair ||
+    judgment.transfer ||
+    isMoneyMoveKind(create.kind) ||
+    judgment.supersede ||
+    judgment.matchedTransactionId ||
+    !judgment.pairedTransactionId ||
+    statementAttachCandidate(judgment)?.transactionId !==
+      judgment.pairedTransactionId
+  )
+    return false;
+  const status = judgment.spending?.status;
+  return (
+    status === "already_booked" ||
+    status === "ready" ||
+    (status === "deferred" &&
+      !(
+        judgment.providerStatus === "posted" &&
+        ["purchase", "refund", "fee"].includes(create.kind)
+      ))
+  );
+}
+
 /** Vendor matching folds case and surrounding whitespace, as `resolveNames` does. */
 const vendorName = (name: string | null | undefined) =>
   name?.trim().toLowerCase() ?? "";
 
 /** What one create writes that another charge's application can read. */
-function statementFootprint(judgment: StatementTransactionJudgment) {
+export function statementFootprint(judgment: StatementTransactionJudgment) {
   const create = judgment.create!;
   const spending =
     judgment.spending?.status === "ready" ? judgment.spending : null;
@@ -442,7 +487,7 @@ function statementFootprint(judgment: StatementTransactionJudgment) {
     purchaseId: spending?.purchaseId ?? null,
   };
 }
-type StatementFootprint = ReturnType<typeof statementFootprint>;
+export type StatementFootprint = ReturnType<typeof statementFootprint>;
 
 const daysApart = (left: string, right: string) =>
   Math.abs(plainDateDaysBetween(left, right));
@@ -453,7 +498,7 @@ const daysApart = (left: string, right: string) =>
  * their bookings share a Purchase, a Vendor's nearby spending or category
  * history, or a Vendor name one of them creates.
  */
-function footprintAffects(
+export function footprintAffects(
   earlier: StatementFootprint,
   later: StatementFootprint,
 ) {
@@ -575,7 +620,7 @@ export async function applyStatementTransactionSuggestions(
       application.transactionId ||
       application.fields.length ||
       application.rejectedCandidateIds.length ||
-      !statementBatchCandidate(judgment)
+      !(statementBatchCandidate(judgment) || statementBatchAttach(judgment))
     )
       continue;
     const subject = suggestionSubjects.statement_transaction.parse(
@@ -636,68 +681,107 @@ export async function applyStatementTransactionSuggestions(
       const proposal = rebuilt.get(chargeId(entry.charge));
       if (!proposal || proposal.judgment.reviewReason) return [];
       const judgment = withPublishedLabels(proposal.judgment, entry.published);
+      const action =
+        entry.published.recommended === "attach" ? "attach" : "create";
+      const still = { ...judgment, spending: entry.published.spending };
       if (
-        changedStatementTerms(entry.published, judgment, "create", null)
-          .length ||
-        !statementBatchCandidate({
-          ...judgment,
-          spending: entry.published.spending,
-        })
+        changedStatementTerms(entry.published, judgment, action, null).length ||
+        !(action === "attach"
+          ? statementBatchAttach(still)
+          : statementBatchCandidate(still))
       )
         return [];
-      return [{ ...entry, proposal, judgment }];
+      return [{ ...entry, proposal, judgment, action }];
     });
-    const page = current.length
-      ? await prepareStatementSpendingFacts(
-          txDb,
-          current.map(({ judgment }) => judgment),
-        )
-      : undefined;
-    const ready: (typeof current)[number][] = [];
-    for (const entry of current) {
-      const spending = entry.published.spending!;
-      const replanned = await prepareStatementSpending(
-        txDb,
-        { ...entry.judgment, recommended: "create" },
-        spending.request.advice ?? null,
-        page,
-      );
-      // A deferred plan must still defer; a ready one must book as reviewed.
-      if (
-        spending.status === "deferred"
-          ? replanned?.status !== "deferred"
-          : changedStatementBooking(spending, replanned).length
-      )
-        continue;
-      ready.push(entry);
-    }
-    if (!ready.length) return;
     const accounts = new Map(
-      (
-        await unwrapDb(tx).execute<{ id: string; shortcode: string }>(
-          sql`SELECT id, shortcode FROM "FinancialAccount" WHERE id = ANY(${uuidArrayParam([...new Set(ready.map(({ judgment }) => judgment.accountId))])}) AND ${notDeleted("FinancialAccount")}`,
-          "objects",
-        )
-      ).map((row) => [String(row.id), row.shortcode]),
+      current.length
+        ? (
+            await unwrapDb(tx).execute<{ id: string; shortcode: string }>(
+              sql`SELECT id, shortcode FROM "FinancialAccount" WHERE id = ANY(${uuidArrayParam([...new Set(current.map(({ judgment }) => judgment.accountId))])}) AND ${notDeleted("FinancialAccount")}`,
+              "objects",
+            )
+          ).map((row) => [String(row.id), row.shortcode])
+        : [],
     );
-    const applied = ready.filter(({ judgment }) =>
+    const live = current.filter(({ judgment }) =>
       accounts.has(judgment.accountId),
     );
-    if (!applied.length) return;
-    await transitionSuggestionStates(
-      tx,
-      inArray(
-        suggestionTable.id,
-        applied.map(({ index }) => entries[index]!.state.id),
-      ),
-      appliedStatementState,
+    if (!live.length) return;
+    // Core reads its facts in this transaction after our locks, plans every
+    // create on its prospective source with the published advice, and books
+    // one independent layer.
+    const items: FinancialCreateItem[] = live.map(
+      ({ judgment, published, index, action }) => {
+        const create = judgment.create!;
+        const spending = published.spending
+          ? { advice: published.spending.request.advice ?? null }
+          : null;
+        // An as-is attach applies no field corrections to its proven pair.
+        if (action === "attach")
+          return {
+            key: entries[index]!.state.id,
+            kind: "attach" as const,
+            transactionId: parseEntityId(
+              "financialTransaction",
+              judgment.pairedTransactionId,
+            ),
+            sourceRef: create.sourceRef,
+            patch: {},
+            spending,
+          };
+        const {
+          accountId: _account,
+          allocations: _allocations,
+          purchaseId: _purchase,
+          ...fields
+        } = financialTransactionCreateInput.parse({
+          accountId: accounts.get(judgment.accountId)!,
+          purchaseId: null,
+          kind: create.kind,
+          status: create.status,
+          amount: create.amount,
+          transactionDate: create.transactionDate,
+          postedDate: create.postedDate,
+          merchant: create.merchant,
+          rawDescription: create.rawDescription,
+          sourceCategory: create.sourceCategory,
+          sourceRefs: [create.sourceRef],
+          notes: create.notes,
+        });
+        return {
+          key: entries[index]!.state.id,
+          accountId: parseEntityId("financialAccount", judgment.accountId),
+          create: fields,
+          spending,
+        };
+      },
     );
-    // Claims: one write per source and account instead of one per charge.
+    const facts = await loadFinancialCreateFacts(tx, items);
+    const plans = await planFinancialCreates(facts);
+    // A deferred plan must still defer; any other must book as reviewed.
+    // A plan that would book non-spending evidence keeps its own review,
+    // which refuses it, as the single path does.
+    const ready = live.filter(({ published, judgment }, position) => {
+      const spending = published.spending!;
+      const replanned = plans[position] ?? null;
+      return (
+        !booksNonSpending(
+          judgment.create?.kind,
+          replanned?.status ?? "deferred",
+        ) &&
+        (spending.status === "deferred"
+          ? replanned?.status === "deferred"
+          : !changedStatementBooking(spending, replanned).length)
+      );
+    });
+    if (!ready.length) return;
+    // Claims: one write per source and account instead of one per charge,
+    // before core reads the occurrences it accepts.
     const claims = new Map<
       string,
       { source: string; accountId: string; externalIds: string[] }
     >();
-    for (const { charge, judgment, proposal } of applied) {
+    for (const { charge, judgment, proposal } of ready) {
       const accountCode = accounts.get(judgment.accountId)!;
       const key = JSON.stringify([charge.source, accountCode]);
       const claim = claims.get(key) ?? {
@@ -721,76 +805,36 @@ export async function applyStatementTransactionSuggestions(
         },
         actor,
       );
-    const created = await createFinancialTransactions(
-      tx,
-      applied.map(({ judgment }) => {
-        const create = judgment.create!;
-        return financialTransactionCreateInput.parse({
-          accountId: accounts.get(judgment.accountId)!,
-          purchaseId: null,
-          kind: create.kind,
-          status: create.status,
-          amount: create.amount,
-          transactionDate: create.transactionDate,
-          postedDate: create.postedDate,
-          merchant: create.merchant,
-          rawDescription: create.rawDescription,
-          sourceCategory: create.sourceCategory,
-          sourceRefs: [create.sourceRef],
-          notes: create.notes,
-        });
-      }),
-      actor,
-    );
-    const codes = new Map(
-      (
-        await unwrapDb(tx).execute<{ id: string; shortcode: string }>(
-          sql`SELECT id, shortcode FROM "FinancialTransaction" WHERE id = ANY(${uuidArrayParam(created)})`,
-          "objects",
-        )
-      ).map((row) => [String(row.id), row.shortcode]),
-    );
-    // One read-only page serves every new charge's preview before the commit
-    // takes its locks and prepares its own.
-    const createdPage = await prepareFinancialSpendingPage(txDb, {
-      accountIds: [],
-      transactionIds: created,
-      sources: [],
-    });
-    await prepareFinancialSpendingCandidates(txDb, createdPage);
-    const previews = await previewFinancialSpendings(
-      txDb,
-      applied.map(({ published }, position) => ({
-        request: {
-          transactionId: parseShortcodeFor(
-            "financialTransaction",
-            codes.get(created[position]!)!,
-          ),
-          advice: published.spending?.request.advice ?? null,
-        },
-      })),
-      createdPage,
-    );
-    const plans = [];
-    for (const [position, { judgment }] of applied.entries()) {
-      const transactionId = parseShortcodeFor(
-        "financialTransaction",
-        codes.get(created[position]!)!,
+    let outcomes;
+    try {
+      outcomes = await applyFinancialCreates(
+        tx,
+        facts,
+        ready.map(({ index }) => entries[index]!.state.id),
+        actor,
       );
-      const plan = previews[position]!;
-      if (plan.status === "deferred") {
-        if (
-          judgment.providerStatus === "posted" &&
-          ["purchase", "refund", "fee"].includes(judgment.create!.kind)
-        )
-          throw refused(
-            "The matched transaction's kind or status cannot book this spending; correct it first.",
-          );
-        continue;
-      }
-      plans.push({ plan, transactionId });
+    } catch (error) {
+      if (error instanceof FinancialCreateDivergenceError)
+        throw new AutomaticBatchDivergence(error.key, error.message);
+      throw error;
     }
-    await commitFinancialSpendings(txDb, plans, actor);
+    const written = new Set(
+      outcomes.flatMap((outcome) =>
+        outcome.status === "declined" ? [] : [outcome.key],
+      ),
+    );
+    const applied = ready.filter(({ index }) =>
+      written.has(entries[index]!.state.id),
+    );
+    if (!applied.length) return;
+    await transitionSuggestionStates(
+      tx,
+      inArray(
+        suggestionTable.id,
+        applied.map(({ index }) => entries[index]!.state.id),
+      ),
+      appliedStatementState,
+    );
     for (const { index } of applied) results[index] = "applied";
     await refreshStatementNeighbours(
       txDb,

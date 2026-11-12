@@ -858,7 +858,7 @@ describe("statement Transaction suggestions", () => {
         throw new Error("Synthetic application scope source missing");
       const regenerate = statementSuggestionsRepo.regenerateCharges;
       const applyPage = automaticRuleRuntime.applyAutomaticRulePage;
-      const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
+      const apply = automaticRuleRuntime.applyAutomaticRules;
       let moved = false;
       const move = async (
         db: typeof ctx.db,
@@ -900,9 +900,20 @@ describe("statement Transaction suggestions", () => {
           };
         });
       const application = vi
-        .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
+        .spyOn(automaticRuleRuntime, "applyAutomaticRules")
         .mockImplementation(async (...args) => {
-          if (phase === "single") await move(args[0], args[1]);
+          if (phase === "single") {
+            const [charge] = await getDb(ctx.db)
+              .select({ data: suggestionTable.data })
+              .from(suggestionTable)
+              .where(eq(suggestionTable.id, args[1][0]!));
+            await move(
+              args[0],
+              z
+                .object({ source: z.string(), chargeKey: z.string() })
+                .parse(charge!.data),
+            );
+          }
           return apply(...args);
         });
       try {
@@ -2552,10 +2563,7 @@ describe("statement Transaction suggestions", () => {
         }),
       ]);
       await generate(ctx);
-      const admission = vi.spyOn(
-        automaticRuleRuntime,
-        "applyAutomaticRulesForCharge",
-      );
+      const admission = vi.spyOn(automaticRuleRuntime, "applyAutomaticRules");
       try {
         expect(
           await labelStatementSuggestions(ctx.db, {
@@ -2624,7 +2632,7 @@ describe("statement Transaction suggestions", () => {
           runId,
           scope: { importId: recorded.batchId },
         }),
-      { statements: 252, parameters: 700 },
+      { statements: 130, parameters: 700 },
     );
     expect(outcome).toMatchObject({ completed: 32, failed: [], next: null });
     expect(
@@ -2653,7 +2661,7 @@ describe("statement Transaction suggestions", () => {
         scope: { importId: retained.batchId },
       });
     expect(
-      await expectStatementBudget(replay, { statements: 301, parameters: 700 }),
+      await expectStatementBudget(replay, { statements: 150, parameters: 700 }),
     ).toMatchObject({ processed: 32, failed: [] });
     await replay();
     expect(
@@ -2715,7 +2723,21 @@ describe("statement Transaction suggestions", () => {
     const run = async (prefix: string, account: string, single: boolean) => {
       const recorded = await record(
         ctx,
-        Array.from({ length: 4 }, (_, index) => shop(prefix, index, account)),
+        [
+          ...Array.from({ length: 4 }, (_, index) =>
+            shop(prefix, index, account),
+          ),
+          // A repeat Vendor within two weeks depends on the first booking.
+          ...[2, 7].map((day) =>
+            rowInput({
+              accountDescriptor: account,
+              providerAmount: -(17 + day),
+              statementDate: `2026-05-0${day}`,
+              merchant: `${prefix} Shop 0`,
+              rawDescription: `${prefix.toUpperCase()} SHOP 0 REPEAT ${day}`,
+            }),
+          ),
+        ],
         { fingerprint: `synthetic-differential-${prefix}` },
       );
       await generate(ctx);
@@ -2737,12 +2759,19 @@ describe("statement Transaction suggestions", () => {
             : page(...args),
         );
       try {
-        expect(
-          await labelStatementSuggestions(ctx.db, {
+        // Dependent bookings may settle on a later pass; both paths run until
+        // nothing is left to label or apply.
+        let completed = 0;
+        for (let pass = 0; pass < 4; pass++) {
+          const outcome = await labelStatementSuggestions(ctx.db, {
             port: answering({ kind: "purchase", counterparty: "business" }),
             scope: { importId: recorded.batchId },
-          }),
-        ).toMatchObject({ completed: 4, failed: [] });
+          });
+          expect(outcome.failed).toEqual([]);
+          completed += outcome.completed;
+          if (!outcome.next && !outcome.completed) break;
+        }
+        expect(completed).toBe(6);
       } finally {
         fallback.mockRestore();
       }
@@ -2825,17 +2854,13 @@ describe("statement Transaction suggestions", () => {
         port: answering({ kind: "purchase", counterparty: "business" }),
       });
     const page = automaticRuleRuntime.applyAutomaticRulePage;
-    const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
     const reviewed: string[] = [];
-    const alone: string[] = [];
-    const descriptionOf = async (
-      charge: statementSuggestionsRepo.ChargeRef,
-    ) => {
-      const { rows } = await getDb(ctx.db).execute<{ description: string }>(
-        sql`SELECT judgment->${"create"}->>${"rawDescription"} AS description FROM "Suggestion" WHERE data->>${"source"} = ${charge.source} AND data->>${"chargeKey"} = ${charge.chargeKey} ORDER BY "createdAt" DESC LIMIT 1`,
-      );
-      return rows[0]?.description ?? "";
-    };
+    // Each page transaction's charges, and what it declined to its own review.
+    const pageWrites: string[][] = [];
+    const declined: string[] = [];
+    const descriptionOf = (selection: { row: { judgment: unknown } }) =>
+      statementTransactionJudgment.parse(selection.row.judgment).create
+        ?.rawDescription ?? "";
     const pageSpy = vi
       .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
       .mockImplementation(async (...args) => {
@@ -2867,13 +2892,12 @@ describe("statement Transaction suggestions", () => {
             application: selection.review.application,
           });
         }
-        return page(...args);
-      });
-    const applySpy = vi
-      .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
-      .mockImplementation(async (...args) => {
-        alone.push(await descriptionOf(args[1]));
-        return apply(...args);
+        const result = await page(...args);
+        pageWrites.push(args[1].map(descriptionOf));
+        for (const selection of args[1])
+          if (result.outcomes.get(selection.row.id) === "fallback")
+            declined.push(descriptionOf(selection));
+        return result;
       });
     try {
       const outcome =
@@ -2891,20 +2915,18 @@ describe("statement Transaction suggestions", () => {
       expect(outcome).toMatchObject({ failed: [] });
     } finally {
       pageSpy.mockRestore();
-      applySpy.mockRestore();
     }
     expect(reviewed).toHaveLength(1);
-    // The member's application wins; the page leaves that charge to its own
-    // review, which finds nothing left to apply.
-    expect(alone).toContain("EXAMPLE REVIEWED SHOP");
-    // Of the two charges naming one new Vendor, the later in page order
-    // applies alone after the page.
-    const twinsAlone = alone.filter((description) =>
-      description.startsWith("EXAMPLE TWIN"),
-    );
-    // Generation orders charge keys; labels order their publication receipts.
-    // Either order keeps a colliding create outside the shared write.
-    expect(twinsAlone.length).toBeGreaterThanOrEqual(1);
+    // The member's application wins; the page declines that charge to its
+    // own review, which finds nothing left to apply.
+    expect(declined).toContain("EXAMPLE REVIEWED SHOP");
+    // Two charges naming one new Vendor depend on each other, so whichever
+    // order the page sees them in, they never share one write transaction.
+    for (const write of pageWrites)
+      expect(
+        write.filter((description) => description.startsWith("EXAMPLE TWIN"))
+          .length,
+      ).toBeLessThanOrEqual(1);
     const transactions = (
       await getDb(ctx.db)
         .select({ rawDescription: financialTransaction.rawDescription })
@@ -3111,6 +3133,49 @@ describe("statement Transaction suggestions", () => {
       expect(publication).toHaveBeenCalledTimes(1);
     } finally {
       publication.mockRestore();
+      effect.mockRestore();
+    }
+  });
+
+  it("recovers a committed generation publication after its retirement check fails once", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    const afterCommit = databaseHelpers.runAfterCommit;
+    let interrupted = false;
+    const effect = vi
+      .spyOn(databaseHelpers, "runAfterCommit")
+      .mockImplementation((db, work) =>
+        typeof work === "function"
+          ? afterCommit(db, async (committed) => {
+              if (!interrupted) {
+                interrupted = true;
+                throw new Error(
+                  "Synthetic retirement admission failure after commit",
+                );
+              }
+              return work(committed);
+            })
+          : afterCommit(db, work),
+      );
+    try {
+      // The batch committed before its effect failed; the one-at-a-time pass
+      // finds that publication rather than reporting the charge as failed.
+      expect(
+        await generateStatementSuggestionPage(ctx.db, {
+          servicesFor: buildCrudServices,
+          after: null,
+          runId: null,
+        }),
+      ).toMatchObject({ failed: [], published: 0, unchanged: 1 });
+      expect(interrupted).toBe(true);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: suggestionTable.id })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.family, "statement_transaction")),
+      ).toHaveLength(1);
+      expect(await readPendingStatements(ctx)).toHaveLength(1);
+    } finally {
       effect.mockRestore();
     }
   });
@@ -3323,6 +3388,95 @@ describe("statement Transaction suggestions", () => {
       await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
     ).toBe(0);
   });
+
+  it.each(["generation", "label"] as const)(
+    "replays a %s page that stopped between its commit and its copy refresh",
+    async (phase) => {
+      await card(ctx, ["monarch", "copilot"]);
+      const primary = await record(ctx, [
+        rowInput({ rawDescription: "EXAMPLE GROCER 0001" }),
+      ]);
+      await record(
+        ctx,
+        [rowInput({ statementDate: "2026-05-05", merchant: null })],
+        { source: "copilot", fingerprint: "fp-copilot-crash" },
+      );
+      await generate(ctx);
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "background",
+      });
+      if (phase === "generation")
+        await labelStatementSuggestions(ctx.db, {
+          port: answering({ kind: "purchase", counterparty: "business" }),
+          runId,
+        });
+      const page = (recoverSince: Date | null) =>
+        phase === "generation"
+          ? generateStatementSuggestionPage(ctx.db, {
+              servicesFor: buildCrudServices,
+              runId,
+              after: null,
+              scope: { importId: primary.batchId },
+              recoverSince,
+            })
+          : labelStatementSuggestions(ctx.db, {
+              port: answering({ kind: "purchase", counterparty: "business" }),
+              runId,
+              scope: { importId: primary.batchId },
+              recoverSince,
+            });
+      const copyAdvice = () =>
+        getDb(ctx.db)
+          .select({
+            judgment: suggestionTable.judgment,
+            decisions: suggestionTable.decisions,
+          })
+          .from(suggestionTable)
+          .where(
+            sql`${suggestionTable.active} AND ${suggestionTable.data}->>${"source"} = ${"copilot"}`,
+          );
+      const checkpoint = new Date();
+      // The process stops after the money commit: no after-commit work runs.
+      const afterCommit = vi
+        .spyOn(databaseHelpers, "runAfterCommit")
+        .mockImplementation(async () => undefined);
+      try {
+        await page(null);
+      } finally {
+        afterCommit.mockRestore();
+      }
+      const [booked] = await getDb(ctx.db).select().from(financialTransaction);
+      expect(booked).toBeDefined();
+      expect(await copyAdvice()).toEqual([]);
+      const applied = await getDb(ctx.db)
+        .select({
+          id: suggestionTable.id,
+          decisions: suggestionTable.decisions,
+        })
+        .from(suggestionTable)
+        .where(eq(suggestionTable.status, "applied"));
+      // The replay finds nothing left to apply, re-derives the stopped
+      // attempt's refresh from its committed decision and keeps its receipts.
+      await page(checkpoint);
+      const [copy] = await copyAdvice();
+      expect(copy?.judgment).toMatchObject({
+        recommended: "attach",
+        pairedTransactionId: booked!.id,
+      });
+      expect(
+        await getDb(ctx.db).select().from(financialTransaction),
+      ).toHaveLength(1);
+      expect(
+        await getDb(ctx.db)
+          .select({
+            id: suggestionTable.id,
+            decisions: suggestionTable.decisions,
+          })
+          .from(suggestionTable)
+          .where(eq(suggestionTable.status, "applied")),
+      ).toEqual(applied);
+    },
+  );
 
   it("skips superseded evidence and publishes fresh labels for the revised charge", async () => {
     await card(ctx);
@@ -3904,6 +4058,80 @@ describe("statement Transaction suggestions", () => {
       true,
     );
   });
+
+  // Window boundaries: a primary on day 0, its copy from another source on
+  // day 3, and a same-source charge of the same amount `days` later.
+  it.each([6, 7, 8])(
+    "settles a primary, its copy and an equal charge %i days later by their windows",
+    async (days) => {
+      await card(ctx, ["monarch", "copilot"]);
+      const later = new Date(Date.UTC(2026, 4, 4 + days))
+        .toISOString()
+        .slice(0, 10);
+      const primary = await record(ctx, [
+        rowInput({
+          merchant: "Example Cafe",
+          rawDescription: "EXAMPLE CAFE 0001",
+        }),
+        rowInput({
+          merchant: "Example Bakery",
+          rawDescription: "EXAMPLE BAKERY 0002",
+          statementDate: later,
+        }),
+      ]);
+      await record(
+        ctx,
+        [
+          rowInput({
+            merchant: null,
+            rawDescription: "EXAMPLE CAFE 0001",
+            statementDate: "2026-05-07",
+          }),
+        ],
+        { source: "copilot", fingerprint: "fp-copilot-window" },
+      );
+      await generate(ctx);
+      const page = automaticRuleRuntime.applyAutomaticRulePage;
+      const pageWrites: string[][] = [];
+      const spy = vi
+        .spyOn(automaticRuleRuntime, "applyAutomaticRulePage")
+        .mockImplementation(async (...args) => {
+          pageWrites.push(
+            args[1].map(
+              (selection) =>
+                statementTransactionJudgment.parse(selection.row.judgment)
+                  .create?.rawDescription ?? "",
+            ),
+          );
+          return page(...args);
+        });
+      try {
+        expect(
+          await labelStatementSuggestions(ctx.db, {
+            port: answering({ kind: "purchase", counterparty: "business" }),
+            scope: { importId: primary.batchId },
+          }),
+        ).toMatchObject({ failed: [] });
+      } finally {
+        spy.mockRestore();
+      }
+      const booked = (
+        await getDb(ctx.db)
+          .select({ rawDescription: financialTransaction.rawDescription })
+          .from(financialTransaction)
+          .where(notDeleted(financialTransaction))
+      )
+        .map((row) => row.rawDescription)
+        .sort();
+      // Six days puts the later charge within one window of the copy, so no
+      // member sees a stable group and every charge waits for review.
+      expect(booked).toEqual(
+        days === 6 ? [] : ["EXAMPLE BAKERY 0002", "EXAMPLE CAFE 0001"],
+      );
+      // Equal amounts within the pending-post window never share a write.
+      expect(pageWrites.some((write) => write.length > 1)).toBe(days === 8);
+    },
+  );
 
   // Failure mode: once one of two same-amount charges is attached, the other
   // has no unmatched sibling left, so a model "same" alone would attach a

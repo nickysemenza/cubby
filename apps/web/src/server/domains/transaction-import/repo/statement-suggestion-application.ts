@@ -1,4 +1,3 @@
-import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -27,7 +26,10 @@ import {
   statementCandidateSubject,
   statementLabelSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
-import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
+import {
+  changedStatementBooking,
+  prepareStatementSpending,
+} from "~/server/domains/transaction-import/repo/statement-spending";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { createAppError } from "~/server/errors/app-error";
 import { changedTerms } from "~/server/generic/suggestions/repo/suggestion-presentation";
@@ -198,18 +200,6 @@ function statementApplicationTerms(
   }
 }
 
-const reviewedBooking = (plan: FinancialSpendingPlan | null | undefined) =>
-  plan?.status === "ready"
-    ? {
-        status: plan.status,
-        effect: plan.effect,
-        purchaserId: plan.purchaserId,
-        vendorId: plan.vendorId,
-        spendingCategoryId: plan.spendingCategoryId,
-        purchaseId: plan.purchaseId,
-      }
-    : { status: plan?.status ?? null };
-
 function changedFields<T extends object>(reviewed: T, current: T) {
   const changed = changedTerms({ reviewed, current });
   return changed.includes("status") ? ["status"] : changed;
@@ -227,15 +217,6 @@ export function changedStatementTerms(
     statementApplicationTerms(current, action, targetId),
   );
 }
-
-/** A reviewed ready booking's fields that differ from its current replan. */
-export const changedStatementBooking = (
-  published: FinancialSpendingPlan | null | undefined,
-  current: FinancialSpendingPlan | null | undefined,
-) =>
-  changedFields(reviewedBooking(published), reviewedBooking(current)).map(
-    (key) => `spending.${key}`,
-  );
 
 /** Rebuild from retained evidence, never the published spending plan or client source. */
 export async function currentStatementApplication(

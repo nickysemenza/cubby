@@ -6,7 +6,7 @@ import {
   suggestionReviewOut,
 } from "@cubby/schemas/suggestion";
 import { getErrorMessage } from "@cubby/shared";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -88,6 +88,12 @@ export type Handler = {
   ) => Promise<z.infer<typeof suggestionReviewOut>["applicationResult"] | void>;
   /** Automatic reviews applied together under {@link reviewAutomaticPage}. */
   applyBatch?: AutomaticBatchHandler;
+  /**
+   * The family's live rows for these subjects on its own slot index. An apply
+   * supersedes a duplicate through it; whole-subject equality has no index and
+   * would read, and serializably lock, the family's entire live backlog.
+   */
+  liveSubjectRows?: (subjects: readonly unknown[]) => SQL;
 };
 
 export type AutomaticBatchEntry = {

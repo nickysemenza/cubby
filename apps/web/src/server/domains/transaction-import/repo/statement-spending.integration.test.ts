@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
@@ -854,6 +855,112 @@ describe("statement spending review and re-import", () => {
         (row) => row.shortcode,
       ),
     ).toEqual([installment.output.id]);
+  });
+  it("republishes drifted clean spending instead of refusing it on every import pass", async () => {
+    const { account, advice: merchantAdvice, input } = await fixture();
+    // The advice names a Vendor the merchant text alone does not resolve to,
+    // so adviceless rule evidence cannot see that Vendor's spending.
+    await createRepoEntity(ctx, "vendor", { name: "Synthetic Grove Holdings" });
+    const advice = financialSpendingAdvice.parse({
+      ...merchantAdvice,
+      vendorName: "Synthetic Grove Holdings",
+    });
+    const recorded = await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: { ...input.import, fingerprint: "synthetic-spending-grove" },
+        rows: [
+          {
+            ...input.rows[0]!,
+            statementDate: "2026-05-11",
+            providerAmount: -17.25,
+            merchant: "SQ SYNTH GRV 042",
+            rawDescription: "SQ *SYNTH GRV 042",
+            rowPosition: 2,
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    await labelAndRefreshReads(advice);
+    const published = async () => {
+      const [state] = await getDb(ctx.db)
+        .select({
+          id: suggestionTable.id,
+          producer: suggestionTable.producer,
+          judgment: suggestionTable.judgment,
+          data: suggestionTable.data,
+        })
+        .from(suggestionTable)
+        .where(
+          sql`${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
+            AND ${suggestionTable.data}->>'statementDate' = '2026-05-11'`,
+        );
+      return state!;
+    };
+    const before = await published();
+    expect(before.judgment).toMatchObject({
+      spending: { status: "ready", effect: "create_aggregate" },
+    });
+    // Another writer leaves an open Purchase for the same Vendor afterwards.
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(vendorTable.name, "Synthetic Grove Holdings"),
+          ),
+      },
+    });
+    const receipt = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor!.shortcode,
+      date: "2026-03-01",
+    });
+    await createRepoEntity(ctx, "expense", {
+      purchaseId: receipt.output.id,
+      name: "Synthetic older receipt",
+      cost: 40,
+      trade: "other",
+    });
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 10,
+      postedDate: "2026-03-01",
+      allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
+    });
+    const refusals = vi.spyOn(
+      statementApplication,
+      "currentStatementApplication",
+    );
+    try {
+      const pass = () =>
+        generateStatementSuggestionPage(ctx.db, {
+          servicesFor: buildCrudServices,
+          after: null,
+          runId: null,
+          scope: { importId: recorded.batchId },
+        });
+      expect(await pass()).toMatchObject({ published: 1, failed: [] });
+      // Converged: the next pass leaves the republished booking unchanged.
+      expect(await pass()).toMatchObject({ published: 0, failed: [] });
+      // The drifted booking is republished with current terms, keeping the
+      // paid advice and model provenance; it is never admitted as published.
+      const after = await published();
+      expect(after.id).not.toBe(before.id);
+      expect(after.producer).toMatchObject({ kind: "model" });
+      expect(after.judgment).not.toMatchObject({
+        spending: { status: "ready", effect: "create_aggregate" },
+      });
+      expect(after.judgment).toMatchObject({
+        spending: { request: { advice } },
+      });
+      expect(refusals).not.toHaveBeenCalled();
+      expect(await total()).toBe(40);
+    } finally {
+      refusals.mockRestore();
+    }
   });
   it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
     const { input, account, advice, recorded } = await fixture();
