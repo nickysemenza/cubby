@@ -713,39 +713,6 @@ const checkSections = (
 };
 
 /**
- * `detail.lead` and `detail.pairs` place declared sections on the web page.
- * Relation tables keep the full width their columns need.
- */
-const checkSectionPlacement = (
-  context: string,
-  detail: { lead: readonly string[]; pairs: ReadonlyArray<readonly string[]> },
-  sections: ReadonlyArray<{ id: string; kind: string }>,
-): void => {
-  const kinds = new Map(sections.map((section) => [section.id, section.kind]));
-  for (const id of detail.lead)
-    if (!kinds.has(id))
-      throw new EntityDeclarationError(
-        `${context}.detail.lead names ${id}, which is not a declared section.`,
-      );
-  const paired = new Set<string>();
-  for (const id of detail.pairs.flat()) {
-    if (!kinds.has(id))
-      throw new EntityDeclarationError(
-        `${context}.detail.pairs names ${id}, which is not a declared section.`,
-      );
-    if (kinds.get(id) === "relation")
-      throw new EntityDeclarationError(
-        `${context}.detail.pairs names the relation section ${id}; relation tables stay full width.`,
-      );
-    if (paired.has(id))
-      throw new EntityDeclarationError(
-        `${context}.detail.pairs repeats ${id}.`,
-      );
-    paired.add(id);
-  }
-};
-
-/**
  * The detail header and tabs: `lines` and `aiSummary` name readable fields
  * once each, `groups` ids are unique, every section `group` names one of
  * them (or a default group), and `side.needs` reads. Returns the fields the
@@ -1252,7 +1219,6 @@ export const compilePresentation = (
         `${context}.searchFacts: "${key}" must be a readable list field.`,
       );
   }
-  checkSectionPlacement(context, detail, sections);
   checkRecordState(presentation, [listLookup, lookup]);
   const headerFields = checkDetailLayout(detail, sections, lookup);
   const timelineSection = checkSections(
@@ -1318,8 +1284,6 @@ export const compilePresentation = (
       })),
       activityRelations: detail.activityRelations,
       overviewSections: detail.overviewSections,
-      lead: detail.lead,
-      pairs: detail.pairs,
       lines: detail.lines,
       aiSummary: detail.aiSummary,
       groups: detail.groups,

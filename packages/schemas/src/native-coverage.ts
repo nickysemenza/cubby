@@ -6,7 +6,6 @@ import { merchantVendorInference } from "./financial-transaction-fields";
 import { projectRollup } from "./project-output-fields";
 import { recipeTotals, rawRecipeTopLevelFields } from "./recipe-shared";
 import { listLabel } from "./entity-definitions/label-field";
-import { runWorkProgress } from "./run-work-progress";
 import { financialReconciliationSummary } from "./financial-reconciliation";
 import { purchaseReconciliation } from "./purchase-fields";
 import {
@@ -267,13 +266,6 @@ export const nativeCoverage = {
         { path: "vendorLogo", schema: imageUrlSummary },
       ],
     },
-    "run-throughput": {
-      status: "generic",
-      inputs: [
-        { path: "workProgress", schema: runWorkProgress },
-        { path: "status", schema: z.string() },
-      ],
-    },
     "run-ai-cost": {
       status: "generic",
       inputs: [{ path: "chargedCostLabel", schema: listLabel }],
@@ -295,13 +287,7 @@ export const nativeCoverage = {
     // Drawn from the field's declared `display.labelPath`: the server-composed figure (a rule
     // computed once, not per client) or the display name of the record a cell links to. The rich
     // web cell (tooltip, pill, link, workbench) stays web-only; the fact it carries does not.
-    ...generic([
-      "tag-links",
-      "purchase-links",
-      "product-link",
-      "run-activity",
-      "run-waiting-on",
-    ]),
+    ...generic(["tag-links", "purchase-links", "product-link"]),
     ...generic(SHARED_LIST_RENDERERS),
     // The Image row IS the picture: native draws it as the row thumbnail.
   },
@@ -326,8 +312,6 @@ export const nativeCoverage = {
       "financial-transaction-allocations",
       "run-failure-details",
       "run-ai-cost",
-      "run-outcome-counts",
-      "run-waiting-on",
       "email-import-outcome",
       "shipment-order",
       "financial-account-identity",

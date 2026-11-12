@@ -1528,12 +1528,6 @@ const buildMetadataSchemas = () => {
     .enum(["primary", "full"])
     .optional()
     .default("primary");
-  // Presentation choices are not persisted SQL enum vocabulary.
-  const sectionWorkspace = z.union([
-    z.literal("overview"),
-    z.literal("work"),
-    z.literal("evidence"),
-  ]);
   /**
    * The `detail.groups` tab (or `DEFAULT_DETAIL_GROUPS` tab when the entity
    * declares none) this section sits in; omission follows its kind and position.
@@ -1543,8 +1537,6 @@ const buildMetadataSchemas = () => {
     id: sectionId,
     title: nonEmptyString(),
     placement: sectionPlacement,
-    /** Focused detail workspace; omission follows the section's semantic kind. */
-    workspace: sectionWorkspace.optional(),
     group: sectionGroup,
     surfaces: detailSurfacesSchema,
   };
@@ -1618,7 +1610,6 @@ const buildMetadataSchemas = () => {
       title: orNull(nonEmptyString()),
       /** Declared computed field whose explanation applies to this slot. */
       explanationField: orNull(fieldKey),
-      workspace: sectionWorkspace.optional(),
       group: sectionGroup,
       placement: sectionPlacement,
       surfaces: detailSurfacesSchema,
@@ -1809,21 +1800,6 @@ const buildMetadataSchemas = () => {
          * supporting detail reachable through its existing section id. */
         overviewSections: orNull(z.array(sectionId)),
         /**
-         * Sections that answer the record's job, leading the web page ahead
-         * of Needs you and Activity. Native keeps `sections` order and never
-         * reads this.
-         */
-        lead: z.array(sectionId).optional().default([]),
-        /**
-         * Two sections the web page sets side by side where width allows,
-         * stacking below about 1000px. Relation tables stay full width, and
-         * declared `sections` order is unchanged.
-         */
-        pairs: z
-          .array(z.tuple([sectionId, sectionId]))
-          .optional()
-          .default([]),
-        /**
          * Labelled lines under the record's title, in order. Each `field` is a
          * text, `labelField` or `displayItem` value; references stay links.
          */
@@ -1895,8 +1871,6 @@ const buildMetadataSchemas = () => {
           summary,
           activityRelations,
           overviewSections,
-          lead,
-          pairs,
           lines,
           aiSummary,
           groups,
@@ -1918,8 +1892,6 @@ const buildMetadataSchemas = () => {
           sections,
           activityRelations,
           overviewSections,
-          lead,
-          pairs,
           lines,
           aiSummary,
           groups,
