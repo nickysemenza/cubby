@@ -1,8 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { vendor } from "~/server/db/retained-tables";
 import { executeEntity } from "~/server/entity-kernel";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -14,8 +16,9 @@ import { merchantVendorInferenceFor } from "./merchant-vendor-inference";
  * named `vendorName`. Refuses when the name is ambiguous or missing, the
  * string already names or contains-matches a Vendor, or confirmed allocations
  * tie the string to another Vendor. Rechecked inside the write: a concurrent
- * merge leaves the survivor holding the name, and a concurrent alias edit
- * retries the snapshot and re-resolves.
+ * merge leaves the survivor holding the name, and a concurrent Vendor edit
+ * fails this snapshot's update, which retries and re-resolves rather than
+ * overwriting the member's aliases.
  */
 export async function aliasStatementMerchant(
   db: Database,
@@ -44,13 +47,18 @@ export async function aliasStatementMerchant(
         history.candidates.some((candidate) => candidate.vendorId !== target)
       )
         return false;
+      const [current] = await getDb(txDb)
+        .select({ aliases: vendor.aliases })
+        .from(vendor)
+        .where(eq(vendor.id, named.row.id));
+      if (!current) return false;
       await executeEntity(
         { ...input.servicesFor(txDb), actorContext: input.actor },
         {
           action: "update",
           entity: "vendor",
           id: target,
-          data: { aliases: [{ op: "add", key: input.merchant }] },
+          data: { aliases: [...current.aliases, input.merchant] },
         },
       );
       return true;

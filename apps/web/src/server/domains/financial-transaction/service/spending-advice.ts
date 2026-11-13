@@ -67,9 +67,10 @@ async function askChoice(args: DecisionChoiceArgs) {
  * only missing questions are asked, and every completed answer is returned
  * for the caller to store. The escrow question joins merchant identity's
  * decision wave; support reads identity's proposed name. A failure surfaces in
- * that order after both branches settle. A unique Vendor match outranks the
- * merchant answer; a supported business answer may alias the raw merchant
- * onto the one Vendor it names.
+ * that order after both branches settle. A merchant naming exactly one live
+ * Vendor asks no merchant question; any other Vendor match keeps today's
+ * low-confidence advice. A supported business answer may alias an unknown raw
+ * merchant onto the one Vendor it names.
  */
 export async function adviseSpending(
   db: Database,
@@ -127,7 +128,17 @@ export async function adviseSpending(
     };
   };
   const merchant = async () => {
-    if (!identityInput) return;
+    if (!merchantText || !identityInput) return;
+    const [named] = await resolveFinancialSpendingVendors(
+      db,
+      [merchantText],
+      input.preparation,
+    );
+    // One live Vendor identifies the merchant; its questions are inapplicable.
+    if (named?.row && !named.candidates.length) {
+      delete answers.merchant;
+      return named;
+    }
     // A supplied decision port is a closed-set test/evaluation seam; it must
     // never fall through to a live generative request.
     if (!answers.merchant && !input.port)
@@ -150,7 +161,8 @@ export async function adviseSpending(
     const identity = answers.merchant?.identity.value;
     const supportInput =
       identity && statementMerchantSupportInput(identityInput, identity);
-    if (!answers.merchant || !supportInput || answers.merchant.support) return;
+    if (!answers.merchant || !supportInput || answers.merchant.support)
+      return named;
     const feature = MERCHANT_IDENTITY_SUPPORT_FEATURE;
     answers.merchant.support = {
       ...(await askChoice({
@@ -170,13 +182,9 @@ export async function adviseSpending(
         [feature.feature]: STATEMENT_ANSWER_VERSIONS.merchantSupport,
       },
     };
+    return named;
   };
-  const [, [named]] = await Promise.all([
-    settleDecisionBranches(escrow, merchant),
-    merchantText
-      ? resolveFinancialSpendingVendors(db, [merchantText], input.preparation)
-      : Promise.resolve([]),
-  ]);
+  const [, named] = await settleDecisionBranches(escrow, merchant);
 
   const answered = statementAdviceFromAnswers(answers);
   const advice = financialSpendingAdvice.parse(
