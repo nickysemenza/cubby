@@ -13,16 +13,20 @@ struct RecordMachineryHeader: View {
         VStack(alignment: .leading, spacing: 6) {
             if let read = model.read {
                 Text(Words.stageLine(read)).font(.subheadline.weight(.medium))
-                VStack(alignment: .leading, spacing: 4) {
+                WrappingFactsLayout(spacing: 4) {
                     if let gap = read.gaps.items.first {
                         if let since = gap.since { Text("Since \(Words.instant(since))") }
                         if let action = gap.actions.first {
-                            Button(action.label) { Task { await model.act(app, subject: subject, field: nil, action: action) } }
-                                .disabled(model.pending)
+                            Button(action.label) {
+                                Task { await model.act(app, subject: subject, field: nil, action: action) }
+                            }
+                            .disabled(model.pending)
                         } else if gap.since == nil {
                             Text(Words.gapSentence(gap))
                         }
-                    } else { Text(Words.noGapLabel) }
+                    } else {
+                        Text(Words.noGapLabel)
+                    }
                 }
                 .font(.caption)
                 Button(Words.countLine(read)) { showingPanel = true }
@@ -41,7 +45,7 @@ struct RecordMachineryHeader: View {
                             }
                         }
                         #if os(macOS)
-                        .frame(minWidth: 360, idealWidth: 480, minHeight: 320, idealHeight: 600)
+                            .frame(minWidth: 360, idealWidth: 480, minHeight: 320, idealHeight: 600)
                         #endif
                         .presentationCompactAdaptation(.sheet)
                     }
@@ -50,9 +54,13 @@ struct RecordMachineryHeader: View {
             }
             if let absorbed = model.output?.absorbed {
                 Text(Words.absorbedRecordNotice(absorbed.requested))
-                NavigationLink("Open \(absorbed.survivor)", value: Route.entityDetail(subject.entity, id: absorbed.survivor))
+                NavigationLink(
+                    "Open \(absorbed.survivor)",
+                    value: Route.entityDetail(subject.entity, id: absorbed.survivor))
             }
-            if model.decided { Text(Words.decidedNote).font(.caption).accessibilityAddTraits(.updatesFrequently) }
+            if model.decided {
+                Text(Words.decidedNote).font(.caption).accessibilityAddTraits(.updatesFrequently)
+            }
             if let error = model.error {
                 MachineryRaw(label: "Raw error", value: error)
                 Button("Retry") { Task { await model.load(app, subject: subject) } }

@@ -307,7 +307,7 @@ struct EntityDetailView: View {
                         .padding(FieldGuideTokens.Space.md)
                 }
                 EntityDetailContent(
-                    descriptor: descriptor, row: row,
+                    descriptor: descriptor, row: row, requestedID: id,
                     relationSections: relationSections,
                     connectedRecords: connectedRecords,
                     onChanged: { Task { await refresh() } },
@@ -460,6 +460,7 @@ struct EntityDetailView: View {
 struct EntityDetailContent: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    var requestedID: String? = nil
     var relationSections: [RelationSectionModel] = []
     var connectedRecords: ConnectedRecordsPreviewModel? = nil
     var onChanged: () -> Void = {}
@@ -586,7 +587,7 @@ struct EntityDetailContent: View {
         private var macBody: some View {
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                    EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
+                    EntityHeroView(descriptor: descriptor, row: row, requestedID: requestedID) { EmptyView() }
                     actionBar.frame(maxWidth: 560, alignment: .leading)
                     if let groupedSuggestions {
                         DetailSuggestionsRow(descriptor: descriptor, model: groupedSuggestions)
@@ -747,7 +748,7 @@ struct EntityDetailContent: View {
     private var phoneBody: some View {
         List {
             Section {
-                EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
+                EntityHeroView(descriptor: descriptor, row: row, requestedID: requestedID) { EmptyView() }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
                 if !actionsFollowSummary {

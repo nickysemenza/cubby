@@ -227,7 +227,7 @@ struct EntityRowPresentationTests {
         ]
         #expect(try fact(assignment: ["kind": "none"], result: household).value == "Household")
         #expect(try !fact(assignment: ["kind": "none"], result: household).inherited)
-        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Updating…")
+        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Waiting for Cubby")
     }
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only

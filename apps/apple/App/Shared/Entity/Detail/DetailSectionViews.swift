@@ -10,6 +10,7 @@ import SwiftUI
 struct EntityHeroView<Actions: View>: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
+    let requestedID: String?
     @ViewBuilder let actions: Actions
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -23,11 +24,12 @@ struct EntityHeroView<Actions: View>: View {
     let showsTitle: Bool
 
     init(
-        descriptor: EntityDescriptor, row: EntityRow, showsTitle: Bool? = nil,
+        descriptor: EntityDescriptor, row: EntityRow, showsTitle: Bool? = nil, requestedID: String? = nil,
         @ViewBuilder actions: () -> Actions
     ) {
         self.descriptor = descriptor
         self.row = row
+        self.requestedID = requestedID
         self.showsTitle = showsTitle ?? true
         self.actions = actions()
     }
@@ -87,7 +89,7 @@ struct EntityHeroView<Actions: View>: View {
         }
         .task(id: imageSubject) {
             machinery = MachineryModel()
-            await machinery.load(app, subject: imageSubject)
+            await machinery.load(app, subject: .init(entity: descriptor.key, id: requestedID ?? row.id))
         }
         .onChange(of: imageSubject) { _, _ in showingImageChain = false }
         .popover(isPresented: $showingImageChain) {

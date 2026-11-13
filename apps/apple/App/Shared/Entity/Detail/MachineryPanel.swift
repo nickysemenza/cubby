@@ -9,11 +9,17 @@ final class MachineryModel {
     var pending = false
     var decided = false
     var read: Machinery? { output?.machinery }
+    var supported: Bool {
+        guard let read else { return false }
+        if case .unrecognized = read.stage { return false }
+        return true
+    }
 
     func load(_ app: AppModel, subject: EntityRef, field: String? = nil) async {
         error = nil
         do {
-            let output = try await app.client.readMachinery(.init(entity: subject.entity, id: subject.id, field: field))
+            let output = try await app.client.readMachinery(
+                .init(entity: subject.entity, id: subject.id, field: field))
             try Task.checkCancellation()
             self.output = output
         } catch is CancellationError {
@@ -23,13 +29,18 @@ final class MachineryModel {
         }
     }
 
-    func decide(_ app: AppModel, subject: EntityRef, field: String?, decision: MachineryDecideInputDecisionsItem) async {
-        guard !pending else { return }
+    func decide(
+        _ app: AppModel, subject: EntityRef, field: String?, decision: MachineryDecideInputDecisionsItem
+    ) async {
+        guard !pending, supported, DecisionChannel.allCases.contains(decision.channel),
+            DecisionKind.allCases.contains(decision.kind)
+        else { return }
         pending = true
         error = nil
         defer { pending = false }
         do {
-            _ = try await app.client.decideMachinery(.init(entity: subject.entity, id: subject.id, decisions: [decision]))
+            _ = try await app.client.decideMachinery(
+                .init(entity: subject.entity, id: subject.id, decisions: [decision]))
             decided = true
             app.recordEntityMutation(keys: [subject.entity])
             await load(app, subject: subject, field: field)
@@ -39,7 +50,9 @@ final class MachineryModel {
         }
     }
 
-    func act(_ app: AppModel, subject: EntityRef, field: String?, action: MachineryGapsItemsItemActionsItem) async {
+    func act(_ app: AppModel, subject: EntityRef, field: String?, action: MachineryGapsItemsItemActionsItem)
+        async
+    {
         do {
             // The generated action and write input have distinct structural JSON names.
             let json = try JSONValue(encoding: action)
@@ -51,13 +64,16 @@ final class MachineryModel {
         }
     }
 
-    func approve(_ app: AppModel, subject: EntityRef, field: String?, scope: MachineryApproveDriftInputScope) async {
-        guard !pending, let drift = read?.drift else { return }
+    func approve(_ app: AppModel, subject: EntityRef, field: String?, scope: MachineryApproveDriftInputScope)
+        async
+    {
+        guard !pending, supported, let drift = read?.drift else { return }
         pending = true
         error = nil
         defer { pending = false }
         do {
-            _ = try await app.client.approveMachineryDrift(.init(entity: subject.entity, id: subject.id, proposalHash: drift.proposalHash, scope: scope))
+            _ = try await app.client.approveMachineryDrift(
+                .init(entity: subject.entity, id: subject.id, proposalHash: drift.proposalHash, scope: scope))
             decided = true
             app.recordEntityMutation(keys: [subject.entity])
             await load(app, subject: subject, field: field)
@@ -89,18 +105,26 @@ struct MachineryPanel: View {
                     }
                 }
                 if read.inputs.total > 0 {
-                    heading("Inputs in the order Cubby used them", shown: read.inputs.shown, total: read.inputs.total)
+                    heading(
+                        "Inputs in the order Cubby used them", shown: read.inputs.shown,
+                        total: read.inputs.total)
                     ForEach(Array(read.inputs.items.enumerated()), id: \.offset) { _, input in
                         inputRow(input)
                     }
                 }
                 if let drift = read.drift {
                     Text("Drift").font(.headline)
-                    Text("The current rules would change this record. Approving issues \(drift.askCount) \(drift.askCount == 1 ? "ask" : "asks") for about \(Words.costLabel(drift.estimatedCostMicros)).")
+                    Text(
+                        "The current rules would change this record. Approving issues \(drift.askCount) \(drift.askCount == 1 ? "ask" : "asks") for about \(Words.costLabel(drift.estimatedCostMicros))."
+                    )
                     MachineryRaw(label: "Exact difference", value: raw(drift.difference))
                     if allowsActions {
-                        Button("Approve") { Task { await model.approve(app, subject: subject, field: field, scope: .item) } }
-                        Button("Approve every change like this") { Task { await model.approve(app, subject: subject, field: field, scope: .class) } }
+                        Button("Approve") {
+                            Task { await model.approve(app, subject: subject, field: field, scope: .item) }
+                        }
+                        Button("Approve every change like this") {
+                            Task { await model.approve(app, subject: subject, field: field, scope: .class) }
+                        }
                     }
                     DisclosureGroup("Proposal") {
                         MachineryRaw(label: "Proposal hash", value: drift.proposalHash)
@@ -109,13 +133,18 @@ struct MachineryPanel: View {
                 }
                 ForEach(Array((read.passes ?? []).enumerated()), id: \.offset) { _, pass in
                     DisclosureGroup("\(Words.stageLabel(pass.stage.rawValue)) · \(pass.name)") {
-                        Text(Words.attemptsLabel(n: pass.attempts, max: pass.maxAttempts, nextAt: Words.instant(pass.availableAt)))
+                        Text(
+                            Words.attemptsLabel(
+                                n: pass.attempts, max: pass.maxAttempts,
+                                nextAt: Words.instant(pass.availableAt)))
                         if let error = pass.lastError { MachineryRaw(label: "Raw error", value: error) }
                     }
                 }
                 ForEach(Array(read.scopes.enumerated()), id: \.offset) { _, scope in
                     if let error = scope.error {
-                        DisclosureGroup("Scope errors") { MachineryRaw(label: "\(scope.kind) · \(error.class)", value: error.raw) }
+                        DisclosureGroup("Scope errors") {
+                            MachineryRaw(label: "\(scope.kind) · \(error.class)", value: error.raw)
+                        }
                     }
                 }
                 if read.truncated { Text("This read was cut at its size limit; later rows are not shown.") }
@@ -140,7 +169,9 @@ struct MachineryPanel: View {
     private func heading(_ label: String, shown: Int, total: Int) -> some View {
         VStack(alignment: .leading) {
             Text(label).font(.headline)
-            if let coverage = Words.coverageLabel(shown: shown, total: total) { Text(coverage).foregroundStyle(.secondary) }
+            if let coverage = Words.coverageLabel(shown: shown, total: total) {
+                Text(coverage).foregroundStyle(.secondary)
+            }
         }
     }
 
@@ -153,15 +184,24 @@ struct MachineryPanel: View {
             Text("from \(Words.actorLabel(gap.actor))")
             if let since = gap.since { Text("Since \(Words.instant(since))") }
             if let queue = gap.queue {
-                Text("\(queue.position) of \(queue.of) in line · \(Words.etaLabel(queue.eta.map(Words.instant)))")
+                Text(
+                    "\(queue.position) of \(queue.of) in line · \(Words.etaLabel(queue.eta.map(Words.instant)))"
+                )
             }
             if let attempts = gap.attempts {
-                Text(Words.attemptsLabel(n: attempts.n, max: attempts.max, nextAt: attempts.nextAt.map(Words.instant)))
+                Text(
+                    Words.attemptsLabel(
+                        n: attempts.n, max: attempts.max, nextAt: attempts.nextAt.map(Words.instant)))
             }
             if unknown { Text(Words.unknownCallNote) }
             if allowsActions {
                 ForEach(Array(gap.actions.enumerated()), id: \.offset) { _, action in
-                    Button(action.label) { Task { await model.act(app, subject: subject, field: field, action: action) } }
+                    Button(action.label) {
+                        Task { await model.act(app, subject: subject, field: field, action: action) }
+                    }
+                    .disabled(
+                        !model.supported || !DecisionChannel.allCases.contains(action.channel)
+                            || !DecisionKind.allCases.contains(action.kind))
                 }
             }
             if let error = gap.lastError {
@@ -174,11 +214,15 @@ struct MachineryPanel: View {
 
     private func inputRow(_ input: MachineryInputsItemsItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(Words.rowStatusLabel(Words.inputRowStatus(input))) · \(Words.inputKindLabel(input.kind.rawValue))")
-                .fontWeight(.medium)
+            Text(
+                "\(Words.rowStatusLabel(Words.inputRowStatus(input))) · \(Words.inputKindLabel(input.kind.rawValue))"
+            )
+            .fontWeight(.medium)
             if let source = input.source { sourceLink(source) }
             if let decision = input.decision {
-                Text("\(Words.decisionChannelLabel(decision.channel.rawValue)) · \(Words.decisionKindLabel(decision.kind.rawValue))")
+                Text(
+                    "\(Words.decisionChannelLabel(decision.channel.rawValue)) · \(Words.decisionKindLabel(decision.kind.rawValue))"
+                )
                 if let superseded = decision.supersededBy { Text("Superseded by \(superseded)") }
             }
             if let by = input.by { Text("by \(by)") }
@@ -200,15 +244,20 @@ struct MachineryPanel: View {
     }
 
     @ViewBuilder private func sourceLink(_ code: String) -> some View {
-        if let entity = EntityCatalog.all.first(where: { $0.shortcodePrefix == code.components(separatedBy: "-").first })?.key {
+        if let entity = EntityCatalog.all.first(where: {
+            $0.shortcodePrefix == code.components(separatedBy: "-").first
+        })?.key {
             NavigationLink(code, value: Route.entityDetail(entity, id: code))
-        } else { Text(code).monospaced() }
+        } else {
+            Text(code).monospaced()
+        }
     }
 
     private func raw(_ value: some Encodable) -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        return (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) } ?? "Unsupported value"
+        return (try? encoder.encode(value)).flatMap { String(data: $0, encoding: .utf8) }
+            ?? "Unsupported value"
     }
 }
 

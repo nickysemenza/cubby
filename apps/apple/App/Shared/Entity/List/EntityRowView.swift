@@ -193,7 +193,9 @@ struct EntityRowView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            accessibilityText(for: layout) + (MachineryListLine.text(row.raw).map { ", " + $0 } ?? "") + (FieldValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
+            accessibilityText(for: layout) + (MachineryListLine.text(row.raw).map { ", " + $0 } ?? "")
+                + (FieldValueStatus.isUpdating(in: row.raw)
+                    ? ", " + FieldEnvelopePresentation.staleLabel : ""))
     }
 
     /// Line 2's facts after the status mark: placement or subtitle first, at most two in all.

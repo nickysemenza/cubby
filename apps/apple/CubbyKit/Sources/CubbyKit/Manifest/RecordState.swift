@@ -28,15 +28,16 @@ public struct RecordState: Sendable, Hashable {
     ) {
         self.option = option
         phase = option.statePhase
-        role = switch option.stage {
-        case .needsYou: .needs
-        case .stuck: .stalled
-        case .working: .running
-        case .waiting: .queued
-        case .done: .done
-        case .ended: .ended
-        case nil: .ended
-        }
+        role =
+            switch option.stage {
+            case .needsYou: .needs
+            case .stuck: .stalled
+            case .working: .running
+            case .waiting: .queued
+            case .done: .done
+            case .ended: .ended
+            case nil: .ended
+            }
         label = option.stage.map { FieldEnvelopePresentation.stageLabel($0.rawValue) } ?? option.label
         trailing = reason ?? waitLabel.map { Self.withoutLabel($0, label: option.label) }
         self.jobs = jobs

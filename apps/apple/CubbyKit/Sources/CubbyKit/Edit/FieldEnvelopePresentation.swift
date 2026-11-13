@@ -81,7 +81,9 @@ extension FieldEnvelope {
         else { return [] }
         var actions: [FieldAssignmentAction] = []
         if case .available = reset, !policy.reset.isEmpty {
-            actions.append(.init(kind: .useInherited, label: FieldEnvelopePresentation.resetLabel, payload: policy.reset))
+            actions.append(
+                .init(kind: .useInherited, label: FieldEnvelopePresentation.resetLabel, payload: policy.reset)
+            )
         }
         if canConfirm, var payload = policy.confirm, let value = effectiveValue {
             payload[field.key] = value
@@ -281,14 +283,14 @@ public enum FieldEnvelopePresentation {
     }
 }
 
-
 extension FieldEnvelopePresentation {
     public static let waitingLabel = "Waiting for Cubby"
     public static let staleLabel = "out of date"
     public static let resetLabel = "Let Cubby decide"
     public static let vetoLabel = "Wrong, clear it"
     public static let releasedLabel = "Cubby decides this"
-    public static let unknownCallNote = "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again."
+    public static let unknownCallNote =
+        "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again."
     public static let decidedNote = "Recorded. Cubby reworks this next; the stage shows its progress."
     public static let noGapLabel = "Nothing is waiting on this."
     public static let emptyMachineryLabel = "Cubby has recorded no work on this yet."
@@ -379,8 +381,14 @@ extension FieldEnvelopePresentation {
         if micros == 0 { return "$0" }
         let dollars = Double(micros) / 1_000_000
         if dollars >= 1 { return String(format: "$%.2f", locale: Locale(identifier: "en_US_POSIX"), dollars) }
-        let rounded = Double(String(format: "%.2g", locale: Locale(identifier: "en_US_POSIX"), dollars)) ?? dollars
-        return "$\(rounded)"
+        let rounded =
+            Double(String(format: "%.2g", locale: Locale(identifier: "en_US_POSIX"), dollars)) ?? dollars
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.numberStyle = .decimal
+        formatter.usesGroupingSeparator = false
+        formatter.maximumFractionDigits = 20
+        return "$" + (formatter.string(from: NSNumber(value: rounded)) ?? "0")
     }
 
     public static func countLine(_ read: Machinery) -> String {
@@ -388,7 +396,8 @@ extension FieldEnvelopePresentation {
         let asks = read.inputs.items.filter { $0.kind == .answer }.count
         let decisions = read.inputs.items.filter { $0.kind == .decision }.count
         let more = read.inputs.total > read.inputs.shown ? "+" : ""
-        return "\(plural(inputs, "input", "inputs"))\(more) · \(plural(asks, "ask", "asks")) · \(plural(decisions, "decision", "decisions")) · \(costLabel(read.totalCostMicros))"
+        return
+            "\(plural(inputs, "input", "inputs"))\(more) · \(plural(asks, "ask", "asks")) · \(plural(decisions, "decision", "decisions")) · \(costLabel(read.totalCostMicros))"
     }
 
     public static func gapSentence(_ gap: MachineryGapsItemsItem) -> String {
