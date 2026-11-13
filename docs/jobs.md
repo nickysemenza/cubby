@@ -35,6 +35,8 @@ due. Dispatch event admission and funding resets can use the same sequence.
 | Pass                  | Key       | Checkpoint and outcome owner                                                                                                                                  |
 | --------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `run.execute`         | Run id    | Step-ledger, AI-work and mailbox-discovery Runs; the cursor names the generation and frozen provider page; `RunStep` and Run progress keep committed outcomes |
+| `purchase.dispatch`   | Run id    | Queued agent events and hosted model Asks; the Durable Object keeps its Pi transcript and alarms                                                              |
+| `derived.snapshot`    | `default` | One ordered snapshot cursor: target, last UUID, page attempts and aggregate progress                                                                          |
 | `runs.reconcile`      | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly                        |
 | `purchase.discovery`  | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor                                      |
 | `retention`           | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                                            |
@@ -54,8 +56,9 @@ path marks its Durable Object directly; only a failed mark persists a Pass.
 Purchase-discovery task publishers use their existing task shape, which
 `publishBackgroundTasks` persists as the singleton Pass.
 
-The `Job` runtime owns purchase-agent dispatch, funding-resume timers and the producer kinds listed below. Its drains and
-execution contracts apply to those owners.
+The `Job` runtime owns the retained producer kinds listed below. Its drains and
+execution contracts apply to those owners. Run execution, dispatch, funding waits
+and typed-snapshot rebuilds use the kernel.
 
 ## Jobs are not entities
 
@@ -89,16 +92,13 @@ reconciles their review gaps, and repeats hourly (its cursor's
 `nextAt` is its next due time). It runs deterministic SQL: no model, no Run and
 no model call.
 
-One-record work stays a Job. Job `generation` is the supersession fence and the
-Run execution attempt number. Outcomes live on domain owners; Jobs retain no
+One-record work stays a Job. Job `generation` is the supersession fence and remains local to its producer. Outcomes live on domain owners; Jobs retain no
 result JSON. `availableAt` is the only stored wait deadline. Completed Jobs
 remain until retention prunes them.
 
-| Job kind             | Why a row                                      | Owner of the result           |
-| -------------------- | ---------------------------------------------- | ----------------------------- |
-| `purchase.dispatch`  | Durable handoff to the agent, deduped by event | The Run and its agent session |
-| `run.funding-resume` | Waits for a funding window to end              | The paused Runs               |
-| `location-ai.*`      | One per record, replaced on re-admission       | The Location                  |
+| Job kind | Why a row | Owner |
+| --- | --- | --- |
+| `background.drain` | Retained drain rotation and last execution | Its owning rows |
 
 Everything else is a drain over its owner's rows and has no row here. There is
 no stored queue health or alert engine: [Work status](#member-facing-work-explanations)
@@ -114,20 +114,36 @@ re-exports it for the server. A kind absent there is a server kind with three
 attempts and 1 s doubling to 60 s backoff. Each lane names the executor that
 runs it:
 
-| Lane       | Kinds               | Executor                                        |
-| ---------- | ------------------- | ----------------------------------------------- |
-| `external` | `purchase.dispatch` | a coordinator, handed off by a permit           |
-| `server`   | every other kind    | a [background permit](#selection-and-admission) |
+The retained Job kinds use the server executor through a background permit.
+Kernel Pass and Ask admission has its own live-claim partitions.
 
-Coordinators run at most `COORDINATOR_TURN_CAP` (6) work turns at once across
-the household, queued in order by the `COORDINATOR_GATE` Durable Object
-([budget](infrastructure.md#background-connection-budget)). A
-`purchase.dispatch` whose coordinator finds every turn held defers with
-`provider_capacity` and no attempt ("Waiting for a coordinator turn"); the
-coordinator keeps its place in the queue and brings the Job forward when the
-gate reserves it a turn, and an 8–12 minute fallback re-polls meanwhile. A
-gate that cannot answer defers the same way ("Waiting for the coordinator gate
-to answer") and re-polls in 1–2 minutes.
+### Agent turns
+
+`purchase.dispatch` is keyed by Run id. Admission appends durable events to its
+cursor; an event keeps its operation identity across delivery retries. The
+Pass loads the coordinator only under its live token, delivers its queued
+events and stays claimed while Pi has active work. Every purchase-agent and
+mail-agent provider turn, including escalation, passes through `withAsk` with
+that Run and Pass. These are hosted Asks: the Durable Object supplies their
+transport; the generic Ask worker never sends them. Answers commit before Pi
+receives the provider response. Pi retains its transcript, tools, operation
+receipts and alarms in the same per-Run Durable Object.
+
+The `household.agent-turns` claim partition has six slots. A dispatch Pass
+holds one for its coordinator's entire active turn, including its child model
+Asks, tools and lifecycle work. Child Asks are fenced by that live parent
+claim and do not consume a second slot. This preserves six concurrent agent
+turns across the household. A full partition waits 15 seconds with
+`provider_capacity`, schedules its recovery wake and spends no attempt.
+An idle or sleeping coordinator releases its claim; its alarm requests the
+next Pass. Prompts persist in the host before admission. Transcript reads do
+not load Pi or require a slot. Run pause or cancellation revokes its Pass and
+hosted Asks; shared reconciler Asks remain independent.
+
+A retained request that predates the host's Ask protocol starts with unknown
+outcome if its durable generation had already begun. It requires explicit
+settlement before another call can leave; a deployment does not infer that
+an unrecorded response means no paid request was sent.
 
 `run-ai.summary.write` writes the [AI summary of an ended Run](#run-summaries):
 a server kind with six attempts on the recoverable backoff, provider-fenced,
@@ -216,7 +232,7 @@ leases, paused or other counts, else expired leases.
   window `perMinute` and `etaAt` are null and the line says the pace is
   unknown. A group not yet due, and a retry, use the earliest `availableAt`; a
   retry names the most common `lastExecution.errorClass`. A funding wait's
-  `etaAt` is the queued `run.funding-resume` Job's time.
+  `etaAt` is the earliest frozen funding deadline on its owed Passes or Asks.
 - `label` is the whole line for text clients ("Queued for model capacity ·
   23rd of 36 · about 16 min", "Waiting for AI funding · resumes 6:00 AM",
   "Retrying after an error (TimeoutError) · next try in about 4 min"); clock
@@ -335,8 +351,7 @@ everything else:
   inside a drain; a retryable error backs off; anything else fails an attempt.
 
 Producers use `repo/producer.ts`, member and Run controls `repo/operator.ts`,
-drains `generic/background/drains.ts`, and readers `repo/job-reads.ts` (rows by identity, a Run's
-live lease, stopped Run executions). The queue core and selection
+drains `generic/background/drains.ts`, and readers `repo/job-reads.ts` (rows by identity and state). The queue core and selection
 (`repo/queue.ts`), `db/job-schema.ts` and the `Job` table object are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
 `no-restricted-properties` exempt only `generic/jobs` and the files that
@@ -456,44 +471,27 @@ cancel.
 
 ### Funding waits
 
-`run.funding-resume` is keyed by funding window, not Run: one Job per window,
-whose handler resumes every funding-paused Run. A funding-paused import stays
-`paused_auth` rather than stopping for review. Every funding wait — an AI
-budget stop, a provider funding stop, a paid refusal — is an
-`ai_funding_window` deferral to the window end plus 60 seconds
-(`fundingResumeAt`); a provider configuration stop defers 15 minutes as
-`provider_capacity`. The Workflow boundary finds either anywhere in a wrapped
-cause chain. Neither consumes an attempt or discards frozen input, page evidence
-or the Job cursor. Generic early retries leave a funding-paused Run waiting
-while its funding-resume Job is pending.
+A funding-paused Run stays `paused_auth` with `execution_limit`. Its Pass and
+any refused Ask wait with cause `funding` and the funding owner's frozen
+deadline (window end plus 60 seconds). Provider configuration waits use
+`provider_capacity`. Neither spends a failure attempt or discards input,
+page evidence, transcript or cursor. A routine wake preserves a funding wait;
+claim recovery cannot bring its deadline forward.
 
-An explicit Run launch or Resume makes its retained queued/backing-off Job due
-immediately, preserving its generation, attempts and cursor and clearing the
-old wait reason; the next page still checks current funding and may pause
-again. Resume creates no paid grant; `run_now_paid` uses its explicit paid
-authority. An explicit budget increase releases funding-paused discovery before
-bringing queued Jobs forward; claims reacquire their query resource or
-exclusive mailbox scope, while contenders defer under the same Job fence
-without spending failure attempts. Until admitted, a released discovery reads
-as paused rather than waiting for funding. The release marker stays out of the
-public checkpoint and grants no overage. A fresh funding stop clears it,
-keeping the funding owner's frozen deadline for the next wait. Wait
-publication locks the Run before the Job, so a concurrent release cannot be
-overwritten by the older timer. A raise that precedes the funding stop itself
-does not release that later stop. Member pauses remain stopped.
+A funding reset calls `releaseFundingWaits`: one SQL statement clears queued
+Ask and owed Pass funding waits and makes them due. It also versions active
+holders so a refusal already in flight cannot restore an older wait after
+the reset. Unknown outcomes, cancellations and unrelated provider waits stay.
+The funding owner releases eligible Runs and retained evaluation, embedding
+and image waits through their existing owners, then wakes the runner.
 
-The funding wake (`resumeFundingPausedRuns` with every window) also ends the
-other funding waits: it makes queued kernel Asks with wait cause `funding` due
-in one statement, preserving unknown outcomes, cancellations and provider waits. It
-releases funding-paused discovery, then makes due the
-model Asks waiting on `funding`, and embeddings and image jobs waiting on `ai_funding_window`, then
-brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
-report them as `waiting`: the import and discovery Runs eligible for release,
-the Ask, embedding and image waits, all queued Jobs the wake brings
-forward, and when funding waits retry on their own. Released discovery is not
-counted or released again until a new funding stop clears its release marker. Automatic
-mailbox admission joins the retained Run. Run control refusals are
-`RUN_CONTROL_REFUSED` (409), never 500.
+A released discovery reacquires its query resource or exclusive mailbox
+scope. Until admitted it reads as paused with its admission reason. Its release
+marker stays outside the public checkpoint and grants no paid overage. A fresh
+funding stop clears the marker and freezes its new deadline. A member pause
+stays stopped. Resume creates no paid grant; `run_now_paid` uses its explicit
+paid authority. Settings → AI funding reports eligible Run and kernel waits
+alongside retained producer waits and their next retry time.
 
 ## Runs and recovery
 
@@ -865,8 +863,9 @@ and failed pages; its unknown total stays indeterminate.
 
 ### Hourly maintenance and retention
 
-The hourly cron starts `runs.reconcile` and `retention`, runs the kernel,
-and performs one bounded image-execution repair. Retention prunes one page of
+The hourly cron starts `runs.reconcile`, `retention`, `purchase.discovery`
+and the scheduled `derived.snapshot`, runs the kernel, and performs one bounded
+image-execution repair. Retention prunes one page of
 2,000 Jobs and one page of 2,000 terminal Passes per invocation.
 
 - Completed Jobs are kept eight days, cancelled fourteen and failed thirty.
@@ -986,9 +985,17 @@ context's `work`.
   concurrent work and are not additive phase timings.
 - **Unmeasured drivers.** A page that records no phase stores no sample.
 
-`job.logs` reads raw Worker lines for Job-backed execution. Run Passes keep
-step progress and raw failures on their Run and Pass rows; credentials and limits are in
-[infrastructure](infrastructure.md#inline-job-logs-and-limits).
+`machinery()` on a Run includes its Passes, stages, costs, claims, attempts,
+wait causes, deadlines and raw errors; `runWork` includes scopes and Asks as
+well. Run progress and step samples remain on their domain rows. Successful
+Pass pages retain twelve duration samples per instance for queue pace and ETA.
+Pass execution does not populate `Job.lastExecution`: Job error-class,
+wall/query/AI-cost/Worker-version samples, `deferringSince` and the
+`withJobPhase` counters are absent for these Passes. Model cost still lives in
+AiUsage and retained Answers; step page measurements stay on RunStep. The
+web's machinery view uses kernel rows for moved work, while `job.logs` and
+Queue details describe retained Jobs and drain records. Credentials and log
+limits are in [infrastructure](infrastructure.md#inline-job-logs-and-limits).
 
 ## Apple version gate
 
@@ -1119,11 +1126,12 @@ whose message was lost. A permit cannot be cancelled, so a stale one touches
 Postgres once and finds nothing due. A process dying between commit and its
 post-commit signal recovers on app-open or the next hourly tick.
 
-The hourly cron (`server/worker/scheduled.ts`) is the timer for work due later
-and the backstop for a lost permit or broken delivery. It rings due device work, starts the reconciliation and retention Passes, runs the kernel and `maintainJobs`, runs legacy units itself for
-up to five minutes, then sends up to `maxConcurrency` permits for what is still
-due (one delayed permit when the next work is later). A failure in one step
-still lets the others and the daily pass run, then rejects the event.
+The hourly cron (`server/worker/scheduled.ts`) rings due device work and admits reconciliation, retention,
+purchase discovery and the hourly snapshot Pass. It runs the kernel with a
+20-second budget and sends one backstop wake for retained producer work. Job
+units execute through permits; cron does not run them inline or fan out
+permits for these Passes. Independent steps still run after a sibling fails;
+the event then reports its failures.
 
 The invocation at 7 a.m. America/Los_Angeles also launches the daily
 `maintenance` Run and recovers missed work. Every daily step is idempotent, and

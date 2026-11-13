@@ -255,11 +255,12 @@ actions its manifest mounts (`packages/schemas/src/import-run-agent.ts`), called
 in process through the MCP handler with a run-bound delegation
 (`agent-services.ts` `mcpFetch`). Instructions:
 `.agents/skills/purchase-import/references/mail-import.md` via
-`server/domains/purchase-agent/service/import-run-workflows.ts`. The host runs
-every alarm, dispatch and prompt inside a household coordinator turn
-(`coordinator-turn.ts`) granted by the `COORDINATOR_GATE` Durable Object
-(`coordinator-gate.ts`); without a free turn it loads nothing and waits in the
-gate's queue, and pi's services refuse database work once the turn is lost
+`server/domains/purchase-agent/service/import-run-workflows.ts`. The host runs agent work under the Run's `purchase.dispatch` kernel Pass.
+Its six-slot `household.agent-turns` partition bounds the household's live
+coordinators. Every model turn uses a hosted `withAsk` with Run and Pass
+identity. The Pass holds its slot through tools and lifecycle work; host
+services fence on its claim token. The Durable Object retains Pi's transcript,
+alarms and durable prompts, and an alarm requests a Pass before loading Pi
 ([budget](../../../../../../../docs/infrastructure.md#background-connection-budget)).
 
 Memoized claims publish host-owned progress, heartbeat and work samples.

@@ -2392,21 +2392,23 @@ reports keep every rule.
 
 ### Hourly pass
 
-`DerivedRebuild` holds one coarse pass cursor (target and last committed UUID), a single-writer
-lease, cursor attempts, pass failures and the last three wall-clock durations. Each background
-permit publishes pages until a 20-second wall budget: at most 50 identities each, with adapters declaring a smaller
-`preparationBatchSize` (default 20; the recipe ingredient graph stays at 20). Cursor-attempt
-shrinking bounds a retry independently. Publication, cursor advancement, page counters and movement
-time commit together. Reading ids and recording the page attempt share one CTE that commits before
-compute; an enumeration error retries the unchanged cursor. Claims record attempts before compute, so
-isolate terminations count: after three attempts the page halves, down to one record; three failed
-attempts at one record skip it, keep its prior output and record a failure. A thrown compute or
-publication fails only its page, keeps prior output and advances. A transient connection drop — a
-killed statement, SQLSTATE 57P01, or a pool-slot timeout — retries that same cursor instead: the
-release keeps incrementing cursor attempts and records the error, without incrementing failures, so
-one drop does not mark the pass as failing. Repeated drops on that page reach the same shrinking
-bound, which skips or fails the page with the error still visible. A provider outage costs one failed
-call per bounded page.
+`derived.snapshot`, keyed `default`, holds one ordered cursor: target, last
+committed UUID, cursor attempts, pass failures, counters and the last three
+summaries and durations. Views and typed snapshots remain the publication
+sources, with up to an hour of lag. The hourly cron admits one bulk Pass;
+manual repair joins an active cursor. Each kernel page prepares at most 50
+identities, with adapters declaring a smaller `preparationBatchSize` (default
+20; the recipe ingredient graph stays at 20). The shared 90-second claim owns
+publication and cursor advancement in one transaction.
+
+A page records its cursor attempt before compute, so isolate termination
+shrinks the next attempt after three tries, down to one identity. Repeated
+singleton termination skips that identity, keeps its prior output and records
+a failure. A non-transient compute or publication error fails its page, keeps
+prior output and advances to later populations. A transient connection drop
+retries the same cursor without spending a failure attempt. Its recorded
+cursor attempts retain the same shrinking bound. Publication uses a savepoint
+so a failed page cannot leave partial values or effects.
 
 The last three pass summaries keep processed-record and failed-page counts and duration.
 `finishedAt` records completion even with errors; `cleanAt` advances only for a pass with no
@@ -2414,9 +2416,8 @@ failures. Interrupted passes resume their committed cursor across hour boundarie
 retries resume running passes); completed passes, failed ones included, wait for the next hourly
 slot, and only a healthy pass clears failures. A requested new pass clears the previous error first;
 a manual request never resets an active cursor. Queue continuations and the hourly timer enter the
-shared background drain; an interrupted isolate's duplicate delivery waits out the lease. Worker logs
-record each claimed invocation's target and yield or completion, without record ids or values. Drain
-errors go to Sentry and schedule a retry without blocking purchase dispatch reconciliation. Search
+kernel; an interrupted isolate's duplicate delivery waits out the shared claim.
+Pass errors schedule a retry without blocking purchase dispatch reconciliation. Search
 publication uses a sorted upsert, retires missing documents in the same transaction, and re-marks
 a revision-keyed `vectorize.sync` Pass only for changed embeddable documents. Each revision
 uses an embedding Ask, so repeated admission reuses its Answer. `EntityEmbedding` keeps source

@@ -330,7 +330,7 @@ export const JOB_KIND_POLICY = {
     internal: true,
     label: "Background drain page",
     purpose:
-      "Records the latest page of one drain unit (cloud images, embeddings, AI evaluation, derived rebuild, reconciliation).",
+      "Records the latest page of one drain unit (cloud images, embeddings, AI evaluation and the kernel).",
     trigger: "A background permit selecting that unit.",
     targets: "The rows the drain unit owes; its record row holds no work.",
     effects: "Records when the unit last ran and that execution's outcome.",

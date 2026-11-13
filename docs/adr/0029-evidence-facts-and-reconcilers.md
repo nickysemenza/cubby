@@ -269,8 +269,9 @@ Raw source observations remain insert-only.
 
 Every transaction that writes a money-lane column first takes
 `pg_advisory_xact_lock(HOUSEHOLD_WRITE)` and runs at read committed. This is
-the only advisory lock in the server, and there are no serializable
-transactions. The transaction sets `lock_timeout`, `statement_timeout` and
+the money-write advisory lock. Claim partitions use separate short
+admission locks shared by Ask and Pass claims; producer calls happen after
+those transactions close. Money applies use no serializable transactions. The transaction sets `lock_timeout`, `statement_timeout` and
 `idle_in_transaction_session_timeout` with `SET LOCAL`, so Postgres releases
 the gate when a Worker dies. Loading, matching, planning and producer calls
 happen before the transaction opens.
