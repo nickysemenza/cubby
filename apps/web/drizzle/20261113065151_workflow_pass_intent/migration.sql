@@ -1,33 +1,42 @@
--- RunStep and Run.progress retain their checkpoints. Only execution ownership moves.
-INSERT INTO "Pass" (name, key, cursor, "runId", attempts, "maxAttempts", "availableAt", "waitCause", "lastError", "cancelledAt")
-SELECT 'run.execute', r.id::text,
-  jsonb_build_object('runId', r.id::text, 'purpose', r.purpose, 'generation', j.generation),
-  r.id, CASE WHEN j.state='failed' THEN greatest(j.attempts,coalesce(j."maxAttempts",3)) ELSE j.attempts END, coalesce(j."maxAttempts",3), j."availableAt",
-  CASE j."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE j."waitReason" END,
-  j.error, CASE WHEN j.state IN ('paused','cancelled') THEN coalesce(j."updatedAt", now()) ELSE NULL END
-FROM "Job" j JOIN "Run" r ON r.id = j."runId"
-WHERE j.kind = 'run.execute' AND j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled')
-  AND r.purpose IN ('sweep', 'maintenance', 'ai_refresh', 'mail_reclassify', 'connection_discovery')
-ON CONFLICT (name, key) DO NOTHING;
+-- Coalesced work retains every source receipt and resumes from the earliest
+-- unvisited checkpoint. A terminal Run never becomes claimable through a Job.
+LOCK TABLE "Job", "Run", "Pass" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
-INSERT INTO "Pass" (name, key, cursor, "availableAt", attempts, "maxAttempts", "lastError", "cancelledAt", "waitCause")
-SELECT 'purchase.discovery', 'default', jsonb_build_object('senderAfter', coalesce(j.input->'senderAfter', 'null'::jsonb)),
-  j."availableAt", CASE WHEN j.state='failed' THEN greatest(j.attempts,coalesce(j."maxAttempts",3)) ELSE j.attempts END, coalesce(j."maxAttempts",3), j.error,
-  CASE WHEN j.state IN ('paused','cancelled') THEN j."updatedAt" ELSE NULL END,
-  CASE j."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE j."waitReason" END
-FROM "Job" j WHERE j.kind = 'maintenance.purchase-discovery'
-  AND j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled')
-ON CONFLICT (name, key) DO NOTHING;
+CREATE TEMP TABLE workflow_intent_sources ON COMMIT DROP AS
+SELECT j.*,r.status run_status,
+ CASE j.kind WHEN 'run.execute' THEN 'run.execute' WHEN 'maintenance.purchase-discovery' THEN 'purchase.discovery' ELSE 'calendar.invalidate' END pass_name,
+ CASE j.kind WHEN 'run.execute' THEN r.id::text WHEN 'maintenance.purchase-discovery' THEN 'default' ELSE coalesce(j.input->>'origin',j.key) END pass_key,
+ CASE j.kind WHEN 'run.execute' THEN jsonb_build_object('runId',r.id::text,'purpose',r.purpose,'generation',j.generation)
+ WHEN 'maintenance.purchase-discovery' THEN jsonb_build_object('senderAfter',coalesce(j.input->'senderAfter','null'::jsonb))
+ ELSE jsonb_build_object('origin',coalesce(j.input->>'origin',j.key),'reason',coalesce(j.input->>'reason','change')) END pass_cursor
+FROM "Job" j LEFT JOIN "Run" r ON r.id=j."runId"
+WHERE j.state IN ('queued','running','retry_wait','paused','failed','cancelled') AND
+ (j.kind IN ('maintenance.purchase-discovery','calendar-feed.mark-dirty') OR j.kind='run.execute' AND r.purpose IN ('sweep','maintenance','ai_refresh','mail_reclassify','connection_discovery'));
 --> statement-breakpoint
-INSERT INTO "Pass" (name, key, cursor, "availableAt", attempts, "maxAttempts", "lastError", "cancelledAt", "waitCause")
-SELECT 'calendar.invalidate', coalesce(j.input->>'origin', j.key),
-  jsonb_build_object('origin', coalesce(j.input->>'origin', j.key), 'reason', coalesce(j.input->>'reason', 'change')),
-  j."availableAt", CASE WHEN j.state='failed' THEN greatest(j.attempts,coalesce(j."maxAttempts",3)) ELSE j.attempts END, coalesce(j."maxAttempts",3), j.error,
-  CASE WHEN j.state IN ('paused','cancelled') THEN j."updatedAt" ELSE NULL END,
-  CASE j."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE j."waitReason" END
-FROM "Job" j WHERE j.kind = 'calendar-feed.mark-dirty'
-  AND j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled')
-ON CONFLICT (name, key) DO NOTHING;
+CREATE TEMP TABLE workflow_intents ON COMMIT DROP AS
+SELECT DISTINCT ON (pass_name,pass_key) s.*,
+ (SELECT min(t."availableAt") FROM workflow_intent_sources t WHERE t.pass_name=s.pass_name AND t.pass_key=s.pass_key) first_available,
+ (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM workflow_intent_sources t WHERE t.pass_name=s.pass_name AND t.pass_key=s.pass_key) receipts
+FROM workflow_intent_sources s
+ORDER BY pass_name,pass_key,
+ -- Live intent wins over a stopped duplicate; one stopped receipt cannot stop
+ -- independent runnable work. Run generations use the newest durable attempt.
+ (state IN ('queued','running','retry_wait')) DESC,
+ CASE WHEN pass_name='run.execute' THEN generation END DESC,
+ (pass_cursor->'senderAfter' IS DISTINCT FROM 'null'::jsonb),
+ pass_cursor->'senderAfter'->>'mailboxId' COLLATE "C" NULLS FIRST,
+ pass_cursor->'senderAfter'->>'afterId' COLLATE "C" NULLS FIRST,
+ "updatedAt" DESC,id;
+--> statement-breakpoint
+INSERT INTO "Pass" (name,key,cursor,"runId",attempts,"maxAttempts","availableAt","waitCause","lastError","cancelledAt")
+SELECT pass_name,pass_key,pass_cursor||jsonb_build_object('legacyJobs',receipts),
+ CASE WHEN pass_name='run.execute' THEN "runId" END,
+ CASE WHEN state='failed' OR run_status='failed' THEN greatest(attempts,coalesce("maxAttempts",3)) ELSE attempts END,
+ coalesce("maxAttempts",3),first_available,
+ CASE "waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE "waitReason" END,error,
+ CASE WHEN state IN ('paused','cancelled') OR pass_name='run.execute' AND run_status NOT IN ('running','paused_auth') THEN coalesce("updatedAt",now()) END
+FROM workflow_intents
+ON CONFLICT (name,key) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "Pass" (name, key, cursor, "runId", "availableAt", "waitCause", "cancelledAt")
 SELECT 'run.execute', r.id::text,
@@ -46,36 +55,18 @@ WHERE r.purpose IN ('sweep', 'maintenance', 'ai_refresh', 'mail_reclassify', 'co
 ON CONFLICT (name, key) DO NOTHING;
 --> statement-breakpoint
 DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM "Job" j JOIN "Run" r ON r.id = j."runId"
-    WHERE j.kind = 'run.execute' AND j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled')
-      AND r.purpose IN ('sweep', 'maintenance', 'ai_refresh', 'mail_reclassify', 'connection_discovery')
-      AND NOT EXISTS (SELECT 1 FROM "Pass" p WHERE p.name = 'run.execute' AND p.key = r.id::text
-        AND p.cursor->>'runId' = r.id::text AND p.cursor->>'purpose' = r.purpose
-        AND p.cursor->>'generation' = j.generation::text AND p."runId" = r.id
-        AND p.attempts = CASE WHEN j.state='failed' THEN greatest(j.attempts,coalesce(j."maxAttempts",3)) ELSE j.attempts END AND p."maxAttempts" = coalesce(j."maxAttempts",3) AND p."availableAt" = j."availableAt"
-        AND p."lastError" IS NOT DISTINCT FROM j.error
-        AND p."waitCause" IS NOT DISTINCT FROM CASE j."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE j."waitReason" END
-        AND (p."cancelledAt" IS NOT NULL) = (j.state IN ('paused','cancelled')))
-  ) THEN RAISE EXCEPTION 'Run execution checkpoint did not carry into its Pass'; END IF;
-  IF EXISTS (
-    SELECT 1 FROM "Job" j WHERE j.kind IN ('maintenance.purchase-discovery', 'calendar-feed.mark-dirty')
-      AND j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled')
-      AND NOT EXISTS (SELECT 1 FROM "Pass" p WHERE p.attempts = CASE WHEN j.state='failed' THEN greatest(j.attempts,coalesce(j."maxAttempts",3)) ELSE j.attempts END AND p."maxAttempts" = coalesce(j."maxAttempts",3)
-        AND p."availableAt" = j."availableAt" AND p."lastError" IS NOT DISTINCT FROM j.error
-        AND p."waitCause" IS NOT DISTINCT FROM CASE j."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE j."waitReason" END
-        AND (p."cancelledAt" IS NOT NULL) = (j.state IN ('paused','cancelled')) AND (
-        (j.kind = 'maintenance.purchase-discovery' AND p.name = 'purchase.discovery' AND p.key = 'default'
-          AND p.cursor->'senderAfter' = coalesce(j.input->'senderAfter', 'null'::jsonb))
-        OR (j.kind = 'calendar-feed.mark-dirty' AND p.name = 'calendar.invalidate'
-          AND p.key = coalesce(j.input->>'origin', j.key)
-          AND p.cursor->>'origin' = coalesce(j.input->>'origin', j.key)
-          AND p.cursor->>'reason' = coalesce(j.input->>'reason', 'change'))))
-  ) THEN RAISE EXCEPTION 'Background intent did not carry into its Pass'; END IF;
+ IF EXISTS (SELECT 1 FROM workflow_intents e WHERE NOT EXISTS (
+   SELECT 1 FROM "Pass" p WHERE p.name=e.pass_name AND p.key=e.pass_key
+   AND p.cursor=e.pass_cursor||jsonb_build_object('legacyJobs',e.receipts)
+   AND p."availableAt"=e.first_available
+   AND p.attempts=CASE WHEN e.state='failed' OR e.run_status='failed' THEN greatest(e.attempts,coalesce(e."maxAttempts",3)) ELSE e.attempts END
+   AND p."maxAttempts"=coalesce(e."maxAttempts",3)
+   AND p."lastError" IS NOT DISTINCT FROM e.error
+   AND p."waitCause" IS NOT DISTINCT FROM CASE e."waitReason" WHEN 'ai_funding_window' THEN 'funding' ELSE e."waitReason" END
+   AND (p."cancelledAt" IS NOT NULL)=(e.state IN ('paused','cancelled') OR e.pass_name='run.execute' AND e.run_status NOT IN ('running','paused_auth'))
+ )) THEN RAISE EXCEPTION 'Background intent did not carry into its Pass'; END IF;
+ IF (SELECT count(*) FROM workflow_intent_sources)<>(SELECT coalesce(sum(jsonb_array_length(p.cursor->'legacyJobs')),0) FROM "Pass" p JOIN workflow_intents e ON p.name=e.pass_name AND p.key=e.pass_key)
+ THEN RAISE EXCEPTION 'Background intent source count mismatch'; END IF;
 END $$;
 --> statement-breakpoint
-DELETE FROM "Job" j WHERE j.state IN ('queued', 'running', 'retry_wait', 'paused', 'failed', 'cancelled') AND (
-  j.kind IN ('maintenance.purchase-discovery', 'calendar-feed.mark-dirty')
-  OR (j.kind = 'run.execute' AND EXISTS (SELECT 1 FROM "Run" r WHERE r.id = j."runId"
-    AND r.purpose IN ('sweep', 'maintenance', 'ai_refresh', 'mail_reclassify', 'connection_discovery')))
-);
+DELETE FROM "Job" j USING workflow_intent_sources s WHERE j.id=s.id;

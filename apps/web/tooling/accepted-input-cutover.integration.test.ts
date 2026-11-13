@@ -319,19 +319,29 @@ it("aborts atomically for every preservation verification", async () => {
           ([key]) => key === label,
         )?.[1];
         expect(sabotage).toBeDefined();
-        await client.query("BEGIN");
-        try {
-          for (const prefix of statements.slice(0, index))
-            await client.query(prefix);
-          await client.query(sabotage!);
-          await expect(
-            client.query(
-              `DO $test$ BEGIN IF EXISTS (${match[1]}) THEN RAISE EXCEPTION 'Accepted-input cutover: ${label} preservation mismatch'; END IF; END $test$;`,
-            ),
-          ).rejects.toThrow(`${label} preservation mismatch`);
-        } finally {
-          await client.query("ROLLBACK");
-        }
+        const { withCutoverMigration } =
+          await import("./accepted-input-cutover.fixtures");
+        const { findPgError } = await import("../src/server/errors/db-errors");
+        const injected = [...statements];
+        injected[index] =
+          statement.slice(0, match.index) +
+          sabotage +
+          ";\n" +
+          statement.slice(match.index);
+        await withCutoverMigration(
+          injected.join("--> statement-breakpoint"),
+          async (folder) => {
+            let failure: unknown;
+            try {
+              await migrateDatabase(db, { migrationsFolder: folder });
+            } catch (error) {
+              failure = error;
+            }
+            expect(findPgError(failure)?.message).toBe(
+              `Accepted-input cutover: ${label} preservation mismatch`,
+            );
+          },
+        );
         expect(
           (await client.query(`SELECT count(*)::int n FROM "AiEvaluation"`))
             .rows[0].n,

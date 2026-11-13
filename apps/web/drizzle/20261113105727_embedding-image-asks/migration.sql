@@ -1,3 +1,5 @@
+LOCK TABLE "Job", "SearchDocument", "EntityEmbedding", "ImageProcessingJob", "ImageProcessingAttempt", "ImageProcessingEvent", "AiUsage", "Image", "Entity", "Ask", "Answer", "AskScope", "Pass" IN SHARE ROW EXCLUSIVE MODE;
+--> statement-breakpoint
 CREATE TABLE "ImageEvidence" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"entityId" uuid NOT NULL,
@@ -44,6 +46,9 @@ SELECT CASE WHEN j.state NOT IN ('pending','leased','waiting_for_device')
  a.result,a."completedAt",a."startedAt",a.error,a.number
 FROM "ImageProcessingAttempt" a JOIN "ImageProcessingJob" j ON j.id=a."jobId"
 WHERE a.result IS NOT NULL;
+CREATE INDEX ON image_carry (receipt,number);
+CREATE INDEX ON image_carry (id);
+ANALYZE image_carry;
 --> statement-breakpoint
 INSERT INTO "Ask" (id,"inputHash",feature,producer,"promptVersion",input,state,executor,"answeredAt",attempts,"maxAttempts")
 SELECT id,pg_temp.kernel_hash(envelope),envelope->>'feature','image','1',envelope,'answered',executor,coalesce("completedAt","startedAt"),0,5 FROM image_carry;
@@ -104,7 +109,7 @@ SELECT a.id,'record',o."entityKind"||':'||o."entityId"::text FROM embedding_owed
 --> statement-breakpoint
 INSERT INTO "Pass" (name,key,cursor,"availableAt") SELECT 'vectorize.sync','retired',null,now() WHERE EXISTS (SELECT 1 FROM "EntityEmbedding" WHERE "deletionId" IS NULL AND "artifactState"<>'selected' AND ("deletedAt" IS NOT NULL OR "artifactState" IN ('retired','failed'))) ON CONFLICT DO NOTHING;
 --> statement-breakpoint
-CREATE TEMP TABLE metadata_owed AS SELECT j.*,jsonb_build_object('feature','image.metadata','producer','image','tier',null,'model',null,'parameters',null,'outputRevision','1','promptVersion','1','input',jsonb_build_object('imageId',i.id,'key',i.key,'contentType',i."contentType",'sourceRevision',to_char(i."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) AS envelope,i.id AS "imageId",i.key AS "sourceKey" FROM "Job" j JOIN "Image" i ON i.id::text=j.input->>'imageId' WHERE j.kind='image-metadata.extract' AND j.state NOT IN ('succeeded','failed','cancelled');
+CREATE TEMP TABLE metadata_owed AS SELECT j.*,jsonb_build_object('feature','image.metadata','producer','image','tier',null,'model',null,'parameters',null,'outputRevision','1','promptVersion','1','input',jsonb_build_object('imageId',i.id,'key',i.key,'contentType',i."contentType",'sourceRevision',to_char(i."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) AS envelope,i.id AS "imageId",i.key AS "sourceKey" FROM "Job" j JOIN "Image" i ON i.id::text=j.input->>'imageId' WHERE j.kind='image-metadata.extract' AND j.state NOT IN ('completed','failed','cancelled');
 --> statement-breakpoint
 INSERT INTO "Ask" ("inputHash",feature,producer,"promptVersion",input,state,"availableAt","lastError") SELECT pg_temp.kernel_hash(envelope),'image.metadata','image','1',envelope,CASE WHEN "leaseToken" IS NOT NULL THEN 'unknown' ELSE 'queued' END,"availableAt",error FROM metadata_owed ON CONFLICT DO NOTHING;
 --> statement-breakpoint

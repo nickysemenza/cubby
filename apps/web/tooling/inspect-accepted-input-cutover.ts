@@ -28,16 +28,32 @@ try {
         'FROM "ConnectionCandidateEvidence"',
         'FROM (SELECT NULL::text AS "scopeKey" WHERE false) "ConnectionCandidateEvidence"',
       );
+  const hasMinor = (
+    await client.query(
+      `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='Expense' AND column_name='costMinor') present`,
+    )
+  ).rows[0].present;
+  if (!hasMinor) {
+    const invalid = await client.query(
+      `SELECT count(*)::int n FROM "Expense" WHERE cost IS NOT NULL AND (abs(cost*100-round(cost*100))>=0.0000001 OR round(cost*100)/100<>cost)`,
+    );
+    if (invalid.rows[0].n)
+      throw new Error("Expense is not exactly representable in cents");
+  }
+  const expenseAmount = hasMinor ? '"costMinor"' : "round(cost::numeric*100)";
   const result =
     await client.query(`WITH expected AS MATERIALIZED (${projection}),
+    ask_ids AS MATERIALIZED (SELECT DISTINCT row->>'id' id FROM expected WHERE mapping='ask'),
+    bindings AS MATERIALIZED (SELECT row FROM expected WHERE mapping='recordKey' AND row->>'scopeKind'='bankEvent'),
+    money_entries AS MATERIALIZED (SELECT row FROM expected WHERE mapping='manualEntry' AND row->'payload'->>'table' IN ('Expense','Purchase','FinancialTransaction','FinancialTransactionAllocation')),
     money AS (
-      SELECT 'Expense'::text source,id,"purchaseId" owner,date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
+      SELECT 'Expense'::text source,id,"purchaseId" owner,date_trunc('month',date)::date month_key,${expenseAmount} amount FROM "Expense"
       UNION ALL SELECT 'Purchase',id,id,date_trunc('month',date)::date,"statedTotalMinor" FROM "Purchase"
       UNION ALL SELECT 'FinancialTransaction',id,NULL,date_trunc('month',"transactionDate")::date,"amountMinor" FROM "FinancialTransaction"
       UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation"
     ), money_copy AS (
       SELECT DISTINCT ON (m.source,m.id) m.*, (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric copied
-      FROM money m LEFT JOIN expected e ON e.mapping='manualEntry' AND e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id
+      FROM money m LEFT JOIN money_entries e ON e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id
     ), failures AS (
       SELECT mapping,count(*) FILTER(WHERE
         CASE mapping
@@ -48,7 +64,7 @@ try {
           WHEN 'decision' THEN row->>'subject' IS NULL OR row->>'at' IS NULL
           WHEN 'ask' THEN row->>'id' IS NULL OR row->>'state' NOT IN ('queued','answered','unknown')
           WHEN 'answer' THEN row->>'inputHash' IS NULL OR row->'output' IS NULL
-          WHEN 'askScope' THEN row->>'scopeKey' IS NULL OR NOT EXISTS(SELECT 1 FROM expected a WHERE a.mapping='ask' AND a.row->>'id'=expected.row->>'askId')
+          WHEN 'askScope' THEN row->>'scopeKey' IS NULL OR NOT EXISTS(SELECT 1 FROM ask_ids a WHERE a.id=expected.row->>'askId')
         END)::int n FROM expected GROUP BY mapping
     )
     SELECT 'destination' category,mapping||'/'||split_part(source_id,':',1) mapping,count(*)::int rows FROM expected GROUP BY 2
@@ -76,12 +92,12 @@ try {
     UNION ALL SELECT 'verification','requester count',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"
     UNION ALL SELECT 'verification','accepted occurrence',count(*)::int FROM "SourceOccurrence" o
       WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored' AND o."acceptedTransactionId" IS NOT NULL
-      AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
+      AND NOT EXISTS(SELECT 1 FROM bindings e WHERE e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
     UNION ALL SELECT 'identity','transactions with multiple accepting occurrences',count(*)::int FROM
       (SELECT "acceptedTransactionId" FROM "SourceOccurrence" WHERE "deletedAt" IS NULL AND "withdrawnAt" IS NULL AND "supersededByOccurrenceId" IS NULL AND disposition IS DISTINCT FROM 'ignored' AND "acceptedTransactionId" IS NOT NULL GROUP BY "acceptedTransactionId" HAVING count(*)>1) multiple
     UNION ALL SELECT 'identity','occurrences left unbound',count(*)::int FROM "SourceOccurrence" o
       WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored' AND o."acceptedTransactionId" IS NOT NULL
-      AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
+      AND NOT EXISTS(SELECT 1 FROM bindings e WHERE e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
     UNION ALL SELECT 'ask-state',CASE WHEN row->>'cancelledAt' IS NOT NULL THEN 'cancelled' ELSE row->>'state' END,count(*)::int FROM (SELECT DISTINCT ON (row->>'id') row FROM expected WHERE mapping='ask') planned GROUP BY 2
     UNION ALL SELECT 'decisions','none',count(*)::int FROM expected WHERE mapping='decision' AND row->>'kind'='none'
     UNION ALL SELECT 'authority','member-held',count(*)::int FROM expected WHERE mapping='decision' AND row->>'id' LIKE 'ffffffff%'

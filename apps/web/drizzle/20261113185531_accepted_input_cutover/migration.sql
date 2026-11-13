@@ -2,7 +2,7 @@
 -- verification and contraction are atomic. Acquire every lock before the first read.
 SET LOCAL lock_timeout='2s';
 --> statement-breakpoint
-LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_money ON COMMIT DROP AS
 SELECT 'Expense'::text source, id, "purchaseId" owner, date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
@@ -199,25 +199,25 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind',CASE WHEN value='null'::jsonb THEN 'none' ELSE 'set' END,'value',value,
  'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR audit_value IS DISTINCT FROM value OR channel='system' OR "userId"='cubby-system' THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
  'actorId',CASE WHEN authority IS NULL AND audit_value=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
- FROM field_values WHERE cubby_holds IS NOT TRUE AND value IS NOT NULL AND ((value<>'null'::jsonb AND value<>'""'::jsonb AND value<>'[]'::jsonb) OR audit_id IS NOT NULL AND authority IS NULL AND changes->field ? 'to' AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system')
+ FROM field_values WHERE (entity NOT IN ('financialTransaction','purchase','expense','FinancialTransactionAllocation','ExpenseAttribution') OR audit_id IS NOT NULL AND authority IS NULL AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system' OR entity='purchase' AND field='purchaserOverrideId' OR entity='FinancialTransactionAllocation' AND EXISTS (SELECT 1 FROM records r WHERE r.id=field_values.id AND r.payload->>'source'='manual')) AND cubby_holds IS NOT TRUE AND value IS NOT NULL AND ((value<>'null'::jsonb AND value<>'""'::jsonb AND value<>'[]'::jsonb) OR audit_id IS NOT NULL AND authority IS NULL AND changes->field ? 'to' AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system')
  UNION ALL
  SELECT 'answer',entity||':'||id||':'||field,jsonb_build_object('inputHash','legacy:field:'||entity||':'||id||':'||field,'feature','legacy:field','producer','model','promptVersion','legacy:unknown',
  'output',jsonb_build_object('value',value,'auditId',audit_id,'subject',entity||':'||id,'field',field),'createdAt',audit_at) FROM field_values WHERE cubby_holds
  UNION ALL
  SELECT 'ask',i.source_table||':'||i.id,jsonb_build_object('id',c.ask_id,'inputHash',c.hash,'feature',coalesce(c.envelope->>'feature','legacy:'||c.feature),'producer',c.producer,'promptVersion',coalesce(c.envelope->>'promptVersion',c.prompt_version),
  'input',coalesce(c.envelope,jsonb_build_object('legacy',c.legacy,'sourceTable',c.source_table)),'state',c.state,'cancelledAt',CASE WHEN c.cancel_import THEN coalesce(c.legacy->'updatedAt',to_jsonb(now() AT TIME ZONE 'UTC')) END,
- 'availableAt',c.available_at,'attempts',c.attempts,'maxAttempts',greatest(3,c.attempts+1),'lastError',CASE WHEN c.cancel_import AND NOT c.cancelled THEN 'Cutover cancelled legacy queued work: incomplete canonical input or unregistered feature' ELSE c.error END,'waitCause',CASE WHEN c.legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN c.legacy->>'waitCause' END,'createdAt',c.created_at,'executor',CASE WHEN c.envelope IS NULL THEN 'legacy' END) FROM imports i JOIN ask_rows c USING(ask_id)
+ 'availableAt',c.available_at,'attempts',c.attempts,'maxAttempts',greatest(3,c.attempts+1),'lastError',CASE WHEN c.cancel_import AND NOT c.cancelled THEN 'Cutover cancelled legacy queued work: incomplete canonical input or unregistered feature' ELSE c.error END,'waitCause',CASE WHEN c.legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN c.legacy->>'waitCause' END,'createdAt',c.created_at,'executor',NULL) FROM imports i JOIN ask_rows c USING(ask_id) WHERE i.source_table='AiEvaluation'
  UNION ALL
  SELECT 'answer',source_table||':'||id,jsonb_build_object('inputHash',hash,'feature','legacy:'||feature,'producer',producer,'promptVersion',prompt_version,
- 'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',ask_id,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
+ 'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',CASE WHEN source_table='AiEvaluation' THEN ask_id END,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
  UNION ALL
- SELECT 'answer','Captured:'||c.id,jsonb_build_object('inputHash',h.hash,'feature',c.feature,'producer','model','promptVersion',c.version,'output',c.answer->'value','model',c.answer->'models'->>0,'createdAt',c.at)
- FROM captured_answers c JOIN envelope_hashes h USING(id)
+ (SELECT DISTINCT ON (h.hash) 'answer','Captured:'||c.id,jsonb_build_object('inputHash',h.hash,'feature',c.feature,'producer','model','promptVersion',c.version,'output',c.answer->'value','model',c.answer->'models'->>0,'createdAt',c.at)
+ FROM captured_answers c JOIN envelope_hashes h USING(id) ORDER BY h.hash,c.at DESC,c.id DESC)
  UNION ALL
- SELECT 'askScope',source_table||':'||id||':owner',jsonb_build_object('askId',ask_id,'scopeKind','run','scopeKey',run_id,'runId',run_id,'receipt',legacy->'receipt','createdAt',created_at) FROM imports WHERE run_id IS NOT NULL
+ SELECT 'askScope',source_table||':'||id||':owner',jsonb_build_object('askId',ask_id,'scopeKind','run','scopeKey',run_id,'runId',run_id,'receipt',legacy->'receipt','createdAt',created_at) FROM imports WHERE source_table='AiEvaluation' AND run_id IS NOT NULL
  UNION ALL
  SELECT 'askScope',source_table||':'||id||':record',jsonb_build_object('askId',ask_id,'scopeKind',CASE WHEN target->>'entity' IN ('product','cookbook','location','meal','project','task','vendor','financialAccount','planting','gardenEntry','productCategory','run','device','spendingCategory') THEN 'fields' ELSE 'record' END,
- 'scopeKey',(target->>'entity')||':'||(target->>'recordId'),'createdAt',created_at) FROM imports WHERE target->>'recordId' IS NOT NULL
+ 'scopeKey',(target->>'entity')||':'||(target->>'recordId'),'createdAt',created_at) FROM imports WHERE source_table='AiEvaluation' AND target->>'recordId' IS NOT NULL
  UNION ALL
  SELECT 'askScope','AiEvaluationRequest:'||r.id,jsonb_build_object('askId',i.ask_id,'scopeKind','run','scopeKey',r."runId",'runId',r."runId",'receipt',r.receipt,'sequence',r.sequence,'cancelledAt',r."cancelledAt",'createdAt',r."createdAt") FROM "AiEvaluationRequest" r JOIN imports i ON i.source_table='AiEvaluation' AND i.id=r."evaluationId"
  UNION ALL
@@ -278,7 +278,7 @@ UNION ALL
 -- A current automatic/released trail supersedes old held assignments. This is
 -- an observation of authority at cutover, not a fabricated member release.
 SELECT 'decision','CubbyRelease:'||entity||':'||id||':'||field,jsonb_build_object('id',md5('cutover:cubby-release:'||entity||':'||id||':'||field)::uuid,
- 'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind','release','value',NULL,'actorKind','system','actorId',NULL,'at',now() AT TIME ZONE 'UTC')
+ 'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind','release','value',NULL,'actorKind','system','actorId',NULL,'at',greatest(now() AT TIME ZONE 'UTC',coalesce((SELECT max((event->>'createdAt')::timestamp) FROM review_events v JOIN "Suggestion" s ON s.id=v.id WHERE s.entity=field_values.entity AND s."recordId"=field_values.id AND s.field=field_values.field),audit_at))+interval '1 microsecond')
 FROM field_values WHERE cubby_holds
 ), empty_scopes AS (
  SELECT DISTINCT e.row->>'scopeKind' kind,e.row->>'scopeKey' key FROM expected e WHERE e.mapping='scope' AND e.row->>'scopeKind' IN ('bankEvent','purchaseEvent')
@@ -295,6 +295,8 @@ SELECT mapping,source_id,row FROM complete_expected
 -- cutover:select:end
 ;
 --> statement-breakpoint
+CREATE INDEX ON cutover_expected (mapping,(row->>'id'));
+CREATE INDEX ON cutover_expected (mapping,(row->>'scopeKind'),(row->>'scopeKey'));
 ANALYZE cutover_expected;
 --> statement-breakpoint
 INSERT INTO "RecordKey" ("scopeKind","scopeKey","entity","naturalKey","entityId","rejectedAt")

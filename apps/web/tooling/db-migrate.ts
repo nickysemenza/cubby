@@ -127,10 +127,7 @@ const TRANSACTION_LOCK_RETRIES = 5;
 const TRANSACTION_LOCK_RETRY_DELAY_MS = 15_000;
 
 /**
- * Live queue traffic can hold or cross a cutover's locks (0037 deadlocked on every
- * attempt). A statement in this mode is idempotent and rolled back whole, so taking
- * it again from the start is safe. Whatever was already committed stays compatible
- * with the running Worker; a later Deploy resumes from the same statement.
+ * Retry only after PostgreSQL has rolled back the entire pending chain.
  */
 const isLockContention = (error: unknown) => {
   // Drizzle wraps the driver's error as its cause.
@@ -195,75 +192,48 @@ export async function migrateDatabase(
   const pending = migrations
     .slice(0, boundary + 1)
     .filter((entry) => !applied.has(entry.name));
-  const retryTransaction = (batch: MigrationMeta[]) =>
-    retryingLockContention(
-      () => migrate(batch, migrationDb, { migrationsFolder }),
-      {
-        retries: TRANSACTION_LOCK_RETRIES,
-        delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
-      },
-    );
-  if (
-    !pending.some((migration) =>
-      migration.sql[0]?.includes("-- cubby:transaction-per-statement"),
-    )
-  ) {
-    await retryTransaction(pending);
-    return;
-  }
-  for (const migration of pending) {
-    if (!migration.sql[0]?.includes("-- cubby:transaction-per-statement")) {
-      await retryTransaction([migration]);
-      continue;
-    }
-    // Opt-in backfills must be restartable: a crash leaves committed batches
-    // but no migration receipt. Each statement therefore has to be idempotent.
-    for (const statement of migration.sql) {
-      if (statement.includes("-- cubby:outside-transaction")) {
-        // An interrupted concurrent build leaves an invalid index that
-        // `IF NOT EXISTS` would keep; rebuild it and verify the result.
-        for (const name of await invalidIndexesNamedIn(db, statement))
-          await db.execute(
-            sql.raw(`DROP INDEX CONCURRENTLY IF EXISTS "${name}"`),
-          );
-        await db.execute(sql.raw(statement));
-        const invalid = await invalidIndexesNamedIn(db, statement);
-        if (invalid.length)
-          throw new Error(
-            `Concurrent index build left invalid indexes: ${invalid.join(", ")}`,
-          );
-        continue;
-      }
-      let remaining: boolean;
-      do {
-        remaining = await retryingLockContention(() =>
-          db.transaction(async (tx) => {
-            await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
-            const result = await tx.execute<{ remaining: boolean }>(
-              sql.raw(statement),
-            );
-            return statement.includes("-- cubby:repeat-batch")
-              ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
-                  .remaining
-              : false;
-          }),
-        );
-      } while (remaining);
-    }
-    await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
-      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
-  }
-}
-
-async function invalidIndexesNamedIn(db: NodePgDatabase, statement: string) {
-  const { rows } = await db.execute<{ name: string }>(sql`
-    SELECT c.relname AS name FROM pg_index i
-    JOIN pg_class c ON c.oid = i.indexrelid
-    JOIN pg_namespace n ON n.oid = c.relnamespace
-    WHERE NOT i.indisvalid AND n.nspname = current_schema()`);
-  return rows
-    .map((row) => row.name)
-    .filter((name) => statement.includes(`"${name}"`));
+  // All pending DDL, retained data and receipts share one rollback boundary.
+  // Historical files used concurrent indexes and repeatable batches. Keep their
+  // immutable hashes while building indexes transactionally and draining batches.
+  await retryingLockContention(
+    () =>
+      db.transaction(async (tx) => {
+        await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+        for (const migration of pending) {
+          for (const source of migration.sql) {
+            const statement = source.replace(/\bCONCURRENTLY\b/gi, "");
+            if (source.includes("-- cubby:outside-transaction")) {
+              const { rows } = await tx.execute<{ name: string }>(sql`
+              SELECT c.relname AS name FROM pg_index i
+              JOIN pg_class c ON c.oid = i.indexrelid
+              JOIN pg_namespace n ON n.oid = c.relnamespace
+              WHERE NOT i.indisvalid AND n.nspname = current_schema()`);
+              for (const { name } of rows)
+                if (statement.includes(`"${name}"`))
+                  await tx.execute(
+                    sql.raw(`DROP INDEX "${name.replaceAll('"', '""')}"`),
+                  );
+            }
+            let remaining: boolean;
+            do {
+              const result = await tx.execute<{ remaining: boolean }>(
+                sql.raw(statement),
+              );
+              remaining = source.includes("-- cubby:repeat-batch")
+                ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
+                    .remaining
+                : false;
+            } while (remaining);
+          }
+          await tx.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
+          VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
+        }
+      }),
+    {
+      retries: TRANSACTION_LOCK_RETRIES,
+      delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
+    },
+  );
 }
 
 const PRODUCTION_URL_ENV = "PRODUCTION_DIRECT_DATABASE_URL";
