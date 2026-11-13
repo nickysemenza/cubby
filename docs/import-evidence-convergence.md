@@ -394,6 +394,14 @@ Browser order extractions keep their package facts in the accepted extraction;
 callers record a tracking capture explicitly through `shipments.record` when
 they have the original page content.
 
+Original shipment captures enter through the kernel's `append` as
+`shipment.capture` evidence. The source-key/checksum constraint decides duplicate
+intake; replay reads the retained capture without updating it. Capture row and
+source keys index the evidence for reconcilers. Email captures discover the
+Email's `emailState` scope, and evidence visibility belongs to the capturing
+member. Package observations supply shipment identity separately from the raw
+capture.
+
 Email agents route package observations through `shipments.record` and use
 `purchase_import.mail_resolve` for association/disposition; linked resolutions
 can include per-Purchase packets atomically. The claim prepass settles the

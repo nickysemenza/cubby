@@ -5,7 +5,11 @@
  * entry point.
  */
 import { runKernelModule } from "~/server/domains/run/service/run-summary";
+import { shipmentKernelModule } from "~/server/domains/shipment/service";
 
 import type { DomainModule } from "./define";
 
-export const KERNEL_MODULES: readonly DomainModule[] = [runKernelModule];
+export const KERNEL_MODULES: readonly DomainModule[] = [
+  runKernelModule,
+  shipmentKernelModule,
+];

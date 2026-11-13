@@ -21,8 +21,10 @@ import {
   constraintViolation,
 } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { append, evidenceRow } from "~/server/kernel/api";
 
 import { canonical } from "./evidence-internal";
+import { shipmentCaptureEvidence } from "./source-evidence";
 
 export async function loadSourceCapture(
   db: Database,
@@ -173,14 +175,16 @@ export async function applySourceCapture(
     emailId,
     actorUserId,
   };
+  await append(db, [evidenceRow(shipmentCaptureEvidence, plan)]);
   const [capture] = await getDb(db)
-    .insert(shipmentSourceCapture)
-    .values(plan)
-    .onConflictDoUpdate({
-      target: [shipmentSourceCapture.sourceKey, shipmentSourceCapture.checksum],
-      set: { sourceKey: plan.sourceKey },
-    })
-    .returning();
+    .select()
+    .from(shipmentSourceCapture)
+    .where(
+      and(
+        eq(shipmentSourceCapture.sourceKey, sourceKey),
+        eq(shipmentSourceCapture.checksum, checksum),
+      ),
+    );
   if (!capture) throw new Error("Shipment source capture was not retained.");
   return capture;
 }

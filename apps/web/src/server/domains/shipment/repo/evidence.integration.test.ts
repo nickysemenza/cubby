@@ -23,6 +23,7 @@ import {
   vendor,
   runFinding,
   expense,
+  factKey,
   inventoryEntry,
   email,
   ledgerParty,
@@ -1233,6 +1234,23 @@ describe("Shipment retained evidence", () => {
     const captures = await getDb(ctx.db).select().from(shipmentSourceCapture);
     expect(captures).toHaveLength(1);
     expect(captures[0]?.source).toEqual(input.source);
+    expect(captures[0]?.actorUserId).toBe(ctx.actor.userId);
+    const captureKeys = await getDb(ctx.db)
+      .select({ key: factKey.key, kind: factKey.factKind })
+      .from(factKey)
+      .where(eq(factKey.factId, captures[0]!.id));
+    expect(captureKeys).toEqual(
+      expect.arrayContaining([
+        {
+          key: `row:ShipmentSourceCapture:${captures[0]!.id}`,
+          kind: "shipment.capture",
+        },
+        {
+          key: `shipment:source:${captures[0]!.sourceKey}`,
+          kind: "shipment.capture",
+        },
+      ]),
+    );
     if (input.source.kind !== "sms_export")
       throw new Error("Synthetic SMS missing");
     await expect(
