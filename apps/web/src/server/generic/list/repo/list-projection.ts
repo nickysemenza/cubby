@@ -274,7 +274,16 @@ export function listReadPlan<Row>(
           machinery.fields(
             z.object({ machinery: machineryListFields.nullable() }),
             (row, rows) => ({
-              machinery: rows?.get(sourceIdentity.parse(row).id) ?? null,
+              machinery: rows
+                ? (rows.get(sourceIdentity.parse(row).id) ?? {
+                    stage: "done",
+                    nextActor: null,
+                    firstGap: null,
+                    eta: null,
+                    attempts: 0,
+                    costMicros: 0,
+                  })
+                : null,
             }),
           ),
         ]

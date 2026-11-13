@@ -498,9 +498,11 @@ export function AuditRecordRow({
         entry.provenance || (changes && changedCount > shownCount) ? (
           <RecordDetail
             summary={
-              shownCount > 0
-                ? `${countLabel(changedCount - shownCount, "more field")}`
-                : `${countLabel(changedCount, "field")} changed`
+              entry.provenance
+                ? "How Cubby changed this"
+                : shownCount > 0
+                  ? `${countLabel(changedCount - shownCount, "more field")}`
+                  : `${countLabel(changedCount, "field")} changed`
             }
           >
             <Panel tone="muted">

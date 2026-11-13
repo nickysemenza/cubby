@@ -28,6 +28,7 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { AuditLogList } from "~/entity/audit-log/audit-log-list";
 import { useDeferredEntityRosters } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-list";
 import { entityMetadataQueryOptions } from "~/entity/metadata";
@@ -67,7 +68,6 @@ import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 import { Alert, AlertAction } from "~/ui/reui/alert";
 
 import { useAcceptClean, type CleanTarget } from "./accept-clean";
-import { AutomaticDecisions } from "./automatic-decisions";
 import { recordSuggestionScope } from "./record-scope";
 import { MobileEvidenceDisclosure } from "./suggestion-actions";
 import { SuggestionEvidence } from "./suggestion-evidence";
@@ -305,10 +305,9 @@ export function SuggestionsPage({
       </div>
       {search.status === "automatic" ? (
         <div className="px-2 py-2 md:px-4">
-          <AutomaticDecisions
-            key={`${search.record}:${search.auditFamily ?? search.family}`}
-            id={parseRecordParam(search.record)?.code}
-            initialFamily={search.auditFamily ?? search.family}
+          <AuditLogList
+            channel="system"
+            entityId={parseRecordParam(search.record)?.code}
           />
         </div>
       ) : (
