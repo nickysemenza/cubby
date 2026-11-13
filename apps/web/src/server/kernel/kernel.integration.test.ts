@@ -696,6 +696,81 @@ describe("evidence-facts kernel", () => {
     ]);
   });
 
+  it("coalesces declared Catalog creation across scopes and keeps each record's audit provenance", async () => {
+    expect(() =>
+      writes(vendor, ["name"], {
+        createOnly: ["aliases"],
+        coalesceCreation: (values) => values[0]!,
+      }),
+    ).toThrow("Only authored Catalog creations");
+    const target = writes(vendor, [], {
+      entity: "vendor",
+      createOnly: ["name"],
+      coalesceCreation: (values) => values[0]!,
+    });
+    const reconciler = defineReconciler<string>({
+      scope: "fixture.sharedCreation",
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      load: async (_reads, keys) => new Map(keys.map((key) => [key, key])),
+      reconcile(_input, c) {
+        c.record(target, "synthetic-shared", {
+          name: "Synthetic shared batch Vendor",
+        });
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "sharedCreation", reconcilers: [reconciler] }),
+    ]);
+    const scopes = ["a", "b"].map((key) => ({ kind: reconciler.scope, key }));
+    const result = await kernel.reconcileNow(ctx.db, scopes);
+    expect(result.every((outcome) => outcome.status === "applied")).toBe(true);
+    const rows = await repositoryQueries(ctx.db)
+      .select()
+      .from(vendor)
+      .where(eq(vendor.name, "Synthetic shared batch Vendor"));
+    expect(rows).toHaveLength(1);
+    const metadata = await repositoryQueries(ctx.db).execute<{
+      scopeKey: string;
+      entityId: string;
+    }>(
+      sql`SELECT "scopeKey", "entityId" FROM "RecordKey" WHERE "scopeKind" = ${reconciler.scope} ORDER BY "scopeKey"`,
+    );
+    expect(metadata.rows).toEqual(
+      scopes.map((scope) => ({ scopeKey: scope.key, entityId: rows[0]!.id })),
+    );
+    const audit = await repositoryQueries(ctx.db).execute<{
+      provenance: { scope: { kind: string; key: string } };
+    }>(
+      sql`SELECT provenance FROM "AuditLog" WHERE "entityId" = ${rows[0]!.id}::uuid`,
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(audit.rows[0]?.provenance.scope.kind).toBe(reconciler.scope);
+    await repositoryQueries(ctx.db)
+      .update(vendor)
+      .set({ name: "Synthetic member rename" })
+      .where(eq(vendor.id, rows[0]!.id));
+    await kernel.reconcileNow(ctx.db, [scopes[1]!, scopes[0]!]);
+    expect(
+      (
+        await repositoryQueries(ctx.db)
+          .select()
+          .from(vendor)
+          .where(eq(vendor.id, rows[0]!.id))
+      )[0]?.name,
+    ).toBe("Synthetic member rename");
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{ id: string }>(
+          sql`SELECT id FROM "AuditLog" WHERE "entityId" = ${rows[0]!.id}::uuid`,
+        )
+      ).rows,
+    ).toHaveLength(1);
+  });
+
   it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic evidence owner",

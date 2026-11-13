@@ -9,15 +9,23 @@ import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
 
 const kernelApply = new AsyncLocalStorage<{
   provenance: KernelAuditProvenance | null;
+  records?: ReadonlyMap<string, KernelAuditProvenance>;
 }>();
 
 export const withKernelApply = <T>(
   provenance: KernelAuditProvenance | null,
   work: () => Promise<T>,
-): Promise<T> => kernelApply.run({ provenance }, work);
+  records?: ReadonlyMap<string, KernelAuditProvenance>,
+): Promise<T> => kernelApply.run({ provenance, records }, work);
 
 export const inKernelApply = () => kernelApply.getStore() !== undefined;
 
 /** The running apply's provenance, for the audit rows it writes. */
-export const kernelApplyProvenance = () =>
-  kernelApply.getStore()?.provenance ?? null;
+export const kernelApplyProvenance = (entity?: string, id?: string) => {
+  const context = kernelApply.getStore();
+  return (
+    (entity && id ? context?.records?.get(`${entity}:${id}`) : null) ??
+    context?.provenance ??
+    null
+  );
+};

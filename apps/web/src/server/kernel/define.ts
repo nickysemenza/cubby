@@ -243,6 +243,8 @@ export type ColumnRef = {
   readonly columns: readonly string[];
   /** Authored catalog values supplied on creation; never owned or re-derived. */
   readonly createOnly?: readonly string[];
+  /** Equal Catalog natural keys may share one creation in a coherent batch. */
+  readonly coalesceCreation?: (values: readonly ColumnValues[]) => ColumnValues;
   /** The manifest entity, when the table is an entity's; drives change records and removal. */
   readonly entity: string | null;
   /** Fact keys of a written row, so downstream readers find it. */
@@ -263,6 +265,7 @@ export function writes<T extends KeyedTable>(
   columns: readonly (keyof T["_"]["columns"] & string)[],
   options: {
     createOnly?: readonly (keyof T["_"]["columns"] & string)[];
+    coalesceCreation?: (values: readonly ColumnValues[]) => ColumnValues;
     entity?: string;
     keys?: (row: InferSelectModel<T>) => Key[];
     discovers?: (row: InferSelectModel<T>) => ScopeRef[];
@@ -270,12 +273,18 @@ export function writes<T extends KeyedTable>(
     remove?: RemovePort;
   } = {},
 ): ColumnRef {
+  if (
+    options.coalesceCreation &&
+    (columns.length > 0 || !options.createOnly?.length)
+  )
+    throw new Error("Only authored Catalog creations may coalesce");
   return {
     table,
     name: getTableName(table),
     columns,
     entity: options.entity ?? null,
     createOnly: options.createOnly ?? [],
+    coalesceCreation: options.coalesceCreation,
     // SAFETY: the kernel passes rows read from or written to this table.
     keys: options.keys as ColumnRef["keys"],
     // SAFETY: as above.

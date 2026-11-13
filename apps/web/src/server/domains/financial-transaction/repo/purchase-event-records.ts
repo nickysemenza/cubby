@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   expense,
   expenseAttribution,
@@ -63,9 +65,29 @@ export const attributionRecords = writes(expenseAttribution, [
   "ledgerPartyId",
   "weight",
 ]);
+const vendorCreation = z.object({
+  name: z.string(),
+  aliases: z.array(z.string()),
+});
+
 export const bookingVendors = writes(vendor, [], {
   entity: "vendor",
   createOnly: ["name", "aliases"],
+  coalesceCreation(values) {
+    const proposed = values.map((value) => vendorCreation.parse(value));
+    const name = proposed[0]!.name;
+    return {
+      name,
+      aliases: [
+        ...new Set(
+          proposed.flatMap((value) => [
+            ...value.aliases,
+            ...(value.name === name ? [] : [value.name]),
+          ]),
+        ),
+      ].sort(),
+    };
+  },
 });
 
 export const purchaseEventTables = {

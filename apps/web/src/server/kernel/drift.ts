@@ -21,6 +21,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 import { applyComputed } from "./apply";
+import { insertRows } from "./bulk-write";
 import { CLAIM_LEASE_MS, releaseClaim, type ClaimedScope } from "./claim";
 import { computeBatch, usedInputs, type Computed } from "./compute";
 import { decide } from "./decide";
@@ -136,38 +137,52 @@ async function proposeOrAdvance(
   return "proposed";
 }
 
-/** Store the exact proposal without applying records or owing new producer calls. */
+/** Store exact proposals in one table write; no producer calls are owed. */
+export async function recordDrifts(
+  q: Q,
+  proposals: readonly { computed: Computed; diff: Difference }[],
+): Promise<void> {
+  const rows = await Promise.all(
+    proposals.map(async ({ computed, diff }) => {
+      const proposal = {
+        difference: Object.assign({}, describeDifference(diff), {
+          disagreements: computed.desired?.disagreements ?? [],
+        }),
+        askCount: computed.missing.length,
+        estimatedCostMicros: computed.missing.reduce(
+          (sum, missing) =>
+            sum +
+            (missing.kind.estimateCostMicros?.(missing.envelope.input) ?? 0),
+          0,
+        ),
+      };
+      return {
+        scopeKind: computed.scope.kind,
+        scopeKey: computed.scope.key,
+        version: computed.reconciler.version,
+        rules: computed.reconciler.rules,
+        proposalHash: await hashCanonical(proposal),
+        inputsHash: computed.inputsHash,
+        ...proposal,
+      };
+    }),
+  );
+  await insertRows(
+    q,
+    drift,
+    rows,
+    sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
+    version = excluded.version, rules = excluded.rules, "proposalHash" = excluded."proposalHash", "inputsHash" = excluded."inputsHash",
+    difference = excluded.difference, "askCount" = excluded."askCount", "estimatedCostMicros" = excluded."estimatedCostMicros"`,
+  );
+}
+
 export async function recordDrift(
   q: Q,
   computed: Computed,
   diff: Difference,
 ): Promise<void> {
-  const { scope, reconciler } = computed;
-  const proposal = {
-    difference: Object.assign({}, describeDifference(diff), {
-      disagreements: computed.desired?.disagreements ?? [],
-    }),
-    askCount: computed.missing.length,
-    estimatedCostMicros: computed.missing.reduce(
-      (sum, missing) =>
-        sum + (missing.kind.estimateCostMicros?.(missing.envelope.input) ?? 0),
-      0,
-    ),
-  };
-  const values = {
-    version: reconciler.version,
-    rules: reconciler.rules,
-    proposalHash: await hashCanonical(proposal),
-    inputsHash: computed.inputsHash,
-    ...proposal,
-  };
-  await q
-    .insert(drift)
-    .values({ scopeKind: scope.kind, scopeKey: scope.key, ...values })
-    .onConflictDoUpdate({
-      target: [drift.scopeKind, drift.scopeKey],
-      set: values,
-    });
+  await recordDrifts(q, [{ computed, diff }]);
 }
 
 /** The kernel's own pass: visit every scope derived under older rules. */

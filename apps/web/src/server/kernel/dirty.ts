@@ -61,6 +61,8 @@ export type DirtyInput = {
   discovers?: readonly ScopeRef[];
   /** A reconciler's own output never dirties its own scope. */
   exclude?: ScopeRef;
+  /** A coherent batch publishes its snapshot together. */
+  excludes?: readonly ScopeRef[];
   reason: string;
 };
 
@@ -102,7 +104,10 @@ export async function markDirty(
       INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "availableAt")
       SELECT targets.kind, targets.key, lanes.lane, 1, ${input.reason}, now()
       FROM targets JOIN lanes ON lanes.kind = targets.kind
-      WHERE ${input.exclude ? sql`NOT (targets.kind = ${input.exclude.kind} AND targets.key = ${input.exclude.key})` : sql`true`}
+      WHERE NOT EXISTS (
+        SELECT 1 FROM jsonb_to_recordset(${JSON.stringify([...(input.excludes ?? []), ...(input.exclude ? [input.exclude] : [])])}::jsonb) AS excluded(kind text, key text)
+        WHERE excluded.kind = targets.kind AND excluded.key = targets.key
+      )
       ORDER BY targets.kind, targets.key
       ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
         seq = "ScopeDirty".seq + 1,

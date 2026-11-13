@@ -6,6 +6,8 @@ export type DatabaseOperationMetrics = {
   /** All started SQL, pool acquisition and client-queue work has settled. */
   isIdle(): boolean;
   queryCount: number;
+  /** Statements by explicitly scoped phase; unscoped work is control. */
+  queryCountByPhase: Record<string, number>;
   queryDurationSumMs: number;
   queryActiveWallMs: number;
   queryMaxDurationMs: number;
@@ -49,6 +51,14 @@ type StoredDatabaseOperationMetrics = DatabaseOperationMetrics & {
   };
 };
 
+const databasePhase = new AsyncLocalStorage<string>();
+
+/** Phase attribution shares the existing operation collectors and records no SQL values. */
+export const withDatabaseOperationPhase = <T>(
+  phase: string,
+  work: () => Promise<T>,
+): Promise<T> => databasePhase.run(phase, work);
+
 const operationMetricsStore = new AsyncLocalStorage<
   StoredDatabaseOperationMetrics[]
 >();
@@ -65,6 +75,7 @@ const emptyMetrics = (): StoredDatabaseOperationMetrics => {
     acquireStartedCount: 0,
     operations: [],
     queryCount: 0,
+    queryCountByPhase: {},
     queryDurationSumMs: 0,
     queryActiveWallMs: 0,
     queryMaxDurationMs: 0,
@@ -163,6 +174,9 @@ export const beginDatabaseQuery = (
   parameterCount = 0,
 ): FinishActivity => {
   for (const metrics of operationMetricsStore.getStore() ?? []) {
+    const phase = databasePhase.getStore() ?? "control";
+    metrics.queryCountByPhase[phase] =
+      (metrics.queryCountByPhase[phase] ?? 0) + 1;
     metrics.queryParameterCount += parameterCount;
     metrics.queryMaxParameterCount = Math.max(
       metrics.queryMaxParameterCount,

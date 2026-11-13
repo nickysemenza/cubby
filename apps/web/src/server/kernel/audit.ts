@@ -16,6 +16,7 @@ import {
 import { minorToMoney } from "@cubby/shared";
 
 import type { Database } from "~/server/db/database";
+import { withDatabaseOperationPhase } from "~/server/db/db-observability";
 import {
   logAuditEntries,
   type AuditEntryInput,
@@ -92,5 +93,8 @@ export async function auditApply(
       changes: changesOf(entity, update.seen, update.set),
     });
   }
-  if (entries.length) await logAuditEntries(tx, systemActor(), entries);
+  if (entries.length)
+    await withDatabaseOperationPhase("audit", () =>
+      logAuditEntries(tx, systemActor(), entries),
+    );
 }

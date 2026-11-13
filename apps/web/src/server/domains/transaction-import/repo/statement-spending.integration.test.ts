@@ -14,7 +14,10 @@ import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
+import {
+  withDatabaseOperationMetrics,
+  withDatabaseOperationPhase,
+} from "~/server/db/db-observability";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { evidenceBinding, drift } from "~/server/db/kernel-schema";
@@ -545,13 +548,25 @@ describe("statement spending review and re-import", () => {
       const kernel = await productionKernel();
       const measured = await withDatabaseOperationMetrics(async (metrics) => {
         await expectStatementBudget(
-          () => kernel.run(ctx.db, { budgetMs: 20_000 }),
-          { statements: 2_000 + 400 * count, parameters: 65_535 },
+          () =>
+            withDatabaseOperationPhase("fence", () =>
+              kernel.run(ctx.db, { budgetMs: 20_000 }),
+            ),
+          { statements: 150, parameters: 128 },
         );
+        expect(
+          Object.values(metrics.queryCountByPhase).reduce(
+            (sum, value) => sum + value,
+            0,
+          ),
+        ).toBe(metrics.queryCount);
+        expect(metrics.queryCountByPhase.load).toBeLessThanOrEqual(48);
+        expect(metrics.queryCountByPhase.audit).toBeLessThanOrEqual(2);
         return {
           charges: count,
           statements: metrics.queryCount,
           parameters: metrics.queryMaxParameterCount,
+          phases: metrics.queryCountByPhase,
         };
       });
       console.log("statement-kernel-budget", JSON.stringify(measured));

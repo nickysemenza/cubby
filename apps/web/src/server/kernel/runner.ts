@@ -24,7 +24,7 @@ import { startPass, runOnePass } from "./pass";
 import type { KernelRegistry } from "./registry";
 import { ASK, KERNEL_UNIT } from "./vocab";
 
-const SCOPE_BATCH = 25;
+const SCOPE_BATCH = 64;
 const ASK_BATCH = 4;
 const SWEEP_CHECK_MS = 10 * 60_000;
 const lastSweepCheck = new WeakMap<KernelRegistry, number>();
@@ -114,7 +114,7 @@ export async function reconcileNow(
         repositoryQueries(db),
         registry,
         lane,
-        pending.size,
+        Math.min(pending.size, SCOPE_BATCH),
         [...pending.values()],
       );
       if (claimed.length) break;

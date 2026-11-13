@@ -164,7 +164,12 @@ machinery(db: Db, viewer: Actor, ref: EntityRef, o?: { field?: string }): Promis
 ```
 
 `load` takes every key of a batch and issues a fixed number of statements for
-the batch. Each read through `Reads` records its key, including a read that
+the batch. Apply locks the union of input revisions and dirty claims once,
+then writes each table as a set. Identity reservations, RecordKeys, bindings,
+audits, dependencies and cached scope outcomes are batch writes. Audit rows
+retain their individual scope provenance. A batch is one coherent input
+snapshot: its output notifications exclude every completed scope in that
+batch and still notify other dependent scopes. Each read through `Reads` records its key, including a read that
 returns no rows, and `Reads` reaches only the sources the reconciler declared.
 `reconcile` has no database, clock or network access. Inside it,
 `c.answer(kind, input)` returns the Answer or `Missing`, and `Missing` files an
@@ -173,6 +178,12 @@ Ask; `c.decision(channel, subject, field)` returns the decision in force;
 `c.bind(fact, event)` binds evidence to an event; `c.emit(scopeRef)` starts a
 downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 `c.gap.time` declare what is missing and who supplies it.
+
+A Catalog target with no owned columns may declare `coalesceCreation(values)`
+to combine equal natural keys in the same batch. In canonical scope-key order,
+the first new declaration reserves the shared id; every participating scope
+keeps a RecordKey to it. Existing RecordKeys always retain their ids. The
+coalescer supplies creation values only; member edits remain authored.
 
 `c.record` returns the record's UUID. For an existing `RecordKey` it returns
 the retained id; for a new natural key it derives a UUID v8 from the scope
@@ -279,7 +290,9 @@ Catalog scopes use the same fence without the gate. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the
 same record wins and the scope reruns.
 
-Background money applies yield the gate after 1.5 seconds. A member's write
+Background money applies commit after each bounded batch of at most 64 scopes,
+before the next batch can take the gate. A batch's set-based writes publish
+atomically; session timeouts bound in-flight statements. A member's write
 uses a 2 second `lock_timeout` and reports a timeout as a retryable wait.
 Evidence appends and decision inserts take no gate; a rejection that invokes
 a money entity's deletion policy takes the gate before that policy runs; unique constraints on

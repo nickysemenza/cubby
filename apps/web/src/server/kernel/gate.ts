@@ -29,9 +29,6 @@ const TIMEOUTS = {
   { lock: number; statement: number; idle: number }
 >;
 
-/** Background money applies commit and re-take the gate after this long. */
-export const BACKGROUND_GATE_YIELD_MS = 1_500;
-
 /** A member's write found the gate held past its lock timeout; retry shortly. */
 export class HouseholdWriteBusyError extends JobRetryableError {
   override name = "HouseholdWriteBusyError";
