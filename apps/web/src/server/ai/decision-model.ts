@@ -23,6 +23,7 @@ import { z } from "zod";
 import { cachedCall } from "~/server/ai/adapters";
 import { type GatewayMetadata, gatewayFetch } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import { insideModelAsk, produceModel } from "~/server/ai/model-call-context";
 import {
   buildChoiceInput,
   type DecisionChoiceInput,
@@ -583,6 +584,52 @@ async function runDecisionChoiceInternal(
       probability: 0,
       ranked: [],
     };
+  if (args.usage.db && !insideModelAsk() && !args.port) {
+    const { modelAskFor } = await import("./model-asks");
+    const { withAsk } = await import("~/server/kernel/api");
+    const kind = modelAskFor(feature);
+    const result = await withAsk(
+      args.usage.db,
+      {
+        ...kind,
+        async produce() {
+          const value = await produceModel(() =>
+            runDecisionChoiceInternal(
+              {
+                ...args,
+                usage: { ...args.usage, applicationCache: false },
+              },
+              pending,
+            ),
+          );
+          return {
+            output: { value: z.json().parse(value), model: feature.model },
+            model: feature.model,
+            tier: feature.tier,
+          };
+        },
+      },
+      {
+        kind: "choice",
+        model: feature.model,
+        subject: args.subject,
+        rules: args.rules,
+        choices: [...args.choices],
+        allowNone: args.allowNone ?? true,
+        images: args.images ? [...args.images] : undefined,
+      },
+      {
+        runId: args.usage.runId,
+        record: args.usage.entity
+          ? {
+              entity: args.usage.entity.entityKind,
+              id: args.usage.entity.entityId,
+            }
+          : undefined,
+      },
+    );
+    return validate(result.value);
+  }
   if (input.images?.length) {
     const selector = getDecisionModelConfig(feature.model).selector;
     const body = JSON.stringify({

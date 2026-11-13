@@ -27,7 +27,6 @@ import {
   storeAiEvaluationResult,
   type ClaimedAiEvaluation,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
-import { enqueueAiEvaluations } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
   suggestFields,
   type SuggestFieldsPorts,
@@ -46,10 +45,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
-import {
-  latestFieldWrite,
-  latestFieldWrites,
-} from "~/server/generic/audit-log/repo/field-write";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import {
   JobEvidenceObsoleteError,
   JobTargetError,
@@ -84,8 +80,6 @@ type SweepTarget = {
   basis: Record<string, string | null>;
   field: string;
 };
-/** Targets enrolled per history read and enrollment transaction. */
-const ROSTER_CHUNK = 200;
 const sweepListRowSchema = z.object({ id: z.string() }).passthrough();
 const sweepRunInputSchema = sweepFieldTargets.element.extend({
   entity: fieldSuggestionsInput.shape.entity,
@@ -284,81 +278,22 @@ export async function rosterSuggestionTargets(
     }
     pageIndex++;
   } while (rowsSeen < totalCount);
-  const manifest = await producingAiManifest(db);
-  // Each round trip costs the database's network distance; a roster of
-  // hundreds of targets reads history and enrolls one chunk at a time.
-  for (let offset = 0; offset < targets.length; offset += ROSTER_CHUNK) {
-    const chunk = targets.slice(offset, offset + ROSTER_CHUNK);
-    const writesByField = new Map<string, Map<string, { id: string }>>();
-    for (const field of new Set(chunk.map((target) => target.field)))
-      writesByField.set(
-        field,
-        await latestFieldWrites(
-          db,
-          input.entity,
-          field,
-          chunk
-            .filter((target) => target.field === field)
-            .map((target) => target.entityId),
-        ),
-      );
-    const enrollments = await Promise.all(
-      chunk.map(async (target, index) => {
-        const fieldDecisionId =
-          writesByField.get(target.field)?.get(target.entityId)?.id ?? null;
-        const snapshot = sweepSnapshot.parse({
-          input,
-          target,
-          fieldDecisionId,
-        });
-        const inputFingerprint = await sha256Hex(
-          JSON.stringify({
-            entity: input.entity,
-            target,
-            fieldDecisionId,
-            model: input.model ?? null,
-            taxonomy: input.taxonomyRevision,
-            manifest,
-          }),
-        );
-        return {
-          sequence: offset + index,
-          input: {
-            runId,
-            executionKind: "suggestion_sweep" as const,
-            shareKey: await sha256Hex(
-              JSON.stringify({
-                kind: "field",
-                actor: ports.context.actorContext.userId,
-                inputFingerprint,
-              }),
-            ),
-            feature: fieldPolicyKey(input.entity, target.field),
-            target: {
-              kind: "field" as const,
-              entity: input.entity,
-              recordId: target.entityId,
-              field: target.field,
-              suggestionIds: [],
-            },
-            provenance: {
-              dependencies: dependencyStamps(
-                manifest,
-                fieldDependencyKeys(input.entity, target.field),
-              ),
-              inputFingerprint,
-              optionFingerprint:
-                manifest[fieldPolicyKey(input.entity, target.field)]
-                  ?.policyFingerprint ?? "",
-              model: input.model ?? null,
-            },
-            snapshot,
+  const { reconcileNow } = await import("~/server/kernel/api");
+  await reconcileNow(
+    db,
+    [
+      ...new Map(
+        targets.map((target) => [
+          target.entityId,
+          {
+            kind: "fields",
+            key: `${input.entity}:${target.entityId}`,
           },
-        };
-      }),
-    );
-    await enqueueAiEvaluations(db, enrollments);
-  }
+        ]),
+      ).values(),
+    ],
+    { runId },
+  );
   return targets.length;
 }
 

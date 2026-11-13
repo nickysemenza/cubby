@@ -68,6 +68,7 @@ import { withAiBudget, withPlanBudget } from "~/server/ai/budget";
 import { stopForFunding } from "~/server/ai/funding-wait";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
+import { insideModelAsk, produceModel } from "~/server/ai/model-call-context";
 import {
   MODEL_FOR_TIER,
   type AiChatRequest,
@@ -889,6 +890,55 @@ export async function runStructuredFeature<T>(
       confidence: "low",
       reasoning: "Input preparation",
     });
+  }
+  if (ctx.db && !insideModelAsk() && ports === productionStructuredRunPorts) {
+    const { modelAskFor } = await import("./model-asks");
+    const { withAsk } = await import("~/server/kernel/api");
+    const media = await identifyMedia(request, ctx.db);
+    const kind = modelAskFor(spec);
+    const input = {
+      kind: "structured" as const,
+      request: media.sent,
+      model: spec.model,
+    };
+    const result = await withAsk(
+      ctx.db,
+      {
+        ...kind,
+        async produce() {
+          let model = spec.model;
+          const value = await produceModel(() =>
+            runStructuredFeature(
+              spec,
+              media.sent,
+              {
+                ...ctx,
+                applicationCache: false,
+                onAnswered: (answered) => {
+                  model = answered;
+                },
+              },
+              ports,
+            ),
+          );
+          return {
+            output: { value: z.json().parse(value), model },
+            model,
+            tier: spec.tier,
+          };
+        },
+      },
+      input,
+      {
+        runId: ctx.runId,
+        record: ctx.entity
+          ? { entity: ctx.entity.entityKind, id: ctx.entity.entityId }
+          : undefined,
+      },
+    );
+    const model = supportedChatModelSchema.safeParse(result.model);
+    if (model.success) ctx.onAnswered?.(model.data);
+    return spec.schema.parse(result.value);
   }
   const placeCall = async (
     callRequest: AiChatRequest,

@@ -1,0 +1,267 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "bea4f5e1-c2f7-4fbf-acf4-ebaf331b7aeb",
+  "prevIds": [
+    "52c76c22-7e39-4e5c-a7c3-b7186b8e6abe"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|tbl|public.PhotoInventoryEvidence",
+        "n|tbl|public.PhotoInventoryEvidence",
+        "e|tbl|public.PhotoInventoryEvidence",
+        "n|rel|public.PhotoInventoryEvidence",
+        "n|type|public.PhotoInventoryEvidence",
+        "n|rel|public.PhotoInventoryEvidence_pkey",
+        "n|rel|public.PhotoInventoryEvidence_fingerprint_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "n|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "e|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "n|con|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.PhotoInventoryEvidence",
+        "n|sch|public",
+        "n|tbl|public.Location",
+        "n|sch|public",
+        "n|col|public.PhotoInventoryEvidence.locationId",
+        "n|col|public.Location.id",
+        "e|uniqueness|public.Location.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "n|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "e|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "n|con|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.PhotoInventoryEvidence",
+        "n|sch|public",
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.PhotoInventoryEvidence.runId",
+        "n|col|public.Run.id",
+        "e|uniqueness|public.Run.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "PhotoInventoryEvidence",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "locationId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "runId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "fingerprint",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "sourceSnapshot",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "result",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "locationId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Location",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_runId_Run_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "runId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Run",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_fingerprint_key",
+        "nameExplicit": true,
+        "columns": [
+          "fingerprint"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    }
+  ]
+}

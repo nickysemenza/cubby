@@ -1,4 +1,3 @@
-import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -10,19 +9,10 @@ import {
   type SweepFamily,
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
-import type { RunStepError } from "@cubby/schemas/run-step";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { reviveRunAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
-import {
-  readEvaluationOutcomes,
-  readEvaluationTally,
-  readFailedEvaluations,
-  type EvaluationScope,
-  type EvaluationTally,
-} from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import {
   countStatementPendingHolds,
@@ -39,7 +29,7 @@ import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { ensureRun } from "../repo/ensure-run";
 import { activeSweepFor, type StepRunOwner } from "../repo/run-step";
 import type { StepDriversFor } from "./run-step-registry";
-import { pageRetryRefs, type StepContext, type StepPage } from "./step-run";
+import { pageRetryRefs, type StepPage } from "./step-run";
 
 /**
  * Starts a Sweep: the declared steps of each family in scope, run by the
@@ -500,70 +490,6 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
   },
 };
 
-// ---- AI evaluations a Sweep step fans out to per-item Jobs and waits on. ----
-
-const EVALUATION_WAIT_SECONDS = 30;
-
-const fieldEvaluations = (run: StepRunOwner): EvaluationScope => ({
-  runId: run.id,
-  source: "requested",
-  executionKind: aiExecutionKind.enum.suggestion_sweep,
-});
-
-/**
- * One wait page over the evaluations a roster queued: their states are the
- * step's absolute counts, so a re-read never adds them twice.
- */
-async function evaluationPage(
-  context: StepContext,
-  scope: EvaluationScope,
-  tally: EvaluationTally,
-  extra: Pick<Extract<StepPage, { kind: "progress" }>, "tallies" | "reasons">,
-): Promise<StepPage> {
-  const { step } = context;
-  const { pending, total, completed, failed } = tally;
-  const skipped = tally.blocked + tally.obsolete + tally.cancelled;
-  // This Run is running and still waits, so nothing it waits on may stay parked.
-  if (pending) await reviveRunAiEvaluationWork(context.db, context.run.id);
-  // Errors are the newest-first sample; only a settled step records them.
-  const errors: RunStepError[] =
-    !pending && failed
-      ? (await readFailedEvaluations(context.db, scope)).map((item) => ({
-          at: item.updatedAt.toISOString(),
-          message: item.error ?? "AI evaluation failed",
-          ref: `evaluation:${item.id}`,
-        }))
-      : [];
-  return {
-    kind: "progress",
-    delta: {
-      done: completed - step.done,
-      failed: failed - step.failed,
-      skipped: skipped - step.skipped,
-    },
-    ...(errors.length && { errors }),
-    ...extra,
-    absolute: true,
-    ...(pending && {
-      action: `Waiting for ${pending} of ${total} evaluations`,
-    }),
-    ...(pending && { waitSeconds: EVALUATION_WAIT_SECONDS }),
-    done: pending === 0,
-  };
-}
-
-/** "Retry failed" on an evaluate step re-admits each failed evaluation once. */
-async function readmitFailures(context: StepContext, owned: boolean) {
-  if (!context.retrying) return;
-  const { readmitFailedAiWork } =
-    await import("~/server/workflows/runs/control");
-  await readmitFailedAiWork(context.db, context.run.id, {
-    owned,
-    requested: !owned,
-    attempt: context.attempt,
-  });
-}
-
 // ---- Fields: roster each entity's decision fields, then wait. ----
 
 /** The entity × decision-field targets a field Sweep covers. */
@@ -627,20 +553,32 @@ const fieldRoster: StepDriversFor<"sweep">["field_roster"] = {
 
 const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
   count: async ({ db, run }) => ({
-    total: (await readEvaluationTally(db, fieldEvaluations(run))).total,
+    total: (await (await import("~/server/kernel/api")).runWork(db, run.id))
+      .asks.length,
     boundary: null,
   }),
-  page: async (context) => {
-    await readmitFailures(context, false);
-    const scope = fieldEvaluations(context.run);
-    const outcomes = await readEvaluationOutcomes(context.db, scope);
-    const reasons: Record<string, number> = {};
-    for (const diagnostic of outcomes.diagnostics)
-      reasons[diagnostic.reason] = (reasons[diagnostic.reason] ?? 0) + 1;
-    return evaluationPage(context, scope, outcomes.tally, {
-      tallies: { applied: outcomes.applied, queued: outcomes.queued },
-      reasons,
-    });
+  page: async ({ db, run, step }) => {
+    const { asks } = await (
+      await import("~/server/kernel/api")
+    ).runWork(db, run.id);
+    const completed = asks.filter((ask) => ask.state === "answered").length;
+    const failed = asks.filter((ask) => ask.stage === "stuck").length;
+    const skipped = asks.filter((ask) => ask.state === "abandoned").length;
+    const pending = asks.length - completed - failed - skipped;
+    return {
+      kind: "progress",
+      absolute: true,
+      delta: {
+        done: completed - step.done,
+        failed: failed - step.failed,
+        skipped: skipped - step.skipped,
+      },
+      tallies: { answers: completed, pending },
+      ...(pending
+        ? { action: `Waiting for ${pending} answers`, waitSeconds: 5 }
+        : {}),
+      done: pending === 0,
+    };
   },
 };
 

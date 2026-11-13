@@ -130,7 +130,7 @@ export async function decide(
 export async function reconcileNow(
   db: Database,
   scopes: readonly ScopeRef[],
-  options?: { waitMs?: number },
+  options?: { waitMs?: number; runId?: string },
 ): Promise<Outcome[]> {
   return (await productionKernel()).reconcileNow(db, scopes, options);
 }

@@ -11,7 +11,6 @@
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { notDeleted } from "~/server/db/helpers/predicates";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { location } from "~/server/db/retained-tables";
 
@@ -22,11 +21,13 @@ export const LOCATION_DESCRIPTION_FEATURE_ID = "location-description";
 export const locationAiDescriptionSql = (
   locationId: AnyColumn | SQL,
 ): SQL<string | null> => sql<string | null>`(
-  SELECT a."result"->>'description' FROM "AiAnalysis" a
-  WHERE a."entityKind" = 'location' AND a."entityId" = ${locationId}
-    AND a."feature" = ${LOCATION_DESCRIPTION_FEATURE_ID} AND ${notDeleted("a")}
-  ORDER BY a."updatedAt" DESC, a."id" DESC
-  LIMIT 1
+  SELECT coalesce(a.output->'value'->>'description', a.output->>'description')
+  FROM "ScopeState" state
+  CROSS JOIN LATERAL jsonb_array_elements(state.inputs) used
+  JOIN "Answer" a ON a."inputHash" = used->>'inputHash'
+  WHERE state."scopeKind" = ${"fields"} AND state."scopeKey" = ${"location:"} || ${locationId}::text
+    AND a.feature = ${LOCATION_DESCRIPTION_FEATURE_ID}
+  ORDER BY a."createdAt" DESC LIMIT 1
 )`;
 
 /**

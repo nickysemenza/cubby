@@ -8,7 +8,6 @@
  * Kept as literal SQL over the analysis table, like the Location description
  * (`location-ai-description.ts`).
  */
-import { aiAnalysisEntityKind } from "@cubby/schemas/ai-analysis-fields";
 import {
   RUN_SUMMARY_FEATURE_ID,
   runAiSummary,
@@ -18,7 +17,6 @@ import {
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { notDeleted } from "~/server/db/helpers/predicates";
 
 /**
  * Runs that ended before this instant are never summarized; the summary Job
@@ -34,11 +32,15 @@ export const runSummaryWrittenSql = (
   runId: AnyColumn | SQL,
   endedAt: AnyColumn | SQL,
 ): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM "AiAnalysis" a
-  WHERE a."entityKind" = ${aiAnalysisEntityKind.enum.run} AND a."entityId" = ${runId}
-    AND a."feature" = ${RUN_SUMMARY_FEATURE_ID} AND ${notDeleted("a")}
-    -- Run times are UTC wall times; the cast drops the stored "Z".
-    AND (a."result"->>'generation')::timestamp = date_trunc('milliseconds', ${endedAt})
+  SELECT 1 FROM "ScopeState" state
+  CROSS JOIN LATERAL jsonb_array_elements(state.inputs) used
+  JOIN "Answer" a ON a."inputHash" = used->>'inputHash'
+  LEFT JOIN "Ask" asked ON asked.id = a."askId"
+  WHERE state."scopeKind" = ${"fields"} AND state."scopeKey" = ${"run:"} || ${runId}::text
+    AND a.feature = ${RUN_SUMMARY_FEATURE_ID}
+    AND coalesce(a.output->'value'->>${"generation"},
+      (asked.input#>>'{input,request,messages,0,content}')::jsonb->>'endedAt')::timestamp
+      = date_trunc('milliseconds', ${endedAt})
 )`;
 
 /** The current summary of each ended Run on a page, by Run id. */
@@ -56,12 +58,18 @@ export async function readRunAiSummaries(
     model: string;
     result: unknown;
     updatedAt: Date | string;
-  }>(sql`SELECT a."entityId", a."model", a."result", a."updatedAt"
-    FROM "AiAnalysis" a
-    WHERE a."entityKind" = ${aiAnalysisEntityKind.enum.run}
-      AND a."feature" = ${RUN_SUMMARY_FEATURE_ID} AND ${notDeleted("a")}
-      AND a."entityId" = ANY(${uuidArrayParam(ended.map((run) => run.id))})
-    ORDER BY a."updatedAt" DESC, a."id" DESC`);
+  }>(sql`SELECT wanted.id AS "entityId", a.model,
+    jsonb_build_object(${"text"}, coalesce(a.output->'value'->>${"text"}, a.output->>${"text"}),
+      ${"generation"}, coalesce(a.output->'value'->>${"generation"},
+        (asked.input#>>'{input,request,messages,0,content}')::jsonb->>'endedAt')) AS result,
+    a."createdAt" AS "updatedAt"
+    FROM unnest(${uuidArrayParam(ended.map((row) => row.id))}) AS wanted(id)
+    JOIN "ScopeState" state ON state."scopeKind" = ${"fields"} AND state."scopeKey" = ${"run:"} || wanted.id::text
+    CROSS JOIN LATERAL jsonb_array_elements(state.inputs) used
+    JOIN "Answer" a ON a."inputHash" = used->>'inputHash'
+    LEFT JOIN "Ask" asked ON asked.id = a."askId"
+    WHERE a.feature = ${RUN_SUMMARY_FEATURE_ID}
+    ORDER BY a."createdAt" DESC`);
   const generationOf = new Map(
     ended.map((run) => [run.id, runSummaryGeneration(run.endedAt)]),
   );

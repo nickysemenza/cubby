@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { precedentSchema } from "~/server/ai/fields/repo/precedents";
+import { produceModel } from "~/server/ai/model-call-context";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { defineAsk } from "~/server/kernel/api";
 
@@ -47,12 +48,16 @@ export const fieldAsk = defineAsk({
   output: fieldAnswer,
   policy: { tier: FIELD_SUGGESTION_FEATURE.tier },
   label: "Cubby's answer",
+  admit: async (db) =>
+    (await import("~/server/ai/model-asks")).admitModel(db, "decision"),
   // Loaded on call: the producer's graph (rosters, domain readers) stays out
   // of the module list the kernel and the write boundary load.
   produce: async (input, context) =>
-    (await import("./produce")).produceFieldAnswer(
-      context.db,
-      input,
-      context.runId,
+    produceModel(async () =>
+      (await import("./produce")).produceFieldAnswer(
+        context.db,
+        input,
+        context.runId,
+      ),
     ),
 });

@@ -78,7 +78,7 @@ export type Kernel = {
   reconcileNow(
     db: Database,
     scopes: readonly ScopeRef[],
-    options?: { waitMs?: number },
+    options?: { waitMs?: number; runId?: string },
   ): Promise<Outcome[]>;
   machinery(
     db: Database,

@@ -94,7 +94,7 @@ export async function reconcileNow(
   db: Database,
   registry: KernelRegistry,
   scopes: readonly ScopeRef[],
-  options: { waitMs?: number } = {},
+  options: { waitMs?: number; runId?: string } = {},
 ): Promise<Outcome[]> {
   if (!scopes.length) return [];
   await markDirty(repositoryQueries(db), registry, {
@@ -142,6 +142,22 @@ export async function reconcileNow(
   }
   for (const scope of pending.values())
     outcomes.push({ scope, status: "waiting", gaps: [] });
+  if (options.runId) {
+    const q = repositoryQueries(db);
+    await q.execute(sql`
+      INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId")
+      SELECT DISTINCT a.id, ${"run"}, ${options.runId}, ${options.runId}::uuid
+      FROM jsonb_to_recordset(${JSON.stringify(scopes)}::jsonb) AS wanted(kind text, key text)
+      JOIN "ScopeState" state ON state."scopeKind" = wanted.kind AND state."scopeKey" = wanted.key
+      JOIN "Ask" a ON EXISTS (
+        SELECT 1 FROM "AskScope" waiting WHERE waiting."askId" = a.id
+          AND waiting."scopeKind" = wanted.kind AND waiting."scopeKey" = wanted.key
+      ) OR EXISTS (
+        SELECT 1 FROM jsonb_array_elements(state.inputs) used
+        WHERE used->>${"kind"} = ${"answer"} AND used->>${"inputHash"} = a."inputHash"
+      )
+      ON CONFLICT DO NOTHING`);
+  }
   return outcomes;
 }
 

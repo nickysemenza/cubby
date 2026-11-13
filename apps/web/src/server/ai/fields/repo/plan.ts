@@ -122,13 +122,29 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
       },
     ];
   });
-  if (!fields.length) return null;
+  if (!fields.length && entity !== "run" && entity !== "location") return null;
   return {
     entity,
     table,
     tableName: getTableName(table),
     fields,
-    reads: [...new Set(fields.flatMap((field) => [...field.basis, field.key]))],
+    reads: [
+      ...new Set([
+        ...fields.flatMap((field) => [...field.basis, field.key]),
+        ...(entity === "location" ? ["name", "updatedAt", "deletedAt"] : []),
+        ...(entity === "run"
+          ? [
+              "purpose",
+              "status",
+              "failureCode",
+              "startedAt",
+              "endedAt",
+              "updatedAt",
+              "deletedAt",
+            ]
+          : []),
+      ]),
+    ],
     writes: fields
       .filter((field) => field.apply === "auto")
       .map((field) => field.key),

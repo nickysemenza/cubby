@@ -309,6 +309,29 @@ describe("evidence-facts kernel", () => {
     expect(stored?.amountMinor).toBe(900);
   });
 
+  it("retains Run requester links for queued and already answered scope inputs", async () => {
+    const { kernel } = kernelWith();
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+    });
+    await kernel.append(ctx.db, [
+      charge("ORD-RUN", 100),
+      receipt("ORD-RUN", "Synthetic Grocer"),
+    ]);
+    await settle(kernel);
+    const [stored] = await purchases(ctx.db);
+    await kernel.reconcileNow(
+      ctx.db,
+      [{ kind: CATEGORY_SCOPE, key: stored!.id }],
+      { runId },
+    );
+    const work = await kernel.runWork(ctx.db, runId);
+    expect(work.asks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
+    );
+  });
+
   it("cannot leave a scope clean when a key it read with no rows gains a row before its apply", async () => {
     let raced = false;
     const { kernel, fixture } = kernelWith({

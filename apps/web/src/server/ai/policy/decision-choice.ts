@@ -11,7 +11,7 @@ export const NONE_KEY = "none";
 export const MIB = 1024 * 1024;
 
 /** Embedded-only Clef media. Dimensions, when known, are validated but not sent. */
-const decisionImageSchema = z.union([
+export const decisionImageSchema = z.union([
   z.string(),
   z.object({
     content_type: z.enum(["image/png", "image/jpeg", "image/webp"]),

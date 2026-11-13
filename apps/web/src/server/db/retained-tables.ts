@@ -42,7 +42,10 @@ import type {
   UserId,
 } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image-summary";
-import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
+import type {
+  KernelAuditProvenance,
+  KernelJson,
+} from "@cubby/schemas/kernel/machinery";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { purchaseDocumentKindValues } from "@cubby/schemas/purchase-fields";
@@ -103,6 +106,7 @@ import {
   expense,
   image,
   ledgerTransfer,
+  location,
   run,
 } from "./generated/entity-table-definitions.gen";
 import { sqlEnumConstant } from "./sql-enum";
@@ -561,6 +565,21 @@ export const ledgerSourceClaim = pgTable(
  * One relation per subject kind; ids are unique across entity tables, so a
  * join on `entityId` needs no kind filter.
  */
+
+/** One immutable observation from a location photo pass. */
+export const photoInventoryEvidence = pgTable("PhotoInventoryEvidence", {
+  id: pkUuid(),
+  locationId: uuid("locationId")
+    .notNull()
+    .references(() => location.id),
+  runId: uuid("runId").references(() => run.id),
+  fingerprint: text("fingerprint")
+    .notNull()
+    .unique("PhotoInventoryEvidence_fingerprint_key"),
+  sourceSnapshot: jsonb("sourceSnapshot").notNull().$type<KernelJson>(),
+  result: jsonb("result").notNull().$type<KernelJson>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+});
 
 export const aiAnalysis = pgTable(
   "AiAnalysis",

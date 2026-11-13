@@ -20,6 +20,7 @@ import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import type { ModelInput } from "~/server/ai/model-asks";
 import {
   decideField,
   fieldJson,
@@ -39,6 +40,7 @@ import {
   type Reconciler,
 } from "~/server/kernel/api";
 
+import { analysisSources, analysisAsk, loadAnalysis } from "./analysis";
 import { fieldAsk, type FieldAnswer, type FieldAskInput } from "./ask";
 import {
   fieldsPlanOf,
@@ -63,6 +65,7 @@ type FieldsInput = {
   entity: ShortcodeEntity;
   id: string;
   row: Row | null;
+  analysis: ModelInput | null;
   /** Values each field held before a later write replaced them. */
   replaced: ReadonlyMap<string, readonly string[]>;
   precedents: ReadonlyMap<string, readonly Precedent[]>;
@@ -256,6 +259,14 @@ async function load(
           id: item.id,
           row: row && live.includes(row) ? row : null,
           replaced: replaced.get(item.id) ?? new Map(),
+          analysis: row
+            ? await loadAnalysis(
+                reads.for(item.key),
+                entity,
+                item.id,
+                String(row.name ?? "this location"),
+              )
+            : null,
           precedents: new Map(
             [...precedentsByField].map(([field, bySubject]) => [
               field,
@@ -303,14 +314,16 @@ export function fieldsReconciler(
       // SAFETY: as above.
       ...plans.map((plan) => source.table(plan.table, plan.reads as never[])),
       source.table(auditLog, ["changes"]),
+      ...analysisSources,
     ],
     writes: [...writeRefs.values()],
-    asks: [ask],
+    asks: [ask, analysisAsk("location"), analysisAsk("run")],
     load,
     reconcile(input, c) {
       const plan = fieldsPlans().get(input.entity)!;
       const row = input.row;
       if (!row) return c.done();
+      if (input.analysis) c.answer(analysisAsk(input.entity), input.analysis);
       const subject = recordSubject(input.entity, input.id);
       const target = writeRefs.get(input.entity);
       for (const field of plan.fields) {
