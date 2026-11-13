@@ -240,6 +240,19 @@ function hoistRepeats(root: JsonObject): JsonObject {
       } else if (SCHEMA_KEYS.has(key)) walk(entry, "schema", visit);
     }
   };
+  // An all-string enum already excludes every other JSON type. Keep the
+  // values and every other constraint while removing its redundant type.
+  const compactEnum = (schema: JsonObject) => {
+    if (
+      schema.type === "string" &&
+      Array.isArray(schema.enum) &&
+      schema.enum.every(isText)
+    )
+      delete schema.type;
+  };
+  walk(root.properties ?? {}, "map", compactEnum);
+  for (const definition of Object.values(definitions))
+    walk(definition, "schema", compactEnum);
   // Exclusion fields share their guidance even when their value constraints
   // differ. Keep annotations in an allOf branch so draft-7 ref siblings cannot
   // discard either the guidance or the constraints. The merged tree owns copies.
@@ -488,7 +501,47 @@ function compactSharedDefinitions(schema: JsonObject): JsonObject {
   }
   if (!isObject(compactBody))
     throw new Error("A JSON Schema root must be an object");
-  return { ...compactBody, $defs: shared };
+  // The most frequently referenced definitions get the shortest wire names.
+  const alphabet =
+    "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const shortName = (index: number): string =>
+    index < alphabet.length
+      ? alphabet[index]!
+      : shortName(Math.floor(index / alphabet.length)) +
+        alphabet[index % alphabet.length]!;
+  const names = new Map(
+    Object.keys(shared)
+      .sort(
+        (left, right) =>
+          (counts.get(`#/$defs/${right}`) ?? 0) -
+          (counts.get(`#/$defs/${left}`) ?? 0),
+      )
+      .map((name, index) => [name, shortName(index)]),
+  );
+  const rename = (value: JSONType): JSONType => {
+    if (Array.isArray(value)) return value.map(rename);
+    if (!isObject(value)) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        key === "$ref" && isText(entry) && entry.startsWith("#/$defs/")
+          ? `#/$defs/${names.get(entry.slice("#/$defs/".length))}`
+          : rename(entry),
+      ]),
+    );
+  };
+  const renamed = rename(compactBody);
+  if (!isObject(renamed))
+    throw new Error("A JSON Schema root must be an object");
+  return {
+    ...renamed,
+    $defs: Object.fromEntries(
+      Object.entries(shared).map(([name, definition]) => [
+        names.get(name)!,
+        rename(definition),
+      ]),
+    ),
+  };
 }
 
 /**
