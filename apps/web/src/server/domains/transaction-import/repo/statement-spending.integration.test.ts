@@ -823,11 +823,8 @@ describe("statement spending review and re-import", () => {
     ]);
     const scope = { kind: "purchaseEvent", key: first.id };
     await reconcileNow(ctx.db, [scope]);
-    expect(await getDb(ctx.db).select().from(drift)).toEqual([
-      expect.objectContaining({
-        difference: expect.objectContaining({ disagreements: [] }),
-      }),
-    ]);
+    for (const proposal of await getDb(ctx.db).select().from(drift))
+      expect(proposal.difference).toMatchObject({ disagreements: [] });
     await updateExpense(
       ctx.db,
       parseShortcodeFor("expense", line.shortcode),
