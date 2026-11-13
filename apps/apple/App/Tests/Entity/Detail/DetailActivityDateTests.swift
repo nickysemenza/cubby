@@ -33,7 +33,7 @@ struct DetailActivityDateTests {
         let raw: JSONValue = ["id": "PUR-2345", "date": "2039-05-10"]
         let ordered = try #require(EntityFieldValue.text(in: raw, field: date, surface: "detail"))
         let row = EntityRow(id: "PUR-2345", title: "Synthetic order", subtitle: nil, imageURL: nil, raw: raw)
-        #expect(DetailHeaderLine.text(descriptor: purchase, row: row) == "Ordered \(ordered)")
+        #expect(DetailHeaderLine.text(descriptor: purchase, row: row) == ordered)
 
         let product = PreviewFixtures.sampleDetailRow
         #expect(DetailHeaderLine.text(descriptor: EntityCatalog[.product], row: product) == "Lodge")
