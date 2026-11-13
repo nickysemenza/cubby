@@ -111,6 +111,6 @@ struct NativeCoverageViewPathTests {
         #expect(DetailSlotRegistry.handoff(slot: "run.photo-batch", row: stoppedImport) == nil)
         #expect(
             NativePresentationCoverage.recordHandoffs(EntityCatalog[.run], row: stoppedImport).map(\.label)
-                == ["Open agent history on web"])
+                == ["Open agent history on web", "Open evaluation progress on web"])
     }
 }

@@ -27,21 +27,23 @@ struct RecordListRowRenderingTests {
         #expect(image.height < 120)
     }
 
-    @Test(arguments: [CGFloat(320), CGFloat(640)])
-    func accessibilitySizeShowsWrappedContext(width: CGFloat) throws {
-        let row = RecordListRow(title: "Workshop drill", symbol: "wrench") {
-            Text(
-                "Garage shelf · Upper cabinet · Household tools · Long handled garden tools · Repair supplies"
-            )
-        } rail: {
-            Text("Available")
-        } supplement: {
-            EmptyView()
+    @Test func accessibilitySizeShowsWrappedContext() throws {
+        func height(width: CGFloat) throws -> Int {
+            let row = RecordListRow(title: "Workshop drill", symbol: "wrench") {
+                Text(
+                    "Garage shelf · Upper cabinet · Household tools · Long handled garden tools · Repair supplies"
+                )
+            } rail: {
+                Text("Available")
+            } supplement: {
+                EmptyView()
+            }
+            .frame(width: width)
+            .environment(\.dynamicTypeSize, .accessibility3)
+            return try #require(ImageRenderer(content: row).cgImage).height
         }
-        .frame(width: width)
-        .environment(\.dynamicTypeSize, .accessibility3)
-
-        let image = try #require(ImageRenderer(content: row).cgImage)
-        #expect(image.height > 100)
+        // macOS keeps its platform font metrics when Dynamic Type is set. Wrapping must
+        // still grow the row as its available width shrinks, on either platform.
+        #expect(try height(width: 320) > height(width: 640))
     }
 }

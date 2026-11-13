@@ -156,9 +156,17 @@ export const machineryHandlers = implementOperationDomain(machineryContract, {
     const record = await recordOf(context.db, "run", input.runId);
     return (await import("~/server/kernel/api")).runWork(context.db, record.id);
   },
-  read: async (context, input) => ({
-    machinery: await readMachinery(context.db, context.actorContext, input),
-  }),
+  read: async (context, input) => {
+    if (!(await machineryCapabilityOf(input.entity)))
+      return { machinery: null, absorbed: null };
+    const record = await recordOf(context.db, input.entity, input.id);
+    return {
+      machinery: await readMachinery(context.db, context.actorContext, input),
+      absorbed: record.absorbed
+        ? { requested: record.absorbed, survivor: record.shortcode }
+        : null,
+    };
+  },
   decide: (context, input) =>
     decideForRecord(context.db, context.actorContext, input),
   approveDrift: (context, input) =>

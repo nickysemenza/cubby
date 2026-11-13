@@ -80,7 +80,12 @@ export const machineryContract = defineContract(
       input: machineryRecord.extend({
         field: z.string().min(1).optional(),
       }),
-      output: z.object({ machinery: machinery.nullable() }),
+      output: z.object({
+        machinery: machinery.nullable(),
+        absorbed: z
+          .object({ requested: z.string(), survivor: z.string() })
+          .nullable(),
+      }),
       cache: { tags: ENTITY_ROOT_TAGS, profile: "live-status" },
     }),
     decide: mutation({

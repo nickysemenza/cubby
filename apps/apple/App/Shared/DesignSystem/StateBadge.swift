@@ -64,7 +64,7 @@ struct StateBadge: View {
                 Text(state.label).foregroundStyle(labelColor)
             }
             .font(size == .header ? .subheadline.weight(.medium) : .caption.weight(.medium))
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -99,7 +99,7 @@ struct StateBadge: View {
         .padding(.horizontal, size == .header ? 8 : 6)
         .padding(.vertical, size == .header ? 3 : 2)
         .background(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusChip).fill(fill))
-        .fixedSize()
+        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

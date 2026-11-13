@@ -75,8 +75,8 @@ struct FieldEnvelopeTests {
         let missing = try envelope(F.envelope(result: F.missing))
         #expect(missing.readableValue == .null)
         #expect(missing.isMissing)
-        #expect(missing.emptyLabel(field: field) == "Updating…")
-        #expect(missing.visibleEmptyLabel(field: field) == "Updating…")
+        #expect(missing.emptyLabel(field: field) == "Waiting for Cubby")
+        #expect(missing.visibleEmptyLabel(field: field) == "Waiting for Cubby")
 
         let household = try envelope(
             F.envelope(result: F.live(F.emptyDecision("explicit_none", provenance: F.own))))
@@ -162,7 +162,7 @@ struct FieldEnvelopeTests {
                     reset: F.resetReady(
                         F.live(F.decision("LPY-7M4K", provenance: F.inherited("product", "PRD-4K7M"))))),
                 result: F.live(F.decision("LPY-4K7M", provenance: F.own))))
-        #expect(explicit.actions(field: field).map(\.label) == ["Use inherited"])
+        #expect(explicit.actions(field: field).map(\.label) == ["Let Cubby decide"])
         #expect(
             explicit.actions(field: field).first?.payload == [
                 "ownershipMode": "inherit", "ownerLedgerPartyId": .null,
@@ -182,7 +182,7 @@ struct FieldEnvelopeTests {
         #expect(refused.actions(field: field).isEmpty)
     }
 
-    /// Equal values never grant an action; only `reset.kind == available` offers Use inherited.
+    /// Equal values never grant an action; only `reset.kind == available` offers Let Cubby decide.
     @Test func resetIsOfferedOnlyByCurrentControls() throws {
         let field = try itemization()
         let unavailable = try envelope(

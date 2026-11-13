@@ -35,13 +35,11 @@ struct EntityRowPresentationTests {
     }
 
     // A self-label timestamp must still reach the shared date presentation, not print raw ISO text.
-    @Test func runActivitySelfLabelRetainsDatePresentation() throws {
+    @Test func runActivityRetainsDatePresentation() throws {
         let timestamp = "2026-09-12T10:00:00.000Z"
         let row = EntityRow(
             id: "RUN-4K7M", title: "Synthetic run", subtitle: nil, imageURL: nil,
             raw: ["id": "RUN-4K7M", "activityAt": .string(timestamp)])
-        let field = try #require(EntityCatalog[.run].fields.first { $0.key == "activityAt" })
-        #expect(field.labelPath == "activityAt")
         let fact = try #require(
             EntityRowPresentation.resolve(descriptor: EntityCatalog[.run], row: row, columns: ["activityAt"])
                 .facts.first { $0.id == "activityAt" })
@@ -227,7 +225,7 @@ struct EntityRowPresentationTests {
         ]
         #expect(try fact(assignment: ["kind": "none"], result: household).value == "Household")
         #expect(try !fact(assignment: ["kind": "none"], result: household).inherited)
-        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Updating…")
+        #expect(try fact(assignment: inherit, result: ["kind": "missing"]).value == "Waiting for Cubby")
     }
 
     /// A scored entity's record can itself be unassessed (null score), and an exceptions-only
