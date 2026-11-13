@@ -156,16 +156,18 @@ export async function loadMachineryRows(
         AND "scopeKind" IN (SELECT DISTINCT kind FROM scopes)
       GROUP BY "scopeKind"
     ), joined AS (
-      SELECT scopes.*, s.stage, s."nextActor", s."firstGap", queue.position, queue.attempts,
-        coalesce((SELECT sum(a."costMicros") FROM "Answer" a WHERE a."inputHash" IN
-          (SELECT i->>'inputHash' FROM jsonb_array_elements(s.inputs) i)), 0) AS cost,
+      SELECT scopes.*, s.stage, s."nextActor", s."firstGap", s.inputs, queue.position, queue.attempts,
         coalesce(queue.live, false) AS live, medians.median, medians.n
       FROM scopes
       LEFT JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
       LEFT JOIN queue ON queue.kind = scopes.kind AND queue.key = scopes.key
       LEFT JOIN medians ON medians.kind = scopes.kind
     )
-    SELECT id::text AS id, coalesce(max(attempts), 0)::int AS attempts, sum(cost)::float8 AS "costMicros",
+    SELECT id::text AS id, coalesce(max(attempts), 0)::int AS attempts,
+      coalesce((SELECT sum(a."costMicros") FROM "Answer" a WHERE a."inputHash" IN
+        (SELECT i->>'inputHash' FROM joined cost_scope
+          CROSS JOIN LATERAL jsonb_array_elements(cost_scope.inputs) i
+          WHERE cost_scope.id = joined.id)), 0)::float8 AS "costMicros",
       CASE
         WHEN bool_or(rejected) THEN ${STAGE.ended}
         WHEN bool_or(stage = ${STAGE.stuck} OR attempts >= ${MAX_SCOPE_ATTEMPTS}) THEN ${STAGE.stuck}
