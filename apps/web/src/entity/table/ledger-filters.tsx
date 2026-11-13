@@ -12,6 +12,7 @@ import {
   useViewCounts,
   withFacets,
 } from "~/entity/table/list-query-context";
+import { mobileColumnLabel } from "~/ui/data-table/table-meta";
 import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 import {
@@ -51,11 +52,7 @@ function getLedgerFields<TData extends RowData>(
     const header = column.columnDef.header;
     const label =
       config.label ??
-      (isColumnLabel(header)
-        ? header
-        : (column.columnDef.meta?.presentation?.label ??
-          column.columnDef.meta?.filterConfig?.label ??
-          "Details"));
+      (isColumnLabel(header) ? header : mobileColumnLabel(column));
     let hints = optionHints?.[column.id];
     if (!hints && config.facetCount && table.options.meta?.completeLocalData) {
       // Only complete bounded lists may count locally. A server page is not

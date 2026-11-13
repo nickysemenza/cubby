@@ -1,3 +1,4 @@
+import { machineryColumnLabel } from "@cubby/schemas/field-envelope-presentation";
 import type { CompiledEntityListFields } from "./list-field-types.ts";
 import type {
   GeneratedListField,
@@ -1769,8 +1770,15 @@ const compileFieldPresentation = (
         value,
         cellValueType: valueType,
       });
+      const machineryLabel =
+        key === "machineryStage"
+          ? machineryColumnLabel("stage")
+          : key === "machineryActor"
+            ? machineryColumnLabel("actor")
+            : undefined;
       const presentation: GeneratedListFieldPresentation<string> = {
         label:
+          machineryLabel ??
           (key === entity.inspector.titleField
             ? `${entity.inspector.singular} name`
             : undefined) ??

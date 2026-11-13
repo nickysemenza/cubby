@@ -32,6 +32,7 @@ import {
   ColumnEntityMark,
   columnEntityTarget,
 } from "~/ui/data-table/column-presentation";
+import { mobileColumnLabel } from "~/ui/data-table/table-meta";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -85,9 +86,7 @@ function sortableHeaderLabel<TData extends RowData>(
   const definition = header.column.columnDef.header;
   return isStringHeader(definition)
     ? definition
-    : (header.column.columnDef.meta?.presentation?.label ??
-        header.column.columnDef.meta?.filterConfig?.label ??
-        "Details");
+    : mobileColumnLabel(header.column);
 }
 
 /**

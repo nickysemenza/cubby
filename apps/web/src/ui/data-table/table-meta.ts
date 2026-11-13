@@ -252,7 +252,7 @@ export interface CubbyTableMeta {
   };
 }
 
-/** A column's label on a phone: its mobile label, its header text, or its humanized id. */
+/** A column's declared label, with explicit names for infrastructure columns. */
 export function mobileColumnLabel<TItem extends RowData>(
   column: CubbyColumn<TItem, unknown>,
 ): string {
