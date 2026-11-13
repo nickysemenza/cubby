@@ -353,6 +353,11 @@ export const declaredLinkEdges = [
               "A garden entry outlives the planting it described; only that association is detached.",
           },
           handler: null,
+          before: {
+            module: "~/server/domains/garden/repo/repository",
+            export: "plantingDeleteEdgeHandlers",
+            member: "auditMemberships",
+          },
         },
         merge: {
           kind: "unsupported",

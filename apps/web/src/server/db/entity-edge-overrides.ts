@@ -1107,10 +1107,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  planting: {
-    ...edges({}),
-    ...linkEdgesFor("planting"),
-  },
+
   gardenEntry: {
     ...edges({
       "EntityAttachment.entityId": {

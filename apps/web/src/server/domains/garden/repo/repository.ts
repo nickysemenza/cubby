@@ -7,6 +7,8 @@ import { gardenEntrySchemaBindings } from "~/entity/generated/entity-schema-bind
 import { plantingSchemaBindings } from "~/entity/generated/entity-schema-bindings.planting.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { entityLink, planting } from "~/server/db/schema";
 import {
@@ -33,15 +35,6 @@ import {
 
 const plantings = bindShortcodeResolver("planting");
 const entries = bindShortcodeResolver("gardenEntry");
-
-const PLANTING_DELETE_EDGE_POLICY = {
-  "EntityLink[gardenEntryPlanting].to": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "A garden entry outlives the planting it described; only that association is detached.",
-  },
-} as const satisfies IncomingEdgePolicy<"planting", OperationDisposition>;
 
 const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
   "EntityAttachment.entityId": {
@@ -123,7 +116,7 @@ const auditEntryPlantingSets = async (
 
 export const plantingRepository = defineRepository("planting", {
   schemas: plantingSchemaBindings,
-  lifecycle: { delete: PLANTING_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.planting },
   scaffold: plantingScaffold,
   create: asActor(createPlanting),
   update: async (ctx, shortcode, data) => {
@@ -148,11 +141,12 @@ export const plantingRepository = defineRepository("planting", {
     const ids = await plantings.all(ctx.db, shortcodes);
     const result = await deleteByPolicy(ctx.db, {
       entity: "planting",
-      policy: PLANTING_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.planting,
       ids,
       actor: ctx.actorContext,
-      beforeDelete: (tx, removed) =>
-        auditEntryPlantingSets(tx, removed, ctx.actorContext),
+      ...(await DECLARED_EDGE_DELETE_HOOKS.planting({
+        actor: ctx.actorContext,
+      })),
     });
     await recordChange(ctx.db, { kind: "source", categories: ["gardenEntry"] });
     return result;
@@ -179,4 +173,11 @@ export const gardenEntryRepository = defineRepository("gardenEntry", {
       data,
       ctx.actorContext,
     ),
+});
+
+export const plantingDeleteEdgeHandlers = (context: {
+  actor: ActorContext;
+}) => ({
+  auditMemberships: (tx: DrizzleTransaction, ids: PlantingId[]) =>
+    auditEntryPlantingSets(tx, ids, context.actor),
 });
