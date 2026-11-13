@@ -4,14 +4,16 @@
  * list that ended after `RUN_SUMMARY_CUTOFF`.
  *
  * Admission is a plain drain over owed Runs; each Run end is one keyed
- * `run-ai.summary.write` Job, so the Job owns claim, lease, provider fence,
- * retry and backoff, and an exhausted Job keeps its Run from being owed again.
+ * `run-ai.summary.write` Job, so the Job owns claim, lease, retry and
+ * backoff, and an exhausted Job keeps its Run from being owed again. The model
+ * call itself is the kernel Ask `runSummaryAsk`.
  * The summarized Run is never the call's owner: the call is automatic AI work,
  * so a funding stop throws into the Job instead of pausing the Run, and the
  * handler writes only `AiAnalysis`.
  */
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { z } from "zod";
 
 import { AUTOMATIC_AI_CALL } from "~/server/ai/policy/call-owner";
 import { RUN_SUMMARY_FEATURE } from "~/server/ai/policy/features";
@@ -20,6 +22,7 @@ import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import type { Fenced } from "~/server/generic/jobs/types";
+import { defineAsk, defineModule, withAsk } from "~/server/kernel/api";
 
 import { readRunById } from "../repo/run";
 import { listRunStepsForRuns } from "../repo/run-step";
@@ -30,6 +33,45 @@ import {
 } from "../repo/run-summary";
 
 const PAGE = 20;
+
+const jsonValue = z.json();
+
+/**
+ * The Run summary as a kernel Ask: its declared input is the Run's composed
+ * words and counts, and the call goes through funding admission, the
+ * response cache's in-flight claim and a committed Answer.
+ */
+const runSummaryAsk = defineAsk({
+  feature: RUN_SUMMARY_FEATURE.feature,
+  producer: "model",
+  promptVersion: RUN_SUMMARY_FEATURE.promptVersion,
+  input: jsonValue,
+  output: RUN_SUMMARY_FEATURE.schema,
+  policy: { tier: RUN_SUMMARY_FEATURE.tier },
+  label: "a Run summary",
+  async produce(input, { db }) {
+    let model: string | null = null;
+    const output = await runStructuredFeature(
+      RUN_SUMMARY_FEATURE,
+      RUN_SUMMARY_FEATURE.request(input),
+      {
+        db,
+        ...AUTOMATIC_AI_CALL,
+        operation: "runSummary",
+        applicationCache: false,
+        onAnswered: (answered) => {
+          model = answered;
+        },
+      },
+    );
+    return { output, model, tier: RUN_SUMMARY_FEATURE.tier };
+  },
+});
+
+export const runKernelModule = defineModule({
+  name: "run",
+  asks: [runSummaryAsk],
+});
 
 /**
  * Publishes one summary Job per owed Run end. Concurrent pages publish the
@@ -96,15 +138,12 @@ export async function writeRunSummary(
           : null,
     })),
   };
-  const { text } = await runStructuredFeature(
-    RUN_SUMMARY_FEATURE,
-    RUN_SUMMARY_FEATURE.request(input),
-    {
-      db,
-      ...AUTOMATIC_AI_CALL,
-      operation: "runSummary",
-      entity: { entityKind: "run", entityId: runId },
-    },
+  // The Answer is committed before the summary is written; a retry of this
+  // Job reads it instead of calling again.
+  const { text } = await withAsk(
+    db,
+    runSummaryAsk,
+    jsonValue.parse(JSON.parse(JSON.stringify(input))),
   );
   let written = false;
   await fenced(async (tx) => {

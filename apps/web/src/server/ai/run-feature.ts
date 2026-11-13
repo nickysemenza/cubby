@@ -123,6 +123,11 @@ export interface AiRunContext<T = unknown> extends Pick<
   cacheStatus?: "hit" | "miss" | "none";
   applicationCacheStatus?: ApplicationCacheStatus;
   /**
+   * `false` when the caller already holds this call's in-flight claim: a
+   * kernel Ask claims its `inputHash` on the same response cache.
+   */
+  applicationCache?: boolean;
+  /**
    * Skip the gateway's response cache despite an identical request body —
    * what a "regenerate" action needs, since an unchanged prompt would
    * otherwise return the very answer the user just rejected.
@@ -1049,7 +1054,10 @@ export async function runStructuredFeature<T>(
       );
     return parsed;
   };
-  const cached = spec.cache && ports === productionStructuredRunPorts;
+  const cached =
+    spec.cache &&
+    ports === productionStructuredRunPorts &&
+    ctx.applicationCache !== false;
   const media = cached
     ? await identifyMedia(request, ctx.db)
     : { sent: request, keyed: request };
