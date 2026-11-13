@@ -27,7 +27,7 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
   const rows = [
     ...work.scopes.map((scope) => ({
       key: `scope:${scope.kind}:${scope.key}`,
-      label: scope.kind,
+      label: scope.firstGap ? `${scope.kind} · ${scope.firstGap}` : scope.kind,
       stage: scope.stage,
       detail: scope,
     })),

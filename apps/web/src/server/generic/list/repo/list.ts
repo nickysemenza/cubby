@@ -114,7 +114,10 @@ import {
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
 import type { SearchReadPort } from "~/server/generic/search/repo/search-read-port";
-import { machineryStageSql, machineryActorSql } from "~/server/kernel/api";
+import {
+  machineryStageSql,
+  machineryActorSql,
+} from "~/server/kernel/projection";
 import {
   traceListPageWithCount,
   withListReadTracing,

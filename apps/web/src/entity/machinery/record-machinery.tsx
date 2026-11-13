@@ -25,6 +25,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import { DateDisplay } from "~/ui/values/date-display";
 
 type MachineryRef = { entity: Entity; id: string; field?: string };
@@ -49,6 +50,10 @@ export function useMachineryActions(ref: MachineryRef) {
     pending: decide.isPending || approve.isPending,
     decided: decide.isSuccess || approve.isSuccess,
     error: decide.error ?? approve.error,
+    retry: () => {
+      if (approve.error && approve.variables) approve.mutate(approve.variables);
+      else if (decide.variables) decide.mutate(decide.variables);
+    },
     act: (action: KernelGapAction) =>
       decide.mutate({
         entity: ref.entity,
@@ -145,7 +150,11 @@ export function MachineryPanelFor({
         {actions.decided ? MACHINERY_DECIDED_NOTE : null}
       </output>
       {actions.error ? (
-        <ErrorDisplay error={actions.error} title="this decision" />
+        <ErrorDisplay
+          error={actions.error}
+          title="this decision"
+          onRetry={actions.retry}
+        />
       ) : null}
     </div>
   );
@@ -165,7 +174,7 @@ function MachineryHeader({
 }) {
   const actions = useMachineryActions(target);
   const first = read.gaps.items[0];
-  const action = first?.actions[0];
+  const action = first?.actions.length === 1 ? first.actions[0] : null;
   return (
     <div
       data-machinery-header
@@ -226,7 +235,11 @@ function MachineryHeader({
         {actions.decided ? MACHINERY_DECIDED_NOTE : null}
       </output>
       {actions.error ? (
-        <ErrorDisplay error={actions.error} title="this decision" />
+        <ErrorDisplay
+          error={actions.error}
+          title="this decision"
+          onRetry={actions.retry}
+        />
       ) : null}
     </div>
   );
@@ -262,7 +275,7 @@ export function RecordMachineryHeader({
 }) {
   const target = { entity, id };
   const read = useMachinery(target);
-  if (read.isPending) return null;
+  if (read.isPending) return <Skeleton className="my-2 h-16 w-full" />;
   if (read.isError)
     return (
       <ErrorDisplay

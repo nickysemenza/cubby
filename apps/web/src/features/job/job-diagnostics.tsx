@@ -10,7 +10,6 @@ import {
   JOB_LOG_LEVELS,
   type JobFacts,
   type JobGroup,
-  type JobListOut,
   type JobLogsOut,
 } from "~/contracts/job.contract";
 import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
@@ -23,14 +22,12 @@ import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { CloudflareIcon } from "~/ui/icons/cloudflare";
 import { Disclosure } from "~/ui/layout";
 import { Panel } from "~/ui/layout";
-import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { type Fact, Facts } from "~/ui/records/facts";
-import { RecordList, type RecordListState } from "~/ui/records/record-list";
+import { RecordList } from "~/ui/records/record-list";
 
 import { jobWait } from "../run/run-view-model";
-import { JobDefinition } from "../run/work-definition";
 import { JOB_STATE_LABEL, JobStatePill, WaitNotice } from "./job-status";
 
 const time = (iso: string | null) =>
@@ -370,47 +367,6 @@ function JobLogPanel({ jobId }: { jobId: string }) {
         </>
       ) : null}
     </Panel>
-  );
-}
-
-/** Diagnostics for a Run: its executing Job, fan-out Jobs and raw logs. */
-export function JobDiagnostics({
-  jobs,
-  state,
-}: {
-  jobs: JobListOut | undefined;
-  state: RecordListState;
-}) {
-  if (state.status !== "success" || !jobs)
-    return (
-      <RecordList
-        state={state.status === "success" ? { status: "pending" } : state}
-      />
-    );
-  return (
-    <div className="grid gap-5">
-      {jobs.primary ? (
-        <div className="grid gap-3">
-          <JobDefinition kind={jobs.primary.kind} />
-          <JobFactsList facts={jobs.primary} />
-        </div>
-      ) : (
-        <EmptyState size="inline">No Job executes this Run.</EmptyState>
-      )}
-      <Section headingAs="h3" compact title="Jobs" count={jobs.groups.length}>
-        <JobsTable groups={jobs.groups} />
-      </Section>
-      {jobs.primary ? (
-        <Section
-          headingAs="h3"
-          compact
-          title="Logs"
-          caption="Raw Worker lines for this Job's active window."
-        >
-          <JobLogPanel jobId={jobs.primary.id} />
-        </Section>
-      ) : null}
-    </div>
   );
 }
 

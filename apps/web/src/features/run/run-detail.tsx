@@ -9,7 +9,6 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
 import { entityListHref } from "~/entity/entity-list-href";
 import { useEntityMetadata } from "~/entity/metadata";
-import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
 import { runPlanBlocks } from "~/lib/run-plan";
@@ -91,7 +90,12 @@ function useRunFacet(runId: string) {
 const scrollTo = (id: string) =>
   document
     .getElementById(id)
-    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    ?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+      block: "start",
+    });
 
 /**
  * The reads every Run detail slot shares; React Query dedupes them, so the
@@ -104,12 +108,8 @@ function useRunDetail(record: RunOut) {
     ...runDetail.steps.queryOptions({ runId: record.id }),
     refetchInterval: polling,
   });
-  const jobs = useQuery({
-    ...job.list.queryOptions({ runId: record.id }),
-    refetchInterval: polling,
-  });
   const overview = steps.data
-    ? runOverview(steps.data, jobs.data, Date.now(), steps.data.input)
+    ? runOverview(steps.data, undefined, Date.now(), steps.data.input)
     : null;
   const families = [
     ...new Set(
@@ -139,7 +139,6 @@ function useRunDetail(record: RunOut) {
   const facets = presenter ? decisionFacetCounts(rows, presenter) : [];
   return {
     steps,
-    jobs,
     overview,
     family,
     families,

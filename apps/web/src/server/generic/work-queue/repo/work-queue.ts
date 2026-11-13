@@ -32,7 +32,6 @@ import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
-import type { WorkPublicationMeta } from "~/server/db/work-item-schema";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
@@ -46,7 +45,6 @@ import {
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  admittedReasons,
   emptyWorkCandidates,
   scopeAdmitsReasons,
   type WorkCte,
@@ -76,16 +74,6 @@ interface WorkQueueRead {
   /** Agents see shared work and work routed only to their member. */
   readonly memberOnly: boolean;
   readonly record?: WorkScope["record"];
-  /** Read the household's last publication instead of evaluating sources. */
-  readonly published?: PublishedWork;
-}
-
-/** A publication's rows are `WorkItem`; its coverage was captured with them. */
-interface PublishedWork {
-  readonly meta: WorkPublicationMeta | null;
-  readonly publishedAt: Date;
-  /** The latest republish's raw failure; a success clears it. */
-  readonly error: string | null;
 }
 
 type RecordRead = {
@@ -241,154 +229,6 @@ const routedWork = sql`SELECT work.*, routing.owner_codes,
           ELSE ARRAY[]::text[] END AS owner_codes
       ) routing`;
 
-const publishedColumns = (reasonKeys: SQL) =>
-  sql`source, entity, id, name, key, family, executor, reason,
-      ${reasonKeys} AS reason_keys, owners, "exclusiveOwner" AS exclusive_owner,
-      shared, amount, date, "inputIncomplete" AS input_incomplete,
-      "ownerCodes" AS owner_codes, "ownerKey" AS owner_key, "ownerLabel" AS owner_label`;
-
-/**
- * The admitted sources' published rows, routed when they were published. A
- * source whose rows carry only admitted reasons keeps the admitted part of
- * its stored membership, as its live candidates would.
- */
-const publishedRouted = (admitted: readonly WorkSource[], scope: WorkScope) => {
-  const whole = admitted.filter((source) => !source.admittedReasonsOnly);
-  return sql.join(
-    [
-      sql`SELECT ${publishedColumns(sql`"reasonKeys"`)} FROM "WorkItem"
-        WHERE source IN (${sql.join(
-          [...whole.map((source) => sql`${source.id}`), sql`NULL`],
-          sql`, `,
-        )})`,
-      ...admitted
-        .filter((source) => source.admittedReasonsOnly)
-        .map((source) => {
-          const keys = sql.join(
-            admittedReasons(scope, source.reasons).map(
-              (reason) => sql`${reason.key}`,
-            ),
-            sql`, `,
-          );
-          return sql`SELECT * FROM (SELECT ${publishedColumns(
-            sql`ARRAY(SELECT reason FROM unnest("reasonKeys") WITH ORDINALITY AS stored(reason, position)
-              WHERE reason IN (${keys}) ORDER BY position)`,
-          )} FROM "WorkItem" WHERE source = ${source.id}) pruned
-            WHERE cardinality(reason_keys) > 0`;
-        }),
-    ].map((query) => sql`(${query})`),
-    sql` UNION ALL `,
-  );
-};
-
-/**
- * Reconciles the household publication with the composed sources' current
- * union, deferrals applied. Reads never wait for it; see work-publication.
- */
-export async function insertWorkItems(
-  db: Database,
-  composition: WorkQueueComposition,
-): Promise<WorkPublicationMeta> {
-  const { prepared, withCtes, union } = await candidateUnion(
-    db,
-    composition.sources,
-    {},
-  );
-  const deferred = and(
-    ...composition.deferrals.map((deferral) => sql`NOT (${deferral})`),
-  );
-  await getDb(db).execute(sql`
-    WITH ${withCtes}
-    ${membersCte},
-    work AS NOT MATERIALIZED (${union}),
-    routed AS NOT MATERIALIZED (${routedWork}),
-    incoming AS MATERIALIZED (
-      SELECT source, entity, id, name, key, family, executor, reason,
-        reason_keys, owners, exclusive_owner, shared, amount, date,
-        input_incomplete, owner_codes, owner_key, owner_label
-      FROM routed work ${deferred ? sql`WHERE ${deferred}` : sql``}
-    ),
-    removed AS (
-      DELETE FROM "WorkItem" old
-      WHERE NOT EXISTS (SELECT 1 FROM incoming next
-        WHERE next.key=old.key AND next.input_incomplete=old."inputIncomplete")
-    )
-    INSERT INTO "WorkItem" (source, entity, id, name, key, family, executor,
-      reason, "reasonKeys", owners, "exclusiveOwner", shared, amount, date,
-      "inputIncomplete", "ownerCodes", "ownerKey", "ownerLabel")
-    SELECT DISTINCT ON (key, input_incomplete)
-      source, entity, id, name, key, family, executor, reason,
-      reason_keys, owners, exclusive_owner, shared, amount, date,
-      input_incomplete, owner_codes, owner_key, owner_label
-    FROM incoming next
-    WHERE NOT EXISTS (
-      SELECT 1 FROM "WorkItem" stored
-      WHERE stored.key=next.key AND stored."inputIncomplete"=next.input_incomplete
-        AND (stored.source, stored.entity, stored.id, stored.name,
-          stored.family, stored.executor, stored.reason, stored."reasonKeys",
-          stored.owners, stored."exclusiveOwner", stored.shared, stored.amount,
-          stored.date, stored."ownerCodes", stored."ownerKey", stored."ownerLabel")
-          IS NOT DISTINCT FROM
-          (next.source, next.entity, next.id, next.name,
-          next.family, next.executor, next.reason, next.reason_keys,
-          next.owners, next.exclusive_owner, next.shared, next.amount,
-          next.date, next.owner_codes, next.owner_key, next.owner_label)
-    )
-    ON CONFLICT (key, "inputIncomplete") DO UPDATE SET
-      source=excluded.source, entity=excluded.entity, id=excluded.id,
-      name=excluded.name, family=excluded.family, executor=excluded.executor,
-      reason=excluded.reason, "reasonKeys"=excluded."reasonKeys",
-      owners=excluded.owners, "exclusiveOwner"=excluded."exclusiveOwner",
-      shared=excluded.shared, amount=excluded.amount, date=excluded.date,
-      "ownerCodes"=excluded."ownerCodes", "ownerKey"=excluded."ownerKey",
-      "ownerLabel"=excluded."ownerLabel"
-    WHERE ("WorkItem".source, "WorkItem".entity, "WorkItem".id,
-      "WorkItem".name, "WorkItem".family, "WorkItem".executor,
-      "WorkItem".reason, "WorkItem"."reasonKeys", "WorkItem".owners,
-      "WorkItem"."exclusiveOwner", "WorkItem".shared, "WorkItem".amount,
-      "WorkItem".date, "WorkItem"."ownerCodes", "WorkItem"."ownerKey",
-      "WorkItem"."ownerLabel") IS DISTINCT FROM
-      (excluded.source, excluded.entity, excluded.id,
-      excluded.name, excluded.family, excluded.executor,
-      excluded.reason, excluded."reasonKeys", excluded.owners,
-      excluded."exclusiveOwner", excluded.shared, excluded.amount,
-      excluded.date, excluded."ownerCodes", excluded."ownerKey",
-      excluded."ownerLabel")`);
-  const coverage = prepared.flatMap((candidate) =>
-    candidate.inputCoverage
-      ? [
-          sql`SELECT ${candidate.declaration.id}::text AS source,
-        ${candidate.declaration.family}::text AS family,
-        ${candidate.declaration.executor}::text AS executor, observed.message
-      FROM (${candidate.inputCoverage}) observed`,
-        ]
-      : [],
-  );
-  const coverageRows = coverage.length
-    ? z
-        .array(
-          z.object({
-            source: z.string(),
-            family: z.string(),
-            executor: z.string(),
-            message: z.string(),
-          }),
-        )
-        .parse(
-          await getDb(db).execute(
-            sql.join(coverage, sql` UNION ALL `),
-            "objects",
-          ),
-        )
-    : [];
-  return {
-    incompleteProjectIds: (await composition.incompleteProjectIds?.()) ?? [],
-    incompleteDiagnosticSources:
-      (await composition.incompleteDiagnosticSources?.()) ?? [],
-    coverage: coverageRows,
-  };
-}
-
 async function queryWorkQueue(
   db: Database,
   composition: WorkQueueComposition,
@@ -403,17 +243,14 @@ async function queryWorkQueue(
   const admitted = composition.sources.filter((source) =>
     admits(source, input, scope),
   );
-  const published = read.published;
-  const { prepared, withCtes, routed } = published
-    ? {
-        prepared: [],
-        withCtes: sql``,
-        routed: publishedRouted(admitted, scope),
-      }
-    : await candidateUnion(db, admitted, scope).then((live) => ({
-        ...live,
-        routed: sql`WITH work AS NOT MATERIALIZED (${live.union}) ${routedWork}`,
-      }));
+  const { prepared, withCtes, routed } = await candidateUnion(
+    db,
+    admitted,
+    scope,
+  ).then((live) => ({
+    ...live,
+    routed: sql`WITH work AS NOT MATERIALIZED (${live.union}) ${routedWork}`,
+  }));
 
   const reasons = [
     ...new Map(
@@ -443,8 +280,7 @@ async function queryWorkQueue(
     ? sql`concat_ws(' ', name, reason, id) ILIKE ${ilikeContains(input.query)}`
     : undefined;
   const { view: _view, ...requested } = input;
-  // A publication applied its deferrals when it was written.
-  const deferrals = published ? [] : composition.deferrals;
+  const deferrals = composition.deferrals;
   const population = and(
     ...deferrals.map((deferral) => sql`NOT (${deferral})`),
     ownerAdmission,
@@ -473,30 +309,19 @@ async function queryWorkQueue(
     ]),
   );
   const selectedView = input.view ? viewPredicates[input.view] : undefined;
-  const admittedIds = new Set(admitted.map((source) => source.id));
-  const coverage = published
-    ? (published.meta?.coverage ?? [])
-        .filter((observed) => admittedIds.has(observed.source))
-        .map(
-          (observed) => sql`
-    SELECT source, NULL::int AS count, message FROM (
-      SELECT ${observed.source}::text AS source, ${observed.family}::text AS family,
-        ${observed.executor}::text AS executor, ${observed.message}::text AS message
-    ) work ${selectedView ? sql`WHERE ${selectedView}` : sql``}`,
-        )
-    : prepared.flatMap((candidate) =>
-        candidate.inputCoverage
-          ? [
-              sql`
+  const coverage = prepared.flatMap((candidate) =>
+    candidate.inputCoverage
+      ? [
+          sql`
     SELECT source, NULL::int AS count, message FROM (
       SELECT ${candidate.declaration.id}::text AS source,
         ${candidate.declaration.family}::text AS family,
         ${candidate.declaration.executor}::text AS executor, observed.message
       FROM (${candidate.inputCoverage}) observed
     ) work ${selectedView ? sql`WHERE ${selectedView}` : sql``}`,
-            ]
-          : [],
-      );
+        ]
+      : [],
+  );
   const coverageUnion = coverage.length
     ? sql.join(coverage, sql` UNION ALL `)
     : sql`SELECT NULL::text AS source, NULL::int AS count, NULL::text AS message WHERE false`;
@@ -711,12 +536,9 @@ async function queryWorkQueue(
     meta: {
       pageIndex: input.pageIndex,
       pageSize: input.pageSize,
-      incompleteProjectIds: published
-        ? published.meta?.incompleteProjectIds
-        : await composition.incompleteProjectIds?.(),
-      incompleteDiagnosticSources: published
-        ? published.meta?.incompleteDiagnosticSources
-        : await composition.incompleteDiagnosticSources?.(),
+      incompleteProjectIds: await composition.incompleteProjectIds?.(),
+      incompleteDiagnosticSources:
+        await composition.incompleteDiagnosticSources?.(),
       incompleteSources: row.incompleteSources.map((input) => ({
         source: input.source,
         count: input.count,
@@ -724,14 +546,6 @@ async function queryWorkQueue(
         label: sourceById.get(input.source)?.inputLabel ?? input.source,
       })),
       totalCount: row.total,
-      ...(published
-        ? {
-            publication: {
-              publishedAt: published.publishedAt.toISOString(),
-              error: published.error,
-            },
-          }
-        : {}),
       ...(row.summary ? { summary: row.summary } : {}),
       viewCounts: row.viewCounts,
       reasons,
@@ -826,7 +640,7 @@ async function attachDisplayImages(db: Database, items: WorkQueueRow[]) {
 }
 
 /** The household or member queue over the composed sources, or over their
- * last publication when `published` is given. */
+ * current composed sources. */
 export const readWorkQueueWith = (
   db: Database,
   composition: WorkQueueComposition,

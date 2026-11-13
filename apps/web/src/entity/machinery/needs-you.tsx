@@ -49,7 +49,11 @@ function NeedsYouRow({ item }: { item: NeedsYouPage["items"][number] }) {
         {actions.decided ? "Recorded. Cubby reworks this next." : null}
       </output>
       {actions.error ? (
-        <ErrorDisplay error={actions.error} title="this decision" />
+        <ErrorDisplay
+          error={actions.error}
+          title="this decision"
+          onRetry={actions.retry}
+        />
       ) : null}
     </li>
   );
