@@ -367,4 +367,4 @@ export const { definition, readSchemas } = defineEntityModel(
   }),
 );
 
-export default defineEntity(definition, () => [], readSchemas);
+export default defineEntity(definition, () => ({ edges: [] }), readSchemas);
