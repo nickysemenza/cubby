@@ -16,6 +16,7 @@ import { mapRecord } from "@cubby/shared";
 import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 import type { AnyColumn } from "drizzle-orm";
 
+import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import {
   vendor,
   shipment,
@@ -1887,34 +1888,5 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  device: edges({
-    "RunPushRegistration.deviceId": {
-      column: runPushRegistration.deviceId,
-      role: "owned-child",
-      label: "push registrations",
-      description:
-        "A Live Activity or notification push registration this install made for a Run it started.",
-      liveness: { kind: "must-target-live" },
-    },
-    "AuditLog.deviceId": {
-      column: auditLog.deviceId,
-      role: "history",
-      label: "audit entries",
-      description:
-        "An audit entry written from this install; the column is cleared when the device goes.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Audit attribution can name a retired install; explicit device removal clears this pointer.",
-      },
-    },
-    "ImageSighting.deviceId": {
-      column: imageSighting.deviceId,
-      role: "owned-child",
-      label: "image sightings",
-      description:
-        "A sighting reported by this device; meaningless without the reporting install.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+  ...DECLARED_EDGE_OVERRIDES,
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

@@ -25,7 +25,11 @@ import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 import { listGroupMetricKeys } from "./list-group-metrics";
 import { createRelationships } from "./relationships";
-import { edgeDefinitionSchema } from "./edges";
+import {
+  edgeDefinitionSchema,
+  edgeRelationship,
+  type EdgeDefinition,
+} from "./edges";
 import { entityRelationMetadataSchema } from "./relationship-shape";
 
 /** The scalar shapes the entity compiler can persist and project. */
@@ -3480,7 +3484,11 @@ export function defaultReadSchemas<
 }
 
 type EntityInput = Omit<EntityDeclaration, "relations">;
-type DefinedEntity<T> = Omit<T, "relations"> & {
+type RelationshipInput =
+  | EntityDeclaration["relations"]
+  | { edges: EdgeDefinition[] };
+type DefinedEntity<T> = Omit<T, "relations" | "edges"> & {
+  edges: EdgeDefinition[];
   relations: EntityDeclaration["relations"];
 };
 
@@ -3530,25 +3538,31 @@ export function defineEntity<
       : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> }),
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
   readSchemas: S,
 ): DefinedEntity<T> & { readSchemas: S };
 export function defineEntity<const T extends EntityInput>(
   declaration: ValidDeclaration<T>,
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
 ): DefinedEntity<T> & { readSchemas: DefaultReadSchemas<T> };
 export function defineEntity<const T extends EntityInput>(
   declaration: T,
   relationships: (
     self: ReturnType<typeof createRelationships<NoInfer<T>>>,
-  ) => EntityDeclaration["relations"],
+  ) => RelationshipInput,
   readSchemas?: RawReadSchemas,
 ) {
+  const input = relationships(createRelationships(declaration));
+  const edges = [
+    ...(declaration.edges ?? []),
+    ...("edges" in input ? input.edges : []),
+  ];
   return {
     ...declaration,
-    relations: relationships(createRelationships(declaration)),
+    edges,
+    relations: "edges" in input ? input.edges.flatMap(edgeRelationship) : input,
     readSchemas: readSchemas ?? defaultReadSchemas(declaration),
   };
 }

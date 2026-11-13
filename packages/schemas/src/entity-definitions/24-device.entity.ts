@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { attachedImageInputs } from "./image-description-inputs";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { z } from "zod";
@@ -13,6 +14,221 @@ import { defineEntity, defineEntityModel } from "./definition.js";
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "device",
+  edges: [
+    defineEdge({
+      key: "AuditLog.deviceId",
+      from: "row:AuditLog",
+      to: "device",
+      cardinality: "one",
+      inverse: {
+        key: "device.AuditLog",
+        from: "device",
+        to: "row:AuditLog",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "AuditLog.deviceId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "History attribution.",
+      },
+      fromEnd: {
+        role: "metadata",
+        label: "device references",
+        description: "A row naming the install associated with its event.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description:
+          "An audit entry written from this install; the column is cleared when the device goes.",
+        label: "audit entries",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Audit attribution can name a retired install; explicit device removal clears this pointer.",
+        },
+        role: "history",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "clearFk",
+              effect: "detach",
+              description:
+                "Audit entries outlive the install; they keep their other attribution.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "Devices cannot be merged.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImageSighting.deviceId",
+      from: "row:ImageSighting",
+      to: "device",
+      cardinality: "one",
+      inverse: {
+        key: "device.ImageSighting",
+        from: "device",
+        to: "row:ImageSighting",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImageSighting.deviceId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "ImageSighting.imageId",
+      },
+      fromEnd: {
+        role: "metadata",
+        label: "device references",
+        description: "A row naming the install associated with its event.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description:
+          "A sighting reported by this device; meaningless without the reporting install.",
+        label: "image sightings",
+        liveness: {
+          kind: "must-target-live",
+        },
+        role: "owned-child",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "cascade-sightings",
+              effect: "hard-delete",
+              description:
+                "A device's reported sightings are removed with it; affected images are re-derived in the same transaction.",
+            },
+            handler: {
+              module: "~/server/domains/device/repo/edge-policies",
+              export: "deleteDeviceSightings",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "Devices cannot be merged.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "RunPushRegistration.deviceId",
+      from: "row:RunPushRegistration",
+      to: "device",
+      cardinality: "one",
+      inverse: {
+        key: "device.RunPushRegistration",
+        from: "device",
+        to: "row:RunPushRegistration",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "RunPushRegistration.deviceId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason:
+          "Push delivery state for a device's Run registration, not a relationship.",
+      },
+      fromEnd: {
+        role: "metadata",
+        label: "device references",
+        description: "A row naming the install associated with its event.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description:
+          "A Live Activity or notification push registration this install made for a Run it started.",
+        label: "push registrations",
+        liveness: {
+          kind: "must-target-live",
+        },
+        role: "owned-child",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "Child rows have no independently exposed lifecycle operation.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "cascade-push-registrations",
+              effect: "hard-delete",
+              description:
+                "A removed install receives no more Run pushes; its registrations go with it.",
+            },
+            handler: {
+              module: "~/server/domains/device/repo/edge-policies",
+              export: "deleteDevicePushRegistrations",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "Devices cannot be merged.",
+          },
+        },
+      },
+    }),
+  ],
   names: { singular: "Device", plural: "Devices" },
   route: {
     basePath: "devices",
@@ -539,9 +755,17 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("ledgerPartyId").named("owner", "Owner"),
-    r.field("productId").named("hardware", "Hardware"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("ledgerPartyId").named("owner", "Owner"),
+        "ledgerParty.devices",
+      ),
+      r.declare(
+        r.field("productId").named("hardware", "Hardware"),
+        "product.devices",
+      ),
+    ],
+  }),
   readSchemas,
 );

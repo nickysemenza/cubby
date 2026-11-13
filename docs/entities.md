@@ -2902,6 +2902,8 @@ link kind, row ownership, per-end meaning and liveness, and per-end delete and m
 A custom disposition names an exported policy function through `handler`; null uses the ordinary
 disposition executor. Unsupported operations carry an explicit reason. A composition names paths
 through physical declarations and inherits their ownership and policies without claiming storage.
+A relationship callback can return `{ edges }`; `r.declare(handle.named(...), inverseKey)` builds
+a composition from the typed handle and emits its navigation metadata from that declaration.
 Inverse endpoints are checked by TypeScript and generation. Generation rejects repeated physical
 storage, duplicate keys and invalid composition paths; the server compiler checks named policy
 exports for existence and callability; policy implementations retain their branded identifier types.

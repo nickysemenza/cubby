@@ -1,3 +1,4 @@
+import type { EntityManifest } from "@cubby/schemas/entity-manifest";
 /**
  * Which entity owns each non-entity row that carries an `ENTITY_EDGES` column,
  * so the physical edge graph (`repo/entity-edge-source.ts`) can name both
@@ -16,10 +17,9 @@
  * new join table must decide its owner explicitly and a stale entry fails to
  * compile.
  */
-
-import type { EntityManifest } from "@cubby/schemas/entity-manifest";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { DECLARED_EDGE_OWNERS } from "./generated/declared-edges.gen";
 import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   emailFinancialAssociation,
@@ -31,7 +31,6 @@ import {
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
-  imageSighting,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -88,6 +87,7 @@ const WORKFLOW =
   "Workflow evidence about entities, not a relationship between them.";
 
 export const ENTITY_EDGE_OWNERS = {
+  ...DECLARED_EDGE_OWNERS,
   EntityAttachment: { ownerIdentity: entityAttachment.entityId },
   EntityLink: { linkFrom: entityLink.fromEntityId },
   ExpenseAttribution: { owner: expenseAttribution.expenseId },
@@ -128,7 +128,6 @@ export const ENTITY_EDGE_OWNERS = {
   ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
   ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
-  ImageSighting: { owner: imageSighting.imageId },
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
     excluded: "Per-Run work membership and publication receipts.",
@@ -138,7 +137,6 @@ export const ENTITY_EDGE_OWNERS = {
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },
-  AuditLog: { excluded: "History attribution." },
   Suggestion: { excluded: WORKFLOW },
   RunFinding: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
@@ -151,10 +149,6 @@ export const ENTITY_EDGE_OWNERS = {
   // A reviewed association names the Email whose evidence it settles.
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
   RunControlEvent: { excluded: WORKFLOW },
-  RunPushRegistration: {
-    excluded:
-      "Push delivery state for a device's Run registration, not a relationship.",
-  },
   RunOperation: { excluded: WORKFLOW },
   ImportSourceClaim: { excluded: WORKFLOW },
   Job: { excluded: WORKFLOW },

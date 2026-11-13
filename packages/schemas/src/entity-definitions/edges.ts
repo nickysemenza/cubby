@@ -5,6 +5,8 @@ import {
   operationDispositionSchema,
 } from "../entity-integrity";
 
+import { entityRelationMetadataSchema } from "./relationship-shape";
+
 const text = z.string().min(1);
 const column = z
   .templateLiteral([text, ".", text])
@@ -109,6 +111,16 @@ const pathStep = z.strictObject({
 });
 const composition = z.strictObject({
   ...identity,
+  navigation: entityRelationMetadataSchema
+    .omit({
+      key: true,
+      target: true,
+      cardinality: true,
+      provenance: true,
+      inverse: true,
+      sources: true,
+    })
+    .optional(),
   storage: z.strictObject({
     kind: z.literal("composition"),
     sources: z
@@ -145,4 +157,103 @@ export const defineEdge = <const D extends EdgeDefinition>(
   )
     throw new Error(`${declaration.key}: inverse must reverse the endpoints.`);
   return declaration;
+};
+
+/** A typed relationship handle supplies navigation; its physical sources own lifecycle policy. */
+export const defineRelationshipEdge = (
+  from: z.infer<typeof entitySchema>,
+  relation: z.infer<typeof entityRelationMetadataSchema>,
+  inverseKey: string,
+): EdgeDefinition => {
+  const {
+    key,
+    target,
+    cardinality: count,
+    provenance,
+    inverse: _inverse,
+    sources,
+    ...navigation
+  } = relation;
+  if (provenance.kind !== "local-path")
+    throw new Error(`${from}.${key} requires a local path.`);
+  return defineEdge({
+    key: `${from}.${key}`,
+    from,
+    to: entitySchema.parse(target),
+    cardinality: count,
+    inverse: {
+      key: inverseKey,
+      from: entitySchema.parse(target),
+      to: from,
+      cardinality: "many",
+    },
+    navigation,
+    storage: {
+      kind: "composition",
+      sources: [
+        {
+          key: relation.sourceKey ?? "direct",
+          label: relation.label,
+          path: provenance.steps,
+        },
+        ...(sources ?? []).map((source) => {
+          if (source.provenance.kind !== "local-path")
+            throw new Error(
+              `${from}.${key}.${source.key} requires a local path.`,
+            );
+          return {
+            key: source.key,
+            label: source.label,
+            path: source.provenance.steps,
+          };
+        }),
+      ],
+    },
+    ownership: { kind: "sources" },
+    policies: { kind: "sources" },
+  });
+};
+
+/** The manifest relationship is a projection, never another authored graph. */
+export const edgeRelationship = (
+  edge: EdgeDefinition,
+): z.infer<typeof entityRelationMetadataSchema>[] => {
+  if (
+    edge.storage.kind !== "composition" ||
+    !("navigation" in edge) ||
+    !edge.navigation
+  )
+    return [];
+  const [primary, ...sources] = edge.storage.sources;
+  if (!primary) throw new Error(`${edge.key} requires a primary source.`);
+  const reverse = (path: typeof primary.path) =>
+    [...path]
+      .reverse()
+      .map((step) => ({
+        edge: step.edge,
+        direction:
+          step.direction === "outgoing"
+            ? ("incoming" as const)
+            : ("outgoing" as const),
+      }));
+  return [
+    {
+      ...edge.navigation,
+      key: edge.key.slice(edge.from.length + 1),
+      target: edge.to,
+      cardinality: edge.cardinality,
+      provenance: { kind: "local-path", steps: primary.path },
+      inverse: { steps: reverse(primary.path) },
+      ...(sources.length
+        ? {
+            sources: sources.map((source) => ({
+              key: source.key,
+              label: source.label,
+              provenance: { kind: "local-path" as const, steps: source.path },
+              inverse: { steps: reverse(source.path) },
+            })),
+          }
+        : {}),
+    },
+  ];
 };

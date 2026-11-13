@@ -1,3 +1,4 @@
+import { renderDeclaredEdges } from "./entities/render/declared-edges.ts";
 import {
   collectEdgeDeclarations,
   validateEdgeDeclarations,
@@ -138,13 +139,23 @@ const main = async () => {
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
   const edges = collectEdgeDeclarations(declarations);
-  validateEdgeDeclarations(edges);
+  const legacyPaths = new Set(
+    entities.flatMap((entity) =>
+      entity.relations.flatMap((relation) =>
+        relation.provenance.kind === "local-path"
+          ? relation.provenance.steps.map((step) => step.edge)
+          : [],
+      ),
+    ),
+  );
+  validateEdgeDeclarations(edges, legacyPaths);
   await settle([
     await renderAgentPromptArtifact(ROOT),
     await renderPlaybookArtifact(ROOT),
   ]);
   await settle([
     ...renderEntityArtifacts(entities, modulesChildren),
+    ...renderDeclaredEdges(edges, entities, modulesChildren),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities, edges),

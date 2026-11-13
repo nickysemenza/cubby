@@ -1,3 +1,5 @@
+import { entitySchema } from "../entity-core";
+import { defineRelationshipEdge } from "./edges";
 import { z } from "zod";
 import {
   ENTITY_LINK_KINDS,
@@ -250,6 +252,13 @@ type QueryDestination<
 
 /** Source-only relationship construction; the compiler validates physical paths against the complete catalog. */
 export const createRelationships = <const O extends Owner>(owner: O) => ({
+  declare(relation: Relation, inverseKey: string) {
+    return defineRelationshipEdge(
+      entitySchema.parse(owner.key),
+      relation,
+      inverseKey,
+    );
+  },
   field<const K extends ReferenceField<O>["key"]>(
     key: K,
   ): TraversableRelationshipHandle<

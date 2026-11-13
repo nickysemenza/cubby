@@ -21,6 +21,7 @@ export const collectEdgeDeclarations = (
 /** Inverses are navigation names; only physical declarations claim storage. */
 export const validateEdgeDeclarations = (
   edges: readonly EdgeDefinition[],
+  legacyPaths: ReadonlySet<string> = new Set(),
 ): void => {
   const keys = new Set<string>();
   const storageOwners = new Map<string, string>();
@@ -56,8 +57,13 @@ export const validateEdgeDeclarations = (
         );
       sourceKeys.add(source.key);
       let endpoint = edge.from;
+      let hasLegacyStep = false;
       for (const step of source.path) {
         const referenced = byKey.get(step.edge);
+        if (!referenced && legacyPaths.has(step.edge)) {
+          hasLegacyStep = true;
+          continue;
+        }
         if (!referenced || referenced.storage.kind === "composition")
           throw new EntityDeclarationError(
             `${edge.key}.${source.key}: ${step.edge} must name a physical edge.`,
@@ -66,13 +72,13 @@ export const validateEdgeDeclarations = (
           step.direction === "outgoing" ? referenced.from : referenced.to;
         const to =
           step.direction === "outgoing" ? referenced.to : referenced.from;
-        if (from !== endpoint)
+        if (!hasLegacyStep && from !== endpoint)
           throw new EntityDeclarationError(
             `${edge.key}.${source.key}: ${step.edge} starts at ${from}, expected ${endpoint}.`,
           );
         endpoint = to;
       }
-      if (endpoint !== edge.to)
+      if (!hasLegacyStep && endpoint !== edge.to)
         throw new EntityDeclarationError(
           `${edge.key}.${source.key} ends at ${endpoint}, expected ${edge.to}.`,
         );
