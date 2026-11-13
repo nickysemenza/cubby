@@ -2267,7 +2267,14 @@ describe("evidence-facts kernel", () => {
             reads: [source.table(vendor, ["name"])],
             writes: [],
             async load(reads, keys) {
-              if (version > 1) await reads.rows(vendor, keys);
+              if (version > 1)
+                await Promise.all(
+                  keys.map((key) => reads.for(key).rows(vendor, [key])),
+                );
+              if (version === 3)
+                await repositoryQueries(ctx.db)
+                  .execute(sql`UPDATE "KeyRev" SET rev = rev + 1
+                  WHERE key = ${`row:Vendor:${seller.id}`}`);
               return new Map(keys.map((key) => [key, null]));
             },
             reconcile(_input, c) {
@@ -2315,6 +2322,19 @@ describe("evidence-facts kernel", () => {
       SELECT count(*)::int AS n FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`);
     expect(dirty.rows[0]?.n).toBe(0);
     expect(await repositoryQueries(ctx.db).select().from(drift)).toEqual([]);
+    const third = createKernel([module(3)]);
+    await settle(third);
+    const fenced = await repositoryQueries(ctx.db)
+      .execute(sql`SELECT "scopeKey", version FROM "ScopeState"
+      WHERE "scopeKind" = ${scope.kind}`);
+    expect(fenced.rows).toEqual(
+      expect.arrayContaining(
+        sellers.map((row) => ({
+          scopeKey: row.id,
+          version: row.id === seller.id ? 2 : 3,
+        })),
+      ),
+    );
   });
 
   it("turns a version change alone into a Drift proposal, not a record change", async () => {
@@ -2346,7 +2366,7 @@ describe("evidence-facts kernel", () => {
     const [stored] = await purchases(ctx.db);
     expect(stored?.merchant).toBe("Synthetic Grocer");
     expect(await dirtyCount(ctx.db)).toBe(0);
-    const [proposal] = (
+    const proposals = (
       await repositoryQueries(ctx.db).execute<{
         proposalHash: string;
         scopeKey: string;
@@ -2354,6 +2374,8 @@ describe("evidence-facts kernel", () => {
         sql`SELECT "proposalHash", "scopeKey" FROM "Drift" ORDER BY "scopeKey"`,
       )
     ).rows;
+    expect(proposals.map((row) => row.scopeKey)).toEqual([...orders].sort());
+    const proposal = proposals[0];
     expect(proposal?.scopeKey).toBe("ORD-F");
 
     await expect(
