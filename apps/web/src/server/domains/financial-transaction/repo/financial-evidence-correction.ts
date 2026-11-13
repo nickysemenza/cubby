@@ -29,7 +29,12 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import {
+  bookingGraph,
+  loadFinancialBookingLineage,
+} from "~/server/domains/financial-transaction/repo/financial-booking";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   lockFinancialSourceOccurrences,
@@ -44,11 +49,6 @@ import {
 import { isBlockedRefusal } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
-import {
-  bookingGraph,
-  digestValue,
-  loadFinancialBookingLineage,
-} from "./financial-booking";
 import {
   acceptedAutomaticFacts,
   refreshAutomaticBookingFingerprint,

@@ -36,7 +36,7 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/policy/purchaser";
 import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { type FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
@@ -45,6 +45,7 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
+import { decideStatementKind } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementLabelSubject,
@@ -64,7 +65,6 @@ import {
   type LabelCursor,
   recordStatementAnswerBatch,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";

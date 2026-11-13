@@ -2895,6 +2895,17 @@ keeps its paged contract. Run rows open passive Problems.
 
 ### Relationship authorship
 
+Module edge inputs use `defineEdge` from `entity-definitions/edges.ts`; an entity declaration
+accepts them in `edges`, and a domain module can register the same `EdgeDefinition` values. Each
+physical declaration names its endpoints, forward and inverse cardinality, foreign-key column or
+link kind, row ownership, per-end meaning and liveness, and per-end delete and merge policies.
+A custom disposition names an exported policy function through `handler`; null uses the ordinary
+disposition executor. Unsupported operations carry an explicit reason. A composition names paths
+through physical declarations and inherits their ownership and policies without claiming storage.
+Inverse endpoints are checked by TypeScript and generation. Generation rejects repeated physical
+storage, duplicate keys and invalid composition paths; the server compiler checks named policy
+exports for existence and callability; policy implementations retain their branded identifier types.
+
 Relationship authorship uses `entity-definitions/relationships.ts`. A stored singular identifier
 reference uses `r.field(key)`; its field owns the target used by storage, validation and the graph,
 and ordinary storage entries inherit it (explicit null opts out). `r.link(kind, direction)` and
@@ -2957,11 +2968,11 @@ leaves may name tombstones, labelled `(deleted)`; ordinary references require li
 
 ### Deletion and merge
 
-Lifecycle is separate from logical relationships. Physical edges carry stable domain meaning, and each
-delete or merge operation declares its own disposition for every incoming edge. The integrity catalog
-records whether the generic kernel or a specialized workflow owns execution. There is no logical
-`deletionPolicy` and no inferred database cascade. Generic deletion blocks incoming references; domain
-detach, cascade and merge policies stay explicit.
+An edge declaration owns its stable domain meaning and its separate delete and merge dispositions.
+The operation owns execution: the generic disposition executor or an explicitly named policy function
+runs inside the operation's transaction. The integrity catalog records whether the generic kernel or a
+specialized workflow owns execution. There is no inferred database cascade. Generic deletion blocks
+incoming references; domain detach, cascade and merge policies stay explicit.
 
 Deletion is one command. Soft versus hard deletion is a capability; the result names the deleted
 public references and a non-null changed-row count for every affected-edge disposition. There is no
@@ -3150,7 +3161,7 @@ their target, so an empty child location stays a cleanup candidate.
 Two generic tables carry pure pairings and identifiers (ADR 0007):
 
 - `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds every pure pairing of
-  two entities: `purchaseProduct`, `projectTool`, `gardenEntryPlanting`, `productComponent`,
+  two entities: `purchaseProduct`, `purchasePaymentAccount`, `projectTool`, `gardenEntryPlanting`, `productComponent`,
   `taskDependency`, `projectDependency`. Link kinds are declared in
   `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and cycle rules,
   per-end role, label, liveness, merge collision rule); the table's CHECKs and edge-source branches

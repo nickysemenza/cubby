@@ -12,6 +12,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { uniqBy } from "es-toolkit";
 
+import { withinPostingDateWindow } from "~/server/domains/financial-transaction/policy/settlement-window";
 import {
   normalizeMerchant,
   type merchantVendorInferences,
@@ -22,7 +23,6 @@ import type {
   FinancialStatementPreviewOptions,
   FinancialStatementPreviewPreparation,
 } from "./financial-statement-preview";
-import { withinPostingDateWindow } from "./settlement-window";
 
 /**
  * Deliberately *not* the identity module's canonicalizer, despite being the

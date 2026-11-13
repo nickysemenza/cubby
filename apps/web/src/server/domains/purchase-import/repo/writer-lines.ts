@@ -16,11 +16,8 @@ import { eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { expense, importSourceProduct } from "~/server/db/schema";
-import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import type { LineProducts } from "./writer";
-import type { LineIdentityDecision } from "./writer-decisions";
+import { type planLineMatch } from "~/server/domains/purchase-import/policy/accepted-source";
+import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
 import {
   planAggregateExpense,
   planLineAction,
@@ -29,9 +26,12 @@ import {
   planImportedExpense,
   planInsertedFindings,
   type LineFinding,
-  type planLineMatch,
   type planLineMode,
-} from "./writer-plan";
+} from "~/server/domains/purchase-import/repo/writer-plan";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+
+import type { LineProducts } from "./writer";
+import type { LineIdentityDecision } from "./writer-decisions";
 
 export type LineMutation = {
   targetKind: "expense" | "product";

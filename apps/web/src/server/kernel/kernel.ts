@@ -4,20 +4,28 @@
  * kernel's declarations without a cycle; tests bind their own modules.
  */
 import type { ActorContext } from "@cubby/schemas/context";
-import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
+import {
+  FIELDS_SCOPE,
+  QUALITY_SCOPE,
+  recordScopeKey,
+  type MachineryCapability,
+} from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
+import { registerOwnedColumns } from "~/server/db/owned-columns";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 import { append } from "./append";
-import { withAsk } from "./ask";
+import { withAsk, type AskWaiters } from "./ask";
 import { decide, type DecisionWriters } from "./decide";
 import {
   defineModule,
   type AskKind,
+  type ColumnRef,
   type DecisionInput,
   type DecisionRef,
   type DomainModule,
@@ -35,11 +43,13 @@ import {
   versionSweepPass,
   type ApprovalOutcome,
 } from "./drift";
+import { householdWrite } from "./gate";
+import { mergeRecords, type MergeVerdict } from "./identity";
 import { rowKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
-import { buildRegistry, type KernelRegistry } from "./registry";
+import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
 import { reconcileNow, runKernel } from "./runner";
 import { wakeAfterCommit } from "./wake";
 
@@ -71,21 +81,40 @@ export type Kernel = {
     db: Database,
     kind: AskKind<I, O>,
     input: I,
-    options?: { scopes?: readonly ScopeRef[]; runId?: string | null },
+    options?: AskWaiters,
   ): Promise<O>;
   /**
    * Emit keys for an entity writer's authored or catalog columns that some
-   * reconciler reads; call it inside the writer's transaction.
+   * reconciler reads, inside the writer's transaction. The shared entity
+   * writers call it; a `created` record also starts its `fields` and
+   * `quality` scopes.
    */
   emitWrites(
     db: Database,
     write: {
-      table: PgTable;
+      table: PgTable | string;
       ids: readonly string[];
       columns: readonly string[];
       discovers?: readonly ScopeRef[];
+      entity?: string;
+      created?: boolean;
     },
   ): Promise<number>;
+  /**
+   * Merge two records outside a reconcile (a member's `same`, or the money
+   * lane's proven match) under the household write gate, settling ownership
+   * and dirtying every affected scope.
+   */
+  merge(
+    db: Database,
+    merge: {
+      target: ColumnRef;
+      a: string;
+      b: string;
+      basis: "proof" | "decision";
+      actor?: ActorContext;
+    },
+  ): Promise<MergeVerdict>;
   approveDrift(
     db: Database,
     actor: ActorContext,
@@ -125,6 +154,7 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   });
   registry = buildRegistry([kernelModule, ...modules]);
   const bound = registry;
+  registerOwnedColumns(ownedColumns(bound));
   return {
     registry: bound,
     async append(db, rows, options) {
@@ -144,21 +174,68 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
     withAsk: (db, kind, input, options) =>
       withAsk(db, bound, kind, input, options),
     async emitWrites(db, write) {
-      const name = getTableName(write.table);
+      const name =
+        typeof write.table === "string"
+          ? write.table
+          : getTableName(write.table);
       const read = bound
         .readers(name)
         .some((reader) =>
           reader.columns.some((column) => write.columns.includes(column)),
         );
-      if (!read && !write.discovers?.length) return 0;
+      const capability = write.entity
+        ? bound.machinery.get(write.entity)
+        : undefined;
+      const started: ScopeRef[] =
+        write.created && capability && write.entity
+          ? write.ids.flatMap((id) => [
+              ...(capability.fields
+                ? [
+                    {
+                      kind: FIELDS_SCOPE,
+                      key: recordScopeKey(write.entity!, id),
+                    },
+                  ]
+                : []),
+              ...(capability.quality
+                ? [
+                    {
+                      kind: QUALITY_SCOPE,
+                      key: recordScopeKey(write.entity!, id),
+                    },
+                  ]
+                : []),
+            ])
+          : [];
+      const discovers = [...(write.discovers ?? []), ...started];
+      if (!read && !discovers.length) return 0;
       const dirtied = await markDirty(repositoryQueries(db), bound, {
         keys: read ? write.ids.map((id) => rowKey(name, id)) : [],
-        discovers: write.discovers,
+        discovers,
         reason: `write:${name}`,
       });
       if (dirtied) await wakeAfterCommit(db);
       return dirtied;
     },
+    merge: (db, merge) =>
+      householdWrite(
+        db,
+        async (tx) => {
+          const verdict = await withKernelApply(null, () =>
+            mergeRecords(tx, bound, merge),
+          );
+          if (verdict.merged) {
+            await markDirty(repositoryQueries(tx), bound, {
+              keys: verdict.keys,
+              discovers: verdict.scopes,
+              reason: "merge",
+            });
+            await wakeAfterCommit(tx);
+          }
+          return verdict;
+        },
+        { mode: "member" },
+      ),
     approveDrift: (db, actor, scope, proposalHash) =>
       approveDrift(db, bound, actor, scope, proposalHash),
     approveDriftClass: (db, actor, kind) =>

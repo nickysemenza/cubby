@@ -12,6 +12,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
+import { resolveForRead } from "~/server/kernel/identity";
 import { workflow } from "~/server/workflows/runtime/builder";
 import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
@@ -46,9 +47,19 @@ export function defineEntityGet<
         parseSchema<S["id"], string>(binding.schemas.id, input.id),
       )
       .call("found", async ({ context }, { input, id }) => {
-        // A merged-away or deleted code is simply not found; the message
-        // names the survivor (ADR 0006).
-        const page = await binding.repository.read(context, [id]);
+        // An absorbed code opens its survivor (ADR 0029 section 9); a deleted
+        // code is not found, and the message says why.
+        let page = await binding.repository.read(context, [id]);
+        if (page.data[0] === undefined && isShortcodeEntity(binding.entity)) {
+          const survivor = await resolveForRead(context.db, input.id);
+          if (survivor?.absorbed && survivor.entity === binding.entity)
+            page = await binding.repository.read(context, [
+              parseSchema<S["id"], string>(
+                binding.schemas.id,
+                survivor.shortcode,
+              ),
+            ]);
+        }
         const [row] = page.data;
         return {
           item:

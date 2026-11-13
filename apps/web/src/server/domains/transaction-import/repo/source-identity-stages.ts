@@ -30,18 +30,18 @@ import {
   lockFinancialEvidenceKeys,
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
-import { constraintViolation } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
-
-import { auditEvidenceRows } from "./intake-audit";
 import {
   checkLockedIdentity,
   selectIdentityOwner,
   type SourceIdentityLoaded,
   type SourceIdentityPlan,
-} from "./source-identity-plan";
+} from "~/server/domains/transaction-import/policy/source-identity-plan";
+import { providerIdentityClaims } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
+import { constraintViolation } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
+import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+
+import { auditEvidenceRows } from "./intake-audit";
 
 const sameSet = (left: readonly string[], right: readonly string[]) =>
   JSON.stringify([...new Set(left)].sort()) ===

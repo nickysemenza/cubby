@@ -160,8 +160,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   the kernel's one entry `server/kernel/api.ts`. A domain declares `defineEvidence`,
   `defineAsk`, `defineReconciler` and `definePass` in one `defineModule` and adds one line to
   `server/kernel/modules.ts`. Writers call `append` and `decide`; producer calls go through
-  `withAsk`; entity writers of a column a reconciler reads call `emitWrites` in their
-  transaction; money-lane writers use `householdWrite`; records resolve through
+  `withAsk`; the shared entity writers emit kernel keys themselves and a bespoke writer of a
+  column a reconciler reads calls `emitWrites`; money-lane writers use `householdWrite`;
+  merges outside a reconcile use `merge`; records resolve through
   `resolveForRead`/`resolveForWrite`; list pages bind `loadMachineryRows`. The kernel drain
   in `workflows/jobs.ts` runs dirty scopes, asks and passes.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).

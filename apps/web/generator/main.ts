@@ -1,3 +1,7 @@
+import {
+  collectEdgeDeclarations,
+  validateEdgeDeclarations,
+} from "./entities/edges.ts";
 import { rawSource } from "./artifacts.ts";
 import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
@@ -133,6 +137,8 @@ const main = async () => {
   );
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
+  const edges = collectEdgeDeclarations(declarations);
+  validateEdgeDeclarations(edges);
   await settle([
     await renderAgentPromptArtifact(ROOT),
     await renderPlaybookArtifact(ROOT),
@@ -141,7 +147,7 @@ const main = async () => {
     ...renderEntityArtifacts(entities, modulesChildren),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
-    ...renderKernelBindingsArtifacts(entities),
+    ...renderKernelBindingsArtifacts(entities, edges),
     ...renderFilterArtifacts(entities),
     ...renderSearchArtifacts(entities),
     ...renderTimelineArtifacts(entities),

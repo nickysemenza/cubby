@@ -79,7 +79,7 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/policy/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
@@ -89,13 +89,29 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/policy/charge-identity";
+import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
+import {
+  statementEffectiveMovement,
+  statementLoanInput,
+  type StatementMovementInput,
+} from "~/server/domains/transaction-import/policy/statement-effective-movement";
+import {
+  kindAgreed,
+  decideStatementKind,
+  type OwnAccount,
+  ownAccountNamed,
+  statementTransactionKind,
+} from "~/server/domains/transaction-import/policy/statement-transaction-kind";
+import {
   sourceObservationFacts,
   sourceObservationsForPage,
   sourceObservationIdentities,
   statementChargeSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceObservationJudgments } from "~/server/domains/transaction-import/repo/source-occurrence";
-import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   chargeKeyOf,
   chargeStateOf,
@@ -107,16 +123,7 @@ import {
   suggestionField,
   suggestionRefKey,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import {
-  statementEffectiveMovement,
-  statementLoanInput,
-  type StatementMovementInput,
-} from "~/server/domains/transaction-import/repo/statement-effective-movement";
-import {
-  chargeId,
-  previewRowFor,
-  type ChargeRef,
-} from "~/server/domains/transaction-import/repo/statement-input";
+import { previewRowFor } from "~/server/domains/transaction-import/repo/statement-input";
 import { mergeStatementAnswers } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
   readStatementSuggestions,
@@ -125,13 +132,6 @@ import {
   statementSuggestionKeys,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
-import {
-  kindAgreed,
-  decideStatementKind,
-  type OwnAccount,
-  ownAccountNamed,
-  statementTransactionKind,
-} from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import {
   chargeValues,
   exactTwinsSql,
@@ -4483,4 +4483,4 @@ export async function countSuggestionsNeedingLabels(
 export {
   chargeId,
   type ChargeRef,
-} from "~/server/domains/transaction-import/repo/statement-input";
+} from "~/server/domains/transaction-import/policy/charge-identity";

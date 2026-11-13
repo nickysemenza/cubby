@@ -16,11 +16,8 @@ import {
   type PurchaseId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  paymentTender,
-  type PaymentTender,
-} from "@cubby/schemas/purchase-import";
-import { cents, minorToMoney } from "@cubby/shared";
+import { paymentTender } from "@cubby/schemas/purchase-import";
+import { cents } from "@cubby/shared";
 import { and, asc, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -40,6 +37,7 @@ import {
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
+import { postingWindowDayBounds } from "~/server/domains/financial-transaction/policy/settlement-window";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   applyAllocationChanges,
@@ -53,15 +51,19 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { withinPostingInstantWindowSql } from "~/server/domains/financial-transaction/repo/settlement-window";
+import { matchCompletePaymentSet } from "~/server/domains/purchase-import/policy/import-lines";
 import {
-  postingWindowDayBounds,
-  withinPostingInstantWindowSql,
-} from "~/server/domains/financial-transaction/repo/settlement-window";
+  RetainedPayment,
+  RetainedPaymentRow,
+  RetainedSettlementDiscoveryFacts,
+  Charge,
+  RetainedSettlementOutcome,
+  normalizePaymentSet,
+  anchorPayments,
+  toPolicyPayments,
+} from "~/server/domains/purchase-import/policy/retained-payments";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
-import {
-  matchCompletePaymentSet,
-  type SettlementCandidate,
-} from "~/server/domains/purchase-import/repo/writer-policy";
 import { merchantVendorAllowsSettlementSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 type SettlementReader = Pick<
@@ -81,13 +83,6 @@ export async function lockPartySettlement(
   await advisoryXactLock(tx, "purchase-settlement", ledgerPartyId);
 }
 
-type RetainedPayment = Readonly<
-  Pick<
-    typeof purchasePaymentEvidence.$inferSelect,
-    "amountMinor" | "chargedAt" | "cardLastFour" | "tender"
-  >
->;
-
 const retainedPaymentFields = {
   sourceClaimId: purchasePaymentEvidence.sourceClaimId,
   amountMinor: purchasePaymentEvidence.amountMinor,
@@ -95,43 +90,6 @@ const retainedPaymentFields = {
   cardLastFour: purchasePaymentEvidence.cardLastFour,
   tender: purchasePaymentEvidence.tender,
 };
-
-type RetainedPaymentRow = RetainedPayment &
-  Pick<typeof purchasePaymentEvidence.$inferSelect, "sourceClaimId">;
-
-type RetainedSettlementDiscoveryFacts = Readonly<{
-  target: Readonly<
-    Pick<typeof purchase.$inferSelect, "vendorId" | "date"> & {
-      statedTotal: number | null;
-    }
-  > | null;
-  hasAllocation: boolean;
-  hasNegativeAllocation: boolean;
-  payments: readonly RetainedPayment[] | "conflicting_sources";
-  ownerIds: readonly LedgerPartyId[];
-}>;
-
-type Charge = SettlementCandidate & {
-  kind: ReturnType<typeof financialTransactionKind.parse>;
-  accountId: FinancialAccountId;
-};
-
-export type RetainedSettlementOutcome =
-  | "allocated"
-  | "already_allocated"
-  | "no_evidence"
-  | "conflicting_sources"
-  | "incomplete"
-  | "competing";
-
-// Sources record the same payment at different precision (a full timestamp
-// and card on the page, a date only in an export), so they agree on amount
-// and charge day.
-// The UTC day on purpose: date-only sources arrive as UTC-midnight
-// timestamps, and the deferred-settlement SQL compares `chargedAt::date`.
-const paymentKey = (payment: RetainedPayment) =>
-  // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- same UTC day as the SQL side
-  `${payment.amountMinor}|${payment.chargedAt?.toISOString().slice(0, 10) ?? ""}`;
 
 /**
  * One order's payment set. A Purchase seen through several sources (a browser
@@ -152,64 +110,6 @@ async function loadPaymentSet(
     );
   return normalizePaymentSet(rows);
 }
-
-function normalizePaymentSet(
-  rows: readonly RetainedPaymentRow[],
-): RetainedPayment[] | "conflicting_sources" {
-  const bySource = new Map<string, RetainedPayment[]>();
-  for (const row of rows) {
-    const set = bySource.get(row.sourceClaimId) ?? [];
-    set.push(row);
-    bySource.set(row.sourceClaimId, set);
-  }
-  const sets = [...bySource.values()];
-  const signature = (set: RetainedPayment[]) =>
-    set.map(paymentKey).sort().join(";");
-  const [first] = sets;
-  if (!first) return [];
-  if (!sets.every((set) => signature(set) === signature(first)))
-    return "conflicting_sources";
-  // Agreeing sources may differ in what they say paid: an order page omits a
-  // tender that the export names. A known tender is never left as a wildcard.
-  const knownTender = new Map<string, PaymentTender>();
-  const knownCard = new Map<string, string>();
-  for (const payment of sets.flat()) {
-    const key = paymentKey(payment);
-    if (payment.tender !== "unknown") {
-      const previous = knownTender.get(key);
-      if (previous && previous !== payment.tender) return "conflicting_sources";
-      knownTender.set(key, payment.tender);
-    }
-    if (payment.cardLastFour) {
-      const previous = knownCard.get(key);
-      if (previous && previous !== payment.cardLastFour)
-        return "conflicting_sources";
-      knownCard.set(key, payment.cardLastFour);
-    }
-  }
-  return first.map((payment) => ({
-    ...payment,
-    tender: knownTender.get(paymentKey(payment)) ?? payment.tender,
-    cardLastFour: knownCard.get(paymentKey(payment)) ?? payment.cardLastFour,
-  }));
-}
-
-/**
- * A wholly undated payment set stands at its order date: charges for such
- * orders post within the posting window of the order date. A dated line keeps
- * its instant, and its undated siblings stay bounded by it. Without either
- * there is no window, and an amount alone is coincidence, not evidence.
- */
-const anchorPayments = (
-  payments: readonly RetainedPayment[],
-  orderDate: string | null,
-): RetainedPayment[] =>
-  !orderDate || payments.some((payment) => payment.chargedAt)
-    ? [...payments]
-    : payments.map((payment) => ({
-        ...payment,
-        chargedAt: new Date(`${orderDate}T12:00:00.000Z`),
-      }));
 
 /**
  * Page-local discovery facts only. Plans still match each charge separately;
@@ -426,32 +326,6 @@ async function settleableCharges(
         (!charge.storedValue || admitsStoredAccount(charge.accountId)),
     ),
   ];
-}
-
-const toPolicyPayments = (payments: RetainedPayment[]) =>
-  payments.map((payment) => ({
-    amount: minorToMoney(payment.amountMinor),
-    chargedAt: payment.chargedAt?.toISOString(),
-    cardLastFour: payment.cardLastFour ?? undefined,
-    tender: payment.tender,
-  }));
-
-/** A charge absent from every payment's exact matcher cannot appear in its full plan. */
-export function retainedSettlementDiscoveryCouldMatch(
-  facts: RetainedSettlementDiscoveryFacts | undefined,
-  charge: SettlementCandidate,
-  existingCharge: boolean,
-) {
-  // Attachment previews can change an existing charge; the full planner uses
-  // its stored representation instead of the supplied additional charge.
-  if (existingCharge || !facts) return true;
-  return (
-    facts.payments !== "conflicting_sources" &&
-    anchorPayments(facts.payments, facts.target?.date ?? null).some(
-      (payment) =>
-        matchCompletePaymentSet(toPolicyPayments([payment]), [charge]) !== null,
-    )
-  );
 }
 
 /**

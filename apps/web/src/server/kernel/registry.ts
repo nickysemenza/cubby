@@ -6,9 +6,11 @@
  */
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import type { KernelLane } from "@cubby/schemas/kernel/machinery";
-import { getTableName } from "drizzle-orm";
+import { getTableColumns, getTableName } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 
 import { evidenceBinding } from "~/server/db/kernel-schema";
+import type { OwnedColumn } from "~/server/db/owned-columns";
 
 import {
   type AskKind,
@@ -136,6 +138,24 @@ export function validateKernelGraph(reconcilers: readonly Reconciler[]): void {
     state.set(scope, "closed");
   };
   for (const reconciler of reconcilers) visit(reconciler.scope);
+}
+
+/** Every column a registered reconciler owns, for the write boundary. */
+export function ownedColumns(registry: KernelRegistry): OwnedColumn[] {
+  return [...registry.reconcilers.values()].flatMap((reconciler) =>
+    reconciler.writes
+      .filter((ref) => ref.name !== BINDINGS)
+      .flatMap((ref) => {
+        const columns = getTableColumns(ref.table);
+        const schema = getTableConfig(ref.table).schema ?? null;
+        return ref.columns.map((name) => ({
+          schema,
+          table: ref.name,
+          column: columns[name]?.name ?? name,
+          scope: reconciler.scope,
+        }));
+      }),
+  );
 }
 
 export function buildRegistry(

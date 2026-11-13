@@ -25,7 +25,9 @@ import {
   deleteExpenses,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import { loadFinancialBookingLineage } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
@@ -35,7 +37,6 @@ import {
 import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { updateFinancialTransaction } from "./financial-transaction";
 
 async function reimbursementDestination(

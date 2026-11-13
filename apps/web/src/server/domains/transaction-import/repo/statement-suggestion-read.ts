@@ -17,6 +17,10 @@ import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
+import {
+  isMoneyMoveKind,
+  kindAgreed,
+} from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   SOURCE_HELD_REASON,
@@ -30,10 +34,6 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import {
-  isMoneyMoveKind,
-  kindAgreed,
-} from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import {
   automaticApplicationRule,
   matchedRulesOf,

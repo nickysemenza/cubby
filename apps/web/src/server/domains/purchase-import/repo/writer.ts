@@ -67,6 +67,17 @@ import {
   type findExactProductNameMatches,
   type findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
+import {
+  changedAcceptedProductChoice,
+  planLineMatch,
+  planLearnedTender,
+  planTenderUpdates,
+  planFinancialProjection,
+  planAcceptedPaymentReview,
+  planTargetReview,
+} from "~/server/domains/purchase-import/policy/accepted-source";
+import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
+import { importLineWritePolicy } from "~/server/domains/purchase-import/policy/import-plan";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import {
   type LiveSourceOrder,
@@ -74,7 +85,31 @@ import {
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
-import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
+import {
+  purchaseDateFor,
+  lineIdentifiers,
+  lineIdentifierRequests,
+  lineExternalIdentity,
+  explicitLineDecisions,
+  type ExplicitDistinctFrom,
+  type LineIdentityDecision,
+} from "~/server/domains/purchase-import/repo/writer-decisions";
+import {
+  planSourceAssociation,
+  planOriginalBindings,
+  planAttachments,
+  planRunWrites,
+  planFallbackExpenses,
+  planPurchaseNote,
+  planLineMode,
+  planPurchaseHeader,
+  planPaymentEvidence,
+  planPurchaseTarget,
+  planLockedPurchase,
+  planSourceIdentity,
+  planSourceKey,
+  planSourceOrder,
+} from "~/server/domains/purchase-import/repo/writer-plan";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
@@ -111,16 +146,6 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
-import {
-  purchaseDateFor,
-  buildPurchaseImportPlan,
-  lineIdentifiers,
-  lineIdentifierRequests,
-  lineExternalIdentity,
-  explicitLineDecisions,
-  type ExplicitDistinctFrom,
-  type LineIdentityDecision,
-} from "./writer-decisions";
 import { writePurchaseLines } from "./writer-lines";
 import {
   loadAcceptedProductChoices,
@@ -142,29 +167,6 @@ import {
   loadOriginalLineBindings,
   loadTargetReviewFacts,
 } from "./writer-load";
-import {
-  changedAcceptedProductChoice,
-  planLineMatch,
-  planSourceAssociation,
-  planOriginalBindings,
-  planAttachments,
-  planLearnedTender,
-  planTenderUpdates,
-  planRunWrites,
-  planFinancialProjection,
-  planFallbackExpenses,
-  planPurchaseNote,
-  planLineMode,
-  planAcceptedPaymentReview,
-  planPurchaseHeader,
-  planPaymentEvidence,
-  planPurchaseTarget,
-  planLockedPurchase,
-  planSourceIdentity,
-  planSourceKey,
-  planSourceOrder,
-  planTargetReview,
-} from "./writer-plan";
 
 async function assertImportOwnership(
   db: Database,
@@ -1067,42 +1069,14 @@ export async function importVendorOrder(
       : null;
   if (fallbackAt && input.extraction.candidate)
     input.extraction.candidate.orderedAt = fallbackAt;
-  const semanticPlan = buildPurchaseImportPlan(input.extraction);
-
-  const skipsLineWrites = semanticPlan.writeBlockReason !== null;
-  const foreignReversal =
-    input.extraction.candidate?.currency !== "USD" &&
-    (input.extraction.candidate?.sourceEvent === "refunded" ||
-      input.extraction.candidate?.sourceEvent === "cancelled" ||
-      input.extraction.candidate?.lines.some(
-        (line) =>
-          line.lineKind === "principal" &&
-          line.amount !== null &&
-          line.amount < 0,
-      ));
-  const unpricedForeign =
-    semanticPlan.writeBlockReason === "foreign_currency" &&
-    /^[A-Z]{3}$/.test(input.extraction.candidate?.currency ?? "") &&
-    !foreignReversal &&
-    (input.extraction.status === "ready" ||
-      (input.extraction.status === "needs_review" &&
-        input.extraction.reason === "foreign_currency"));
-  // A USD order with a printed total and unpriced items: the total books as
-  // one aggregate Expense and the items as unpriced lines beside it.
-  const unpricedItemization =
-    semanticPlan.writeBlockReason === "unpriced_itemization";
-  const unpriced = unpricedForeign || unpricedItemization;
-  const writesLines = !skipsLineWrites || unpriced;
-  const valuation = unpriced ? "unknown" : "USD";
-  const identityOnly =
-    !unpricedForeign &&
-    !foreignReversal &&
-    [
-      "missing_currency",
-      "foreign_currency",
-      "missing_date",
-      "missing_total",
-    ].includes(semanticPlan.writeBlockReason ?? "");
+  const {
+    skipsLineWrites,
+    unpricedForeign,
+    unpriced,
+    writesLines,
+    valuation,
+    identityOnly,
+  } = importLineWritePolicy(input.extraction);
   const explicitResolutions = input.productResolutions ?? [];
   const identityDecisions =
     skipsLineWrites && !identityOnly && !unpriced

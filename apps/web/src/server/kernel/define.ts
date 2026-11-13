@@ -4,6 +4,7 @@
  * resulting values. Nothing registers itself; `workflows/kernel-modules.ts`
  * lists every module explicitly.
  */
+import type { ActorContext } from "@cubby/schemas/context";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import type {
   AskProducer,
@@ -176,7 +177,7 @@ export const source = {
  */
 export type MergePort = (
   tx: Database,
-  merge: { keepId: string; loserIds: readonly string[] },
+  merge: { keepId: string; loserIds: readonly string[]; actor: ActorContext },
 ) => Promise<void>;
 
 /** Removes records inside the apply transaction (generic/removal for entities). */

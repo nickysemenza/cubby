@@ -17,11 +17,14 @@ import { DECISION_KINDS } from "@cubby/schemas/kernel/stage";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
 import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 
+import { settleAskOutcome } from "./ask";
+import { askOfSubject, askOutcomes, ASK_OUTCOME_FIELD } from "./ask-gap";
 import type { DecisionInput, DecisionRef, ScopeRef } from "./define";
 import { markDirty } from "./dirty";
 import { clearRejected, markRejected, removeRecords } from "./identity";
@@ -57,6 +60,15 @@ const recordOf = (subject: string) => {
   const match = /^([A-Za-z][\w-]*):([0-9a-f-]{36})$/u.exec(subject);
   return match ? { entity: match[1]!, id: match[2]! } : null;
 };
+
+/** Whether a registered reconciler owns `entity.field` (a `fields` scope's column, say). */
+const ownsField = (registry: KernelRegistry, entity: string, field: string) =>
+  [...registry.reconcilers.values()].some((reconciler) =>
+    reconciler.writes.some(
+      (ref) =>
+        (ref.entity ?? ref.name) === entity && ref.columns.includes(field),
+    ),
+  );
 
 async function normalize(decision: DecisionInput) {
   const allowed: readonly string[] = DECISION_KINDS[decision.channel];
@@ -170,9 +182,24 @@ export async function decide(
           const target = [...registry.reconcilers.values()]
             .flatMap((reconciler) => reconciler.writes)
             .find((ref) => (ref.entity ?? ref.name) === record.entity);
-          if (target && owners.length)
-            await removeRecords(tx, target, [record.id]);
-          else if (writers.reject) await writers.reject(tx, decision);
+          if (target && owners.length) {
+            const owner = owners[0]!;
+            // The kernel removes its own record; the delete rows carry the decision.
+            await withKernelApply(
+              {
+                scope: owner,
+                version: registry.reconcilers.get(owner.kind)?.version ?? 0,
+                inputs: [
+                  {
+                    kind: "decision",
+                    id: decision.id,
+                    subject: decision.subject,
+                  },
+                ],
+              },
+              () => removeRecords(tx, target, [record.id]),
+            );
+          } else if (writers.reject) await writers.reject(tx, decision);
           else
             throw new KernelContractError(
               `No reconciler owns ${decision.subject} and no delete policy was supplied`,
@@ -182,7 +209,27 @@ export async function decide(
             ...(await clearRejected(q, record.entity, record.id)),
           );
       }
-      if (decision.channel === "assignment" && writers.field)
+      const askHash = askOfSubject(decision.subject);
+      if (askHash && decision.channel === "assignment") {
+        const outcome = askOutcomes.find((value) => value === decision.value);
+        if (decision.field !== ASK_OUTCOME_FIELD || !outcome)
+          throw new KernelContractError(
+            `An ask decision sets ${ASK_OUTCOME_FIELD} to one of ${askOutcomes.join(", ")}`,
+          );
+        await settleAskOutcome(tx, registry, askHash, outcome);
+        continue;
+      }
+      // A column a reconciler owns takes its decision through that
+      // reconciler; the entity's writer applies only authored columns.
+      if (
+        decision.channel === "assignment" &&
+        writers.field &&
+        !(
+          record &&
+          decision.field &&
+          ownsField(registry, record.entity, decision.field)
+        )
+      )
         await writers.field(tx, decision);
     }
     await markDirty(q, registry, {

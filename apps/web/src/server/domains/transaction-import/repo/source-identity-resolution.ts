@@ -3,8 +3,8 @@ import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
 import type { SourceIdentityResolution } from "@cubby/schemas/source-occurrence-fields";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { planSourceIdentity } from "~/server/domains/transaction-import/policy/source-identity-plan";
 
-import { planSourceIdentity } from "./source-identity-plan";
 import {
   lockAndLoadSourceIdentity,
   loadSourceIdentityAliases,

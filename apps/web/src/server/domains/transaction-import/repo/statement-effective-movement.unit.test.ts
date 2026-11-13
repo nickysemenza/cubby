@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { statementEffectiveMovement } from "./statement-effective-movement";
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 
 describe("statement effective movement", () => {
   it("projects loan classes independently of provider sign", () => {

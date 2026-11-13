@@ -5,14 +5,18 @@
  * it are refused and name the survivor. Web, native and MCP resolve through
  * the functions here.
  */
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { systemActor, type ActorContext } from "@cubby/schemas/context";
+import {
+  isAuditableEntity,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
   parseEntityId,
 } from "@cubby/schemas/identifiers";
-import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
+import { alias, type PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -22,16 +26,29 @@ import {
   repositoryQueries,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
-import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
+import {
+  isShortcodeEntity,
+  resolveEntityIdentity,
+} from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
+import { finalizeMerge } from "~/server/generic/merge/repo/core";
 import {
   cascadeRemoval,
   type RemovableEntity,
 } from "~/server/generic/removal/repo/core";
+import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 
-import type { ColumnRef, KeyedTable, ScopeRef } from "./define";
-import { decisionKey, recordSubject, rowKey } from "./keys";
-import { idColumn } from "./reads";
+import type { ColumnRef, KeyedTable, MergePort, ScopeRef } from "./define";
+import {
+  bindingEventKey,
+  bindingFactKey,
+  decisionKey,
+  recordSubject,
+  rowKey,
+} from "./keys";
+import { idColumn, KernelContractError } from "./reads";
+import type { KernelRegistry } from "./registry";
+import { STAGE } from "./vocab";
 
 type Q = Pick<RepositoryQueryClient, "select" | "execute" | "update">;
 
@@ -155,7 +172,8 @@ export function entityRemoval(
       await cascadeRemoval(drizzleTx, {
         entity,
         ids: ids.map((id) => parseEntityId(entity, id)),
-        audit: { into: [] },
+        // Inside an apply, the delete rows carry its provenance.
+        audit: { actor: systemActor() },
       });
     });
   };
@@ -198,24 +216,81 @@ export type MergeVerdict =
   | { merged: false; reason: "decided" | "not-minted" | "unknown-record" };
 
 /**
- * Merge two records of one table inside the apply transaction. `decision`
+ * The default merge for an entity table: the entity's declared merge policy
+ * (`lifecycle.merge`) through generic/merge, then the soft-delete finalize
+ * with its redirect, cascade and audit. A domain passes its own `merge` port
+ * only when it has real policy beyond the declaration.
+ */
+export function entityMerge(
+  entity: RemovableEntity,
+  table: PgTable,
+): MergePort {
+  return async (tx, { keepId, loserIds, actor }) => {
+    const { repositoryReadBinding } =
+      await import("~/server/generated/entity-kernel-bindings.gen");
+    const binding = await repositoryReadBinding(entity).load();
+    const policy = binding.lifecycle.merge;
+    if (!policy)
+      throw new KernelContractError(`${entity} declares no merge policy`);
+    await withTransaction(tx, async (drizzleTx) => {
+      const keep = parseEntityId(entity, keepId);
+      const losers = loserIds.map((id) => parseEntityId(entity, id));
+      await applyMergePolicy(drizzleTx, {
+        entity,
+        policy,
+        keepId: keep,
+        loserIds: losers,
+        liveOnly: true,
+      });
+      await finalizeMerge(drizzleTx, {
+        entity,
+        // SAFETY: an entity table's declared `id` and `deletedAt` columns.
+        table: table as Parameters<typeof finalizeMerge>[1]["table"],
+        keepId: keep,
+        loserIds: losers,
+        removal: "soft",
+        actor,
+      });
+    });
+  };
+}
+
+const isRemovable = (entity: string | null): entity is RemovableEntity =>
+  entity !== null && isShortcodeEntity(entity) && isAuditableEntity(entity);
+
+/**
+ * Merge two records of one table inside an apply transaction. `decision`
  * merges a member's `same`. `proof` merges without asking only in ADR 0029's
  * one case: a unique complete payment match, and the absorbed record was
  * created by Cubby and carries no decision; any other case returns the reason
- * and the caller leaves an identity gap. The older record survives; the
- * absorbed record's `RecordKey` rows repoint to it.
+ * and the caller leaves an identity gap. The older record survives.
+ *
+ * Ownership settles in the same transaction: the survivor's owning scope
+ * owns the record. When the absorbed record belonged to another scope, that
+ * scope's `RecordKey` rows repoint to the survivor and stop writing it, the
+ * scope is Ended and runs as the survivor's scope from then on, and its
+ * evidence bindings move to the survivor's event, so later evidence dirties
+ * the survivor.
  */
 export async function mergeRecords(
   tx: Database,
+  registry: KernelRegistry,
   merge: {
     target: ColumnRef;
     a: string;
     b: string;
     basis: "proof" | "decision";
+    actor?: ActorContext;
   },
 ): Promise<MergeVerdict> {
   const { target } = merge;
-  if (!target.merge) throw new Error(`${target.name} declares no merge policy`);
+  const port =
+    target.merge ??
+    (isRemovable(target.entity)
+      ? entityMerge(target.entity, target.table)
+      : null);
+  if (!port)
+    throw new KernelContractError(`${target.name} declares no merge policy`);
   const q = repositoryQueries(tx);
   const entity = target.entity ?? target.name;
   const createdAt = getTableColumns(target.table).createdAt;
@@ -254,37 +329,84 @@ export async function mergeRecords(
     if ((decided.rows[0]?.n ?? 0) > 0)
       return { merged: false, reason: "decided" };
   }
-  await target.merge(tx, { keepId, loserIds: [loserId] });
-  const moved = await q
+  const ownersOf = (id: string) =>
+    q
+      .select({ kind: recordKey.scopeKind, key: recordKey.scopeKey })
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.entity, entity),
+          eq(recordKey.entityId, id),
+          isNull(recordKey.mergedAt),
+        ),
+      );
+  const [survivorOwners, absorbedOwners] = await Promise.all([
+    ownersOf(keepId),
+    ownersOf(loserId),
+  ]);
+  await port(tx, {
+    keepId,
+    loserIds: [loserId],
+    actor: merge.actor ?? systemActor(),
+  });
+
+  const survivor = survivorOwners[0];
+  const foreign = survivor
+    ? absorbedOwners.filter(
+        (owner) => owner.kind !== survivor.kind || owner.key !== survivor.key,
+      )
+    : [];
+  const keys = [
+    rowKey(target.name, keepId),
+    rowKey(target.name, loserId),
+    decisionKey(recordSubject(entity, keepId)),
+    decisionKey(recordSubject(entity, loserId)),
+  ];
+  const scopes = new Map<string, ScopeRef>();
+  for (const owner of [...survivorOwners, ...absorbedOwners])
+    scopes.set(`${owner.kind}\u0000${owner.key}`, owner);
+  // Same-scope (or unowned survivor) rows simply follow the survivor.
+  await q
     .update(recordKey)
     .set({ entityId: keepId })
-    .where(and(eq(recordKey.entity, entity), eq(recordKey.entityId, loserId)))
-    .returning({
-      scopeKind: recordKey.scopeKind,
-      scopeKey: recordKey.scopeKey,
-    });
-  const owners = await q
-    .select({ scopeKind: recordKey.scopeKind, scopeKey: recordKey.scopeKey })
-    .from(recordKey)
-    .where(and(eq(recordKey.entity, entity), eq(recordKey.entityId, keepId)));
-  const scopes = new Map<string, ScopeRef>();
-  for (const row of [...moved, ...owners])
-    scopes.set(`${row.scopeKind}:${row.scopeKey}`, {
-      kind: row.scopeKind,
-      key: row.scopeKey,
-    });
-  return {
-    merged: true,
-    keepId,
-    loserId,
-    keys: [
-      rowKey(target.name, keepId),
-      rowKey(target.name, loserId),
-      decisionKey(recordSubject(entity, keepId)),
-      decisionKey(recordSubject(entity, loserId)),
-    ],
-    scopes: [...scopes.values()],
-  };
+    .where(
+      and(
+        eq(recordKey.entity, entity),
+        eq(recordKey.entityId, loserId),
+        foreign.length
+          ? sql`NOT (${recordKey.scopeKind}, ${recordKey.scopeKey}) IN (SELECT f.kind, f.key FROM jsonb_to_recordset(${JSON.stringify(foreign)}::jsonb) AS f(kind text, key text))`
+          : undefined,
+      ),
+    );
+  for (const owner of foreign) {
+    await q
+      .update(recordKey)
+      .set({ entityId: keepId, mergedAt: new Date() })
+      .where(
+        and(
+          eq(recordKey.entity, entity),
+          eq(recordKey.entityId, loserId),
+          eq(recordKey.scopeKind, owner.kind),
+          eq(recordKey.scopeKey, owner.key),
+        ),
+      );
+    const reconciler = registry.reconcilers.get(owner.kind);
+    await q.execute(sql`
+      INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "mergedIntoKey", "reconciledAt")
+      VALUES (${owner.kind}, ${owner.key}, ${reconciler?.version ?? 0}, ${reconciler?.rules ?? ""},
+        ${STAGE.ended}, ${survivor!.key}, now())
+      ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
+        stage = excluded.stage, "mergedIntoKey" = excluded."mergedIntoKey",
+        gaps = '[]'::jsonb, "nextActor" = NULL, "firstGap" = NULL`);
+    const moved = await q.execute<{ factKind: string; factId: string }>(sql`
+      UPDATE "EvidenceBinding" SET "eventKey" = ${survivor!.key}
+      WHERE "eventKey" = ${owner.key}
+      RETURNING "factKind", "factId"`);
+    keys.push(bindingEventKey(owner.key), bindingEventKey(survivor!.key));
+    for (const fact of moved.rows)
+      keys.push(bindingFactKey({ kind: fact.factKind, id: fact.factId }));
+  }
+  return { merged: true, keepId, loserId, keys, scopes: [...scopes.values()] };
 }
 
 /** Mark a record's keys rejected so its evidence does not create it again. */

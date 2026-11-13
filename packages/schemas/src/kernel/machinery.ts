@@ -12,6 +12,17 @@ import {
 export const kernelJson = z.json();
 export type KernelJson = z.infer<typeof kernelJson>;
 
+/**
+ * What decided a kernel apply, stored on each audit row it writes: the scope,
+ * its reconciler version and the inputs it used (ADR 0029 section 1).
+ */
+const kernelAuditProvenance = z.object({
+  scope: z.object({ kind: z.string(), key: z.string() }),
+  version: z.number().int().nonnegative(),
+  inputs: z.array(z.json()),
+});
+export type KernelAuditProvenance = z.infer<typeof kernelAuditProvenance>;
+
 /** ADR 0029 section 8: an owed producer call never leaves `unknown` on its own. */
 export const askState = z.enum(["queued", "sent", "answered", "unknown"]);
 export type AskState = z.infer<typeof askState>;
@@ -149,6 +160,17 @@ export const machinery = z.object({
   inputs: capped(machineryInput),
   drift: machineryDrift.nullable(),
   totalCostMicros: z.number().int().nonnegative(),
+  /**
+   * With `{ field }`: what "Let Cubby decide" would make the field, as a
+   * field result, from its declared reset or the `fields` scope's derivation.
+   */
+  resetPreview: z
+    .object({
+      source: z.enum(["resolution", "derivation"]),
+      result: z.json(),
+      pendingAnswers: z.number().int().nonnegative(),
+    })
+    .nullable(),
   /** True when the 256 KB response cap dropped trailing collection items. */
   truncated: z.boolean(),
 });

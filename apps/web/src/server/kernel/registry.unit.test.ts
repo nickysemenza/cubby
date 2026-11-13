@@ -50,7 +50,7 @@ describe("kernel graph", () => {
       ]),
     ).toThrow(
       new KernelGraphError(
-        "Reconcilers first and second both write Purchase.merchant",
+        "Reconcilers first and second both write FixturePurchase.merchant",
       ),
     );
   });
@@ -69,7 +69,7 @@ describe("kernel graph", () => {
       ]),
     ).toThrow(
       new KernelGraphError(
-        "The fields scope claims Purchase.category, which purchaseEvent owns",
+        "The fields scope claims FixturePurchase.category, which purchaseEvent owns",
       ),
     );
   });

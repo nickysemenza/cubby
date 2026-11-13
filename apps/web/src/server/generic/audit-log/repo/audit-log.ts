@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { kernelApplyProvenance } from "~/server/db/kernel-apply-context";
 import { auditLog } from "~/server/db/schema";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -235,6 +236,7 @@ export async function logAuditEntry(
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
       automationPending: automationPending(entry),
+      provenance: kernelApplyProvenance(),
     })
     .returning({ id: auditLog.id });
   if (inserted) {
@@ -258,6 +260,7 @@ const auditRecordKeys = [
   "runId",
   "authority",
   "automationPending",
+  "provenance",
 ] as const satisfies readonly (keyof typeof auditLog.$inferInsert)[];
 const auditRecordColumns = sql.join(
   auditRecordKeys.map((key) => sql.identifier(auditLog[key].name)),
@@ -282,6 +285,8 @@ export async function logAuditEntries(
 ): Promise<void> {
   if (entries.length === 0) return;
 
+  // A kernel apply's rows carry its scope, version and inputs.
+  const provenance = kernelApplyProvenance();
   const auditRecords = entries.map((entry) => ({
     entityKind: entry.entityKind,
     entityId: entry.entityId,
@@ -289,6 +294,7 @@ export async function logAuditEntries(
     changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
     automationPending: automationPending(entry),
+    provenance,
   }));
 
   // One jsonb parameter however many rows: a layer's audit stays within the

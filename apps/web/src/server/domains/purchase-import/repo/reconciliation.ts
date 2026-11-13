@@ -30,7 +30,7 @@ import {
 import {
   matchCompletePaymentSet,
   sourceFinancialFacts,
-} from "~/server/domains/purchase-import/repo/writer-policy";
+} from "~/server/domains/purchase-import/policy/import-lines";
 import {
   publishRunFinding,
   runFindingColumns,
@@ -496,13 +496,11 @@ export async function reviewResolution(
           );
       }
       attributions = await redistributeReplacementAttributions(
-        tx,
         targets,
         candidate.lines,
       );
     } else
       attributions = await redistributeReplacementAttributions(
-        tx,
         partyCentTargets(
           originalAllocations.filter((row) =>
             selectedInternal.has(row.expenseId),
