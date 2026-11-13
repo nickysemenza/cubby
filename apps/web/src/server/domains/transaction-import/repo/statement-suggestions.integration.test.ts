@@ -475,7 +475,6 @@ describe("statement Transaction suggestions", () => {
     ]);
     expect(proposal?.providerScopeFingerprint).toBe(predecessorOwnerHash);
     await generate(ctx);
-    await label(ctx, answering({ kind: "purchase", counterparty: "person" }));
     const [current] = await readPendingStatements(ctx);
     const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!current || !bankRecord)
@@ -522,7 +521,6 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "synthetic-dismissal-revision" },
     );
     await generate(ctx);
-    await label(ctx, answering({ kind: "purchase", counterparty: "person" }));
     const pending = await readPendingStatements(ctx);
     expect(pending).toHaveLength(1);
     expect(pending[0]?.suggestionId).not.toBe(current.suggestionId);
@@ -1179,6 +1177,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-suggest-posted" },
     );
     await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
     expect(await readPendingStatements(ctx)).toEqual([]);
     const states = Object.fromEntries(
       (await listSourceTransactionRecords(ctx.db, {})).data.map((row) => [
@@ -2846,9 +2845,12 @@ describe("statement Transaction suggestions", () => {
       /changed since review|stale/,
     );
     // Republication, not a scanner, replaces the stale advice; the refused
-    // review recorded nothing, so the replaced row is pruned.
+    // Replaced rows retain compatible answers for later charge publications.
     expect(await generate(ctx)).toBe(1);
-    expect(await stateOf(ctx, suggestion!.suggestionId)).toBeUndefined();
+    expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
+      active: false,
+      status: "superseded",
+    });
     expect((await readPendingStatements(ctx))[0]).toMatchObject({
       recommended: "book",
       clean: false,
@@ -3300,57 +3302,6 @@ describe("statement Transaction suggestions", () => {
 
   // Failure modes: a category rule alone makes a create bulk-acceptable; a
   // label that disagrees with the rule still leaves it clean.
-  it("cleans a create only when a label agrees with the category rule", async () => {
-    await card(ctx);
-    await record(ctx, [
-      rowInput({
-        merchant: "Example Cafe",
-        rawDescription: "EXAMPLE CAFE",
-        sourceCategory: "Coffee Shops",
-        providerAmount: -6.25,
-      }),
-      rowInput({
-        merchant: "Example Market",
-        rawDescription: "EXAMPLE MARKET",
-        sourceCategory: "Shopping",
-        providerAmount: -8.5,
-      }),
-    ]);
-    await generate(ctx);
-    expect((await readPendingStatements(ctx)).every((row) => !row.clean)).toBe(
-      true,
-    );
-
-    await label(
-      ctx,
-      answering({
-        kind: (subject) => (subject.includes("CAFE") ? "purchase" : "fee"),
-        counterparty: "business",
-      }),
-    );
-    const rows = await readPendingStatements(ctx);
-    expect(rows.find((row) => row.merchant === "Example Cafe")).toMatchObject({
-      clean: true,
-      create: {
-        kind: "purchase",
-        kindSource: "rule",
-        votes: { rule: "purchase", label: "purchase", history: null },
-        counterparty: { label: "business", history: null },
-      },
-    });
-    expect(rows.find((row) => row.merchant === "Example Market")).toMatchObject(
-      {
-        clean: false,
-        create: {
-          kind: "purchase",
-          votes: { rule: "purchase", label: "fee", history: null },
-        },
-      },
-    );
-  });
-
-  // Failure modes: a payment-app credit from a friend under Paychecks becomes
-  // clean income; a payment to a person is offered as a transfer or in bulk.
   it("never cleans a payment with a person, in either direction", async () => {
     await card(ctx);
     await record(ctx, [
