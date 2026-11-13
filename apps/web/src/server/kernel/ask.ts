@@ -20,6 +20,7 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import { askResponseClaims } from "~/server/ai/response-cache";
 import type { Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { answer } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
@@ -141,9 +142,7 @@ async function ensureAsk(
   const scopes = waiters.scopes ?? [];
   const rows = [
     ...scopes.map((scope) => ({ kind: scope.kind, key: scope.key, runId })),
-    ...(runId && !scopes.length
-      ? [{ kind: RUN_WAITER, key: runId, runId }]
-      : []),
+    ...(runId ? [{ kind: RUN_WAITER, key: runId, runId }] : []),
     ...(waiters.record
       ? [
           {
@@ -177,7 +176,7 @@ async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
   await q.execute(sql`
     UPDATE "Pass" p SET "availableAt" = now()
     FROM "AskScope" s
-    WHERE s."askId" = ${askId}::uuid AND s."scopeKind" = ${PASS_WAITER}
+    WHERE s."askId" = ${askId}::uuid AND s."cancelledAt" IS NULL AND s."scopeKind" = ${PASS_WAITER}
       AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL`);
 }
 
@@ -228,7 +227,7 @@ export async function settleAskOutcome(
 async function waitingScopes(q: Q, askId: string): Promise<ScopeRef[]> {
   const result = await q.execute<{ kind: string; key: string }>(sql`
     SELECT "scopeKind" AS kind, "scopeKey" AS key FROM "AskScope"
-    WHERE "askId" = ${askId}::uuid AND "scopeKind" <> ${RUN_WAITER}`);
+    WHERE "askId" = ${askId}::uuid AND "cancelledAt" IS NULL AND "scopeKind" <> ${RUN_WAITER}`);
   return result.rows;
 }
 
@@ -355,6 +354,7 @@ async function executeClaimed(
   registry: KernelRegistry,
   entries: readonly ClaimedEntry[],
   runId: string | null,
+  background = false,
 ): Promise<AskResult<unknown>[]> {
   const q = repositoryQueries(db);
   const results: AskResult<unknown>[] = entries.map(() => ({
@@ -362,16 +362,37 @@ async function executeClaimed(
     error: new Error("Ask not run"),
   }));
   const ready: { index: number; cacheToken: string }[] = [];
+  const requesters = new Map<string, string | null>();
   for (const [index, entry] of entries.entries()) {
     const target = { table: "Ask" as const, id: entry.ask.id };
     try {
       if (!entry.kind.produce)
         throw new Error(`Ask ${entry.kind.feature} declares no producer`);
-      await entry.kind.admit?.(db);
+      const owners = runId
+        ? null
+        : await q.execute<{ runId: string }>(sql`
+        SELECT s."runId" FROM "AskScope" s JOIN "Run" r ON r.id=s."runId"
+        WHERE s."askId"=${entry.ask.id}::uuid AND s."cancelledAt" IS NULL
+          AND r.status=${"running"} AND r."retiredAt" IS NULL AND ${notDeleted("r")}
+        ORDER BY s."createdAt", s."runId" LIMIT 1`);
+      const requester = runId ?? owners?.rows[0]?.runId ?? null;
+      requesters.set(entry.ask.id, requester);
+      await entry.kind.admit?.(db, {
+        runId: requester,
+        askId: entry.ask.id,
+        background,
+      });
       const claim = await askResponseClaims.claim(entry.ask.inputHash);
       if (claim.kind === "hit") {
         const replay = storedProduced.parse(JSON.parse(claim.value));
-        await commitAnswer(db, registry, entry.kind, entry.ask, replay, runId);
+        await commitAnswer(
+          db,
+          registry,
+          entry.kind,
+          entry.ask,
+          replay,
+          requesters.get(entry.ask.id) ?? null,
+        );
         results[index] = {
           status: "answered",
           output: entry.kind.output.parse(replay.output),
@@ -439,7 +460,7 @@ async function executeClaimed(
           db,
           signal: controller.signal,
           ask: { id: ask.id, inputHash: ask.inputHash },
-          runId,
+          runId: requesters.get(ask.id) ?? null,
         });
         produced = { ...produced, output: kind.output.parse(produced.output) };
       } catch (error) {
@@ -459,7 +480,14 @@ async function executeClaimed(
         return;
       }
       clearInterval(heartbeat);
-      await commitAnswer(db, registry, kind, ask, produced, runId);
+      await commitAnswer(
+        db,
+        registry,
+        kind,
+        ask,
+        produced,
+        requesters.get(ask.id) ?? null,
+      );
       await askResponseClaims
         .publish(ask.inputHash, cacheToken, JSON.stringify(produced))
         // SILENT: the replay copy is rebuildable from the committed Answer.
@@ -488,9 +516,9 @@ export async function withAsk<I, O>(
   const q = repositoryQueries(db);
   const envelope = askEnvelope(untyped, input);
   const inputHash = await inputHashOf(envelope);
+  const row = await ensureAsk(q, untyped, envelope, inputHash, options);
   const known = await readAnswerOutput(q, inputHash);
   if (known !== undefined) return kind.output.parse(known);
-  const row = await ensureAsk(q, untyped, envelope, inputHash, options);
   if (row.cancelled)
     throw new AskAbandonedError(
       `A member gave up on the ${kind.feature} answer for ${inputHash}.`,
@@ -560,7 +588,7 @@ export async function runQueuedAsks(
       ask: { ...ask, maxAttempts: kind.maxAttempts },
     };
   });
-  await executeClaimed(db, registry, entries, null);
+  await executeClaimed(db, registry, entries, null, true);
   return claimed.length;
 }
 

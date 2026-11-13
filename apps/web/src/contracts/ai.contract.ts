@@ -18,8 +18,6 @@ import {
   financeCategoryApplyOut,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
-  settledSuggestionQuestionsInput,
-  settledSuggestionQuestionsOut,
   decisionCatalogOut,
   ingredientMergeSuggestionBatchInput,
   ingredientMergeSuggestionBatchOut,
@@ -133,14 +131,7 @@ export const aiContract = defineContract(
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
     }),
-    settledSuggestionQuestions: query({
-      note: "List pages skip re-asking declined suggestion questions",
-      input: settledSuggestionQuestionsInput,
-      output: settledSuggestionQuestionsOut,
-      // List pages batch this read and cache each question separately, tagged
-      // with the entity kinds its decision reads (`record-suggestions.tsx`).
-      cache: { tags: [["ai", "settledSuggestionQuestion"]] },
-    }),
+
     decisionCatalog: query({
       note: "The /ai Decisions tab; agents replay decisions through suggest_fields",
       input: zod.undefined(),

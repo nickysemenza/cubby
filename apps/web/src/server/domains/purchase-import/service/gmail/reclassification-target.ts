@@ -1,27 +1,13 @@
+import { emailReclassifyResult } from "@cubby/schemas/email-actions";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
-import {
-  publishAiEvaluation,
-  type ClaimedAiEvaluation,
-} from "~/server/ai/evaluation/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
+import type { RunRow } from "~/server/domains/run/repo/ai-work-state";
 
-import {
-  deferClassificationRefresh,
-  publishGmailEvidence,
-} from "../../repo/gmail/admitted-source";
+import { deferClassificationRefresh } from "../../repo/gmail/admitted-source";
 import { gmailProviderForUser } from "../../repo/gmail/provider";
-import {
-  loadReclassificationTarget,
-  readEvaluationState,
-  readReclassifiedEmail,
-  reclassificationSnapshot,
-  saveReclassificationSnapshot,
-} from "../../repo/gmail/reclassification-work";
+import { readReclassifiedEmail } from "../../repo/gmail/reclassification-work";
 import { ingestGmailMessages } from "./ingest";
 
 export type ReclassificationPorts = Pick<
@@ -29,48 +15,25 @@ export type ReclassificationPorts = Pick<
   "triage" | "relevance" | "candidateChoice" | "storage"
 >;
 
+/** The Run claim fences execution; publication rechecks the captured Email evidence. */
 export async function executeReclassificationTarget(
   db: Database,
-  evaluation: ClaimedAiEvaluation,
+  owner: RunRow,
+  target: ReturnType<typeof mailReclassifyRunInput.parse>["emails"][number],
   ports: ReclassificationPorts = {},
 ) {
-  const token = evaluation.attemptToken;
-  const { owner, current } = await loadReclassificationTarget(db, evaluation);
-  if (!owner)
-    throw new JobEvidenceObsoleteError("Reclassification Run no longer exists");
   const input = mailReclassifyRunInput.parse(owner.input);
-  const settle = async (outcome: "removed" | "frozen") => {
-    await publishGmailEvidence(
-      db,
-      {
-        ledgerPartyId: owner.ledgerPartyId!,
-        mailboxId: input.mailboxId,
-        messageId: current?.messageId ?? "",
-        runId: owner.id,
-        executionPolicy: "classification_only",
-        expected: current ?? null,
-        evaluation: { id: evaluation.id, token, reclassification: true },
-      },
-      async () => {
-        if (outcome === "frozen")
-          throw new Error(
-            "Email eligibility changed before its frozen receipt; retrying",
-          );
-        return { kind: "removed" };
-      },
-    );
-  };
-  if (!current)
-    return publishAiEvaluation(db, evaluation.id, token, async () => ({
-      result: {
-        id: reclassificationSnapshot.parse(evaluation.snapshot).publicId,
-        outcome: "removed",
-        classification: null,
-        stage: null,
-        conflict: false,
-        error: null,
-      },
-    }));
+  const current = await readReclassifiedEmail(db, target.emailId);
+  const result = (outcome: string, after = current) =>
+    emailReclassifyResult.parse({
+      id: current?.shortcode ?? target.emailId,
+      outcome,
+      classification: after?.classification ?? null,
+      stage: after?.classificationStage ?? null,
+      conflict: false,
+      error: null,
+    });
+  if (!current || current.deletedAt) return result("removed");
   if (
     current.ledgerPartyId !== owner.ledgerPartyId ||
     current.mailboxId !== input.mailboxId
@@ -78,54 +41,34 @@ export async function executeReclassificationTarget(
     throw new Error(
       "Reclassification Email is outside its member/mailbox roster",
     );
+  if (current.checksum !== target.checksum) return result("changed");
   if (
     current.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION ||
     (await deferClassificationRefresh(db, "classification_only", current))
   )
-    return settle("frozen");
-  const snapshot = reclassificationSnapshot.parse(evaluation.snapshot);
-  await saveReclassificationSnapshot(db, evaluation.id, token, {
-    ...snapshot,
-    checksum: current.checksum,
-  });
-  await withRunEvaluation(owner.id, { id: evaluation.id, token }, async () => {
-    const provider = await gmailProviderForUser(
-      db,
-      owner.actorUserId,
-      input.mailboxId,
-    );
-    const triage =
+    return result("frozen");
+  const provider = await gmailProviderForUser(
+    db,
+    owner.actorUserId,
+    input.mailboxId,
+  );
+  await ingestGmailMessages(db, provider, {
+    ...ports,
+    triage:
       ports.triage ??
-      (await import("./triage-model")).productionMailTriage(
-        db,
-        owner.id,
-        undefined,
-        snapshot.decisionModelOverride,
-      );
-    await ingestGmailMessages(db, provider, {
-      ...ports,
-      triage,
-      ledgerPartyId: current.ledgerPartyId,
-      mailboxId: input.mailboxId,
-      messageIds: [current.messageId],
-      runId: owner.id,
-      reclassify: true,
-      evaluation: { id: evaluation.id, token, reclassification: true },
-    });
+      (await import("./triage-model")).productionMailTriage(db, owner.id),
+    ledgerPartyId: current.ledgerPartyId,
+    mailboxId: input.mailboxId,
+    messageIds: [current.messageId],
+    runId: owner.id,
+    reclassify: true,
   });
-  const published = await readEvaluationState(db, evaluation.id);
-  // A restart re-marked the item with its latest evidence.
-  if (
-    published &&
-    (!PENDING_AI_STATES.includes(published.state) ||
-      published.restarts > evaluation.restarts)
-  )
-    return;
   const after = await readReclassifiedEmail(db, current.id);
-  if (
-    after &&
-    (await deferClassificationRefresh(db, "classification_only", after))
-  )
-    return settle("frozen");
-  throw new Error("Reclassification evidence changed during publication");
+  if (!after || after.deletedAt || after.status === "deleted")
+    return result("removed", after);
+  if (after.checksum !== target.checksum) return result("changed", after);
+  return result(
+    after.classification === current.classification ? "confirmed" : "replaced",
+    after,
+  );
 }

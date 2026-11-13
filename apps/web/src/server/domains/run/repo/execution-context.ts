@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState, jobWaitReason } from "@cubby/schemas/job";
 import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
@@ -35,24 +33,7 @@ import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
-const boundEvaluation = new AsyncLocalStorage<{
-  runId: RunId;
-  evaluation: { id: string; token: string };
-}>();
-/** One evaluation may execute for its owning Run without that Run being `running`. */
-export const withRunEvaluation = <T>(
-  runId: RunId,
-  evaluation: { id: string; token: string },
-  work: () => Promise<T>,
-) => boundEvaluation.run({ runId, evaluation }, work);
-
-/** The workload boundary receives the same scoped attempt fence as the metered transport. */
-export const currentRunEvaluation = (runId: RunId) => {
-  const bound = boundEvaluation.getStore();
-  return bound?.runId === runId ? bound.evaluation : undefined;
-};
-
-/** Paid work belongs to a live Run that is running or executing a bound evaluation. */
+/** Paid work belongs to a live running Run. */
 export async function assertRunExecutable(db: Database, runId: RunId) {
   const [current] = await unwrapDb(db)
     .select({ status: run.status, retiredAt: run.retiredAt })
@@ -61,13 +42,7 @@ export async function assertRunExecutable(db: Database, runId: RunId) {
     .limit(1);
   if (!current || current.retiredAt)
     throw new Error("Run is no longer available for paid work.");
-  const evaluation = currentRunEvaluation(runId);
-  const sharedExecutable =
-    evaluation &&
-    (await (
-      await import("~/server/ai/evaluation/repo/ai-evaluation-requests")
-    ).evaluationIsExecutable(db, evaluation, runId));
-  if (current.status !== "running" && !sharedExecutable)
+  if (current.status !== "running")
     throw new Error("Run is no longer executable.");
   return current;
 }

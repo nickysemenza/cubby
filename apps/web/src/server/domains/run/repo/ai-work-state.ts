@@ -1,35 +1,20 @@
-import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { isMemberStartedRun } from "@cubby/schemas/run-fields";
-import {
-  and,
-  count,
-  eq,
-  inArray,
-  isNotNull,
-  notExists,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
-import { guardAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
-import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import {
   getDb,
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { aiEvaluation, run } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   assertWorkflowEffect,
   currentRunExecution,
 } from "~/server/workflows/runs/execution";
-
 export type RunRow = typeof run.$inferSelect;
-export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
 type RunUpdate = PgUpdateSetSource<typeof run>;
 
 export async function readRun(
@@ -73,7 +58,6 @@ export async function writeRunningAttemptProgress(
   runId: RunRow["id"],
   attempt: number,
   set: RunUpdate,
-  options: { requireNoOwnedPendingWork?: boolean } = {},
 ) {
   const execution = currentRunExecution();
   if (
@@ -86,37 +70,26 @@ export async function writeRunningAttemptProgress(
     const written = await getDb(target)
       .update(run)
       .set(set)
-      .where(
-        and(
-          eq(run.id, runId),
-          eq(run.status, "running"),
-          // Discovery may add or reopen work after the attempt read its roster.
-          options.requireNoOwnedPendingWork
-            ? notExists(
-                getDb(target)
-                  .select({ id: aiEvaluation.id })
-                  .from(aiEvaluation)
-                  .where(
-                    and(
-                      eq(aiEvaluation.runId, run.id),
-                      inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
-                      sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
-                    ),
-                  ),
-              )
-            : undefined,
-        ),
-      )
+      .where(and(eq(run.id, runId), eq(run.status, "running")))
       .returning({
         id: run.id,
         shortcode: run.shortcode,
         purpose: run.purpose,
         trigger: run.trigger,
       });
-    if (written[0])
+    if (written[0]) {
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(target, {
+        table: run,
+        entity: "run",
+        ids: [runId],
+        columns: Object.keys(set),
+      });
       await (
         await import("./work-progress")
       ).checkpointRunWorkProgress(target, written[0].shortcode);
+    }
     if (
       written[0] &&
       (set.status !== undefined ||
@@ -142,131 +115,4 @@ export async function writeRunningAttemptProgress(
       .for("no key update");
     return write(tx);
   });
-}
-
-export async function aiEvaluationsForRun(db: Database, runId: RunRow["id"]) {
-  return getDb(db)
-    .select()
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.runId, runId));
-}
-
-export async function guardAiEvaluationAttempt(
-  db: Database,
-  id: string,
-  attemptToken: string,
-) {
-  await withTransactionDatabase(db, (tx) =>
-    guardAiEvaluation(tx, id, attemptToken),
-  );
-}
-
-/** Waits for the next budget window or a reconnected mailbox; recovery resumes it. */
-export async function pauseRunForAiWork(
-  db: Database,
-  runId: RunRow["id"],
-  message: string,
-) {
-  await getDb(db)
-    .update(run)
-    .set({
-      status: "paused_auth",
-      endedAt: null,
-      failureCode: "execution_limit",
-      dispatchError: message,
-    })
-    .where(
-      and(
-        eq(run.id, runId),
-        or(
-          eq(run.status, "running"),
-          and(
-            eq(run.status, "needs_review"),
-            eq(run.failureCode, "execution_limit"),
-          ),
-        ),
-      ),
-    );
-}
-
-/** A funding stop ends when its evaluations' drain runs again after the wait. */
-export async function resumeFundingStoppedRuns(
-  db: Database,
-  runIds: readonly RunRow["id"][],
-) {
-  if (!runIds.length) return;
-  await getDb(db)
-    .update(run)
-    .set({ status: "running" })
-    .where(
-      and(
-        inArray(run.id, [...runIds]),
-        eq(run.status, "paused_auth"),
-        eq(run.failureCode, "execution_limit"),
-      ),
-    );
-}
-
-export async function readAiEvaluationReceipt(db: Database, id: string) {
-  const [row] = await getDb(db)
-    .select({ receipt: aiEvaluation.receipt })
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.id, id));
-  return row?.receipt;
-}
-
-/** Refresh coordinators need counts and pending identities, never inference snapshots. */
-export async function readAiRefreshWorkSummary(
-  db: Database,
-  runId: RunRow["id"],
-  attempt: number,
-) {
-  const where = and(
-    eq(aiEvaluation.runId, runId),
-    sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
-  );
-  const counts = await getDb(db)
-    .select({ state: aiEvaluation.state, count: count() })
-    .from(aiEvaluation)
-    .where(where)
-    .groupBy(aiEvaluation.state);
-  const errors = await getDb(db)
-    .select({ error: aiEvaluation.error })
-    .from(aiEvaluation)
-    .where(and(where, isNotNull(aiEvaluation.error)))
-    .orderBy(aiEvaluation.createdAt, aiEvaluation.id)
-    .limit(10);
-  const [diagnostic] = await getDb(db)
-    .select({
-      hasRoster: runEvaluationRosterExists(runId),
-      text: sql<
-        string | null
-      >`string_agg(${aiEvaluation.error}, ${"\n"} ORDER BY ${aiEvaluation.createdAt}, ${aiEvaluation.id})`,
-    })
-    .from(aiEvaluation)
-    .where(where);
-  const pending = await getDb(db)
-    .select({ id: aiEvaluation.id })
-    .from(aiEvaluation)
-    .where(and(where, inArray(aiEvaluation.state, PENDING_AI_STATES)))
-    .orderBy(aiEvaluation.createdAt, aiEvaluation.id)
-    .limit(2);
-  const tally = new Map(counts.map((row) => [row.state, row.count]));
-  return {
-    hasRoster: diagnostic?.hasRoster ?? false,
-    pending,
-    failureText: diagnostic?.text ?? null,
-    progress: aiRefreshProgress.parse({
-      attempt,
-      selected: counts.reduce((total, row) => total + row.count, 0),
-      queued: tally.get("queued") ?? 0,
-      resultReady: tally.get("result_ready") ?? 0,
-      completed: tally.get("completed") ?? 0,
-      blocked: tally.get("blocked") ?? 0,
-      failed: tally.get("failed") ?? 0,
-      obsolete: tally.get("obsolete") ?? 0,
-      cancelled: tally.get("cancelled") ?? 0,
-      errors: errors.flatMap((row) => (row.error ? [row.error] : [])),
-    }),
-  };
 }

@@ -79,7 +79,24 @@ export type ModelOutput = z.infer<typeof modelOutput>;
 export async function admitModel(
   db: Database,
   tier: AiFeature["tier"],
+  context?: { runId: string | null; askId: string; background: boolean },
 ): Promise<void> {
+  const runId = context?.runId;
+  if (runId)
+    await (
+      await import("~/server/domains/run/repo/execution-context")
+    ).assertRunExecutable(db, runEntityId.parse(runId));
+  else if (
+    context?.background &&
+    (await (
+      await import("~/server/domains/run/repo/automatic-ai-stop")
+    ).readAutomaticAiStop(db))
+  )
+    throw new (await import("~/server/generic/jobs/errors")).JobDeferredError(
+      "Automatic AI work is stopped",
+      new Date(Date.now() + 60_000),
+      "provider_capacity",
+    );
   if (tier === "decision" || tier === "embedding") return;
   const status = await (await import("./funding")).readAiFundingStatus(db);
   if (
@@ -114,7 +131,7 @@ export const modelAsks = declarations.map((feature) =>
           : "decision-choice.v1",
     },
     label: feature.feature,
-    admit: (db) => admitModel(db, feature.tier),
+    admit: (db, context) => admitModel(db, feature.tier, context),
     produce: (input, { db, runId }) =>
       produceModel(async () => {
         const usage = {

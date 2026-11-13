@@ -1,5 +1,5 @@
-import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { askState } from "@cubby/schemas/kernel/machinery";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -246,7 +246,7 @@ export async function launchWorkflowRun(
         progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
-    if (!input.automatic) await reviveRunEvaluations(tx, input.runId);
+    if (!input.automatic) await reviveRunAsks(tx, input.runId);
     return {
       attempt: generation,
       instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
@@ -278,28 +278,16 @@ const progressAttempt = z.object({ attempt: z.number().int().nonnegative() });
 /** Whether a finished Run still owes queued steps or AI work a relaunch would run. */
 async function runOwesWork(tx: Database, runId: RunId) {
   const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
-    EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
-      AND e.receipt->>'retryEvaluationId' IS NULL
-      AND (e."runId"=${runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${runId}::uuid AND r."cancelledAt" IS NULL)))
+    EXISTS (SELECT 1 FROM "Ask" a JOIN "AskScope" s ON s."askId"=a.id
+      WHERE s."runId"=${runId}::uuid AND s."cancelledAt" IS NULL AND a.state=${askState.enum.queued})
     OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${runId}::uuid AND s.state=${runStepState.enum.queued})
   ) AS pending`);
   return pending.rows[0]?.pending ?? false;
 }
 
 /** Items parked while a Run was stopped return when a member relaunches it. */
-async function reviveRunEvaluations(tx: Database, runId: RunId) {
-  const pending = await getDb(tx).execute<{
-    id: string;
-  }>(sql`SELECT e.id FROM "AiEvaluation" e
-    WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.result_ready})
-      AND (e."runId"=${runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${runId}::uuid AND r."cancelledAt" IS NULL))`);
-  const { markAiEvaluationWork } =
-    await import("~/server/ai/evaluation/repo/ai-evaluation-work");
-  await markAiEvaluationWork(
-    tx,
-    pending.rows.map((row) => row.id),
-    { revive: true },
-  );
+async function reviveRunAsks(tx: Database, runId: RunId) {
+  await (await import("~/server/kernel/api")).retryRunAsks(tx, runId);
 }
 
 /**
@@ -363,7 +351,7 @@ async function launchPassRun(
         progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || jsonb_build_object('attempt', ${generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
-    if (!input.automatic) await reviveRunEvaluations(tx, input.runId);
+    if (!input.automatic) await reviveRunAsks(tx, input.runId);
     return {
       attempt: generation,
       instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
@@ -671,6 +659,14 @@ export async function reconcileWorkflowRuns(
                 : null,
         })
         .where(and(eq(runTable.id, row.runId!), reconcilable()));
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(tx, {
+        table: runTable,
+        entity: "run",
+        ids: [row.runId!],
+        columns: ["status", "endedAt", "failureCode"],
+      });
       return true;
     });
     if (updated) reconciled++;

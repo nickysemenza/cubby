@@ -3,15 +3,12 @@ import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
-import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
-import { runSummaryDrain } from "~/server/domains/run/service/run-summary";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   derivedRebuildDue,
@@ -148,10 +145,8 @@ const kernelDrain: BackgroundDrain = {
 // Built per permit: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   kernelDrain,
-  aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
-  runSummaryDrain,
 ];
 
 /** Every production drain's `due` rows, for reads that report owed drain units. */

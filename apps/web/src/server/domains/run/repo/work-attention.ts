@@ -10,10 +10,6 @@ import {
 } from "@cubby/schemas/run-fields";
 import { eq, notInArray, sql, type SQL } from "drizzle-orm";
 
-import {
-  evaluationRosterExists,
-  evaluationRecoveryExists,
-} from "~/server/ai/evaluation/repo/evaluation-tally";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { related } from "~/server/db/helpers/related";
 import { imageProcessingJob } from "~/server/db/retained-tables";
@@ -91,8 +87,7 @@ export function historicalRoutineRunPredicate(input: {
     AND ${input.status} IN (${RUN.failed}, ${RUN.dispatch_failed}, ${RUN.needs_review})
     AND ${input.failureCode} IS DISTINCT FROM 'execution_limit'
   THEN NOT ${runHasLiveWork(input.id)}
-    AND NOT ${evaluationRosterExists({ runId: input.id, source: "owned" })}
-    AND NOT ${evaluationRosterExists({ runId: input.id, source: "requested" })}
+    AND NOT EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id})
     AND NOT ${unresolvedImageWorkExists(input.id)}
     AND NOT EXISTS (SELECT 1 FROM "RunFinding" historical_finding WHERE historical_finding."runId" = ${input.id} AND ${activeFindingSql("historical_finding")})
     AND NOT EXISTS (SELECT 1 FROM "PhotoGroupProposal" historical_proposal WHERE historical_proposal."runId" = ${input.id} AND historical_proposal.state = ${photoGroupProposalState.enum.proposed})
@@ -106,14 +101,12 @@ export function settledAiRunPredicate(input: {
   status: SQL;
   failureCode: SQL;
 }): SQL<boolean> {
-  const owned = { runId: input.id, source: "owned" } as const;
-  const requested = { runId: input.id, source: "requested" } as const;
   return sql<boolean>`(${input.purpose} = ${runPurpose.enum.ai_refresh}
     AND ${input.status} = ${RUN.failed}
     AND ${input.failureCode} IS NOT DISTINCT FROM ${"ai_work_failed"}
-    AND ${evaluationRosterExists(owned)}
-    AND NOT ${evaluationRecoveryExists(owned)}
-    AND NOT ${evaluationRecoveryExists(requested)}
+    AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."runId" = ${input.id})
+    AND NOT EXISTS (SELECT 1 FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+      WHERE s."runId" = ${input.id} AND s."cancelledAt" IS NULL AND a.state <> ${"answered"})
     AND NOT ${runHasLiveWork(input.id)}
     AND NOT ${unresolvedImageWorkExists(input.id)})`;
 }

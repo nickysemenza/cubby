@@ -623,6 +623,14 @@ async function completeRunIfDone(
         endedAt: now,
       })
       .where(eq(runTable.id, scope.public.runId));
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(txDb, {
+      table: runTable,
+      entity: "run",
+      ids: [scope.public.runId],
+      columns: ["status", "endedAt", "failureCode"],
+    });
   } else {
     await getDb(txDb)
       .update(runTable)

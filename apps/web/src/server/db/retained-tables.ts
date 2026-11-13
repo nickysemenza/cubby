@@ -103,6 +103,7 @@ import {
 } from "./entity-link-schema";
 import {
   device,
+  email,
   expense,
   image,
   ledgerTransfer,
@@ -567,6 +568,19 @@ export const ledgerSourceClaim = pgTable(
  */
 
 /** One immutable observation from a location photo pass. */
+export const mailHandlingReceipt = pgTable("MailHandlingReceipt", {
+  id: pkUuid(),
+  runId: uuid("runId")
+    .notNull()
+    .references(() => run.id),
+  emailId: uuid("emailId")
+    .notNull()
+    .references(() => email.id),
+  key: text("key").notNull().unique("MailHandlingReceipt_key_key"),
+  receipt: jsonb("receipt").notNull().$type<KernelJson>(),
+  createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+});
+
 export const photoInventoryEvidence = pgTable("PhotoInventoryEvidence", {
   id: pkUuid(),
   locationId: uuid("locationId")

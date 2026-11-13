@@ -1,9 +1,6 @@
 import {
-  locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   locationAiJobKey,
-  runAiSummaryJobKey,
-  runAiSummaryWriteTaskSchema,
   type BackgroundTask,
 } from "@cubby/schemas/background-tasks";
 import { runEntityId } from "@cubby/schemas/identifiers";
@@ -68,21 +65,6 @@ async function locationVision<T>(
 }
 
 const BACKGROUND_TASK_KINDS = {
-  "location-ai.description.refresh": {
-    schema: locationAiDescriptionRefreshTaskSchema,
-    key: (task) => locationAiJobKey(task.kind, task.locationId),
-    providerFenced: true,
-    run: (db, task, fenced) =>
-      locationVision((vision) =>
-        vision.describeLocation(
-          db,
-          task.locationId,
-          taskRunOwner(task),
-          undefined,
-          fenced,
-        ),
-      ),
-  },
   "location-ai.inventory.refresh": {
     schema: locationAiInventoryRefreshTaskSchema,
     key: (task) => locationAiJobKey(task.kind, task.locationId),
@@ -98,16 +80,6 @@ const BACKGROUND_TASK_KINDS = {
           fenced,
         ),
       ),
-  },
-  "run-ai.summary.write": {
-    schema: runAiSummaryWriteTaskSchema,
-    key: (task) => runAiSummaryJobKey(task.subjectRunId, task.endedAt),
-    providerFenced: true,
-    run: async (db, task, fenced) => {
-      const { writeRunSummary } =
-        await import("~/server/domains/run/service/run-summary");
-      return writeRunSummary(db, task, fenced);
-    },
   },
 } satisfies {
   readonly [K in JobBackgroundTaskKind]: BackgroundTaskKind<K>;

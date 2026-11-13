@@ -22,6 +22,8 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 import {
+  cancelRunAsks,
+  retryRunAsks,
   createKernel,
   defineModule,
   defineAsk,
@@ -591,6 +593,57 @@ describe("evidence-facts kernel", () => {
       sql`SELECT count(*)::int AS n FROM "Ask" WHERE "claimPartition" = ${limit.partition} AND "claimToken" IS NOT NULL AND "claimDeadline" > now()`,
     );
     expect(live.rows[0]?.n).toBe(2);
+  });
+
+  it("retains replay requester receipts and withdraws only the cancelled Run's demand", async () => {
+    let calls = 0;
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        calls++;
+        return "Groceries";
+      },
+    });
+    const first = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const second = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+    });
+    let admittedFor: string | null = null;
+    await kernel.withAsk(
+      ctx.db,
+      {
+        ...fixture.categorize,
+        admit: async (_db, context) => {
+          admittedFor = context.runId;
+        },
+      },
+      { merchant: "Synthetic Replay Shop" },
+      { runId: first },
+    );
+    await kernel.withAsk(
+      ctx.db,
+      fixture.categorize,
+      { merchant: "Synthetic Replay Shop" },
+      { runId: second },
+    );
+    expect(admittedFor).toBe(first);
+    expect(calls).toBe(1);
+    await cancelRunAsks(ctx.db, first);
+    const requests = await repositoryQueries(ctx.db).execute<{
+      runId: string;
+      cancelled: boolean;
+    }>(sql`
+      SELECT "runId", "cancelledAt" IS NOT NULL AS cancelled FROM "AskScope" WHERE "scopeKind"=${"run"}`);
+    expect(requests.rows).toEqual(
+      expect.arrayContaining([
+        { runId: first, cancelled: true },
+        { runId: second, cancelled: false },
+      ]),
+    );
+    await retryRunAsks(ctx.db, first);
+    expect((await kernel.runWork(ctx.db, first)).asks).toEqual(
+      expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
+    );
+    expect(calls).toBe(1);
   });
 
   it("never sends an unknown ask again", async () => {

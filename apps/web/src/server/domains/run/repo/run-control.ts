@@ -42,7 +42,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
-import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  getDb,
+  notDeleted,
+  withTransaction,
+} from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
 import {
   ledgerParty,
@@ -420,6 +425,14 @@ export async function markRunFailed(
         ledgerPartyId: runTable.ledgerPartyId,
       });
     if (!failed) return failed;
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(databaseForTransaction(tx), {
+      table: runTable,
+      entity: "run",
+      ids: [runId],
+      columns: ["status", "endedAt", "failureCode"],
+    });
     await recordChange(tx, {
       kind: "source",
       categories: ["run"],
@@ -792,6 +805,14 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(databaseForTransaction(tx), {
+        table: runTable,
+        entity: "run",
+        ids: [scope.runId],
+        columns: ["status", "endedAt", "failureCode"],
+      });
       await failOperationsForRun(
         tx,
         scope.runId,

@@ -174,8 +174,6 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/email-evidence-write-scope.ts",
   "src/server/generic/problems/repo/detectors-purchase.ts",
   "src/server/generic/problems/repo/reparse.ts",
-  "src/server/ai/evaluation/repo/ai-evaluation-requests.ts",
-  "src/server/ai/evaluation/repo/ai-evaluation-work.ts",
   "src/server/generic/jobs/drain-store.ts",
   "src/server/entity-kernel/repo/entity-identity.ts",
   "src/server/entity-kernel/repo/debug.ts",

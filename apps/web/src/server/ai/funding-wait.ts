@@ -67,7 +67,7 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "evaluations" | "embeddings" | "images" | "jobs" | "asks";
+  name: "runs" | "embeddings" | "images" | "jobs" | "asks";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };
@@ -117,17 +117,6 @@ export const fundingWaiters: readonly FundingWait[] = [
         ).releaseFundingPausedDiscovery(db, now);
       return count;
     },
-  },
-  {
-    name: "evaluations",
-    count: async (db) =>
-      (
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
-      ).countFundingWaitingEvaluations(db),
-    wake: async (db) =>
-      (
-        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
-      ).wakeFundingWaitingEvaluations(db),
   },
   {
     name: "images",
@@ -186,14 +175,4 @@ export async function resumeFundingPausedRuns(
     await import("~/server/workflows/background-tasks/publish")
   ).wakeJobs({ source: "funding-window" });
   return woken;
-}
-
-/** The evaluation drain resumes its own paused requesters after it claims them. */
-export async function resumeFundingStoppedRuns(
-  db: Database,
-  runIds: readonly RunId[],
-) {
-  await (
-    await import("~/server/domains/run/repo/ai-work-state")
-  ).resumeFundingStoppedRuns(db, runIds);
 }

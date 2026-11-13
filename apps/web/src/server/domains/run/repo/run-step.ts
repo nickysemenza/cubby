@@ -300,12 +300,21 @@ export async function finishStepRunRow(
         and(eq(run.id, runId), eq(run.status, "running"), attemptIs(attempt)),
       )
       .returning({ id: run.id, purpose: run.purpose, trigger: run.trigger });
-    if (finished)
+    if (finished) {
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(tx, {
+        table: run,
+        entity: "run",
+        ids: [runId],
+        columns: ["status", "endedAt", "failureCode"],
+      });
       await recordChange(tx, {
         kind: finished.purpose === "derived_refresh" ? "projection" : "source",
         categories: ["run"],
         ringFromBackground: isMemberStartedRun(finished),
       });
+    }
     return Boolean(finished);
   });
 }

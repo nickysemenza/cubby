@@ -347,19 +347,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Does not bypass funding eligibility or force a member-paused Run.",
   },
-  "location-ai.description.refresh": {
-    ...SERVER,
-    maxAttempts: 10,
-    backoff: RECOVERABLE_BACKOFF,
-    label: "Describe a Location",
-    purpose: "Refreshes the AI description for a Location.",
-    trigger: "Location description refresh request.",
-    targets: "The requested Location and current evidence.",
-    effects: "Records an eligible Location description result.",
-    dependencies: "Location evidence and configured AI model.",
-    cost: "AI funding policy applies.",
-    exclusions: "Results are applied only under the owning field policy.",
-  },
   "location-ai.inventory.refresh": {
     ...SERVER,
     maxAttempts: 10,
@@ -372,22 +359,6 @@ export const JOB_KIND_POLICY = {
     dependencies: "Location inventory evidence and configured model.",
     cost: "AI funding policy applies.",
     exclusions: "Analysis alone does not receive or deduct stock.",
-  },
-  "run-ai.summary.write": {
-    ...SERVER,
-    maxAttempts: 6,
-    backoff: RECOVERABLE_BACKOFF,
-    label: "Summarize an ended Run",
-    activityLabel: "Run summaries",
-    purpose: "Writes the AI summary shown in an ended Run's header.",
-    trigger: "A Run in the default Runs list reaching its end state.",
-    targets: "One ended Run and its recorded title, cause, outcome and steps.",
-    effects:
-      "Records one AI summary for that end; the Run's status, cost and progress are unchanged.",
-    dependencies: "The fast AI tier and the AI funding window.",
-    cost: "One short fast-tier call per ended Run, recorded as automatic AI usage.",
-    exclusions:
-      "Runs that ended before summaries existed, hidden automatic Runs, and Runs that changed again before the summary was written.",
   },
   "background.drain": {
     ...SERVER,

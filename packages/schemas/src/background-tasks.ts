@@ -3,7 +3,7 @@ import { searchableEntities } from "./generated/entity-roster.gen";
 import { locationId, parseEntityRef } from "./identifiers";
 
 export const locationAiJobKey = (
-  kind: "location-ai.description.refresh" | "location-ai.inventory.refresh",
+  kind: "location-ai.inventory.refresh",
   locationId: string,
 ) => `${kind}:${locationId}`;
 
@@ -32,33 +32,11 @@ const entityEmbeddingRefreshTaskSchema = z
     return { ...task, entityKind: ref.entity, entityId: ref.id, ref };
   });
 
-export const locationAiDescriptionRefreshTaskSchema = z.object({
-  kind: z.literal("location-ai.description.refresh"),
-  ...taskEnvelopeFields,
-  locationId,
-});
-
 export const locationAiInventoryRefreshTaskSchema = z.object({
   kind: z.literal("location-ai.inventory.refresh"),
   ...taskEnvelopeFields,
   locationId,
 });
-
-/**
- * Write the AI summary of one ended Run's end generation. The summarized Run
- * is `subjectRunId`, never the envelope's `runId`: the Job must not count as
- * the Run's own work (its wait, stall or progress).
- */
-export const runAiSummaryWriteTaskSchema = z.object({
-  kind: z.literal("run-ai.summary.write"),
-  ...taskEnvelopeFields,
-  subjectRunId: z.uuid(),
-  /** The `endedAt` this summary describes; a re-ended Run is a new key. */
-  endedAt: z.iso.datetime(),
-});
-/** One summary Job per Run end generation; an exhausted one is never re-owed. */
-export const runAiSummaryJobKey = (runId: string, endedAt: string) =>
-  `run-summary:${runId}:${Date.parse(endedAt)}`;
 
 const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
@@ -90,11 +68,9 @@ const calendarFeedMarkDirtyTaskSchema = z.object({
 /** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
-  locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
-  runAiSummaryWriteTaskSchema,
 ]);
 
 /** The parsed (branded) task a handler receives. */

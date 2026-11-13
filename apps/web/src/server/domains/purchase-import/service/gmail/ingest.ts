@@ -303,7 +303,6 @@ async function observeClassification(
       promptVersion: call?.promptVersion ?? null,
       operation: call?.operation ?? null,
       conflict,
-      evaluationId: input.evaluation?.id ?? null,
       provenance: {
         dependencies,
         inputFingerprint: checksum,
@@ -598,7 +597,6 @@ async function acquireEligible(
         runId: input.runId,
         executionPolicy,
         expected: prior,
-        evaluation: input.evaluation,
       },
       async () => {
         throw new Error("Email eligibility changed; retrying");
@@ -614,9 +612,6 @@ async function acquireEligible(
     runId: input.runId,
     executionPolicy,
     expected: prior,
-    evaluation: input.evaluation
-      ? { ...input.evaluation, sourceChecksum: checksum, observationId: null }
-      : undefined,
     observationId: null,
   };
   const metadata = {
@@ -987,7 +982,6 @@ export async function ingestGmailMessages(
     reclassify?: boolean;
     refreshStage?: "mailbox-triage" | "mailbox-relevance";
     refreshDependencies?: AiProvenance["dependencies"];
-    evaluation?: { id: string; token: string; reclassification?: boolean };
     storage?: OrderMailAttachmentStorage;
     onMessage?: (handled: number) => Promise<void>;
   },
@@ -1031,7 +1025,6 @@ export async function ingestGmailMessages(
             runId: input.runId,
             executionPolicy,
             expected: beforeFetch,
-            evaluation: input.evaluation,
           },
           async () => {
             throw new Error(
@@ -1062,9 +1055,7 @@ export async function ingestGmailMessages(
           runId: input.runId,
           executionPolicy,
           expected: beforeFetch,
-          evaluation: input.evaluation
-            ? { ...input.evaluation, removed: true }
-            : undefined,
+          removed: true,
         },
         async (tx) => {
           if (fetched.missing)

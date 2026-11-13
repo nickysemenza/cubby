@@ -116,10 +116,7 @@ export async function listSubjectJobs(
   const keys =
     subject.kind === "image"
       ? []
-      : [
-          locationAiJobKey("location-ai.description.refresh", recordId),
-          locationAiJobKey("location-ai.inventory.refresh", recordId),
-        ];
+      : [locationAiJobKey("location-ai.inventory.refresh", recordId)];
   return readJobs(db, inArray(job.key, keys), null, null);
 }
 

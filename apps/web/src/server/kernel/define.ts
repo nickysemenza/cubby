@@ -152,7 +152,10 @@ export type AskKind<I = unknown, O = unknown> = {
   readonly label: string;
   // Methods, so an AskKind<I, O> is an AskKind of the registry's shared shape.
   /** Funding admission before the ask is marked sent; throws a wait to refuse. */
-  admit?(db: Database): Promise<void>;
+  admit?(
+    db: Database,
+    context: { runId: string | null; askId: string; background: boolean },
+  ): Promise<void>;
   /** Places the call; reads only its declared input. */
   produce?(input: I, context: ProduceContext): Promise<Produced<O>>;
   /** Estimated cost of one call, for drift proposals. */
@@ -169,7 +172,10 @@ export function defineAsk<I, O>(spec: {
   maxAttempts?: number;
   claimLimit?: ClaimLimit;
   label?: string;
-  admit?(db: Database): Promise<void>;
+  admit?(
+    db: Database,
+    context: { runId: string | null; askId: string; background: boolean },
+  ): Promise<void>;
   produce?(input: I, context: ProduceContext): Promise<Produced<O>>;
   estimateCostMicros?(input: I): number;
 }): AskKind<I, O> {

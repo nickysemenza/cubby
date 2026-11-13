@@ -48,8 +48,12 @@ export const fieldAsk = defineAsk({
   output: fieldAnswer,
   policy: { tier: FIELD_SUGGESTION_FEATURE.tier },
   label: "Cubby's answer",
-  admit: async (db) =>
-    (await import("~/server/ai/model-asks")).admitModel(db, "decision"),
+  admit: async (db, context) =>
+    (await import("~/server/ai/model-asks")).admitModel(
+      db,
+      "decision",
+      context,
+    ),
   // Loaded on call: the producer's graph (rosters, domain readers) stays out
   // of the module list the kernel and the write boundary load.
   produce: async (input, context) =>

@@ -22,7 +22,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { operationCommandRequest } from "~/contracts/define";
@@ -37,8 +37,6 @@ import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   aiUsage,
-  aiEvaluation,
-  aiEvaluationRequest,
   emailCandidateObservation,
   emailClassificationObservation,
   emailReview,
@@ -976,20 +974,15 @@ export async function emailReviewReport(
     email.classification === "uncertain"
       ? await client
           .select({ owner: run })
-          .from(aiEvaluationRequest)
-          .innerJoin(
-            aiEvaluation,
-            eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
-          )
-          .innerJoin(run, eq(run.id, aiEvaluationRequest.runId))
+          .from(run)
           .where(
             and(
-              eq(aiEvaluation.executionKind, "mail_reclassify"),
-              sql`${aiEvaluation.target}->>'recordId' = ${email.id}`,
-              sql`${aiEvaluation.snapshot}->>'checksum' IS NOT DISTINCT FROM ${email.checksum}`,
+              eq(run.purpose, "mail_reclassify"),
+              sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${run.input}->${"emails"}) selected
+              WHERE selected->>${"emailId"} = ${email.id}::text
+                AND selected->>${"checksum"} IS NOT DISTINCT FROM ${email.checksum})`,
               eq(run.ledgerPartyId, email.ledgerPartyId),
               notDeleted(run),
-              isNull(aiEvaluationRequest.cancelledAt),
             ),
           )
           .orderBy(desc(run.startedAt), desc(run.id))

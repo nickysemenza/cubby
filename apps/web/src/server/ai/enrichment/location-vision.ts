@@ -68,8 +68,6 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-
 const log = createLogger("ai.analysis");
 
 const MAX_ANALYSIS_IMAGES = 5;
@@ -732,20 +730,16 @@ export const selectLocationDescriptionBackfill = async (
   return locations.map((location) => location.id);
 };
 
-/** Publish one description-refresh task per selected location. */
+/** Owe each selected location's fields scope; Answers are shared with inline requests. */
 export const enqueueLocationDescriptionBackfill = async (
   db: Database,
   locationIds: readonly LocationId[],
 ): Promise<{ enqueued: number; total: number }> => {
-  const requestedAt = new Date().toISOString();
-  const receipt = await publishBackgroundTasks(
+  await (
+    await import("~/server/kernel/api")
+  ).reconcileNow(
     db,
-    locationIds.map((locationId) => ({
-      kind: "location-ai.description.refresh" as const,
-      requestedAt,
-      locationId,
-    })),
-    { source: "location-ai.description.backfill" },
+    locationIds.map((id) => ({ kind: "fields", key: `location:${id}` })),
   );
-  return { enqueued: receipt.count, total: locationIds.length };
+  return { enqueued: locationIds.length, total: locationIds.length };
 };

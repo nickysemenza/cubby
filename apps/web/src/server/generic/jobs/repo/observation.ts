@@ -1,7 +1,3 @@
-import {
-  aiEvaluationState,
-  aiExecutionKind,
-} from "@cubby/schemas/ai-evaluation";
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
@@ -18,7 +14,6 @@ import {
   workQueueWaitReason,
 } from "@cubby/schemas/job";
 import type {
-  AiEvaluationBacklog,
   JobExecution,
   WorkActivity,
   WorkQueueUnit,
@@ -31,7 +26,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db/database";
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -61,8 +55,6 @@ const RECENT_MINUTES = {
   failed: 60,
   outcome: 60,
 } as const;
-/** Blocked evaluations are terminal history; only recent ones are a backlog. */
-const BLOCKED_DAYS = 7;
 /** Wait groups named per Job kind, largest first. */
 const WAIT_GROUPS = 3;
 /** Active Runs named per stream, newest first. */
@@ -194,47 +186,6 @@ async function readEmbeddingStreams(
   ];
 }
 
-/** AI evaluations, held on their own rows: one stream per feature. */
-async function readAiEvaluationStreams(
-  db: Database,
-  now: Date,
-): Promise<StreamRow[]> {
-  const at = sql`${now.toISOString()}::timestamp`;
-  const since = (minutes: number) =>
-    sql`${at} - ${minutes} * interval '1 minute'`;
-  const owed = sql`e."runAt" IS NOT NULL AND e.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})`;
-  const held = sql`e."leaseUntil" > ${at}`;
-  const later = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" > ${at}`;
-  const claimable = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" <= ${at}`;
-  const rows = await getDb(db).execute<StreamRow>(
-    sql`
-    SELECT 'ai.evaluation:' || e.feature AS kind,
-      count(*) FILTER (WHERE ${held})::int AS "running",
-      count(*) FILTER (WHERE ${claimable})::int AS "due",
-      count(*) FILTER (WHERE ${later} AND e.attempts > 0)::int AS "backingOff",
-      count(*) FILTER (WHERE ${later} AND e.attempts = 0)::int AS "scheduled",
-      0 AS "paused",
-      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
-      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
-      count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.failed} AND e."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
-      -- Evidence invalidation finishes owed work without publishing a value.
-      max(e."updatedAt") FILTER (WHERE e.state IN (${aiEvaluationState.enum.completed}, ${aiEvaluationState.enum.obsolete})) AS "lastCompletedAt",
-      min(e."runAt") FILTER (WHERE ${claimable}) AS "oldestDueAt",
-      ARRAY(
-        SELECT r.shortcode FROM "AiEvaluation" stream
-        JOIN "Run" r ON r.id = stream."runId"
-        WHERE stream.feature = e.feature AND stream."runAt" IS NOT NULL AND ${notDeleted("r")}
-          AND r.status = ANY(${textArrayParam(ACTIVE_RUN_STATUSES)})
-        GROUP BY r.id ORDER BY r."createdAt" DESC, r.id LIMIT ${STREAM_RUNS}
-      ) AS "runs"
-    FROM "AiEvaluation" e
-    WHERE ${owed} OR e."updatedAt" > ${since(RECENT_MINUTES.failed)}
-    GROUP BY e.feature`,
-    "objects",
-  );
-  return rows;
-}
-
 /** Map stream identities through the owning drain declaration. */
 const drainStreamKind = (unit: string, declarations: readonly DrainDue[]) =>
   declarations
@@ -360,47 +311,6 @@ async function readQueue(db: Database, now: Date, drains: readonly DrainDue[]) {
   };
 }
 
-/**
- * Owed and recently blocked AI evaluations by feature and state. It also
- * reports, per feature, answers that are paid for, owed and not published: a
- * `result_ready` row no page holds that is due, or that waits out a failed
- * publication's backoff. A row parked (`runAt` null), postponed, or held by a
- * funding or provider wait (`waitCause`) until a later `runAt` is waiting on
- * purpose and is not counted. A row counts from its failing streak's start,
- * else from when it fell due.
- */
-async function readAiEvaluationBacklog(db: Database, now: Date) {
-  const at = sql`${now.toISOString()}::timestamp`;
-  const { queued, result_ready, blocked } = aiEvaluationState.enum;
-  const unpublished = sql`e.state = ${result_ready} AND e."runAt" IS NOT NULL
-    AND NOT coalesce(e."leaseUntil" > ${at}, false)
-    AND (e."runAt" <= ${at} OR (e."failingSince" IS NOT NULL AND e."waitCause" IS NULL))`;
-  const rows = await getDb(db).execute<{
-    feature: string;
-    state: AiEvaluationBacklog["state"];
-    count: number;
-    oldestAt: string;
-    errorClass: string | null;
-    unpublished: number;
-    unpublishedSince: string | null;
-  }>(sql`
-    SELECT e.feature, e.state, count(*)::int AS count, min(e."createdAt") AS "oldestAt",
-      -- Stored errors are cause chains; the first cause's name is the class.
-      mode() WITHIN GROUP (ORDER BY coalesce(substring(e.error from '"name":"([^"]+)"'), left(e.error, 80)))
-        FILTER (WHERE e.error IS NOT NULL) AS "errorClass",
-      count(*) FILTER (WHERE ${unpublished})::int AS unpublished,
-      min(CASE WHEN e."waitCause" IS NULL THEN coalesce(e."failingSince", e."runAt") ELSE e."runAt" END)
-        FILTER (WHERE ${unpublished}) AS "unpublishedSince"
-    FROM "AiEvaluation" e
-    -- Every execution kind, spelled out so the (executionKind, state) index serves the read.
-    WHERE e."executionKind" = ANY(${textArrayParam(aiExecutionKind.options)})
-      AND (e.state IN (${queued}, ${result_ready})
-        OR (e.state = ${blocked} AND e."updatedAt" > ${at} - ${BLOCKED_DAYS} * interval '1 day'))
-    GROUP BY e.feature, e.state
-    ORDER BY e.feature, e.state`);
-  return rows.rows;
-}
-
 const WAIT_REASON_TEXT = {
   provider_capacity: "provider capacity",
   ai_funding_window: "AI funding",
@@ -470,10 +380,6 @@ function describeQueue(activity: WorkActivity): string {
         }`,
       );
   }
-  for (const row of activity.evaluations)
-    lines.push(
-      `AiEvaluation ${row.feature} ${row.state}: ${row.count}, oldest ${row.oldestAt}${row.errorClass ? `, top error ${row.errorClass}` : ""}`,
-    );
   return lines.join("\n");
 }
 
@@ -555,12 +461,10 @@ async function observeWork(
         : [],
     ),
   );
-  const evaluations = await readAiEvaluationBacklog(db, now);
   const streams = [
     ...rows.rows,
     ...(await readImageStreams(db, now)),
     ...(await readEmbeddingStreams(db, now)),
-    ...(await readAiEvaluationStreams(db, now)),
   ]
     .sort((left, right) => left.kind.localeCompare(right.kind))
     .map((row) => ({
@@ -606,7 +510,6 @@ async function observeWork(
       completedMinutes: RECENT_MINUTES.completed,
       failedMinutes: RECENT_MINUTES.failed,
       outcomeMinutes: RECENT_MINUTES.outcome,
-      blockedDays: BLOCKED_DAYS,
     },
     streams,
     queue: [
@@ -662,33 +565,12 @@ async function observeWork(
         ];
       }),
     ].sort((left, right) => left.unit.localeCompare(right.unit)),
-    evaluations: evaluations.map((row) => ({
-      feature: row.feature,
-      label: kindLabel(`ai.evaluation:${row.feature}`),
-      state: row.state,
-      count: row.count,
-      // SAFETY: an aggregate over at least one row with a non-null createdAt.
-      oldestAt: iso(row.oldestAt)!,
-      errorClass: row.errorClass,
-    })),
   };
   return {
     activity,
     drains: queue.drains,
     owed: queue.owed,
     deferring,
-    unpublished: evaluations.flatMap((row) =>
-      row.unpublishedSince
-        ? [
-            {
-              feature: row.feature,
-              count: row.unpublished,
-              since: new Date(`${row.unpublishedSince}Z`),
-              errorClass: row.errorClass,
-            },
-          ]
-        : [],
-    ),
   };
 }
 
@@ -844,16 +726,6 @@ async function readFailedWork(db: Database, now: Date) {
       WHERE (state = ${jobState.enum.failed} AND "updatedAt" > ${since}::timestamp
         AND NOT EXISTS (SELECT 1 FROM "Job" done WHERE done.kind = j.kind AND done.state = ${jobState.enum.completed} AND done."updatedAt" > j."updatedAt"))
         OR (state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
-      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", "updatedAt", error FROM "AiEvaluation" evaluation
-        WHERE ((state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
-          OR (state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})
-            AND "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
-          AND NOT ${retried(sql`evaluation.receipt`)}
-          AND (NOT EXISTS (SELECT 1 FROM "AiEvaluationRequest" request
-              WHERE request."evaluationId" = evaluation.id AND ${retried(sql`request.receipt`)})
-            OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" request
-              WHERE request."evaluationId" = evaluation.id AND request."cancelledAt" IS NULL
-                AND NOT ${retried(sql`request.receipt`)}))
       UNION ALL SELECT 'image.' || lane, "updatedAt", "updatedAt", "lastError" FROM "ImageProcessingJob" image_job
         WHERE (state = ${imageProcessingJobState.enum.failed}
           OR (state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
@@ -988,11 +860,10 @@ export async function readBackgroundWorkStatus(
   now: Date,
   drainDues: readonly DrainDue[],
 ) {
-  const [{ activity, drains, owed, deferring, unpublished }, failures] =
-    await Promise.all([
-      observeWork(db, now, drainDues),
-      readFailedWork(db, now),
-    ]);
+  const [{ activity, drains, owed, deferring }, failures] = await Promise.all([
+    observeWork(db, now, drainDues),
+    readFailedWork(db, now),
+  ]);
   const rebuild = activity.rebuild;
   const stuck: WorkStuckItem[] = [...failures];
   const stuckWindow = minutesAgo(now, STUCK_WINDOW_MINUTES);
@@ -1067,26 +938,6 @@ export async function readBackgroundWorkStatus(
       declarations: drainDues,
     }),
   );
-  for (const pile of unpublished) {
-    const kind = `ai.evaluation:${pile.feature}`;
-    if (
-      pile.since > stuckWindow ||
-      stuck.some((item) => item.key === `${kind}:failing`)
-    )
-      continue;
-    stuck.push({
-      key: `${kind}:unpublished`,
-      title: `${kindLabel(kind)}: AI answers aren't being saved`,
-      body: `${countLabel(pile.count, "AI answer")} ${pile.count === 1 ? "has" : "have"} waited ${formatStuckAge(now.getTime() - pile.since.getTime())} to be saved. Kept answers are not paid for again.`,
-      since: pile.since.toISOString(),
-      action: { type: "none" },
-      diagnostic: [
-        pile.errorClass ? `Top error: ${pile.errorClass}` : null,
-        queueDiagnostic(),
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    });
-  }
+
   return { stuck, behind, lastFinishedAt, deviceDueSince };
 }

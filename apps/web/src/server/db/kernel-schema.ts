@@ -213,6 +213,9 @@ export const askScope = pgTable(
     scopeKind: text("scopeKind").notNull(),
     scopeKey: text("scopeKey").notNull(),
     runId: uuid("runId"),
+    receipt: jsonb("receipt").$type<KernelJson>(),
+    sequence: integer("sequence"),
+    cancelledAt: timestamp("cancelledAt", { mode: "date" }),
     createdAt: createdAt(),
   },
   (table) => [

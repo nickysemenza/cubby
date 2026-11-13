@@ -105,14 +105,7 @@ export async function publishGmailEvidence<T>(
     /** Extraction-preview publication is auxiliary evidence, not message handling. */
     recordHandlingReceipt?: boolean;
     observationId?: string | null;
-    evaluation?: {
-      id: string;
-      token: string;
-      sourceChecksum?: string;
-      reclassification?: boolean;
-      removed?: boolean;
-      observationId?: string | null;
-    };
+    removed?: boolean;
   },
   publish: (
     tx: Database,
@@ -121,8 +114,7 @@ export async function publishGmailEvidence<T>(
   ) => Promise<T>,
   scope?: EmailEvidenceWriteScope,
 ): Promise<T | null> {
-  const initialObservationId =
-    input.observationId ?? input.evaluation?.observationId ?? null;
+  const initialObservationId = input.observationId ?? null;
   const commitEvidence = async (
     tx: DrizzleTransaction,
     scope: EmailEvidenceWriteScope,
@@ -131,9 +123,6 @@ export async function publishGmailEvidence<T>(
     // Transaction-local: a contended member lock fails fast and frees the socket.
     await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
     let observationId = initialObservationId;
-    const evaluation = input.evaluation
-      ? { ...input.evaluation, observationId }
-      : undefined;
     const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
     // Shared: removal, admission and correction lock the owner exclusively and
     // win, while unrelated Emails publish concurrently.
@@ -151,18 +140,7 @@ export async function publishGmailEvidence<T>(
     ].map((id) => runEntityId.parse(id));
     // Requester and captured Runs lock in one sorted statement. Publication
     // may update a captured Run, so neither holds it shared.
-    const guarded = evaluation
-      ? await (
-          await import("~/server/ai/evaluation/repo/ai-evaluation")
-        ).guardAiEvaluation(
-          databaseForTransaction(tx),
-          evaluation.id,
-          evaluation.token,
-          "no key update",
-          runIds,
-        )
-      : null;
-    if (!evaluation && runIds.length)
+    if (runIds.length)
       await tx
         .select({ id: run.id })
         .from(run)
@@ -171,7 +149,7 @@ export async function publishGmailEvidence<T>(
         .for("no key update");
     const decline = async (
       reason: "removed" | "frozen" | "changed",
-      current: typeof emailTable.$inferSelect | null,
+      _current: typeof emailTable.$inferSelect | null,
     ) => {
       if (input.recordHandlingReceipt !== false)
         await (
@@ -181,86 +159,6 @@ export async function publishGmailEvidence<T>(
           observationId,
           outcome: reason,
         });
-      if (!evaluation || !guarded) return null;
-      const { completeAiEvaluation } =
-        await import("~/server/ai/evaluation/repo/ai-evaluation");
-      if (!evaluation.reclassification) {
-        await completeAiEvaluation(
-          databaseForTransaction(tx),
-          evaluation.id,
-          evaluation.token,
-          {
-            reason: `source_${reason}`,
-            sourceChecksum: current?.checksum ?? null,
-          },
-          "blocked",
-        );
-        return null;
-      }
-      const result = {
-        id:
-          input.expected?.shortcode ??
-          current?.shortcode ??
-          (
-            await import("./reclassification-work")
-          ).reclassificationSnapshot.parse(guarded.row.snapshot).publicId,
-        outcome: reason,
-        classification: null,
-        stage: null,
-        conflict: false,
-        error: null,
-      };
-      if (reason === "changed" && current) {
-        if (guarded.row.restarts < 2) {
-          // A fresh ticket keeps the item for its latest evidence; this
-          // attempt's page can no longer clear it.
-          const { aiEvaluation } = await import("~/server/db/schema");
-          const { markAiEvaluationWork } =
-            await import("~/server/ai/evaluation/repo/ai-evaluation-work");
-          await tx
-            .update(aiEvaluation)
-            .set({
-              restarts: guarded.row.restarts + 1,
-              result: null,
-              error:
-                "Email evidence changed; continuing with its latest evidence",
-            })
-            .where(eq(aiEvaluation.id, evaluation.id));
-          await markAiEvaluationWork(databaseForTransaction(tx), [
-            evaluation.id,
-          ]);
-        } else {
-          // Release the pending key before registering the next generation's demand.
-          await completeAiEvaluation(
-            databaseForTransaction(tx),
-            evaluation.id,
-            evaluation.token,
-            { result },
-            "obsolete",
-          );
-          const continuationRunIds = await (
-            await import("./reclassification-continuation")
-          ).continueChangedReclassification(
-            databaseForTransaction(tx),
-            guarded.row,
-            current,
-          );
-          await completeAiEvaluation(
-            databaseForTransaction(tx),
-            evaluation.id,
-            evaluation.token,
-            { result, continuationRunIds },
-            "obsolete",
-          );
-        }
-      } else
-        await completeAiEvaluation(
-          databaseForTransaction(tx),
-          evaluation.id,
-          evaluation.token,
-          { result },
-          reason === "frozen" ? "blocked" : "completed",
-        );
       return null;
     };
     if (!party) return decline("removed", null);
@@ -295,7 +193,6 @@ export async function publishGmailEvidence<T>(
       scope,
       recordObservation: (id) => {
         observationId = id;
-        if (evaluation) evaluation.observationId = id;
       },
     });
     if (input.recordHandlingReceipt !== false)
@@ -304,30 +201,8 @@ export async function publishGmailEvidence<T>(
       ).recordDiscoveryEmailReceipt(txDb, {
         ...input,
         observationId,
-        outcome: evaluation?.removed ? "removed" : undefined,
+        outcome: input.removed ? "removed" : undefined,
       });
-    if (evaluation)
-      await (
-        await import("~/server/ai/evaluation/repo/ai-evaluation")
-      ).completeAiEvaluation(
-        txDb,
-        evaluation.id,
-        evaluation.token,
-        evaluation.reclassification && input.expected && input.runId
-          ? await (
-              await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt")
-            ).reclassificationReceipt(
-              txDb,
-              input.expected,
-              evaluation.observationId ?? null,
-              result,
-              evaluation.removed,
-            )
-          : {
-              outcome: result,
-              sourceChecksum: evaluation.sourceChecksum ?? null,
-            },
-      );
     return result;
   };
   if (scope !== undefined) {

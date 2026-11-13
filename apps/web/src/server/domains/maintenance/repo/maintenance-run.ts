@@ -60,6 +60,15 @@ async function endBudgetPausedPass(db: Database, runId: RunId) {
       ),
     )
     .returning({ id: run.id });
+  if (ended)
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(db, {
+      table: run,
+      entity: "run",
+      ids: [runId],
+      columns: ["status", "endedAt", "failureCode"],
+    });
   return Boolean(ended);
 }
 
