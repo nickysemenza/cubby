@@ -63,7 +63,6 @@ import {
   ledgerSourceClaim,
   ledgerTransfer,
   mealFoodEntry,
-  mealRecipe,
   mealRecipePortion,
   mailboxCursor,
   email as emailTable,
@@ -634,39 +633,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  meal: edges({
-    "MealFoodEntry.mealId": {
-      column: mealFoodEntry.mealId,
-      role: "composition",
-      label: "food entries",
-      description:
-        "A product or manual food amount assigned to an eater at this meal; the entry has no meaning outside the meal that owns it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealRecipe.mealId": {
-      column: mealRecipe.mealId,
-      role: "composition",
-      label: "planned recipes",
-      description:
-        "A recipe assigned to this meal; the pairing is part of what the meal consists of, not an independent association.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealRecipePortion.mealId": {
-      column: mealRecipePortion.mealId,
-      role: "association",
-      label: "served portions",
-      description:
-        "A recorded portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "meal photos",
-      description: "A photo attached to this meal.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   ledgerParty: edges({
     "Task.assigneeId": {
       column: task.assigneeId,

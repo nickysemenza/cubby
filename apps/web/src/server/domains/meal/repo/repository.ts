@@ -1,4 +1,5 @@
 import { mealSchemaBindings } from "~/entity/generated/entity-schema-bindings.meal.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -8,7 +9,6 @@ import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode
 import {
   createMealWithEntityId,
   deleteMeals,
-  MEAL_DELETE_EDGE_POLICY,
   mealScaffold,
   updateMeal,
 } from "./crud";
@@ -17,7 +17,7 @@ const mealShortcodes = bindShortcodeResolver("meal");
 
 export const mealRepository = defineRepository("meal", {
   schemas: mealSchemaBindings,
-  lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.meal },
   scaffold: mealScaffold,
   create: asActor(createMealWithEntityId),
   update: async (ctx, id, data) => {

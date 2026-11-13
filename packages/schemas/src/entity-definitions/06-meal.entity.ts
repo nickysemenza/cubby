@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -26,6 +27,280 @@ import { z } from "zod";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "meal",
+    edges: [
+      defineEdge({
+        key: "MealFoodEntry.mealId",
+        from: "row:MealFoodEntry",
+        to: "meal",
+        cardinality: "one",
+        inverse: {
+          key: "meal.incoming.MealFoodEntry.mealId",
+          from: "meal",
+          to: "row:MealFoodEntry",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealFoodEntry.mealId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealFoodEntry.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "composition",
+          label: "food entries",
+          description:
+            "A product or manual food amount assigned to an eater at this meal; the entry has no meaning outside the meal that owns it.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-food-entries",
+                effect: "soft-delete",
+                description:
+                  "Deleting a meal soft-deletes its product and manual food entries.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "MealRecipe.mealId",
+        from: "row:MealRecipe",
+        to: "meal",
+        cardinality: "one",
+        inverse: {
+          key: "meal.incoming.MealRecipe.mealId",
+          from: "meal",
+          to: "row:MealRecipe",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealRecipe.mealId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealRecipe.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "composition",
+          label: "planned recipes",
+          description:
+            "A recipe assigned to this meal; the pairing is part of what the meal consists of, not an independent association.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Deleting a meal soft-deletes its planned recipes; the recipes themselves are untouched.",
+              },
+              handler: null,
+              before: {
+                module: "~/server/domains/meal/repo/crud",
+                export: "removeSourcedPortions",
+              },
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "MealRecipePortion.mealId",
+        from: "row:MealRecipePortion",
+        to: "meal",
+        cardinality: "one",
+        inverse: {
+          key: "meal.incoming.MealRecipePortion.mealId",
+          from: "meal",
+          to: "row:MealRecipePortion",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealRecipePortion.mealId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealRecipePortion.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "association",
+          label: "served portions",
+          description:
+            "A recorded portion from a recipe preparation assigned for consumption at this meal, including portions from an earlier leftovers source.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "meal/EntityAttachment.entityId",
+        from: "row:EntityAttachment",
+        to: "meal",
+        cardinality: "one",
+        inverse: {
+          key: "meal.incoming.EntityAttachment.entityId",
+          from: "meal",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityAttachment.entityKind",
+            value: "meal",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "meal photos",
+          description: "A photo attached to this meal.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Image associations are soft-deleted with the meal, and each file is\n      deleted too unless something else still references it.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Meal", plural: "Meals" },
     route: {
       listColumns: {
@@ -828,78 +1103,92 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("recipe", "many", [
-        { edge: "MealRecipe.mealId", direction: "incoming" },
-        { edge: "MealRecipe.recipeId", direction: "outgoing" },
-      ])
-      .named("recipes", "Recipes", {
-        view: { columnGroup: "Food", inverseKey: "recipe.meals" },
-        sources: [
-          r
-            .path("recipe", "many", [
-              { edge: "MealRecipePortion.mealId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.mealRecipeId",
-                direction: "outgoing",
-              },
-              { edge: "MealRecipe.recipeId", direction: "outgoing" },
-            ])
-            .source("served-portions", "Served portions"),
-        ],
-      }),
-    r
-      .path("product", "many", [
-        { edge: "MealFoodEntry.mealId", direction: "incoming" },
-        { edge: "MealFoodEntry.productId", direction: "outgoing" },
-      ])
-      .named("food-products", "Food products", {
-        view: {
-          key: "foodProducts",
-          columnGroup: "Food",
-          filterPrefix: "foodProduct",
-          inverseKey: "product.meals",
-        },
-      }),
-    r
-      .path("ingredient", "many", [
-        { edge: "MealFoodEntry.mealId", direction: "incoming" },
-        { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
-      ])
-      .named("food-ingredients", "Food ingredients", {
-        view: {
-          key: "foodIngredients",
-          columnGroup: "Food",
-          filterPrefix: "foodIngredient",
-          inverseKey: "ingredient.meals",
-        },
-      }),
-    r
-      .path("ledgerParty", "many", [
-        { edge: "MealFoodEntry.mealId", direction: "incoming" },
-        { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
-      ])
-      .named("eaters", "Eaters", {
-        view: {
-          columnGroup: "People",
-          filterPrefix: "eater",
-          inverseKey: "ledgerParty.meals",
-        },
-        sourceKey: "food-entries",
-        sources: [
-          r
-            .path("ledgerParty", "many", [
-              { edge: "MealRecipePortion.mealId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.ledgerPartyId",
-                direction: "outgoing",
-              },
-            ])
-            .source("portions", "Served portions"),
-        ],
-      }),
-    r.images(),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("recipe", "many", [
+            { edge: "MealRecipe.mealId", direction: "incoming" },
+            { edge: "MealRecipe.recipeId", direction: "outgoing" },
+          ])
+          .named("recipes", "Recipes", {
+            view: { columnGroup: "Food", inverseKey: "recipe.meals" },
+            sources: [
+              r
+                .path("recipe", "many", [
+                  { edge: "MealRecipePortion.mealId", direction: "incoming" },
+                  {
+                    edge: "MealRecipePortion.mealRecipeId",
+                    direction: "outgoing",
+                  },
+                  { edge: "MealRecipe.recipeId", direction: "outgoing" },
+                ])
+                .source("served-portions", "Served portions"),
+            ],
+          }),
+        "recipe.meals",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.productId", direction: "outgoing" },
+          ])
+          .named("food-products", "Food products", {
+            view: {
+              key: "foodProducts",
+              columnGroup: "Food",
+              filterPrefix: "foodProduct",
+              inverseKey: "product.meals",
+            },
+          }),
+        "product.meals",
+      ),
+      r.declare(
+        r
+          .path("ingredient", "many", [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.ingredientId", direction: "outgoing" },
+          ])
+          .named("food-ingredients", "Food ingredients", {
+            view: {
+              key: "foodIngredients",
+              columnGroup: "Food",
+              filterPrefix: "foodIngredient",
+              inverseKey: "ingredient.meals",
+            },
+          }),
+        "ingredient.meals",
+      ),
+      r.declare(
+        r
+          .path("ledgerParty", "many", [
+            { edge: "MealFoodEntry.mealId", direction: "incoming" },
+            { edge: "MealFoodEntry.ledgerPartyId", direction: "outgoing" },
+          ])
+          .named("eaters", "Eaters", {
+            view: {
+              columnGroup: "People",
+              filterPrefix: "eater",
+              inverseKey: "ledgerParty.meals",
+            },
+            sourceKey: "food-entries",
+            sources: [
+              r
+                .path("ledgerParty", "many", [
+                  { edge: "MealRecipePortion.mealId", direction: "incoming" },
+                  {
+                    edge: "MealRecipePortion.ledgerPartyId",
+                    direction: "outgoing",
+                  },
+                ])
+                .source("portions", "Served portions"),
+            ],
+          }),
+        "ledgerParty.meals",
+      ),
+      r.declare(r.images(), "image.meal.images"),
+    ],
+  }),
   readSchemas,
 );

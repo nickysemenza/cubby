@@ -29,7 +29,6 @@ import {
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
-  mealRecipePortion,
   photoRunImage,
   runStep,
   purchasePaymentEvidence,
@@ -83,8 +82,6 @@ export const ENTITY_EDGE_OWNERS = {
   FinancialTransactionAllocation: {
     owner: financialTransactionAllocation.transactionId,
   },
-
-  MealRecipePortion: { owner: mealRecipePortion.mealId },
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
   ShipmentObservation: { excluded: WORKFLOW },

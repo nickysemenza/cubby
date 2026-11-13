@@ -3,7 +3,6 @@ import {
   type MealCreateInput,
   type MealUpdateInput,
 } from "@cubby/schemas/entities/meal";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { MealId, MealRecipeId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { MealRecipeInput } from "@cubby/schemas/meal";
@@ -21,7 +20,8 @@ import { mealRepositoryReadSchema } from "~/entity/generated/entity-schema-bindi
 import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   associatePendingImages,
   mapImages,
@@ -79,33 +79,6 @@ type MealColumnPatch = {
   mealType?: MealCreateInput["mealType"];
   mealKind?: MealCreateInput["mealKind"];
 };
-
-export const MEAL_DELETE_EDGE_POLICY = {
-  "MealFoodEntry.mealId": {
-    code: "soft-delete-food-entries",
-    effect: "soft-delete",
-    description:
-      "Deleting a meal soft-deletes its product and manual food entries.",
-  },
-  "MealRecipe.mealId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Deleting a meal soft-deletes its planned recipes; the recipes themselves are untouched.",
-  },
-  "MealRecipePortion.mealId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the meal, and each file is\n      deleted too unless something else still references it.",
-  },
-} as const satisfies IncomingEdgePolicy<"meal", OperationDisposition>;
 
 // `mealType` must sort by slot, not by slug: a plain text ordering puts
 // dessert before dinner, which reads as a broken table. `mealTypeValues`
@@ -432,7 +405,10 @@ export const updateMeal = defineMutationWriter({
  * sides; a portion targeted at a different Meal remains only when its source
  * occurrence remains live.
  */
-const removeSourcedPortions = async (tx: DrizzleTransaction, ids: MealId[]) => {
+export const removeSourcedPortions = async (
+  tx: DrizzleTransaction,
+  ids: MealId[],
+) => {
   const sourceOccurrences = await tx
     .select({ id: mealRecipe.id })
     .from(mealRecipe)
@@ -458,10 +434,10 @@ const removeSourcedPortions = async (tx: DrizzleTransaction, ids: MealId[]) => {
 export const deleteMeals = (db: Database, ids: MealId[], actor: ActorContext) =>
   deleteByPolicy(db, {
     entity: "meal",
-    policy: MEAL_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.meal,
     ids,
     actor,
-    beforeDelete: removeSourcedPortions,
+    ...DECLARED_EDGE_DELETE_HOOKS.meal,
   });
 
 export const addRecipeToMeal = async (
