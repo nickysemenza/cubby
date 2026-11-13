@@ -158,6 +158,7 @@ struct WhyThisValueView: View {
     let onClose: () -> Void
 
     @Environment(AppModel.self) private var appModel
+    @State private var machinery = MachineryModel()
     @State private var resolved: FieldExplanationOutput?
     @State private var loadError: String?
     @State private var editor: EditorRequest?
@@ -173,7 +174,9 @@ struct WhyThisValueView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 header
-                if notAssessed {
+                if let read = machinery.read {
+                    machineryContent(read)
+                } else if notAssessed {
                     notAssessedContent
                 } else if let resolved {
                     content(resolved)
@@ -198,7 +201,11 @@ struct WhyThisValueView: View {
         #endif
         .accessibilityIdentifier("field.explanation.popover")
         .presentationCompactAdaptation(.sheet)
-        .task { await load() }
+        .task(id: subject.stableKey + field.key) {
+            machinery = MachineryModel()
+            await machinery.load(appModel, subject: subject, field: field.key)
+            await load()
+        }
         .sheet(item: $editor) { request in
             EntityEditorSheet(
                 key: subject.entity, mode: .update(id: subject.id), resolutionAction: request.action,
@@ -224,6 +231,51 @@ struct WhyThisValueView: View {
             .accessibilityLabel("Close field explanation")
             .accessibilityIdentifier("field.explanation.close")
         }
+    }
+
+    @ViewBuilder private func machineryContent(_ read: Machinery) -> some View {
+        if let resolved {
+            let envelope = (try? JSONValue(encoding: resolved.envelope)).flatMap(FieldEnvelope.init)
+            if let envelope {
+                effectiveResult(envelope)
+                if let origin = resolved.origin, let line = Self.originLine(origin) {
+                    Text(line).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
+        if let preview = read.resetPreview {
+            Text("If you let Cubby decide").font(.caption).foregroundStyle(.secondary)
+            if let result = try? JSONValue(encoding: preview.result) {
+                let envelope: JSONValue = ["result": result]
+                if let value = result["decision"]?["outcome"]?["value"], value != .null {
+                    ExplanationEvidenceValue(value: value)
+                } else if let resultEnvelope = FieldEnvelope(envelope) {
+                    Text(resultEnvelope.emptyLabel(field: field))
+                }
+            }
+            if let note = FieldEnvelopePresentation.resetPendingNote(preview.pendingAnswers) { Text(note).font(.caption) }
+            if allowsActions {
+                Button(FieldEnvelopePresentation.resetLabel) {
+                    Task {
+                        await machinery.decide(appModel, subject: subject, field: field.key,
+                            decision: .init(channel: .assignment, kind: .release, field: .value(field.key)))
+                        resolved = nil
+                        await load()
+                    }
+                }.disabled(machinery.pending)
+            }
+        }
+        if allowsActions, resolved?.origin?.holder == .cubby {
+            Button(FieldEnvelopePresentation.vetoLabel) {
+                Task {
+                    await machinery.decide(appModel, subject: subject, field: field.key,
+                        decision: .init(channel: .veto, kind: .veto, field: .value(field.key)))
+                    resolved = nil
+                    await load()
+                }
+            }.disabled(machinery.pending)
+        }
+        MachineryPanel(model: machinery, subject: subject, field: field.key, allowsActions: allowsActions)
     }
 
     // MARK: Content
