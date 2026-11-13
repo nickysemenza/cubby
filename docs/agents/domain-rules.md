@@ -122,8 +122,9 @@ capabilities, and platform folders (`db/`, `http/`, `operation-runtime/`,
 `workflows/`, …). Inside a domain the role is the path segment: `repo`,
 `service`, `operations` — a `<role>.ts` file, or a `<role>/` folder once it
 holds more than one module; tests sit beside their file. `cubby/domain-layers`
-keeps imports flowing operations → service → repo → db (`http/`, `mcp/`, and
-`workflows/` import like operations), keeps `ai/` out of repos, keeps `db/`
+keeps imports flowing operations → service → repo → db (`http/`, `mcp/`,
+`workflows/` and the kernel's module list `kernel/modules.ts` import like
+operations), keeps `ai/` out of repos, keeps `db/`
 out of services, and keeps platform and generic code off a domain's service
 and operations. It has no baseline, so a new violation is fixed by moving
 code to the right role, never by an exemption. No `index.ts` barrels in

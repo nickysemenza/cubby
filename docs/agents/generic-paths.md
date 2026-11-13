@@ -156,6 +156,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   transaction that checks current inputs and publishes. The read-only
   `generic/jobs/repo/observation.ts` reports those owners without scheduling work.
   [Background derived data](../entities.md#background-derived-data) owns freshness.
+- Evidence, answers and decisions ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md)):
+  the kernel's one entry `server/kernel/api.ts`. A domain declares `defineEvidence`,
+  `defineAsk`, `defineReconciler` and `definePass` in one `defineModule` and adds one line to
+  `server/kernel/modules.ts`. Writers call `append` and `decide`; producer calls go through
+  `withAsk`; entity writers of a column a reconciler reads call `emitWrites` in their
+  transaction; money-lane writers use `householdWrite`; records resolve through
+  `resolveForRead`/`resolveForWrite`; list pages bind `loadMachineryRows`. The kernel drain
+  in `workflows/jobs.ts` runs dirty scopes, asks and passes.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);

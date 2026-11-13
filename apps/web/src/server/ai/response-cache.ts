@@ -527,3 +527,22 @@ async function releaseClaim(store: CacheStore, key: string, token: string) {
       log.error("claim release failed", { error });
     });
 }
+
+/**
+ * The single in-flight claim for a kernel Ask (ADR 0029 section 8), keyed by
+ * its `inputHash` on the same shards. A completed entry is a replay copy of
+ * the `Answer` row and can be rebuilt from it.
+ */
+export const askResponseClaims = {
+  claim: async (inputHash: string): Promise<CacheClaim> =>
+    cacheStore(inputHash).readOrClaim(inputHash, false),
+  renew: async (inputHash: string, token: string): Promise<boolean> =>
+    cacheStore(inputHash).renew(inputHash, token),
+  publish: async (
+    inputHash: string,
+    token: string,
+    value: string,
+  ): Promise<boolean> => cacheStore(inputHash).publish(inputHash, token, value),
+  release: async (inputHash: string, token: string): Promise<void> =>
+    cacheStore(inputHash).release(inputHash, token),
+};

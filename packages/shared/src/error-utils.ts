@@ -155,6 +155,8 @@ export const AppErrors = {
   // An identifier (ASIN, barcode, Notion page, ...) already belongs to another
   // live record; the live `(source, kind, externalId)` unique allows one.
   EXTERNAL_ID_CONFLICT: "CONFLICT",
+  // A write named a record merged into another; the message names the survivor.
+  RECORD_ABSORBED: "CONFLICT",
   // A declared `block` edge of a policy-driven delete still has live rows.
   ENTITY_DELETE_BLOCKED: "PRECONDITION_FAILED",
   LEDGER_SOURCE_CLAIM_CONFLICT: "CONFLICT",

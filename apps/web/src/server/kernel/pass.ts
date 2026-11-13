@@ -1,0 +1,120 @@
+/**
+ * Passes (ADR 0029 section 7): one row per registered pass instance with a
+ * resumable cursor under the shared claim. A pass page publishes only while
+ * its claim is live; a cancelled or lapsed claim writes nothing.
+ */
+import { sql } from "drizzle-orm";
+
+import type { Database } from "~/server/db/database";
+import {
+  repositoryQueries,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+
+import {
+  CLAIM_LEASE_MS,
+  claimPass,
+  fenceClaim,
+  renewClaim,
+  settleFailure,
+  type ClaimedPass,
+} from "./claim";
+import type { Claim, Json, Pass } from "./define";
+import type { KernelRegistry } from "./registry";
+
+/** Start (or restart a finished) pass instance; a pending one keeps its cursor. */
+export async function startPass(
+  db: Database,
+  pass: Pass,
+  options: {
+    key?: string;
+    cursor?: Json | null;
+    runId?: string | null;
+    availableAt?: Date;
+  } = {},
+): Promise<void> {
+  // Database time, not the Worker's clock: a skewed clock must not park the pass.
+  const at = options.availableAt
+    ? sql`${options.availableAt.toISOString()}::timestamp`
+    : sql`now()`;
+  await repositoryQueries(db).execute(sql`
+    INSERT INTO "Pass" (name, key, cursor, "runId", "availableAt")
+    VALUES (${pass.name}, ${options.key ?? "default"}, ${JSON.stringify(options.cursor ?? null)}::jsonb,
+      ${options.runId ?? null}::uuid, ${at})
+    ON CONFLICT (name, key) DO UPDATE SET
+      cursor = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN excluded.cursor ELSE "Pass".cursor END,
+      attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN 0 ELSE "Pass".attempts END,
+      "doneAt" = NULL, "cancelledAt" = NULL,
+      "availableAt" = least("Pass"."availableAt", excluded."availableAt"),
+      "updatedAt" = now()`);
+}
+
+function passClaim(db: Database, claimed: ClaimedPass): Claim {
+  const target = {
+    table: "Pass" as const,
+    name: claimed.name,
+    key: claimed.key,
+  };
+  const controller = new AbortController();
+  return {
+    token: claimed.token,
+    deadline: new Date(Date.now() + CLAIM_LEASE_MS),
+    signal: controller.signal,
+    async renew() {
+      const held = await renewClaim(
+        repositoryQueries(db),
+        target,
+        claimed.token,
+      );
+      if (!held) controller.abort();
+      return held;
+    },
+    fenced: (work) =>
+      repositoryTransactionDatabase(db, async (tx) => {
+        await fenceClaim(repositoryQueries(tx), target, claimed.token);
+        return work(tx);
+      }),
+  };
+}
+
+/** Claim and run one due pass page; false when none was due. */
+export async function runOnePass(
+  db: Database,
+  registry: KernelRegistry,
+): Promise<boolean> {
+  const claimed = await claimPass(repositoryQueries(db), [
+    ...registry.passes.keys(),
+  ]);
+  if (!claimed) return false;
+  const pass = registry.passes.get(claimed.name)!;
+  const target = {
+    table: "Pass" as const,
+    name: claimed.name,
+    key: claimed.key,
+  };
+  const claim = passClaim(db, claimed);
+  try {
+    // SAFETY: the cursor column holds the JSON the pass last returned.
+    const result = await pass.run(db, claimed.cursor as Json | null, claim);
+    await claim.fenced(async (tx) => {
+      await repositoryQueries(tx).execute(sql`
+        UPDATE "Pass" SET cursor = ${JSON.stringify(result.cursor)}::jsonb,
+          "doneAt" = ${result.done ? sql`now()` : sql`NULL`},
+          "availableAt" = ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`},
+          attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
+          "waitCause" = NULL, "lastError" = NULL, "updatedAt" = now()
+        WHERE name = ${claimed.name} AND key = ${claimed.key}`);
+    });
+  } catch (error) {
+    await settleFailure(
+      repositoryQueries(db),
+      target,
+      claimed.token,
+      claimed.attempts,
+      error,
+    );
+  }
+  return true;
+}

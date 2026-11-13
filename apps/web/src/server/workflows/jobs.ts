@@ -33,6 +33,7 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { type PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
+import { kernelDueSql, kernelNextSql } from "~/server/kernel/runner";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
@@ -165,8 +166,28 @@ export async function reconcileStoppedWork(db: Database) {
   return reconciled;
 }
 
+/** Each kernel page runs dirty scopes, asks and passes for at most this long. */
+const KERNEL_PAGE_BUDGET_MS = 20_000;
+
+/** The evidence-facts kernel: dirty scopes, asks and passes (ADR 0029 section 7). */
+const kernelDrain: BackgroundDrain = {
+  name: "kernel",
+  label: (unit) => (unit === "kernel" ? "Reconcile records" : undefined),
+  due: kernelDueSql,
+  next: kernelNextSql,
+  async page(db) {
+    const { runProductionKernel } = await import("~/server/kernel/api");
+    return {
+      claimed: await runProductionKernel(db, {
+        budgetMs: KERNEL_PAGE_BUDGET_MS,
+      }),
+    };
+  },
+};
+
 // Built per permit: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
+  kernelDrain,
   cloudImageDrain,
   embeddingRefreshDrain(),
   embeddingCleanupDrain(),
