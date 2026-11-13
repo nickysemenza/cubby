@@ -1,4 +1,4 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -12,7 +12,8 @@ import { fenceClaim, releaseClaim, renewClaim } from "~/server/kernel/claim";
 import { withWorkflowExecution } from "./execution";
 
 /** Borrow the persisted Pass claim so scripted step journeys use production fences. */
-export async function runPassFixture(db: Database, runId: RunId) {
+export async function runPassFixture(db: Database, runId: string) {
+  runEntityId.parse(runId);
   const q = repositoryQueries(db);
   const token = crypto.randomUUID();
   const result = await q.execute<{ cursor: unknown }>(sql`
@@ -49,7 +50,7 @@ export async function runPassFixture(db: Database, runId: RunId) {
 
 export async function withRunPassFixture<T>(
   db: Database,
-  runId: RunId,
+  runId: string,
   work: () => Promise<T>,
 ): Promise<T> {
   const claim = await runPassFixture(db, runId);

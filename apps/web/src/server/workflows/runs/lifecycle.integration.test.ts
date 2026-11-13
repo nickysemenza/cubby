@@ -8,7 +8,6 @@ import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { JobRetryableError } from "~/server/generic/jobs/errors";
-import { cancelWork } from "~/server/kernel/api";
 
 import { controlWorkflowRun } from "./control";
 import {
@@ -46,7 +45,9 @@ describe("Run Pass admission", () => {
         progress,
       })
       .where(eq(run.id, id));
-    await cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
     await launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" });
     await getDb(ctx.db)
       .update(run)
@@ -78,7 +79,9 @@ describe("Run Pass admission", () => {
       endedAt: null,
       progress: { ...progress, attempt: claim.generation },
     });
-    await cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
     await getDb(ctx.db)
       .update(run)
       .set({ status: "failed", failureCode: "job_failed" })
@@ -232,7 +235,9 @@ describe("Run Pass admission", () => {
         ),
       );
     await expect(record(1)).resolves.toEqual({ recorded: true });
-    await cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: id });
     await expect(record(2)).rejects.toThrow(/obsolete/);
     const [owner] = await getDb(ctx.db)
       .select()
@@ -258,7 +263,7 @@ describe("Run Pass admission", () => {
       await getDb(ctx.db).select().from(run).where(eq(run.clientKey, key)),
     ).toEqual([]);
     expect(
-      (await getDb(ctx.db).execute(sql`SELECT * FROM "Pass"`)).rows,
+      await getDb(ctx.db).execute(sql`SELECT * FROM "Pass"`, "objects"),
     ).toEqual([]);
   });
 });

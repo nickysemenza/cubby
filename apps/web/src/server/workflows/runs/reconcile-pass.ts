@@ -20,7 +20,7 @@ import { definePass, startPass } from "~/server/kernel/api";
 
 import { reconcileWorkflowRuns } from "./lifecycle";
 
-export const RUNS_RECONCILE_PASS = "runs.reconcile";
+const RUNS_RECONCILE_PASS = "runs.reconcile";
 
 const ACTIVE_RECHECK_MS = 15 * 60_000;
 const IDLE_RECHECK_MS = 60 * 60_000;
@@ -53,7 +53,7 @@ function failureTextOf(raw: string | null): string {
 }
 
 /** Fail Runs whose `run.execute` Pass spent its attempts; returns how many. */
-export async function reconcileStuckRunPasses(db: Database): Promise<number> {
+async function reconcileStuckRunPasses(db: Database): Promise<number> {
   const q = repositoryQueries(db);
   const stuck = await q.execute<{ id: string; lastError: string | null }>(sql`
     SELECT r.id, p."lastError" FROM "Run" r
@@ -77,7 +77,7 @@ export async function reconcileStuckRunPasses(db: Database): Promise<number> {
 }
 
 /** Every stopped execution's Run, projected; returns how many Runs changed. */
-export async function reconcileStoppedWork(db: Database) {
+async function reconcileStoppedWork(db: Database) {
   let reconciled =
     (await reconcileCoordinatorDispatches(db)) +
     (await reconcileStuckRunPasses(db));

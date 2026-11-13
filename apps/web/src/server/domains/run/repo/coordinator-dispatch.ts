@@ -55,8 +55,6 @@ const failedUnstartedDispatch = sql`j.kind='purchase.dispatch' AND j.state=${job
       AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND ${notDeleted("r")}`;
 
 /** Permit selection: since when a failed start dispatch leaves its Run running. */
-export const failedCoordinatorDispatchesSince = () =>
-  sql`(SELECT min(j."updatedAt") FROM "Job" j JOIN "Run" r ON j."runId" = r.id WHERE ${failedUnstartedDispatch} AND ${notDeleted("r")})`;
 
 /** Returns how many Runs it failed. */
 export async function reconcileCoordinatorDispatches(db: Database) {

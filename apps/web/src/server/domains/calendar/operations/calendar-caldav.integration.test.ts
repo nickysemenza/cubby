@@ -21,7 +21,7 @@ import type {
 import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { sql } from "drizzle-orm";
 
 import { scheduleCalendarFeedDirty } from "../repo/client";
 import {
@@ -362,9 +362,7 @@ describe("durable calendar dirty-mark fallback", () => {
         }),
       );
       expect(
-        (await readJobs(ctx.db, {})).some(
-          (row) => row.kind === "calendar-feed.mark-dirty",
-        ),
+        (await getDb(ctx.db).execute(sql`SELECT name FROM "Pass" WHERE name = 'calendar.invalidate'`, "objects")).length > 0,
       ).toBe(true);
       consoleError.mockRestore();
     }));

@@ -3,7 +3,6 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { Database } from "~/server/db";
 import { repairImageProcessingExecution } from "~/server/domains/image-processing/repo/image-processing";
 
-
 const log = createLogger("job-maintenance");
 
 /** Hourly bounded repair and retention. Unfinished rows remain for the next tick. */

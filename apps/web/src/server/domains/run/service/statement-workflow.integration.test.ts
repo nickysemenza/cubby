@@ -15,7 +15,6 @@ import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { runProductionKernel } from "~/server/kernel/api";
 
 import { readRunSteps } from "../repo/run-step";
 import { startSweep } from "./sweep";
@@ -160,7 +159,9 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
         throw new Error(execution.lastError ?? execution.state);
       if (execution.availableAt.getTime() > now)
         await wait(execution.availableAt.getTime() - now);
-      await runProductionKernel(ctx.db, { budgetMs: 1 });
+      await (
+        await import("~/server/kernel/api")
+      ).runProductionKernel(ctx.db, { budgetMs: 1 });
     }
     const [saved] = await getDb(ctx.db)
       .select()

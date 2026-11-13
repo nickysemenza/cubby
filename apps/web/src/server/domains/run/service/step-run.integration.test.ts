@@ -11,6 +11,7 @@ import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
@@ -77,14 +78,28 @@ const advanceStepRun = (
 const recordRunEvent = (
   ...args: Parameters<typeof recordRunEventImplementation>
 ) =>
-  withRunPassFixture(args[0], args[1].runId, () =>
-    recordRunEventImplementation(...args),
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "mail_discovery" },
+      runId: args[1].runId,
+    },
+    () => recordRunEventImplementation(...args),
   );
 const writeRunningAttemptProgress = (
   ...args: Parameters<typeof writeRunningAttemptProgressImplementation>
 ) =>
-  withRunPassFixture(args[0], args[1], () =>
-    writeRunningAttemptProgressImplementation(...args),
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1]}`,
+      kind: "run.execute",
+      input: { runId: args[1], purpose: "mail_discovery" },
+      runId: args[1],
+    },
+    () => writeRunningAttemptProgressImplementation(...args),
   );
 
 describe("step-ledger Runs", () => {

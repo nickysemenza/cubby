@@ -15,7 +15,6 @@ import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import { startPass } from "~/server/kernel/api";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
@@ -151,13 +150,22 @@ export async function publishBackgroundTasks(
     for (const task of parsed) {
       if (task.kind === "entity-embedding.refresh") continue;
       if (task.kind === "maintenance.purchase-discovery") {
-        const { purchaseDiscoveryPass } = await import("../purchase-discovery-pass");
-        await startPass(tx, purchaseDiscoveryPass, {cursor: {senderAfter: task.senderAfter ?? null}});
+        const { purchaseDiscoveryPass } =
+          await import("../purchase-discovery-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, purchaseDiscoveryPass, {
+          cursor: { senderAfter: task.senderAfter ?? null },
+        });
         continue;
       }
       if (task.kind === "calendar-feed.mark-dirty") {
-        const { calendarInvalidatePass } = await import("../calendar-invalidate-pass");
-        await startPass(tx, calendarInvalidatePass, {key: task.origin, cursor: {origin: task.origin, reason: task.reason}});
+        const { calendarInvalidatePass } =
+          await import("../calendar-invalidate-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, calendarInvalidatePass, {
+          key: task.origin,
+          cursor: { origin: task.origin, reason: task.reason },
+        });
         continue;
       }
       await enqueueJob(tx, {

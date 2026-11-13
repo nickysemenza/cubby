@@ -11,7 +11,7 @@ export const retentionPass = definePass({
   name: "retention",
   async run(_db, cursor, claim) {
     const removed = await claim.fenced(async (tx) => {
-      const jobs = await pruneFinishedJobs(tx, {limit: LIMIT});
+      const jobs = await pruneFinishedJobs(tx, { limit: LIMIT });
       const passes = await repositoryQueries(tx).execute(sql`
         WITH doomed AS (
           SELECT name, key FROM "Pass"
@@ -22,6 +22,10 @@ export const retentionPass = definePass({
         RETURNING p.name`);
       return jobs === LIMIT || passes.rows.length === LIMIT;
     });
-    return {cursor, done: false, availableAt: new Date(Date.now() + (removed ? 0 : 60 * 60_000))};
+    return {
+      cursor,
+      done: false,
+      availableAt: new Date(Date.now() + (removed ? 0 : 60 * 60_000)),
+    };
   },
 });

@@ -47,6 +47,7 @@ import { fenceClaim } from "~/server/kernel/claim";
 import { withWorkflowExecution } from "./execution";
 import { resumeClaimedWorkflowRun } from "./lifecycle";
 
+// TODO(kernel PassResult.waitCause): return typed waits instead of JobDeferredError.
 type PassResult = Awaited<ReturnType<Pass["run"]>>;
 
 /** Pass claims last 90 s; a page renews well inside that. */
@@ -69,6 +70,7 @@ const passTarget = (runId: string) => ({
 });
 
 /** The claim as workflow code sees it: a fence for open transactions and a pre-provider check. */
+// TODO(kernel Claim.fence): replace the internal fenceClaim import with claim.fence(tx).
 const passFence = (claim: Claim, runId: string) => ({
   fence: (tx: Database) =>
     fenceClaim(repositoryQueries(tx), passTarget(runId), claim.token),
@@ -194,6 +196,7 @@ async function reconcileIfLastAttempt(
   }
 }
 
+// TODO(kernel claim-deadline wake): remove this per-pass recovery wake and its heartbeat wake.
 async function recoveryWake(deadline: Date) {
   const { wakeAt } = await import("../background-tasks/publish");
   await wakeAt(new Date(deadline.getTime() + 5_000), {
@@ -289,6 +292,7 @@ export async function startRunPass(
   },
 ) {
   const target = passTarget(input.runId);
+  // TODO(kernel Pass priority): carry member-started priority into startPass. Reference: launchPassRun.
   // An exhausted Pass is still pending to `startPass`; cancelling first makes it restart fresh.
   if (input.restart) await cancelWork(db, target);
   await startPass(db, runExecutePass, {
@@ -300,6 +304,11 @@ export async function startRunPass(
       generation: input.generation,
     },
   });
+  if (input.restart) {
+    // TODO(kernel startPass): restarted cancelled Passes must clear their prior claim token.
+    await repositoryQueries(db).execute(sql`UPDATE "Pass" SET "claimToken" = NULL, "claimDeadline" = NULL,
+      "waitCause" = NULL, "lastError" = NULL WHERE name = ${RUN_EXECUTE_PASS} AND key = ${input.runId}`);
+  }
 }
 
 /** Stop a Run's Pass; a live page stops at its next renewal or fence. */

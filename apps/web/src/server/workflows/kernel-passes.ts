@@ -6,12 +6,13 @@
  */
 import type { Pass } from "~/server/kernel/api";
 
-import { retentionPass } from "./retention-pass";
-import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
 import { calendarInvalidatePass } from "./calendar-invalidate-pass";
+import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
+import { retentionPass } from "./retention-pass";
 import { runsReconcilePass } from "./runs/reconcile-pass";
 import { runExecutePass } from "./runs/run-pass";
 
+// TODO(kernel passes-only module): register these without the Run summary module.
 export const WORKFLOW_PASSES: readonly Pass[] = [
   retentionPass,
   purchaseDiscoveryPass,

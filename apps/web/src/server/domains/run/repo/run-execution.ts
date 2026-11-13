@@ -207,6 +207,7 @@ export function runPassRollup(
   };
 }
 
+// TODO(kernel Pass completion history and priority): use its queue order and duration samples for ETA.
 /** Each due Pass's place in the claim order (every pass name, by `availableAt`). */
 export async function readDuePassPositions(
   db: RepositoryQueryInput,

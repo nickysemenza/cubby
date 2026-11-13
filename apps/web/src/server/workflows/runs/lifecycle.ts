@@ -48,7 +48,6 @@ import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import {
   lockUnchangedJob,
   stoppedRunExecutions,
-  stoppedRunExecutionsSince,
 } from "~/server/generic/jobs/repo/job-reads";
 import {
   makeJobsDueNow,
@@ -385,7 +384,10 @@ async function launchPassRun(
         pass.state === "working");
     if (input.automatic && pass) {
       if (!live) return null;
-      return {attempt: pass.generation ?? 1, instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`};
+      return {
+        attempt: pass.generation ?? 1,
+        instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
+      };
     }
     if (owner.status === "completed") {
       if (input.automatic) return null;
@@ -700,10 +702,6 @@ const reconcilable = () =>
       eq(runTable.failureCode, "execution_limit"),
     ),
   )!;
-
-/** Permit selection: since when a stopped execution leaves its Run reading as running. */
-export const workflowRunsToReconcileSince = () =>
-  stoppedRunExecutionsSince(reconcilable() ?? sql`false`);
 
 /** Lost permits and interrupted workers are recovered by permit selection, never new Run attempts. */
 export async function reconcileWorkflowRuns(

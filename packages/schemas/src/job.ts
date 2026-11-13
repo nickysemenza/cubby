@@ -429,7 +429,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Never claimed or executed as a Job; item retries live on the drain's rows.",
   },
-
 } as const satisfies Record<string, JobKindDeclaration>;
 
 const POLICY_BY_KIND: ReadonlyMap<string, JobKindDeclaration> = new Map(

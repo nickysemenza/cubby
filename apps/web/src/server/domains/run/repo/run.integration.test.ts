@@ -24,9 +24,7 @@ import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { runProductionKernel } from "~/server/kernel/api";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
-import { startRunPass } from "~/server/workflows/runs/run-pass";
 
 import { readRun, runScaffold } from "./run";
 import { readRunPass } from "./run-execution";
@@ -425,13 +423,17 @@ describe("Run attention entity view", () => {
       trigger: "scheduled",
       execution: false,
     });
-    await startRunPass(ctx.db, {
+    await (
+      await import("~/server/workflows/runs/run-pass")
+    ).startRunPass(ctx.db, {
       runId: emptyJobOwner,
       purpose: "ai_refresh",
       generation: 1,
       restart: false,
     });
-    await runProductionKernel(ctx.db, { budgetMs: 1 });
+    await (
+      await import("~/server/kernel/api")
+    ).runProductionKernel(ctx.db, { budgetMs: 1 });
     expect(await readRunPass(ctx.db, emptyJobOwner)).toMatchObject({
       state: "waiting",
       lastError: expect.stringContaining("no durable evaluation roster"),

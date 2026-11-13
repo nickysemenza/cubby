@@ -167,5 +167,9 @@ export async function discoverPurchases(
       pending.errors,
       "Retained Email admission failed; discovery continued.",
     );
-  return { mail, senderAfter: pending.senderAfter ?? null, more: senders.more || Boolean(pending.senderAfter) };
+  return {
+    mail,
+    senderAfter: pending.senderAfter ?? null,
+    more: senders.more || Boolean(pending.senderAfter),
+  };
 }
