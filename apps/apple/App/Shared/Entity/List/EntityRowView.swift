@@ -175,7 +175,9 @@ struct EntityRowView: View {
                 }
             }
         } supplement: {
-            if layout.state != nil || layout.progress != nil {
+            if MachineryListLine.text(row.raw) != nil {
+                MachineryListLine(raw: row.raw)
+            } else if layout.state != nil || layout.progress != nil {
                 WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
                     if let state = layout.state { StateBadge(state: state) }
                     if let progress = layout.progress {
@@ -191,7 +193,7 @@ struct EntityRowView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            accessibilityText(for: layout) + (FieldValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
+            accessibilityText(for: layout) + (MachineryListLine.text(row.raw).map { ", " + $0 } ?? "") + (FieldValueStatus.isUpdating(in: row.raw) ? ", Updating" : ""))
     }
 
     /// Line 2's facts after the status mark: placement or subtitle first, at most two in all.

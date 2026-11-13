@@ -13,6 +13,8 @@ struct EntityHeroView<Actions: View>: View {
     @ViewBuilder let actions: Actions
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(AppModel.self) private var app
+    @State private var machinery = MachineryModel()
     @State private var showingPhoto = false
     @State private var showingImageChain = false
 
@@ -79,8 +81,13 @@ struct EntityHeroView<Actions: View>: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             let facts = RecordHeaderFacts(descriptor: descriptor, row: row)
-            if facts.hasContent { facts }
+            if machinery.read == nil, facts.hasContent { facts }
+            RecordMachineryHeader(model: machinery, subject: imageSubject)
             actions
+        }
+        .task(id: imageSubject) {
+            machinery = MachineryModel()
+            await machinery.load(app, subject: imageSubject)
         }
         .onChange(of: imageSubject) { _, _ in showingImageChain = false }
         .popover(isPresented: $showingImageChain) {
@@ -145,7 +152,7 @@ struct EntityHeroView<Actions: View>: View {
             if kind != nil || state != nil {
                 WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
                     if let kind { KindTag(option: kind) }
-                    if let state { StateBadge(state: state, size: .header) }
+                    if machinery.read == nil, let state { StateBadge(state: state, size: .header) }
                 }
                 .padding(.vertical, 2)
             }
