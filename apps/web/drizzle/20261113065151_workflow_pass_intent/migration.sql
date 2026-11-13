@@ -15,6 +15,12 @@ WHERE j.state IN ('queued','running','retry_wait','paused','failed','cancelled')
 --> statement-breakpoint
 CREATE TEMP TABLE workflow_intents ON COMMIT DROP AS
 SELECT DISTINCT ON (pass_name,pass_key) s.*,
+ CASE WHEN pass_name='purchase.discovery' THEN
+ (SELECT t.pass_cursor FROM workflow_intent_sources t WHERE t.pass_name=s.pass_name AND t.pass_key=s.pass_key
+ ORDER BY (t.pass_cursor->'senderAfter' IS DISTINCT FROM 'null'::jsonb),
+ t.pass_cursor->'senderAfter'->>'mailboxId' COLLATE "C" NULLS FIRST,
+ t.pass_cursor->'senderAfter'->>'afterId' COLLATE "C" NULLS FIRST,t.id LIMIT 1)
+ ELSE pass_cursor END selected_cursor,
  (SELECT min(t."availableAt") FROM workflow_intent_sources t WHERE t.pass_name=s.pass_name AND t.pass_key=s.pass_key) first_available,
  (SELECT jsonb_agg(to_jsonb(t) ORDER BY t.id) FROM workflow_intent_sources t WHERE t.pass_name=s.pass_name AND t.pass_key=s.pass_key) receipts
 FROM workflow_intent_sources s
@@ -29,7 +35,7 @@ ORDER BY pass_name,pass_key,
  "updatedAt" DESC,id;
 --> statement-breakpoint
 INSERT INTO "Pass" (name,key,cursor,"runId",attempts,"maxAttempts","availableAt","waitCause","lastError","cancelledAt")
-SELECT pass_name,pass_key,pass_cursor||jsonb_build_object('legacyJobs',receipts),
+SELECT pass_name,pass_key,selected_cursor||jsonb_build_object('legacyJobs',receipts),
  CASE WHEN pass_name='run.execute' THEN "runId" END,
  CASE WHEN state='failed' OR run_status='failed' THEN greatest(attempts,coalesce("maxAttempts",3)) ELSE attempts END,
  coalesce("maxAttempts",3),first_available,
@@ -57,7 +63,7 @@ ON CONFLICT (name, key) DO NOTHING;
 DO $$ BEGIN
  IF EXISTS (SELECT 1 FROM workflow_intents e WHERE NOT EXISTS (
    SELECT 1 FROM "Pass" p WHERE p.name=e.pass_name AND p.key=e.pass_key
-   AND p.cursor=e.pass_cursor||jsonb_build_object('legacyJobs',e.receipts)
+   AND p.cursor=e.selected_cursor||jsonb_build_object('legacyJobs',e.receipts)
    AND p."availableAt"=e.first_available
    AND p.attempts=CASE WHEN e.state='failed' OR e.run_status='failed' THEN greatest(e.attempts,coalesce(e."maxAttempts",3)) ELSE e.attempts END
    AND p."maxAttempts"=coalesce(e."maxAttempts",3)

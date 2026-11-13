@@ -88,7 +88,7 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  ELSE a.changes->f.field->'to' END ELSE a.changes->f.field->'to' END audit_value FROM "AuditLog" a WHERE a."entityKind"=r.entity AND a."entityId"=r.id
    AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true
 ), source_answers AS (
- SELECT 'AiEvaluation'::text source_table, e.id, to_jsonb(e) legacy, e.feature, e.provenance->>'model' model,
+ SELECT 'AiEvaluation'::text source_table, e.id, CASE WHEN e.result IS NULL THEN to_jsonb(e) ELSE jsonb_build_object('id',e.id,'sourceTable','AiEvaluation','updatedAt',e."updatedAt",'receipt',e.receipt) END legacy, e.feature, e.provenance->>'model' model,
  coalesce(e.provenance->>'promptVersion',(SELECT d->>'promptVersion' FROM jsonb_array_elements(coalesce(e.provenance->'dependencies','[]'::jsonb)) d WHERE d->>'feature'=e.feature LIMIT 1),'legacy:unknown') prompt_version, e."createdAt" created_at, e."runId" run_id,
  e.result result, CASE WHEN e.result IS NOT NULL THEN 'answered' WHEN e."leaseToken" IS NOT NULL OR e.attempts>0 OR e.state IN ('result_ready','completed') THEN 'unknown' ELSE 'queued' END state,
  e.state IN ('cancelled','obsolete','failed','completed') cancelled, coalesce(e."runAt",e."createdAt") available_at,
@@ -153,10 +153,11 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  SELECT s.*,coalesce(w.hash,'legacy:'||s.source_table||':'||s.id::text) hash,
  CASE WHEN s.source_table='Suggestion' AND (s.legacy->'producer'->>'kind'='rule' OR s.legacy->>'model'='rule') THEN 'source' ELSE 'model' END producer,
  w.envelope,CASE WHEN w.id IS NULL THEN s.id ELSE min(s.id::text) OVER(PARTITION BY w.hash)::uuid END ask_id,
+ s.source_table='AiEvaluation' AND (s.result IS NULL OR EXISTS(SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=s.id)) needs_ask,
  s.cancelled OR s.source_table='AiEvaluation' AND s.state='queued' AND w.id IS NULL cancel_import
  FROM source_answers s LEFT JOIN executable_work w ON w.id=s.id AND s.source_table='AiEvaluation'
 ), ask_rows AS (
- SELECT DISTINCT ON (ask_id) * FROM imports ORDER BY ask_id,id
+ SELECT DISTINCT ON (ask_id) * FROM imports WHERE needs_ask ORDER BY ask_id,id
 ), review_events AS (
  SELECT s.id, d.event, d.ord FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END) WITH ORDINALITY d(event,ord) WHERE s.family IN ('field','statement_transaction','recommendation')
  UNION ALL
@@ -236,15 +237,15 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  'availableAt',c.available_at,'attempts',c.attempts,'maxAttempts',greatest(3,c.attempts+1),'lastError',CASE WHEN c.cancel_import AND NOT c.cancelled THEN 'Cutover cancelled legacy queued work: incomplete canonical input or unregistered feature' ELSE c.error END,'waitCause',CASE WHEN c.legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN c.legacy->>'waitCause' END,'createdAt',c.created_at,'executor',NULL) FROM imports i JOIN ask_rows c USING(ask_id) WHERE i.source_table='AiEvaluation'
  UNION ALL
  SELECT 'answer',source_table||':'||id,jsonb_build_object('inputHash',hash,'feature','legacy:'||feature,'producer',producer,'promptVersion',prompt_version,
- 'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',CASE WHEN source_table='AiEvaluation' THEN ask_id END,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
+ 'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',CASE WHEN needs_ask THEN ask_id END,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
  UNION ALL
  (SELECT DISTINCT ON (h.hash) 'answer','Captured:'||c.id,jsonb_build_object('inputHash',h.hash,'feature',c.feature,'producer','model','promptVersion',c.version,'output',c.answer->'value','model',c.answer->'models'->>0,'createdAt',c.at)
  FROM captured_answers c JOIN envelope_hashes h USING(id) ORDER BY h.hash,c.at DESC,c.id DESC)
  UNION ALL
- SELECT 'askScope',source_table||':'||id||':owner',jsonb_build_object('askId',ask_id,'scopeKind','run','scopeKey',run_id,'runId',run_id,'receipt',legacy->'receipt','createdAt',created_at) FROM imports WHERE source_table='AiEvaluation' AND run_id IS NOT NULL
+ SELECT 'askScope',source_table||':'||id||':owner',jsonb_build_object('askId',ask_id,'scopeKind','run','scopeKey',run_id,'runId',run_id,'receipt',legacy->'receipt','createdAt',created_at) FROM imports WHERE needs_ask AND run_id IS NOT NULL
  UNION ALL
  SELECT 'askScope',source_table||':'||id||':record',jsonb_build_object('askId',ask_id,'scopeKind',CASE WHEN target->>'entity' IN ('product','cookbook','location','meal','project','task','vendor','financialAccount','planting','gardenEntry','productCategory','run','device','spendingCategory') THEN 'fields' ELSE 'record' END,
- 'scopeKey',(target->>'entity')||':'||(target->>'recordId'),'createdAt',created_at) FROM imports WHERE source_table='AiEvaluation' AND target->>'recordId' IS NOT NULL
+ 'scopeKey',(target->>'entity')||':'||(target->>'recordId'),'createdAt',created_at) FROM imports WHERE needs_ask AND target->>'recordId' IS NOT NULL
  UNION ALL
  SELECT 'askScope','AiEvaluationRequest:'||r.id,jsonb_build_object('askId',i.ask_id,'scopeKind','run','scopeKey',r."runId",'runId',r."runId",'receipt',r.receipt,'sequence',r.sequence,'cancelledAt',r."cancelledAt",'createdAt',r."createdAt") FROM "AiEvaluationRequest" r JOIN imports i ON i.source_table='AiEvaluation' AND i.id=r."evaluationId"
  UNION ALL
@@ -438,7 +439,10 @@ CREATE TABLE archive."AiEvaluation_preimage" AS TABLE "AiEvaluation";
 CREATE TABLE archive."AiEvaluationRequest_preimage" AS TABLE "AiEvaluationRequest";
 --> statement-breakpoint
 DO $verify$ BEGIN
- IF EXISTS (SELECT 1 WHERE (SELECT count(*) FROM "AiEvaluation")<>(SELECT count(*) FROM archive."AiEvaluation_preimage") OR (SELECT count(*) FROM "AiEvaluation")<>(SELECT count(*) FROM "AiEvaluation" source JOIN cutover_expected e ON e.mapping='ask' AND e.source_id='AiEvaluation:'||source.id JOIN "Ask" carried ON carried.id=(e.row->>'id')::uuid)) THEN RAISE EXCEPTION 'Accepted-input cutover: evaluation count preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 WHERE (SELECT count(*) FROM "AiEvaluation")<>(SELECT count(*) FROM archive."AiEvaluation_preimage") OR (SELECT count(*) FROM "AiEvaluation")<>(SELECT count(*) FROM "AiEvaluation" source JOIN cutover_expected e ON e.source_id='AiEvaluation:'||source.id AND e.mapping=CASE WHEN source.result IS NULL OR EXISTS(SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=source.id) THEN 'ask' ELSE 'answer' END
+ LEFT JOIN "Ask" carried ON e.mapping='ask' AND carried.id=(e.row->>'id')::uuid
+ LEFT JOIN "Answer" paid ON e.mapping='answer' AND paid."inputHash"=e.row->>'inputHash'
+ WHERE carried.id IS NOT NULL OR paid."inputHash" IS NOT NULL)) THEN RAISE EXCEPTION 'Accepted-input cutover: evaluation count preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 WHERE (SELECT count(*) FROM "AiEvaluationRequest")<>(SELECT count(*) FROM archive."AiEvaluationRequest_preimage") OR (SELECT count(*) FROM "AiEvaluationRequest")<>(SELECT count(*) FROM "AiEvaluationRequest" source JOIN cutover_expected e ON e.mapping='askScope' AND e.source_id='AiEvaluationRequest:'||source.id JOIN "AskScope" carried ON carried."askId"=(e.row->>'askId')::uuid AND carried."scopeKind"='run' AND carried."scopeKey"=source."runId"::text)) THEN RAISE EXCEPTION 'Accepted-input cutover: requester count preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM "AiEvaluation" a FULL JOIN archive."AiEvaluation_preimage" b USING(id) WHERE to_jsonb(a) IS DISTINCT FROM to_jsonb(b)) THEN RAISE EXCEPTION 'Accepted-input cutover: evaluation preimage preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM "AiEvaluationRequest" a FULL JOIN archive."AiEvaluationRequest_preimage" b USING(id) WHERE to_jsonb(a) IS DISTINCT FROM to_jsonb(b)) THEN RAISE EXCEPTION 'Accepted-input cutover: requester preimage preservation mismatch'; END IF;
