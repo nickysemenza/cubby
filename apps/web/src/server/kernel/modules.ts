@@ -7,6 +7,7 @@ import { connectionKernelModule } from "~/server/domains/connection/repo/connect
  * entry point.
  */
 import { imageKernelModule } from "~/server/domains/image-processing/service/module";
+import { financialTransactionKernelModule } from "~/server/domains/financial-transaction/service/financial-kernel";
 import { runKernelModule } from "~/server/domains/run/service/run-summary";
 import { shipmentKernelModule } from "~/server/domains/shipment/service";
 import { embeddingKernelModule } from "~/server/generic/embedding/module";
@@ -21,6 +22,7 @@ export const KERNEL_MODULES: readonly DomainModule[] = [
   connectionKernelModule,
   runKernelModule,
   shipmentKernelModule,
+  financialTransactionKernelModule,
   statementKernelModule,
   fieldsKernelModule,
   workflowKernelModule,

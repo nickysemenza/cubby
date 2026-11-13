@@ -15,6 +15,7 @@ import {
   purchasePaymentEvidence,
   vendorAccount,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { readPurchase as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
@@ -86,7 +87,7 @@ describe("settlement conflicts", () => {
       statedTotal: moneyToMinor(13.59),
     });
     const charge = (accountId: typeof buyerCard.id, amount: number) =>
-      insertWithShortcode(ctx.db, "financialTransaction", {
+      seedBankTransaction(ctx.db, {
         accountId,
         kind: "purchase",
         status: "posted",

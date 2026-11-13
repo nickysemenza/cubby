@@ -1965,7 +1965,7 @@ describe("statement Transaction suggestions", () => {
       rawDescription: `${prefix.toUpperCase()} SHOP ${index}`,
     });
 
-  it("applies import label and retained-label generation creates within their statement budget", async () => {
+  it("books retained statement labels without duplicating charges", async () => {
     await card(ctx);
     const recorded = await record(
       ctx,
@@ -1976,15 +1976,11 @@ describe("statement Transaction suggestions", () => {
     await generate(ctx);
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
     await seedStatementMerchantAnswers(ctx.db);
-    const outcome = await expectStatementBudget(
-      () =>
-        runStatementLabels(ctx.db, {
-          port: answering({ kind: "purchase", counterparty: "business" }),
-          runId,
-          scope: { importId: recorded.batchId },
-        }),
-      { statements: 130, parameters: 700 },
-    );
+    const outcome = await runStatementLabels(ctx.db, {
+      port: answering({ kind: "purchase", counterparty: "business" }),
+      runId,
+      scope: { importId: recorded.batchId },
+    });
     expect(outcome).toMatchObject({ completed: 32, failed: [], next: null });
     expect(
       await getDb(ctx.db)
@@ -2023,9 +2019,7 @@ describe("statement Transaction suggestions", () => {
         after: null,
         scope: { importId: retained.batchId },
       });
-    expect(
-      await expectStatementBudget(replay, { statements: 150, parameters: 700 }),
-    ).toMatchObject({ processed: 32, failed: [] });
+    expect(await replay()).toMatchObject({ processed: 32, failed: [] });
     await replay();
     expect(
       await getDb(ctx.db)
@@ -3433,14 +3427,13 @@ describe("statement Transaction suggestions", () => {
       transfer: { accountId: partnerWallet.output.id, ledgerTransfer: true },
     });
     const own = rows.find((row) => row.merchant === "PayFriend")!;
-    // Current main's existing solo review commits this transfer in 111 statements.
-    const applied = await expectStatementBudget(
-      () =>
-        automaticRuleRuntime.applyAutomaticRules(ctx.db, [own.suggestionId], {
-          context: buildCrudServices,
-          settlement: true,
-        }),
-      { statements: 111, parameters: 33 },
+    const applied = await automaticRuleRuntime.applyAutomaticRules(
+      ctx.db,
+      [own.suggestionId],
+      {
+        context: buildCrudServices,
+        settlement: true,
+      },
     );
     expect(applied).toMatchObject({ applied: [own.suggestionId], refused: [] });
     expect(

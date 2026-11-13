@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   readRecordWorkQueue,
   readWorkQueue,
@@ -140,7 +141,7 @@ describe("financial Work sources", () => {
       "financialAccount",
       account.output.id,
     );
-    const transfer = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const transfer = await seedBankTransaction(ctx.db, {
       accountId,
       kind: "account_transfer",
       status: "posted",

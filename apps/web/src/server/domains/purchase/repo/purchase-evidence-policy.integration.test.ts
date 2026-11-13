@@ -14,6 +14,8 @@ import {
   expense,
   financialTransactionAllocation,
 } from "~/server/db/schema";
+import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   findOrCreateVendor,
@@ -216,7 +218,7 @@ describe("purchase evidence policy", () => {
       name: "Fixture instalment card",
       identity: { kind: "cash" },
     });
-    const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const charge = await seedBankTransaction(ctx.db, {
       accountId: account.id,
       amount: moneyToMinor(1000),
       kind: "purchase",
@@ -394,9 +396,9 @@ describe("purchase evidence policy", () => {
         document: "not_expected",
         itemization: "not_expected",
       });
-      await unwrapDb(ctx.db).execute(
-        sql`UPDATE "FinancialTransaction" SET "itemizationExpectation" = 'required' WHERE id = ${transaction.entityId}`,
-      );
+      await updateSeedBankTransaction(ctx.db, transaction.entityId, {
+        itemizationExpectation: "required",
+      });
       expect(await read()).toMatchObject({
         booking: "missing",
         document: "not_expected",
@@ -455,9 +457,9 @@ describe("purchase evidence policy", () => {
     expect(await quality()).toMatchObject({
       gaps: [{ check: "financialtransaction_display_image" }],
     });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET kind = 'account_transfer' WHERE id = ${transaction.entityId}`,
-    );
+    await updateSeedBankTransaction(ctx.db, transaction.entityId, {
+      kind: "account_transfer",
+    });
     const transferQuality = await quality();
     expect(transferQuality).toMatchObject({ status: "defect" });
     expect(transferQuality?.gaps.map((gap) => gap.check)).toEqual([
@@ -743,7 +745,7 @@ describe("vendor itemization default from order evidence", () => {
         spendingCategoryId: category.id,
         date: "2026-09-01",
       });
-      const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+      const charge = await seedBankTransaction(ctx.db, {
         accountId: account.id,
         amount: moneyToMinor(25),
         kind: "purchase",
@@ -847,7 +849,7 @@ describe("vendor itemization default from order evidence", () => {
       name: "Fixture online card",
       identity: { kind: "cash" },
     });
-    const charge = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const charge = await seedBankTransaction(ctx.db, {
       accountId: account.id,
       amount: moneyToMinor(25),
       kind: "purchase",

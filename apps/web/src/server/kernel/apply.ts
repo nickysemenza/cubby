@@ -21,13 +21,17 @@ import {
 } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
+  repositorySavepoint,
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
+import {
+  insertPayloadsWithIdentities,
+  isEntityShortcodeCollision,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
 import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   askGapState,
@@ -56,6 +60,7 @@ import type {
 } from "./define";
 import { difference, type Difference } from "./diff";
 import { lockKeyRevs, markDirty } from "./dirty";
+import { recordDrift } from "./drift";
 import {
   BACKGROUND_GATE_YIELD_MS,
   enterWriteTransaction,
@@ -91,6 +96,7 @@ export type ApplyOptions = {
 
 const isConflict = (error: UnparsedError) =>
   error instanceof KernelConflict ||
+  isEntityShortcodeCollision(error, "Entity") ||
   ["40001", "40P01"].includes(findPgError(error)?.code ?? "");
 
 /** A bound value cast to its column's type, for a typed VALUES list. */
@@ -112,7 +118,14 @@ async function insertRecords(
   if (entity && isShortcodeEntity(entity)) {
     // SAFETY: the reconciler declared these as columns of this entity's
     // table, and the shortcode insert supplies only the identity columns.
-    await insertManyWithShortcode(tx, entity, rows as never[]);
+    await repositorySavepoint(tx, (nested) =>
+      insertPayloadsWithIdentities(
+        nested,
+        target.table,
+        entity,
+        rows as never[],
+      ),
+    );
     return;
   }
   // SAFETY: as above; the declared columns are this table's own.
@@ -327,12 +340,57 @@ async function applyScope(
       `Scope ${scope.kind}:${scope.key} was dirtied since the load`,
     );
 
-  const diff = difference(computed, options);
+  const proposed = difference(computed, options);
+  const decisionIds = new Set(
+    computed.decisions.map((decision) => decision.id),
+  );
+  const heldBaseline =
+    !options.releaseBaseline &&
+    computed.storedBindings.some((binding) => binding.basis === "baseline") &&
+    (proposed.inserts.length > 0 ||
+      proposed.removals.length > 0 ||
+      proposed.merges.length > 0 ||
+      proposed.rejections.length > 0 ||
+      computed.missing.length > 0 ||
+      proposed.updates.some((update) =>
+        Object.keys(update.set).some((field) => {
+          const desiredRecord = desired.records.find(
+            (record) =>
+              record.target.name === update.target.name &&
+              record.naturalKey === update.naturalKey,
+          );
+          return !decisionIds.has(desiredRecord?.provenance[field] ?? "");
+        }),
+      ) ||
+      proposed.bindingsAdd.some(
+        (binding) =>
+          binding.basis !== "decision" &&
+          !computed.storedBindings.some(
+            (stored) =>
+              stored.basis === "baseline" &&
+              stored.fact.kind === binding.fact.kind &&
+              stored.fact.id === binding.fact.id &&
+              stored.eventKey === binding.eventKey,
+          ),
+      ));
+  if (heldBaseline) await recordDrift(q, computed, proposed);
+  const diff: Difference = heldBaseline
+    ? {
+        inserts: [],
+        updates: [],
+        removals: [],
+        rejections: [],
+        bindingsAdd: [],
+        bindingsRemove: [],
+        merges: [],
+      }
+    : proposed;
   const changed: Key[] = [];
   const discovered: ScopeRef[] = [...desired.emits];
   const entities = new Set<string>();
   const touch = (target: ColumnRef, row: ColumnValues) => {
     changed.push(
+      tableKey(target.name),
       rowKey(target.name, String(row.id)),
       tableKey(target.name),
       ...(target.keys?.(row) ?? []),
@@ -340,7 +398,19 @@ async function applyScope(
     discovered.push(...(target.discovers?.(row) ?? []));
     if (target.entity) entities.add(target.entity);
   };
-  const gaps: KernelGap[] = [...desired.gaps];
+  const gaps: KernelGap[] = heldBaseline
+    ? [
+        {
+          kind: "decision",
+          input: "approval of the change to accepted records",
+          actor: "you",
+          since: null,
+          until: null,
+          actions: [],
+          inputHash: null,
+        },
+      ]
+    : [...desired.gaps];
 
   const byTarget = <T extends { target: ColumnRef }>(items: readonly T[]) => {
     const groups = new Map<string, T[]>();
@@ -469,7 +539,7 @@ async function applyScope(
   for (const entry of [...diff.bindingsAdd, ...diff.bindingsRemove])
     changed.push(bindingEventKey(entry.eventKey), bindingFactKey(entry.fact));
 
-  await fileAsks(q, computed);
+  if (!heldBaseline) await fileAsks(q, computed);
   // An answer Cubby cannot settle alone becomes the member's gap; an unknown
   // or exhausted ask makes the scope Stuck.
   const asks = await scopeAsks(q, scope);
@@ -527,7 +597,8 @@ async function applyScope(
       target: [scopeState.scopeKind, scopeState.scopeKey],
       set: state,
     });
-  await q.execute(sql`
+  if (!heldBaseline)
+    await q.execute(sql`
     DELETE FROM "Drift" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`);
   await q.execute(sql`
     DELETE FROM "ScopeDirty" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}

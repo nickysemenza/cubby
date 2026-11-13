@@ -95,6 +95,7 @@ export {
   decisionKey,
   driftSubject,
   legacyKey,
+  recordIdentity,
   recordSubject,
   rowKey,
 } from "./keys";

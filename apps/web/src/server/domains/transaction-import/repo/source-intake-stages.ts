@@ -43,6 +43,7 @@ import { append, evidenceRow } from "~/server/kernel/api";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
+import { dirtySourceOccurrences } from "./source-event-dirty";
 import { occurrenceEvidence, statementEvidence } from "./statement-evidence";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
@@ -635,6 +636,10 @@ export async function applySourceIntake(
           "sourceOccurrence",
           [write.owner],
           updated,
+        );
+        await dirtySourceOccurrences(
+          tx,
+          updated.map((row) => row.id),
         );
         break;
       }

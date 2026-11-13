@@ -102,6 +102,17 @@ async function proposeOrAdvance(
       WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`);
     return "advanced";
   }
+  await recordDrift(q, computed, diff);
+  return "proposed";
+}
+
+/** Store the exact proposal without applying records or owing new producer calls. */
+export async function recordDrift(
+  q: Q,
+  computed: Computed,
+  diff: Difference,
+): Promise<void> {
+  const { scope, reconciler } = computed;
   const proposal = {
     difference: describeDifference(diff),
     askCount: computed.missing.length,
@@ -125,7 +136,6 @@ async function proposeOrAdvance(
       target: [drift.scopeKind, drift.scopeKey],
       set: values,
     });
-  return "proposed";
 }
 
 /** The kernel's own pass: visit every scope derived under older rules. */

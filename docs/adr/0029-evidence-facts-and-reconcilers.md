@@ -101,6 +101,13 @@ Adding a scope kind needs a measured reason. One reconciler per derived field
 is ADR 0021's engine again and is not allowed; derived values stay views,
 typed snapshots and the hourly pass (ADR 0025 item 4).
 
+A reconciler that must create an authored catalog record declares its initial
+values in `writes(..., { createOnly: [...] })`. Those values are supplied only
+on insertion, are excluded from column ownership and the read-write graph, and
+are never changed on recomputation. Existing catalog writers retain their
+authored responsibility. A booking can create a Vendor and its aliases without
+claiming the names and aliases of the household's whole Vendor catalog.
+
 Recipes, Meals, Tasks, Projects, Locations, garden records and Inventory counts
 are authored. They stay plain writes with no money or state reconciler; an
 authored entity that declares AI fill-in has a `fields` scope for those
@@ -172,7 +179,9 @@ the retained id; for a new natural key it derives a UUID v8 from the scope
 kind, scope key, table and natural key using SHA-256. Contents never enter
 that identity. Other records declared in the same reconcile use that UUID as
 a foreign key. Apply preserves it, orders inserts by foreign-key dependency,
-and reserves entity shortcodes inside its transaction. A conflicted or failed
+and commits the reserved entity shortcode inside its transaction. `c.identity`
+returns the same id and public shortcode before a record is declared; shortcode
+collisions re-run the scope with an unreserved code while retaining its id. A conflicted or failed
 apply leaves no identity, shortcode or `RecordKey` reservation. A cycle between
 new rows in different tables is refused before any record is inserted.
 
@@ -231,6 +240,12 @@ while a claimable dirty scope of an upstream kind exists in the same lane. The
 graph is `bankEvent → paymentMatch → purchaseEvent`, `bankEvent →
 transferPair`, and across lanes `purchaseEvent → emailState`; `shipment`,
 `fields` and `quality` have no upstream.
+
+Predicate reads also record a table-membership key. A matching authored or
+catalog mutation raises that key, including when the previous predicate read
+was empty. Reviewed evidence-association changes replace the affected
+`FactKey` entries and raise both the old and the new keys in their transaction.
+Raw source observations remain insert-only.
 
 ### 6. One write gate, one input fence
 
@@ -358,6 +373,11 @@ delete policy and search cleanup, and marks the `RecordKey` rejected so the
 record is not created again when its evidence returns. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
+Reconcilers resolve retained decision and manual-entry references through
+`c.reference(entity, idOrShortcode)`. It follows redirects from the identity
+snapshot loaded for the batch, returns the live survivor only for the requested
+entity kind, and does not alter the retained input.
+
 ### 10. Stage and the machinery read
 
 Stage is not stored on any record. `ScopeState` caches the last computed
@@ -450,6 +470,11 @@ member decision and above automatic matching. The first sweep then proposes
 drift wherever the derivation without the baseline disagrees, and approving
 that drift releases the baseline for that scope. A scope with no stored
 records gets version 0 and an empty baseline.
+
+An input-triggered reconcile also protects accepted baselines. An automatic
+difference records a Drift proposal and applies no record changes or new asks.
+A field assignment with the current Decision as its provenance may update that
+field above the baseline; it does not authorize other automatic differences.
 
 ### 12. Cutover migration
 

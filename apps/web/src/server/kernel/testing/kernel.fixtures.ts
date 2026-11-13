@@ -6,7 +6,7 @@
  * tables live in their own schema so they never enter the public catalog.
  */
 import { sourceActor } from "@cubby/schemas/kernel/stage";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { integer, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -142,6 +142,7 @@ export const receiptEvidence = defineEvidence({
 });
 
 export type FixtureHooks = {
+  predicateReceipts?: boolean;
   linked?: boolean;
   /** Runs inside each `load`, before it reads; tests mutate inputs here. */
   onLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
@@ -218,6 +219,15 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       source.evidence(receiptEvidence),
       source.bindings,
       source.table(fixtureCharge, ["orderRef", "amountMinor"]),
+      ...(hooks.predicateReceipts
+        ? [
+            source.table(fixtureReceipt, [
+              "orderRef",
+              "amountMinor",
+              "merchant",
+            ]),
+          ]
+        : []),
     ],
     writes: [
       purchaseWrites,
@@ -231,7 +241,11 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           const scoped = reads.for(key);
           const [charges, receipts, bindings] = await Promise.all([
             scoped.facts(chargeEvidence, [`order:${key}`]),
-            scoped.facts(receiptEvidence, [`order:${key}`]),
+            hooks.predicateReceipts
+              ? scoped
+                  .select(fixtureReceipt, [], eq(fixtureReceipt.orderRef, key))
+                  .then((rows) => new Map([[`order:${key}`, rows]]))
+              : scoped.facts(receiptEvidence, [`order:${key}`]),
             scoped.bindings({ events: [key] }),
           ]);
           const own = charges.get(`order:${key}`) ?? [];
@@ -266,11 +280,8 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       }
       const id = c.recordId(purchaseWrites, "event");
       const assigned = id
-        ? c.decision(
-            "assignment",
-            recordSubject(PURCHASE_TABLE, id),
-            "merchant",
-          )
+        ? (c.assignments(recordSubject(PURCHASE_TABLE, id)).get("merchant") ??
+          null)
         : null;
       const observed = receipt?.merchant ?? null;
       const merchant = assigned
@@ -280,12 +291,17 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         : version >= 2 && observed
           ? observed.toUpperCase()
           : observed;
-      const purchaseId = c.record(purchaseWrites, "event", {
-        orderRef: input.orderRef,
-        amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-        merchant,
-        receiptId: receipt?.id ?? null,
-      });
+      const purchaseId = c.record(
+        purchaseWrites,
+        "event",
+        {
+          orderRef: input.orderRef,
+          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          merchant,
+          receiptId: receipt?.id ?? null,
+        },
+        { provenance: assigned ? { merchant: assigned.id } : {} },
+      );
       if (hooks.linked) {
         const expenseId = c.record(expenseWrites, "expense", {
           purchaseId,

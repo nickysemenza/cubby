@@ -85,7 +85,10 @@ export function difference(
         target: record.target,
         naturalKey: record.naturalKey,
         id: record.id,
-        values: { ...record.values },
+        values: {
+          ...record.values,
+          ...(record.shortcode ? { shortcode: record.shortcode } : {}),
+        },
       });
       continue;
     }
@@ -101,7 +104,10 @@ export function difference(
     const set: ColumnValues = {};
     const seen: ColumnValues = {};
     for (const [column, value] of Object.entries(record.values))
-      if (!same(value, stored[column])) {
+      if (
+        record.target.columns.includes(column) &&
+        !same(value, stored[column])
+      ) {
         set[column] = value;
         seen[column] = stored[column] ?? null;
       }
@@ -232,7 +238,11 @@ export function describeDifference(diff: Difference): Json {
       inserts: diff.inserts.map((entry) => ({
         table: entry.target.name,
         naturalKey: entry.naturalKey,
-        values: entry.values,
+        values: Object.fromEntries(
+          Object.entries(entry.values).filter(
+            ([column]) => column !== "id" && column !== "shortcode",
+          ),
+        ),
       })),
       updates: diff.updates.map((entry) => ({
         table: entry.target.name,

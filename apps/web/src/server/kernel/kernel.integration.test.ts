@@ -13,12 +13,13 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { manualEntry } from "~/server/db/kernel-schema";
+import { manualEntry, evidenceBinding, drift } from "~/server/db/kernel-schema";
+import { registerOwnedColumns } from "~/server/db/owned-columns";
 import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
-import { ledgerParty, transactionImport } from "~/server/db/schema";
+import { ledgerParty, transactionImport, vendor } from "~/server/db/schema";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
@@ -34,6 +35,8 @@ import {
   defineReconciler,
   source,
   defineEvidence,
+  defineReconciler,
+  writes,
   definePass,
   evidenceRow,
   recordSubject,
@@ -53,6 +56,7 @@ import {
 } from "./claim";
 import { computeBatch } from "./compute";
 import { runOnePass } from "./pass";
+import { ownedColumns } from "./registry";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -82,7 +86,9 @@ describe("evidence-facts kernel", () => {
       categorize: async () => "Groceries",
       ...hooks,
     });
-    return { kernel: createKernel([fixture.module]), fixture };
+    const kernel = createKernel([fixture.module]);
+    registerOwnedColumns(ownedColumns(kernel.registry));
+    return { kernel, fixture };
   };
   const charge = (
     orderRef: string,
@@ -176,6 +182,227 @@ describe("evidence-facts kernel", () => {
     });
     await kernel.reconcileNow(ctx.db, [scope]);
     expect(seen.at(-1)).toBe(1);
+  });
+
+  it("reserves public codes during reconcile and retries a collision without leaking an identity", async () => {
+    const target = writes(vendor, [], {
+      entity: "vendor",
+      createOnly: ["name"],
+    });
+    let retainedReference: string | null = null;
+    const reconciler = defineReconciler<string>({
+      scope: PURCHASE_SCOPE,
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      load: async (_reads, keys) => new Map(keys.map((key) => [key, key])),
+      reconcile(key, c) {
+        const identity = c.identity(target, "seller");
+        const id = c.record(
+          target,
+          "seller",
+          { name: `Synthetic ${key}` },
+          {
+            provenance: retainedReference
+              ? {
+                  reference:
+                    c.reference("vendor", retainedReference) ?? "missing",
+                }
+              : {},
+          },
+        );
+        if (id !== identity.id)
+          throw new Error("A declared record changed its reserved identity");
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({
+        name: "codes",
+        evidence: [chargeEvidence],
+        reconcilers: [reconciler],
+      }),
+    ]);
+    await kernel.append(ctx.db, [charge("ORD-CODE", 1250)]);
+    const q = repositoryQueries(ctx.db);
+    const claimed = await claimScopes(q, kernel.registry, "money", 10);
+    const computed = await computeBatch(
+      q,
+      kernel.registry,
+      reconciler,
+      [{ kind: PURCHASE_SCOPE, key: "ORD-CODE" }],
+      { locked: false, hideBaseline: false },
+    );
+    const desired = computed[0]!.desired!.records[0]!;
+    expect(desired.shortcode).toMatch(/^VEN-/);
+    await q
+      .insert(entityIdentity)
+      .values({
+        id: crypto.randomUUID(),
+        kind: "vendor",
+        shortcode: desired.shortcode,
+        deletedAt: new Date(),
+      });
+    expect(
+      (
+        await applyComputed(
+          ctx.db,
+          kernel.registry,
+          reconciler,
+          computed,
+          claimed,
+          { releaseBaseline: false, mode: "member" },
+        )
+      )[0]?.status,
+    ).toBe("conflict");
+    expect(
+      await q
+        .select()
+        .from(entityIdentity)
+        .where(eq(entityIdentity.id, desired.id)),
+    ).toEqual([]);
+    await settle(kernel);
+    const [stored] = await q
+      .select()
+      .from(vendor)
+      .where(eq(sql`${vendor.id}::text`, desired.id));
+    expect(stored?.id).toBe(desired.id);
+    expect(stored?.shortcode).toMatch(/^VEN-/);
+    expect(stored?.shortcode).not.toBe(desired.shortcode);
+    await q
+      .update(entityIdentity)
+      .set({ mergedIntoId: stored!.id })
+      .where(eq(entityIdentity.shortcode, desired.shortcode!));
+    retainedReference = desired.shortcode;
+    await q
+      .update(vendor)
+      .set({ name: "Member catalog name" })
+      .where(eq(vendor.id, stored!.id));
+    await kernel.append(ctx.db, [charge("ORD-CODE", 1400)]);
+    await settle(kernel);
+    expect(
+      (await q.select().from(vendor).where(eq(vendor.id, stored!.id)))[0]?.name,
+    ).toBe("Member catalog name");
+    const replay = await computeBatch(
+      q,
+      kernel.registry,
+      reconciler,
+      [{ kind: PURCHASE_SCOPE, key: "ORD-CODE" }],
+      { locked: false, hideBaseline: false },
+    );
+    expect(replay[0]?.desired?.records[0]).toMatchObject({
+      id: desired.id,
+      shortcode: stored!.shortcode,
+    });
+    expect(replay[0]?.desired?.records[0]?.provenance.reference).toBe(
+      stored!.id,
+    );
+  });
+
+  it("reindexes evidence keys when a reviewed association moves and dirties both scopes", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-FROM", 1250),
+      charge("ORD-TO", 1250),
+      receipt("ORD-FROM", "Synthetic Seller"),
+    ]);
+    await settle(kernel);
+    const [evidence] = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureReceipt);
+    await repositoryTransactionDatabase(ctx.db, async (tx) => {
+      await repositoryQueries(tx)
+        .update(fixtureReceipt)
+        .set({ orderRef: "ORD-TO" })
+        .where(eq(fixtureReceipt.id, evidence!.id));
+      await kernel.emitWrites(tx, {
+        table: fixtureReceipt,
+        ids: [evidence!.id],
+        columns: ["orderRef"],
+      });
+    });
+    await settle(kernel);
+    expect(
+      (await purchases(ctx.db)).map((row) => [row.orderRef, row.merchant]),
+    ).toEqual([
+      ["ORD-FROM", null],
+      ["ORD-TO", "Synthetic Seller"],
+    ]);
+    expect(
+      await repositoryQueries(ctx.db).select().from(fixtureReceipt),
+    ).toHaveLength(1);
+  });
+
+  it("keeps accepted baseline records and reports drift while applying a member's field decision", async () => {
+    const { kernel } = kernelWith();
+    const [fact] = await kernel.append(ctx.db, [charge("ORD-BASELINE", 1250)]);
+    await settle(kernel);
+    const [booked] = await purchases(ctx.db);
+    await repositoryQueries(ctx.db)
+      .insert(evidenceBinding)
+      .values({
+        factKind: fact!.kind,
+        factId: fact!.id,
+        eventKey: "ORD-BASELINE",
+        basis: "baseline",
+        scopeKind: PURCHASE_SCOPE,
+        scopeKey: "ORD-BASELINE",
+      });
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject(PURCHASE_TABLE, booked!.id),
+        field: "merchant",
+        value: "Member seller",
+      },
+    ]);
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]?.merchant).toBe("Member seller");
+    await kernel.append(ctx.db, [charge("ORD-BASELINE", 1400)]);
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]).toMatchObject({
+      id: booked!.id,
+      amountMinor: 1250,
+      merchant: "Member seller",
+    });
+    const [proposal] = await repositoryQueries(ctx.db).select().from(drift);
+    expect(proposal).toMatchObject({
+      scopeKind: PURCHASE_SCOPE,
+      scopeKey: "ORD-BASELINE",
+    });
+    expect(
+      (
+        await kernel.machinery(ctx.db, ctx.actor, {
+          entity: PURCHASE_TABLE,
+          id: booked!.id,
+        })
+      ).drift,
+    ).not.toBeNull();
+  });
+
+  it("dirties a negative predicate read when an authored row starts matching it", async () => {
+    const { kernel } = kernelWith({ predicateReceipts: true });
+    await kernel.append(ctx.db, [charge("ORD-PREDICATE", 1250)]);
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]?.merchant).toBeNull();
+    await repositoryQueries(ctx.db)
+      .insert(fixtureReceipt)
+      .values({
+        sourceRef: "synthetic-authored",
+        orderRef: "ORD-PREDICATE",
+        amountMinor: 1250,
+        merchant: "Synthetic Seller",
+      });
+    await kernel.emitWrites(ctx.db, {
+      table: fixtureReceipt,
+      ids: [],
+      columns: ["orderRef", "amountMinor", "merchant"],
+      created: true,
+    });
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]?.merchant).toBe("Synthetic Seller");
   });
 
   it("retains a manual observation once without rewriting its original payload", async () => {

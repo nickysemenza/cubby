@@ -42,6 +42,7 @@ import {
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   previewFinancialBooking,
   commitFinancialBooking,
@@ -1887,10 +1888,10 @@ describe("shared spending booking", () => {
     const request = { transactionId: transaction.output.id, advice };
     const plan = await previewFinancialSpending(ctx.db, request);
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
-    await getDb(ctx.db)
-      .update(transactionTable)
-      .set({ status: "pending", postedDate: null })
-      .where(eq(transactionTable.shortcode, transaction.output.id));
+    await updateSeedBankTransaction(ctx.db, transaction.output.id, {
+      status: "pending",
+      postedDate: null,
+    });
     const replay = await previewFinancialSpending(ctx.db, request);
     expect(replay.status).toBe("already_booked");
     await commitFinancialSpending(ctx.db, replay, ctx.actor);

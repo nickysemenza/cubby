@@ -340,10 +340,11 @@ export function createReads(
       keys: readonly Key[],
       where: SQL,
     ) {
-      requireTable(table);
-      const revs = await revisions(keys);
+      const name = requireTable(table);
+      const predicateKeys = [...new Set([...keys, tableKey(name)])];
+      const revs = await revisions(predicateKeys);
       const rows = await q.select().from(table).where(where);
-      recordAll(scopes, revs, keys);
+      recordAll(scopes, revs, predicateKeys);
       // SAFETY: rows come from `select().from(table)` of this same table.
       return rows as InferSelectModel<T>[];
     },

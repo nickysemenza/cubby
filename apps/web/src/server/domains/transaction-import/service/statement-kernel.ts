@@ -1,4 +1,3 @@
-import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import {
   occurrenceEvidence,
   statementEvidence,
@@ -7,5 +6,6 @@ import { defineModule } from "~/server/kernel/api";
 
 export const statementKernelModule = defineModule({
   name: "statement",
-  evidence: [occurrenceEvidence, statementEvidence, manualTransactionEvidence],
+  entities: ["sourceOccurrence", "sourceTransactionRecord"],
+  evidence: [occurrenceEvidence, statementEvidence],
 });

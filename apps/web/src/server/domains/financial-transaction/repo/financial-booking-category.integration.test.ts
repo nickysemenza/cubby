@@ -18,6 +18,7 @@ import {
   purchase as purchaseTable,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -77,10 +78,9 @@ describe("reviewed booking category and refund capacity", () => {
         sourceCategory: "Synthetic source dining",
       });
       // Legacy stored category evidence must not become a new ledger override.
-      await getDb(ctx.db)
-        .update(financialTransaction)
-        .set({ spendingCategoryId: category.id })
-        .where(eq(financialTransaction.shortcode, saved.output.id));
+      await updateSeedBankTransaction(ctx.db, saved.output.id, {
+        spendingCategoryId: category.id,
+      });
       return saved;
     };
     const line = async (
@@ -240,10 +240,9 @@ describe("reviewed booking category and refund capacity", () => {
   it("books unclassified spending and replays after a later classification edit", async () => {
     const { purchase, transaction } = await fixture();
     const source = await transaction(35);
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ spendingCategoryId: null })
-      .where(eq(financialTransaction.shortcode, source.output.id));
+    await updateSeedBankTransaction(ctx.db, source.output.id, {
+      spendingCategoryId: null,
+    });
     const review = await previewFinancialBooking(
       ctx.db,
       financialBookingInput.parse({
@@ -258,10 +257,9 @@ describe("reviewed booking category and refund capacity", () => {
       "spendingCategory",
       { name: "Later reviewed classification" },
     );
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ spendingCategoryId: laterCategory.id })
-      .where(eq(financialTransaction.shortcode, source.output.id));
+    await updateSeedBankTransaction(ctx.db, source.output.id, {
+      spendingCategoryId: laterCategory.id,
+    });
     expect(await commitFinancialBooking(ctx.db, review, ctx.actor)).toEqual({
       ...saved,
       replayed: true,
@@ -616,10 +614,9 @@ describe("finance.book_transaction", () => {
   it("books posted income as a reimbursement into an existing Purchase over MCP", async () => {
     const { purchase, income } = await fixture();
     const transactionId = await income();
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ itemizationExpectation: "required" })
-      .where(eq(financialTransaction.shortcode, transactionId));
+    await updateSeedBankTransaction(ctx.db, transactionId, {
+      itemizationExpectation: "required",
+    });
     const result = await callMcpTool(
       createMcpServer(),
       "finance",

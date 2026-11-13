@@ -9,9 +9,11 @@ import type { KernelActor, KernelGap } from "@cubby/schemas/kernel/stage";
 import { sourceActor } from "@cubby/schemas/kernel/stage";
 import { and, inArray, sql } from "drizzle-orm";
 
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { answer, evidenceBinding, recordKey } from "~/server/db/kernel-schema";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
+import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 
 import type {
   AskKind,
@@ -40,6 +42,7 @@ import {
   decisionKey,
   hashCanonical,
   recordIdentity,
+  recordShortcode,
   VETO_SEPARATOR,
 } from "./keys";
 import {
@@ -53,6 +56,11 @@ import { bindingWrites, type KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 
 type Q = Pick<RepositoryQueryClient, "select" | "execute">;
+
+type EntityReference = Pick<
+  typeof entityIdentity.$inferSelect,
+  "id" | "kind" | "mergedIntoId" | "deletedAt"
+>;
 
 /** Rounds of demand-driven loading before a scope is failed as unstable. */
 const MAX_ROUNDS = 4;
@@ -169,6 +177,21 @@ export async function computeBatch(
     ]),
   );
 
+  const shortcodeOwners = new Map<string, string>();
+  const entityReferences = new Map<string, EntityReference>();
+  if (
+    reconciler.writes.some(
+      (target) => target.entity && isShortcodeEntity(target.entity),
+    )
+  )
+    for (const row of await q.select().from(entityIdentity)) {
+      entityReferences.set(row.id, row);
+      if (row.shortcode) {
+        shortcodeOwners.set(row.shortcode, row.id);
+        entityReferences.set(row.shortcode, row);
+      }
+    }
+
   let results = new Map<string, { desired: Desired | null; error: unknown }>();
   for (let round = 0; ; round++) {
     results = new Map();
@@ -192,6 +215,8 @@ export async function computeBatch(
       }
       const pure = createPure(registry, reconciler, {
         scope,
+        shortcodeOwners,
+        entityReferences,
         owned: owned.get(scope.key) ?? [],
         answers,
         decisions,
@@ -488,8 +513,6 @@ async function loadStoredBindings(
   scopes: readonly ScopeRef[],
 ): Promise<Map<string, Binding[]>> {
   const stored = new Map<string, Binding[]>();
-  if (!reconciler.writes.some((ref) => ref.name === bindingWrites.name))
-    return stored;
   const rows = await q
     .select()
     .from(evidenceBinding)
@@ -524,6 +547,8 @@ function createPure(
   reconciler: Reconciler,
   state: {
     scope: ScopeRef;
+    shortcodeOwners: Map<string, string>;
+    entityReferences: Map<string, EntityReference>;
     owned: readonly OwnedRecord[];
     answers: ReadonlyMap<string, { inputHash: string; output: Json | null }>;
     decisions: ReadonlyMap<string, readonly DecisionRow[]>;
@@ -557,6 +582,43 @@ function createPure(
         `Reconciler ${reconciler.scope} writes undeclared table ${target.name}`,
       );
     return declared;
+  };
+  const identityOf = (target: ColumnRef, naturalKey: string) => {
+    const declared = requireTarget(target);
+    const owned = state.owned.find(
+      (record) =>
+        record.target.name === declared.name &&
+        record.naturalKey === naturalKey,
+    );
+    const id =
+      owned?.entityId ?? recordIdentity(state.scope, declared.name, naturalKey);
+    const existingCode =
+      typeof owned?.stored?.shortcode === "string"
+        ? owned.stored.shortcode
+        : null;
+    const code =
+      existingCode ??
+      (declared.entity && isShortcodeEntity(declared.entity)
+        ? recordShortcode(declared.entity, id, state.shortcodeOwners)
+        : null);
+    if (code) {
+      state.shortcodeOwners.set(code, id);
+      if (
+        !state.entityReferences.has(id) &&
+        declared.entity &&
+        isShortcodeEntity(declared.entity)
+      ) {
+        const reference = {
+          id,
+          kind: declared.entity,
+          mergedIntoId: null,
+          deletedAt: null,
+        };
+        state.entityReferences.set(id, reference);
+        state.entityReferences.set(code, reference);
+      }
+    }
+    return { id, shortcode: code };
   };
   const gap = (
     kind: KernelGap["kind"],
@@ -618,6 +680,48 @@ function createPure(
   };
 
   return {
+    identity: identityOf,
+    reference(entity, ref) {
+      let row =
+        state.entityReferences.get(ref) ??
+        state.entityReferences.get(ref.toLowerCase()) ??
+        state.entityReferences.get(ref.toUpperCase());
+      const visited = new Set<string>();
+      while (row?.mergedIntoId) {
+        if (visited.has(row.id))
+          throw new KernelContractError(
+            "Entity identity redirects contain a cycle",
+          );
+        visited.add(row.id);
+        row = state.entityReferences.get(row.mergedIntoId);
+      }
+      return row && row.kind === entity && !row.deletedAt ? row.id : null;
+    },
+    assignments(subject) {
+      state.tracked.subjects.add(subject);
+      return new Map(
+        (state.decisions.get(subject) ?? []).flatMap((row) => {
+          if (
+            row.channel !== "assignment" ||
+            (row.kind !== "set" && row.kind !== "none") ||
+            state.released.has(`${subject}\u0000${row.slot}`)
+          )
+            return [];
+          return [
+            [
+              row.slot,
+              {
+                id: row.id,
+                kind: row.kind,
+                value: row.value,
+                values: [],
+                at: new Date(row.at),
+              },
+            ] as const,
+          ];
+        }),
+      );
+    },
     answer(kind, input, options) {
       if (!declaredAsks.has(kind.feature))
         throw new KernelContractError(
@@ -684,14 +788,12 @@ function createPure(
     },
     record(target, naturalKey, values, options) {
       const declared = requireTarget(target);
-      const id =
-        state.owned.find(
-          (record) =>
-            record.target.name === declared.name &&
-            record.naturalKey === naturalKey,
-        )?.entityId ?? recordIdentity(state.scope, declared.name, naturalKey);
+      const { id, shortcode } = identityOf(declared, naturalKey);
       for (const column of Object.keys(values))
-        if (!declared.columns.includes(column))
+        if (
+          !declared.columns.includes(column) &&
+          !declared.createOnly?.includes(column)
+        )
           throw new KernelContractError(
             `Reconciler ${reconciler.scope} writes undeclared column ${declared.name}.${column}`,
           );
@@ -699,6 +801,7 @@ function createPure(
       if (rejected.has(`${declared.name}\u0000${naturalKey}`)) return id;
       records.push({
         id,
+        shortcode,
         target: declared,
         naturalKey,
         values: { ...values },

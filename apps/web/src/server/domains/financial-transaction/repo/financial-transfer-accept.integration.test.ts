@@ -17,6 +17,7 @@ import {
   financialTransactionAllocation,
   ledgerTransfer,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 
@@ -48,7 +49,7 @@ describe("acceptFinancialTransferPair", () => {
     ledgerTransferId: EntityId<"ledgerTransfer"> | null = null,
     status: typeof financialTransaction.$inferSelect.status = "posted",
   ) => {
-    const row = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const row = await seedBankTransaction(ctx.db, {
       accountId,
       kind: "account_transfer",
       status,

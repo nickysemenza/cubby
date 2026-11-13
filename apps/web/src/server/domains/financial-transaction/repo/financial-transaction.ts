@@ -54,6 +54,11 @@ import {
   emptySpendingCategorySummary,
   loadTransactionSpendingCategorySummaries,
 } from "~/server/domains/expense/repo/expense-category-summary";
+import { bankTransactionWrites } from "~/server/domains/financial-transaction/repo/bank-event";
+import {
+  createBankTransactions,
+  updateBankTransactions,
+} from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
@@ -80,7 +85,6 @@ import {
   resolveAllocationInputs,
   writeAllocationSets,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
-import { appendManualTransactions } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { financialTransactionSearch } from "~/server/domains/financial-transaction/repo/search-read-financial-transaction";
 import {
   findSettlementConflicts,
@@ -405,15 +409,6 @@ export async function createFinancialTransactions(
     inputs.map((data, index) => ({ data, accountId: accountIds[index]! })),
     actor,
   );
-  await appendManualTransactions(
-    databaseForTransaction(tx),
-    created.flatMap((row, index) =>
-      inputs[index]!.sourceRefs.length
-        ? []
-        : [{ input: inputs[index]!, id: row.id }],
-    ),
-    actor,
-  );
   const named = await resolveAllocationInputs(
     tx,
     inputs.flatMap((data) =>
@@ -502,8 +497,7 @@ export async function createFinancialTransactionRows(
 }
 
 /**
- * Insert proven fresh transactions in the layer, accept their sources and
- * stage the create and evidence audits.
+ * Append validated bank inputs, accept their sources and stage provenance audits.
  */
 export async function insertFreshFinancialTransactions(
   layer: WriteLayer,
@@ -515,20 +509,10 @@ export async function insertFreshFinancialTransactions(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
-  const created = await layer.insert(
-    "financialTransaction",
-    layer.stage(
-      "financialTransaction",
-      inputs.map(({ data, accountId }) => {
-        const {
-          allocations: _allocations,
-          sourceRefs: _sourceRefs,
-          purchaseId: _purchaseId,
-          ...columns
-        } = data;
-        return { ...columns, accountId, amount: moneyToMinor(data.amount) };
-      }),
-    ),
+  const created = await createBankTransactions(
+    databaseForTransaction(layer.tx),
+    inputs,
+    actor,
   );
   const acceptedSourceChanges = await acceptFreshFinancialSources(
     layer.tx,
@@ -1153,8 +1137,7 @@ export async function updateFinancialTransactions(
           )
         : null,
     );
-    // Updates that write the same column values share one statement.
-    const groups = new Map<string, FinancialTransactionId[]>();
+    // Reconciled values become decisions; ordinary metadata keeps its writer.
     const columnValues = valuesFor.map((values) =>
       Object.fromEntries(
         Object.entries(values).filter(([key]) =>
@@ -1162,22 +1145,31 @@ export async function updateFinancialTransactions(
         ),
       ),
     );
+    await updateBankTransactions(
+      databaseForTransaction(tx),
+      updates.map((_update, index) => ({
+        id: ids[index]!,
+        values: columnValues[index]!,
+      })),
+      actor,
+    );
     for (const [index, values] of columnValues.entries()) {
-      const key = JSON.stringify(values, (_key, value: unknown) =>
-        typeof value === "bigint" ? `${value}n` : value,
+      const ordinary = Object.fromEntries(
+        Object.entries(values).filter(
+          ([field]) => !bankTransactionWrites.columns.includes(field),
+        ),
       );
-      groups.set(key, [...(groups.get(key) ?? []), ids[index]!]);
+      if (Object.keys(ordinary).length)
+        await tx
+          .update(financialTransaction)
+          .set(ordinary)
+          .where(
+            and(
+              inArray(financialTransaction.id, [ids[index]!]),
+              notDeleted(financialTransaction),
+            ),
+          );
     }
-    for (const group of groups.values())
-      await tx
-        .update(financialTransaction)
-        .set(columnValues[ids.indexOf(group[0]!)]!)
-        .where(
-          and(
-            inArray(financialTransaction.id, group),
-            notDeleted(financialTransaction),
-          ),
-        );
     const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
       tx,
       updates.flatMap(({ data }, index) =>

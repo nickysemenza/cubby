@@ -40,8 +40,10 @@ import { providerIdentityClaims } from "~/server/domains/transaction-import/poli
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
+import { emitWrites } from "~/server/kernel/api";
 
 import { auditEvidenceRows } from "./intake-audit";
+import { dirtySourceOccurrences } from "./source-event-dirty";
 
 const sameSet = (left: readonly string[], right: readonly string[]) =>
   JSON.stringify([...new Set(left)].sort()) ===
@@ -351,16 +353,23 @@ export async function applySourceIdentity(
           return constraintViolation("The retired owner disappeared.");
         break;
       }
-      case "move_evidence":
-        await db
+      case "move_evidence": {
+        const moved = await db
           .update(sourceTransactionRecord)
           .set({ occurrenceId: write.to })
-          .where(eq(sourceTransactionRecord.occurrenceId, write.from));
+          .where(eq(sourceTransactionRecord.occurrenceId, write.from))
+          .returning({ id: sourceTransactionRecord.id });
+        await emitWrites(databaseForTransaction(tx), {
+          table: sourceTransactionRecord,
+          ids: moved.map((row) => row.id),
+          columns: ["occurrenceId"],
+        });
         await db
           .update(financialEvidenceAlias)
           .set({ occurrenceId: write.to })
           .where(eq(financialEvidenceAlias.occurrenceId, write.from));
         break;
+      }
       case "supersede_suggestions":
         await transitionSuggestionStates(
           databaseForTransaction(tx),
@@ -478,5 +487,9 @@ export async function applySourceIdentity(
       }
     }
   }
+  await dirtySourceOccurrences(
+    tx,
+    [retired?.id, updatedOwner?.id].flatMap((id) => (id ? [id] : [])),
+  );
   return plan.result;
 }

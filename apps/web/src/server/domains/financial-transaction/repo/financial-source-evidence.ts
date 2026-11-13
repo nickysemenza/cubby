@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { entitySchema } from "@cubby/schemas/entity";
 import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-transaction-fields";
 import {
   parseEntityId,
@@ -23,7 +24,9 @@ import {
   sourceTransactionRecord,
   financialEvidenceAlias,
   financialTransaction,
+  recordKey,
 } from "~/server/db/retained-tables";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   financialEvidenceAmountMinor,
   lockFinancialEvidenceKeys,
@@ -45,7 +48,11 @@ const refuse = (message: string): never => {
 /** Presentation of retained references on an already identified transaction. Never resolve acceptance from these rows. */
 export const financialSourceReferenceRows = sql`(
   -- includes-deleted: occurrence reservations and accepted history survive source tombstones.
-  SELECT occurrence."acceptedTransactionId" AS owner,occurrence.source,occurrence.shortcode AS "externalId" FROM "SourceOccurrence" occurrence WHERE occurrence."acceptedTransactionId" IS NOT NULL
+  SELECT coalesce(occurrence."acceptedTransactionId", bank."entityId") AS owner,occurrence.source,occurrence.shortcode AS "externalId"
+  FROM "SourceOccurrence" occurrence LEFT JOIN "RecordKey" bank
+    ON bank."scopeKind" = 'bankEvent' AND bank."scopeKey" = occurrence.id::text AND bank.entity = ${sqlEnumConstant(entitySchema, entitySchema.enum.financialTransaction)}
+      AND bank."rejectedAt" IS NULL AND bank."mergedAt" IS NULL
+  WHERE coalesce(occurrence."acceptedTransactionId", bank."entityId") IS NOT NULL
   UNION
   SELECT alias."historicalTransactionId",alias.source,alias.value FROM "FinancialEvidenceAlias" alias
   WHERE alias."historicalTransactionId" IS NOT NULL AND ${notDeleted("alias")}
@@ -61,14 +68,28 @@ export async function financialSourceRefsFor(
   const ids = transactionIds.map((id) =>
     parseEntityId("financialTransaction", id),
   );
+  const acceptedId =
+    sql`coalesce(${sourceOccurrence.acceptedTransactionId}, ${recordKey.entityId})`.mapWith(
+      (id) => parseEntityId("financialTransaction", id),
+    );
   const occurrences = await repositoryQueries(db)
     .select({
-      transactionId: sourceOccurrence.acceptedTransactionId,
+      transactionId: acceptedId,
       source: sourceOccurrence.source,
       externalId: sourceOccurrence.shortcode,
     })
     .from(sourceOccurrence)
-    .where(inArray(sourceOccurrence.acceptedTransactionId, ids));
+    .leftJoin(
+      recordKey,
+      and(
+        eq(recordKey.scopeKind, "bankEvent"),
+        eq(recordKey.scopeKey, sql`${sourceOccurrence.id}::text`),
+        eq(recordKey.entity, "financialTransaction"),
+        isNull(recordKey.rejectedAt),
+        isNull(recordKey.mergedAt),
+      ),
+    )
+    .where(inArray(acceptedId, ids));
   const aliases = await repositoryQueries(db)
     .select({
       transactionId: financialEvidenceAlias.historicalTransactionId,
