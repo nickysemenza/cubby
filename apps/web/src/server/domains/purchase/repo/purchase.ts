@@ -1,11 +1,11 @@
 import type { EntityRelationPageInput } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   resolveExpenseLineKind,
   type ExpenseLineKind,
 } from "@cubby/schemas/expense-line-kind";
+import type { FinancialTransactionId } from "@cubby/schemas/identifiers";
 import {
   type ExpenseId,
   type LedgerPartyId,
@@ -63,7 +63,12 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import {
+  DECLARED_EDGE_MERGE_HOOKS,
+  DECLARED_EDGE_DELETE_HOOKS,
+} from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   databaseForTransaction,
@@ -208,130 +213,6 @@ import {
   insertManyWithShortcode,
   insertWithShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-export const PURCHASE_DELETE_EDGE_POLICY = {
-  "Shipment.purchaseId": {
-    code: "detach-shipment",
-    effect: "detach",
-    description:
-      "Packages and their tracking evidence survive without a Purchase association.",
-  },
-  "SourceOrderObservation.purchaseId": {
-    code: "preserve-source-observation",
-    effect: "preserve",
-    description:
-      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
-  },
-  "ImportPreparedOrder.targetPurchaseId": {
-    code: "preserve-prepared-target",
-    effect: "preserve",
-    description:
-      "An import preparation retains its reviewed target tombstone and must be prepared again before commit.",
-  },
-  "ImportSourceOrder.purchaseId": {
-    code: "detach-import-order",
-    effect: "detach",
-    description:
-      "The order association stays as the Email's accepted history with its Purchase link cleared, and its original-line Product bindings are removed; importing the same order again adds a new association beside it.",
-  },
-  "PurchasePaymentEvidence.purchaseId": {
-    code: "delete-payment-evidence",
-    effect: "hard-delete",
-    description:
-      "Captured payment evidence has no meaning without its purchase.",
-  },
-  "Expense.purchaseId": {
-    code: "clear-live-fk-with-audit",
-    effect: "detach",
-    description:
-      "Deleting a purchase nulls its expenses' purchaseId rather than deleting them — an expense is the money, and deleting a purchase must never delete spend. Each detach is logged to the audit trail.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the purchase, and each file is\n      deleted too unless something else still references it.",
-  },
-  "EntityLink[purchaseProduct].from": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Product links are soft-deleted with the purchase; the Products themselves are not.",
-  },
-  "EntityLink[purchasePaymentAccount].from": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Payment-account links are soft-deleted with the purchase; the accounts themselves are not.",
-  },
-  "FinancialTransactionAllocation.purchaseId": {
-    code: "soft-delete-allocations-of-affected-transactions",
-    effect: "soft-delete",
-    description:
-      "Deleting a purchase removes its settlement allocations — and, for a transaction that was split across this purchase and others, the sibling slices too, because a partial allocation set is not a legal state: a transaction has either none, or a set summing to its amount. Those transactions revert to unlinked evidence on their accounts; no amount changes. For the ordinary single-allocation transaction this is exactly equivalent to detaching it.",
-  },
-} as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
-
-export const PURCHASE_MERGE_EDGE_POLICY = {
-  "Shipment.purchaseId": {
-    code: "repoint-shipment",
-    effect: "repoint",
-    description:
-      "Packages follow the surviving Purchase without changing tracking evidence.",
-  },
-  "SourceOrderObservation.purchaseId": {
-    code: "preserve-source-observation",
-    effect: "preserve",
-    description:
-      "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
-  },
-  "ImportPreparedOrder.targetPurchaseId": {
-    code: "preserve-prepared-target",
-    effect: "preserve",
-    description:
-      "A merge invalidates preparation against the original target rather than silently changing its approved identity.",
-  },
-  "ImportSourceOrder.purchaseId": {
-    code: "repoint-import-claim",
-    effect: "repoint",
-    description: "Source claims follow the surviving purchase.",
-  },
-  "PurchasePaymentEvidence.purchaseId": {
-    code: "repoint-payment-evidence",
-    effect: "repoint",
-    description: "Captured payment evidence follows the surviving purchase.",
-  },
-  "Expense.purchaseId": {
-    code: "repoint-live-fk-with-audit",
-    effect: "repoint",
-    description:
-      "Merging a purchase re-points its expenses onto the surviving purchase, logged to the audit trail.",
-  },
-  "EntityAttachment.entityId": {
-    code: "move-dedupe-and-soft-delete-source",
-    effect: "move-dedupe",
-    description:
-      "The absorbed purchase's images move onto the survivor, skipping any already filed there, and the source associations are soft-deleted.",
-  },
-  "EntityLink[purchaseProduct].from": {
-    code: "move-dedupe-and-soft-delete-source",
-    effect: "move-dedupe",
-    description:
-      "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
-  },
-  "EntityLink[purchasePaymentAccount].from": {
-    code: "move-dedupe-and-soft-delete-source",
-    effect: "move-dedupe",
-    description:
-      "The absorbed purchase's payment-account links move onto the survivor, skipping accounts already linked there, and the source links are soft-deleted.",
-  },
-  "FinancialTransactionAllocation.purchaseId": {
-    code: "move-and-sum-amounts-then-soft-delete-source",
-    effect: "move-dedupe",
-    description:
-      "The absorbed purchase's settlement allocations move onto the survivor. Where BOTH purchases held a slice of the SAME transaction the two slices are SUMMED into one row rather than one being skipped — unlike images and product links an allocation carries an amount, so dropping the duplicate would destroy evidence and break the transaction's sum-to-amount invariant. The source rows are soft-deleted.",
-  },
-} as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 /** Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. */
 const purchaseExpenses = () =>
@@ -2194,39 +2075,26 @@ export const foldChargeInto = async (
   // allocations rather than repointed: a transaction holding a slice of both
   // purchases collapses to a single slice and becomes singly linked again.
   //
-  // Everything else follows the declared `PURCHASE_MERGE_EDGE_POLICY`; these
+  // Everything else follows the declared `DECLARED_EDGE_MERGE_POLICIES.purchase`; these
   // overrides are the edges whose move is not a plain column write.
   let moved: string[] = [];
   await applyMergePolicy(tx, {
     entity: "purchase",
-    policy: PURCHASE_MERGE_EDGE_POLICY,
+    policy: DECLARED_EDGE_MERGE_POLICIES.purchase,
     keepId: survivorId,
     loserIds: [deadId],
     liveOnly: true,
-    overrides: {
-      "Expense.purchaseId": async () => {
-        moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
-          from: [deadId],
-          to: survivorId,
-          liveOnly: true,
-        });
-        await logAuditEntries(
-          tx,
-          actor,
-          moved.map((id) => ({
-            entityKind: "expense" as const,
-            entityId: id,
-            action: "update" as const,
-            changes: { purchaseId: { from: deadId, to: survivorId } },
-          })),
-        );
-      },
-      "FinancialTransactionAllocation.purchaseId": () =>
-        moveChargeAllocations(tx, deadId, survivorId, actor),
-      // Duplicate document links collapse instead of aborting the merge.
-      "EntityAttachment.entityId": () =>
-        moveChargeImages(tx, deadId, survivorId),
-    },
+    overrides: (
+      await DECLARED_EDGE_MERGE_HOOKS.purchase({
+        tx,
+        deadId,
+        survivorId,
+        actor,
+        onMoved: (values) => {
+          moved = values;
+        },
+      })
+    ).overrides,
   });
 
   // Moved Expenses and documents change current quality inputs. The source
@@ -2485,56 +2353,14 @@ export const deletePurchases = (
     const affectedTransactionIds = await transactionIdsAllocatedTo(tx, ids);
     const removed = await deleteByPolicy(tx, {
       entity: "purchase",
-      policy: PURCHASE_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.purchase,
       ids,
       actor,
-      beforeDelete: (inner) =>
-        preservePurchaseItemAttribution(inner, ids, null),
-      overrides: {
-        "ImportSourceOrder.purchaseId": async (inner) => {
-          const orders = inner
-            .select({ id: importSourceOrder.id })
-            .from(importSourceOrder)
-            .where(inArray(importSourceOrder.purchaseId, ids));
-          // Bindings name the deleted Purchase's lines and would otherwise
-          // keep their Products from being deleted.
-          await inner
-            .delete(importSourceProduct)
-            .where(inArray(importSourceProduct.sourceOrderId, orders));
-          await inner
-            .update(importSourceOrder)
-            .set({ purchaseId: null, updatedAt: new Date() })
-            .where(inArray(importSourceOrder.purchaseId, ids));
-        },
-        // Drop ALL slices of every affected transaction, not just this
-        // purchase's: a partial allocation set is not a legal state, whereas
-        // zero is ("unlinked evidence"), so a split transaction reverts
-        // entirely to unlinked.
-        "FinancialTransactionAllocation.purchaseId": async (inner) => {
-          if (affectedTransactionIds.length === 0) return;
-          const allocationsBefore = await readAllocations(
-            inner,
-            affectedTransactionIds,
-          );
-          await inner
-            .update(financialTransactionAllocation)
-            .set({ deletedAt: new Date() })
-            .where(
-              and(
-                inArray(
-                  financialTransactionAllocation.transactionId,
-                  affectedTransactionIds,
-                ),
-                notDeleted(financialTransactionAllocation),
-              ),
-            );
-          await applyAllocationChanges(inner, {
-            transactionIds: affectedTransactionIds,
-            before: allocationsBefore,
-            actor,
-          });
-        },
-      },
+      ...(await DECLARED_EDGE_DELETE_HOOKS.purchase({
+        ids,
+        affectedTransactionIds,
+        actor,
+      })),
     });
     return {
       expenseIds: detaching.map((row) => row.id),
@@ -2544,3 +2370,91 @@ export const deletePurchases = (
       deleted: removed.deleted,
     };
   });
+
+interface PurchaseMergeEdgeContext {
+  tx: DrizzleTransaction;
+  deadId: PurchaseId;
+  survivorId: PurchaseId;
+  actor: ActorContext;
+  onMoved: (ids: string[]) => void;
+}
+export const purchaseMergeEdgeHandlers = (
+  context: PurchaseMergeEdgeContext,
+) => {
+  const { tx, deadId, survivorId, actor, onMoved } = context;
+  return {
+    moveExpenses: async () => {
+      const moved = await repointEdge(tx, "purchase", "Expense.purchaseId", {
+        from: [deadId],
+        to: survivorId,
+        liveOnly: true,
+      });
+      onMoved(moved);
+      await logAuditEntries(
+        tx,
+        actor,
+        moved.map((id) => ({
+          entityKind: "expense" as const,
+          entityId: id,
+          action: "update" as const,
+          changes: { purchaseId: { from: deadId, to: survivorId } },
+        })),
+      );
+    },
+    foldAllocations: () => moveChargeAllocations(tx, deadId, survivorId, actor),
+    foldImages: () => moveChargeImages(tx, deadId, survivorId),
+  };
+};
+interface PurchaseDeleteEdgeContext {
+  ids: PurchaseId[];
+  affectedTransactionIds: FinancialTransactionId[];
+  actor: ActorContext;
+}
+export const purchaseDeleteEdgeHandlers = (
+  context: PurchaseDeleteEdgeContext,
+) => {
+  const { ids, affectedTransactionIds, actor } = context;
+  return {
+    preserveItemAttribution: (tx: DrizzleTransaction) =>
+      preservePurchaseItemAttribution(tx, ids, null),
+    detachSourceOrders: async (inner: DrizzleTransaction) => {
+      const orders = inner
+        .select({ id: importSourceOrder.id })
+        .from(importSourceOrder)
+        .where(inArray(importSourceOrder.purchaseId, ids));
+      // Bindings name the deleted Purchase's lines and would otherwise
+      // keep their Products from being deleted.
+      await inner
+        .delete(importSourceProduct)
+        .where(inArray(importSourceProduct.sourceOrderId, orders));
+      await inner
+        .update(importSourceOrder)
+        .set({ purchaseId: null, updatedAt: new Date() })
+        .where(inArray(importSourceOrder.purchaseId, ids));
+    },
+    removeWholeAllocationSets: async (inner: DrizzleTransaction) => {
+      if (affectedTransactionIds.length === 0) return;
+      const allocationsBefore = await readAllocations(
+        inner,
+        affectedTransactionIds,
+      );
+      await inner
+        .update(financialTransactionAllocation)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            inArray(
+              financialTransactionAllocation.transactionId,
+              affectedTransactionIds,
+            ),
+            notDeleted(financialTransactionAllocation),
+          ),
+        );
+      await applyAllocationChanges(inner, {
+        transactionIds: affectedTransactionIds,
+        before: allocationsBefore,
+        actor,
+      });
+    },
+  };
+};
