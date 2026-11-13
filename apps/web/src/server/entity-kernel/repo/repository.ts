@@ -60,6 +60,7 @@ import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  databaseForTransaction,
   notDeleted,
   updateLiveAndReturn,
   withTransactionOn,
@@ -254,11 +255,8 @@ export function createEntityReader<
         actor: ActorContext,
       ) =>
         withTransactionOn(db, async (tx) => {
-          const row = await insertWithShortcode(
-            tx,
-            config.entity,
-            await values(tx, data),
-          );
+          const inserted = await values(tx, data);
+          const row = await insertWithShortcode(tx, config.entity, inserted);
           const identity = z
             .object({ id: z.string(), shortcode: z.string() })
             .parse(row);
@@ -270,6 +268,13 @@ export function createEntityReader<
               action: "create",
             });
           }
+          await emitEntityWrite(tx, {
+            entity: config.entity,
+            table: entityManifest[config.entity].dbTable,
+            id: entityId,
+            columns: Object.keys(inserted),
+            created: true,
+          });
           return readOutput(
             { entityId, shortcode: identity.shortcode },
             async () => publish(await readCreated(tx, entityId), entityId),
@@ -279,6 +284,33 @@ export function createEntityReader<
   }
 
   return { getByID, getByIDOrNull, getByShortcode, createWriter };
+}
+
+/**
+ * Kernel keys for what an ordinary entity writer just wrote, in its own
+ * transaction: a reconciler that reads one of these columns runs again, and
+ * a created record starts its `fields` and `quality` scopes (ADR 0029
+ * section 5). Loaded on use, so repositories do not load the kernel graph.
+ */
+async function emitEntityWrite(
+  tx: DrizzleTransaction,
+  write: {
+    entity: string;
+    table: PgTable | string | null;
+    id: string;
+    columns: readonly string[];
+    created: boolean;
+  },
+): Promise<void> {
+  if (!write.table) return;
+  const { emitWrites } = await import("~/server/kernel/api");
+  await emitWrites(databaseForTransaction(tx), {
+    table: write.table,
+    ids: [write.id],
+    columns: write.columns,
+    entity: write.entity,
+    created: write.created,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -389,9 +421,20 @@ export function createEntityCrud<
         (await config.relations?.read(tx, id, data)) ?? {};
       await config.relations?.write?.(tx, id, data);
       const values = config.toUpdate(data, before);
-      const updated = Object.values(values).some((value) => value !== undefined)
+      const written = Object.entries(values)
+        .filter(([, value]) => value !== undefined)
+        .map(([column]) => column);
+      const updated = written.length
         ? await updateLiveAndReturn(tx, config.table, values, id)
         : before;
+      if (written.length)
+        await emitEntityWrite(tx, {
+          entity: config.entity,
+          table: config.table,
+          id,
+          columns: written,
+          created: false,
+        });
       if (entityManifest[config.entity].auditable) {
         const relationsAfter: RelationSnapshot<TRelKey> =
           (await config.relations?.read(tx, id, data)) ?? {};

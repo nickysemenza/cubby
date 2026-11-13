@@ -29,7 +29,7 @@ const ETA_MIN_OBSERVATIONS = 5;
 function recordScopes(capability: MachineryCapability, id: SQL): SQL {
   const parts: SQL[] = [
     sql`SELECT rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord FROM "RecordKey" rk
-      WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id}`,
+      WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id} AND rk."mergedAt" IS NULL`,
   ];
   if (capability.fields)
     parts.push(
@@ -123,7 +123,8 @@ export async function loadMachineryRows(
   const parts: SQL[] = [
     sql`SELECT page.id, rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord,
       rk."rejectedAt" IS NOT NULL AS rejected
-      FROM page JOIN "RecordKey" rk ON rk.entity = ${capability.entity} AND rk."entityId" = page.id`,
+      FROM page JOIN "RecordKey" rk ON rk.entity = ${capability.entity} AND rk."entityId" = page.id
+        AND rk."mergedAt" IS NULL`,
   ];
   if (capability.fields)
     parts.push(

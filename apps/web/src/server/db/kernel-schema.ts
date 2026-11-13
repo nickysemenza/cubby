@@ -317,6 +317,8 @@ export const scopeState = pgTable(
     error: text("error"),
     reconciledAt: timestamp("reconciledAt", { mode: "date" }),
     inputsChangedAt: timestamp("inputsChangedAt", { mode: "date" }),
+    /** A scope whose record merged into another scope's: it is Ended and runs as that scope. */
+    mergedIntoKey: text("mergedIntoKey"),
   },
   (table) => [
     primaryKey({
@@ -345,6 +347,8 @@ export const recordKey = pgTable(
     minted: boolean("minted").notNull().default(false),
     /** A `reject` decision: the record is not created again from its evidence. */
     rejectedAt: timestamp("rejectedAt", { mode: "date" }),
+    /** The record merged into another scope's survivor; this scope no longer writes it. */
+    mergedAt: timestamp("mergedAt", { mode: "date" }),
     createdAt: createdAt(),
   },
   (table) => [

@@ -22,8 +22,10 @@ iOS/macOS, HTTP, MCP connections), so change contracts in place:
   it until the client reconnects. A client that cached an older closed schema
   must reconnect once to load the open schema. Input schemas stay closed.
 - Household data is real: carry it through a migration that transforms it.
-- Merged-away codes refuse reads as well as writes, naming the survivor; no
-  client redirects ([ADR 0024](../adr/0024-repository-read-declaration.md)).
+- An absorbed (merged-away) code resolves to its survivor on reads; writes
+  addressed to it are refused and name the survivor. Web, native and MCP
+  resolve through `resolveForRead`/`resolveForWrite` in the shared get path
+  ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md) section 9).
 - Queued work stores frozen snapshots (`AiEvaluation.snapshot`, provenance
   fingerprints). Changing a fingerprinted snapshot's shape makes every queued
   row fail its evidence check at execution, one full page each. In the same
@@ -184,6 +186,14 @@ matrix exercises their real block, detach or cascade behavior.
 Deletes and merges have no live preview — attempt the mutation and read its
 structured refusal. Attach/detach previews stay advisory, and mutations
 re-check transactionally regardless.
+
+Only the kernel's apply step writes a column a registered reconciler owns
+(ADR 0029 section 2): every traced pool refuses any other statement that
+writes one (`db/owned-columns.ts`), so a writer appends evidence or records a
+decision instead. The refusal covers the reconcilers listed in
+`kernel/modules.ts` and switches on per domain as each module is added. The
+shared entity writers emit kernel keys for the columns they write; a bespoke
+writer of a column a reconciler reads calls `emitWrites` in its transaction.
 
 Take as few locks as possible: coordinate through a constraint or a
 compare-and-set update. When a lock is needed, make it narrow, shared

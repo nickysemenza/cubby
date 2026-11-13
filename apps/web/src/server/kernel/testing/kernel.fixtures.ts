@@ -6,7 +6,7 @@
  * tables live in their own schema so they never enter the public catalog.
  */
 import { sourceActor } from "@cubby/schemas/kernel/stage";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { integer, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -17,6 +17,7 @@ import {
   defineEvidence,
   defineModule,
   defineReconciler,
+  bindingWrites,
   recordSubject,
   source,
   writes,
@@ -24,7 +25,7 @@ import {
 
 const fixture = pgSchema("kernel_fixture");
 
-export const fixtureCharge = fixture.table("Charge", {
+export const fixtureCharge = fixture.table("FixtureCharge", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
@@ -34,7 +35,7 @@ export const fixtureCharge = fixture.table("Charge", {
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
-export const fixtureReceipt = fixture.table("Receipt", {
+export const fixtureReceipt = fixture.table("FixtureReceipt", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
@@ -47,7 +48,7 @@ export const fixtureReceipt = fixture.table("Receipt", {
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 });
 
-export const fixturePurchase = fixture.table("Purchase", {
+export const fixturePurchase = fixture.table("FixturePurchase", {
   id: uuid("id").primaryKey(),
   orderRef: text("orderRef").notNull(),
   amountMinor: integer("amountMinor").notNull(),
@@ -63,13 +64,13 @@ export async function resetFixtureTables(db: Database): Promise<void> {
   // One statement per call: the query tracer reads one result per statement.
   for (const statement of [
     `CREATE SCHEMA IF NOT EXISTS kernel_fixture`,
-    `CREATE TABLE IF NOT EXISTS kernel_fixture."Charge" (
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureCharge" (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       "sourceRef" text NOT NULL UNIQUE,
       "orderRef" text NOT NULL,
       "amountMinor" integer NOT NULL,
       "createdAt" timestamp NOT NULL DEFAULT now())`,
-    `CREATE TABLE IF NOT EXISTS kernel_fixture."Receipt" (
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureReceipt" (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       "sourceRef" text NOT NULL UNIQUE,
       "orderRef" text NOT NULL,
@@ -78,7 +79,7 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "categoryHint" text,
       owner text,
       "createdAt" timestamp NOT NULL DEFAULT now())`,
-    `CREATE TABLE IF NOT EXISTS kernel_fixture."Purchase" (
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixturePurchase" (
       id uuid PRIMARY KEY,
       "orderRef" text NOT NULL,
       "amountMinor" integer NOT NULL,
@@ -87,16 +88,16 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "deletedAt" timestamp,
       "createdAt" timestamp NOT NULL DEFAULT now(),
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
-    `DELETE FROM kernel_fixture."Charge"`,
-    `DELETE FROM kernel_fixture."Receipt"`,
-    `DELETE FROM kernel_fixture."Purchase"`,
+    `DELETE FROM kernel_fixture."FixtureCharge"`,
+    `DELETE FROM kernel_fixture."FixtureReceipt"`,
+    `DELETE FROM kernel_fixture."FixturePurchase"`,
   ])
     await repositoryQueries(db).execute(sql.raw(statement));
 }
 
 export const PURCHASE_SCOPE = "fixture.purchase";
 export const CATEGORY_SCOPE = "fixture.category";
-export const PURCHASE_TABLE = "Purchase";
+export const PURCHASE_TABLE = "FixturePurchase";
 
 export const chargeEvidence = defineEvidence({
   kind: "fixture.charge",
@@ -160,34 +161,57 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     ["orderRef", "amountMinor", "merchant"],
     {
       discovers: (row) => [{ kind: CATEGORY_SCOPE, key: row.id }],
+      // The absorbed purchase is retired; the kernel settles who owns the survivor.
+      merge: async (tx, { loserIds }) => {
+        await repositoryQueries(tx)
+          .update(fixturePurchase)
+          .set({ deletedAt: new Date() })
+          .where(inArray(fixturePurchase.id, [...loserIds]));
+      },
     },
   );
   const categoryWrites = writes(fixturePurchase, ["category"]);
 
   const purchase = defineReconciler<{
     orderRef: string;
+    /** Own charges bind to this order's event; charges merged in arrive bound. */
     charges: (typeof fixtureCharge.$inferSelect)[];
+    bound: (typeof fixtureCharge.$inferSelect)[];
     receipts: (typeof fixtureReceipt.$inferSelect)[];
   }>({
     scope: PURCHASE_SCOPE,
     lane: "money",
     version,
-    reads: [source.evidence(chargeEvidence), source.evidence(receiptEvidence)],
-    writes: [purchaseWrites],
+    reads: [
+      source.evidence(chargeEvidence),
+      source.evidence(receiptEvidence),
+      source.bindings,
+      source.table(fixtureCharge, ["orderRef", "amountMinor"]),
+    ],
+    writes: [purchaseWrites, bindingWrites],
     async load(reads, keys) {
       await hooks.onLoad?.(PURCHASE_SCOPE, keys);
       const entries = await Promise.all(
         keys.map(async (key) => {
           const scoped = reads.for(key);
-          const [charges, receipts] = await Promise.all([
+          const [charges, receipts, bindings] = await Promise.all([
             scoped.facts(chargeEvidence, [`order:${key}`]),
             scoped.facts(receiptEvidence, [`order:${key}`]),
+            scoped.bindings({ events: [key] }),
           ]);
+          const own = charges.get(`order:${key}`) ?? [];
+          const boundIds = bindings
+            .filter((binding) => !own.some((row) => row.id === binding.fact.id))
+            .map((binding) => binding.fact.id);
+          const bound = [
+            ...(await scoped.rows(fixtureCharge, boundIds)).values(),
+          ];
           return [
             key,
             {
               orderRef: key,
-              charges: newestFirst(charges.get(`order:${key}`) ?? []),
+              charges: newestFirst(own),
+              bound,
               receipts: newestFirst(receipts.get(`order:${key}`) ?? []),
             },
           ] as const;
@@ -196,7 +220,9 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       return new Map(entries);
     },
     reconcile(input, c) {
-      const charge = input.charges[0];
+      for (const own of input.charges)
+        c.bind({ kind: chargeEvidence.kind, id: own.id }, input.orderRef);
+      const charge = newestFirst([...input.charges, ...input.bound])[0];
       const receipt = input.receipts[0];
       if (!charge && !receipt) {
         for (const key of c.existing(purchaseWrites))

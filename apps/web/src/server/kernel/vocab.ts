@@ -27,5 +27,11 @@ export const STAGE = {
 /** The `AskScope` kind of a Run that waits on an ask with no scope. */
 export const RUN_WAITER = "run";
 
+/** The `AskScope` kind of a record that waits on an ask outside any scope. */
+export const RECORD_WAITER = "record";
+
+/** The `AskScope` kind of a pass that waits on an ask, keyed `name:key`. */
+export const PASS_WAITER = "pass";
+
 /** The background drain unit that runs kernel work. */
 export const KERNEL_UNIT = "kernel";

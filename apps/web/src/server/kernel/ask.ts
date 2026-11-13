@@ -1,3 +1,4 @@
+import { recordScopeKey } from "@cubby/schemas/kernel/capability";
 /**
  * Paid producer calls (ADR 0029 section 8). An Ask moves `queued → sent →
  * answered`, or to `unknown`. Funding admission comes first; a refusal, or a
@@ -27,6 +28,7 @@ import {
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 
+import type { AskOutcome } from "./ask-gap";
 import {
   backoffMs,
   claimAsks,
@@ -39,8 +41,9 @@ import type { AskKind, Json, Produced, ScopeRef } from "./define";
 import { markDirty } from "./dirty";
 import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
 import { answerKey } from "./keys";
+import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
-import { ASK, RUN_WAITER } from "./vocab";
+import { ASK, PASS_WAITER, RECORD_WAITER, RUN_WAITER } from "./vocab";
 import { wakeAfterCommit } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
@@ -48,6 +51,10 @@ type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 /** The ask's call went out and its outcome is unknown; a member settles it. */
 export class AskUnknownError extends Error {
   override name = "AskUnknownError";
+}
+/** A member gave up on this answer; it is not produced unless they ask again. */
+export class AskAbandonedError extends Error {
+  override name = "AskAbandonedError";
 }
 /** The ask spent its attempts; it stays queued and Stuck until a member retries it. */
 export class AskExhaustedError extends Error {
@@ -96,6 +103,16 @@ type AskRow = {
   attempts: number;
   maxAttempts: number;
   lapsed: boolean;
+  cancelled: boolean;
+};
+
+export type AskWaiters = {
+  scopes?: readonly ScopeRef[];
+  runId?: string | null;
+  /** A record that shows this ask in its machinery. */
+  record?: { entity: string; id: string };
+  /** A pass that continues once this ask settles. */
+  pass?: { name: string; key: string };
 };
 
 /** Upsert the ask and record its waiters; returns its current state. */
@@ -104,7 +121,7 @@ async function ensureAsk(
   kind: AskKind,
   envelope: AskEnvelope,
   inputHash: string,
-  waiters: { scopes: readonly ScopeRef[]; runId: string | null },
+  waiters: AskWaiters,
 ): Promise<AskRow> {
   const result = await q.execute<AskRow>(sql`
     INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input, "maxAttempts")
@@ -112,16 +129,33 @@ async function ensureAsk(
       ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts})
     ON CONFLICT ("inputHash") DO UPDATE SET "inputHash" = excluded."inputHash"
     RETURNING id, state, attempts, "maxAttempts",
-      (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed`);
+      (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed,
+      "cancelledAt" IS NOT NULL AS cancelled`);
   const row = result.rows[0]!;
+  const runId = waiters.runId ?? null;
+  const scopes = waiters.scopes ?? [];
   const rows = [
-    ...waiters.scopes.map((scope) => ({
-      kind: scope.kind,
-      key: scope.key,
-      runId: waiters.runId,
-    })),
-    ...(waiters.runId && !waiters.scopes.length
-      ? [{ kind: RUN_WAITER, key: waiters.runId, runId: waiters.runId }]
+    ...scopes.map((scope) => ({ kind: scope.kind, key: scope.key, runId })),
+    ...(runId && !scopes.length
+      ? [{ kind: RUN_WAITER, key: runId, runId }]
+      : []),
+    ...(waiters.record
+      ? [
+          {
+            kind: RECORD_WAITER,
+            key: recordScopeKey(waiters.record.entity, waiters.record.id),
+            runId,
+          },
+        ]
+      : []),
+    ...(waiters.pass
+      ? [
+          {
+            kind: PASS_WAITER,
+            key: `${waiters.pass.name}:${waiters.pass.key}`,
+            runId,
+          },
+        ]
       : []),
   ];
   if (rows.length)
@@ -131,6 +165,58 @@ async function ensureAsk(
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS w(kind text, key text, "runId" text)
       ON CONFLICT DO NOTHING`);
   return row;
+}
+
+/** Passes waiting on an ask run as soon as it settles. */
+async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
+  await q.execute(sql`
+    UPDATE "Pass" p SET "availableAt" = now()
+    FROM "AskScope" s
+    WHERE s."askId" = ${askId}::uuid AND s."scopeKind" = ${PASS_WAITER}
+      AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL`);
+}
+
+/**
+ * A member's statement about an ask Cubby cannot settle alone, applied in
+ * the decision's transaction: `not_sent` returns an unknown ask to the
+ * queue, `retry` re-queues one that failed or was given up, `abandoned`
+ * gives up. Waiting scopes rerun and waiting passes run.
+ */
+export async function settleAskOutcome(
+  tx: Database,
+  registry: KernelRegistry,
+  inputHash: string,
+  outcome: AskOutcome,
+): Promise<void> {
+  const q = repositoryQueries(tx);
+  const updated = await q.execute<{ id: string }>(
+    outcome === "not_sent"
+      ? sql`UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL, "claimToken" = NULL,
+          "claimDeadline" = NULL, "waitCause" = NULL, "availableAt" = now()
+        WHERE "inputHash" = ${inputHash} AND state = ${ASK.unknown} AND "cancelledAt" IS NULL
+        RETURNING id`
+      : outcome === "retry"
+        ? sql`UPDATE "Ask" SET state = ${ASK.queued}, attempts = 0, "cancelledAt" = NULL,
+            "claimToken" = NULL, "claimDeadline" = NULL, "waitCause" = NULL, "availableAt" = now()
+          WHERE "inputHash" = ${inputHash} AND state = ${ASK.queued}
+            AND ("cancelledAt" IS NOT NULL OR attempts >= "maxAttempts")
+          RETURNING id`
+        : sql`UPDATE "Ask" SET "cancelledAt" = coalesce("cancelledAt", now()),
+            "claimToken" = NULL, "claimDeadline" = NULL
+          WHERE "inputHash" = ${inputHash} AND state IN (${ASK.queued}, ${ASK.unknown})
+          RETURNING id`,
+  );
+  const ask = updated.rows[0];
+  if (!ask)
+    throw new KernelContractError(
+      `The ask ${inputHash} is not in a state that "${outcome}" applies to`,
+    );
+  await wakeWaitingPasses(q, ask.id);
+  await markDirty(q, registry, {
+    keys: [answerKey(inputHash)],
+    discovers: await waitingScopes(q, ask.id),
+    reason: `ask:${outcome}`,
+  });
 }
 
 /** Scopes waiting on an ask, so its settlement dirties them. */
@@ -177,6 +263,7 @@ async function commitAnswer(
       discovers: await waitingScopes(q, ask.id),
       reason: `answer:${kind.feature}`,
     });
+    await wakeWaitingPasses(q, ask.id);
     if (dirtied) await wakeAfterCommit(tx);
   });
 }
@@ -390,7 +477,7 @@ export async function withAsk<I, O>(
   registry: KernelRegistry,
   kind: AskKind<I, O>,
   input: I,
-  options: { scopes?: readonly ScopeRef[]; runId?: string | null } = {},
+  options: AskWaiters = {},
 ): Promise<O> {
   const untyped: AskKind = kind;
   const q = repositoryQueries(db);
@@ -398,10 +485,11 @@ export async function withAsk<I, O>(
   const inputHash = await inputHashOf(envelope);
   const known = await readAnswerOutput(q, inputHash);
   if (known !== undefined) return kind.output.parse(known);
-  const row = await ensureAsk(q, untyped, envelope, inputHash, {
-    scopes: options.scopes ?? [],
-    runId: options.runId ?? null,
-  });
+  const row = await ensureAsk(q, untyped, envelope, inputHash, options);
+  if (row.cancelled)
+    throw new AskAbandonedError(
+      `A member gave up on the ${kind.feature} answer for ${inputHash}.`,
+    );
   if (row.state === "answered") {
     const settled = await readAnswerOutput(q, inputHash);
     if (settled !== undefined) return kind.output.parse(settled);

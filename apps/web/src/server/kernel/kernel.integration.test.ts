@@ -306,6 +306,18 @@ describe("evidence-facts kernel", () => {
       },
     ]);
     await settle(kernel);
+    // Only the kernel's apply step writes an owned column.
+    const refused = await repositoryQueries(ctx.db)
+      .update(fixturePurchase)
+      .set({ merchant: "Direct Write" })
+      .where(eq(fixturePurchase.id, booked!.id))
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(
+      String(refused instanceof Error ? (refused.cause ?? refused) : refused),
+    ).toContain("reconciler-owned");
     await kernel.append(ctx.db, [receipt("ORD-G", "Synthetic Grocer Revised")]);
     await settle(kernel);
 
@@ -314,6 +326,60 @@ describe("evidence-facts kernel", () => {
       .from(fixturePurchase)
       .where(eq(fixturePurchase.id, booked!.id));
     expect(stored?.merchant).toBe("Corner Market");
+  });
+
+  it("hands a merged record to the survivor's scope and ends the absorbed scope", async () => {
+    const { kernel, fixture } = kernelWith();
+    await kernel.append(ctx.db, [charge("ORD-M1", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-M2", 200)]);
+    await settle(kernel);
+    const [older, newer] = await purchases(ctx.db);
+
+    const verdict = await kernel.merge(ctx.db, {
+      target: fixture.purchaseWrites,
+      a: newer!.id,
+      b: older!.id,
+      basis: "decision",
+      actor: ctx.actor,
+    });
+    expect(verdict).toMatchObject({
+      merged: true,
+      keepId: older!.id,
+      loserId: newer!.id,
+    });
+    await settle(kernel);
+    // Evidence that still reaches the absorbed scope reruns the survivor; the
+    // absorbed scope writes nothing again.
+    await kernel.append(ctx.db, [charge("ORD-M2", 300, "stmt-ORD-M2-late")]);
+    await settle(kernel);
+
+    const live = (await purchases(ctx.db)).filter(
+      (row) => row.deletedAt === null,
+    );
+    expect(
+      live.map(({ id, orderRef, amountMinor }) => ({
+        id,
+        orderRef,
+        amountMinor,
+      })),
+    ).toEqual([{ id: older!.id, orderRef: "ORD-M1", amountMinor: 200 }]);
+    const states = await repositoryQueries(ctx.db).execute<{
+      key: string;
+      stage: string;
+      into: string | null;
+    }>(
+      sql`SELECT "scopeKey" AS key, stage, "mergedIntoKey" AS into FROM "ScopeState"
+        WHERE "scopeKind" = ${PURCHASE_SCOPE} ORDER BY "scopeKey"`,
+    );
+    expect(states.rows).toEqual([
+      { key: "ORD-M1", stage: "waiting", into: null },
+      { key: "ORD-M2", stage: "ended", into: "ORD-M1" },
+    ]);
+    const bindings = await repositoryQueries(ctx.db).execute<{
+      eventKey: string;
+    }>(sql`SELECT DISTINCT "eventKey" FROM "EvidenceBinding"`);
+    expect(bindings.rows).toEqual([{ eventKey: "ORD-M1" }]);
   });
 
   it("keeps a veto in force after a later assignment is released", async () => {

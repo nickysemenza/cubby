@@ -92,7 +92,10 @@ export type Computed = {
   durationMs: number;
 };
 
-export type ComputeMode = ReadMode;
+export type ComputeMode = ReadMode & {
+  /** Assignments treated as released, for a reset preview that writes nothing. */
+  released?: readonly { subject: string; field: string }[];
+};
 
 /** The record key's entity column: the manifest entity, or the table name. */
 export const recordEntity = (target: ColumnRef) => target.entity ?? target.name;
@@ -125,6 +128,11 @@ export async function computeBatch(
   const revisions = (keys: readonly Key[]) =>
     mode.locked ? lockKeyRevs(q, keys) : readKeyRevs(q, keys);
   const reads = createReads(q, reconciler, scopeKeys, ledger, mode);
+  const released = new Set(
+    (mode.released ?? []).map(
+      (entry) => `${entry.subject}\u0000${entry.field}`,
+    ),
+  );
 
   let inputs: Map<string, unknown>;
   let owned: Map<string, OwnedRecord[]>;
@@ -176,6 +184,7 @@ export async function computeBatch(
         answers,
         decisions,
         tracked,
+        released,
       });
       try {
         results.set(scope.key, {
@@ -451,7 +460,8 @@ async function loadOwned(
       naturalKey: row.naturalKey,
       entityId: row.entityId,
       minted: row.minted,
-      rejected: row.rejectedAt !== null,
+      // A record merged into another scope's survivor is no longer this scope's to write.
+      rejected: row.rejectedAt !== null || row.mergedAt !== null,
       stored: storedByTable.get(target.name)?.get(row.entityId) ?? null,
     });
     owned.set(row.scopeKey, list);
@@ -504,6 +514,7 @@ function createPure(
     answers: ReadonlyMap<string, { inputHash: string; output: Json | null }>;
     decisions: ReadonlyMap<string, readonly DecisionRow[]>;
     tracked: Tracked;
+    released: ReadonlySet<string>;
   },
 ): Pure {
   const records: DesiredRecord[] = [];
@@ -618,6 +629,11 @@ function createPure(
     },
     decision(channel, subject, slot) {
       state.tracked.subjects.add(subject);
+      if (
+        channel === "assignment" &&
+        state.released.has(`${subject}\u0000${slot ?? ""}`)
+      )
+        return null;
       return inForce(state.decisions.get(subject) ?? [], channel, slot ?? null);
     },
     existing(target) {
