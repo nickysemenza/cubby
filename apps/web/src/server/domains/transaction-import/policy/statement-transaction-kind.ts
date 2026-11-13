@@ -9,7 +9,7 @@ import type {
   StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 
-import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-effective-movement";
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 
 type KindRule = {
   kind: FinancialTransactionKind;

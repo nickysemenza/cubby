@@ -13,6 +13,7 @@ import type { PgColumn } from "drizzle-orm/pg-core";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
 import {
   evidenceBinding,
   recordKey,
@@ -28,6 +29,8 @@ import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { askIsStuck, askMemberGap, type AskCondition } from "./ask-gap";
+import { auditApply } from "./audit";
 import {
   ClaimLapsedError,
   LOCKED_RUN_AFTER_CONFLICTS,
@@ -57,7 +60,6 @@ import {
 import { mergeRecords, markRejected, removeRecords } from "./identity";
 import { bindingEventKey, bindingFactKey, recordSubject, rowKey } from "./keys";
 import type { KernelRegistry } from "./registry";
-import { ASK } from "./vocab";
 import { wakeAfterCommit } from "./wake";
 
 type Q = Pick<
@@ -208,15 +210,14 @@ async function fileAsks(q: Q, computed: Computed) {
         SELECT value FROM jsonb_array_elements_text(${JSON.stringify(wanted.map((entry) => entry.inputHash))}::jsonb)))`);
 }
 
-/** A scope is Stuck while an ask it waits on is `unknown` or out of attempts. */
-async function waitsOnStuckAsk(q: Q, scope: ScopeRef): Promise<boolean> {
-  const result = await q.execute<{ stuck: boolean }>(sql`
-    SELECT EXISTS (
-      SELECT 1 FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
-      WHERE s."scopeKind" = ${scope.kind} AND s."scopeKey" = ${scope.key}
-        AND (a.state = ${ASK.unknown} OR (a.state = ${ASK.queued} AND a.attempts >= a."maxAttempts"))
-    ) AS stuck`);
-  return result.rows[0]?.stuck ?? false;
+/** The asks a scope waits on, with what a member must know about each. */
+async function scopeAsks(q: Q, scope: ScopeRef): Promise<AskCondition[]> {
+  const result = await q.execute<AskCondition>(sql`
+    SELECT a."inputHash", a.state, a.attempts, a."maxAttempts",
+      a."cancelledAt" IS NOT NULL AS cancelled
+    FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+    WHERE s."scopeKind" = ${scope.kind} AND s."scopeKey" = ${scope.key}`);
+  return result.rows;
 }
 
 /** The inputs the scope used, in the order it used them, for the machinery read. */
@@ -314,6 +315,7 @@ async function applyScope(
     await updateRecords(q, diff.updates);
     for (const update of diff.updates) touch(update.target, update.row);
   }
+  await auditApply(tx, diff);
   for (const group of byTarget(diff.removals)) {
     const target = group[0]!.target;
     await removeRecords(
@@ -330,7 +332,7 @@ async function applyScope(
   for (const rejection of diff.rejections)
     await markRejected(q, recordEntity(rejection.target), rejection.id);
   for (const merge of diff.merges) {
-    const verdict = await mergeRecords(tx, {
+    const verdict = await mergeRecords(tx, registry, {
       target: merge.target,
       a: merge.survivorId,
       b: merge.absorbedId,
@@ -412,7 +414,17 @@ async function applyScope(
     changed.push(bindingEventKey(entry.eventKey), bindingFactKey(entry.fact));
 
   await fileAsks(q, computed);
-  const stuck = await waitsOnStuckAsk(q, scope);
+  // An answer Cubby cannot settle alone becomes the member's gap; an unknown
+  // or exhausted ask makes the scope Stuck.
+  const asks = await scopeAsks(q, scope);
+  const stuck = asks.some(askIsStuck);
+  for (const [index, gap] of gaps.entries()) {
+    const ask = gap.inputHash
+      ? asks.find((entry) => entry.inputHash === gap.inputHash)
+      : undefined;
+    const member = ask ? askMemberGap(ask, gap.input, gap.since) : null;
+    if (member) gaps[index] = member;
+  }
 
   // Downstream readers of the output run again; this scope never does.
   const downstream = await markDirty(q, registry, {
@@ -530,8 +542,18 @@ async function applyOne(
     return outcome(scope, "failed", [], computed.error);
   }
   try {
-    const gaps = await repositoryTransactionDatabase(tx, (inner) =>
-      applyScope(inner, registry, computed, claimed, options),
+    // The apply step alone may write owned columns; its audit rows carry
+    // this scope, its version and the inputs that decided it.
+    const gaps = await withKernelApply(
+      {
+        scope: computed.scope,
+        version: computed.reconciler.version,
+        inputs: usedInputs(computed),
+      },
+      () =>
+        repositoryTransactionDatabase(tx, (inner) =>
+          applyScope(inner, registry, computed, claimed, options),
+        ),
     );
     return outcome(scope, gaps.length ? "waiting" : "applied", gaps);
   } catch (error) {
@@ -570,6 +592,52 @@ async function settleBatchFailure(
 }
 
 /**
+ * A scope whose record merged into another scope's survivor is Ended: it
+ * writes nothing again and its runs become the survivor's, so evidence that
+ * still reaches it dirties the survivor.
+ */
+async function redirectMergedScopes(
+  db: Database,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  claimed: readonly ClaimedScope[],
+): Promise<Map<string, Outcome>> {
+  const ended = new Map<string, Outcome>();
+  if (!claimed.length) return ended;
+  const rows = await repositoryQueries(db).execute<{
+    key: string;
+    into: string;
+  }>(sql`
+    SELECT "scopeKey" AS key, "mergedIntoKey" AS into FROM "ScopeState"
+    WHERE "scopeKind" = ${reconciler.scope} AND "mergedIntoKey" IS NOT NULL
+      AND "scopeKey" IN (SELECT value FROM jsonb_array_elements_text(${JSON.stringify(claimed.map((scope) => scope.key))}::jsonb))`);
+  if (!rows.rows.length) return ended;
+  await repositoryTransactionDatabase(db, async (tx) => {
+    const q = repositoryQueries(tx);
+    await markDirty(q, registry, {
+      keys: [],
+      discovers: rows.rows.map((row) => ({
+        kind: reconciler.scope,
+        key: row.into,
+      })),
+      reason: `merged:${reconciler.scope}`,
+    });
+    for (const row of rows.rows) {
+      const scope = claimed.find((entry) => entry.key === row.key)!;
+      await q.execute(sql`
+        DELETE FROM "ScopeDirty" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}
+          AND "claimToken" = ${scope.token}::uuid`);
+      ended.set(
+        row.key,
+        outcome({ kind: scope.kind, key: scope.key }, "clean"),
+      );
+    }
+    await wakeAfterCommit(tx);
+  });
+  return ended;
+}
+
+/**
  * Compute claimed scopes outside any transaction, then apply them. Scopes
  * past three conflicts run locked, one per transaction.
  */
@@ -577,16 +645,23 @@ export async function runClaimedScopes(
   db: Database,
   registry: KernelRegistry,
   reconciler: Reconciler,
-  claimed: readonly ClaimedScope[],
+  claimedScopes: readonly ClaimedScope[],
   options: ApplyOptions & { mode: WriteMode; hideBaseline?: boolean },
 ): Promise<Outcome[]> {
+  const ended = await redirectMergedScopes(
+    db,
+    registry,
+    reconciler,
+    claimedScopes,
+  );
+  const claimed = claimedScopes.filter((scope) => !ended.has(scope.key));
   const locked = claimed.filter(
     (scope) => scope.conflicts >= LOCKED_RUN_AFTER_CONFLICTS,
   );
   const loose = claimed.filter(
     (scope) => scope.conflicts < LOCKED_RUN_AFTER_CONFLICTS,
   );
-  const outcomes: Outcome[] = [];
+  const outcomes: Outcome[] = [...ended.values()];
   for (const scope of locked)
     outcomes.push(await runLocked(db, registry, reconciler, scope, options));
   if (!loose.length) return outcomes;

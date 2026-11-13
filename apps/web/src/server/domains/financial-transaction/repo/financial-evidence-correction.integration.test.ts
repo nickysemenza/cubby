@@ -16,12 +16,13 @@ import {
   sourceOccurrence,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import { loadFinancialBookingLineage } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 
-import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { acceptedAutomaticFacts } from "./financial-convergence";
 import {
   type FinancialEvidenceCorrectionInput,

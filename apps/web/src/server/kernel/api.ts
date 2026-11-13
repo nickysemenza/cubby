@@ -11,10 +11,12 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
+import type { AskWaiters } from "./ask";
 import { cancelClaimable } from "./claim";
 import type { DecisionWriters } from "./decide";
 import type {
   AskKind,
+  ColumnRef,
   DecisionInput,
   DecisionRef,
   EvidenceRow,
@@ -25,6 +27,7 @@ import type {
   ScopeRef,
 } from "./define";
 import type { ApprovalOutcome } from "./drift";
+import type { MergeVerdict } from "./identity";
 import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
 
@@ -69,13 +72,20 @@ export type { DecisionWriters, StoredDecision } from "./decide";
 export type { Reads, ScopeReads } from "./reads";
 export { effectiveBindings } from "./reads";
 export { bindingWrites } from "./registry";
-export { AskExhaustedError, AskUnknownError } from "./ask";
-export { householdWrite, HouseholdWriteBusyError } from "./gate";
 export {
+  AskAbandonedError,
+  AskExhaustedError,
+  AskUnknownError,
+  type AskWaiters,
+} from "./ask";
+export { householdWrite, HouseholdWriteBusyError } from "./gate";
+export { OwnedColumnWriteError } from "~/server/db/owned-columns";
+export {
+  entityMerge,
   entityRemoval,
-  mergeRecords,
   resolveForRead,
   resolveForWrite,
+  type MergeVerdict,
 } from "./identity";
 export {
   decisionKey,
@@ -136,22 +146,41 @@ export async function withAsk<I, O>(
   db: Database,
   kind: AskKind<I, O>,
   input: I,
-  options?: { scopes?: readonly ScopeRef[]; runId?: string | null },
+  options?: AskWaiters,
 ): Promise<O> {
   return (await productionKernel()).withAsk(db, kind, input, options);
 }
 
-/** Emit keys for authored or catalog columns a reconciler reads; call inside the writer's transaction. */
+/**
+ * Emit keys for authored or catalog columns a reconciler reads, inside the
+ * writer's transaction. The shared entity writers call this themselves.
+ */
 export async function emitWrites(
   db: Database,
   write: {
-    table: PgTable;
+    table: PgTable | string;
     ids: readonly string[];
     columns: readonly string[];
     discovers?: readonly ScopeRef[];
+    entity?: string;
+    created?: boolean;
   },
 ): Promise<number> {
   return (await productionKernel()).emitWrites(db, write);
+}
+
+/** Merge two records under the write gate, settling which scope owns the survivor. */
+export async function merge(
+  db: Database,
+  request: {
+    target: ColumnRef;
+    a: string;
+    b: string;
+    basis: "proof" | "decision";
+    actor?: ActorContext;
+  },
+): Promise<MergeVerdict> {
+  return (await productionKernel()).merge(db, request);
 }
 
 /** Approve one Drift proposal by its hash. */

@@ -4,12 +4,18 @@
  *
  * A field takes part when it is a `fill` target with a physical column on its
  * entity's table. Only `apply: "auto"` columns are written; `review` and
- * `offer` columns are read, so the scope can show their answers. A declared
- * `finance` spending review stays with the money lane, whose writer books
- * the category with its allocations; a prune target is a removal proposal and
- * never applies. A field with an inheritance mode column (Task project) stays
+ * `offer` columns are read, so the scope can show their answers. The money
+ * lane's entities (Purchase, Expense, FinancialTransaction) and every declared
+ * spending review stay with the money lane: their columns are written by the
+ * booking, import and spending-review writers, which only the money lane may
+ * move. A prune target is a removal proposal and never applies. A field with an inheritance mode column (Task project) stays
  * authored: the assignment channel has no `inherit` kind to record a
- * person's choice to inherit.
+ * person's choice to inherit. A NOT NULL column without a default (Location
+ * type, Purchase vendor, Expense cost type) stays authored: its creator
+ * always supplies it, and only the kernel may write a column it owns. A
+ * reference column (Product brand, category, ingredient, plant) is offered,
+ * not written: merging or removing the record it points at repoints it, and
+ * only the kernel may write a column it owns.
  */
 import type { AuditFieldChange } from "@cubby/schemas/audit";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -68,7 +74,14 @@ const shortcodeEntitySet = new Set<string>(shortcodeEntities);
 const isShortcodeEntity = (value: unknown): value is ShortcodeEntity =>
   typeof value === "string" && shortcodeEntitySet.has(value);
 
+const MONEY_LANE_ENTITIES = new Set<string>([
+  "purchase",
+  "expense",
+  "financialTransaction",
+]);
+
 function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
+  if (MONEY_LANE_ENTITIES.has(entity)) return null;
   const table = SHORTCODE_TABLE[entity];
   const columns = getTableColumns(table);
   const has = (key: string) => Object.hasOwn(columns, key);
@@ -85,16 +98,21 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
   const fields: FieldPlan[] = models.flatMap((field) => {
     const suggest = field.control?.suggest;
     if (!suggest || suggest.mode !== "fill" || !has(field.key)) return [];
-    if (financeReviewContext(entity, field.key) === "finance") return [];
+    const column = Object.entries(columns).find(
+      ([key]) => key === field.key,
+    )?.[1];
+    if (column?.notNull && !column.hasDefault) return [];
+    if (financeReviewContext(entity, field.key)) return [];
     const resolution: object | null | undefined =
       "resolution" in field ? field.resolution : null;
     if (resolution && "inheritMode" in resolution && resolution.inheritMode)
       return [];
     const basis = suggest.basis.filter(has);
+    const apply = suggestApplyPolicy(entity, field.key);
     return [
       {
         key: field.key,
-        apply: suggestApplyPolicy(entity, field.key),
+        apply: apply === "auto" && reference(field.key) ? "offer" : apply,
         fillOnly: "fillOnly" in suggest && suggest.fillOnly === true,
         undecided:
           "undecided" in suggest && typeof suggest.undecided === "string"

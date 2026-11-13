@@ -6,7 +6,11 @@ import {
   replacementLineAttribution,
   type ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
-import { nullableMinorToMoney } from "@cubby/shared";
+import {
+  nullableMinorToMoney,
+  moneyToMinor,
+  minorToMoney,
+} from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -24,83 +28,30 @@ import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
 } from "~/server/domains/household-contribution/repo/allocation";
+import { replacementAttributions } from "~/server/domains/purchase-import/policy/replacement-attributions";
 
 /** Split the two signed line totals into party margins, then intersect their
  * cumulative cent intervals. Both the per-line and per-party margins are exact;
  * the resulting allocations are shown before they become recorded weights. */
 export async function redistributeReplacementAttributions(
-  tx: DrizzleTransaction,
   allocations: readonly Pick<
     ExpenseAllocationRow,
     "role" | "ledgerPartyId" | "allocationKey" | "cents"
   >[],
   lines: readonly ExtractedPurchaseLine[],
 ) {
-  const targets = JSON.stringify(
-    allocations.map((row) => ({
-      role: row.role,
-      partyId: row.ledgerPartyId,
-      partyCode: row.allocationKey,
-      targetCents: row.cents.toString(),
+  return z.array(replacementLineAttribution).parse(
+    replacementAttributions({
+      allocations,
+      lines: lines.map((line) => ({
+        amountMinor: line.amount === null ? null : moneyToMinor(line.amount),
+      })),
+    }).map(({ weightMinor, amountMinor, ...row }) => ({
+      ...row,
+      weight: Number(weightMinor),
+      amount: minorToMoney(amountMinor),
     })),
   );
-  const inputs = JSON.stringify(
-    lines.map((line, lineIndex) => ({ lineIndex, amount: line.amount })),
-  );
-  const result = await tx.execute(
-    sql`
-    WITH targets AS (
-      SELECT * FROM jsonb_to_recordset(${targets}::jsonb)
-        AS t(role text, "partyId" uuid, "partyCode" text, "targetCents" bigint)
-    ), lines AS (
-      SELECT "lineIndex", round(amount * 100)::bigint AS cents
-      FROM jsonb_to_recordset(${inputs}::jsonb) AS l("lineIndex" int, amount numeric)
-    ), roles AS (
-      SELECT role, CASE WHEN sum("targetCents") < 0 THEN -1 ELSE 1 END AS direction,
-        sum(abs("targetCents")) AS total_weight
-      FROM targets GROUP BY role
-    ), weighted AS (
-      SELECT t.*, r.direction,
-        CASE WHEN r.total_weight = 0 THEN 1 ELSE abs(t."targetCents") END AS weight,
-        COALESCE((SELECT sum(abs(l.cents)) FROM lines l WHERE sign(l.cents) = -r.direction), 0) AS opposite_cents
-      FROM targets t JOIN roles r USING (role)
-    ), based AS (
-      SELECT w.*,
-        floor(opposite_cents * weight / sum(weight) OVER (PARTITION BY role)) AS base,
-        mod(opposite_cents * weight, sum(weight) OVER (PARTITION BY role)) AS remainder
-      FROM weighted w
-    ), ranked AS (
-      SELECT b.*, sum(base) OVER (PARTITION BY role) AS assigned,
-        row_number() OVER (PARTITION BY role ORDER BY remainder DESC, "partyCode") AS rank
-      FROM based b
-    ), opposite AS (
-      SELECT *, base + CASE WHEN rank <= opposite_cents - assigned THEN 1 ELSE 0 END AS share
-      FROM ranked
-    ), margins AS (
-      SELECT role, "partyId", "partyCode", direction, abs("targetCents") + share AS cents FROM opposite
-      UNION ALL
-      SELECT role, "partyId", "partyCode", -direction, share FROM opposite
-    ), party_intervals AS (
-      SELECT *, sum(cents) OVER (PARTITION BY role, direction ORDER BY "partyCode") - cents AS start,
-        sum(cents) OVER (PARTITION BY role, direction ORDER BY "partyCode") AS finish
-      FROM margins
-    ), line_intervals AS (
-      SELECT *, sign(cents) AS direction,
-        sum(abs(cents)) OVER (PARTITION BY sign(cents) ORDER BY "lineIndex") - abs(cents) AS start,
-        sum(abs(cents)) OVER (PARTITION BY sign(cents) ORDER BY "lineIndex") AS finish
-      FROM lines
-    ), transported AS (
-      SELECT l."lineIndex", p.role, p."partyId", p."partyCode", p.direction,
-        greatest(0, least(l.finish, p.finish) - greatest(l.start, p.start)) AS weight
-      FROM line_intervals l JOIN party_intervals p ON p.direction = l.direction
-    )
-    SELECT "lineIndex", role, "partyId", "partyCode", weight::double precision AS weight,
-      (direction * weight / 100.0)::double precision AS amount
-    FROM transported WHERE weight > 0 ORDER BY "lineIndex", role, "partyCode"
-  `,
-    "objects",
-  );
-  return z.array(replacementLineAttribution).parse(result);
 }
 
 export async function aggregateReplacementApprovalFingerprint(

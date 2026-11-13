@@ -272,9 +272,11 @@ const buildUpdateOperation = <
           );
           await writeRecordEmoji(
             writeContext.db,
+            writeContext.actorContext,
             binding.entity,
             updated.entityId,
             validated.data,
+            previousEmoji ?? null,
           );
           await auditRecordEmoji(
             writeContext.db,
@@ -544,6 +546,7 @@ const buildEntityOperations = <
             );
             await writeRecordEmoji(
               writeContext.db,
+              writeContext.actorContext,
               binding.entity,
               created.entityId,
               validated.data,

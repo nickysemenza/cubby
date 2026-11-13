@@ -715,7 +715,14 @@ export const reorderTasks = async (
               relationalSql(table, and(eq(task.id, moveId), notDeleted(task))),
           },
         });
-        const updated = await updateLiveAndReturn(tx, task, axisValues, moveId);
+        const fields = holdFieldsValues("task", axisValues);
+        const updated = await updateLiveAndReturn(
+          tx,
+          task,
+          fields.values,
+          moveId,
+        );
+        await fields.settle(tx, actor, moveId, before ?? {});
         await assertEffectiveTaskTrade(tx, moveId);
         const changes = before
           ? computeChanges(before, updated, ["status", "projectId", "trade"])

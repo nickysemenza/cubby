@@ -15,9 +15,8 @@ describe("reviewed receipt attribution transport", () => {
       testEntityId("ledgerParty", "receipt-first"),
       testEntityId("ledgerParty", "receipt-second"),
     ];
-    const result = await withTransaction(ctx.db, (tx) =>
+    const result = await withTransaction(ctx.db, () =>
       redistributeReplacementAttributions(
-        tx,
         [
           {
             role: "beneficiary",

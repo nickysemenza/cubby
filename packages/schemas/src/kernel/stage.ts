@@ -75,6 +75,8 @@ const kernelGapAction = z.object({
   kind: decisionKind,
   subject: z.string(),
   field: z.string().nullable(),
+  /** The decision's value, for an action that sets one. */
+  value: z.json().optional(),
   /** Member-facing label from the reconciler, worded by the server. */
   label: z.string(),
 });

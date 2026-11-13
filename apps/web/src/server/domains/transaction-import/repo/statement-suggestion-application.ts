@@ -14,6 +14,7 @@ import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { financialTransaction, suggestionTable } from "~/server/db/schema";
+import { decideStatementKind } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
@@ -30,7 +31,6 @@ import {
   changedStatementBooking,
   prepareStatementSpending,
 } from "~/server/domains/transaction-import/repo/statement-spending";
-import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { createAppError } from "~/server/errors/app-error";
 import { changedTerms } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";

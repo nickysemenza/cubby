@@ -382,15 +382,11 @@ export function fieldsReconciler(
 }
 
 /** The machinery capability of every authored entity with a `fields` scope. */
-export function fieldsCapabilities(
-  except: ReadonlySet<string>,
-): MachineryCapability[] {
-  return [...fieldsPlans().keys()]
-    .filter((entity) => !except.has(entity))
-    .map((entity) => ({
-      entity,
-      owning: null,
-      fields: true,
-      quality: false,
-    }));
+export function fieldsCapabilities(): MachineryCapability[] {
+  return [...fieldsPlans().keys()].map((entity) => ({
+    entity,
+    owning: null,
+    fields: true,
+    quality: false,
+  }));
 }

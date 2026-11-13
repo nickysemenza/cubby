@@ -2,13 +2,13 @@ import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-
 import { moneyToMinor } from "@cubby/shared";
 import { z } from "zod";
 
-import {
+import type {
   sourceOccurrence,
   sourceTransactionRecord,
   transactionImport,
   transactionImportRecord,
-} from "~/server/db/schema";
-import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+} from "~/server/db/retained-tables";
+import { providerIdentityClaims } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 
 /**

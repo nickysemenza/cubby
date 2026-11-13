@@ -2,9 +2,9 @@ import { entityRefKey } from "@cubby/schemas/entity";
 /**
  * Why this value for a `fields` column (ADR 0029 sections 1 and 10): who
  * holds it comes from provenance. An assignment decision in force is a
- * person's; otherwise the value is Cubby's, from the Answer its `fields`
- * scope last used for the field, and that Answer is also the picker's guess
- * when it differs from the stored value.
+ * person's; otherwise the value is Cubby's, set by the kernel apply whose
+ * AuditLog provenance names the field's Answer. The Answer the `fields`
+ * scope last used is the picker's guess when it differs from the stored value.
  */
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { FieldGuess, FieldOrigin } from "@cubby/schemas/field-authority";
@@ -23,7 +23,7 @@ import type { RepositoryQueryInput } from "~/server/db/repository-access.boundar
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { recordSubject } from "~/server/kernel/api";
+import { recordSubject } from "~/server/kernel/keys";
 
 import { fieldPlan, type FieldsRow } from "./plan";
 import { readStoredColumns } from "./stored-field";
@@ -54,11 +54,32 @@ async function readUsedAnswer(
     SELECT a."inputHash", a."createdAt" AS at, a.output
     FROM "ScopeState" s
     CROSS JOIN LATERAL jsonb_array_elements(s.inputs) used
-    JOIN "Answer" a ON a."inputHash" = used->>'inputHash'
+    JOIN "Answer" a ON a."inputHash" = used->>${"inputHash"}
     JOIN "Ask" k ON k."inputHash" = a."inputHash"
     WHERE s."scopeKind" = ${FIELDS_SCOPE} AND s."scopeKey" = ${recordScopeKey(entity, recordId)}
       AND used->>${"kind"} = ${"answer"} AND k.input->${"input"}->>${"field"} = ${field}
     ORDER BY a."createdAt" DESC
+    LIMIT 1`);
+  return usedAnswer.safeParse(result.rows[0]).data ?? null;
+}
+
+/** The newest kernel apply that wrote `field`, with the field's Answer among its inputs. */
+async function readCubbyWrite(
+  db: RepositoryQueryInput,
+  entity: ShortcodeEntity,
+  recordId: string,
+  field: string,
+) {
+  const result = await repositoryQueries(db).execute<FieldsRow>(sql`
+    SELECT a."inputHash", l."createdAt" AS at, a.output
+    FROM "AuditLog" l
+    CROSS JOIN LATERAL jsonb_array_elements(l.provenance->${"inputs"}) used
+    JOIN "Answer" a ON a."inputHash" = used->>${"inputHash"}
+    JOIN "Ask" k ON k."inputHash" = a."inputHash"
+    WHERE l."entityKind" = ${entity} AND l."entityId" = ${recordId}::uuid
+      AND l.provenance IS NOT NULL AND l.changes ? ${field}
+      AND used->>${"kind"} = ${"answer"} AND k.input->${"input"}->>${"field"} = ${field}
+    ORDER BY l."createdAt" DESC
     LIMIT 1`);
   return usedAnswer.safeParse(result.rows[0]).data ?? null;
 }
@@ -179,10 +200,13 @@ export async function describeFieldOrigin(
       guess: null,
     };
   const open = undecidedFieldValue(entity, field, value);
+  const written = open
+    ? null
+    : await readCubbyWrite(db, entity, recordId, field);
   const cubbyAnswer =
-    answer?.output.proposal &&
-    answer.output.proposal.value === String(value ?? "")
-      ? answer
+    written?.output.proposal &&
+    written.output.proposal.value === String(value ?? "")
+      ? written
       : null;
   return {
     ...base,

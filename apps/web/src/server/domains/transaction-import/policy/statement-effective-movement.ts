@@ -1,6 +1,6 @@
 import { cents } from "@cubby/shared";
 
-import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/policy/purchaser";
 
 type StatementMovementClass =
   | "standard"

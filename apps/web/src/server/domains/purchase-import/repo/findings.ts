@@ -57,7 +57,7 @@ import {
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
-import { decideLineWrite } from "~/server/domains/purchase-import/repo/writer-policy";
+import { decideLineWrite } from "~/server/domains/purchase-import/policy/import-lines";
 import { findingHasExpired } from "~/server/domains/run/repo/finding-expiry";
 import {
   publishRunFinding,
@@ -368,7 +368,6 @@ async function applyAggregateReplacement(
       "The Purchase changed after this preview; prepare the receipt again.",
     );
   const allocations = await redistributeReplacementAttributions(
-    tx,
     preview.allocations,
     fix.lines,
   );

@@ -21,7 +21,7 @@ import {
 import {
   importedLineMatchesExpense,
   sameLineTitle,
-} from "~/server/domains/purchase-import/repo/writer-policy";
+} from "~/server/domains/purchase-import/policy/import-lines";
 import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

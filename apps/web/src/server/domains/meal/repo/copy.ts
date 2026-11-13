@@ -8,6 +8,7 @@ import {
 import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
 
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   insertAndReturn,
@@ -64,13 +65,19 @@ const copyMealsTx = async (
   const mealMap = new Map<MealId, MealId>();
   const shortcodeMap = new Map<MealId, MealShortcode>();
   for (const source of sources) {
-    const created = await insertWithShortcode(tx, "meal", {
-      date: targetDate(source.date),
-      name: source.name,
-      sortOrder: source.sortOrder,
-      mealType: source.mealType,
-      mealKind: source.mealKind,
-    });
+    const fields = holdFieldsValues(
+      "meal",
+      {
+        date: targetDate(source.date),
+        name: source.name,
+        sortOrder: source.sortOrder,
+        mealType: source.mealType,
+        mealKind: source.mealKind,
+      },
+      "create",
+    );
+    const created = await insertWithShortcode(tx, "meal", fields.values);
+    await fields.settle(tx, actor, created.id);
     mealMap.set(source.id, created.id);
     shortcodeMap.set(source.id, parseShortcodeFor("meal", created.shortcode));
     await logAuditEntry(tx, actor, {

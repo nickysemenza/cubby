@@ -9,7 +9,7 @@
  *   entities that already guarantee it, bumps `updatedAt`) as if it changed
  *   the record.
  */
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -119,6 +119,8 @@ describe("entity kernel update patch", () => {
               eq(auditLog.entityKind, entity),
               eq(auditLog.entityId, entityId),
               eq(auditLog.action, "update"),
+              // The kernel audits the `fields` columns it applies on its own row.
+              isNull(auditLog.provenance),
             ),
           );
 

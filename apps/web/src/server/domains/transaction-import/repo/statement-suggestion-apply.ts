@@ -50,6 +50,7 @@ import {
   createFinancialTransaction,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { isMoneyMoveKind } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import {
   sourceObservationFactsFrom,
   statementSuggestionSourceHeld,
@@ -66,7 +67,6 @@ import {
   pendingPostedMatch,
   regenerateChargesAfterCommit,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import { isMoneyMoveKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import type { AutomaticBatchEntry } from "~/server/generic/suggestions/repo/review";

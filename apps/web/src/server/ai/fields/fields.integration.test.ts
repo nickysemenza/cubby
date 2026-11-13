@@ -47,7 +47,7 @@ describe("fields scope", () => {
         name: "fields",
         asks: [ask],
         reconcilers: [fieldsReconciler(ask)],
-        machinery: fieldsCapabilities(new Set()),
+        machinery: fieldsCapabilities(),
       }),
     ]);
     return { kernel };

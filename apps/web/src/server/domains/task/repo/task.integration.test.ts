@@ -1,7 +1,7 @@
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -554,6 +554,8 @@ describe("updateTasksInBulk status patch", () => {
           eq(auditLog.entityKind, "task"),
           eq(auditLog.action, "update"),
           inArray(auditLog.entityId, [changedId, unchangedId]),
+          // The kernel audits the `fields` columns it applies on its own row.
+          isNull(auditLog.provenance),
         ),
       );
     expect(audits.filter((audit) => audit.entityId === changedId)).toHaveLength(

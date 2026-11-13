@@ -1,0 +1,159 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "c15dea9e-ae84-4de5-947a-ce2fe491dea4",
+  "prevIds": [
+    "50d49b24-6ca8-4fd7-b710-027beb7cbe55"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AuditLog",
+        "provenance"
+      ],
+      "writes": [
+        "s|col|public.AuditLog.provenance",
+        "n|col|public.AuditLog.provenance",
+        "e|col|public.AuditLog.provenance"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "RecordKey",
+        "mergedAt"
+      ],
+      "writes": [
+        "s|col|public.RecordKey.mergedAt",
+        "n|col|public.RecordKey.mergedAt",
+        "e|col|public.RecordKey.mergedAt"
+      ],
+      "reads": [
+        "n|tbl|public.RecordKey",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ScopeState",
+        "mergedIntoKey"
+      ],
+      "writes": [
+        "s|col|public.ScopeState.mergedIntoKey",
+        "n|col|public.ScopeState.mergedIntoKey",
+        "e|col|public.ScopeState.mergedIntoKey"
+      ],
+      "reads": [
+        "n|tbl|public.ScopeState",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AuditLog",
+        "AuditLog_kernel_createdAt_idx"
+      ],
+      "writes": [
+        "s|idx|public.AuditLog_kernel_createdAt_idx",
+        "n|idx|public.AuditLog_kernel_createdAt_idx",
+        "e|idx|public.AuditLog_kernel_createdAt_idx",
+        "n|rel|public.AuditLog_kernel_createdAt_idx"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public",
+        "n|col|public.AuditLog.createdAt"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "provenance",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "RecordKey",
+        "name": "mergedAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ScopeState",
+        "name": "mergedIntoKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "AuditLog_kernel_createdAt_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "createdAt",
+            "isExpression": false,
+            "asc": false,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"provenance\" IS NOT NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}

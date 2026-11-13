@@ -13,7 +13,7 @@ import { cents, dollars } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import { sourceFinancialFacts } from "../writer-policy";
+import { sourceFinancialFacts } from "~/server/domains/purchase-import/policy/import-lines";
 
 const amount = z.union([
   wholeCentAmount,

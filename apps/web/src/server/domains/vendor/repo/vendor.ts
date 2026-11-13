@@ -48,6 +48,7 @@ import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
 import { vendorRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.vendor.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -1150,12 +1151,22 @@ export const mergeVendors = async (
         carriedFields: Object.keys(plan.carried),
       };
 
-      const { logoImageId: carriedLogo, ...carriedColumns } = plan.carried;
+      const { logoImageId: carriedLogo, ...carried } = plan.carried;
+      // A carried `fields` column is the merging member's decision.
+      const carriedFields = holdFieldsValues("vendor", carried);
+      const carriedColumns = carriedFields.values;
       if (Object.keys(carriedColumns).length > 0) {
         await tx
           .update(vendor)
           .set(carriedColumns)
           .where(eq(vendor.id, keepId));
+      }
+      if (carriedFields.held.length) {
+        const [keeperBefore] = await tx
+          .select()
+          .from(vendor)
+          .where(eq(vendor.id, keepId));
+        await carriedFields.settle(tx, actor, keepId, keeperBefore ?? {});
       }
       // The losers' names stay Vendor aliases so imports keep finding the keeper.
       let aliasChange: { from: string[]; to: string[] } | undefined;

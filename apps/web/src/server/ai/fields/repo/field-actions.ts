@@ -15,7 +15,8 @@ import type { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { decide, reconcileNow, recordSubject } from "~/server/kernel/api";
+import { decide, reconcileNow } from "~/server/kernel/api";
+import { recordSubject } from "~/server/kernel/keys";
 
 import { assignmentsInForce } from "./field-decisions";
 import { fieldPlan } from "./plan";

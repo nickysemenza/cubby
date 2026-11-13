@@ -7,12 +7,15 @@
  * `{ shown, total }`, and the response at 256 KB.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { Entity } from "@cubby/schemas/entity";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   FIELDS_SCOPE,
   QUALITY_SCOPE,
   recordScopeKey,
 } from "@cubby/schemas/kernel/capability";
 import {
+  kernelJson,
   MACHINERY_COLLECTION_CAP,
   MACHINERY_RAW_ERROR_BYTES,
   MACHINERY_RESPONSE_BYTES,
@@ -38,14 +41,18 @@ import {
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
+import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 
+import { askIsStuck, askMemberGap } from "./ask-gap";
 import { MAX_SCOPE_ATTEMPTS } from "./claim";
+import { computeBatch } from "./compute";
 import type { ColumnValues, Json, ScopeRef } from "./define";
 import { resolveForRead } from "./identity";
+import { recordSubject } from "./keys";
 import { idColumn, KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
-import { ASK } from "./vocab";
+import { ASK, RECORD_WAITER } from "./vocab";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "select">;
 
@@ -93,6 +100,7 @@ async function recordScopes(
   }>(sql`
     SELECT DISTINCT "scopeKind" AS kind, "scopeKey" AS key, "rejectedAt" IS NOT NULL AS rejected
     FROM "RecordKey" WHERE entity = ${entity} AND "entityId" = ${id}::uuid
+      AND "mergedAt" IS NULL
     ORDER BY kind, key`);
   const scopes: ScopeRef[] = [];
   if (!field)
@@ -173,6 +181,12 @@ export async function machinery(
       );
       const none = sql`SELECT NULL::text AS kind, NULL::text AS key WHERE false`;
       const wanted = scopes.length ? scopeValues(scopes) : sql`(${none})`;
+      // Asks the record waits on directly (a Run's summary) join its scopes' asks.
+      const recordWaiter = {
+        kind: RECORD_WAITER,
+        key: recordScopeKey(ref.entity, ref.id),
+      };
+      const waiting = scopeValues([...scopes, recordWaiter]);
 
       const [states, dirty, asks, drifts, ranks] = await Promise.all([
         q.execute<{
@@ -214,7 +228,9 @@ export async function machinery(
           attempts: number;
           maxAttempts: number;
           live: boolean;
+          cancelled: boolean;
           availableAt: string;
+          createdAt: string;
           lastError: string | null;
           position: number | null;
           of: number | null;
@@ -226,8 +242,10 @@ export async function machinery(
           )
           SELECT s."scopeKind" AS kind, s."scopeKey" AS key, a."inputHash", a.feature, a.state,
             a.attempts, a."maxAttempts", (a."claimToken" IS NOT NULL AND a."claimDeadline" > now()) AS live,
-            ${isoText(sql`a."availableAt"`)} AS "availableAt", a."lastError", queue.position, queue.of
-          FROM "AskScope" s JOIN ${wanted} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
+            a."cancelledAt" IS NOT NULL AS cancelled,
+            ${isoText(sql`a."availableAt"`)} AS "availableAt", ${isoText(sql`a."createdAt"`)} AS "createdAt",
+            a."lastError", queue.position, queue.of
+          FROM "AskScope" s JOIN ${waiting} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
           JOIN "Ask" a ON a.id = s."askId" LEFT JOIN queue ON queue.id = a.id`),
         q.execute<{
           proposalHash: string;
@@ -426,82 +444,114 @@ export async function machinery(
         for (const input of inputs)
           if (input.answer) input.answer.rawError = null;
 
-      const gaps: MachineryGap[] = scopes.flatMap((scope) =>
-        (stateOf(scope)?.gaps ?? []).map((gap): MachineryGap => {
-          const ask = gap.inputHash
-            ? asks.rows.find((row) => row.inputHash === gap.inputHash)
-            : undefined;
-          const scopeDirty = dirtyOf(scope);
-          const rank = ranks.get(`${scope.kind}\u0000${scope.key}`);
-          const queue =
-            gap.kind === "time" && gap.until
-              ? { position: 1, of: 1, eta: gap.until, basis: "timer" as const }
-              : ask?.position && ask.of
+      // An answer Cubby cannot settle alone reads as the member's gap, live.
+      const memberGap = (gap: KernelGap) => {
+        const ask = gap.inputHash
+          ? asks.rows.find((row) => row.inputHash === gap.inputHash)
+          : undefined;
+        return (ask && askMemberGap(ask, gap.input, gap.since)) ?? gap;
+      };
+      const recordAsks = asks.rows.filter(
+        (row) => row.kind === recordWaiter.kind && row.key === recordWaiter.key,
+      );
+      const askGaps: { scope: ScopeRef; gap: KernelGap }[] = recordAsks.flatMap(
+        (row) => {
+          const label = registry.asks.get(row.feature)?.label ?? row.feature;
+          if (row.state === "answered") return [];
+          return [
+            {
+              scope: recordWaiter,
+              gap: askMemberGap(row, label, row.createdAt) ?? {
+                kind: "answer" as const,
+                input: label,
+                actor: "cubby" as const,
+                since: row.createdAt,
+                until: null,
+                actions: [],
+                inputHash: row.inputHash,
+              },
+            },
+          ];
+        },
+      );
+      const gaps: MachineryGap[] = [
+        ...scopes.flatMap((scope) =>
+          (stateOf(scope)?.gaps ?? []).map((gap) => ({
+            scope,
+            gap: memberGap(gap),
+          })),
+        ),
+        ...askGaps,
+      ].map(({ scope, gap }): MachineryGap => {
+        const ask = gap.inputHash
+          ? asks.rows.find((row) => row.inputHash === gap.inputHash)
+          : undefined;
+        const scopeDirty = dirtyOf(scope);
+        const rank = ranks.get(`${scope.kind}\u0000${scope.key}`);
+        const queue =
+          gap.kind === "time" && gap.until
+            ? { position: 1, of: 1, eta: gap.until, basis: "timer" as const }
+            : ask?.position && ask.of
+              ? (() => {
+                  const ms = median(
+                    askMedians.rows.find((row) => row.feature === ask.feature),
+                  );
+                  return {
+                    position: ask.position,
+                    of: ask.of,
+                    eta: etaFrom(ask.position, ms),
+                    basis:
+                      ms === null
+                        ? ("insufficient-history" as const)
+                        : ("claim-order" as const),
+                  };
+                })()
+              : rank && gap.actor !== "you"
                 ? (() => {
                     const ms = median(
-                      askMedians.rows.find(
-                        (row) => row.feature === ask.feature,
-                      ),
+                      scopeMedians.rows.find((row) => row.kind === scope.kind),
                     );
                     return {
-                      position: ask.position,
-                      of: ask.of,
-                      eta: etaFrom(ask.position, ms),
+                      position: rank.position,
+                      of: rank.of,
+                      eta: etaFrom(rank.position, ms),
                       basis:
                         ms === null
                           ? ("insufficient-history" as const)
                           : ("claim-order" as const),
                     };
                   })()
-                : rank && gap.actor !== "you"
-                  ? (() => {
-                      const ms = median(
-                        scopeMedians.rows.find(
-                          (row) => row.kind === scope.kind,
-                        ),
-                      );
-                      return {
-                        position: rank.position,
-                        of: rank.of,
-                        eta: etaFrom(rank.position, ms),
-                        basis:
-                          ms === null
-                            ? ("insufficient-history" as const)
-                            : ("claim-order" as const),
-                      };
-                    })()
-                  : null;
-          const state = stateOf(scope);
-          return {
-            ...gap,
-            queue,
-            attempts: ask
+                : null;
+        const state = stateOf(scope);
+        return {
+          ...gap,
+          queue,
+          attempts: ask
+            ? {
+                n: ask.attempts,
+                max: ask.maxAttempts,
+                nextAt: ask.availableAt,
+              }
+            : scopeDirty
               ? {
-                  n: ask.attempts,
-                  max: ask.maxAttempts,
-                  nextAt: ask.availableAt,
+                  n: scopeDirty.attempts,
+                  max: MAX_SCOPE_ATTEMPTS,
+                  nextAt: scopeDirty.availableAt,
                 }
-              : scopeDirty
-                ? {
-                    n: scopeDirty.attempts,
-                    max: MAX_SCOPE_ATTEMPTS,
-                    nextAt: scopeDirty.availableAt,
-                  }
-                : null,
-            lastError: ask?.lastError
+              : null,
+          lastError: ask?.lastError
+            ? {
+                class: "ask",
+                raw: hidden ? "" : (rawText(ask.lastError) ?? ""),
+              }
+            : state?.error
               ? {
-                  class: "ask",
-                  raw: hidden ? "" : (rawText(ask.lastError) ?? ""),
+                  class: state.errorClass ?? "failed",
+                  raw: rawText(state.error) ?? "",
                 }
-              : state?.error
-                ? {
-                    class: state.errorClass ?? "failed",
-                    raw: rawText(state.error) ?? "",
-                  }
-                : null,
-          };
-        }),
-      );
+              : null,
+        };
+      });
 
       // Only entities with public identity rows can be absorbed or deleted there.
       const ended =
@@ -511,11 +561,7 @@ export async function machinery(
       const stuck =
         dirty.rows.some((row) => row.attempts >= MAX_SCOPE_ATTEMPTS) ||
         states.rows.some((row) => row.stage === "stuck") ||
-        asks.rows.some(
-          (row) =>
-            row.state === "unknown" ||
-            (row.state === "queued" && row.attempts >= row.maxAttempts),
-        );
+        asks.rows.some(askIsStuck);
       const working =
         dirty.rows.some((row) => row.live) || asks.rows.some((row) => row.live);
       const stage = resolveStage({ ended, stuck, working, gaps });
@@ -565,12 +611,71 @@ export async function machinery(
             sum + (row.costMicros == null ? 0 : Number(row.costMicros)),
           0,
         ),
+        resetPreview: options.field
+          ? await resetPreview(tx, registry, ref, options.field)
+          : null,
         truncated: false,
       };
       return fitResponse(result);
     },
     { isolationLevel: "repeatable read", accessMode: "read only" },
   );
+}
+
+/**
+ * What "Let Cubby decide" would make the field, computed without writing:
+ * the field's declared reset (its resolution source or inheritance chain)
+ * when it has one, otherwise the record's `fields` scope derived with the
+ * member's assignment on the field released.
+ */
+async function resetPreview(
+  db: Database,
+  registry: KernelRegistry,
+  ref: { entity: string; id: string },
+  field: string,
+): Promise<Machinery["resetPreview"]> {
+  if (Object.hasOwn(entityFieldModels, ref.entity)) {
+    // SAFETY: the own-property check above narrows the manifest key.
+    const entity = ref.entity as Entity;
+    const declared = await inheritedResetPreview(db, entity, field, ref.id);
+    if (declared)
+      return { source: "resolution", result: declared, pendingAnswers: 0 };
+  }
+  const capability = registry.machinery.get(ref.entity);
+  const reconciler = registry.reconcilers.get(FIELDS_SCOPE);
+  if (!capability?.fields || !reconciler) return null;
+  const [computed] = await computeBatch(
+    repositoryQueries(db),
+    registry,
+    reconciler,
+    [{ kind: FIELDS_SCOPE, key: recordScopeKey(ref.entity, ref.id) }],
+    {
+      locked: false,
+      hideBaseline: false,
+      released: [{ subject: recordSubject(ref.entity, ref.id), field }],
+    },
+  );
+  if (!computed?.desired) return null;
+  const patched = computed.desired.patches.find(
+    (patch) => patch.id === ref.id && Object.hasOwn(patch.values, field),
+  );
+  const value = patched
+    ? kernelJson.parse(patched.values[field] ?? null)
+    : null;
+  return {
+    source: "derivation",
+    result: {
+      kind: "live",
+      decision: {
+        outcome:
+          value === null
+            ? { kind: "empty", reason: "unset" }
+            : { kind: "value", value },
+        provenance: value === null ? null : { kind: "computed" },
+      },
+    },
+    pendingAnswers: computed.missing.length,
+  };
 }
 
 /** Drop trailing inputs, then gaps, until the response fits 256 KB. */

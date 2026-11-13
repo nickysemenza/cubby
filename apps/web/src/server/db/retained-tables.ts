@@ -42,6 +42,7 @@ import type {
   UserId,
 } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image-summary";
+import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
 import type { LedgerSourceClaimNormalizedEvidence } from "@cubby/schemas/ledger-transfer";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { purchaseDocumentKindValues } from "@cubby/schemas/purchase-fields";
@@ -825,12 +826,18 @@ export const auditLog = pgTable(
     // columns. The cutover migration turns them into Decisions, then drops them.
     authority: text("authority").$type<AuditAuthority>(),
     automationPending: boolean("automationPending").notNull().default(false),
+    /** A kernel apply's scope, reconciler version and inputs; null for any other write. */
+    provenance: jsonb("provenance").$type<KernelAuditProvenance>(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
     index("AuditLog_automationPending_idx")
       .on(table.createdAt, table.id)
       .where(sql`${table.automationPending}`),
+    // Changes by Cubby: kernel applies, newest first.
+    index("AuditLog_kernel_createdAt_idx")
+      .on(table.createdAt.desc())
+      .where(sql`${table.provenance} IS NOT NULL`),
     index("AuditLog_automatic_createdAt_idx")
       .on(table.createdAt.desc())
       .where(

@@ -13,6 +13,38 @@ reference to a deleted, ignored or superseded observation invalidates current
 advice. The source/external-ID lookup index therefore includes tombstones; the
 separate live-only unique index still enforces active observation identity.
 
+## Money rules
+
+Pure policy lives under `apps/web/src/server/domains/<domain>/policy/`.
+Repositories load evidence, apply decisions and retain transaction and lock
+ownership. Empty searches are evidence too: loaders must supply empty arrays
+and explicit missing rows rather than omit competing candidates.
+
+| Domain / module                                         | Decision and read inputs                                                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transaction-import/source-intake-plan`                 | Occurrence head, withdrawal and membership plans from the complete `SourceOccurrence`, retained `SourceTransactionRecord`, `TransactionImport` and `TransactionImportRecord` rows in `SourceIntakeLoaded`, with an explicit observation time and prepared source fingerprints. Provider revisions without ordering proof have no selected head.                                                               |
+| `transaction-import/source-identity-plan`               | Reviewed identity proof and the resulting owner changes from complete occurrence/observation rows, account identity, accepted transaction id, historical bindings, alias rows and reviewed expected versions. Missing heads, aliases and targets remain explicit inputs.                                                                                                                                      |
+| `transaction-import/source-transaction-record-identity` | Provider identity and source-reference fingerprints from source, account, date, provider-signed amount, original descriptor and provider identity claims.                                                                                                                                                                                                                                                     |
+| `transaction-import/statement-effective-movement`       | Effective sign and loan movement from provider amount, descriptor, merchant and category; loan authority reads live account/party identity, source aliases, provider account ids and Vendor names/aliases.                                                                                                                                                                                                    |
+| `transaction-import/statement-transaction-kind`         | Kind votes, spending eligibility and person/payment-rail policy from effective amount, provider category, descriptor, account kind, transfer evidence and counterparty/rule/model/history votes.                                                                                                                                                                                                              |
+| `transaction-import/charge-identity`                    | Stable charge key from occurrence source and charge key.                                                                                                                                                                                                                                                                                                                                                      |
+| `transaction-import/transfer-pair`                      | Opposite-leg candidates, overlaps, competitors, clean/apply blockers and fingerprints from the complete loaded leg pool, including empty account/candidate searches and each leg's collection membership, account/owner, dates, signed amount, source refs, status-derived eligibility and labels.                                                                                                            |
+| `financial-account/purchaser`                           | Live household spending/loan authority and individual purchaser from account identity/deletion, owner kind/deletion and dated primary-cardholder identity/deletion plus sole-access proof.                                                                                                                                                                                                                    |
+| `financial-transaction/settlement-window`               | Three-day instant, calendar-date and prefilter bounds from explicitly supplied dates. SQL predicates use the same width.                                                                                                                                                                                                                                                                                      |
+| `financial-transaction/spending-prerequisites`          | Spending and Vendor-creation blockers from transaction kind/amount/date/source refs, account/owner, resolved purchaser, Vendor resolution ambiguity and counterparty/name/confidence/escrow advice.                                                                                                                                                                                                           |
+| `financial-transaction/booking-action`                  | Link existing spending or create a lump from live Expense costMinor/future/economicRole/lineKind, carried-cost provenance, transaction amount and the sum of other same-direction eligible allocations.                                                                                                                                                                                                       |
+| `financial-transaction/booking-fingerprint`             | Retained JSON fingerprints and fresh booking lineage from the exact supplied preview, serialized evidence and Expense row order.                                                                                                                                                                                                                                                                              |
+| `purchase-import/import-plan`                           | Import write blocks from accepted extraction status/reason and candidate currency, order date, total and line prices.                                                                                                                                                                                                                                                                                         |
+| `purchase-import/import-lines`                          | Exact line matching, aggregate replacement eligibility and unique complete payment matching from existing Expense identity/title/amount/role/product/quantity/source claim, extracted lines, retained payments and all eligible charge candidates.                                                                                                                                                            |
+| `purchase-import/accepted-source`                       | Accepted-source financial replay and Product-choice guards, original line binding, target review and tender learning from accepted extraction, proposed extraction, `ImportSourceOrder.originalOrder`, `ImportSourceProduct` bindings, merged Product identities and retained `PurchasePaymentEvidence` amountMinor/chargedAt/cardLastFour/tender. Empty retained/binding searches participate in the result. |
+| `purchase-import/retained-payments`                     | Agreement across payment sources and order-date anchoring from `PurchasePaymentEvidence.sourceClaimId/amountMinor/chargedAt/cardLastFour/tender` in evidence-index order, plus `Purchase.date`. Discovery uses allocation presence and candidate charge facts.                                                                                                                                                |
+| `purchase-import/replacement-attributions`              | Exact signed line and party margins from the resolved Expense allocation role/party/key/cents and accepted line minor amounts. Largest remainders use the party key as the tie-breaker.                                                                                                                                                                                                                       |
+
+Wire extraction, previews and retained fingerprint envelopes preserve their
+existing dollar-number shapes. Booking capacity and attribution transport use
+signed minor units; SQL candidate discovery, retained-settlement orchestration,
+booking row construction and Vendor resolution remain repository-owned.
+
 ## Statement booking
 
 Bank transactions are evidence; Expenses are the spending ledger. Statement
@@ -24,7 +56,7 @@ remain settlement-only: clean ones are created automatically without Expenses.
 A uniquely supported opposite leg is created as a pair; an unpaired movement
 with supported kind evidence can be recorded alone. Ambiguous pairings remain
 in review.
-All money continues to be `SUM(Expense.cost)`. Interest earned is recorded as
+All money continues to be `SUM(Expense.costMinor)`. Interest earned is recorded as
 `interest` with an inflow; interest linked to a Purchase remains an outflow.
 
 Pending or unknown provider status does not prevent an otherwise supported
@@ -1312,7 +1344,7 @@ history can show an acquisition with unknown USD item cost; neither its cost nor
 quantity enters USD pricing averages.
 
 A separately supported USD aggregate remains the only booked amount. Source
-amounts never enter `Expense.cost`, USD payment evidence or USD sums. Exact
+amounts never enter `Expense.costMinor`, USD payment evidence or USD sums. Exact
 foreign source itemization is present independently of Product resolution;
 booking is recorded when the USD aggregate covers the purchase, while USD item
 valuation stays unknown. Unresolved ordinary USD costs still make booking

@@ -25,13 +25,11 @@ import { databaseForTransaction } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import {
-  decide,
-  reconcileNow,
-  recordSubject,
-  type DecisionInput,
-  type ScopeRef,
-} from "~/server/kernel/api";
+import type { DecisionInput, ScopeRef } from "~/server/kernel/api";
+import { recordSubject } from "~/server/kernel/keys";
+
+/** The kernel's runtime, loaded on use so entity writers do not load its graph. */
+const kernel = () => import("~/server/kernel/api");
 
 import {
   fieldsPlanOf,
@@ -182,7 +180,7 @@ export async function recordFieldEdits(
     );
   }
   if (rechecks.length) decisions[0] = { ...decisions[0]!, scopes: rechecks };
-  await decide(db, actor, decisions);
+  await (await kernel()).decide(db, actor, decisions);
   return fields.some(({ field }) => field.apply === "auto")
     ? { kind: FIELDS_SCOPE, key: recordScopeKey(plan.entity, recordId) }
     : null;
@@ -248,7 +246,8 @@ export async function settleFieldEdits(
     ),
   ];
   const scope = await recordFieldEdits(db, actor, plan, recordId, edits);
-  if (scope) await reconcileNow(db, [scope], { waitMs: 2_000 });
+  if (scope)
+    await (await kernel()).reconcileNow(db, [scope], { waitMs: 2_000 });
 }
 
 /** Which of these fields Cubby holds: no assignment decision is in force on them. */
@@ -300,10 +299,11 @@ export async function cubbyHeldFields(
 
 /**
  * An entity writer's values with the `fields` columns held back: write
- * `values`, then call `settle` in the same transaction, which records the
- * edits as decisions and applies the held columns. A create writes every
- * column, owned ones included (a NOT NULL column needs its first value), and
- * records the creator's values as decisions; it passes no `before`.
+ * `values` (a create leaves the held columns DEFAULT), then call `settle` in
+ * the same transaction, which emits the write's kernel keys, records the
+ * edits as decisions and applies the held columns through the `fields` scope.
+ * A create passes no `before`. For the shared writers, which emit their own
+ * keys, use {@link splitFieldsValues} and {@link settleFieldEdits}.
  */
 export type HeldFieldsValues<V> = {
   values: V;
@@ -324,16 +324,26 @@ export function holdFieldsValues<V extends object>(
   mode: "create" | "update" = "update",
 ): HeldFieldsValues<V> {
   const plan = fieldsPlanOf(entity);
-  const { authored, owned } =
-    mode === "create"
-      ? { authored: written, owned: {} }
-      : splitFieldsValues(plan, written);
+  const { authored, owned } = splitFieldsValues(plan, written);
   return {
     values: authored,
     held: Object.keys(owned),
-    settle: (db, actor, recordId, before, changes) =>
-      settleFieldEdits(
-        db instanceof Database ? db : databaseForTransaction(db),
+    async settle(db, actor, recordId, before, changes) {
+      const database = db instanceof Database ? db : databaseForTransaction(db);
+      if (plan)
+        await (
+          await kernel()
+        ).emitWrites(database, {
+          table: plan.table,
+          ids: [recordId],
+          columns: Object.entries(authored).flatMap(([key, value]) =>
+            value === undefined ? [] : [key],
+          ),
+          entity,
+          created: mode === "create",
+        });
+      await settleFieldEdits(
+        database,
         actor,
         plan,
         recordId,
@@ -349,6 +359,7 @@ export function holdFieldsValues<V extends object>(
                 ),
               )
             : undefined),
-      ),
+      );
+    },
   };
 }
