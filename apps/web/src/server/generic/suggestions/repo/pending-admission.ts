@@ -6,5 +6,5 @@ export type SuggestionRecordSelection = {
 };
 
 export const recommendationScopes = {
-  connection: sql`s.subject->>'scope' LIKE 'connection.%'`,
+  connection: sql`s.subject->>${"scope"} LIKE 'connection.%'`,
 };

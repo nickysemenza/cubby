@@ -346,7 +346,7 @@ export async function activeSweepFor(db: Database, family: string) {
         eq(run.purpose, "sweep"),
         inArray(run.status, ["running", "paused_auth"]),
         sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${run.input}->'families') covered
-          WHERE covered->>'family' = ${family} AND coalesce(covered->'scope', '{}'::jsonb) = '{}'::jsonb)`,
+          WHERE covered->>'family' = ${family} AND coalesce(covered->${"scope"}, '{}'::jsonb) = '{}'::jsonb)`,
       ),
     )
     .limit(1);
