@@ -4,12 +4,13 @@ import { z } from "zod";
 import { fieldAnswer } from "~/server/ai/fields/repo/field-answer";
 import { fieldReviewPlan } from "~/server/ai/fields/repo/plan";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { ask, answer, decision } from "~/server/db/kernel-schema";
 import { decideConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { authoredFieldWriter } from "~/server/generic/machinery/repo/field-decisions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { householdWrite } from "~/server/kernel/gate";
 
 import type { Review } from "./review";
 
@@ -110,7 +111,7 @@ export async function reviewGap(
       !z.uuid().safeParse(value).success
         ? await resolveOrThrow(db, plan.field.reference, value)
         : value;
-    return withTransactionDatabase(db, async (tx) => {
+    return householdWrite(db, async (tx) => {
       const { decide } = await import("~/server/kernel/api");
       const subject = `${captured.entity}:${captured.recordId}`;
       const decisions = [];
