@@ -162,7 +162,8 @@ describe("Run Pass admission", () => {
       attempts: 1,
     });
     if (!resumed) throw new Error("Missing resumed execution");
-    expect(resumed.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
+    expect(resumed.availableAt).toEqual(fundingDeadline);
+    await (await import("~/server/kernel/api")).releaseFundingWaits(ctx.db);
     const claimed = await runPassFixture(ctx.db, id);
     if (!claimed) throw new Error("Missing claim");
     const [owner] = await getDb(ctx.db)
@@ -214,7 +215,7 @@ describe("Run Pass admission", () => {
     });
   });
 
-  // Progress must use the same Job generation as publication; an old Worker
+  // Progress must use the same Pass generation as publication; an old Worker
   // must not retain a heartbeat after a member pauses its execution.
   it("records current Pass progress and fences progress after pause", async () => {
     const id = await ensureRun(ctx.db, ctx.actor, {

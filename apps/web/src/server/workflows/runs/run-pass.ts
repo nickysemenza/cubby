@@ -146,7 +146,7 @@ async function advance(
     before.status === "paused_auth" &&
     before.failureCode === "execution_limit"
   ) {
-    // Only the funding window's end or an explicit launch lifts a funding pause.
+    // Only the funding window's end or a funding release lifts this pause.
     const pending = await pendingFundingResumeAt(db, runId);
     if (
       pending &&

@@ -86,7 +86,7 @@ decision. The infrastructure it depends on:
 The agent runtime (Agents SDK, pi-durable, MCP client) stays off every page
 request: the exported Durable Object is a shell that loads
 `server/domains/purchase-agent/service/run-agent.ts` on its first event, and the
-Job handler loads the dispatch host only when a purchase dispatch is due.
+dispatch Pass loads the host when its Run is due.
 `apps/web/tooling/checks/check-server-closure.ts` reports the static entry,
 browser API bootstrap, combined page path and total output; the API bootstrap
 includes the dispatch adapter's static imports, while individual operation

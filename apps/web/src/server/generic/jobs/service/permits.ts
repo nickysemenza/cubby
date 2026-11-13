@@ -291,17 +291,15 @@ export async function runPermit(
 
 /**
  * A permit for the earliest owed work: now, delayed, or left to the cron.
- * `parallel` permits are sent only for work due now.
  */
-export async function sendSuccessor(
+async function sendSuccessor(
   { db, drains, ports }: PermitRuntime,
   source: string,
-  parallel = 1,
 ) {
   const at = await nextDueAt(db, nextFragments(drains));
   if (!at) return;
   const delay = at.getTime() - Date.now();
   if (delay > MAX_PERMIT_DELAY_MS) return;
   if (delay > 0) return ports.send(at, source);
-  for (let index = 0; index < parallel; index++) await ports.send(null, source);
+  await ports.send(null, source);
 }

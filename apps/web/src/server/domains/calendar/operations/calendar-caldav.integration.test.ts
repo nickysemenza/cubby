@@ -128,7 +128,13 @@ describe("CalDAV canonical mutation seam", () => {
       name: "CalDAV task",
       dueDate: "2026-09-07",
     });
-    expect(await getDb(ctx.db).query.auditLog.findMany()).toHaveLength(2);
+    expect(
+      await getDb(ctx.db).query.auditLog.findMany({
+        where: {
+          RAW: (row, { isNull }) => relationalSql(row, isNull(row.provenance)),
+        },
+      }),
+    ).toHaveLength(1);
 
     let committed: CalDavCommitReceipt | undefined;
     await expect(

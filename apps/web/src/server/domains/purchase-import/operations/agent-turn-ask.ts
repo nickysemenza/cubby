@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { defineAsk } from "~/server/kernel/api";
 
-export const agentTurnResponse = z.object({
+const agentTurnResponse = z.object({
   status: z.number().int(),
   headers: z.record(z.string(), z.string()),
   body: z.string(),

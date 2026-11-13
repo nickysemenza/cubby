@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
 import { kernelPass } from "~/server/db/kernel-schema";
@@ -24,15 +25,13 @@ import { rebuildDeclarations, requestDerivedRebuild } from "./rebuild";
 
 describe("hourly deterministic snapshot Pass", () => {
   const ctx = withTestDb();
-  const cursor = async () =>
-    snapshotCursor(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(kernelPass)
-          .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS))
-      )[0]?.cursor,
-    );
+  const cursor = async () => {
+    const [row] = await getDb(ctx.db)
+      .select()
+      .from(kernelPass)
+      .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS));
+    return snapshotCursor(z.json().parse(row?.cursor ?? null));
+  };
   const stubbed = (): DerivedComputes =>
     Object.fromEntries(
       Object.keys(derivedComputes).map((key) => [
