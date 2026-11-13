@@ -21,6 +21,7 @@ import { transactionImportRecord } from "~/server/db/retained-tables";
 import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import {
   sourceObservationColumns,
+  sourceObservationFactsFrom,
   sourceObservationFrom,
   sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -363,7 +364,7 @@ export async function updateSourceTransactionRecords(
       .from(
         "externalIds" in selector
           ? observationIdentities
-          : sourceObservationFrom,
+          : sourceObservationFactsFrom,
       )
       .where(selectorConditions(selector));
     let accountId;

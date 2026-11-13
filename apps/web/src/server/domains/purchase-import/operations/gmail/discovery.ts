@@ -445,6 +445,8 @@ export async function startMailDiscovery(
     paidGrant?: DiscoveryPaidGrant;
     /** The member who asked for this scan; their Runs are member-started. */
     requestedBy?: ActorContext;
+    /** Sender proofs already read for this pass. */
+    knownAttributions?: Parameters<typeof listGmailSyncTargets>[1];
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
   const grantDiscovery = async (runId: RunId) => {
@@ -458,7 +460,7 @@ export async function startMailDiscovery(
   };
   let started = 0;
   let running = 0;
-  const targets = await listGmailSyncTargets(db);
+  const targets = await listGmailSyncTargets(db, options.knownAttributions);
   const requested = options.target;
   const selected = requested
     ? targets.filter(

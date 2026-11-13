@@ -1,7 +1,7 @@
 import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -128,6 +128,8 @@ export async function publishGmailEvidence<T>(
     scope: EmailEvidenceWriteScope,
   ) => {
     assertEmailEvidenceScope(databaseForTransaction(tx), scope);
+    // Transaction-local: a contended member lock fails fast and frees the socket.
+    await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
     let observationId = initialObservationId;
     const evaluation = input.evaluation
       ? { ...input.evaluation, observationId }

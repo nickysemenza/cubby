@@ -22,6 +22,9 @@ import { classifyJobFailure } from "~/server/generic/jobs/failure";
 
 const log = createLogger("derived-rebuild");
 
+/** Pages committed by one permit. The 120s lease is renewed with each page. */
+const REBUILD_PAGE_BUDGET_MS = 20_000;
+
 /**
  * A dropped connection before a page commits retries the same cursor.
  * The release keeps the cursor-attempt streak and records the error, so page
@@ -51,8 +54,9 @@ export class DerivedRebuildBusyError extends Error {
 }
 
 /**
- * One page of the pass per call: a background permit is one unit. True while
- * the pass has more to do. Continuations carry no entity IDs or work ownership.
+ * Several pages of the pass per call, bounded by a wall budget. Each page
+ * still commits its cursor before the next one starts. True while the pass
+ * has more to do. Continuations carry no entity IDs or work ownership.
  */
 export async function rebuildDerived(
   db: Database,
@@ -67,9 +71,11 @@ export async function rebuildDerived(
   log.info("pass invocation started", { target: claim.target });
   const declarations = rebuildDeclarations();
   let current = { target: claim.target, afterId: claim.afterId };
+  const started = Date.now();
 
   try {
-    // A missing declaration resets the cursor first; the loop ends after one real page.
+    // A missing declaration resets the cursor first. Further pages run until
+    // the wall budget, and each committed page renews the lease.
     for (let page = 0; ; page++) {
       const index = declarations.findIndex(
         (entry) => entry.target === current.target,
@@ -196,7 +202,7 @@ export async function rebuildDerived(
         return false;
       }
       current = next;
-      break;
+      if (Date.now() - started >= REBUILD_PAGE_BUDGET_MS) break;
     }
     await releaseRebuild(db, claim.token);
     log.info("pass invocation yielded", { target: current.target });

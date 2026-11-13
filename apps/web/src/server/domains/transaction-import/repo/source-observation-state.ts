@@ -219,8 +219,20 @@ export const sourceObservationField = (
       THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE point_owner."reviewState" END
       FROM "SourceOccurrence" point_owner JOIN "SourceTransactionRecord" record ON record."occurrenceId"=point_owner.id WHERE record.id=${id})`;
   }
-  return sql`(SELECT observed.${sql.identifier(key)} FROM ${key === "historicalTransactionIds" ? sourceObservations : sourceObservationFacts} observed WHERE observed.id=${id})`;
+  if (key === "historicalTransactionIds") {
+    // Same sibling hop as matchState. A point read must not fold every observation.
+    return sql`coalesce((
+      SELECT array_agg(history.code ORDER BY history.code)
+      FROM "SourceTransactionRecord" point_record
+      CROSS JOIN LATERAL (${sourceHistoricalTransactionRows(sql`point_record.id`, sql`ARRAY[point_record."occurrenceId"]::uuid[]`)}) history
+      WHERE point_record.id=${id}
+    ), ARRAY[]::text[])`;
+  }
+  return sql`(SELECT observed.${sql.identifier(key)} FROM ${sourceObservationFacts} observed WHERE observed.id=${id})`;
 };
+
+/** Fact columns under the stored-table alias, without the global history fold. */
+export const sourceObservationFactsFrom = sql`${sourceObservationFacts} "SourceTransactionRecord"`;
 
 export const SOURCE_HELD_REASON =
   "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged; money stays unchanged until reviewed.";

@@ -253,6 +253,7 @@ export async function resolveImportVendor(
   db: Db,
   input: ImportVendorInput,
   actor: ActorContext,
+  knownCandidates?: Awaited<ReturnType<typeof importVendorCandidates>>,
 ): Promise<VendorId> {
   const name = input.name.trim();
   const proof = await senderProofVendor(db, input.sender);
@@ -269,7 +270,8 @@ export async function resolveImportVendor(
       { name, address: proof.address, evidence: input.evidence },
       actor,
     );
-  const candidates = await importVendorCandidates(db, input);
+  const candidates =
+    knownCandidates ?? (await importVendorCandidates(db, input));
   const platformAlias = candidates.find(
     ({ candidate, sharedPlatform }) =>
       candidate.exactNameMatch &&

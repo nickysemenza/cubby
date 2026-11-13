@@ -179,6 +179,16 @@ export const imageProcessingChildren = [
         name: "ImageProcessingAttempt_device_idx",
         on: [{ sql: "({executor}->>'deviceId')" }],
       },
+      {
+        name: "ImageProcessingAttempt_device_started_idx",
+        on: ["startedAt"],
+        where: "({executor}->>'kind') = 'device'",
+      },
+      {
+        name: "ImageProcessingAttempt_device_completed_idx",
+        on: ["completedAt"],
+        where: "({executor}->>'kind') = 'device' AND {state} = 'ready'",
+      },
       { name: "ImageProcessingAttempt_submission_idx", on: ["submissionId"] },
     ],
     checks: [

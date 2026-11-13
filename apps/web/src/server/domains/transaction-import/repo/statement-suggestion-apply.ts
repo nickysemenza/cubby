@@ -51,7 +51,7 @@ import {
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import {
-  sourceObservationFrom,
+  sourceObservationFactsFrom,
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
@@ -927,7 +927,7 @@ async function applySupersede(
     externalId: string;
   }>(
     sql`
-    SELECT source, "externalId" FROM ${sourceObservationFrom}
+    SELECT source, "externalId" FROM ${sourceObservationFactsFrom}
     WHERE id = ANY(${uuidArrayParam(supersede.pendingRowIds)}) AND ${notDeleted("SourceTransactionRecord")}
   `,
     "objects",

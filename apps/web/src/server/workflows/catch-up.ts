@@ -126,7 +126,12 @@ export async function retireCoordinators(db: Database, before: Date) {
  * follow from discovery. Product research is never started here: it is a
  * member's Burn-down (ADR 0010).
  */
-export async function discoverPurchases(db: Database) {
+export async function discoverPurchases(
+  db: Database,
+  options: {
+    senderAfter?: { mailboxId: string; afterId: string } | null;
+  } = {},
+) {
   const [
     { startMailDiscovery },
     { gmailOAuthConfigured },
@@ -144,14 +149,22 @@ export async function discoverPurchases(db: Database) {
   await reconcileWorkflowRuns(db);
   const { learnAcceptedSenders } =
     await import("~/server/domains/purchase-import/repo/sender-attribution");
+  const { readSenderAttributions } =
+    await import("~/server/domains/purchase-import/repo/sender-attribution-read");
   const { withTransactionDatabase } = await import("~/server/db/helpers");
+  const knownAttributions = await readSenderAttributions(db);
   const senders = await withTransactionDatabase(db, (tx) =>
-    learnAcceptedSenders(tx, systemActor()),
+    learnAcceptedSenders(tx, systemActor(), knownAttributions),
   );
   const pending = await (
     await import("~/server/domains/purchase-import/repo/mail-import-run")
-  ).importPendingEmails(db);
-  if (senders.more)
+  ).importPendingEmails(db, {
+    knownAttributions,
+    senderAfter: options.senderAfter,
+  });
+  const mail = await startMailDiscovery(db, { knownAttributions });
+  // Last publish wins the Job input. Inner backlog republishes omit the cursor.
+  if (senders.more || pending.senderAfter)
     await (
       await import("~/server/workflows/background-tasks/publish")
     ).publishBackgroundTasks(
@@ -160,11 +173,15 @@ export async function discoverPurchases(db: Database) {
         {
           kind: "maintenance.purchase-discovery",
           requestedAt: new Date().toISOString(),
+          ...(pending.senderAfter ? { senderAfter: pending.senderAfter } : {}),
         },
       ],
-      { source: "sender-attribution-continuation" },
+      {
+        source: pending.senderAfter
+          ? "mail-sender-page"
+          : "sender-attribution-continuation",
+      },
     );
-  const mail = await startMailDiscovery(db);
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,
     mailPassesRunning: mail.running,

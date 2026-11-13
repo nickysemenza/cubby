@@ -19,12 +19,20 @@ import {
   emailCandidateObservation,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
+import { findPgError } from "~/server/errors/db-errors";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { mailDiscoveryBackpressure } from "~/server/workflows/runs/lifecycle";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import { syntheticRetainedMail } from "../../service/gmail/retained-mail.fixtures";
+import { publishGmailEvidence } from "./admitted-source";
 import { loadMailAttachmentOriginal } from "./attachment-original";
 import {
   productionOrderMailAttachmentStorage,
@@ -453,6 +461,75 @@ describe("Gmail final publication concurrency", () => {
       read,
     };
   }
+  it("defers a waiter when the member lock times out", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic lock-timeout member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    await enqueueJob(ctx.db, {
+      key: "maintenance.purchase-discovery",
+      kind: "maintenance.purchase-discovery",
+      input: {
+        kind: "maintenance.purchase-discovery",
+        requestedAt: "2026-01-15T14:00:00.000Z",
+      },
+    });
+    const [queued] = await readJobs(ctx.db, {
+      key: "maintenance.purchase-discovery",
+    });
+    if (!queued) throw new Error("Missing discovery job");
+    const claim = await claimJob(ctx.db, queued.id);
+    if (!claim) throw new Error("Missing discovery claim");
+    const held = signal<void>();
+    const release = signal<void>();
+    const holder = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM "LedgerParty" WHERE id = ${party.id}::uuid FOR NO KEY UPDATE`,
+      );
+      held.resolve();
+      await release.promise;
+    });
+    await held.promise;
+    let caught: unknown;
+    let deferred: Error | undefined;
+    try {
+      await withJobExecution(ctx.db, claim, async () => {
+        try {
+          await publishGmailEvidence(
+            ctx.db,
+            {
+              ledgerPartyId: party.id,
+              mailboxId: "synthetic-lock-timeout",
+              messageId: "synthetic-lock-timeout",
+              executionPolicy: "classification_only",
+              expected: null,
+              recordHandlingReceipt: false,
+            },
+            async () => null,
+          );
+        } catch (error) {
+          // The drain classifies this wait while the Job execution is current.
+          caught = error;
+          deferred = mailDiscoveryBackpressure(error as Error);
+          throw error;
+        }
+      });
+    } catch {
+      // The publication wait is the assertion subject.
+    } finally {
+      release.resolve();
+      await holder;
+    }
+    expect(findPgError(caught)?.code).toBe("55P03");
+    expect(classifyJobFailure(caught as Error).kind).toBe("transient");
+    expect(deferred).toBeInstanceOf(JobDeferredError);
+    if (!(deferred instanceof JobDeferredError))
+      throw new Error("Expected a deferred lock wait");
+    expect(deferred.reason).toBe("provider_capacity");
+    expect(deferred.until.getTime()).toBeGreaterThan(Date.now() + 10_000);
+  });
+
   describe("attachment disposal publication", () => {
     it("keeps corrected bytes readable when an older committed cleanup deletes its captured legacy key later", async () => {
       const f = await disposalFixture();

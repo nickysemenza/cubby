@@ -213,12 +213,15 @@ export async function nextDueAt(
   db: RepositoryQueryInput,
   drains: readonly SQL[],
 ): Promise<Date | null> {
-  const until = sql`CASE WHEN ${job.state} = ${"running"} THEN ${job.leaseExpiresAt} ELSE ${job.availableAt} END`;
-  const jobs = sql`(SELECT min(${until}) FROM "Job" WHERE ${inArray(job.state, ["queued", "retry_wait", "running"])})`;
+  // One index probe per state. `least` ignores a null probe, and an
+  // `infinity` parked row stays never-due (`Number.isFinite` below).
+  const queued = sql`(SELECT ${job.availableAt} FROM "Job" WHERE ${job.state} = ${"queued"} ORDER BY ${job.availableAt} LIMIT 1)`;
+  const retryWait = sql`(SELECT ${job.availableAt} FROM "Job" WHERE ${job.state} = ${"retry_wait"} ORDER BY ${job.availableAt} LIMIT 1)`;
+  const running = sql`(SELECT min(${job.leaseExpiresAt}) FROM "Job" WHERE ${job.state} = ${"running"})`;
   const result = await repositoryQueries(db).execute<{ at: number | null }>(
     // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
     sql`SELECT (extract(epoch FROM least(${sql.join(
-      [jobs, ...drains.map((next) => sql`(${next})`)],
+      [queued, retryWait, running, ...drains.map((next) => sql`(${next})`)],
       sql`, `,
     )})) * 1000)::float8 AS at`,
   );

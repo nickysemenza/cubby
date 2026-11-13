@@ -42,7 +42,13 @@ export async function reconcileRecordedFinancialEvidence(
   );
   const heads = ids.length
     ? await getDb(db)
-        .select(sourceObservationColumns)
+        .select({
+          acceptedTransactionId: sourceObservationColumns.acceptedTransactionId,
+          transactionShortcode: sourceObservationColumns.transactionShortcode,
+          chargeKey: sourceObservationColumns.chargeKey,
+          withdrawnAt: sourceObservationColumns.withdrawnAt,
+          amount: sourceObservationColumns.amount,
+        })
         .from(
           sql`${sourceObservationsForPage(ids.map((row) => row.id))} "SourceTransactionRecord"`,
         )
