@@ -67,7 +67,6 @@ import {
   bindingWrites,
   defineReconciler,
   recordSubject,
-  recordIdentity,
   source,
   type Binding,
   type ColumnRef,
@@ -894,16 +893,7 @@ export const purchaseEvent = defineReconciler<Input>({
     );
     const resolvedVendor =
       selected ?? checked[0]!.find((result) => result.row)?.row ?? null;
-    const sources = input.occurrences.filter(
-      (row) =>
-        !row.deletedAt &&
-        (row.acceptedTransactionId === transaction.id ||
-          recordIdentity(
-            { kind: "bankEvent", key: row.id },
-            "FinancialTransaction",
-            "transaction",
-          ) === transaction.id),
-    );
+    const sources = input.occurrences.filter((row) => !row.deletedAt);
     const blocker = spendingBlocker({
       facts: {
         source: {
