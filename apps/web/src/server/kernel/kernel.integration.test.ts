@@ -1209,11 +1209,11 @@ describe("evidence-facts kernel", () => {
       sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() + interval '1 second'`,
     );
     await q.execute(
-      sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() - interval '1 second' WHERE key = ${claimed[0]!.key}`,
+      sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() - interval '1 second' WHERE "scopeKey" = ${claimed[0]!.key}`,
     );
     await renewScopeClaims(q, claimed);
     const result = await q.execute<{ key: string; renewed: boolean }>(sql`
-      SELECT key, "claimDeadline" > now() + interval '60 seconds' AS renewed FROM "ScopeDirty"`);
+      SELECT "scopeKey" AS key, "claimDeadline" > now() + interval '60 seconds' AS renewed FROM "ScopeDirty"`);
     expect(result.rows).toEqual(
       expect.arrayContaining([
         { key: claimed[0]!.key, renewed: false },
@@ -1831,7 +1831,7 @@ describe("evidence-facts kernel", () => {
       kernel.withAsk(ctx.db, fixture.categorize, {
         merchant: "Synthetic cached result",
       }),
-    ).rejects.toThrow("Synthetic Answer publication failure");
+    ).rejects.toThrow("Failed query:");
     expect(calls).toBe(1);
     await q.execute(sql`DROP TRIGGER synthetic_fail_answer ON "Answer"`);
     await q.execute(sql`UPDATE "Ask" SET "availableAt"=now()`);
@@ -1839,7 +1839,7 @@ describe("evidence-facts kernel", () => {
       await kernel.withAsk(ctx.db, fixture.categorize, {
         merchant: "Synthetic cached result",
       }),
-    ).toBe("Groceries");
+    ).toEqual({ category: "Groceries" });
     expect(calls).toBe(1);
   });
 

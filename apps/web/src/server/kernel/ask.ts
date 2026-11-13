@@ -508,20 +508,32 @@ async function executeClaimed(
         results[index] = { status: "failed", error };
         return;
       }
-      clearInterval(heartbeat);
-      await commitAnswer(
-        db,
-        registry,
-        kind,
-        ask,
-        produced,
-        requesters.get(ask.id) ?? null,
-      );
-      await askResponseClaims
+      // Store the completed response before attempting database publication. A
+      // database failure must never cause another paid request for this hash.
+      const cached = await askResponseClaims
         .publish(ask.inputHash, cacheToken, JSON.stringify(produced))
-        // SILENT: the replay copy is rebuildable from the committed Answer.
-        .catch(() => undefined);
-      results[index] = { status: "answered", output: produced.output };
+        .catch(() => false);
+      try {
+        await commitAnswer(
+          db,
+          registry,
+          kind,
+          ask,
+          produced,
+          requesters.get(ask.id) ?? null,
+        );
+        results[index] = { status: "answered", output: produced.output };
+      } catch (error) {
+        await q.execute(sql`
+          UPDATE "Ask" SET state = ${cached ? ASK.queued : ASK.unknown},
+            "sentAt" = CASE WHEN ${cached} THEN NULL ELSE "sentAt" END,
+            "claimToken" = NULL, "claimDeadline" = NULL,
+            "availableAt" = now() + interval '1 second', "lastError" = ${rawError(error)}
+          WHERE id = ${ask.id}::uuid AND "claimToken" = ${ask.token}::uuid`);
+        results[index] = { status: "failed", error };
+      } finally {
+        clearInterval(heartbeat);
+      }
     }),
   );
   return results;
@@ -619,17 +631,47 @@ export async function runQueuedAsks(
   );
   const claimed = await claimAsks(db, runnable, limit);
   if (!claimed.length) return 0;
-  const entries = claimed.map((ask) => {
+  const entries: ClaimedEntry[] = [];
+  for (const ask of claimed) {
     const kind = registry.asks.get(ask.feature)!;
     const envelope = z
       .object({ input: z.unknown(), promptVersion: z.string() })
       .parse(ask.input);
-    return {
-      kind: { ...kind, promptVersion: envelope.promptVersion },
+    if (envelope.promptVersion !== kind.promptVersion) {
+      const cached = await askResponseClaims.claim(ask.inputHash);
+      if (cached.kind === "hit") {
+        await commitAnswer(
+          db,
+          registry,
+          { ...kind, promptVersion: envelope.promptVersion },
+          ask,
+          storedProduced.parse(JSON.parse(cached.value)),
+          null,
+        );
+        continue;
+      }
+      if (cached.kind === "claimed")
+        await askResponseClaims.release(ask.inputHash, cached.token);
+      await repositoryTransactionDatabase(db, async (tx) => {
+        const q = repositoryQueries(tx);
+        const nextEnvelope = askEnvelope(kind, envelope.input);
+        const nextHash = await inputHashOf(nextEnvelope);
+        const next = await ensureAsk(q, kind, nextEnvelope, nextHash, {});
+        await q.execute(sql`INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId", sequence, "cancelledAt")
+          SELECT ${next.id}::uuid, "scopeKind", "scopeKey", "runId", sequence, "cancelledAt" FROM "AskScope" WHERE "askId" = ${ask.id}::uuid
+          ON CONFLICT DO NOTHING`);
+        await q.execute(sql`UPDATE "Ask" SET "cancelledAt" = now(), "claimToken" = NULL, "claimDeadline" = NULL,
+          "lastError" = ${`Prompt version changed from ${envelope.promptVersion} to ${kind.promptVersion}; request re-keyed`}
+          WHERE id = ${ask.id}::uuid AND "claimToken" = ${ask.token}::uuid`);
+      });
+      continue;
+    }
+    entries.push({
+      kind,
       input: envelope.input,
       ask: { ...ask, maxAttempts: kind.maxAttempts },
-    };
-  });
+    });
+  }
   await executeClaimed(db, registry, entries, null, true);
   return claimed.length;
 }
@@ -642,6 +684,30 @@ export async function expireAsks(
   db: Database,
   registry: KernelRegistry,
 ): Promise<number> {
+  const lapsed = await repositoryQueries(db).execute<{
+    id: string;
+    inputHash: string;
+    feature: string;
+    promptVersion: string;
+  }>(sql`
+    SELECT id, "inputHash", feature, "promptVersion" FROM "Ask"
+    WHERE state = ${ASK.sent} AND "claimDeadline" <= now()`);
+  for (const row of lapsed.rows) {
+    const kind = registry.asks.get(row.feature);
+    if (!kind) continue;
+    const cached = await askResponseClaims.claim(row.inputHash);
+    if (cached.kind === "hit")
+      await commitAnswer(
+        db,
+        registry,
+        { ...kind, promptVersion: row.promptVersion },
+        row,
+        storedProduced.parse(JSON.parse(cached.value)),
+        null,
+      );
+    else if (cached.kind === "claimed")
+      await askResponseClaims.release(row.inputHash, cached.token);
+  }
   return repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
     const result = await q.execute<{
