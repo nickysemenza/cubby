@@ -111,7 +111,9 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
   });
   expect(calls).toHaveLength(0);
   await userEvent.click(trigger);
-  await waitFor(() => expect(screen.getByText("Loading…")).toBeVisible());
+  await waitFor(() =>
+    expect(screen.getByText("Loading evidence…")).toBeVisible(),
+  );
   releaseFailure();
   const retry = await screen.findByRole("button", {
     name: "Retry explanation",

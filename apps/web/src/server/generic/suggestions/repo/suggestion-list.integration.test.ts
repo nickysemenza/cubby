@@ -57,6 +57,12 @@ describe("cross-family Suggestion list", () => {
           field: "categoryId",
           pending: 1,
         }),
+        expect.objectContaining({
+          entity: "product",
+          field: "tags",
+          applied: 1,
+          pending: 0,
+        }),
       ],
     });
     for (const record of [current.output.id, proposed.output.id]) {

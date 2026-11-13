@@ -181,7 +181,7 @@ describe("preload deployment recovery", () => {
          assert.equal(event.defaultPrevented, false);
          assert.equal(scheduled, 0);`,
       ],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: { ...process.env, FORCE_COLOR: undefined } },
     );
     expect({ status: result.status, stderr: result.stderr }).toEqual({
       status: 0,

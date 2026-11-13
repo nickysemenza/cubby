@@ -273,6 +273,9 @@ describe("table density", () => {
         ]}
       />,
     );
+    // Start outside the cell so a spill under the previous pointer position
+    // cannot intercept Playwright's move to the source cell.
+    await userEvent.hover(view.getByTestId("head-0"));
     await userEvent.hover(view.getByTestId("cell-0"));
     await waitFor(() => expect(overlay()).not.toBeNull());
     const copy = overlay()?.querySelector<HTMLElement>(

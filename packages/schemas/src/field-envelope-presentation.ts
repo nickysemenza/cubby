@@ -419,7 +419,7 @@ const MACHINERY_LIST_COLUMN_LABEL = {
   actor: "Actor",
   gap: "Gap",
   attempts: "Attempts",
-  cost: "Cost",
+  cost: "Automation cost",
   eta: "ETA",
 } as const;
 
