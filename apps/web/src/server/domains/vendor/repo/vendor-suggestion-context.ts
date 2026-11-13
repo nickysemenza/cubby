@@ -7,6 +7,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -46,7 +47,7 @@ export async function loadVendorSuggestionContext(
     .select({
       shortcode: expense.shortcode,
       name: expense.name,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       purchase: purchase.shortcode,
       product: product.shortcode,
       productName: product.name,

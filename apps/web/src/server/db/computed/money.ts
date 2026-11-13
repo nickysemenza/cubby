@@ -15,7 +15,3 @@ export function minorToDollarsSql(
 ): SQL {
   return sql`${value}::${sql.raw(type)} / 100`;
 }
-
-export function dollarsToMinorSql(value: SQLWrapper): SQL<bigint> {
-  return sql<bigint>`round(${value}::numeric * 100)::bigint`;
-}

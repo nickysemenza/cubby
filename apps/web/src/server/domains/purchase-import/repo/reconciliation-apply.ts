@@ -1,4 +1,5 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -72,7 +73,11 @@ export async function applyReconciliationLine(
   if (existing && action.reuse) {
     [row] = await tx
       .update(expense)
-      .set({ ...action.fields, updatedAt: new Date() })
+      .set({
+        ...action.fields,
+        cost: nullableWholeCentToMinor(action.fields.cost),
+        updatedAt: new Date(),
+      })
       .where(eq(expense.id, existing.id))
       .returning();
     reused.add(existing.id);
@@ -96,7 +101,10 @@ export async function applyReconciliationLine(
         ),
       );
   } else {
-    row = await insertWithShortcode(tx, "expense", action.fields);
+    row = await insertWithShortcode(tx, "expense", {
+      ...action.fields,
+      cost: nullableWholeCentToMinor(action.fields.cost),
+    });
     audit.push({ entityKind: "expense", entityId: row.id, action: "create" });
   }
   if (!row) throw new Error("The reviewed Expense changed during commit.");

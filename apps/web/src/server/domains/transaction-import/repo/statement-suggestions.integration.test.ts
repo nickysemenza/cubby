@@ -30,6 +30,7 @@ import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -61,6 +62,7 @@ import {
   captureBackgroundQueue,
   drainStoredDerived,
 } from "~/server/testing/background-queue";
+import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import { sourceObservationFrom } from "./source-observation-state";
@@ -616,7 +618,9 @@ describe("statement Transaction suggestions", () => {
         expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
           [],
         );
-        expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+        expect(
+          await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+        ).toEqual([]);
       } finally {
         page.mockRestore();
         application.mockRestore();
@@ -1177,7 +1181,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .where(notDeleted(expense)),
     ).toEqual([{ cost: 40 }]);
@@ -1399,7 +1403,9 @@ describe("statement Transaction suggestions", () => {
         .where(eq(suggestionTable.id, pending.suggestionId)),
     ).toEqual([{ active: false, status: "superseded" }]);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([]);
   });
 
@@ -1442,7 +1448,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .where(notDeleted(expense)),
     ).toEqual([]);
@@ -1464,7 +1470,7 @@ describe("statement Transaction suggestions", () => {
     if (!proposal) throw new Error("Missing synthetic booking proposal");
     await accept(ctx, proposal);
     const before = await getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense)
       .where(notDeleted(expense));
     await record(
@@ -1491,7 +1497,7 @@ describe("statement Transaction suggestions", () => {
     await expect(accept(ctx, held)).rejects.toThrow(held.reviewReason);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .where(notDeleted(expense)),
     ).toEqual(before);
@@ -1565,7 +1571,7 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([{ status: "pending", amount: 30_000n }]);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .where(notDeleted(expense)),
     ).toEqual([{ cost: 300 }]);
@@ -2650,7 +2656,9 @@ describe("statement Transaction suggestions", () => {
       .select({ kind: financialTransaction.kind })
       .from(financialTransaction);
     expect(transactions).toEqual([{ kind: "interest" }]);
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(0);
   });
 
   it("holds checking-side loan payments for pairing and classifies loan credits", async () => {
@@ -2723,7 +2731,9 @@ describe("statement Transaction suggestions", () => {
         .from(financialTransaction)
         .where(eq(financialTransaction.kind, "account_transfer")),
     ).toEqual([]);
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(0);
   });
 
   // Failure mode: every recorded chunk regenerates the whole ledger.
@@ -3287,7 +3297,9 @@ describe("statement Transaction suggestions", () => {
         .select({ kind: financialTransaction.kind })
         .from(financialTransaction),
     ).toEqual([{ kind: "purchase" }]);
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(1);
   });
 
   it("accepts an unpaired card payment as a non-spending transaction", async () => {
@@ -3326,7 +3338,9 @@ describe("statement Transaction suggestions", () => {
         .select({ kind: financialTransaction.kind })
         .from(financialTransaction),
     ).toEqual(expect.arrayContaining([{ kind: "credit_card_payment" }]));
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(1);
   });
 
   // Failure modes: a cash-out from the member's own balance account is read
@@ -3437,7 +3451,9 @@ describe("statement Transaction suggestions", () => {
         })
         .from(financialTransaction),
     ).toEqual([{ kind: "account_transfer", amount: -15_000n }]);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
   });
 
   // Failure mode: a payment-app payee whose note reads like a merchant is

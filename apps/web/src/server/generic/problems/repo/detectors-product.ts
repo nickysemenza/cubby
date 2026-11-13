@@ -147,7 +147,7 @@ export const loadSoldButStockedPresenterTotals = async (
       .select({
         shortcode: product.shortcode,
         soldQuantity: sql<number>`sum(coalesce(abs(${expense.productQuantity}), 1))::double precision`,
-        proceeds: sql<number>`sum(${expense.cost})::double precision`,
+        proceeds: sql<number>`(sum(${expense.cost}) / 100.0)::double precision`,
       })
       .from(expense)
       .innerJoin(product, eq(product.id, expense.productId))
@@ -703,14 +703,14 @@ export const findWeightSoldProducts = async (
         -- read a count off the line), so it folds to 1 rather than dropping the
         -- row. Sign is carried by cost, so quantity is taken absolute.
         round(
-          (e."cost" / NULLIF(ABS(COALESCE(e."productQuantity", 1)), 0))::numeric,
+          (e."costMinor" / 100.0 / NULLIF(ABS(COALESCE(e."productQuantity", 1)), 0))::numeric,
           2
         ) AS unit_cost
       FROM ${expense} e
       WHERE ${notDeleted("e")}
         AND e."productId" IS NOT NULL
         AND e."lineKind" = 'principal'
-        AND e."cost" > 0
+        AND e."costMinor" > 0
     ),
     spread AS (
       SELECT

@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import {
   runOperation,
@@ -320,7 +321,11 @@ describe("retained mail source associations", () => {
     );
     expect(await outcomes()).toEqual(expected);
     expect(
-      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
+      (
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense)
+      )
         .map((row) => row.cost)
         .sort((a, b) => (a ?? 0) - (b ?? 0)),
     ).toEqual([10, 20]);
@@ -382,7 +387,7 @@ describe("retained mail source associations", () => {
       "EXAMPLE-102",
     ]);
     const costs = await getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense);
     expect(costs.map(({ cost }) => cost).sort()).toEqual([18, 24]);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
@@ -694,7 +699,7 @@ describe("retained mail source associations", () => {
       committed,
     );
     const costs = await getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense);
     expect(costs.reduce((sum, { cost }) => sum + (cost ?? Number.NaN), 0)).toBe(
       30,

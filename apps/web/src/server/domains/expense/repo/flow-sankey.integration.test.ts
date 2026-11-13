@@ -1,4 +1,5 @@
 import type { ExpenseFlowSankeyOut } from "@cubby/schemas/project";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -24,7 +25,7 @@ const principal = (
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name: `synthetic flow ${name}`,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     lineKind: "principal",
     date: "2026-09-20",
     costType: "materials",
@@ -186,7 +187,7 @@ describe("expenseFlowSankey", () => {
       });
       await insertWithShortcode(ctx.db, "expense", {
         name: `${name} line`,
-        cost: 10,
+        cost: 1000n,
         spendingCategoryId: category.id,
         purchaseId: purchase.id,
         date: "2026-09-20",
@@ -199,7 +200,7 @@ describe("expenseFlowSankey", () => {
     // 2 cents of tax round to 1 cent per category path.
     const tax = await insertWithShortcode(ctx.db, "expense", {
       name: "synthetic flow split tax",
-      cost: 0.02,
+      cost: 2n,
       purchaseId: purchase.id,
       date: "2026-09-20",
       costType: "materials",

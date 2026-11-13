@@ -65,7 +65,7 @@ describe("reviewed linked finance category suggestions", () => {
     const line = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture crew shirt line",
-      cost: 29.99,
+      cost: 2999n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -213,7 +213,7 @@ describe("reviewed linked finance category suggestions", () => {
       .where(eq(product.id, f.good.entityId));
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 20 })
+      .set({ cost: 2000n })
       .where(eq(expense.id, f.line.id));
     await expect(apply()).rejects.toThrow(/changed.*review again/i);
     expect(await stored()).toBeNull();
@@ -276,7 +276,7 @@ describe("reviewed linked finance category suggestions", () => {
     const f = await fixture();
     await insertWithShortcode(ctx.db, "expense", {
       name: "Fixture shipment tax",
-      cost: 2,
+      cost: 200n,
       date: "2026-09-01",
       costType: "materials",
       purchaseId: f.purchase.id,
@@ -285,7 +285,7 @@ describe("reviewed linked finance category suggestions", () => {
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture friend reimbursement",
-      cost: -8,
+      cost: -800n,
       date: "2026-09-01",
       costType: "materials",
       purchaseId: f.purchase.id,
@@ -294,7 +294,7 @@ describe("reviewed linked finance category suggestions", () => {
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture retired aggregate",
-      cost: 29.99,
+      cost: 2999n,
       date: "2026-09-01",
       costType: "materials",
       purchaseId: f.purchase.id,

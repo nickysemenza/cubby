@@ -856,7 +856,9 @@ describe("Mail import source admission", () => {
         .where(
           and(eq(expense.purchaseId, purchases[0]!.id), notDeleted(expense)),
         );
-      expect(spend.reduce((sum, row) => sum + (row.cost ?? 0), 0)).toBe(24);
+      expect(
+        spend.reduce((sum, row) => sum + Number(row.cost ?? 0n) / 100, 0),
+      ).toBe(24);
     },
   );
 });

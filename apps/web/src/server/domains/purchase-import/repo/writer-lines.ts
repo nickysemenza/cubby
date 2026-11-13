@@ -7,7 +7,11 @@ import type {
   ExtractedOrderCandidate,
   ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
-import { cents } from "@cubby/shared";
+import {
+  cents,
+  wholeCentToMinor,
+  nullableWholeCentToMinor,
+} from "@cubby/shared";
 import { eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -100,7 +104,10 @@ export async function writePurchaseLines(
         existing,
       );
       if (plan) {
-        const inserted = await insertWithShortcode(tx, "expense", plan);
+        const inserted = await insertWithShortcode(tx, "expense", {
+          ...plan,
+          cost: wholeCentToMinor(plan.cost),
+        });
         rowMutations.push({
           targetKind: "expense",
           targetId: inserted.id,
@@ -218,7 +225,10 @@ export async function writePurchaseLines(
           orderDate,
           unpriced,
         );
-        const inserted = await insertWithShortcode(tx, "expense", plan.values);
+        const inserted = await insertWithShortcode(tx, "expense", {
+          ...plan.values,
+          cost: nullableWholeCentToMinor(plan.values.cost),
+        });
         productLines.push({ lineIndex, productId, expenseId: inserted.id });
         rowMutations.push({
           targetKind: "expense",

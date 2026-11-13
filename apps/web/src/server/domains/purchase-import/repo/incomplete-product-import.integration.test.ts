@@ -12,6 +12,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -51,6 +52,7 @@ import {
   createProductIdentityFixture,
   makeProductInput,
   makeExpenseInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -158,7 +160,7 @@ describe("incomplete itemized purchase identity", () => {
       findingIds: [],
     });
     const rows = await getDb(ctx.db)
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(and(eq(expense.purchaseId, waiting.id), notDeleted(expense)));
     expect(
@@ -231,7 +233,7 @@ describe("incomplete itemized purchase identity", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: waiting.id,
       name: "Synthetic partial charge",
-      cost: 3,
+      cost: 300n,
       date: "2032-03-04",
       costType: "materials",
       lineKind: "principal",
@@ -259,7 +261,7 @@ describe("incomplete itemized purchase identity", () => {
     const result = await importVendorOrder(ctx.db, input, ctx.actor.userId);
     expect(result.findingIds).toHaveLength(1);
     const rows = await getDb(ctx.db)
-      .select({ cost: expense.cost, name: expense.name })
+      .select({ cost: expenseCostDollarsSql(), name: expense.name })
       .from(expense)
       .where(and(eq(expense.purchaseId, waiting.id), notDeleted(expense)));
     expect(rows).toEqual([{ cost: 3, name: "Synthetic partial charge" }]);
@@ -309,7 +311,7 @@ describe("incomplete itemized purchase identity", () => {
       const purchaseId = parseEntityId("purchase", first.purchaseId);
       const lines = () =>
         getDb(ctx.db)
-          .select()
+          .select(dollarExpenseColumns())
           .from(expense)
           .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)));
       const coverage = async () =>
@@ -738,7 +740,7 @@ describe("incomplete itemized purchase identity", () => {
       const items = await getDb(ctx.db).select().from(product);
       expect(items).toHaveLength(1);
       const lines = await getDb(ctx.db)
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.purchaseId, purchaseId));
       expect(
@@ -770,7 +772,7 @@ describe("incomplete itemized purchase identity", () => {
       expect(await getDb(ctx.db).select().from(product)).toEqual(items);
       expect(
         await getDb(ctx.db)
-          .select()
+          .select(dollarExpenseColumns())
           .from(expense)
           .where(eq(expense.purchaseId, purchaseId)),
       ).toEqual(lines);
@@ -809,7 +811,7 @@ describe("incomplete itemized purchase identity", () => {
       });
       expect(
         await getDb(ctx.db)
-          .select()
+          .select(dollarExpenseColumns())
           .from(expense)
           .where(eq(expense.purchaseId, savedPurchaseId)),
       ).toEqual([]);
@@ -850,7 +852,9 @@ describe("incomplete itemized purchase identity", () => {
         await importVendorOrder(ctx.db, input, ctx.actor.userId),
       ).toMatchObject({ outcome: "replayed", purchaseId: first.purchaseId });
       expect(await getDb(ctx.db).select().from(product)).toHaveLength(1);
-      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual([]);
     },
   );
 
@@ -866,7 +870,9 @@ describe("incomplete itemized purchase identity", () => {
     ];
     const imported = await importVendorOrder(ctx.db, input, ctx.actor.userId);
     expect(await getDb(ctx.db).select().from(product)).toEqual([]);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     expect(
       await getDb(ctx.db)
         .select()
@@ -911,7 +917,9 @@ describe("incomplete itemized purchase identity", () => {
     expect(await listProductPurchases(ctx.db, keeper.id)).toMatchObject([
       { source: "link", movementKinds: [] },
     ]);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     const [association] = await getDb(ctx.db)
       .select()
       .from(importSourceOrder)
@@ -1020,7 +1028,7 @@ describe("incomplete itemized purchase identity", () => {
       .from(purchase)
       .where(eq(purchase.shortcode, committed.items[0]!.purchaseId!));
     const lines = await getDb(ctx.db)
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(eq(expense.purchaseId, saved!.id));
     const service = lines.find((line) => line.name.endsWith("service"));
@@ -1083,7 +1091,9 @@ describe("incomplete itemized purchase identity", () => {
         defaultTrade: "other",
       });
       expect(committed.items[0]?.purchaseId).toBeTruthy();
-      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual([]);
       expect(await getDb(ctx.db).select().from(product)).toEqual([]);
       expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
         1,

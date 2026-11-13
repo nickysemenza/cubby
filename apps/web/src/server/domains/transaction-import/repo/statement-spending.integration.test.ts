@@ -141,7 +141,7 @@ describe("statement spending review and re-import", () => {
     Number(
       (
         await getDb(ctx.db).execute<{ total: string }>(
-          sql`SELECT coalesce(sum(cost),0)::text AS total FROM "Expense" WHERE "deletedAt" IS NULL`,
+          sql`SELECT (coalesce(sum("costMinor"),0) / 100.0)::text AS total FROM "Expense" WHERE "deletedAt" IS NULL`,
         )
       ).rows[0]!.total,
     );
@@ -425,7 +425,7 @@ describe("statement spending review and re-import", () => {
     );
     expect(await total()).toBe(42.5);
     expect(await getDb(ctx.db).query.expense.findMany()).toMatchObject([
-      { costType: "services", cost: 42.5 },
+      { costType: "services", cost: 4250n },
     ]);
     expect(
       await getDb(ctx.db).query.financialTransaction.findMany(),

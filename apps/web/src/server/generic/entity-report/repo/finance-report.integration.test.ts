@@ -1,7 +1,7 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -71,7 +71,7 @@ describe("finance entity reports", () => {
     insertWithShortcode(ctx.db, "expense", {
       purchaseId,
       name,
-      cost,
+      cost: nullableWholeCentToMinor(cost),
       date: "2026-09-01",
       lineKind: "principal",
       costType: "materials",
@@ -357,7 +357,7 @@ describe("finance entity reports", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Household contribution",
-      cost: -100,
+      cost: -10000n,
       economicRole: "reimbursement",
       date: "2026-09-01",
       lineKind: "principal",

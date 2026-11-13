@@ -267,7 +267,7 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     productId: product.id,
     purchaseId: purchase.id,
     date: "2026-09-01",
-    cost: 10,
+    cost: 1000n,
   });
   await unwrapDb(ctx.db).execute(
     sql`INSERT INTO "ExpenseAttribution" ("expenseId",role,"ledgerPartyId",weight) VALUES (${line.id},${contributionRole.enum.beneficiary},NULL,1)`,
@@ -279,7 +279,7 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     productId: product.id,
     purchaseId: purchase.id,
     date: "2026-09-01",
-    cost: 5,
+    cost: 500n,
   });
   await unwrapDb(ctx.db).execute(
     sql`INSERT INTO "ExpenseAttribution" ("expenseId",role,"ledgerPartyId",weight) VALUES (${namedLine.id},${contributionRole.enum.beneficiary},${person.id},1)`,
@@ -386,7 +386,7 @@ it("distinguishes no acquisition, multiple acquisitions, and explicit Household 
       name,
       productId: product.id,
       date: "2026-09-01",
-      cost: 1,
+      cost: 100n,
     });
   const multiple = await loadFieldResolutionEvidence(
     ctx.db,
@@ -576,7 +576,7 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
     productId: product.id,
     purchaseId: purchase.id,
     date: "2026-09-01",
-    cost: 10,
+    cost: 1000n,
     costType: "materials",
     lineKind: "principal",
   });

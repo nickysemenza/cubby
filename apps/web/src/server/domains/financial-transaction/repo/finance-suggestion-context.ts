@@ -167,7 +167,7 @@ export async function loadFinanceSuggestionContext(
   const lines = rowsSchema.parse(
     await database.execute(
       sql`
-    SELECT e.shortcode, e.name, e.cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
+    SELECT e.shortcode, e.name, (e."costMinor"::float8 / 100) AS cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
       p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", (SELECT b.name FROM "Vendor" b WHERE b.id=g."brandId" AND ${notDeleted("b")}) AS "brandName", g.model, g.notes AS "productNotes",
       pc.shortcode AS "productCategoryId", pc.name AS "productCategory",
       e."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory",

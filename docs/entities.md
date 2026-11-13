@@ -768,7 +768,7 @@ distinct. Preserve declaration order rather than ranking cells.
 
 Every `chart` path must end at Expense. `entity.monthlyExpenseSpend` returns the current household
 calendar month and eleven predecessors, oldest first, zero-filled; it sums distinct live actual
-Expense costs (credits included), rounds to cents after summing, and excludes planned lines.
+Expense costs (credits included) in exact cents and excludes planned lines.
 Location charts describe stored products' expense history, not expenses incurred there. Product
 seller rankings count distinct actual Purchases containing the Product through its Expense evidence,
 keeping purchase count and last-purchased date. Product purchase-project context follows its own

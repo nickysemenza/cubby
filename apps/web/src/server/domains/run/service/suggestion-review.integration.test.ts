@@ -731,7 +731,7 @@ describe("Suggestion review", () => {
     if (!row) throw new Error("Synthetic finance suggestion was not persisted");
     await getDb(ctx.db)
       .update(expenseTable)
-      .set({ cost: 13 })
+      .set({ cost: 1300n })
       .where(eq(expenseTable.id, line.id));
     await expect(
       acceptSuggestion(ctx.db, context, { id: row.id }),

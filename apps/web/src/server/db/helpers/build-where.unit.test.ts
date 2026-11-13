@@ -610,7 +610,7 @@ describe("expenseScaffold.prepareWhere", () => {
     {
       name: "costSign",
       filters: { costSign: "negative" as const },
-      contains: '"cost" < 0 THEN',
+      contains: '"costMinor" < 0 THEN',
     },
     {
       name: "disposalPurchasePresenceFilter",
@@ -620,7 +620,7 @@ describe("expenseScaffold.prepareWhere", () => {
     {
       name: "costPresenceFilter",
       filters: { costPresenceFilter: "none" as const },
-      contains: '"Expense"."cost" is null',
+      contains: '"costMinor"::numeric / 100) is null',
     },
     {
       name: "productQuantityPresenceFilter",
@@ -638,8 +638,16 @@ describe("expenseScaffold.prepareWhere", () => {
       contains: '"date" >=',
     },
     // Zero is a meaningful bound: `costMax: 0` is the credits-only worklist.
-    { name: "costMax", filters: { costMax: 0 }, contains: '"cost" <=' },
-    { name: "costMin", filters: { costMin: 0 }, contains: '"cost" >=' },
+    {
+      name: "costMax",
+      filters: { costMax: 0 },
+      contains: '"costMinor"::numeric / 100) <=',
+    },
+    {
+      name: "costMin",
+      filters: { costMin: 0 },
+      contains: '"costMinor"::numeric / 100) >=',
+    },
     {
       name: "productQuantityMax",
       filters: { productQuantityMax: -1 },

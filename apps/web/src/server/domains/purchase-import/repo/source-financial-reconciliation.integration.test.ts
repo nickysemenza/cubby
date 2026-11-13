@@ -32,6 +32,7 @@ import { jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   createProductIdentityFixture,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 import {
   patchRunFindingData,
@@ -117,7 +118,7 @@ describe("accepted source financial reconciliation", () => {
     if (!recorded) throw new Error("Synthetic reward Purchase missing");
     expect(recorded.statedTotal).toBe(19657n);
     const lines = await database
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(eq(expense.purchaseId, recorded.id));
     expect(lines).toHaveLength(2);
@@ -235,7 +236,7 @@ describe("accepted source financial reconciliation", () => {
       payments: await database.select().from(purchasePaymentEvidence),
       allocations: await database.select().from(financialTransactionAllocation),
       expenses: await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.purchaseId, accepted.id)),
     });
@@ -502,7 +503,7 @@ describe("accepted source financial reconciliation", () => {
     const snapshot = async () => ({
       state: await state(),
       expenses: await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.id, initial.expenses[0]!.id)),
       findings: await database
@@ -741,7 +742,7 @@ describe("accepted source financial reconciliation", () => {
     );
     await database
       .update(expense)
-      .set({ cost: 42 })
+      .set({ cost: 4200n })
       .where(eq(expense.id, initial.expenses[0]!.id));
     const changed = await state();
     await expect(
@@ -1337,7 +1338,7 @@ describe("accepted source financial reconciliation", () => {
     );
     const unlinked = await insertWithShortcode(ctx.db, "expense", {
       name: "Workshop admission",
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       date: "2026-09-01",
       productId: good.entityId,
@@ -1349,7 +1350,7 @@ describe("accepted source financial reconciliation", () => {
     const seller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic pass seller",
     });
-    const before = await database.select().from(expense);
+    const before = await database.select(dollarExpenseColumns()).from(expense);
     const imported = await memberImport(ctx.db, ctx.actor, {
       key: "unlinked-pass",
       orders: [
@@ -1377,7 +1378,9 @@ describe("accepted source financial reconciliation", () => {
       outcome: "conflict",
       findingCount: 1,
     });
-    expect(await database.select().from(expense)).toEqual(before);
+    expect(await database.select(dollarExpenseColumns()).from(expense)).toEqual(
+      before,
+    );
     const [finding] = await database.select().from(runFinding);
     const preview = await prepareSourceOrderReconciliation(
       ctx.db,
@@ -1406,7 +1409,7 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    const after = await database.select().from(expense);
+    const after = await database.select(dollarExpenseColumns()).from(expense);
     expect(after).toHaveLength(before.length);
     expect(after.find((row) => row.id === unlinked.id)).toMatchObject({
       cost: 40,
@@ -1427,7 +1430,7 @@ describe("accepted source financial reconciliation", () => {
       trade: "other",
     });
     const [disposalBefore] = await database
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(eq(expense.shortcode, disposal.id));
     const inventoryBefore = await database.select().from(inventoryEntry);
@@ -1480,13 +1483,13 @@ describe("accepted source financial reconciliation", () => {
     });
     expect(
       await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.purchaseId, laterPurchase!.id)),
     ).toMatchObject([{ cost: 40, productId: good.entityId }]);
     expect(
       await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(eq(expense.shortcode, disposal.id)),
     ).toEqual([disposalBefore]);

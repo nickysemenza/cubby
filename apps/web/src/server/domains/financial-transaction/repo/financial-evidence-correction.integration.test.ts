@@ -525,7 +525,7 @@ describe("generated booking evidence corrections", () => {
       },
     });
     expect(retired).toMatchObject({
-      cost: 25,
+      cost: 2500n,
       bookingTransactionCode: transaction.output.id,
       deletedAt: expect.any(Date),
     });

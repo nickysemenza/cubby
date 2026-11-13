@@ -1,4 +1,5 @@
 import { parseShortcodeFor, userId } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -176,7 +177,7 @@ describe("photo product candidates", () => {
       productId: item.entityId,
       name: "Synthetic ordered line",
       date: "2026-09-04",
-      cost: 42,
+      cost: 4200n,
       productQuantity: 1,
       costType: "materials",
       trade: "other",
@@ -187,7 +188,7 @@ describe("photo product candidates", () => {
       productId: item.entityId,
       name: "Synthetic paid line",
       date: "2026-08-02",
-      cost: 21,
+      cost: 2100n,
       productQuantity: 1,
       costType: "materials",
       trade: "other",
@@ -598,7 +599,7 @@ describe("photo product candidates", () => {
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         productQuantity,
         productId: item.entityId,
         date: "2026-01-05",

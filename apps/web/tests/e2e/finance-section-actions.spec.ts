@@ -33,7 +33,7 @@ test.describe("split and attach, with the server's rules", () => {
     const source = await insertWithShortcode(db, "expense", {
       ...line,
       name: `Synthetic kit ${stamp}`,
-      cost: 30,
+      cost: 3000n,
       purchaseId: target.id,
     });
 
@@ -100,12 +100,12 @@ test.describe("split and attach, with the server's rules", () => {
     const free = await insertWithShortcode(db, "expense", {
       ...line,
       name: `Synthetic loose board ${stamp}`,
-      cost: 12.5,
+      cost: 1250n,
     });
     const untouched = await insertWithShortcode(db, "expense", {
       ...line,
       name: `Synthetic other board ${stamp}`,
-      cost: 3,
+      cost: 300n,
     });
 
     await gotoDetailActions(

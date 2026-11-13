@@ -2360,7 +2360,7 @@ export const compileListFields = (
         );
       if (
         (format === "currency" || format === "signedCurrency") &&
-        !(entity.key === "expense" && stored?.column === "cost") &&
+        !(entity.key === "expense" && stored?.key === "cost") &&
         !(
           field?.provenance?.kind === "derived" &&
           field.provenance.sources.some((source) => source.entity === "expense")

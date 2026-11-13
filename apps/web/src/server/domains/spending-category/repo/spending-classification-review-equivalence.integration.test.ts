@@ -10,6 +10,7 @@ import {
   type SpendingCategoryId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
@@ -401,7 +402,15 @@ async function seedReviewGraph(db: Database) {
     firstPurchase: purchases.length + mergePaths.length,
     expense,
   });
-  await insertRows(db, expenseTable, "expense", expenses);
+  await insertRows(
+    db,
+    expenseTable,
+    "expense",
+    expenses.map((row) => ({
+      ...row,
+      cost: nullableWholeCentToMinor(row.cost),
+    })),
+  );
   return { ...taxonomy, products, vendors, expenses, mergeExpenses };
 }
 

@@ -16,10 +16,16 @@
  * the precedent of other repo-root files that span multiple entities (e.g.
  * `repo/dashboard.ts`).
  */
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import { type AnyColumn, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
+
+/** `Expense.cost` minor units read back as dollar float8; null stays null. */
+export const expenseCostDollarsSql = (
+  column: SQLWrapper = expense.cost,
+): SQL<number | null> => sql<number | null>`(${column}::float8 / 100)`;
 
 /**
  * An actual (already spent) Expense line versus a planned one (`future`).
@@ -56,7 +62,10 @@ export const plannedExpense = (future: AnyColumn = expense.future): SQL =>
  * the expense's own cost; allocation-scoped reads pass the attributed cost.
  */
 export const expenseAggregateFields = (
-  cost: SQL<number | null> | AnyColumn = expense.cost,
+  cost: SQL<number | null> | SQL<string> = minorToDollarsSql(
+    expense.cost,
+    "numeric",
+  ),
 ) => ({
   actual: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${actualExpense()}), 0)::float`,
   committed: sql<number>`coalesce(sum(${cost}) filter (where ${cost} > 0 and ${plannedExpense()}), 0)::float`,
@@ -105,7 +114,7 @@ export const EXPENSE_MONTH_BUCKET = sql<string>`to_char(${expense.date}, 'YYYY-M
  * self-join. New correlated scalars use `related()` (`db/helpers/related.ts`).
  */
 export const expenseAcquisitionSql = (alias: string): string =>
-  `(${alias}."cost" > 0 OR (COALESCE(${alias}."cost", 0) = 0 AND COALESCE(${alias}."productQuantity", 0) >= 0))`;
+  `(${alias}."costMinor" > 0 OR (COALESCE(${alias}."costMinor", 0) = 0 AND COALESCE(${alias}."productQuantity", 0) >= 0))`;
 
 /**
  * The last date a product was ACQUIRED — the Product list's "Purchase date".
@@ -173,7 +182,7 @@ const expenseCountBody = (productRef: SQL): SQL<number> =>
           AND ${notDeleted("pec_e")})`;
 
 const expenseTotalBody = (productRef: SQL): SQL<number> =>
-  sql`(SELECT COALESCE(sum(pet_e."cost"), 0)::double precision FROM "Expense" pet_e
+  sql`(SELECT (COALESCE(sum(pet_e."costMinor"), 0) / 100.0)::double precision FROM "Expense" pet_e
         WHERE pet_e."productId" = ${productRef}
           AND ${notDeleted("pet_e")})`;
 

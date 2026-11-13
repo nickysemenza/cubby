@@ -121,7 +121,7 @@ describe("finding expiry", () => {
     const line = await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic unlinked line",
       purchaseId: purchase.id,
-      cost: 10,
+      cost: 1000n,
       date: "2026-09-19",
       lineKind: "principal",
       lineBasis: "item_line",

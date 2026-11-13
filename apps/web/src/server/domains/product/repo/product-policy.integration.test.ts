@@ -239,7 +239,7 @@ describe("not_allowed product expectation", () => {
     const lunch = await insertWithShortcode(ctx.db, "expense", {
       purchaseId: meal.id,
       name: "Lunch",
-      cost: 12,
+      cost: 1200n,
       date: "2026-09-21",
       costType: "materials",
       trade: "other",

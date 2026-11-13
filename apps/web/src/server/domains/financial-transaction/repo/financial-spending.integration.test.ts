@@ -18,6 +18,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   databaseForTransaction,
@@ -42,6 +43,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 
 import {
   previewFinancialBooking,
@@ -215,7 +217,10 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, refundPlan, ctx.actor);
     const lines = await getDb(ctx.db)
-      .select({ cost: expense.cost, category: expense.spendingCategoryId })
+      .select({
+        cost: expenseCostDollarsSql(),
+        category: expense.spendingCategoryId,
+      })
       .from(expense)
       .orderBy(expense.cost);
     expect(lines.map((line) => line.cost)).toEqual([-25, 250]);
@@ -294,7 +299,10 @@ describe("shared spending booking", () => {
       });
       expect(
         await getDb(ctx.db)
-          .select({ cost: expense.cost, category: expense.spendingCategoryId })
+          .select({
+            cost: expenseCostDollarsSql(),
+            category: expense.spendingCategoryId,
+          })
           .from(expense),
       ).toEqual([{ cost: 42.5, category: null }]);
       expect(
@@ -351,7 +359,9 @@ describe("shared spending booking", () => {
       expect(booked).toMatchObject({ replayed: false });
       expect(await commit()).toMatchObject({ replayed: true });
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual([{ cost: 42.5 }]);
       expect(
         await getDb(ctx.db)
@@ -511,7 +521,9 @@ describe("shared spending booking", () => {
       await commitFinancialBooking(ctx.db, direct, ctx.actor),
     ).toMatchObject({ replayed: true });
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
   it.each([
@@ -578,7 +590,9 @@ describe("shared spending booking", () => {
           ? { purchaserId: null }
           : held,
       );
-      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual([]);
     },
   );
   it.each(["access", "holder"] as const)(
@@ -632,7 +646,9 @@ describe("shared spending booking", () => {
       await expect(
         commitFinancialBooking(ctx.db, direct, ctx.actor),
       ).rejects.toThrow(/changed|review|not found/i);
-      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual([]);
       await restore();
       await commitFinancialSpending(
         ctx.db,
@@ -644,7 +660,9 @@ describe("shared spending booking", () => {
         commitFinancialSpending(ctx.db, plan, ctx.actor),
       ).rejects.toThrow(/changed|review/i);
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual([{ cost: 42.5 }]);
     },
   );
@@ -734,7 +752,9 @@ describe("shared spending booking", () => {
           .from(purchase),
       ).toEqual([{ purchaserOverrideId: null }]);
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual([{ cost: 42.5 }]);
     },
   );
@@ -846,7 +866,9 @@ describe("shared spending booking", () => {
         expected,
       );
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual([{ cost: 42.5 }]);
     },
   );
@@ -906,7 +928,9 @@ describe("shared spending booking", () => {
     await expect(
       commitFinancialSpending(ctx.db, plan, ctx.actor),
     ).rejects.toThrow(/changed/);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
   });
   it.each([false, true])(
     "refuses null-to-null account/access changes, booked=%s",
@@ -926,7 +950,9 @@ describe("shared spending booking", () => {
         commitFinancialSpending(ctx.db, plan, ctx.actor),
       ).rejects.toThrow(/changed/);
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual(booked ? [{ cost: 42.5 }] : []);
     },
   );
@@ -953,7 +979,9 @@ describe("shared spending booking", () => {
         commitFinancialBooking(ctx.db, review, ctx.actor),
       ).rejects.toThrow(/changed/);
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual(booked ? [{ cost: 42.5 }] : []);
     },
   );
@@ -1176,7 +1204,7 @@ describe("shared spending booking", () => {
     await commitFinancialSpending(ctx.db, reviewed, ctx.actor);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .orderBy(expense.cost),
     ).toEqual([{ cost: 20 }, { cost: 42.5 }]);
@@ -1320,7 +1348,7 @@ describe("shared spending booking", () => {
         costType: string;
         category: string;
         owner: string;
-      }>(sql`SELECT e.cost, e."costType", c.shortcode AS category, lp.shortcode AS owner
+      }>(sql`SELECT (e."costMinor"::float8 / 100) AS cost, e."costType", c.shortcode AS category, lp.shortcode AS owner
       FROM "Expense" e JOIN "Purchase" p ON p.id = e."purchaseId"
       JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId"
       JOIN "LedgerParty" lp ON lp.id = p."purchaserOverrideId"
@@ -1369,7 +1397,9 @@ describe("shared spending booking", () => {
         commitFinancialSpending(ctx.db, plan, ctx.actor),
       ).rejects.toThrow(/identity|evidence changed/);
       expect(
-        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense),
       ).toEqual([{ cost: 42.5 }]);
     },
   );
@@ -1405,7 +1435,9 @@ describe("shared spending booking", () => {
       commitFinancialSpending(ctx.db, plan, ctx.actor),
     ).rejects.toThrow(/review/i);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 40 }]);
     expect(
       await getDb(ctx.db)
@@ -1437,7 +1469,11 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, reviewed, ctx.actor);
     expect(
-      (await getDb(ctx.db).select({ cost: expense.cost }).from(expense))
+      (
+        await getDb(ctx.db)
+          .select({ cost: expenseCostDollarsSql() })
+          .from(expense)
+      )
         .map((row) => row.cost)
         .sort(),
     ).toEqual([42.5, null]);
@@ -1668,7 +1704,7 @@ describe("shared spending booking", () => {
         .from(financialTransactionAllocation)
         .where(inArray(financialTransactionAllocation.transactionId, ids));
       const expenses = await db
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(
           inArray(
@@ -1777,7 +1813,9 @@ describe("shared spending booking", () => {
     );
     await commitFinancialSpending(ctx.db, plan, ctx.actor, created.output.id);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 19 }]);
   });
   // An attachment preview retains the real charge identity and may commit
@@ -1814,7 +1852,9 @@ describe("shared spending booking", () => {
     );
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
   it("requires exactly one source style at the planning boundary", async () => {
@@ -1855,7 +1895,9 @@ describe("shared spending booking", () => {
     expect(replay.status).toBe("already_booked");
     await commitFinancialSpending(ctx.db, replay, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
   it("books pending and observed spending while deferring non-spending kinds", async () => {
@@ -1880,7 +1922,9 @@ describe("shared spending booking", () => {
         ).status,
       ).toBe("deferred");
     }
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     const request = { transactionId: transaction.output.id, advice };
     for (const status of ["pending", "observed"] as const) {
       await updateFinancialTransaction(
@@ -1902,7 +1946,9 @@ describe("shared spending booking", () => {
     expect(replay.status).toBe("already_booked");
     await commitFinancialSpending(ctx.db, replay, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
     expect(
       await getDb(ctx.db)
@@ -1931,7 +1977,7 @@ describe("shared spending booking", () => {
     );
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost, costType: expense.costType })
+        .select({ cost: expenseCostDollarsSql(), costType: expense.costType })
         .from(expense),
     ).toEqual([{ cost: 42.5, costType: "services" }]);
   });
@@ -1968,7 +2014,9 @@ describe("shared spending booking", () => {
     await expect(
       commitFinancialSpending(ctx.db, plan, ctx.actor),
     ).rejects.toThrow(/changed|review/i);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
   });
   it("creates a clean Vendor with the literal merchant alias atomically and refuses newly competing identity", async () => {
     const { transaction, advice } = await fixture();
@@ -1991,7 +2039,9 @@ describe("shared spending booking", () => {
     await expect(
       commitFinancialSpending(ctx.db, plan, ctx.actor),
     ).rejects.toThrow(/changed|review/i);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     const fresh = await previewFinancialSpending(ctx.db, {
       transactionId: transaction.output.id,
       advice: proposed,
@@ -2044,7 +2094,9 @@ describe("shared spending booking", () => {
         },
       }),
     ).toBeUndefined();
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
       await getDb(ctx.db).query.vendor.findFirst({
@@ -2110,7 +2162,7 @@ describe("shared spending booking", () => {
     ).toBe("review_required");
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 42.5, lineKind: "unclassified" })
+      .set({ cost: 4250n, lineKind: "unclassified" })
       .where(eq(expense.shortcode, line.output.id));
     expect(
       (
@@ -2134,7 +2186,9 @@ describe("shared spending booking", () => {
     await expect(
       commitFinancialSpending(ctx.db, plan, ctx.actor),
     ).rejects.toThrow(/changed|review/i);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
   });
   it("does not create another positive aggregate against a reviewed settled Purchase", async () => {
     const { account, transaction, advice } = await fixture();
@@ -2171,7 +2225,9 @@ describe("shared spending booking", () => {
     });
     expect(plan.status).toBe("review_required");
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
     // A settling charge of another amount is a different bank event.
     await updateFinancialTransaction(
@@ -2206,7 +2262,9 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, independent, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }, { cost: 42.5 }]);
   });
   it("allows a reviewed empty Purchase to receive exactly one conserved aggregate", async () => {
@@ -2228,7 +2286,9 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: 42.5 }]);
   });
   it("uses an identified original's live category, excluding future and reimbursement lines, without fresh model advice", async () => {
@@ -2286,7 +2346,10 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     const lines = await getDb(ctx.db)
-      .select({ cost: expense.cost, category: expense.spendingCategoryId })
+      .select({
+        cost: expenseCostDollarsSql(),
+        category: expense.spendingCategoryId,
+      })
       .from(expense)
       .orderBy(expense.cost);
     expect(lines.map((line) => line.cost)).toEqual([-20, -12, 100, 200]);
@@ -2348,7 +2411,7 @@ describe("shared spending booking", () => {
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .orderBy(expense.cost),
     ).toEqual([{ cost: -12 }, { cost: 100 }]);
@@ -2385,7 +2448,9 @@ describe("shared spending booking", () => {
     });
     await commitFinancialSpending(ctx.db, reviewed, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      await getDb(ctx.db)
+        .select({ cost: expenseCostDollarsSql() })
+        .from(expense),
     ).toEqual([{ cost: -9 }]);
   });
 });

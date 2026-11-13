@@ -21,7 +21,7 @@ describe("related rollups", () => {
     });
     expect(text).toContain(`"Purchase"."id"`);
     expect(text).toMatch(
-      /\(SELECT COALESCE\(sum\("r\d+"\."cost"\), 0\)::double precision FROM "Expense" "r\d+" WHERE \("r\d+"\."purchaseId" = "Purchase"\."id"\) AND \("r\d+"\."deletedAt" IS NULL\)\)/,
+      /\(SELECT COALESCE\(sum\("r\d+"\."costMinor"\), 0\)::double precision FROM "Expense" "r\d+" WHERE \("r\d+"\."purchaseId" = "Purchase"\."id"\) AND \("r\d+"\."deletedAt" IS NULL\)\)/,
     );
   });
 
@@ -45,7 +45,7 @@ describe("related rollups", () => {
     expect(text).toMatch(
       /INNER JOIN "Purchase" "r\d+" ON "r\d+"\."id" = "r\d+"\."purchaseId" AND "r\d+"\."deletedAt" IS NULL/,
     );
-    expect(text).toMatch(/\("r\d+"\."cost" IS NULL\)/);
+    expect(text).toMatch(/\("r\d+"\."costMinor" IS NULL\)/);
     expect(text).toMatch(
       /EXISTS \(SELECT 1 FROM "Expense" "r\d+" WHERE \("r\d+"\."purchaseId" = "Purchase"\."id"\)\)/,
     );

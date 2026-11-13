@@ -1,4 +1,4 @@
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
@@ -41,7 +41,7 @@ describe("financial Work sources", () => {
         purchaseId: order.id,
         name: "Synthetic Work facts line",
         costType: "materials",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         trade: "other",
         lineKind: "principal",
@@ -70,7 +70,7 @@ describe("financial Work sources", () => {
       purchaseId: plannedLines.id,
       name: "Synthetic planned Work line",
       costType: "materials",
-      cost: 20,
+      cost: 2000n,
       date: "2026-09-01",
       future: true,
       trade: "other",

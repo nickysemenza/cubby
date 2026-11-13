@@ -12,6 +12,7 @@ import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, purchase, runOperation, vendor } from "~/server/db/schema";
 
@@ -21,7 +22,7 @@ export async function importedMailJudgment(
   purchaseIds: NonNullable<typeof expense.$inferSelect.purchaseId>[],
 ) {
   const lines = await getDb(db)
-    .select({ name: expense.name, cost: expense.cost })
+    .select({ name: expense.name, cost: expenseCostDollarsSql() })
     .from(expense)
     .where(and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)))
     .orderBy(expense.id);

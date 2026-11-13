@@ -2,6 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseChargeContextOut } from "@cubby/schemas/project";
 import { purchaseUpdateData } from "@cubby/schemas/purchase";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -113,7 +114,7 @@ describe("purchase inheritance lifecycle", () => {
     const item = await insertWithShortcode(ctx.db, "expense", {
       name: "Inherited fixture item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: null,
@@ -256,7 +257,7 @@ describe("purchase inheritance lifecycle", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Second project item",
       date: fixtureDate,
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       lineKind: "principal",
       purchaseId: source.id,
@@ -265,7 +266,7 @@ describe("purchase inheritance lifecycle", () => {
     const charge = await insertWithShortcode(ctx.db, "expense", {
       name: "Shared fixture tax",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       lineKind: "tax",
       trade: "building",
@@ -318,7 +319,7 @@ describe("purchase inheritance lifecycle", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic alternate project principal",
       date: fixtureDate,
-      cost: 40,
+      cost: 4000n,
       costType: "materials",
       lineKind: "principal",
       purchaseId: source.id,
@@ -327,7 +328,7 @@ describe("purchase inheritance lifecycle", () => {
     const allocated = await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic allocated tax",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       lineKind: "tax",
       purchaseId: source.id,
@@ -406,7 +407,7 @@ describe("purchase inheritance lifecycle", () => {
       await insertWithShortcode(ctx.db, "expense", {
         name: "Fractional item",
         date: fixtureDate,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         costType: "materials",
         lineKind: "principal",
         purchaseId: source.id,
@@ -450,7 +451,7 @@ describe("purchase inheritance lifecycle", () => {
     const item = await insertWithShortcode(ctx.db, "expense", {
       name: "Explicit trade reset item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       projectId: explicitProject.id,
@@ -519,7 +520,7 @@ describe("purchase inheritance lifecycle", () => {
     const item = await insertWithShortcode(ctx.db, "expense", {
       name: "No fallback trade item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: "electrical",
@@ -563,7 +564,7 @@ describe("purchase inheritance lifecycle", () => {
     const item = await insertWithShortcode(ctx.db, "expense", {
       name: "Purchase default trade item",
       date: fixtureDate,
-      cost: 10,
+      cost: 1000n,
       costType: "materials",
       lineKind: "principal",
       trade: "electrical",
@@ -639,7 +640,7 @@ describe("purchase inheritance lifecycle", () => {
     const unresolved = await insertWithShortcode(ctx.db, "expense", {
       name: "Unresolved receipt adjustment",
       date: fixtureDate,
-      cost: -2.13,
+      cost: -213n,
       costType: "materials",
       lineKind: "unclassified",
       trade: null,
@@ -681,7 +682,7 @@ describe("purchase inheritance lifecycle", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Shared fee",
       date: fixtureDate,
-      cost: 1,
+      cost: 100n,
       costType: "services",
       lineKind: "fee",
       trade: null,

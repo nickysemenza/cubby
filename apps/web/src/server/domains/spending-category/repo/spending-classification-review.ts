@@ -402,7 +402,7 @@ async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
   const result = await unwrapDb(db).execute(
     sql`
     WITH f AS (
-      SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',(to_jsonb(p)-'statedTotalMinor')||jsonb_build_object('statedTotal',p."statedTotalMinor"::numeric/100)) AS facts
+      SELECT e.id, jsonb_build_object('expense',(to_jsonb(e)-'costMinor')||jsonb_build_object('cost',e."costMinor"::numeric/100),'product',to_jsonb(g),'purchase',(to_jsonb(p)-'statedTotalMinor')||jsonb_build_object('statedTotal',p."statedTotalMinor"::numeric/100)) AS facts
       FROM "Expense" e
       LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
       LEFT JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}

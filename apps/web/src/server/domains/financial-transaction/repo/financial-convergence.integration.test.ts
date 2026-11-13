@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -77,7 +78,7 @@ describe("server verified financial convergence", () => {
   }
   async function liveCosts() {
     return getDb(ctx.db)
-      .select({ cost: expense.cost })
+      .select({ cost: expenseCostDollarsSql() })
       .from(expense)
       .where(notDeleted(expense));
   }
@@ -158,7 +159,7 @@ describe("server verified financial convergence", () => {
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 30 })
+      .set({ cost: 3000n })
       .where(eq(expense.bookingTransactionCode, transaction.output.id));
     expect(
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
@@ -474,7 +475,7 @@ describe("server verified financial convergence", () => {
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 30 })
+      .set({ cost: 3000n })
       .where(eq(expense.bookingTransactionCode, transaction.output.id));
     expect(
       await convergeFinancialTransaction(
@@ -509,7 +510,7 @@ describe("server verified financial convergence", () => {
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 27 })
+      .set({ cost: 2700n })
       .where(eq(expense.purchaseId, purchase.entityId));
     expect(
       await convergeFinancialTransaction(

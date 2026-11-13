@@ -11,7 +11,11 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { testShortcode } from "@cubby/schemas/testing";
-import { moneyToMinor } from "@cubby/shared";
+import {
+  moneyToMinor,
+  nullableWholeCentToMinor,
+  nullableMinorToMoney,
+} from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
@@ -20,6 +24,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   withTransaction,
@@ -66,6 +71,7 @@ import {
   createProductIdentityFixture,
   insertEntityFixtures,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 import {
   patchRunFindingData,
@@ -179,7 +185,9 @@ describe("caller-driven purchase import", () => {
       const result = await memberImport(ctx.db, ctx.actor, input);
       const [order] = await getDb(ctx.db).select().from(purchase);
       expect(order?.date).toBe(expected);
-      const expenses = await getDb(ctx.db).select().from(expense);
+      const expenses = await getDb(ctx.db)
+        .select(dollarExpenseColumns())
+        .from(expense);
       expect(expenses.map((row) => row.date)).toEqual(
         expected ? [expected] : [],
       );
@@ -367,7 +375,7 @@ describe("caller-driven purchase import", () => {
     const purchaseId = committed.items[0]?.purchaseId;
     expect(purchaseId).toBeTruthy();
     const rows = await getDb(ctx.db)
-      .select({ cost: expense.cost, lineBasis: expense.lineBasis })
+      .select({ cost: expenseCostDollarsSql(), lineBasis: expense.lineBasis })
       .from(expense)
       .innerJoin(purchase, eq(purchase.id, expense.purchaseId))
       .where(eq(purchase.shortcode, purchaseId!));
@@ -569,7 +577,7 @@ describe("caller-driven purchase import", () => {
       ctx.actor,
     );
     const booked = await getDb(ctx.db)
-      .select({ purchase: purchase.shortcode, cost: expense.cost })
+      .select({ purchase: purchase.shortcode, cost: expenseCostDollarsSql() })
       .from(purchase)
       .leftJoin(expense, eq(expense.purchaseId, purchase.id))
       .where(eq(purchase.vendorId, parseEntityId("vendor", vendor.id)));
@@ -680,7 +688,7 @@ describe("caller-driven purchase import writes", () => {
     return getDb(ctx.db)
       .select({
         name: expense.name,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         trade: expense.trade,
         projectId: expense.projectId,
         productId: expense.productId,
@@ -818,7 +826,9 @@ describe("caller-driven purchase import writes", () => {
       outcome: "replayed",
       purchaseId: saved.shortcode,
     });
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(3);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(3);
   });
 
   // Regression: every imported line was stored as "materials", so an award
@@ -937,7 +947,7 @@ describe("caller-driven purchase import writes", () => {
         await insertWithShortcode(ctx.db, "expense", {
           purchaseId: target.id,
           name: line.title,
-          cost: line.amount,
+          cost: nullableWholeCentToMinor(line.amount),
           date: target.date,
           lineKind: line.lineKind,
           lineBasis: "item_line",
@@ -949,7 +959,10 @@ describe("caller-driven purchase import writes", () => {
           productQuantity: null,
         });
       const database = getDb(ctx.db);
-      const before = await database.select().from(expense).orderBy(expense.id);
+      const before = await database
+        .select(dollarExpenseColumns())
+        .from(expense)
+        .orderBy(expense.id);
       if (mode === "source_owned")
         await memberImport(ctx.db, ctx.actor, {
           key: "accepted-itemized-source",
@@ -1004,7 +1017,10 @@ describe("caller-driven purchase import writes", () => {
         ],
       });
       const item = committed.items[0];
-      const after = await database.select().from(expense).orderBy(expense.id);
+      const after = await database
+        .select(dollarExpenseColumns())
+        .from(expense)
+        .orderBy(expense.id);
       const needsReview = mode === "ambiguous" || mode === "source_owned";
       expect(item).toMatchObject({
         outcome: needsReview ? "conflict" : "updated",
@@ -1102,7 +1118,7 @@ describe("caller-driven purchase import writes", () => {
           purchaseId: existing.id,
           name: "Synthetic service",
           date: "2026-09-01",
-          cost: 10,
+          cost: 1000n,
           costType: "materials",
           lineKind: "principal",
           lineBasis: "item_line",
@@ -1256,7 +1272,7 @@ describe("caller-driven purchase import writes", () => {
       trade: "other",
       costType: "services",
       date: "2026-10-01",
-      cost: 10,
+      cost: 1000n,
       lineKind: "principal",
     });
     return existing;
@@ -1299,7 +1315,9 @@ describe("caller-driven purchase import writes", () => {
       ),
     ).resolves.toMatchObject({ purchaseIds: [existing.shortcode] });
     expect(
-      (await getDb(ctx.db).select().from(expense)).map(({ cost }) => cost),
+      (await getDb(ctx.db).select(dollarExpenseColumns()).from(expense)).map(
+        ({ cost }) => cost,
+      ),
     ).toEqual([10]);
     expect(
       (await getDb(ctx.db).select().from(orderMailEvent)).some(
@@ -1345,7 +1363,9 @@ describe("caller-driven purchase import writes", () => {
       ),
     ).rejects.toThrow(/dismissed/);
     expect(
-      (await getDb(ctx.db).select().from(expense)).map(({ cost }) => cost),
+      (await getDb(ctx.db).select(dollarExpenseColumns()).from(expense)).map(
+        ({ cost }) => cost,
+      ),
     ).toEqual([10]);
     expect(
       (await getDb(ctx.db).select().from(orderMailEvent)).map(
@@ -1390,7 +1410,9 @@ describe("caller-driven purchase import writes", () => {
       defaultTrade: "other",
     });
     await expect(commit()).rejects.toThrow(/dismissed/i);
-    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual([]);
     expect(await getDb(ctx.db).select().from(importSourceClaim)).toEqual([]);
     expect(
       (await getDb(ctx.db).select().from(orderMailCandidateDecision)).map(
@@ -1518,7 +1540,9 @@ describe("caller-driven purchase import writes", () => {
         defaultTrade: "other",
       });
       const beforePurchases = await getDb(ctx.db).select().from(purchase);
-      const beforeExpenses = await getDb(ctx.db).select().from(expense);
+      const beforeExpenses = await getDb(ctx.db)
+        .select(dollarExpenseColumns())
+        .from(expense);
       const mail = await retainedOrderMail(party.id, `terminal-${transition}`);
       const image = await insertWithShortcode(ctx.db, "image", {
         key: `images/synthetic-${transition}.pdf`,
@@ -1597,9 +1621,9 @@ describe("caller-driven purchase import writes", () => {
       expect(await getDb(ctx.db).select().from(purchase)).toEqual(
         beforePurchases,
       );
-      expect(await getDb(ctx.db).select().from(expense)).toEqual(
-        beforeExpenses,
-      );
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual(beforeExpenses);
       expect(await getDb(ctx.db).select().from(entityAttachment)).toEqual([]);
       const [stored] = await getDb(ctx.db)
         .select()
@@ -2540,7 +2564,7 @@ describe("shared purchase-import prepare and commit", () => {
     const manualExpense = await insertWithShortcode(ctx.db, "expense", {
       purchaseId: manualPurchase.id,
       name: "Recorded from a paper receipt",
-      cost: 45,
+      cost: 4500n,
       date: "2026-09-18",
       lineKind: "principal",
       costType: "materials",
@@ -2726,7 +2750,9 @@ describe("shared purchase-import prepare and commit", () => {
     if (!category) throw new Error("Expected the category fixture");
     expect(result.items[0]?.outcome).toBe("conflict");
     const finding = await replacementFinding(manualPurchase.id);
-    const before = await getDb(ctx.db).select().from(expense);
+    const before = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     const inventoryBefore = await getDb(ctx.db).select().from(inventoryEntry);
     const review = await prepareSourceOrderReconciliation(
       ctx.db,
@@ -2752,7 +2778,9 @@ describe("shared purchase-import prepare and commit", () => {
       ctx.actor,
     );
     expect(review.spend).toEqual({ before: 45, after: 45, delta: 0 });
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(before);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual(before);
     await resolveRunFinding(
       ctx.db,
       {
@@ -2763,7 +2791,7 @@ describe("shared purchase-import prepare and commit", () => {
       ctx.actor,
     );
     const rows = await getDb(ctx.db)
-      .select()
+      .select(dollarExpenseColumns())
       .from(expense)
       .where(
         and(
@@ -2803,8 +2831,12 @@ describe("shared purchase-import prepare and commit", () => {
       } = await importOverManualAggregate(targetOrderless);
       expect(result.items[0]?.outcome).toBe("conflict");
       expect(result.items[0]?.purchaseId).toBe(manualPurchase.shortcode);
-      const before = await getDb(ctx.db).select().from(expense);
-      expect(before).toEqual([manualExpense]);
+      const before = await getDb(ctx.db)
+        .select(dollarExpenseColumns())
+        .from(expense);
+      expect(before).toEqual([
+        { ...manualExpense, cost: nullableMinorToMoney(manualExpense.cost) },
+      ]);
       expect(await getDb(ctx.db).select().from(purchase)).toEqual([
         manualPurchase,
       ]);
@@ -2839,7 +2871,9 @@ describe("shared purchase-import prepare and commit", () => {
         ctx.actor,
       );
       expect(review.spend).toEqual({ before: 45, after: 45, delta: 0 });
-      expect(await getDb(ctx.db).select().from(expense)).toEqual(before);
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual(before);
       if (editAfterPreview)
         await getDb(ctx.db)
           .update(expense)
@@ -2890,7 +2924,7 @@ describe("shared purchase-import prepare and commit", () => {
         await getDb(ctx.db).select().from(financialTransactionAllocation),
       ).toEqual(allocations);
       const live = await getDb(ctx.db)
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(isNull(expense.deletedAt));
       expect(live).toHaveLength(1);
@@ -2904,7 +2938,7 @@ describe("shared purchase-import prepare and commit", () => {
         status: "applied",
       });
       const after = await getDb(ctx.db)
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(isNull(expense.deletedAt));
       expect(after).toHaveLength(1);
@@ -2922,7 +2956,7 @@ describe("shared purchase-import prepare and commit", () => {
       });
       expect(
         await getDb(ctx.db)
-          .select()
+          .select(dollarExpenseColumns())
           .from(expense)
           .where(isNull(expense.deletedAt)),
       ).toEqual(after);
@@ -2980,7 +3014,9 @@ describe("shared purchase-import prepare and commit", () => {
       }
       const before = {
         purchases: await getDb(ctx.db).select().from(purchase),
-        expenses: await getDb(ctx.db).select().from(expense),
+        expenses: await getDb(ctx.db)
+          .select(dollarExpenseColumns())
+          .from(expense),
         observations: await getDb(ctx.db).select().from(sourceOrderObservation),
         stock: await getDb(ctx.db).select().from(inventoryEntry),
       };
@@ -2998,9 +3034,9 @@ describe("shared purchase-import prepare and commit", () => {
       expect(await getDb(ctx.db).select().from(purchase)).toEqual(
         before.purchases,
       );
-      expect(await getDb(ctx.db).select().from(expense)).toEqual(
-        before.expenses,
-      );
+      expect(
+        await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+      ).toEqual(before.expenses);
       expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual(
         before.observations,
       );
@@ -3024,7 +3060,9 @@ describe("shared purchase-import prepare and commit", () => {
     });
     expect(stopped?.auditedAt).toBeInstanceOf(Date);
     const beforeReplay = {
-      expenses: await getDb(ctx.db).select().from(expense),
+      expenses: await getDb(ctx.db)
+        .select(dollarExpenseColumns())
+        .from(expense),
       observations: await getDb(ctx.db).select().from(sourceOrderObservation),
     };
     expect(await commitPurchaseImport(ctx.db, commitInput, ctx.actor)).toEqual(
@@ -3033,9 +3071,9 @@ describe("shared purchase-import prepare and commit", () => {
     expect(await commitPurchaseImport(ctx.db, commitInput, ctx.actor)).toEqual(
       result,
     );
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(
-      beforeReplay.expenses,
-    );
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual(beforeReplay.expenses);
     expect(await getDb(ctx.db).select().from(sourceOrderObservation)).toEqual(
       beforeReplay.observations,
     );
@@ -3114,7 +3152,7 @@ describe("shared purchase-import prepare and commit", () => {
     const manualExpense = await insertWithShortcode(ctx.db, "expense", {
       purchaseId: manualPurchase.id,
       name: "Already-identified manual product",
-      cost: 18,
+      cost: 1800n,
       date: "2026-09-19",
       lineKind: "principal",
       costType: "materials",

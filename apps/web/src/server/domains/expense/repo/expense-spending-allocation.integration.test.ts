@@ -1,5 +1,6 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -39,7 +40,7 @@ const line = (
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     lineKind,
     date: "2026-09-20",
     costType: "materials",

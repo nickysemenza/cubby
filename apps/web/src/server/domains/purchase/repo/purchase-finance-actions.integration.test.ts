@@ -1,4 +1,5 @@
 import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -58,7 +59,7 @@ describe("split and attach checks against the ledger", () => {
       insertWithShortcode(ctx.db, "expense", {
         ...line,
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         purchaseId: purchaseId ?? null,
       });
     const [here, free, sibling, foreign, unpriced] = await Promise.all([
@@ -154,7 +155,7 @@ describe("split and attach checks against the ledger", () => {
     await insertWithShortcode(ctx.db, "expense", {
       ...line,
       name: "Itemized line",
-      cost: 3,
+      cost: 300n,
       purchaseId: target.id,
       productId: derived.id,
       productQuantity: 1,
@@ -227,7 +228,7 @@ describe("split and attach checks against the ledger", () => {
       return insertWithShortcode(ctx.db, "expense", {
         ...line,
         name: "Sample kit",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         purchaseId: purchase.id,
       });
     }
@@ -395,7 +396,7 @@ describe("split and attach checks against the ledger", () => {
       const source = await insertWithShortcode(ctx.db, "expense", {
         ...line,
         name: "Unattached expense",
-        cost: 10,
+        cost: 1000n,
         purchaseId: null,
       });
       const code = parseShortcodeFor("expense", source.shortcode);
@@ -433,7 +434,7 @@ describe("split and attach checks against the ledger", () => {
       const source = await insertWithShortcode(ctx.db, "expense", {
         ...line,
         name: "Categorized goods",
-        cost: 10,
+        cost: 1000n,
         purchaseId: (
           await insertWithShortcode(ctx.db, "purchase", {
             vendorId: (

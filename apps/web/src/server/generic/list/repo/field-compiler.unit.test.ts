@@ -194,7 +194,7 @@ describe("list field compiler", () => {
       { orderBy: "expenseTotal", direction: "asc" },
     ]);
     expect(renderWhereSql(total)).toContain(
-      `COALESCE(sum(ru1."cost"::numeric), 0)::double precision`,
+      `(COALESCE(sum(ru1."costMinor"), 0) / 100.0)::double precision`,
     );
   });
 

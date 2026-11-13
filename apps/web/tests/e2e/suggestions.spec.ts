@@ -240,7 +240,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const accountId = await resolveOrThrow(db, "financialAccount", account.id);
   const spendingTotal = async () => {
     const spent = await getDb(db).execute<{ total: number }>(sql`
-      SELECT coalesce(sum(e.cost),0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
+      SELECT (coalesce(sum(e."costMinor"),0) / 100.0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
         AND e."purchaseId" IN (SELECT a."purchaseId" FROM "FinancialTransactionAllocation" a
           JOIN "FinancialTransaction" f ON f.id=a."transactionId" WHERE f."accountId"=${accountId} AND a."deletedAt" IS NULL)
     `);

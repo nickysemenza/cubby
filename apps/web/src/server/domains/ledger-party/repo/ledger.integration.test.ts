@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
-  expense,
   expenseAttribution,
   financialAccount,
   financialTransaction,
@@ -404,7 +403,7 @@ describe("consolidated household ledger", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Placeholder expense",
-      cost: 10,
+      cost: 1000n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
@@ -428,7 +427,7 @@ describe("consolidated household ledger", () => {
     const largeExpense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Large-weight placeholder expense",
-      cost: 10,
+      cost: 1000n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
@@ -703,22 +702,6 @@ describe("consolidated household ledger", () => {
       ctx.actor,
     );
     expect(cleared.output).toMatchObject({ cost: 12, sourceClaims: [] });
-    await unwrapDb(ctx.db)
-      .update(expense)
-      .set({ cost: 10.000000000000002 })
-      .where(eq(expense.id, created.entityId));
-    await expect(
-      updateExpense(
-        ctx.db,
-        created.output.id,
-        { sourceClaims: [claim] },
-        ctx.actor,
-      ),
-    ).rejects.toMatchObject({
-      reason: "CONSTRAINT_VIOLATION",
-      message:
-        "The source claim target amount must be an exact, supported whole-cent amount.",
-    });
   });
 
   it("serializes concurrent claims of new and released source identities", async () => {

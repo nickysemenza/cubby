@@ -16,6 +16,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   financialTransactionAllocation,
@@ -33,6 +34,7 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
@@ -581,7 +583,7 @@ describe("settlement from retained order evidence", () => {
     ).toEqual([20, 30]);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .orderBy(expense.cost),
     ).toEqual([{ cost: 20 }, { cost: 30 }]);
@@ -687,7 +689,7 @@ describe("settlement from retained order evidence", () => {
     ).toEqual([-15, 80]);
     expect(
       await getDb(ctx.db)
-        .select({ cost: expense.cost })
+        .select({ cost: expenseCostDollarsSql() })
         .from(expense)
         .orderBy(expense.cost),
     ).toEqual([{ cost: -15 }, { cost: 80 }]);
@@ -1231,7 +1233,9 @@ describe("settlement from retained order evidence", () => {
       total: 40,
       payments: [{ amount: 40, chargedAt: "2026-09-02T12:00:00.000Z" }],
     });
-    const beforeExpenses = await getDb(ctx.db).select().from(expense);
+    const beforeExpenses = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     const beforePayments = await getDb(ctx.db)
       .select()
       .from(purchasePaymentEvidence);
@@ -1245,7 +1249,9 @@ describe("settlement from retained order evidence", () => {
         { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
       ],
     });
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(beforeExpenses);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual(beforeExpenses);
     expect(await getDb(ctx.db).select().from(purchasePaymentEvidence)).toEqual(
       beforePayments,
     );

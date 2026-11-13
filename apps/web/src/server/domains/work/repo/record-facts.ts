@@ -23,13 +23,13 @@ const recordFacts = {
   },
   purchase: {
     table: sql`${purchase}`,
-    amount: sql`(SELECT sum(e.cost::numeric)::double precision FROM "Expense" e
+    amount: sql`(SELECT (sum(e."costMinor") / 100.0)::double precision FROM "Expense" e
       WHERE e."purchaseId" = "Purchase".id AND ${notDeleted(alias(expense, "e"))})`,
     date: sql`"Purchase"."date"`,
   },
   expense: {
     table: sql`${expense}`,
-    amount: sql`"Expense".cost::double precision`,
+    amount: sql`("Expense"."costMinor"::float8 / 100)`,
     date: sql`"Expense"."date"`,
   },
   financialTransaction: {

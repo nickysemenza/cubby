@@ -15,7 +15,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
-import { cents, minorToMoney, type ShortcodeFor } from "@cubby/shared";
+import {
+  cents,
+  minorToMoney,
+  nullableMinorToMoney,
+  type ShortcodeFor,
+} from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -205,6 +210,20 @@ export async function bookingGraph(
   return graph;
 }
 
+/** Retained booking fingerprints keep Expense cost on the dollar-number wire. */
+const dollarExpense = (row: typeof expense.$inferSelect) => ({
+  ...row,
+  cost: nullableMinorToMoney(row.cost),
+});
+const dollarJoinedExpense = <
+  T extends { Expense: typeof expense.$inferSelect },
+>(
+  row: T,
+): Omit<T, "Expense"> & { Expense: ReturnType<typeof dollarExpense> } => ({
+  ...row,
+  Expense: dollarExpense(row.Expense),
+});
+
 /** Read-only page preparation; authoritative booking still loads its current graph. */
 export async function bookingGraphs(
   db: Database,
@@ -234,6 +253,7 @@ export async function bookingGraphs(
         .from(expense)
         .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)))
         .orderBy(expense.id)
+        .then((rows) => rows.map(dollarExpense))
     : [];
   const attributions = ids.length
     ? await getDb(db)
@@ -248,6 +268,7 @@ export async function bookingGraphs(
           ),
         )
         .orderBy(expenseAttribution.id)
+        .then((rows) => rows.map(dollarJoinedExpense))
     : [];
   const linesByPurchase = groupBy(lines, (line) => line.purchaseId ?? "");
   const attributionsByPurchase = groupBy(
@@ -1409,7 +1430,7 @@ export async function bookFreshFinancialTransactions(
         db,
         previews.map((review) => review.transactionId),
       )
-    : freshBookingLineages(previews, expenseRows);
+    : freshBookingLineages(previews, expenseRows.map(dollarExpense));
   await writeBookingFingerprints(db, previews, ids, lineages);
   return previews.map((_, index) => ({
     purchaseId: purchaseRows[index]!.shortcode,
@@ -1464,7 +1485,8 @@ export async function loadFinancialBookingLineages(
     .where(
       and(inArray(expense.bookingTransactionCode, codes), notDeleted(expense)),
     )
-    .orderBy(expense.id);
+    .orderBy(expense.id)
+    .then((rows) => rows.map(dollarExpense));
   const attributions = await getDb(db)
     .select()
     .from(expenseAttribution)
@@ -1476,7 +1498,8 @@ export async function loadFinancialBookingLineages(
         notDeleted(expenseAttribution),
       ),
     )
-    .orderBy(expenseAttribution.id);
+    .orderBy(expenseAttribution.id)
+    .then((rows) => rows.map(dollarJoinedExpense));
   const sourceClaims = await getDb(db)
     .select()
     .from(ledgerSourceClaim)
@@ -1488,7 +1511,8 @@ export async function loadFinancialBookingLineages(
         notDeleted(ledgerSourceClaim),
       ),
     )
-    .orderBy(ledgerSourceClaim.id);
+    .orderBy(ledgerSourceClaim.id)
+    .then((rows) => rows.map(dollarJoinedExpense));
   return new Map(
     codes.map((code) => [
       code,

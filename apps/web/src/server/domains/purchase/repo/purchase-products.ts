@@ -30,6 +30,7 @@ import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   expenseAcquisitionSql,
   actualExpense,
+  expenseCostDollarsSql,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
@@ -252,7 +253,7 @@ export async function listPurchaseProducts(
     dbc
       .select({
         ...productColumns,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         quantity: expense.productQuantity,
         future: expense.future,
       })
@@ -364,7 +365,7 @@ export async function listProductPurchases(
     dbc
       .select({
         ...purchaseColumns,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         quantity: expense.productQuantity,
         future: expense.future,
       })

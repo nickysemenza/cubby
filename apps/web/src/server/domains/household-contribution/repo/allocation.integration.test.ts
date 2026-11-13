@@ -6,7 +6,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { LedgerPartyKind } from "@cubby/schemas/ledger-party";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
@@ -86,7 +86,7 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
       const row = await insertWithShortcode(ctx.db, "expense", {
         lineKind: "principal",
         name: "Large weighted allocation fixture",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-08-20",
         costType: "materials",
         trade: "other",
@@ -282,7 +282,7 @@ describe("loadExpenseAllocations SQL arithmetic", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Shortcode tie fixture",
-      cost: 0.01,
+      cost: 1n,
       date: "2026-08-20",
       costType: "materials",
       trade: "other",
@@ -340,7 +340,7 @@ describe("loadExpenseAllocations derived funders", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: `Derived funder fixture ${cost}`,
-      cost,
+      cost: nullableWholeCentToMinor(cost),
       date: "2026-08-10",
       costType: "materials",
       trade: "other",
@@ -769,7 +769,7 @@ describe("loadExpenseAllocations derived funders", () => {
         insertWithShortcode(ctx.db, "expense", {
           lineKind: "principal",
           name: `Shared line ${cost}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-08-10",
           costType: "materials",
           trade: "other",
@@ -803,7 +803,7 @@ describe("loadExpenseAllocations assumed-household beneficiaries", () => {
     insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name,
-      cost: 25,
+      cost: 2500n,
       date: "2026-08-10",
       costType: "materials",
       trade: "other",

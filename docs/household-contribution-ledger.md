@@ -273,6 +273,6 @@ fail rather than silently changing units.
 fields. It generates `<key>Minor` bigint storage and preserves the declared
 number-shaped read/write contract. Generic list reads and audits convert at
 their boundary, stored/related filters and metrics project exact dollar SQL,
-and declared totals sum integer cents before checked numeric output. Domain
+and declared totals and rollups sum integer cents before checked numeric output. Domain
 writers convert validated dollar input once before writing the authoritative
 minor column. No second amount column is retained in the active table.

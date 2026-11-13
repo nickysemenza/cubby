@@ -50,6 +50,7 @@ import {
   cents,
   moneyToMinor,
   minorToMoney,
+  nullableWholeCentToMinor,
 } from "@cubby/shared";
 import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -1445,7 +1446,7 @@ export const splitExpense = async (
       if (
         original.cost !== null &&
         splitExpenseDelta(
-          original.cost,
+          minorToMoney(original.cost),
           parts.map((part) => part.cost),
         ).delta !== 0
       ) {
@@ -1671,7 +1672,7 @@ export const splitExpense = async (
         });
         const row = await insertWithShortcode(tx, "expense", {
           name: part.name,
-          cost: part.cost,
+          cost: nullableWholeCentToMinor(part.cost),
           date: original.date,
           economicRole: original.economicRole,
           spendingCategoryId,

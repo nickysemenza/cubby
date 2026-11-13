@@ -39,7 +39,7 @@ describe("order line thumbnails", () => {
         name,
         purchaseId: purchase.id,
         productId: row.id,
-        cost: 3,
+        cost: 300n,
         date: "2026-09-21",
         lineKind: "principal",
         costType: "materials",
@@ -122,7 +122,7 @@ describe("order line thumbnails", () => {
           brandId: null,
         })
       ).id,
-      cost: 5,
+      cost: 500n,
       date: "2026-09-21",
       lineKind: "principal",
       costType: "materials",

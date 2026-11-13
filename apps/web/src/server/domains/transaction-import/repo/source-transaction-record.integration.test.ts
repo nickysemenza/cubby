@@ -1207,7 +1207,7 @@ describe("statement row ledger", () => {
     expect(bundle.sets.expenses).toHaveLength(1);
     expect(bundle.sets.recordedAttribution).toHaveLength(1);
     expect(bundle.sets.effectiveExpenses).toHaveLength(1);
-    expect(bundle.sets.expenses[0]).toMatchObject({ cost: 128.5 });
+    expect(bundle.sets.expenses[0]).toMatchObject({ costMinor: "12850" });
     expect(bundle.sets.recordedAttribution[0]).toMatchObject({
       ledgerPartyId: null,
       weight: "1",

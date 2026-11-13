@@ -255,7 +255,7 @@ describe("derived field explanations against canonical records", () => {
       name: "Synthetic unresolved receipt role",
       lineKind: "unclassified",
       date: "2026-09-01",
-      cost: 1,
+      cost: 100n,
       costType: "materials",
       purchaseId: f.purchase.id,
     });
@@ -298,7 +298,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "principal",
       date: "2026-09-01",
-      cost: 30,
+      cost: 3000n,
       trade: "building",
       costType: "materials",
     });
@@ -307,7 +307,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "principal",
       date: "2026-09-01",
-      cost: 10,
+      cost: 1000n,
       trade: "plumbing",
       costType: "services",
     });
@@ -316,7 +316,7 @@ describe("derived field explanations against canonical records", () => {
       purchaseId: purchase.id,
       lineKind: "shipping",
       date: "2026-09-01",
-      cost: 8,
+      cost: 800n,
       costType: "materials",
     });
     const explanation = await explainField(context(), {
@@ -400,7 +400,7 @@ describe("derived field explanations against canonical records", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic reimbursed booking",
       lineKind: "principal",
-      cost: -10,
+      cost: -1000n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -572,7 +572,7 @@ describe("derived field explanations against canonical records", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic linked policy reimbursement",
       lineKind: "principal",
-      cost: -2,
+      cost: -200n,
       date: "2026-09-01",
       costType: "materials",
       economicRole: "reimbursement",

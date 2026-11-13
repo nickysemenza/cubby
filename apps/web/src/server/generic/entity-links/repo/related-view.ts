@@ -722,7 +722,7 @@ export async function loadRelatedSummary(
         )`;
       }
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost",
+        SELECT e."id" AS "expenseId", (e."costMinor" / 100.0) AS "cost",
           CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
           false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
@@ -751,7 +751,7 @@ export async function loadRelatedSummary(
         )`;
       }
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost",
+        SELECT e."id" AS "expenseId", (e."costMinor" / 100.0) AS "cost",
           CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
           false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",
@@ -763,7 +763,7 @@ export async function loadRelatedSummary(
     }
     if (input.relationKey.startsWith("product.")) {
       return sql`scoped_expenses AS (
-        SELECT e."id" AS "expenseId", e."cost",
+        SELECT e."id" AS "expenseId", (e."costMinor" / 100.0) AS "cost",
           CASE WHEN e."lineKind" = 'principal' THEN 'item' ELSE 'shared' END AS "costComponent",
           false AS "allocationIncomplete", e."productQuantity", e."future",
           e."date" AS "expenseDate", e."purchaseId", e."projectId", e."productId",

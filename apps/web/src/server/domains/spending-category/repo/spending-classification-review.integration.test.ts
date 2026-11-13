@@ -69,7 +69,7 @@ describe("reviewed spending classification", () => {
     const line = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture item",
-      cost: -20,
+      cost: -2000n,
       productQuantity: -1,
       productId: item.id,
       date: "2026-09-01",
@@ -79,7 +79,7 @@ describe("reviewed spending classification", () => {
     const override = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture explicit purpose",
-      cost: 10,
+      cost: 1000n,
       productQuantity: 1,
       productId: item.id,
       spendingCategoryId: oldSpend.id,
@@ -107,7 +107,7 @@ describe("reviewed spending classification", () => {
       fingerprint: preview.fingerprint,
     });
     const resolved = await unwrapDb(ctx.db).execute(
-      sql`SELECT id,cost,"productQuantity",${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id IN (${line.id},${override.id})`,
+      sql`SELECT id,("costMinor"::float8 / 100) AS cost,"productQuantity",${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id IN (${line.id},${override.id})`,
       "objects",
     );
     expect(resolved).toEqual(
@@ -313,7 +313,7 @@ describe("reviewed spending classification", () => {
       spendingCategoryId: null,
     });
     const resolved = await unwrapDb(ctx.db).execute(
-      sql`SELECT e.id, e.cost, e."spendingCategoryId", c.shortcode AS category FROM "Expense" e LEFT JOIN "SpendingCategory" c ON c.id=${effectiveExpenseSpendingCategorySql("e")} WHERE e.id IN (${inherited.entityId}, ${explicit.entityId})`,
+      sql`SELECT e.id, (e."costMinor"::float8 / 100) AS cost, e."spendingCategoryId", c.shortcode AS category FROM "Expense" e LEFT JOIN "SpendingCategory" c ON c.id=${effectiveExpenseSpendingCategorySql("e")} WHERE e.id IN (${inherited.entityId}, ${explicit.entityId})`,
       "objects",
     );
     expect(resolved).toEqual(
@@ -450,7 +450,7 @@ describe("reviewed spending classification", () => {
         lineKind: "principal",
         name: "Fixture historical expense",
         date: "2026-09-01",
-        cost: 12.34,
+        cost: 1234n,
         costType: "materials",
         trade: "other",
         purchaseId: purchase.id,
@@ -549,7 +549,7 @@ describe("reviewed spending classification", () => {
         lineKind: "principal",
         name: "Fixture line",
         date: "2026-09-01",
-        cost: 8.5,
+        cost: 850n,
         costType: "materials",
         trade: "other",
         purchaseId: purchase.id,
@@ -570,7 +570,7 @@ describe("reviewed spending classification", () => {
     const preview = await previewSpendingClassificationReview(ctx.db, request);
     expect(preview.changedExpenseCount).toBe(1);
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET cost=9 WHERE id=${unrelated.id}`,
+      sql`UPDATE "Expense" SET "costMinor"=900 WHERE id=${unrelated.id}`,
     );
     const stillCurrent = await previewSpendingClassificationReview(
       ctx.db,
@@ -595,7 +595,7 @@ describe("reviewed spending classification", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Fixture purchase",
-      cost: 12.34,
+      cost: 1234n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -624,7 +624,7 @@ describe("reviewed spending classification", () => {
     );
     expect(before[0]?.spendingCategoryId).toBeNull();
     await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET cost=15 WHERE id=${expense.id}`,
+      sql`UPDATE "Expense" SET "costMinor"=1500 WHERE id=${expense.id}`,
     );
     await expect(
       applySpendingClassificationReview(context(), {

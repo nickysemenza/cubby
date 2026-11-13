@@ -42,3 +42,19 @@ export const minorToMoney = (minor: bigint): number => {
     );
   return value;
 };
+
+export const nullableMinorToMoney = (minor: bigint | null): number | null =>
+  minor === null ? null : minorToMoney(minor);
+
+/** Whole-cent dollars, tolerating binary float noise as the retired
+ * whole-cent check did, to exact minor units; anything else is refused. */
+export const wholeCentToMinor = (value: number): bigint => {
+  const scaled = value * 100;
+  const minor = Math.round(scaled);
+  if (!Number.isFinite(scaled) || Math.abs(scaled - minor) >= 1e-7)
+    throw new RangeError("Money must resolve to a whole cent.");
+  return BigInt(minor);
+};
+
+export const nullableWholeCentToMinor = (value: number | null): bigint | null =>
+  value === null ? null : wholeCentToMinor(value);

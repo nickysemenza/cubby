@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -297,7 +298,7 @@ describe("manufacturer_part identity", () => {
     );
     expect(
       await getDb(ctx.db)
-        .select({ productId: expense.productId, cost: expense.cost })
+        .select({ productId: expense.productId, cost: expenseCostDollarsSql() })
         .from(expense),
     ).toEqual([{ productId: existing.entityId, cost: 20 }]);
     expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);

@@ -123,7 +123,7 @@ describe("Email review report", () => {
       purchaseId: purchase.id,
       productId: item.entityId,
       name: item.name,
-      cost: 12,
+      cost: 1200n,
       date: "2026-09-01",
       lineKind: "principal",
       costType: "materials",

@@ -428,13 +428,13 @@ async function serviceChargesSummary(
   const [totalsResult, historyResult, latestResult] = await Promise.all([
     unwrapDb(db).execute(
       sql`
-      SELECT count(*) FILTER (WHERE e."cost" > 0)::int AS charges,
-        count(*) FILTER (WHERE e."cost" < 0)::int AS credits,
-        count(*) FILTER (WHERE e."cost" IS NULL)::int AS unpriced,
+      SELECT count(*) FILTER (WHERE e."costMinor" > 0)::int AS charges,
+        count(*) FILTER (WHERE e."costMinor" < 0)::int AS credits,
+        count(*) FILTER (WHERE e."costMinor" IS NULL)::int AS unpriced,
         count(*) FILTER (WHERE e."date" IS NULL)::int AS undated,
         count(*)::int AS count,
-        sum(e."cost")::double precision AS spent
-        , avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average
+        (sum(e."costMinor") / 100.0)::double precision AS spent
+        , (avg(e."costMinor") FILTER (WHERE e."costMinor" > 0) / 100)::double precision AS average
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
     `,
@@ -442,7 +442,7 @@ async function serviceChargesSummary(
     ),
     unwrapDb(db).execute(
       sql`
-      SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
+      SELECT e."shortcode" AS id, e."date"::text AS date, (e."costMinor"::float8 / 100) AS cost
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
       ORDER BY e."date" DESC NULLS LAST, e."id" DESC
@@ -452,10 +452,10 @@ async function serviceChargesSummary(
     ),
     unwrapDb(db).execute(
       sql`
-      SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
+      SELECT e."shortcode" AS id, e."date"::text AS date, (e."costMinor"::float8 / 100) AS cost
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
-        AND e."date" IS NOT NULL AND e."cost" > 0
+        AND e."date" IS NOT NULL AND e."costMinor" > 0
       ORDER BY e."date" DESC, e."id" DESC
       LIMIT 1
     `,

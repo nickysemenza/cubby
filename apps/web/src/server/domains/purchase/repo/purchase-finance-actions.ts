@@ -20,6 +20,7 @@ import { and, count, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -158,7 +159,7 @@ export async function checkLinkExpensesFor(
       : await getDb(db)
           .select({
             id: expense.shortcode,
-            cost: expense.cost,
+            cost: expenseCostDollarsSql(),
             purchaseId: purchase.shortcode,
           })
           .from(expense)

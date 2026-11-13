@@ -66,7 +66,7 @@ describe("Expense category resolution", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       name: "Fixture shoes",
       date: "2026-09-01",
-      cost: 60,
+      cost: 6000n,
       costType: "materials",
       lineKind: "principal",
       productId: product.id,
@@ -141,7 +141,7 @@ describe("Expense category resolution", () => {
     for (let index = 0; index < 12; index++) {
       const line = await insertWithShortcode(ctx.db, "expense", {
         name: `Shared taxonomy fixture ${index}`,
-        cost: 1,
+        cost: 100n,
         date: "2026-09-01",
         costType: "materials",
         lineKind: "principal",
@@ -162,7 +162,7 @@ describe("Expense category resolution", () => {
     });
     const otherLine = await insertWithShortcode(ctx.db, "expense", {
       name: "Shared taxonomy unrelated root",
-      cost: 3,
+      cost: 300n,
       date: "2026-09-01",
       costType: "materials",
       lineKind: "principal",
@@ -241,7 +241,7 @@ describe("Expense category resolution", () => {
     const unresolved = await insertWithShortcode(ctx.db, "expense", {
       name: "Unresolved adjustment evidence",
       date: "2026-09-01",
-      cost: 1.25,
+      cost: 125n,
       costType: "services",
       lineKind: "unclassified",
       trade: null,

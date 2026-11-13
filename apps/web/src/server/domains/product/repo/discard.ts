@@ -135,7 +135,7 @@ const writeDiscardLine = async (
   const storedQuantity = -Math.abs(input.quantity);
   const created = await insertWithShortcode(tx, "expense", {
     name: `Discarded — ${prod.name}`,
-    cost: 0,
+    cost: 0n,
     date: input.date,
     // A Product may only hang off a principal line.
     lineKind: "principal",

@@ -5,6 +5,7 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { productCategoryFeature } from "@cubby/schemas/product-category-fields";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -113,7 +114,7 @@ describe("expense project allocation", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Known receipt item",
-      cost: 10,
+      cost: 1000n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -123,7 +124,7 @@ describe("expense project allocation", () => {
     });
     const unresolved = await insertWithShortcode(ctx.db, "expense", {
       name: "Unresolved receipt row",
-      cost: -1.25,
+      cost: -125n,
       date: "2026-09-20",
       lineKind: "unclassified",
       costType: "services",
@@ -133,7 +134,7 @@ describe("expense project allocation", () => {
     });
     const tax = await insertWithShortcode(ctx.db, "expense", {
       name: "Known receipt tax",
-      cost: 0.25,
+      cost: 25n,
       date: "2026-09-20",
       lineKind: "tax",
       costType: "services",
@@ -183,7 +184,7 @@ describe("expense project allocation", () => {
     await Promise.all([
       insertWithShortcode(ctx.db, "expense", {
         name: "Small principal",
-        cost: 10,
+        cost: 1000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -194,7 +195,7 @@ describe("expense project allocation", () => {
       }),
       insertWithShortcode(ctx.db, "expense", {
         name: "Large principal",
-        cost: 20,
+        cost: 2000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -205,7 +206,7 @@ describe("expense project allocation", () => {
       }),
       insertWithShortcode(ctx.db, "expense", {
         name: "Known zero principal",
-        cost: 0,
+        cost: 0n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -217,7 +218,7 @@ describe("expense project allocation", () => {
     ]);
     const tax = await insertWithShortcode(ctx.db, "expense", {
       name: "Tax",
-      cost: 0.05,
+      cost: 5n,
       date: "2026-09-20",
       lineKind: "tax",
       costType: "services",
@@ -232,7 +233,7 @@ describe("expense project allocation", () => {
     });
     const unrelated = await insertWithShortcode(ctx.db, "expense", {
       name: "Unrelated principal",
-      cost: 100,
+      cost: 10000n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -242,7 +243,7 @@ describe("expense project allocation", () => {
     });
     const standalone = await insertWithShortcode(ctx.db, "expense", {
       name: "Standalone credit",
-      cost: -5,
+      cost: -500n,
       date: "2026-09-20",
       lineKind: "principal",
       costType: "materials",
@@ -450,7 +451,7 @@ describe("expense project allocation", () => {
     await Promise.all([
       insertWithShortcode(ctx.db, "expense", {
         name: "Priced principal",
-        cost: 10,
+        cost: 1000n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -473,7 +474,7 @@ describe("expense project allocation", () => {
     ]);
     const fee = await insertWithShortcode(ctx.db, "expense", {
       name: "Partially covered fee",
-      cost: 1,
+      cost: 100n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -543,7 +544,7 @@ describe("expense project allocation", () => {
       [-10, -20].map((cost, index) =>
         insertWithShortcode(ctx.db, "expense", {
           name: `Refund principal ${index}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -556,7 +557,7 @@ describe("expense project allocation", () => {
     );
     const discount = await insertWithShortcode(ctx.db, "expense", {
       name: "Refund adjustment",
-      cost: -0.05,
+      cost: -5n,
       date: "2026-09-20",
       lineKind: "discount",
       costType: "materials",
@@ -583,7 +584,7 @@ describe("expense project allocation", () => {
     });
     const fee = await insertWithShortcode(ctx.db, "expense", {
       name: "Unweighted shared fee",
-      cost: 2.5,
+      cost: 250n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -634,7 +635,7 @@ describe("expense project allocation", () => {
       [60, 40].map((cost, index) =>
         insertWithShortcode(ctx.db, "expense", {
           name: `Weighted principal ${cost}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -647,7 +648,7 @@ describe("expense project allocation", () => {
     );
     const fee = await insertWithShortcode(ctx.db, "expense", {
       name: "One-cent fee",
-      cost: 0.01,
+      cost: 1n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",
@@ -718,7 +719,7 @@ describe("expense project allocation", () => {
     const principal = (extra: Partial<typeof expense.$inferInsert>) =>
       insertWithShortcode(ctx.db, "expense", {
         name: "Synthetic inherited line",
-        cost: 1,
+        cost: 100n,
         date: "2026-09-20",
         lineKind: "principal",
         costType: "materials",
@@ -798,7 +799,7 @@ describe("expense project allocation", () => {
     ) =>
       insertWithShortcode(ctx.db, "expense", {
         name: `Synthetic ${lineKind} ${cost}`,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-20",
         lineKind,
         costType: lineKind === "principal" ? "materials" : "services",
@@ -962,7 +963,7 @@ describe("expense project allocation", () => {
       [project.id, null].map((projectId, index) =>
         insertWithShortcode(ctx.db, "expense", {
           name: `Mixed principal ${index}`,
-          cost: 50,
+          cost: 5000n,
           date: "2026-09-20",
           lineKind: "principal",
           costType: "materials",
@@ -975,7 +976,7 @@ describe("expense project allocation", () => {
     );
     const fee = await insertWithShortcode(ctx.db, "expense", {
       name: "Mixed assignment fee",
-      cost: 0.03,
+      cost: 3n,
       date: "2026-09-20",
       lineKind: "fee",
       costType: "services",

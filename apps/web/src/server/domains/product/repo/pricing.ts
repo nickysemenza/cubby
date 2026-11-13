@@ -173,7 +173,7 @@ export const resolveProductPriceField = (
  * pricing use the correlated aggregate through {@link kitProjectionFrom};
  * the full-filter footer groups the same measures for visited ancestors.
  */
-const PRICING_OWN_MEASURES = `sum(kpe."cost") FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownCost",
+const PRICING_OWN_MEASURES = `(sum(kpe."costMinor") FILTER (WHERE kpe."productQuantity" IS NOT NULL) / 100.0)::double precision AS "knownCost",
          sum(abs(kpe."productQuantity")) AS "knownUnitCount",
          count(*) FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownExpenseCount",
          count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"`;
@@ -182,7 +182,7 @@ const PRICING_OWN_PREDICATES = `NOT ${serviceProductSqlText('kpe."productId"')}
      AND ${liveAliasSqlText("kpe")}
      AND ${actualExpenseSql("kpe")}
      AND kpe."lineKind" = 'principal'
-     AND kpe."cost" > 0`;
+     AND kpe."costMinor" > 0`;
 
 const PRICING_OWN_AGGREGATE = `SELECT ${PRICING_OWN_MEASURES}
     FROM "Expense" kpe
@@ -314,10 +314,10 @@ export const loadProductPricing = async (
     unwrapDb(db).execute(
       sql`
       SELECT p."id" AS "productId",
-        avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average,
-        count(*) FILTER (WHERE e."cost" > 0)::int AS count,
-        (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
-          FILTER (WHERE e."cost" > 0 AND e."date" IS NOT NULL))[1]::double precision AS latest
+        (avg(e."costMinor") FILTER (WHERE e."costMinor" > 0) / 100)::double precision AS average,
+        count(*) FILTER (WHERE e."costMinor" > 0)::int AS count,
+        ((array_agg(e."costMinor" ORDER BY e."date" DESC, e."id" DESC)
+          FILTER (WHERE e."costMinor" > 0 AND e."date" IS NOT NULL))[1] / 100.0)::double precision AS latest
       FROM "Product" p
       LEFT JOIN "Expense" e ON e."productId" = p."id"
         AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}

@@ -17,6 +17,7 @@ import { applyFinancialSettlementAllocation } from "~/server/domains/financial-t
 import {
   createProductIdentityFixture,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 
 import { proposeSettlementAllocations } from "./purchase-settlement-allocation";
@@ -237,7 +238,7 @@ describe("settlement candidate graph preservation", () => {
     });
     const expenses = () =>
       getDb(ctx.db)
-        .select()
+        .select(dollarExpenseColumns())
         .from(expense)
         .where(
           and(

@@ -1,11 +1,13 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { ExpenseAnalyzeOut, ExpenseFilters } from "@cubby/schemas/project";
 import { testShortcode } from "@cubby/schemas/testing";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, product, productCategory } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
@@ -30,7 +32,7 @@ const line = (
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name: `synthetic root ${name}`,
-    cost,
+    cost: nullableWholeCentToMinor(cost),
     lineKind,
     date: "2026-09-20",
     costType: "materials",
@@ -307,7 +309,7 @@ describe("expense.analyze root Spending Category roll-up", () => {
       });
       expect(
         await unwrapDb(ctx.db)
-          .select({ cost: expense.cost })
+          .select({ cost: expenseCostDollarsSql() })
           .from(expense)
           .where(where),
       ).toEqual([{ cost: 2 }]);

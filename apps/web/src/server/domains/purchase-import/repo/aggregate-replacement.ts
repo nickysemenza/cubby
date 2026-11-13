@@ -6,6 +6,7 @@ import {
   replacementLineAttribution,
   type ExtractedPurchaseLine,
 } from "@cubby/schemas/purchase-import";
+import { nullableMinorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -152,11 +153,16 @@ export async function loadAggregateReplacementSnapshot(
       ),
     )
     .for("update");
-  const [row] = await tx
+  const [lockedRow] = await tx
     .select()
     .from(expense)
     .where(and(eq(expense.id, id), notDeleted(expense)))
     .for("update");
+  // The replacement fingerprint and snapshot keep the dollar-number shape.
+  const row = lockedRow && {
+    ...lockedRow,
+    cost: nullableMinorToMoney(lockedRow.cost),
+  };
   if (!parent || !row || row.purchaseId !== parent.id || row.cost === null)
     throw new Error("The aggregate no longer belongs to this live Purchase.");
   const [claim] = await tx

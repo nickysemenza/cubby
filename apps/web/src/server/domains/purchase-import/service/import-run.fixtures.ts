@@ -198,7 +198,7 @@ export async function importedPurchaseFixture(
     name: "Small Q-17 device",
     purchaseId: order.id,
     productId: item.entityId,
-    cost: 24,
+    cost: 2400n,
     date: "2026-09-01",
     costType: "materials",
     trade: "other",

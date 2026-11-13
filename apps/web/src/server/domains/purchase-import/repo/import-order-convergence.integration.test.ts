@@ -63,6 +63,7 @@ import {
   captureBackgroundQueue,
   drainStoredDerived,
 } from "~/server/testing/background-queue";
+import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
@@ -238,7 +239,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       expect(findings).toHaveLength(1);
       reconciliationFindingId = findings[0]!.id;
       const current = await database
-        .select()
+        .select(dollarExpenseColumns())
         .from(schema.expense)
         .where(
           and(

@@ -6,7 +6,7 @@ import {
   purchaseReconciliation,
   RECONCILIATION_TOLERANCE,
 } from "@cubby/schemas/purchase";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { cents } from "@cubby/shared";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
@@ -333,7 +333,7 @@ describe("state predicates re-declared as values", () => {
           lineKind: "principal",
           purchaseId: row.id,
           name: `Verdict ${label} ${index}`,
-          cost,
+          cost: nullableWholeCentToMinor(cost),
           date: "2026-09-01",
           costType: "services",
           trade: "other",

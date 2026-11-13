@@ -103,7 +103,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       insertWithShortcode(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line A",
-        cost: 10,
+        cost: 1000n,
         date: "2026-01-01",
         costType: "materials",
         productId: productA.entityId,
@@ -112,7 +112,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       insertWithShortcode(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line B",
-        cost: 20,
+        cost: 2000n,
         date: "2026-01-01",
         costType: "materials",
         productId: productB.entityId,
@@ -253,7 +253,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       await insertWithShortcode(ctx.db, "expense", {
         lineKind: "principal",
         name,
-        cost: 10,
+        cost: 1000n,
         date: "2026-01-01",
         costType: "materials",
         productId: product.entityId,
@@ -318,7 +318,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Snack line",
-      cost: 10,
+      cost: 1000n,
       date: "2026-01-01",
       costType: "materials",
       productId: snack.entityId,

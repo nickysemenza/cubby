@@ -75,7 +75,7 @@ describe("one order from two source documents", () => {
         .select({ cost: expense.cost })
         .from(expense)
         .where(notDeleted(expense))
-    ).reduce((total, row) => total + Math.round((row.cost ?? 0) * 100), 0);
+    ).reduce((total, row) => total + Number(row.cost ?? 0n), 0);
   const livePurchases = () =>
     getDb(ctx.db)
       .select({ shortcode: purchase.shortcode, orderId: purchase.orderId })

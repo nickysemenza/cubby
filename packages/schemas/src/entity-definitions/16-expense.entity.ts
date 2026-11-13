@@ -1123,7 +1123,7 @@ Rules:
       },
       { key: "shortcode", specialized: "shortcode" },
       "name",
-      { key: "cost", specialized: "double-precision" },
+      { key: "cost", specialized: "minor-unit-money" },
       "date",
       {
         key: "lineKind",
@@ -1342,8 +1342,8 @@ Rules:
         sql: "{deletedAt} IS NOT NULL OR {lineKind} IN ('principal', 'unclassified') OR ({projectId} IS NULL AND {purchaseId} IS NOT NULL)",
       },
       {
-        name: "Expense_cost_whole_cent_check",
-        sql: "{cost} IS NULL OR abs({cost} * 100 - round({cost} * 100)) < 0.0000001",
+        name: "Expense_cost_minor_range_check",
+        sql: "{cost} IS NULL OR abs({cost}) <= 100000000000000",
       },
       // Signed; zero only where the money is known to be negative — see the
       // ledger rule on `productQuantity`.

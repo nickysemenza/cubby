@@ -49,7 +49,7 @@ describe("project attention activity", () => {
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic later acquisition",
       productId: product.entityId,
-      cost: 20,
+      cost: 2000n,
       date: "2024-02-01",
       future: false,
       lineKind: "principal",
@@ -136,7 +136,7 @@ describe("project attention activity", () => {
         trade: "other",
         lineKind: "principal",
         projectId,
-        cost: -10,
+        cost: -1000n,
         future: false,
         date: householdDaysAgo(2),
       });
@@ -146,7 +146,7 @@ describe("project attention activity", () => {
       trade: "other",
       lineKind: "principal",
       projectId: stale.id,
-      cost: 10,
+      cost: 1000n,
       date: householdDaysAgo(1),
       deletedAt: new Date(),
     });

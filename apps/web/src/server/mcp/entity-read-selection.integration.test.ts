@@ -52,7 +52,7 @@ describe("entity_read field selection", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Synthetic selection line",
-      cost: 12.5,
+      cost: 1250n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",

@@ -336,7 +336,7 @@ const vendorPurchasedBrandProductCount = vendorBrandedProducts()
 const vendorBrandSpend = vendorBrandedProducts()
   .join(expense, (e, g) => eq(e.productId, g.id))
   .where((e) => related(purchase, (p) => eq(p.id, e.purchaseId)).exists())
-  .sum((e) => e.cost);
+  .sum((e) => sql`${e.cost}::numeric / 100`);
 
 async function loadVendorBrandSpend(
   db: Database | DrizzleTransaction,
@@ -349,7 +349,7 @@ async function loadVendorBrandSpend(
   const rows = await getDb(database)
     .select({
       vendorId: product.brandId,
-      spend: sql<number>`COALESCE(sum(${expense.cost}), 0)::double precision`,
+      spend: sql<number>`(COALESCE(sum(${expense.cost}), 0) / 100.0)::double precision`,
     })
     .from(product)
     .innerJoin(

@@ -10,7 +10,7 @@ import {
   parseShortcodeFor,
   type ExpenseShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcode } from "@cubby/shared";
+import { parseShortcode, nullableMinorToMoney } from "@cubby/shared";
 import { and, eq, getTableColumns, inArray, sql, type SQL } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
@@ -164,6 +164,12 @@ function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
     ? sql<unknown>`jsonb_build_object(${sql.join(pairs, sql`, `)})`
     : sql<unknown>`'{}'::jsonb`;
 }
+
+/** Evidence snapshots keep Expense cost on the dollar-number wire. */
+const dollarExpense = (row: typeof expense.$inferSelect) => ({
+  ...row,
+  cost: nullableMinorToMoney(row.cost),
+});
 
 const jsonEvidence = z.json();
 type ConnectionJson = z.infer<typeof jsonEvidence>;
@@ -566,7 +572,7 @@ async function readConnectionBases(
       if (row.purchaseId && row.productId)
         purchaseProducts
           .get(pairKey(row.purchaseId, row.productId))
-          ?.expenses.push(row);
+          ?.expenses.push(dollarExpense(row));
   }
   return {
     locked: lock,
@@ -726,7 +732,8 @@ export async function captureConnectionEvidence(
               notDeleted(expense),
             ),
           )
-          .orderBy(expense.id),
+          .orderBy(expense.id)
+          .then((rows) => rows.map(dollarExpense)),
       });
       break;
     }

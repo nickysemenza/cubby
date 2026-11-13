@@ -649,7 +649,7 @@ async function liveExpenseTotalCents(
     row.unresolved === 0 &&
     Number(row.uncovered) === 0 &&
     row.total !== null
-    ? cents(Number(row.total))
+    ? Number(row.total)
     : null;
 }
 

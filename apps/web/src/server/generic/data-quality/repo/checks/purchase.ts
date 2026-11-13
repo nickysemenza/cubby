@@ -115,11 +115,11 @@ async function loadPurchaseQualityRecords(
   // published checks, never these ledger/settlement inputs.
   const expenses = sql`(SELECT qe."purchaseId",
     count(*)::int AS "expenseCount",
-    count(*) FILTER (WHERE qe."cost" IS NULL AND ${sql.raw(actualExpenseSql("qe"))})::int AS "settleableUnpricedCount",
-    coalesce(sum(qe."cost") FILTER (WHERE ${sql.raw(actualExpenseSql("qe"))}), 0)::double precision AS "settleableTotal",
-    coalesce(sum(qe."cost"::numeric) FILTER (WHERE qe."economicRole" = ${vendorRole}), 0)::double precision AS "vendorTotal",
+    count(*) FILTER (WHERE qe."costMinor" IS NULL AND ${sql.raw(actualExpenseSql("qe"))})::int AS "settleableUnpricedCount",
+    (coalesce(sum(qe."costMinor") FILTER (WHERE ${sql.raw(actualExpenseSql("qe"))}), 0) / 100.0)::double precision AS "settleableTotal",
+    (coalesce(sum(qe."costMinor") FILTER (WHERE qe."economicRole" = ${vendorRole}), 0) / 100.0)::double precision AS "vendorTotal",
     count(*) FILTER (WHERE qe."economicRole" = ${vendorRole})::int AS "vendorCount",
-    count(*) FILTER (WHERE qe."economicRole" = ${vendorRole} AND qe."cost" IS NULL)::int AS "vendorUnpricedCount"
+    count(*) FILTER (WHERE qe."economicRole" = ${vendorRole} AND qe."costMinor" IS NULL)::int AS "vendorUnpricedCount"
     FROM "Expense" qe
     WHERE ${notDeleted("qe")} AND qe."purchaseId" = ANY(${uuidArrayParam(ids)})
     GROUP BY qe."purchaseId") quality_expenses`;

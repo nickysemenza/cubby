@@ -112,7 +112,11 @@ async function loadOccurrenceClosures(
           "purchases",
           `to_jsonb(r)||jsonb_build_object('statedTotalMinor',r."statedTotalMinor"::text)`,
         ],
-        ["expenses", "expenses", "to_jsonb(r)"],
+        [
+          "expenses",
+          "expenses",
+          `to_jsonb(r)||jsonb_build_object('costMinor',r."costMinor"::text)`,
+        ],
         [
           "recordedAttribution",
           "attribution",

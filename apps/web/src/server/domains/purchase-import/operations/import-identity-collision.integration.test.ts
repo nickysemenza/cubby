@@ -27,6 +27,7 @@ import {
   createProductFixture,
   createProductIdentityFixture,
   makeProductInput,
+  dollarExpenseColumns,
 } from "~/server/testing/repo.fixtures";
 
 import { lockPartySettlement } from "../repo/retained-settlement";
@@ -309,7 +310,9 @@ describe("purchase import identifier collisions", () => {
     });
     const [existing] = await getDb(ctx.db).select().from(purchase);
     if (!existing) throw new Error("Imported Purchase missing.");
-    const beforeExpenses = await getDb(ctx.db).select().from(expense);
+    const beforeExpenses = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     let imported: ReturnType<typeof second.commit> | undefined;
     let changed: Promise<void> | undefined;
     let changeSettled = false;
@@ -369,7 +372,9 @@ describe("purchase import identifier collisions", () => {
       if (imported) await imported;
       if (changed) await changed;
     }
-    expect(await getDb(ctx.db).select().from(expense)).toEqual(beforeExpenses);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toEqual(beforeExpenses);
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(1);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       2,
@@ -433,7 +438,9 @@ describe("purchase import identifier collisions", () => {
     }
     expect(statuses).toEqual(["fulfilled", "fulfilled"]);
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
-    expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);
+    expect(
+      await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
+    ).toHaveLength(2);
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       4,
     );
@@ -445,7 +452,9 @@ describe("purchase import identifier collisions", () => {
     expect(
       await getDb(ctx.db).select().from(sourceOrderObservation),
     ).toHaveLength(4);
-    const lines = await getDb(ctx.db).select().from(expense);
+    const lines = await getDb(ctx.db)
+      .select(dollarExpenseColumns())
+      .from(expense);
     expect(lines.map((row) => row.productId).sort()).toEqual(
       [f.copper.entityId, f.blue.entityId].sort(),
     );

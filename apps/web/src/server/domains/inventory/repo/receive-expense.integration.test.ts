@@ -55,7 +55,7 @@ describe("atomic reviewed Expense receiving", () => {
     const line = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Receiving fixture line",
-      cost: 12,
+      cost: 1200n,
       date: "2026-09-01",
       costType: "materials",
       purchaseId: purchase.id,
@@ -135,7 +135,7 @@ describe("atomic reviewed Expense receiving", () => {
     const secondLine = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Second line",
-      cost: 5,
+      cost: 500n,
       date: "2026-09-01",
       costType: "materials",
       purchaseId: f.purchase.id,

@@ -1,7 +1,7 @@
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import { rawPurchaseListItemOut } from "@cubby/schemas/purchase-raw-read";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -55,7 +55,7 @@ describe("purchase reconciliation=mismatch filter", () => {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: `Line ${label}`,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         costType: "services",
         trade: "other",
@@ -145,7 +145,7 @@ describe("purchase list display labels", () => {
       lineKind: "principal",
       purchaseId: purchase.id,
       name: "Label line",
-      cost: 50,
+      cost: 5000n,
       date: "2026-09-01",
       costType: "services",
       trade: "other",

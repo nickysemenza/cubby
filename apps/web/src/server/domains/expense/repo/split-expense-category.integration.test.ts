@@ -4,6 +4,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense } from "~/server/db/schema";
@@ -33,7 +34,7 @@ describe("atomic split classification intent", () => {
     });
     const original = await insertWithShortcode(ctx.db, "expense", {
       name: "Unitemized fixture charge",
-      cost: 60,
+      cost: 6000n,
       date: "2026-09-01",
       purchaseId: purchase.id,
       spendingCategoryId: originalCategory.id,
@@ -83,7 +84,7 @@ describe("atomic split classification intent", () => {
     const rows = await getDb(ctx.db)
       .select({
         name: expense.name,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         category: expense.spendingCategoryId,
         basis: expense.lineBasis,
       })
@@ -155,7 +156,7 @@ describe("atomic split classification intent", () => {
       ),
     ).rejects.toMatchObject({ reason: "CLASSIFICATION_POLICY_REFUSED" });
     const live = await getDb(ctx.db)
-      .select({ id: expense.id, cost: expense.cost })
+      .select({ id: expense.id, cost: expenseCostDollarsSql() })
       .from(expense)
       .where(and(eq(expense.purchaseId, purchase.id), notDeleted(expense)));
     expect(live).toEqual([{ id: original.id, cost: 60 }]);

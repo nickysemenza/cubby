@@ -1,7 +1,7 @@
 import type { FinancialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -95,7 +95,7 @@ describe("purchase evidence policy", () => {
       lineKind: "principal",
       name: "Reviewed statement booking",
       purchaseId: purchase.id,
-      cost: 25,
+      cost: 2500n,
       date: "2026-09-01",
       costType: "materials",
       lineBasis: "allocation",
@@ -125,7 +125,7 @@ describe("purchase evidence policy", () => {
       insertWithShortcode(ctx.db, "expense", {
         name: "Fixture line",
         purchaseId: purchase.id,
-        cost: 10,
+        cost: 1000n,
         date: "2026-09-01",
         costType: "materials",
         lineKind: "principal",
@@ -204,7 +204,7 @@ describe("purchase evidence policy", () => {
       insertWithShortcode(ctx.db, "expense", {
         name,
         purchaseId: purchase.id,
-        cost: economicRole === "vendor" ? 500 : 0,
+        cost: nullableWholeCentToMinor(economicRole === "vendor" ? 500 : 0),
         date: "2026-09-01",
         costType: "materials",
         lineKind: "principal",
@@ -274,7 +274,7 @@ describe("purchase evidence policy", () => {
     const unlinked = await insertWithShortcode(ctx.db, "expense", {
       name: "Fixture unlinked goods",
       purchaseId: purchase.id,
-      cost: 0,
+      cost: 0n,
       date: "2026-09-01",
       costType: "materials",
       lineKind: "principal",
@@ -412,7 +412,7 @@ describe("purchase evidence policy", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Required goods line",
-      cost: 25,
+      cost: 2500n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -475,7 +475,7 @@ describe("purchase evidence policy", () => {
       await insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,
         name: "Required merchandise",
-        cost: 25,
+        cost: 2500n,
         date: "2026-09-01",
         costType: "materials",
         trade: "other",
@@ -499,7 +499,7 @@ describe("purchase evidence policy", () => {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Reviewed credit booking",
-        cost: -10,
+        cost: -1000n,
         date: "2026-09-01",
         costType: "materials",
         trade: "other",
@@ -512,7 +512,7 @@ describe("purchase evidence policy", () => {
           lineKind: "principal",
           purchaseId: purchase.id,
           name: "Mixed vendor booking",
-          cost: 0,
+          cost: 0n,
           date: "2026-09-01",
           costType: "materials",
           trade: "other",
@@ -578,7 +578,7 @@ describe("purchase evidence policy", () => {
       lineKind: "principal",
       purchaseId: purchase.id,
       name: "Historical reviewed aggregate",
-      cost: 25,
+      cost: 2500n,
       date: "2026-09-01",
       costType: "materials",
       trade: "other",
@@ -623,7 +623,7 @@ describe("purchase evidence policy", () => {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Historical reviewed aggregate",
-        cost: 25,
+        cost: 2500n,
         date: "2026-09-01",
         costType: "materials",
         trade: "other",

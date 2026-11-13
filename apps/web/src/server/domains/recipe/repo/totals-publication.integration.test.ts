@@ -146,7 +146,7 @@ describe("recipe Job publication", () => {
       expect(before).toMatchObject({ cost: { lower: 10 } });
       const fields =
         change === "price edit"
-          ? { cost: 20 }
+          ? { cost: 2000n }
           : change === "removal"
             ? { deletedAt: new Date() }
             : { productId: other.entityId };

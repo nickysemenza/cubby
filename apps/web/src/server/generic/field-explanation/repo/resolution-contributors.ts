@@ -561,12 +561,12 @@ async function productPriceEvidence(
   const result = await unwrapDb(db).execute(
     sql`
     ${kitAncestorCteSql(sql`SELECT p.id,p.id,1::numeric,1::numeric,0 FROM "Product" p WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`)}
-    SELECT e.shortcode,e.name,e.cost,e."productQuantity",p.shortcode AS "productCode",p.name AS "productName",
+    SELECT e.shortcode,e.name,(e."costMinor"::float8 / 100) AS cost,e."productQuantity",p.shortcode AS "productCode",p.name AS "productName",
       ka."costWeight"::double precision AS "costWeight",ka."unitWeight"::double precision AS "unitWeight",ka.depth,
       count(*) OVER()::int AS total
     FROM kit_anc ka JOIN "Product" p ON p.id=ka."productId" AND ${notDeleted("p")}
     JOIN "Expense" e ON e."productId"=ka."productId" AND ${notDeleted("e")}
-      AND ${sql.raw(actualExpenseSql("e"))} AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e.cost>0
+      AND ${sql.raw(actualExpenseSql("e"))} AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e."costMinor">0
     ORDER BY ka.depth,e.date DESC NULLS LAST,e.shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`,
     "objects",
   );

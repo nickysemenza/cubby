@@ -1,4 +1,5 @@
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
@@ -6,6 +7,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -88,7 +90,7 @@ describe("reviewed booking category and refund capacity", () => {
       insertWithShortcode(ctx.db, "expense", {
         purchaseId: purchase.id,
         name: "Booking fixture line",
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         costType: "materials",
         trade: "other",
@@ -184,7 +186,7 @@ describe("reviewed booking category and refund capacity", () => {
     await commitFinancialBooking(ctx.db, review, ctx.actor);
     await getDb(ctx.db)
       .update(expense)
-      .set({ cost: 1 })
+      .set({ cost: 100n })
       .where(eq(expense.id, receipt.id));
     await expect(
       commitFinancialBooking(ctx.db, review, ctx.actor),
@@ -212,7 +214,7 @@ describe("reviewed booking category and refund capacity", () => {
       },
     });
     expect(stored).toHaveLength(1);
-    expect(stored[0]?.cost).toBe(-25);
+    expect(stored[0]?.cost).toBe(-2500n);
   });
   it("books displayed category defaults without materializing Purchase or Expense overrides", async () => {
     const { purchase, category, book } = await fixture();
@@ -229,7 +231,7 @@ describe("reviewed booking category and refund capacity", () => {
     const [storedLine] = await getDb(ctx.db)
       .select({
         spendingCategoryId: expense.spendingCategoryId,
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
       })
       .from(expense)
       .where(eq(expense.shortcode, result.expenseId));
@@ -465,7 +467,7 @@ describe("reviewed booking category and refund capacity", () => {
       }),
     ).toMatchObject({
       deletedAt: null,
-      cost: 25,
+      cost: 2500n,
       notes: "Synthetic reviewed note change",
     });
     expect(
@@ -560,7 +562,7 @@ describe("finance.book_transaction", () => {
     await insertWithShortcode(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Synthetic lodge stay",
-      cost: 100,
+      cost: 10000n,
       date: "2026-09-01",
       costType: "services",
       trade: "other",
@@ -604,7 +606,7 @@ describe("finance.book_transaction", () => {
   ) =>
     getDb(ctx.db)
       .select({
-        cost: expense.cost,
+        cost: expenseCostDollarsSql(),
         economicRole: expense.economicRole,
         bookingTransactionCode: expense.bookingTransactionCode,
       })

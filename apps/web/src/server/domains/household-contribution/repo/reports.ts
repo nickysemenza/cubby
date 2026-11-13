@@ -83,7 +83,7 @@ async function loadExpenseFacts(
   const result = await unwrapDb(db).execute<ExpenseFact>(sql`
     SELECT
       ${expense.shortcode} AS shortcode,
-      ${scope.projectIds ? sql`derived_cost."costCents"::text` : sql`round((${expense.cost})::numeric * 100)::bigint::text`} AS "costCents",
+      ${scope.projectIds ? sql`derived_cost."costCents"::text` : sql`${expense.cost}::text`} AS "costCents",
       ${expense.future} AS future
     FROM ${expense}
     ${scope.projectIds ? sql`JOIN (${expenseDerivedCostsSql({ projectIds: scope.projectIds })}) derived_cost ON derived_cost."expenseId" = ${expense.id}` : sql``}

@@ -159,7 +159,7 @@ export const matchExpenses = async (
       SELECT
         e."shortcode"   AS "expenseShortcode",
         e."name"        AS "name",
-        e."cost"        AS "cost",
+        (e."costMinor"::float8 / 100) AS "cost",
         e."date"        AS "date",
         e."future"      AS "future",
         e."notes"       AS "notes",
@@ -177,8 +177,8 @@ export const matchExpenses = async (
         -- sees them. Anything that starts reading these off an unlinked
         -- candidate must partition on a non-null key first.
         count(e."id") OVER (PARTITION BY p."id")::int AS "purchaseExpenseCount",
-        COALESCE(sum(e."cost") OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseExpenseTotal",
-        count(*) FILTER (WHERE e."cost" IS NULL) OVER (PARTITION BY p."id")::int AS "purchaseUnpricedExpenseCount",
+        (COALESCE(sum(e."costMinor") OVER (PARTITION BY p."id"), 0) / 100.0)::double precision AS "purchaseExpenseTotal",
+        count(*) FILTER (WHERE e."costMinor" IS NULL) OVER (PARTITION BY p."id")::int AS "purchaseUnpricedExpenseCount",
         -- Settlement compares against INCURRED spend only; see
         -- FinancialReconciliationInput. The full total above is what the
         -- candidate row displays.
@@ -192,8 +192,8 @@ export const matchExpenses = async (
         -- re-scan "Expense" for every candidate to recompute numbers this pass
         -- already has. Same rule, and it must stay the same rule — a different
         -- shape is the price.
-        COALESCE(sum(e."cost") FILTER (WHERE ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id"), 0)::double precision AS "purchaseSettleableExpenseTotal",
-        count(*) FILTER (WHERE e."cost" IS NULL AND ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
+        (COALESCE(sum(e."costMinor") FILTER (WHERE ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id"), 0) / 100.0)::double precision AS "purchaseSettleableExpenseTotal",
+        count(*) FILTER (WHERE e."costMinor" IS NULL AND ${sql.raw(actualExpenseSql("e"))}) OVER (PARTITION BY p."id")::int AS "purchaseSettleableUnpricedExpenseCount",
         v."name"        AS "vendorName",
         pr."name"       AS "projectName",
         pd."name"       AS "productName"

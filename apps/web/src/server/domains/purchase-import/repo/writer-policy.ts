@@ -159,7 +159,7 @@ const unpricedItemizationExpenseSql = (row: {
     SELECT 1 FROM "Expense" carried
     WHERE carried."purchaseId" = ${row.purchaseId} AND ${notDeleted("carried")}
       AND carried."lineBasis" = ${"allocation"}
-      AND carried.cost = (${order.originalOrder} #>> '{extraction,candidate,printedGrandTotal}')::numeric
+      AND carried."costMinor"::numeric = (${order.originalOrder} #>> '{extraction,candidate,printedGrandTotal}')::numeric * 100
   )`,
     )
     .exists();

@@ -151,7 +151,7 @@ const loadCommitted = (db: Database) =>
   unwrapDb(db)
     .select({
       date: sql<string>`${expense.date}::text`,
-      cents: sql<string>`round(sum(${expense.cost})::numeric * 100)::bigint::text`,
+      cents: sql<string>`sum(${expense.cost})::text`,
     })
     .from(expense)
     .where(and(notDeleted(expense), plannedExpense(), isNotNull(expense.cost)))

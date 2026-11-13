@@ -174,7 +174,7 @@ describe("acceptFinancialTransferPair", () => {
       });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic booked refund",
-      cost: -60,
+      cost: -6000n,
       date: "2026-05-03",
       lineKind: "principal",
       costType: "materials",

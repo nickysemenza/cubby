@@ -185,9 +185,7 @@ export async function liveExpenseCents(db: Database, purchaseId: string) {
         notDeleted(expense),
       ),
     );
-  return rows
-    .map((row) => Math.round((row.cost ?? 0) * 100))
-    .sort((a, b) => a - b);
+  return rows.map((row) => Number(row.cost ?? 0n)).sort((a, b) => a - b);
 }
 
 export async function purchasesForOrder(db: Database, orderId: string) {

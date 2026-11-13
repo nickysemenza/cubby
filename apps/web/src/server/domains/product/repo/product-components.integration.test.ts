@@ -443,7 +443,7 @@ describe("product ⟷ product component links (kit composition)", () => {
 
       await insertWithShortcode(ctx.db, "expense", {
         name: "Kit deposit",
-        cost: 100,
+        cost: 10000n,
         date: "2026-01-01",
         lineKind: "principal",
         costType: "materials",
@@ -454,7 +454,7 @@ describe("product ⟷ product component links (kit composition)", () => {
       });
       await insertWithShortcode(ctx.db, "expense", {
         name: "Kit balance",
-        cost: 149,
+        cost: 14900n,
         date: "2026-01-02",
         lineKind: "principal",
         costType: "materials",

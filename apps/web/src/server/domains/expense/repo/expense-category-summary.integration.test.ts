@@ -1,5 +1,6 @@
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -36,7 +37,7 @@ describe("live Expense category summaries", () => {
     ] as const)
       await insertWithShortcode(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         spendingCategoryId: category.id,
         purchaseId: purchase.id,
         date: "2026-09-20",
@@ -64,7 +65,7 @@ describe("live Expense category summaries", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Sales tax",
-      cost: 5,
+      cost: 500n,
       purchaseId: purchase.id,
       date: "2026-09-20",
       costType: "materials",
@@ -190,7 +191,7 @@ describe("live Expense category summaries", () => {
     ] as const) {
       await insertWithShortcode(ctx.db, "expense", {
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         lineKind,
         spendingCategoryId: lineKind === "principal" ? category.id : null,
         purchaseId: purchase.id,
@@ -209,7 +210,7 @@ describe("live Expense category summaries", () => {
     });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Automatic tax without known principal weights",
-      cost: 2,
+      cost: 200n,
       lineKind: "tax",
       purchaseId: purchase.id,
       date: "2026-09-20",
@@ -237,7 +238,7 @@ describe("live Expense category summaries", () => {
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Known line",
-      cost: 20,
+      cost: 2000n,
       spendingCategoryId: category.id,
       purchaseId: purchase.id,
       date: "2026-09-20",

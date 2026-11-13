@@ -20,7 +20,11 @@ import {
   type RunFindingRoutingKind,
 } from "@cubby/schemas/purchase-import";
 import { tradeSchema } from "@cubby/schemas/task-fields";
-import { cents } from "@cubby/shared";
+import {
+  cents,
+  wholeCentToMinor,
+  nullableWholeCentToMinor,
+} from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -106,7 +110,7 @@ async function refundTally(
       and(
         eq(expense.purchaseId, purchaseId),
         eq(expense.economicRole, "vendor"),
-        sql`round(${expense.cost} * 100) = ${-refundCents}`,
+        sql`${expense.cost} = ${-refundCents}`,
         notDeleted(expense),
       ),
     );
@@ -304,7 +308,7 @@ async function applyFix(
     const row = await insertWithShortcode(tx, "expense", {
       purchaseId,
       name: fix.title,
-      cost: fix.amount,
+      cost: wholeCentToMinor(fix.amount),
       date: targetPurchase.date,
       lineKind: "principal",
       lineBasis: "item_line",
@@ -414,7 +418,7 @@ async function applyAggregateReplacement(
         [aggregate.notes, line.seller ? `Seller: ${line.seller}` : null]
           .filter(Boolean)
           .join("\n") || null,
-      cost: line.amount,
+      cost: nullableWholeCentToMinor(line.amount),
       date: aggregate.date,
       future: aggregate.future,
       lineKind: identity.lineKind,

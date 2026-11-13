@@ -1,6 +1,7 @@
 import { and, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
@@ -68,7 +69,7 @@ async function loadExpenseQualityRecords(
       shortcode: expense.shortcode,
       future: expense.future,
       lineKind: expense.lineKind,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       productQuantity: expense.productQuantity,
       productId: expense.productId,
       categoryMissing: sql<boolean>`coalesce(quality_category.missing, true)`,

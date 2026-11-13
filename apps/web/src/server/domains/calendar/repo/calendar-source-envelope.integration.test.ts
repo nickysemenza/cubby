@@ -38,7 +38,7 @@ describe("Calendar selected source envelopes", () => {
     const expense = await insertWithShortcode(ctx.db, "expense", {
       name: "Synthetic calendar materials",
       date: "2026-10-10",
-      cost: 17,
+      cost: 1700n,
       projectId: project.id,
       lineKind: "principal",
       costType: "materials",

@@ -37,7 +37,10 @@ import { groupBy, sumBy } from "es-toolkit";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
-import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  actualExpense,
+  expenseCostDollarsSql,
+} from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -343,7 +346,7 @@ export async function getProductMovementTimeline(
       expenseCode: expense.shortcode,
       expenseName: expense.name,
       expenseDate: expense.date,
-      cost: expense.cost,
+      cost: expenseCostDollarsSql(),
       quantity: expense.productQuantity,
       future: expense.future,
       productId: expense.productId,

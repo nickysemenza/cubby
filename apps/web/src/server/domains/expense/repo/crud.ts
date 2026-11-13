@@ -24,6 +24,7 @@ import type {
   ExpenseCreateInput,
 } from "@cubby/schemas/project";
 import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
+import { nullableMinorToMoney, nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -171,7 +172,10 @@ const expenseCrud = createEntityCrud({
       spendingCategoryId: data.spendingCategoryId,
       economicRole: data.economicRole,
       name: data.name,
-      cost: data.cost,
+      cost:
+        data.cost === undefined
+          ? undefined
+          : nullableWholeCentToMinor(data.cost),
       date: data.date,
       lineKind: data.lineKind,
       lineBasis: data.lineBasis,
@@ -497,7 +501,7 @@ export const updateExpense = defineMutationWriter({
       const nestedBefore = nestedChanged
         ? await readNestedExpenseAudit(tx, id)
         : undefined;
-      const qualityBefore = await tx.query.expense.findFirst({
+      const storedQuality = await tx.query.expense.findFirst({
         where: {
           RAW: (table: PgTable) =>
             relationalSql(table, and(eq(expense.id, id), notDeleted(expense))),
@@ -516,6 +520,10 @@ export const updateExpense = defineMutationWriter({
           trade: true,
         },
       });
+      const qualityBefore = storedQuality && {
+        ...storedQuality,
+        cost: nullableMinorToMoney(storedQuality.cost),
+      };
       const nextCost =
         data.cost === undefined ? (qualityBefore?.cost ?? null) : data.cost;
       if (qualityBefore?.cost === null && nextCost !== null) {
@@ -1007,7 +1015,7 @@ const expenseInsertValues = (
   spendingCategoryId,
   economicRole: data.economicRole,
   name: data.name,
-  cost: data.cost,
+  cost: nullableWholeCentToMinor(data.cost),
   date: data.date,
   lineKind: tuple.lineKind,
   lineBasis: data.lineBasis,

@@ -63,6 +63,7 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
   notDeleted,
@@ -89,10 +90,10 @@ import {
 } from "~/server/domains/garden/repo/garden";
 import { mealScaffold } from "~/server/domains/meal/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
-import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 // Purchase field reads below resolve through the read ports this scaffold
 // registers; without the import, they depend on module load order.
 import "~/server/domains/purchase/repo/purchase";
+import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { loadPurchaseSpending } from "~/server/domains/purchase/repo/purchase-spending";
 import { readTasksByIds } from "~/server/domains/task/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
@@ -632,7 +633,7 @@ async function getCalendarItems(
             shortcode: expense.shortcode,
             name: expense.name,
             expenseId: expense.id,
-            cost: expense.cost,
+            cost: expenseCostDollarsSql(),
             projectName: project.name,
             productName: product.name,
             productCategoryShortcode: productCategory.shortcode,

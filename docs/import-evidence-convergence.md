@@ -1443,14 +1443,16 @@ Settled money is stored as signed exact minor units (bigint): source amounts,
 `PurchasePaymentEvidence.amountMinor` (signed USD, including original zero
 lines, which are neither discarded nor merged),
 `FinancialTransactionAllocation.amountMinor` (signed, nonzero), FinancialTransaction
-amounts and Purchase `statedTotalMinor` (nullable). Sums, keys, conservation,
-merging and direct comparisons use minor units. Native, MCP, entity and audit
-wires, purchase-import and spending boundaries, and retained fingerprints keep
-dollar numbers (`amount`, `statedTotal`), including the frozen reconciliation
-fingerprint shape. Source extracts and successful receipts are never rewritten.
-`Expense.cost` stays a dollar value until its noisy originals have exact
-decimal evidence or a member judgment; a diagnostic tolerance classifies
-floating noise but never authorizes rounding stored money.
+amounts, Purchase `statedTotalMinor` (nullable) and Expense `costMinor`
+(nullable, signed USD). Sums, keys, conservation, merging and direct
+comparisons use minor units. Native, MCP, entity and audit wires,
+purchase-import and spending boundaries, and retained fingerprints keep dollar
+numbers (`amount`, `statedTotal`, `cost`), including the frozen
+reconciliation fingerprint shape. Source extracts and successful receipts are
+never rewritten. Expense writers accept a dollar value only when it resolves to
+a whole cent within binary float tolerance and refuse anything else. Foreign
+amounts stay in source evidence; Expense accounting is USD. Preimages of
+converted money tables are retained in the `archive` schema.
 
 SQL money projections share `server/db/computed/money.ts`, with explicit numeric
 or float8 result types. Raw SQL dollar fields entering retained JavaScript

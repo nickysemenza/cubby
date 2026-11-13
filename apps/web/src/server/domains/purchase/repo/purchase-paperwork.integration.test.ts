@@ -1,6 +1,6 @@
 import { splitExpenseInput } from "@cubby/schemas/purchase";
 import { testShortcode } from "@cubby/schemas/testing";
-import { moneyToMinor } from "@cubby/shared";
+import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -35,7 +35,7 @@ describe("vendor paperwork and household reimbursements", () => {
         lineKind: "principal",
         purchaseId: purchase.id,
         name,
-        cost,
+        cost: nullableWholeCentToMinor(cost),
         date: "2026-09-01",
         economicRole,
         costType: "services",
@@ -81,7 +81,7 @@ describe("vendor paperwork and household reimbursements", () => {
       lineKind: "principal",
       name: "Original bill",
       purchaseId: purchase.id,
-      cost: 120,
+      cost: 12000n,
       date: "2026-09-01",
       costType: "services",
       trade: "other",
@@ -94,7 +94,7 @@ describe("vendor paperwork and household reimbursements", () => {
       lineKind: "principal",
       name: "Friend reimbursement",
       purchaseId: purchase.id,
-      cost: -40,
+      cost: -4000n,
       date: "2026-09-01",
       costType: "services",
       trade: "other",

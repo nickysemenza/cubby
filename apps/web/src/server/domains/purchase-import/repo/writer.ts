@@ -21,6 +21,7 @@ import { and, eq, isNotNull, or, sql } from "drizzle-orm";
 
 import type { DecisionChoiceResult } from "~/server/ai/decision-model";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   databaseForTransaction,
   getDb,
@@ -237,7 +238,7 @@ export async function existingExpenses(
     .select({
       id: expense.id,
       title: expense.name,
-      amount: expense.cost,
+      amount: expenseCostDollarsSql(),
       lineKind: expense.lineKind,
       lineBasis: expense.lineBasis,
       productQuantity: expense.productQuantity,

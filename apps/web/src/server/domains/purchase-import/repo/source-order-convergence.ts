@@ -8,6 +8,7 @@ import { cents } from "@cubby/shared";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   databaseForTransaction,
@@ -68,7 +69,7 @@ async function readLines(
       id: expense.id,
       shortcode: expense.shortcode,
       title: expense.name,
-      amount: expense.cost,
+      amount: expenseCostDollarsSql(),
       lineKind: expense.lineKind,
       productId: expense.productId,
       projectId: expense.projectId,

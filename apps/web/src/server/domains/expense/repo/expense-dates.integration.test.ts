@@ -1,4 +1,5 @@
 import { expenseCreateInput } from "@cubby/schemas/project";
+import { wholeCentToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -46,7 +47,7 @@ describe("unknown expense dates", () => {
       await expect(
         getDb(ctx.db)
           .update(expense)
-          .set({ cost })
+          .set({ cost: wholeCentToMinor(cost) })
           .where(eq(expense.shortcode, undated.id)),
       ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
       expect(await readExpense(ctx.db, undated.id)).toMatchObject({
@@ -78,7 +79,7 @@ describe("unknown expense dates", () => {
     await expect(
       getDb(ctx.db)
         .update(expense)
-        .set({ cost: 12 })
+        .set({ cost: 1200n })
         .where(eq(expense.shortcode, unknown.id)),
     ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
     // Unknown cost is never $0 spend in the date-based reports.

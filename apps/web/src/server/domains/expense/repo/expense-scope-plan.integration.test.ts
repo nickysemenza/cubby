@@ -1,4 +1,5 @@
 import type { ExpenseId } from "@cubby/schemas/identifiers";
+import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
@@ -44,7 +45,7 @@ it("keeps zero-cent Project shares in Expense membership", async () => {
       purchaseId: order.id,
       projectId,
       date: "2026-09-20",
-      cost,
+      cost: nullableWholeCentToMinor(cost),
       lineKind: "principal",
       costType: "materials",
       trade: "other",
@@ -55,7 +56,7 @@ it("keeps zero-cent Project shares in Expense membership", async () => {
     name: "Synthetic cent-share tax",
     purchaseId: order.id,
     date: "2026-09-20",
-    cost: 0.01,
+    cost: 1n,
     lineKind: "tax",
     costType: "services",
     trade: null,
@@ -101,7 +102,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
         name: "Synthetic scope line",
         purchaseId: purchase.id,
         date: "2026-09-20",
-        cost: lineKind === "tax" ? 0.01 : 1,
+        cost: nullableWholeCentToMinor(lineKind === "tax" ? 0.01 : 1),
         lineKind,
         costType: "materials",
         trade: null,

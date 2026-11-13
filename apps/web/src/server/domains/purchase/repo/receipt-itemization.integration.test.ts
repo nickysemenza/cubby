@@ -30,7 +30,7 @@ describe("receipt Purchase itemization", () => {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Store visit",
-        cost: 42,
+        cost: 4200n,
         date: "2026-09-01",
         costType: "materials",
         lineBasis: "allocation",

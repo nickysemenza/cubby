@@ -522,7 +522,7 @@ describe("persisted Suggestion sweeps", () => {
       // The evidence changes between inference and the auto-apply write.
       await getDb(ctx.db)
         .update(expenseTable)
-        .set({ cost: 13 })
+        .set({ cost: 1300n })
         .where(eq(expenseTable.id, expense.id));
       return suggestion("spendingCategoryId", {
         value: category.shortcode,

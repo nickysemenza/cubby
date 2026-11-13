@@ -176,7 +176,7 @@ export const expenseFixture = (
   insertWithShortcode(db, "expense", {
     lineKind: "principal",
     name,
-    cost: 12,
+    cost: 1200n,
     date: "2026-09-01",
     costType: "materials",
     trade: "other",

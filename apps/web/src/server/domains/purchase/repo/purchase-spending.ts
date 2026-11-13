@@ -182,7 +182,7 @@ const loadLines = async (
       purchaseId: expense.purchaseId,
       shortcode: expense.shortcode,
       name: expense.name,
-      cost: expense.cost,
+      cost: sql<number | null>`${minorToDollarsSql(expense.cost, "float8")}`,
       date: expense.date,
       lineKind: expense.lineKind,
       productQuantity: expense.productQuantity,

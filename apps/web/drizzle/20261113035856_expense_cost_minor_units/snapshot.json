@@ -1,0 +1,170 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "663c5f93-4214-42d0-ab79-419bf426a329",
+  "prevIds": [
+    "2c7e0b7a-5959-4725-9c8c-8b4e12326cf7"
+  ],
+  "footprints": [
+    {
+      "statementType": "rename_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Expense",
+        "cost"
+      ],
+      "writes": [
+        "s|col|public.Expense.cost",
+        "n|col|public.Expense.cost",
+        "s|col|public.Expense.costMinor",
+        "n|col|public.Expense.costMinor"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Expense"
+      ],
+      "writes": [
+        "s|ck|public.Expense.Expense_cost_whole_cent_check",
+        "n|ck|public.Expense.Expense_cost_whole_cent_check",
+        "e|ck|public.Expense.Expense_cost_whole_cent_check",
+        "n|con|public.Expense.Expense_cost_whole_cent_check"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Expense",
+        "costMinor"
+      ],
+      "writes": [
+        "s|colprop|public.Expense.costMinor.type",
+        "s|colprop|public.Expense.costMinor.default"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public",
+        "n|col|public.Expense.costMinor"
+      ],
+      "sqlHash": "72ef3c901f7fae18"
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Expense"
+      ],
+      "writes": [
+        "s|ck|public.Expense.Expense_cost_minor_range_check",
+        "n|ck|public.Expense.Expense_cost_minor_range_check",
+        "e|ck|public.Expense.Expense_cost_minor_range_check",
+        "n|con|public.Expense.Expense_cost_minor_range_check"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public",
+        "n|col|public.Expense.costMinor"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Expense"
+      ],
+      "writes": [
+        "s|ck|public.Expense.Expense_date_cost_check"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public",
+        "n|col|public.Expense.date",
+        "n|col|public.Expense.costMinor",
+        "e|col|public.Expense.date"
+      ],
+      "sqlHash": "88df23438fd03f57"
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Expense"
+      ],
+      "writes": [
+        "s|ck|public.Expense.Expense_productQuantity_check"
+      ],
+      "reads": [
+        "n|tbl|public.Expense",
+        "n|sch|public",
+        "n|col|public.Expense.productQuantity",
+        "n|col|public.Expense.productId",
+        "n|col|public.Expense.costMinor",
+        "e|col|public.Expense.productQuantity",
+        "e|col|public.Expense.productId"
+      ],
+      "sqlHash": "befae5c0b2758a28"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "rename",
+      "key": "columns\u0000[\"public\",\"Expense\",\"cost\"]",
+      "set": {
+        "name": "costMinor"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Expense",
+        "name": "Expense_cost_minor_range_check",
+        "value": "\"costMinor\" IS NULL OR abs(\"costMinor\") <= 100000000000000",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"Expense\",\"Expense_cost_whole_cent_check\"]"
+    },
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"Expense\",\"costMinor\"]",
+      "set": {
+        "type": "bigint"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Expense\",\"Expense_date_cost_check\"]",
+      "set": {
+        "value": "\"date\" IS NOT NULL OR \"costMinor\" IS NULL OR \"costMinor\" = 0"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Expense\",\"Expense_productQuantity_check\"]",
+      "set": {
+        "value": "\"productQuantity\" IS NULL OR (\"productId\" IS NOT NULL AND (\"productQuantity\" <> 0 OR (\"costMinor\" IS NOT NULL AND \"costMinor\" < 0)))"
+      }
+    }
+  ]
+}

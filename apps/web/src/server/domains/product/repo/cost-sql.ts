@@ -15,8 +15,8 @@ export const productCostViewSql = sql`SELECT p.id AS "entityId", ${entitySchema.
   FROM "Product" p JOIN "Entity" identity ON identity.id = p.id AND identity.kind = ${entitySchema.enum.product}
   CROSS JOIN LATERAL (SELECT CASE WHEN count(*) > 0 THEN jsonb_build_object(
     ${productCost.options[1].keyof().enum.kind}::text, ${productCost.options[1].shape.kind.value}::text,
-    'amount', round(avg(e."cost")::numeric, 2)::double precision,
-    'chargeCount', count(*)::int, 'chargeTotal', sum(e."cost"::double precision),
-    'latestCharge', (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC) FILTER (WHERE e."date" IS NOT NULL))[1]::double precision) END AS value
-    FROM "Expense" e WHERE e."productId" = p.id AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))} AND e."cost" > 0) v
+    'amount', round(avg(e."costMinor") / 100, 2)::double precision,
+    'chargeCount', count(*)::int, 'chargeTotal', (sum(e."costMinor") / 100.0)::double precision,
+    'latestCharge', ((array_agg(e."costMinor" ORDER BY e."date" DESC, e."id" DESC) FILTER (WHERE e."date" IS NOT NULL))[1] / 100.0)::double precision) END AS value
+    FROM "Expense" e WHERE e."productId" = p.id AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))} AND e."costMinor" > 0) v
   WHERE ${notDeleted("p")} AND ${notDeleted("identity")} AND ${sql.raw(serviceProductSqlText("p.id"))}`;

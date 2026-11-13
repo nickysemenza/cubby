@@ -399,7 +399,7 @@ export async function seedPerformanceCorpus(
         purchaseId: small.id,
         productId: extra === 0 ? unpricedId : null,
         productQuantity: extra === 0 ? 1 : null,
-        cost: 25,
+        cost: 2500n,
         date: "2026-02-01",
         future: false,
         trade: "other" as const,
@@ -515,7 +515,7 @@ export async function seedPerformanceCorpus(
         productId:
           line === 0 ? kit.id : line === 1 || line === 2 ? sold.id : sibling.id,
         productQuantity: line === 2 ? -3 : 1,
-        cost: line === 2 ? -10 : 10,
+        cost: line === 2 ? -1000n : 1000n,
         date: "2026-01-15",
         future: line === 11,
         trade: "other" as const,

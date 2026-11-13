@@ -82,13 +82,16 @@ export type FinancialReconciliationInput = PurchaseFinancialAggregate & {
  *
  * `repo/expense/match.ts` deliberately does NOT use these; see the note there.
  */
+/** Minor units to exact dollars for the dollar-shaped settlement read. */
+const vendorExpenseCost = (cost: SQL) => sql`${cost}::numeric / 100`;
+
 const incurredExpenses = (purchaseId: SQL) =>
   related(expense, (e) => eq(e.purchaseId, purchaseId)).where((e) =>
     actualExpense(e.future),
   );
 
 export const settleableExpenseTotal = (purchaseId: SQL) =>
-  incurredExpenses(purchaseId).sum((e) => e.cost);
+  incurredExpenses(purchaseId).sum((e) => vendorExpenseCost(e.cost));
 
 export const settleableUnpricedExpenseCount = (purchaseId: SQL) =>
   incurredExpenses(purchaseId)
@@ -101,8 +104,6 @@ const vendorExpenses = (purchaseId: SQL) =>
   related(expense, (e) => eq(e.purchaseId, purchaseId)).where((e) =>
     eq(e.economicRole, VENDOR_ROLE),
   );
-
-const vendorExpenseCost = (cost: SQL) => sql`${cost}::numeric`;
 
 export const vendorExpenseTotal = (purchaseId: SQL) =>
   vendorExpenses(purchaseId).sum((e) => vendorExpenseCost(e.cost));

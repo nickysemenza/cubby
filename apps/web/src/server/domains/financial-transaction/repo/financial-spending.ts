@@ -1185,7 +1185,7 @@ const vendorLines = sql`FROM "Expense" e WHERE e."purchaseId" = p.id
 const vendorSpendingExists = sql`EXISTS (SELECT 1 ${vendorLines})`;
 // Positive charges compare with charge-side lines and payments, as in
 // availableCents; returned principal and refund allocations are excluded there.
-const chargeSideLine = sql`(e.cost >= 0 OR e."lineKind" <> ${expenseLineKindSchema.enum.principal})`;
+const chargeSideLine = sql`(e."costMinor" >= 0 OR e."lineKind" <> ${expenseLineKindSchema.enum.principal})`;
 const chargePayments = sql`FROM "FinancialTransactionAllocation" paid
   JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId"
   JOIN "FinancialAccount" pa ON pa.id = pf."accountId"
@@ -1210,10 +1210,10 @@ const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NO
 // graph capacity check still decides each Purchase it selects.
 const partlyPaidSpending = sql`(${vendorSpendingExists}
   AND EXISTS (SELECT 1 ${chargePayments}) AND (
-  EXISTS (SELECT 1 ${vendorLines} AND (e.cost IS NULL
+  EXISTS (SELECT 1 ${vendorLines} AND (e."costMinor" IS NULL
     OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
   OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
-  OR (SELECT round(sum(e.cost) * 100) ${vendorLines} AND ${chargeSideLine})
+  OR (SELECT sum(e."costMinor") ${vendorLines} AND ${chargeSideLine})
     > (SELECT sum(paid."amountMinor") ${chargePayments})))`;
 // A wholly undated retained payment set is anchored at the order date, as in
 // the retained-settlement matcher. That anchor only proposes a match: an
@@ -1244,7 +1244,7 @@ const refundOriginal = (input: CandidateInput) =>
   input.refund && input.vendorId && input.purchaseId !== null
     ? sql`(p."vendorId" = ${input.vendorId}::uuid
       AND p.date BETWEEN ${input.date}::date - ${REFUND_WINDOW_DAYS}::int AND ${input.date}::date
-      AND EXISTS (SELECT 1 ${vendorLines} AND e.cost < 0
+      AND EXISTS (SELECT 1 ${vendorLines} AND e."costMinor" < 0
         AND e."lineKind" = ${expenseLineKindSchema.enum.principal}))`
     : sql`false`;
 /** Purchases with an undated retained payment of one of these amounts. */
