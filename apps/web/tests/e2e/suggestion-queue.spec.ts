@@ -76,6 +76,38 @@ test("Changes by Cubby lists a reconciled field and its provenance", async ({
       }),
     ]),
   );
+  const rejected = await createEntityFixture(page, "product", {
+    name: uniqueName(testInfo, "Synthetic incorrect category"),
+  });
+  const rejectedId = await resolveOrThrow(db, "product", rejected.id);
+  await applyFieldAnswerFixture(db, {
+    entity: "product",
+    recordId: rejectedId,
+    field: "categoryId",
+    value: await resolveOrThrow(db, "productCategory", category.id),
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/automatic-decisions?record=${rejected.id}`,
+  );
+  await feed
+    .getByRole("button", { name: "Wrong, clear it", exact: true })
+    .click();
+  await expect(feed).toContainText("Decision recorded.");
+  expect(
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, rejectedId))
+    )[0]?.categoryId,
+  ).toBeNull();
+  expect(
+    await getDb(db)
+      .select({ channel: decision.channel, kind: decision.kind })
+      .from(decision)
+      .where(eq(decision.subject, `product:${rejectedId}`)),
+  ).toContainEqual({ channel: "veto", kind: "veto" });
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.
