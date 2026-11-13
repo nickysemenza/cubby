@@ -91,7 +91,7 @@ SELECT s.*,jsonb_build_object('feature','entity.embedding','producer','embedding
 FROM "SearchDocument" s WHERE s."deletedAt" IS NULL AND (s."embeddingDueAt" IS NOT NULL OR s."embeddingLeaseToken" IS NOT NULL);
 --> statement-breakpoint
 INSERT INTO "Ask" ("inputHash",feature,producer,"promptVersion",input,state,"sentAt","availableAt",attempts,"maxAttempts","lastError",executor,"claimToken")
-SELECT pg_temp.kernel_hash(envelope),'entity.embedding','embedding','1',envelope,CASE WHEN "embeddingLeaseToken" IS NOT NULL THEN 'unknown' ELSE 'queued' END,CASE WHEN "embeddingLeaseToken" IS NOT NULL THEN now() END,coalesce("embeddingDueAt",now()),"embeddingAttempts",greatest(100,"embeddingAttempts"+1),"embeddingError",CASE WHEN "embeddingLeaseToken" IS NOT NULL THEN 'vectorize.lookup' END,"embeddingLeaseToken" FROM embedding_owed ON CONFLICT DO NOTHING;
+SELECT pg_temp.kernel_hash(envelope),'entity.embedding','embedding','1',envelope,'queued',NULL,coalesce("embeddingDueAt",now()),"embeddingAttempts",greatest(100,"embeddingAttempts"+1),"embeddingError",NULL,NULL FROM embedding_owed ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "Pass" (name,key,cursor,"availableAt")
 SELECT 'vectorize.sync',"entityId"::text||':'||"sourceHash",jsonb_build_object('entityId',"entityId",'sourceHash',"sourceHash"),coalesce("embeddingDueAt",now()) FROM embedding_owed ON CONFLICT DO NOTHING;

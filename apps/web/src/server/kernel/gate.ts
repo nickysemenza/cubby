@@ -22,11 +22,16 @@ export type WriteMode = "background" | "member";
 
 const TIMEOUTS = {
   // A member waits at most 2 s behind a background apply.
-  member: { lock: 2_000, statement: 15_000, idle: 20_000 },
-  background: { lock: 10_000, statement: 20_000, idle: 30_000 },
+  member: { lock: 2_000, statement: 15_000, idle: 20_000, transaction: 20_000 },
+  background: {
+    lock: 10_000,
+    statement: 20_000,
+    idle: 30_000,
+    transaction: 1_500,
+  },
 } satisfies Record<
   WriteMode,
-  { lock: number; statement: number; idle: number }
+  { lock: number; statement: number; idle: number; transaction: number }
 >;
 
 /** A member's write found the gate held past its lock timeout; retry shortly. */
@@ -48,7 +53,8 @@ export async function enterWriteTransaction(
   await q.execute(sql`SELECT
     set_config('lock_timeout', ${String(limits.lock)}, true),
     set_config('statement_timeout', ${String(limits.statement)}, true),
-    set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true)`);
+    set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true),
+    set_config('transaction_timeout', ${String(limits.transaction)}, true)`);
   if (options.lane === "money")
     await q.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`,

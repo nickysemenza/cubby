@@ -1,3 +1,7 @@
+SET LOCAL lock_timeout = '2s';
+--> statement-breakpoint
+LOCK TABLE "Job", "Pass", "AppSettings" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
 -- Inventory admission owns the evidence publication; its model call is an Ask.
 INSERT INTO "Pass" (name,key,"runId",cursor,attempts,"maxAttempts","availableAt","waitCause","lastError","cancelledAt","createdAt","updatedAt")
 SELECT DISTINCT ON ((j.input->>'locationId')) 'location.inventory', (j.input->>'locationId'), j."runId",
@@ -34,5 +38,20 @@ FROM "AppSettings" WHERE id='6c1b7a52-0f1e-4e8a-9f3d-2a4b8d7e5c91'
 ON CONFLICT (name,key) DO NOTHING;
 --> statement-breakpoint
 DELETE FROM "AppSettings" WHERE id='6c1b7a52-0f1e-4e8a-9f3d-2a4b8d7e5c91';
+--> statement-breakpoint
+DO $$ DECLARE source_count bigint; carried_count bigint;
+BEGIN
+  SELECT count(*) INTO source_count FROM "Job" WHERE state NOT IN ('completed','succeeded');
+  SELECT count(*) INTO carried_count FROM "Job" j
+  JOIN "Pass" p ON (p.name,p.key) = (
+    CASE j.kind WHEN 'location-ai.inventory.refresh' THEN 'location.inventory'
+      WHEN 'location-ai.description.refresh' THEN 'fields.reconcile'
+      WHEN 'run-ai.summary.write' THEN 'fields.reconcile' END,
+    CASE j.kind WHEN 'location-ai.inventory.refresh' THEN j.input->>'locationId' ELSE j.key END)
+  WHERE j.state NOT IN ('completed','succeeded');
+  IF source_count <> carried_count THEN
+    RAISE EXCEPTION 'Job work preservation mismatch: source %, carried %', source_count, carried_count;
+  END IF;
+END $$;
 --> statement-breakpoint
 DROP TABLE "Job";
