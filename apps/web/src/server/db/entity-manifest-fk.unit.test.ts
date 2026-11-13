@@ -71,6 +71,7 @@ const NON_ENTITY_FK_TARGETS = {
     "immutable typed judgment history shared by current projections and Feedback",
   AiEvaluation:
     "durable per-target inference and publication bookkeeping owned by a Run",
+  Ask: "the kernel's owed producer call (ADR 0029), not a domain entity",
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
   Entity: "durable identity, not a domain entity of its own",

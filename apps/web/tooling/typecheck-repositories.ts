@@ -72,6 +72,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase/repo/settlement-predicates.ts",
   "src/server/domains/run/repo/report-run-results.ts",
   "src/server/db/job-schema.ts",
+  "src/server/db/kernel-schema.ts",
   "src/server/generic/suggestions/repo/suggestion-decisions.ts",
   "src/server/db/derived-rebuild-schema.ts",
   "src/server/db/quality-snapshot-schema.ts",

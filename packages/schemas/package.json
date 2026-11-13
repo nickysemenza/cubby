@@ -243,6 +243,7 @@
     "./derived-value": "./src/derived-value.ts",
     "./field-envelope": "./src/field-envelope.ts",
     "./field-envelope-presentation": "./src/field-envelope-presentation.ts",
+    "./kernel/*": "./src/kernel/*.ts",
     "./entity-field-envelopes": "./src/entity-field-envelopes.ts",
     "./entity-fields": "./src/entity-fields.ts",
     "./entity-stored-derived": "./src/entity-stored-derived.ts",
