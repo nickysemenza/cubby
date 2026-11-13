@@ -1,5 +1,4 @@
 import { systemActor } from "@cubby/schemas/context";
-import { BACKGROUND_QUEUE_CONSUMER } from "@cubby/shared/background-queue";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
@@ -14,17 +13,7 @@ import { forwardToPlaced } from "./placed";
 
 const cronLog = createLogger("cron");
 
-/** Units the cron runs itself before handing the rest to queue permits. */
-const BACKSTOP_BUDGET_MS = 5 * 60_000;
-
-/**
- * The timer and backstop for every permit: work due past the queue's 12-hour
- * delay, a lost permit, or broken delivery. It reconciles, maintains, then runs
- * units itself (so a broken queue still drains within the hour), and finally
- * sends up to `maxConcurrency` permits for what is still due. Parked device
- * work that came due gets its ring. A failure still lets the daily pass run,
- * then rejects the event.
- */
+/** Start scheduled Passes and the kernel; a single queue wake recovers retained producer work. */
 async function runHourlyBackstop(
   env: Env,
 ): Promise<{ failed: false } | { failed: true; error: unknown }> {
@@ -33,16 +22,16 @@ async function runHourlyBackstop(
       env.HYPERDRIVE_BACKGROUND.connectionString,
       async () => {
         const [
-          { productionPermitRuntime },
-          { runPermit, sendSuccessor },
+          { wakeJobs },
+          { purchaseDiscoveryPass },
           { ringDueDeviceWork },
           { maintainJobs },
           { scheduleRunsReconcile },
-          { runProductionKernel },
+          { runProductionKernel, startPass },
           { requestDerivedRebuild },
         ] = await Promise.all([
-          import("~/server/workflows/jobs"),
-          import("~/server/generic/jobs/service/permits"),
+          import("~/server/workflows/background-tasks/publish"),
+          import("~/server/workflows/purchase-discovery-pass"),
           import("~/server/domains/image-processing/repo/image-processing-ring"),
           import("~/server/workflows/job-maintenance"),
           import("~/server/workflows/runs/reconcile-pass"),
@@ -57,6 +46,8 @@ async function runHourlyBackstop(
             for (const step of [
               scheduleRunsReconcile,
               maintainJobs,
+              (db: Parameters<typeof startPass>[0]) =>
+                startPass(db, purchaseDiscoveryPass),
               (db: Parameters<typeof requestDerivedRebuild>[0]) =>
                 requestDerivedRebuild(db, { force: false }),
             ])
@@ -64,19 +55,8 @@ async function runHourlyBackstop(
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),
             );
-            const runtime = productionPermitRuntime(db, (error, unit) =>
-              Sentry.withScope((scope) => {
-                if (unit) scope.setTag("cubby.background.unit", unit);
-                Sentry.captureException(error);
-              }),
-            );
-            const deadline = Date.now() + BACKSTOP_BUDGET_MS;
-            for (let ran = true; ran && Date.now() < deadline;)
-              ran = (await runPermit(runtime, { successor: false })) !== null;
-            await sendSuccessor(
-              runtime,
-              "cron.backstop",
-              BACKGROUND_QUEUE_CONSUMER.maxConcurrency,
+            await wakeJobs({ source: "cron.backstop" }).catch(
+              (error: unknown) => errors.push(error),
             );
             if (errors.length)
               throw new AggregateError(errors, "Hourly background work failed");
@@ -158,7 +138,7 @@ async function runScheduledInvocation(
           "daily-maintenance",
           async () => {
             // The cron only launches the pass; its steps drain each backlog
-            // page by page through run.execute Jobs, one active pass at a time.
+            // page by page through the run.execute Pass, one active pass at a time.
             await withInvocationDb(
               env.HYPERDRIVE_BACKGROUND.connectionString,
               async () => {
