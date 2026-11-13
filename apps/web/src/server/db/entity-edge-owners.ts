@@ -90,6 +90,4 @@ export const ENTITY_EDGE_OWNERS = {
   // A reviewed association names the Email whose evidence it settles.
 
   ImportSourceOrder: { excluded: WORKFLOW },
-
-  LedgerSourceClaim: { excluded: WORKFLOW },
 } satisfies Record<NonEntityEdgeTable, EntityEdgeOwner>;

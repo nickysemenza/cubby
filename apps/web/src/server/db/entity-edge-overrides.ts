@@ -27,7 +27,6 @@ import {
   entityLink,
   expense,
   expenseAttribution,
-  financialTransaction,
   financialTransactionAllocation,
   importPreparedOrder,
   sourceOrderObservation,
@@ -628,22 +627,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     }),
     ...externalIdEdgesFor("expense"),
   },
-  ledgerTransfer: edges({
-    "FinancialTransaction.ledgerTransferId": {
-      column: financialTransaction.ledgerTransferId,
-      role: "reference",
-      label: "evidence transactions",
-      description: "Posted settlement evidence for this transfer.",
-      liveness: { kind: "must-target-live" },
-    },
-    "LedgerSourceClaim.ledgerTransferId": {
-      column: ledgerSourceClaim.ledgerTransferId,
-      role: "metadata",
-      label: "source claims",
-      description: "Canonical external evidence claimed by this transfer.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
 
   // The read-only run record itself has no delete/merge operation
   // (`capabilities.delete: null`), so nothing here ever dispositions these
