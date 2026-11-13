@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { plantSchemaBindings } from "~/entity/generated/entity-schema-bindings.plant.gen";
 import {
+  DECLARED_EDGE_DELETE_POLICIES,
+  DECLARED_EDGE_MERGE_POLICIES,
+} from "~/server/db/generated/declared-edges.gen";
+import {
   asActor,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
@@ -10,8 +14,6 @@ import {
 import {
   createPlant,
   mergePlants,
-  PLANT_DELETE_EDGE_POLICY,
-  PLANT_MERGE_EDGE_POLICY,
   plantScaffold,
   readPlant,
   updatePlant,
@@ -33,8 +35,8 @@ export const plantRepository = defineRepository("plant", {
   schemas: plantSchemaBindings,
   updatePolicy: { recordFields: [] },
   lifecycle: {
-    delete: PLANT_DELETE_EDGE_POLICY,
-    merge: PLANT_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.plant,
+    merge: DECLARED_EDGE_MERGE_POLICIES.plant,
   },
   scaffold: plantScaffold,
   create: asActor(createPlant),

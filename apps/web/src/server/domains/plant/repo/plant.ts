@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { plantRawOut as rawPlantOut } from "@cubby/schemas/entity-contracts/plant";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { PlantShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -14,7 +13,7 @@ import { uniq } from "es-toolkit";
 import { plantRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.plant.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
 import { plant } from "~/server/db/schema";
 import { plantSearch } from "~/server/domains/plant/repo/search-read-plant";
@@ -35,34 +34,6 @@ import {
   resolveMergeTargets,
 } from "~/server/generic/merge/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
-
-/** A plant keeps its garden history and seed stock; both block a delete. */
-export const PLANT_DELETE_EDGE_POLICY = {
-  "Planting.plantId": {
-    code: "block-live-planting",
-    effect: "block",
-    description: "A plant grown by a live planting cannot be deleted.",
-  },
-  "Product.growsPlantId": {
-    code: "block-live-garden-source-product",
-    effect: "block",
-    description:
-      "A plant named by a live seed or plant product cannot be deleted.",
-  },
-} as const satisfies IncomingEdgePolicy<"plant", OperationDisposition>;
-
-export const PLANT_MERGE_EDGE_POLICY = {
-  "Planting.plantId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Plantings of a merged plant move to the surviving plant.",
-  },
-  "Product.growsPlantId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Seed and plant products move to the surviving plant.",
-  },
-} as const satisfies IncomingEdgePolicy<"plant", OperationDisposition>;
 
 type PlantRow = typeof plant.$inferSelect;
 
@@ -150,7 +121,7 @@ export async function mergePlants(
     await tx.update(plant).set({ notes }).where(eq(plant.id, keepId));
     const repointed = await applyMergePolicy(tx, {
       entity: "plant",
-      policy: PLANT_MERGE_EDGE_POLICY,
+      policy: DECLARED_EDGE_MERGE_POLICIES.plant,
       keepId,
       loserIds,
       liveOnly: false,

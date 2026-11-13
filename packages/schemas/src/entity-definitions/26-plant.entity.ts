@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
   attachedImageInputs,
@@ -57,6 +58,155 @@ const derivedText = <const K extends string>(
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "plant",
+  edges: [
+    defineEdge({
+      key: "Planting.plantId",
+      from: "planting",
+      to: "plant",
+      cardinality: "one",
+      inverse: {
+        key: "plant.plantings",
+        from: "plant",
+        to: "planting",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Planting.plantId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "planting",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "plants",
+        description: "The plant named by this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description: "A garden planting retains the plant it grew.",
+        label: "plantings",
+        liveness: {
+          kind: "must-target-live",
+        },
+        role: "history",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "This is an outgoing column; the source operation owns its row.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "This is an outgoing column; the source operation owns its row.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-planting",
+              effect: "block",
+              description:
+                "A plant grown by a live planting cannot be deleted.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Plantings of a merged plant move to the surviving plant.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Product.growsPlantId",
+      from: "product",
+      to: "plant",
+      cardinality: "one",
+      inverse: {
+        key: "plant.products",
+        from: "plant",
+        to: "product",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Product.growsPlantId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "product",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "plants",
+        description: "The plant named by this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        description:
+          "A seed packet, seedling, or plant product names the plant it grows without becoming edible inventory.",
+        label: "seeds and plants",
+        liveness: {
+          kind: "must-target-live",
+        },
+        role: "reference",
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason:
+              "This is an outgoing column; the source operation owns its row.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason:
+              "This is an outgoing column; the source operation owns its row.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-garden-source-product",
+              effect: "block",
+              description:
+                "A plant named by a live seed or plant product cannot be deleted.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Seed and plant products move to the surviving plant.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+  ],
   names: { singular: "Plant", plural: "Plants" },
   route: { basePath: "plants" },
   table: "Plant",
@@ -582,18 +732,29 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("ingredientId").named("ingredient", "Ingredient"),
-    r
-      .path("planting", "many", [
-        { edge: "Planting.plantId", direction: "incoming" },
-      ])
-      .named("plantings", "Plantings"),
-    r
-      .path("product", "many", [
-        { edge: "Product.growsPlantId", direction: "incoming" },
-      ])
-      .named("products", "Seeds and plants"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("ingredientId").named("ingredient", "Ingredient"),
+        "ingredient.plants",
+      ),
+      r.declare(
+        r
+          .path("planting", "many", [
+            { edge: "Planting.plantId", direction: "incoming" },
+          ])
+          .named("plantings", "Plantings"),
+        "planting.plant",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Product.growsPlantId", direction: "incoming" },
+          ])
+          .named("products", "Seeds and plants"),
+        "product.grows-plant",
+      ),
+    ],
+  }),
   readSchemas,
 );

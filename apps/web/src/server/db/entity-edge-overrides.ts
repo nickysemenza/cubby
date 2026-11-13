@@ -1571,23 +1571,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  plant: edges({
-    "Planting.plantId": {
-      column: planting.plantId,
-      role: "history",
-      label: "plantings",
-      description: "A garden planting retains the plant it grew.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Product.growsPlantId": {
-      column: product.growsPlantId,
-      role: "reference",
-      label: "seeds and plants",
-      description:
-        "A seed packet, seedling, or plant product names the plant it grows without becoming edible inventory.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   planting: {
     ...edges({}),
     ...linkEdgesFor("planting"),
