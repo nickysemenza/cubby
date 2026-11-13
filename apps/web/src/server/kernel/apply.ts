@@ -48,6 +48,7 @@ import {
   LOCKED_RUN_AFTER_CONFLICTS,
   MAX_SCOPE_ATTEMPTS,
   rawError,
+  renewScopeClaims,
   settleFailure,
   type ClaimedScope,
 } from "./claim";
@@ -1121,6 +1122,35 @@ async function redirectMergedScopes(
  * past three conflicts run locked, one per transaction.
  */
 export async function runClaimedScopes(
+  db: Database,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  claimedScopes: readonly ClaimedScope[],
+  options: ApplyOptions & { mode: WriteMode; hideBaseline?: boolean },
+): Promise<Outcome[]> {
+  let renewal = Promise.resolve();
+  const heartbeat = setInterval(() => {
+    renewal = renewal
+      .then(() => renewScopeClaims(repositoryQueries(db), claimedScopes))
+      .catch(() => {
+        // SILENT: a lost renewal is fenced by the live claim deadline at publication.
+      });
+  }, 20_000);
+  try {
+    return await runHeldScopes(
+      db,
+      registry,
+      reconciler,
+      claimedScopes,
+      options,
+    );
+  } finally {
+    clearInterval(heartbeat);
+    await renewal;
+  }
+}
+
+async function runHeldScopes(
   db: Database,
   registry: KernelRegistry,
   reconciler: Reconciler,

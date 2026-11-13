@@ -62,6 +62,7 @@ import {
 } from "./ask";
 import {
   releaseFundingWaits,
+  renewScopeClaims,
   nextWakeSql,
   claimAsk,
   claimAsks,
@@ -1195,6 +1196,32 @@ describe("evidence-facts kernel", () => {
     expect(await dirtyCount(ctx.db)).toBe(0);
   });
 
+  it("renews a compute batch together without reviving expired scopes", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-renew-a", 700),
+      charge("ORD-renew-b", 900),
+    ]);
+    const q = repositoryQueries(ctx.db);
+    const claimed = await claimScopes(q, kernel.registry, "money", 10);
+    expect(claimed).toHaveLength(2);
+    await q.execute(
+      sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() + interval '1 second'`,
+    );
+    await q.execute(
+      sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() - interval '1 second' WHERE key = ${claimed[0]!.key}`,
+    );
+    await renewScopeClaims(q, claimed);
+    const result = await q.execute<{ key: string; renewed: boolean }>(sql`
+      SELECT key, "claimDeadline" > now() + interval '60 seconds' AS renewed FROM "ScopeDirty"`);
+    expect(result.rows).toEqual(
+      expect.arrayContaining([
+        { key: claimed[0]!.key, renewed: false },
+        { key: claimed[1]!.key, renewed: true },
+      ]),
+    );
+  });
+
   it("does not publish through a lapsed claim", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [charge("ORD-E", 700)]);
@@ -1785,7 +1812,38 @@ describe("evidence-facts kernel", () => {
     expect(calls).toBe(1);
   });
 
-  it("preserves a queued request's prompt version across producer declarations", async () => {
+  it("replays a completed response after Answer publication fails without another producer call", async () => {
+    let calls = 0;
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        calls++;
+        return "Groceries";
+      },
+    });
+    const q = repositoryQueries(ctx.db);
+    await q.execute(
+      sql`CREATE FUNCTION synthetic_fail_answer() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'Synthetic Answer publication failure'; END $$`,
+    );
+    await q.execute(
+      sql`CREATE TRIGGER synthetic_fail_answer BEFORE INSERT ON "Answer" FOR EACH ROW EXECUTE FUNCTION synthetic_fail_answer()`,
+    );
+    await expect(
+      kernel.withAsk(ctx.db, fixture.categorize, {
+        merchant: "Synthetic cached result",
+      }),
+    ).rejects.toThrow("Synthetic Answer publication failure");
+    expect(calls).toBe(1);
+    await q.execute(sql`DROP TRIGGER synthetic_fail_answer ON "Answer"`);
+    await q.execute(sql`UPDATE "Ask" SET "availableAt"=now()`);
+    expect(
+      await kernel.withAsk(ctx.db, fixture.categorize, {
+        merchant: "Synthetic cached result",
+      }),
+    ).toBe("Groceries");
+    expect(calls).toBe(1);
+  });
+
+  it("rekeys a queued request when its producer's prompt version changes", async () => {
     const { kernel, fixture } = kernelWith();
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "background",
@@ -1813,12 +1871,15 @@ describe("evidence-facts kernel", () => {
       sql`UPDATE "Ask" SET "availableAt"=now() WHERE feature=${fixture.categorize.feature}`,
     );
     expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
     const answers = await repositoryQueries(ctx.db).execute<{
       promptVersion: string;
     }>(
       sql`SELECT "promptVersion" FROM "Answer" WHERE feature=${fixture.categorize.feature}`,
     );
-    expect(answers.rows).toEqual([{ promptVersion: "synthetic-original" }]);
+    expect(answers.rows).toEqual([
+      { promptVersion: fixture.categorize.promptVersion },
+    ]);
   });
 
   it("refuses funding before sent without spending an attempt", async () => {
