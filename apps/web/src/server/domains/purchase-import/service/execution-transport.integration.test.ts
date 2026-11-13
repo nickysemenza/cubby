@@ -20,14 +20,7 @@ import { getDb } from "~/server/db/helpers";
 import { kernelPass } from "~/server/db/kernel-schema";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { productionJobHandlers } from "~/server/workflows/jobs";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { startPass } from "~/server/kernel/api";
 import { purchaseDispatchPass } from "~/server/workflows/purchase-dispatch-pass";
 

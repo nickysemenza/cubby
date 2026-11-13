@@ -72,6 +72,16 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
       WHERE id = ${row.id}::uuid AND (status = ${runStatus.enum.running}
         OR (status = ${runStatus.enum.paused_auth} AND "failureCode" = 'execution_limit'))
       RETURNING id`);
+      if (updated.rows.length) {
+        await (
+          await import("~/server/kernel/api")
+        ).emitWrites(tx, {
+          table: (await import("~/server/db/retained-tables")).run,
+          entity: "run",
+          ids: [row.id],
+          columns: ["status", "endedAt", "failureCode"],
+        });
+      }
       failed += updated.rows.length;
     }
     return failed;

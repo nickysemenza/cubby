@@ -7,7 +7,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("carries interrupted discovery, dispatch, funding and snapshot work without changing Run checkpoints", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle({ client, paramsInErrors: true });
-    await migrateDatabase(db, { through: "20261113093638_ask_funding_wakes" });
+    await migrateDatabase(db, { through: "20261113120001_ask_funding_wakes" });
     const party = crypto.randomUUID();
     await client.query(
       `INSERT INTO "Entity" (id, kind, shortcode) VALUES ($1, 'ledgerParty', 'LPY-SYNTH')`,
@@ -93,7 +93,7 @@ it("carries interrupted discovery, dispatch, funding and snapshot work without c
     );
 
     await migrateDatabase(db, {
-      through: "20261113102147_pass_execution_state",
+      through: "20261113120002_pass_execution_state",
     });
     const { rows } = await client.query(
       `SELECT name,key,cursor,attempts,"maxAttempts",to_char("availableAt", 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "availableAt","waitCause","cancelledAt" IS NOT NULL AS cancelled FROM "Pass"`,

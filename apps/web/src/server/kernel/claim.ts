@@ -411,7 +411,7 @@ export async function claimExternalAskRow(
       return result.rows[0] ?? null;
     },
     async (q) => {
-      await parkPartition(
+      return parkPartition(
         q,
         sql`id=${options.id}::uuid AND feature=${kind.feature}`,
         "Ask",
@@ -493,7 +493,7 @@ async function claimAskGroup(
       }>(sql`
     WITH picked AS (
       SELECT id FROM "Ask"
-      WHERE state = ${ASK.queued} AND NOT hosted AND "cancelledAt" IS NULL AND "availableAt" <= now()
+      WHERE state = ${ASK.queued} AND NOT hosted AND executor IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
         AND attempts < "maxAttempts" AND feature = ANY(${textArrayParam(features)})
         AND ("claimToken" IS NULL OR "claimDeadline" <= now())
         -- An ask nobody waits on is its in-line caller's to retry.

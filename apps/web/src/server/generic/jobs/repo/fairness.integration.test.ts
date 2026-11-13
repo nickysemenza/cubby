@@ -1,9 +1,8 @@
 import type { PermitRecovery } from "@cubby/schemas/queue-messages";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -16,7 +15,6 @@ import {
   type PermitRuntime,
 } from "~/server/generic/jobs/service/permits";
 import type { JobHandlers } from "~/server/generic/jobs/types";
-import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
 import { enqueueJob } from "./producer";
 import { claimJob, dueUnits } from "./queue";
