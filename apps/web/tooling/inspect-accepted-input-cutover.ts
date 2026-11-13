@@ -83,6 +83,7 @@ try {
       WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored' AND o."acceptedTransactionId" IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
     UNION ALL SELECT 'ask-state',CASE WHEN row->>'cancelledAt' IS NOT NULL THEN 'cancelled' ELSE row->>'state' END,count(*)::int FROM (SELECT DISTINCT ON (row->>'id') row FROM expected WHERE mapping='ask') planned GROUP BY 2
+    UNION ALL SELECT 'decisions','none',count(*)::int FROM expected WHERE mapping='decision' AND row->>'kind'='none'
     UNION ALL SELECT 'authority','member-held',count(*)::int FROM expected WHERE mapping='decision' AND row->>'id' LIKE 'ffffffff%'
     UNION ALL SELECT 'authority','Cubby-held',count(*)::int FROM expected WHERE mapping='answer' AND row->>'feature'='legacy:field'
     ORDER BY category,mapping`);

@@ -198,7 +198,14 @@ it("carries held values, paid results, redirects and every accepted money row", 
         [`product:${cutoverId(13)}`],
       )
     ).rows;
-    expect(held).toEqual([]);
+    expect(held).toEqual([
+      {
+        field: "brandId",
+        kind: "none",
+        actorKind: "member",
+        actorId: "synthetic-cutover",
+      },
+    ]);
     expect(
       (
         await client.query(`SELECT output FROM "Answer" WHERE "inputHash"=$1`, [
@@ -630,6 +637,21 @@ it("lets current stored authority defeat a synthesized review in both directions
         ],
       );
     }
+    for (const n of [84, 86]) {
+      const code = generateShortcode("product");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
+        [cutoverId(n), code],
+      );
+      await client.query(
+        `INSERT INTO "Product" (id,shortcode,name) VALUES ($1,$2,'Synthetic blank category')`,
+        [cutoverId(n), code],
+      );
+    }
+    await client.query(
+      `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update','{"categoryId":{"from":null,"to":null}}','synthetic-cutover',NULL,'2026-02-01')`,
+      [cutoverId(86)],
+    );
     await migrateDatabase(db);
     expect(
       (
@@ -647,6 +669,22 @@ it("lets current stored authority defeat a synthesized review in both directions
         )
       ).rows,
     ).toEqual([{ kind: "set", value: cutoverId(83) }]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='categoryId'`,
+          [`product:${cutoverId(84)}`],
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='categoryId'`,
+          [`product:${cutoverId(86)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "none" }]);
     const { createDatabase } =
       await import("../src/server/db/database-runtime");
     const { relationalSchema } = await import("../src/server/db/schema");
@@ -674,8 +712,19 @@ it("lets current stored authority defeat a synthesized review in both directions
       const result = await kernel.reconcileNow(database, [
         { kind: "fields", key: `product:${cutoverId(80)}` },
         { kind: "fields", key: `product:${cutoverId(81)}` },
+        { kind: "fields", key: `product:${cutoverId(84)}` },
+        { kind: "fields", key: `product:${cutoverId(86)}` },
       ]);
       expect(result.filter((r) => r.status === "failed")).toEqual([]);
+      expect(
+        (
+          await client.query(
+            `SELECT input->'input'->>'recordId' id FROM "Ask" WHERE feature='field-suggestion' AND input->'input'->>'field'='categoryId' AND input->'input'->>'recordId' IN ($1,$2)`,
+            [cutoverId(84), cutoverId(86)],
+          )
+        ).rows,
+      ).toEqual([{ id: cutoverId(84) }]);
+
       expect(
         (
           await client.query(
