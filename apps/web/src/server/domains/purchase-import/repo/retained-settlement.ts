@@ -65,6 +65,7 @@ import {
 } from "~/server/domains/purchase-import/policy/retained-payments";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import { merchantVendorAllowsSettlementSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 type SettlementReader = Pick<
   DrizzleTransaction,
@@ -80,6 +81,7 @@ export async function lockPartySettlement(
   tx: SettlementReader,
   ledgerPartyId: LedgerPartyId,
 ): Promise<void> {
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   await advisoryXactLock(tx, "purchase-settlement", ledgerPartyId);
 }
 

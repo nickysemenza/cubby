@@ -7,11 +7,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
-import {
-  getDb,
-  withTransactionDatabase,
-  withSnapshotWriteDatabase,
-} from "~/server/db/helpers";
+import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
@@ -31,6 +27,7 @@ import {
   suggestionStateColumns,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
+import { householdWrite } from "~/server/kernel/gate";
 
 import type { Review } from "./review";
 import {
@@ -63,7 +60,7 @@ export function executeReviewApplication(
         }) satisfies z.infer<typeof suggestionReviewOut>;
       // Serialize generic commands without taking projection locks ahead of the
       // domain's parent locks. Receipt and mutation commit in the same boundary.
-      // The subject lock comes first: an apply supersedes the subject's other
+      // The subject lock precedes the id lock: an apply supersedes the subject's other
       // live rows, so two of them applying at once would deadlock on each other.
       // The id lock is the key mail decision review shares. One statement
       // takes both, left to right.
@@ -212,7 +209,7 @@ export function executeReviewApplication(
           ? withSnapshotWriteDatabase(scopedDb, apply, {
               isolationLevel: "serializable",
             })
-          : withTransactionDatabase(scopedDb, apply),
+          : householdWrite(scopedDb, apply),
       emailScope,
     );
   };
