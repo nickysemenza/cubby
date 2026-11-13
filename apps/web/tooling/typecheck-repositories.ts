@@ -80,6 +80,7 @@ export const repositoryOwners = [
   "src/server/domains/transaction-import/repo/transfer-pair-input.ts",
   "src/server/generic/derived/repo/read.ts",
   "src/server/generic/derived/repo/rebuild.ts",
+  "src/server/domains/run/repo/run-execution.ts",
   "src/server/generic/derived/repo/compute.ts",
   "src/server/generic/shortcode/repo/shortcode-resolver.ts",
   "src/server/domains/product/repo/field-envelope.ts",

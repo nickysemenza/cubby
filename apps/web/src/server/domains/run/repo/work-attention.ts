@@ -23,7 +23,7 @@ import {
   runHasLiveExecution,
 } from "~/server/generic/jobs/repo/job-reads";
 
-import { runPassOwed } from "./run-execution";
+import { runPassOwed } from "~/server/domains/run/repo/run-execution";
 
 const RUN = runStatus.enum;
 

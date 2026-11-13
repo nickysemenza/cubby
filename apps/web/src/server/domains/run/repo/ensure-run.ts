@@ -24,14 +24,11 @@ import {
 } from "~/server/db/helpers";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-import { isPassRunPurpose } from "./run-execution";
 
 export type EnsureRunInput = {
   purpose: RunPurpose;
@@ -147,7 +144,7 @@ export async function ensureRun(
       input.execution !== false &&
       isExecutedRunPurpose(input.purpose)
     ) {
-      if (isPassRunPurpose(input.purpose)) {
+      {
         const { startRunPass } =
           await import("~/server/workflows/runs/run-pass");
         await startRunPass(tx, {
@@ -156,13 +153,7 @@ export async function ensureRun(
           generation: 1,
           restart: false,
         });
-      } else
-        await enqueueJob(tx, {
-          key: `run:${row.id}`,
-          kind: "run.execute",
-          input: { runId: row.id, purpose: input.purpose },
-          runId: row.id,
-        });
+      }
     }
     // Refresh telemetry must not invalidate the family that is publishing it.
     await recordChange(tx, {

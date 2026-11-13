@@ -31,7 +31,6 @@ import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { kernelDueSql, kernelNextSql } from "~/server/kernel/runner";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
-import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { derivedComputes } from "./derived-computes";
 
@@ -73,7 +72,6 @@ export const purchaseDispatchHandler = (
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundJobHandlers,
-  "run.execute": runJobHandler,
   "purchase.dispatch": purchaseDispatchHandler(async (waitUntil) => {
     const env = getPurchaseDispatchHostEnv();
     if (!env)

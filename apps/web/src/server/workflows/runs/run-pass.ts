@@ -10,7 +10,10 @@ import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
  * that carry its id, which wake it as they settle.
  */
 import type { JobWaitReason } from "@cubby/schemas/job";
-import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
+import {
+  MAIL_DISCOVERY_ADMISSION_WAIT,
+  mailboxDiscoveryProgress,
+} from "@cubby/schemas/mailbox-research";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { and, eq, sql, type SQL } from "drizzle-orm";
 
@@ -43,7 +46,11 @@ import {
 } from "~/server/kernel/api";
 
 import { withWorkflowExecution } from "./execution";
-import { resumeClaimedWorkflowRun } from "./lifecycle";
+import {
+  mailDiscoveryBackpressure,
+  yieldClaimedMailDiscovery,
+  resumeClaimedWorkflowRun,
+} from "./lifecycle";
 
 const HEARTBEAT_MS = 30_000;
 /**
@@ -124,6 +131,17 @@ async function advance(
   const before = await readRun(db, runId);
   if (!before || before.purpose !== cursor.purpose)
     return { cursor, done: true };
+  if (cursor.purpose === "mail_discovery") {
+    if (before.status === "running")
+      await yieldClaimedMailDiscovery(db, params);
+    if (
+      before.status === "paused" &&
+      before.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
+    )
+      await resumeClaimedWorkflowRun(db, params, "mail_admission");
+    if (before.status === "failed" && before.failureCode === "job_failed")
+      await resumeClaimedWorkflowRun(db, params);
+  }
   if (
     before.status === "paused_auth" &&
     before.failureCode === "execution_limit"
@@ -136,6 +154,15 @@ async function advance(
     )
       return waitResult(cursor, pending, "ai_funding_window");
     await resumeClaimedWorkflowRun(db, params, "funding_ready");
+  }
+  if (cursor.purpose === "mail_discovery") {
+    const page = await (
+      await import("~/server/domains/purchase-import/operations/gmail/discovery")
+    ).advanceMailDiscoveryPage(db, params, cursor.page ?? null);
+    return {
+      cursor: { ...cursor, ...(page.cursor ? { page: page.cursor } : {}) },
+      done: page.done,
+    };
   }
   // SAFETY: the cursor was written by `startRunPass` for a Pass-executed kind.
   const purpose = cursor.purpose as PassRunPurpose;
@@ -246,6 +273,7 @@ export const runExecutePass = definePass({
           runId,
           attempt: cursor.generation,
           database: db,
+          recovered: true,
           job: passFence(claim),
           live: passLive(runId, claim.token),
         },
@@ -270,7 +298,10 @@ export const runExecutePass = definePass({
     } catch (error) {
       const wait = await asWait(claim, runId, error, cursor);
       if (wait) return wait;
-      const failure = classifyJobFailure(error);
+      const failure = classifyJobFailure(
+        mailDiscoveryBackpressure(error) ?? error,
+      );
+      if (failure.kind === "paused") return { cursor, done: true };
       if (failure.kind === "deferred")
         return waitResult(cursor, failure.until, failure.reason);
       await reconcileIfLastAttempt(db, runId, error);

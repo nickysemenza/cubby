@@ -28,12 +28,10 @@ import {
   runStep,
   run as runTable,
 } from "~/server/db/schema";
-import { isPassRunPurpose } from "~/server/domains/run/repo/run-execution";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
-import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
+import { cancelRunJobs } from "~/server/generic/jobs/repo/operator";
 
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 import { cancelRunPass } from "./run-pass";
@@ -117,11 +115,7 @@ export async function controlWorkflowRun(
         .update(runTable)
         .set({ status: "paused" })
         .where(eq(runTable.id, row.id));
-      if (isPassRunPurpose(purpose)) await cancelRunPass(tx, row.id);
-      else {
-        const execution = await readJob(tx, { key: `run:${row.id}` });
-        if (execution) await pauseJob(tx, execution.id);
-      }
+      await cancelRunPass(tx, row.id);
     });
     return;
   }

@@ -28,7 +28,7 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRun, runScaffold } from "./run";
-import { readRunPass } from "./run-execution";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 
 const collisionGenerator = (
   first: string,

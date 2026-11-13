@@ -7,7 +7,6 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import {
   mailboxDiscoveryInput,
   mergeMailboxQueries,
@@ -54,20 +53,18 @@ import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purcha
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
-import {
-  currentJobExecution,
-  withJobPhase,
-} from "~/server/generic/jobs/context";
+import { withJobPhase } from "~/server/generic/jobs/context";
 import { JobPausedError } from "~/server/generic/jobs/errors";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import type { PreparedJobPage } from "~/server/generic/jobs/types";
+import type { Json } from "~/server/kernel/define";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
+import { currentRunExecution } from "~/server/workflows/runs/execution";
 import {
   claimWorkflowRun,
   launchWorkflowRun,
   mailDiscoveryBackpressure,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
+import { startRunPass } from "~/server/workflows/runs/run-pass";
 
 import type { OrderMailAttachmentStorage } from "../../repo/gmail/attachment-storage";
 import {
@@ -297,11 +294,11 @@ async function createDiscoveryPasses(
             input: input.frozen,
             progress,
           });
-          const execution = await enqueueJob(tx, {
-            key: `run:${runId}`,
-            kind: "run.execute",
+          await startRunPass(tx, {
             runId,
-            input: { runId, purpose: "mail_discovery" },
+            purpose: "mail_discovery",
+            generation: 1,
+            restart: false,
           });
           await getDb(tx)
             .update(runTable)
@@ -311,7 +308,7 @@ async function createDiscoveryPasses(
               failureCode: MAIL_DISCOVERY_ADMISSION_WAIT,
               dispatchError:
                 "Mail discovery is queued for shared search capacity",
-              progress: { ...progress, attempt: execution.generation },
+              progress: { ...progress, attempt: 1 },
             })
             .where(eq(runTable.id, runId));
           await launch(runId);
@@ -362,11 +359,9 @@ export type DiscoveryPorts = {
   relevance?: MailRelevance;
   research?: typeof startMailImport;
 };
-const attemptIs = (_attempt: number) => {
-  const execution = currentJobExecution();
-  return execution
-    ? sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.id=${execution.claim.id}::uuid AND j.state=${jobState.enum.running} AND j."generation"=${execution.claim.generation} AND j."leaseToken"=${execution.claim.leaseToken}::uuid AND j."leaseExpiresAt">now())`
-    : sql`false`;
+const attemptIs = (attempt: number) => {
+  const execution = currentRunExecution();
+  return execution?.generation === attempt ? execution.live : sql`false`;
 };
 const patchProgress = (patch: Partial<MailboxDiscoveryProgress>) =>
   sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
@@ -987,14 +982,14 @@ const discoveryCursor = z.object({
 
 /**
  * One `run.execute` quantum: list a provider page, then save it in batches,
- * then finish and admit the next pass. The Job cursor carries the phase.
+ * then finish and admit the next pass. The Pass cursor carries the phase.
  */
 export async function advanceMailDiscoveryPage(
   db: Database,
   params: WorkflowRunParams,
-  claimed: PreparedJobPage["page"]["cursor"] | null,
+  claimed: Json | null,
   ports: DiscoveryPorts = {},
-): Promise<PreparedJobPage["page"]> {
+): Promise<{ done: boolean; cursor?: Json }> {
   const resumed = await beginMailDiscovery(db, params);
   if (resumed.kind === "stopped") return stopDiscoveryPage(db, params);
   const cursor = discoveryCursor.parse(
@@ -1022,7 +1017,7 @@ export async function advanceMailDiscoveryPage(
 async function stopDiscoveryPage(
   db: Database,
   params: WorkflowRunParams,
-): Promise<PreparedJobPage["page"]> {
+): Promise<{ done: boolean; cursor?: Json }> {
   const owner = await readRun(db, runEntityId.parse(params.runId));
   if (owner?.status === "paused_auth")
     throw new JobPausedError(

@@ -5,6 +5,7 @@ import type { Database } from "~/server/db";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   runPassCursor,
+  isPassRunPurpose,
   RUN_EXECUTE_PASS,
 } from "~/server/domains/run/repo/run-execution";
 import { fenceClaim, releaseClaim, renewClaim } from "~/server/kernel/claim";
@@ -15,6 +16,25 @@ import { withWorkflowExecution } from "./execution";
 export async function runPassFixture(db: Database, runId: string) {
   runEntityId.parse(runId);
   const q = repositoryQueries(db);
+  const existing = await q.execute<{
+    purpose: string;
+    progress: { attempt?: number } | null;
+  }>(sql`SELECT purpose, progress FROM "Run" WHERE id = ${runId}::uuid`);
+  const owner = existing.rows[0];
+  if (!owner || !isPassRunPurpose(owner.purpose))
+    throw new Error("Synthetic executed Run missing");
+  const pending = await q.execute<{ key: string }>(
+    sql`SELECT key FROM "Pass" WHERE name = ${RUN_EXECUTE_PASS} AND key = ${runId}`,
+  );
+  if (!pending.rows.length) {
+    const { startRunPass } = await import("./run-pass");
+    await startRunPass(db, {
+      runId: runEntityId.parse(runId),
+      purpose: owner.purpose,
+      generation: owner.progress?.attempt || 1,
+      restart: false,
+    });
+  }
   const token = crypto.randomUUID();
   const result = await q.execute<{ cursor: unknown }>(sql`
     UPDATE "Pass" SET "claimToken" = ${token}::uuid, "claimDeadline" = now() + interval '90 seconds'

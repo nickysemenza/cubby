@@ -15,7 +15,7 @@ import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { run } from "~/server/db/retained-tables";
-import { runHasLiveExecution } from "~/server/generic/jobs/repo/job-reads";
+import { runHasLivePass } from "~/server/domains/run/repo/run-execution";
 
 /** Admission precedes member, Run and Job locks; provider work never holds it. */
 export async function lockMailDiscoveryAdmission(
@@ -142,12 +142,12 @@ async function readMailDiscoveryOwners(
               and(
                 eq(run.status, runStatus.enum.paused),
                 eq(run.failureCode, MAIL_DISCOVERY_ADMISSION_WAIT),
-                runHasLiveExecution(execution),
+                runHasLivePass(execution),
               ),
               and(
                 eq(run.status, runStatus.enum.failed),
                 eq(run.failureCode, "job_failed"),
-                runHasLiveExecution({ ...execution, requireAttempt: true }),
+                runHasLivePass({ ...execution, requireAttempt: true }),
               ),
             ),
           ),

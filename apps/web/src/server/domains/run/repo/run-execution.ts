@@ -3,7 +3,7 @@
  * one Pass row per step-ledger or AI-work Run, keyed by the Run's id. These
  * reads expose that row to Run surfaces (status, wait, progress); the Pass
  * itself is declared in `workflows/runs/run-pass.ts`. Mail discovery still
- * pages as a `run.execute` Job until its module moves.
+ * uses the same Pass claim and retains its provider-page checkpoint.
  */
 import type { JobWaitingOnReason, RunWaitGroup } from "@cubby/schemas/job";
 import {
@@ -25,17 +25,17 @@ import {
 export const RUN_EXECUTE_PASS = "run.execute";
 
 /** Executed kinds the `run.execute` Pass runs: the step ledger and AI work. */
-export type PassRunPurpose = Exclude<ExecutedRunPurpose, "mail_discovery">;
+export type PassRunPurpose = ExecutedRunPurpose;
 export const isPassRunPurpose = (
   purpose: RunPurpose | string,
-): purpose is PassRunPurpose =>
-  isExecutedRunPurpose(purpose) && purpose !== "mail_discovery";
+): purpose is PassRunPurpose => isExecutedRunPurpose(purpose);
 
 /** The Pass cursor: which Run, of which kind, under which execution generation. */
 export const runPassCursor = z.object({
   runId: z.uuid(),
   purpose: z.string(),
   generation: z.number().int().positive(),
+  page: z.json().optional(),
 });
 export type RunPassCursor = z.infer<typeof runPassCursor>;
 
@@ -272,3 +272,15 @@ export async function sweepPassSourceHeld(
     ) AS held`);
   return result.rows[0]?.held ?? false;
 }
+
+/** A mail admission owner must still owe this exact Run generation. */
+export const runHasLivePass = (input: {
+  id: SQL;
+  purpose: SQL;
+  generation: SQL;
+  requireAttempt?: boolean;
+}): SQL<boolean> => sql<boolean>`EXISTS (
+ SELECT 1 FROM "Pass" p WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = (${input.id})::text
+ AND p.cursor->>'purpose' = ${input.purpose} AND p.cursor->>'generation' = (${input.generation})::text
+ AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts < p."maxAttempts"
+ ${input.requireAttempt ? sql`AND ((p.cursor->>'generation')::int > 1 OR p.attempts > 0 OR p."claimToken" IS NOT NULL)` : sql``})`;

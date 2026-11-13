@@ -17,11 +17,7 @@ import {
 } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  withTransactionDatabase,
-  runAfterCommit,
-} from "~/server/db/helpers/core";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { related, outer } from "~/server/db/helpers/related";
 import { run as runTable } from "~/server/db/retained-tables";
 import {
@@ -31,7 +27,6 @@ import {
   retainedMailDiscoveryScope,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import {
-  isPassRunPurpose,
   readRunPass,
   RUN_EXECUTE_PASS,
   type PassRunPurpose,
@@ -39,7 +34,6 @@ import {
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
-import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   JobDeferredError,
   JobRetryableError,
@@ -49,12 +43,6 @@ import {
   lockUnchangedJob,
   stoppedRunExecutions,
 } from "~/server/generic/jobs/repo/job-reads";
-import {
-  makeJobsDueNow,
-  prioritizeJob,
-  retryJob,
-} from "~/server/generic/jobs/repo/operator";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import {
   assertWorkflowEffect,
   currentRunExecution,
@@ -108,13 +96,6 @@ export const recordRunProgress = (
     detail,
   });
 
-/**
- * A member's launch, resume or retry leads unattended Run execution by this
- * many minutes of due time: priority orders Jobs within one kind, never
- * across kinds.
- */
-const MANUAL_RUN_PRIORITY = 10;
-
 /** An aborted Mail snapshot waits on its canonical Job without spending attempts. */
 export function mailDiscoveryBackpressure(
   error: UnparsedError,
@@ -133,7 +114,7 @@ export function mailDiscoveryBackpressure(
   log.warn("Mail discovery database capacity wait", { error });
   const message =
     "Mail discovery is waiting for shared database or search capacity";
-  if (!currentJobExecution())
+  if (!currentRunExecution())
     return createAppError("RUN_CONTROL_REFUSED", message, error);
   const deferred = new JobDeferredError(
     message,
@@ -167,7 +148,7 @@ export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput,
 ): Promise<LaunchedWorkflowRun | null> {
-  if (isPassRunPurpose(input.purpose))
+  if (input.purpose !== "mail_discovery")
     return launchPassRun(db, { ...input, purpose: input.purpose }).catch(
       (error: unknown) => {
         throw activeSlotRefusal(input, error) ?? error;
@@ -230,55 +211,29 @@ export async function launchWorkflowRun(
             : {}),
         }
       : {};
-    const priority = input.automatic ? 0 : MANUAL_RUN_PRIORITY;
-    // Retention prunes the finished Job, so the Run's status has to refuse automatic
-    // work as the row would.
     if (
       input.automatic &&
       ["completed", "failed", "cancelled"].includes(owner.status)
     )
       return null;
-    let execution = await enqueueJob(tx, {
-      key: `run:${input.runId}`,
-      kind: "run.execute",
-      input: { runId: input.runId, purpose: input.purpose },
-      runId: input.runId,
-      priority,
-    });
-    if (["failed", "cancelled", "paused"].includes(execution.state)) {
+    const pass = await readRunPass(tx, input.runId);
+    const live = pass && ["due", "waiting", "working"].includes(pass.state);
+    if (input.automatic && pass && !live) return null;
+    if (owner.status === "completed" && !(await runOwesWork(tx, input.runId))) {
       if (input.automatic) return null;
-      const retried = await retryJob(tx, execution.id);
-      if (retried) execution = retried;
+      throw new Error("Completed Run cannot be relaunched; create a new Run");
     }
-    if (
-      execution.state === "completed" ||
-      // Its finished Job was pruned, so this row is new and the same rule applies.
-      (owner.status === "completed" &&
-        execution.generation === 1 &&
-        execution.attempts === 0)
-    ) {
-      if (input.automatic) return null;
-      // A completed transport Job can leave a failed discovery's frozen page owed.
-      const retainedDiscoveryPage =
-        owner.purpose === "mail_discovery" &&
-        owner.status === "failed" &&
-        mailboxDiscoveryProgress.safeParse(owner.progress).data?.page !==
-          undefined;
-      if (!(await runOwesWork(tx, input.runId)) && !retainedDiscoveryPage)
-        throw new Error("Completed Run cannot be relaunched; create a new Run");
-      execution = await enqueueJob(tx, {
-        key: execution.key,
-        kind: execution.kind,
-        input: execution.input,
+    const generation = live
+      ? (pass.generation ?? 1)
+      : (progressAttempt.safeParse(owner.progress).data?.attempt ?? 0) + 1;
+    const { startRunPass } = await import("./run-pass");
+    if (!input.automatic || !live)
+      await startRunPass(tx, {
         runId: input.runId,
-        priority,
-        invalidate: true,
+        purpose: input.purpose,
+        generation,
+        restart: Boolean(pass && !live),
       });
-    }
-    if (!input.automatic && execution.priority < priority) {
-      const raised = await prioritizeJob(tx, execution.id, priority);
-      if (raised) execution = raised;
-    }
     await getDb(tx)
       .update(runTable)
       .set({
@@ -288,21 +243,14 @@ export async function launchWorkflowRun(
         dispatchError: admitted
           ? null
           : "Mail discovery is queued for shared search capacity",
-        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${execution.generation}::int)`,
+        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
-    if (!input.automatic) {
-      // An explicit launch releases the retained Job's backoff without resetting
-      // its attempt, cursor or the funding preflights on the next page.
-      await makeJobsDueNow(tx, sql`SELECT ${execution.key}::text`);
-      await reviveRunEvaluations(tx, input.runId);
-    }
-    await runAfterCommit(tx, async () => {
-      await (
-        await import("../background-tasks/publish")
-      ).wakeJobs({ source: "run-launch" });
-    });
-    return { attempt: execution.generation, instanceId: execution.id };
+    if (!input.automatic) await reviveRunEvaluations(tx, input.runId);
+    return {
+      attempt: generation,
+      instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
+    };
   }).catch((error: unknown) => {
     if (input.purpose === "mail_discovery") {
       const deferred = mailDiscoveryBackpressure(error);
@@ -635,16 +583,8 @@ export async function resumeClaimedWorkflowRun(
         "provider_capacity",
       );
   } catch (error) {
-    const claimInput = currentJobExecution()?.claim.input;
-    if (
-      claimInput !== null &&
-      typeof claimInput === "object" &&
-      "purpose" in claimInput &&
-      claimInput.purpose === "mail_discovery"
-    ) {
-      const deferred = mailDiscoveryBackpressure(error);
-      if (deferred) throw deferred;
-    }
+    const deferred = mailDiscoveryBackpressure(error);
+    if (deferred) throw deferred;
     const pg = findPgError(error);
     if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
       throw new JobRetryableError(

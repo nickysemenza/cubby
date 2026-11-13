@@ -25,7 +25,7 @@ import {
   isPassRunPurpose,
   readRunPass,
   RUN_EXECUTE_PASS,
-} from "./run-execution";
+} from "~/server/domains/run/repo/run-execution";
 
 /** The execution behind a Run's detail: its Pass, or the mail discovery Job. */
 async function readRunWorkflow(

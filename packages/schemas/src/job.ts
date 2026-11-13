@@ -334,20 +334,6 @@ export const JOB_KIND_POLICY = {
     ...SERVER,
     lane: "external",
   },
-  "run.execute": {
-    activityLabel: "Runs",
-    ...SERVER,
-    label: "Scan a mailbox",
-    purpose: "Advances the mailbox discovery owned by its Run.",
-    trigger: "Run admission, continuation or supported retry.",
-    targets: "The owning Run and its current execution checkpoint.",
-    effects:
-      "Lists and saves mailbox discovery pages; writes outcomes to the Run.",
-    dependencies: "The dependencies declared by the Run type.",
-    cost: "Depends on the Run type; inspect its definition and recorded usage.",
-    exclusions:
-      "Paused, cancelled and ineligible work obeys the Run’s existing control policy.",
-  },
   "run.funding-resume": {
     ...SERVER,
     label: "Resume funded Runs",
