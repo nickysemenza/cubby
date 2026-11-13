@@ -118,6 +118,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 const accountName = sql<string | null>`(
   SELECT fa.name FROM "FinancialAccount" fa
@@ -473,6 +474,7 @@ export async function createFinancialTransactionRows(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   // One locked occurrence FK owns acceptance; retained aliases never grant it.
   const proof = await lockFreshFinancialSources(
     tx,

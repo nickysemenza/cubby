@@ -687,8 +687,45 @@ export async function lockFreshFinancialSources(
         .orderBy(asc(sourceOccurrence.id))
         .for("update", { of: sourceOccurrence })
     : [];
+  // A head joined before an occurrence-lock wait can be an older READ COMMITTED snapshot.
+  // Removal takes the occurrence first, so re-read and lock the live heads after that wait.
+  const liveHeads = locked.length
+    ? await repositoryQueries(tx)
+        .select({
+          id: sourceTransactionRecord.id,
+          amount: sourceTransactionRecord.amount,
+        })
+        .from(sourceTransactionRecord)
+        .where(
+          and(
+            inArray(
+              sourceTransactionRecord.id,
+              locked.flatMap((row) =>
+                row.occurrence.currentObservationId
+                  ? [row.occurrence.currentObservationId]
+                  : [],
+              ),
+            ),
+            notDeleted(sourceTransactionRecord),
+          ),
+        )
+        .orderBy(sourceTransactionRecord.id)
+        .for("update")
+    : [];
   const owners = new Map(
-    locked.map((row) => [row.occurrence.shortcode, row] as const),
+    locked.map(
+      (row) =>
+        [
+          row.occurrence.shortcode,
+          {
+            ...row,
+            headAmount:
+              liveHeads.find(
+                (head) => head.id === row.occurrence.currentObservationId,
+              )?.amount ?? null,
+          },
+        ] as const,
+    ),
   );
   const available = (ref: SourceRef) => {
     const code = occurrenceCode(ref);
