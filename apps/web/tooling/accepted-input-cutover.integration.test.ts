@@ -732,6 +732,22 @@ it("matches the registered model feature envelope catalog", async () => {
       }),
     )
     .parse(JSON.parse(acceptedInputCutoverSql().split("$features$")[1]!));
+  const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
+  const { buildRegistry } = await import("../src/server/kernel/registry");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(
+    new URL("../../../artifacts/review-owned-targets.json", import.meta.url),
+    JSON.stringify(
+      [...buildRegistry(KERNEL_MODULES).reconcilers.values()].flatMap((r) =>
+        r.writes.map((t) => ({
+          scope: r.scope,
+          entity: t.entity,
+          table: t.name,
+          columns: t.columns,
+        })),
+      ),
+    ),
+  );
   expect(catalog).toEqual(
     modelAsks.map((a) => ({
       feature: a.feature,
@@ -763,5 +779,38 @@ it("retires a historical merge even when its deletion timestamp is absent", asyn
         )
       ).rows,
     ).toEqual([{ entityId: cutoverId(4), retired: true }]);
+  });
+});
+
+it("binds an accepting occurrence even under a nullable historical disposition", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    expect(
+      (
+        await client.query(
+          `SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='SourceOccurrence' AND column_name='disposition'`,
+        )
+      ).rows,
+    ).toEqual([{ is_nullable: "NO" }]);
+    await client.query(
+      `ALTER TABLE "SourceOccurrence" ALTER COLUMN disposition DROP NOT NULL`,
+    );
+    await client.query(
+      `UPDATE "SourceOccurrence" SET disposition=NULL WHERE id=$1`,
+      [cutoverId(63)],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT "entityId" FROM "RecordKey" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1`,
+          [cutoverId(63)],
+        )
+      ).rows,
+    ).toEqual([{ entityId: cutoverId(3) }]);
   });
 });
