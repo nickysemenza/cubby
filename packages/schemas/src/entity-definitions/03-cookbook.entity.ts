@@ -77,6 +77,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "cookbookDeleteEdgeHandlers",
                 member: "cascadeRecipes",
               },
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -147,6 +148,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "The cover association is soft-deleted with the cookbook; the cover image is reaped when nothing else uses it.",
               },
               handler: null,
+              order: 1,
             },
             merge: {
               kind: "unsupported",

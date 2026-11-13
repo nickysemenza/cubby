@@ -86,6 +86,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A deleted recipe's forks have their forkedFromRecipeId pointer nulled out — a fork is a full independent recipe, so it survives its parent's deletion, just without the lineage pointer.",
               },
               handler: null,
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -154,6 +155,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A deleted recipe's sub-recipe pointer is left untouched — parent recipes are recomputed and re-resolved rather than having this edge cascaded or guarded.",
               },
               handler: null,
+              order: 1,
             },
             merge: {
               kind: "unsupported",
@@ -224,6 +226,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 module: "~/server/domains/recipe/repo/crud",
                 export: "removeRecipeGrandchildren",
               },
+              order: 2,
             },
             merge: {
               kind: "unsupported",
@@ -290,6 +293,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
               },
               handler: null,
+              order: 3,
             },
             merge: {
               kind: "unsupported",
@@ -359,6 +363,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Image associations are soft-deleted with the recipe, and each file is\n      deleted too unless something else still references it.",
               },
               handler: null,
+              order: 4,
             },
             merge: {
               kind: "unsupported",
@@ -429,6 +434,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
               },
               handler: null,
+              order: 5,
             },
             merge: {
               kind: "unsupported",

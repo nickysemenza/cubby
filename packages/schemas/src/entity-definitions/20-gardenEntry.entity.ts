@@ -78,6 +78,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Garden entry image associations are removed with the entry.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",

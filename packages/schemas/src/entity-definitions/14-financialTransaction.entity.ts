@@ -98,6 +98,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
               },
               handler: null,
+              order: 2,
             },
             merge: {
               kind: "unsupported",
@@ -165,6 +166,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Deleting a transaction retires its reference bindings while preserving every alias row and provenance through tombstones. Proven source occurrence reservations remain independent.",
               },
               handler: null,
+              order: 3,
             },
             merge: {
               kind: "unsupported",
@@ -233,6 +235,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A reviewed Email association keeps naming the deleted transaction's tombstone; the review is history and is never rewritten.",
               },
               handler: null,
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -314,6 +317,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "~/server/domains/financial-transaction/repo/financial-transaction",
                 export: "lockFinancialTransactionDeletion",
               },
+              order: 1,
             },
             merge: {
               kind: "unsupported",

@@ -93,6 +93,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A retired package keeps its retained observations and capture memberships.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -161,6 +162,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A retired package keeps its source binding, so replay cannot recreate it.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",

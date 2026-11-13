@@ -5,7 +5,7 @@ import {
   ENTITY_LINK_KINDS,
   entityLinkEdgeKey,
   type EntityLinkKind,
-} from "../entity-links";
+} from "../entity-link-catalog.gen";
 
 import {
   relationshipQueryDefinition,

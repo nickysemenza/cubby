@@ -45,7 +45,7 @@
  * in `entity-edges.ts`.
  */
 
-import type { EntityEdge } from "./entity-edge-overrides";
+import type { EntityEdge } from "./entity-edge-types";
 import { ENTITY_EDGES } from "./generated/entity-edges.gen";
 
 /** Project one entity's edge map down to its stable-semantics fields only. */

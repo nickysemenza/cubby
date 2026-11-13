@@ -5,7 +5,7 @@
  * entity, `to` the blocker. Removal soft-deletes the link.
  */
 
-import { ENTITY_LINK_KINDS } from "@cubby/schemas/entity-links";
+import { ENTITY_LINK_KINDS } from "@cubby/schemas/entity-link-catalog";
 import {
   localRelationshipByKey,
   type ShortcodeEntity,

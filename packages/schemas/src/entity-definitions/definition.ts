@@ -3287,7 +3287,6 @@ const buildMetadataSchemas = () => {
         .strict(),
       relations: z.array(entityRelationMetadataSchema),
       edges: z.array(edgeDefinitionSchema).optional().default([]),
-      edgeSource: z.literal("declaration").optional(),
       /**
        * `semantic`: lexical search plus an `EntityEmbedding` vector.
        * `lexical`: search without a vector (the financial entities, whose
@@ -3485,9 +3484,7 @@ export function defaultReadSchemas<
 }
 
 type EntityInput = Omit<EntityDeclaration, "relations">;
-type RelationshipInput =
-  | EntityDeclaration["relations"]
-  | { edges: EdgeDefinition[] };
+type RelationshipInput = { edges: EdgeDefinition[] };
 type DefinedEntity<T> = Omit<T, "relations" | "edges"> & {
   edges: EdgeDefinition[];
   relations: EntityDeclaration["relations"];
@@ -3556,15 +3553,11 @@ export function defineEntity<const T extends EntityInput>(
   readSchemas?: RawReadSchemas,
 ) {
   const input = relationships(createRelationships(declaration));
-  const edges = [
-    ...(declaration.edges ?? []),
-    ...("edges" in input ? input.edges : []),
-  ];
+  const edges = [...(declaration.edges ?? []), ...input.edges];
   return {
     ...declaration,
     edges,
-    ...("edges" in input ? { edgeSource: "declaration" as const } : {}),
-    relations: "edges" in input ? input.edges.flatMap(edgeRelationship) : input,
+    relations: input.edges.flatMap(edgeRelationship),
     readSchemas: readSchemas ?? defaultReadSchemas(declaration),
   };
 }

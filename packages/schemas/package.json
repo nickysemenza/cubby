@@ -90,7 +90,7 @@
     "./structured-value-schemas": "./src/generated/structured-value-schemas.gen.ts",
     "./entity-field-schema-maps": "./src/generated/entity-field-schema-maps.gen.ts",
     "./entity-integrity": "./src/entity-integrity.ts",
-    "./entity-links": "./src/entity-links.ts",
+    "./entity-link-catalog": "./src/entity-link-catalog.gen.ts",
     "./entity-detail-data": "./src/entity-detail-data.ts",
     "./entity-graph": "./src/entity-graph.ts",
     "./entity-recommendations": "./src/entity-recommendations.ts",

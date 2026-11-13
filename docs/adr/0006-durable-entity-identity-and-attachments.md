@@ -89,8 +89,8 @@ mirror a raw payload delete. Entity ids must be unique across entity tables,
 which random UUIDs already guarantee; fixtures cannot reuse a fixed id in two
 tables.
 
-ADR 0001 still holds: physical edges remain typed FKs and joins, lifecycle
-remains per-operation policy, and there is no generic edge table.
+Physical edges remain typed FKs and joins. Their `defineEdge` declarations own
+separate delete/merge policies and name their executable functions; graph reads use the generated catalog.
 `EntityAttachment.entityId` and `RunTarget.entityId` are the edge keys that
 target several entities; the relatedness traversal resolves its outgoing direction from the
 path's destination.

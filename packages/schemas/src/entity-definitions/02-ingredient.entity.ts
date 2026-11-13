@@ -73,6 +73,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "An ingredient linked to a product can't be deleted — unlink or delete the product first.",
               },
               handler: null,
+              order: 0,
             },
             merge: {
               kind: "disposition",
@@ -83,6 +84,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
               },
               handler: null,
+              order: 0,
             },
           },
         },
@@ -145,6 +147,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A plant's ingredient link is informational; deleting the ingredient clears it.",
               },
               handler: null,
+              order: 1,
             },
             merge: {
               kind: "disposition",
@@ -155,6 +158,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Plants linked to a merged ingredient move to the survivor.",
               },
               handler: null,
+              order: 1,
             },
           },
         },
@@ -217,6 +221,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "An ingredient recorded in a live meal food entry cannot be deleted.",
               },
               handler: null,
+              order: 2,
             },
             merge: {
               kind: "disposition",
@@ -227,6 +232,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Meal food entries retain their entered amounts while moving to the surviving ingredient.",
               },
               handler: null,
+              order: 2,
             },
           },
         },
@@ -294,6 +300,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 module: "~/server/domains/ingredient/repo/deletion",
                 export: "refuseLiveRecipeUsage",
               },
+              order: 3,
             },
             merge: {
               kind: "disposition",
@@ -304,6 +311,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A merged ingredient's recipe lines are re-pointed onto the surviving ingredient.",
               },
               handler: null,
+              order: 3,
             },
           },
         },

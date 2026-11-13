@@ -94,6 +94,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/task/repo/crud",
               export: "expandTaskRemoval",
             },
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -159,6 +160,7 @@ export const { definition, readSchemas } = defineEntityModel({
               description: "A planting outlives the task that produced it.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -228,6 +230,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Image associations are soft-deleted with the task, and each file is\n      deleted too unless something else still references it.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "unsupported",
@@ -298,6 +301,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
             },
             handler: null,
+            order: 3,
           },
           merge: {
             kind: "unsupported",

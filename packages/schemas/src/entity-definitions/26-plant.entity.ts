@@ -118,6 +118,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A plant grown by a live planting cannot be deleted.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "disposition",
@@ -128,6 +129,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Plantings of a merged plant move to the surviving plant.",
             },
             handler: null,
+            order: 0,
           },
         },
       },
@@ -192,6 +194,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A plant named by a live seed or plant product cannot be deleted.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "disposition",
@@ -202,6 +205,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Seed and plant products move to the surviving plant.",
             },
             handler: null,
+            order: 1,
           },
         },
       },

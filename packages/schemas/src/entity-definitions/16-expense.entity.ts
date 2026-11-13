@@ -108,6 +108,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Deleting an Expense retains its historical receipt reference so an identity-only association cannot revive a cleared Product claim.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -174,6 +175,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -241,6 +243,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Deleting an Expense retires the normalized import references that identify that ledger row.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "unsupported",
@@ -311,6 +314,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
             },
             handler: null,
+            order: 3,
           },
           merge: {
             kind: "unsupported",

@@ -1747,7 +1747,7 @@ const dropFromProposedGroups = async (
 const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
   DECLARED_EDGE_DELETE_POLICIES.image,
 ).map(([key, disposition]) => {
-  // SAFETY: DECLARED_EDGE_DELETE_POLICIES.image `satisfies` IncomingEdgePolicy<"image">, and
+  // SAFETY: generation checks every policy key against its physical declaration, and
   // INCOMING_EDGES is built only from Postgres schema columns.
   const edge = (INCOMING_EDGES.image as Record<string, IncomingEdge>)[key]!;
   // SAFETY: every image incoming edge is built from a Postgres schema column.

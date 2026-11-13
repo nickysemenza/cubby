@@ -9,7 +9,7 @@ import {
   type plantingUpdateData,
 } from "@cubby/schemas/entities/planting";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import {
   rawGardenEntryOut,
   rawGardenEntryListItemOut,

@@ -77,6 +77,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Evidence transactions remain after their transfer is removed.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -142,6 +143,7 @@ export const { definition, readSchemas } = defineEntityModel({
               description: "Transfer-owned normalized claims are retired.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",

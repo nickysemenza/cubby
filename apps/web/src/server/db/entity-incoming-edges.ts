@@ -1,7 +1,4 @@
-/** Physical projection of the compiled source references and explicit domain semantics.
- * Domain operation policies remain exhaustive over explicit edges; newly declared
- * ordinary references receive a conservative blocking disposition automatically.
- */
+/** Physical projection of defineEdge storage. Generated policies own each operation. */
 
 import type { Entity } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
@@ -11,8 +8,8 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { type AnyColumn, eq, type SQL } from "drizzle-orm";
 
-import { ENTITY_EDGE_OVERRIDES } from "./entity-edge-overrides";
-import type { EdgeScope, EntityEdge } from "./entity-edge-overrides";
+import type { EdgeScope, EntityEdge } from "./entity-edge-types";
+import { ENTITY_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import { ENTITY_EDGES } from "./generated/entity-edges.gen";
 
 export interface IncomingEdge {
@@ -66,13 +63,6 @@ const INCOMING_EDGES = Object.fromEntries(
 /** The declared incoming-edge keys for entity `E` — e.g. `IncomingEdgeKey<"image">`. */
 export type IncomingEdgeKey<E extends Entity> =
   keyof (typeof INCOMING_EDGES)[E];
-
-/** Domain edges remain exhaustive; ordinary source references default to refusal. */
-export type IncomingEdgePolicy<E extends Entity, Disposition> = Record<
-  keyof (typeof ENTITY_EDGE_OVERRIDES)[E],
-  Disposition
-> &
-  Partial<Record<IncomingEdgeKey<E>, Disposition>>;
 
 const ORDINARY_REFERENCE_BLOCK: OperationDisposition = {
   code: "block-ordinary-reference",

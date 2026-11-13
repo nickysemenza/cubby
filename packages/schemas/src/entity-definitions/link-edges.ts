@@ -56,6 +56,7 @@ export const declaredLinkEdges = [
               "Product links are soft-deleted with the purchase; the Products themselves are not.",
           },
           handler: null,
+          order: 7,
         },
         merge: {
           kind: "disposition",
@@ -66,6 +67,7 @@ export const declaredLinkEdges = [
               "The absorbed purchase's product links move onto the survivor, skipping products already linked there, and the source links are soft-deleted.",
           },
           handler: null,
+          order: 7,
         },
       },
       to: {
@@ -84,6 +86,7 @@ export const declaredLinkEdges = [
             export: "refuseProductDeletion",
             argument: "EntityLink[purchaseProduct].to",
           },
+          order: 14,
         },
         merge: {
           kind: "disposition",
@@ -98,6 +101,7 @@ export const declaredLinkEdges = [
             export: "productMergeEdgeHandlers",
             member: "movePurchaseLinks",
           },
+          order: 14,
         },
       },
     },
@@ -157,6 +161,7 @@ export const declaredLinkEdges = [
               "Payment-account links are soft-deleted with the purchase; the accounts themselves are not.",
           },
           handler: null,
+          order: 8,
         },
         merge: {
           kind: "disposition",
@@ -167,6 +172,7 @@ export const declaredLinkEdges = [
               "The absorbed purchase's payment-account links move onto the survivor, skipping accounts already linked there, and the source links are soft-deleted.",
           },
           handler: null,
+          order: 8,
         },
       },
       to: {
@@ -179,6 +185,7 @@ export const declaredLinkEdges = [
               "A member's assertion that this account paid an order is soft-deleted with the account; the order's paying accounts fall back to its payment evidence.",
           },
           handler: null,
+          order: 2,
         },
         merge: {
           kind: "unsupported",
@@ -242,6 +249,7 @@ export const declaredLinkEdges = [
               "Tool-use associations are soft-deleted with the project; the tool Products and their other project history remain.",
           },
           handler: null,
+          order: 6,
         },
         merge: {
           kind: "unsupported",
@@ -264,6 +272,7 @@ export const declaredLinkEdges = [
             export: "refuseProductDeletion",
             argument: "EntityLink[projectTool].to",
           },
+          order: 15,
         },
         merge: {
           kind: "disposition",
@@ -278,6 +287,7 @@ export const declaredLinkEdges = [
             export: "productMergeEdgeHandlers",
             member: "foldProjectUses",
           },
+          order: 15,
         },
       },
     },
@@ -337,6 +347,7 @@ export const declaredLinkEdges = [
               "Planting associations are removed with the garden entry; plantings remain.",
           },
           handler: null,
+          order: 1,
         },
         merge: {
           kind: "unsupported",
@@ -358,6 +369,7 @@ export const declaredLinkEdges = [
             export: "plantingDeleteEdgeHandlers",
             member: "auditMemberships",
           },
+          order: 0,
         },
         merge: {
           kind: "unsupported",
@@ -421,6 +433,7 @@ export const declaredLinkEdges = [
               "Deleting a kit takes its own component list with it — the individual component Products are untouched.",
           },
           handler: null,
+          order: 16,
         },
         merge: {
           kind: "disposition",
@@ -435,6 +448,7 @@ export const declaredLinkEdges = [
             export: "productMergeEdgeHandlers",
             member: "moveKitComponents",
           },
+          order: 16,
         },
       },
       to: {
@@ -453,6 +467,7 @@ export const declaredLinkEdges = [
             export: "refuseProductDeletion",
             argument: "EntityLink[productComponent].to",
           },
+          order: 17,
         },
         merge: {
           kind: "disposition",
@@ -467,6 +482,7 @@ export const declaredLinkEdges = [
             export: "productMergeEdgeHandlers",
             member: "moveComponentMemberships",
           },
+          order: 17,
         },
       },
     },
@@ -526,6 +542,7 @@ export const declaredLinkEdges = [
               "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
           },
           handler: null,
+          order: 4,
         },
         merge: {
           kind: "unsupported",
@@ -542,6 +559,7 @@ export const declaredLinkEdges = [
               "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
           },
           handler: null,
+          order: 5,
         },
         merge: {
           kind: "unsupported",
@@ -605,6 +623,7 @@ export const declaredLinkEdges = [
               "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
           },
           handler: null,
+          order: 7,
         },
         merge: {
           kind: "unsupported",
@@ -621,6 +640,7 @@ export const declaredLinkEdges = [
               "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
           },
           handler: null,
+          order: 8,
         },
         merge: {
           kind: "unsupported",

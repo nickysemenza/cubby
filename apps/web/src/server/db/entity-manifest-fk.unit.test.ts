@@ -4,7 +4,7 @@ import {
   ENTITY_LINK_KINDS,
   entityLinkEdgeKey,
   entityLinkKinds,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";

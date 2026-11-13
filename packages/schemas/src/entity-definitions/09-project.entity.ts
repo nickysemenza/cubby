@@ -280,6 +280,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A project with live sub-projects can't be deleted — delete or reparent them first.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -349,6 +350,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/project/repo/crud",
               export: "refuseProjectTaskMembership",
             },
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -415,6 +417,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A project selected as a live purchase default cannot be deleted until the purchase is reassigned.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "unsupported",
@@ -484,6 +487,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/project/repo/crud",
               export: "refuseProjectExpenseMembership",
             },
+            order: 3,
           },
           merge: {
             kind: "unsupported",
@@ -553,6 +557,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
             },
             handler: null,
+            order: 4,
           },
           merge: {
             kind: "unsupported",
@@ -623,6 +628,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
             },
             handler: null,
+            order: 5,
           },
           merge: {
             kind: "unsupported",

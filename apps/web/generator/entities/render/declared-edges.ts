@@ -20,7 +20,6 @@ export const renderDeclaredEdges = (
   edges: readonly EdgeDefinition[],
   entities: readonly CompiledEntity[],
   children: readonly ChildTableDeclaration[],
-  converted: ReadonlySet<string>,
 ): EntityArtifacts[] => {
   const tables = new Map([
     ...retainedTableExports.map(
@@ -51,13 +50,13 @@ export const renderDeclaredEdges = (
     owners = new Map<string, string>();
   const deletes = new Map<string, string[]>(),
     merges = new Map<string, string[]>();
+  const operationOrder = new Map<string, number>();
   const deleteHooks = new Map<string, Hook[]>(),
     mergeHooks = new Map<string, Hook[]>();
   const add = (map: Map<string, string[]>, key: string, value: string) =>
     map.set(key, [...(map.get(key) ?? []), value]);
   for (const entity of entities) {
     ordinary.set(entity.key, []);
-    if (!converted.has(entity.key)) continue;
     const life = z
       .object({ delete: z.object({}).nullable(), merge: z.boolean() })
       .parse(entity.descriptor.lifecycle);
@@ -137,13 +136,11 @@ export const renderDeclaredEdges = (
               ordinary: false,
             },
           ];
-    if (storage.kind === "link" || converted.has(edge.to))
-      ownerFor(
-        edge,
-        storage.kind === "link" ? "EntityLink" : storage.column.split(".")[0]!,
-      );
+    ownerFor(
+      edge,
+      storage.kind === "link" ? "EntityLink" : storage.column.split(".")[0]!,
+    );
     for (const end of ends) {
-      if (!converted.has(end.entity)) continue;
       if (end.entity.startsWith("row:") || end.entity === "identity")
         throw new EntityDeclarationError(
           `${edge.key}: incoming projection requires an entity.`,
@@ -161,6 +158,10 @@ export const renderDeclaredEdges = (
         const policy = edge.policies[end.end][operation];
         if (policy.kind === "unsupported") continue;
         add(map, end.entity, `${key}:${JSON.stringify(policy.disposition)}`);
+        operationOrder.set(
+          operation + "/" + end.entity + "/" + key,
+          policy.order,
+        );
         const refs = [
           ["overrides", policy.handler],
           ["beforeDelete", policy.before],
@@ -177,6 +178,17 @@ export const renderDeclaredEdges = (
       }
     }
   }
+  for (const [operation, map] of [
+    ["delete", deletes],
+    ["merge", merges],
+  ] as const)
+    for (const [entity, rows] of map) {
+      const rank = (row: string) =>
+        operationOrder.get(
+          operation + "/" + entity + "/" + row.slice(0, row.indexOf(":{")),
+        ) ?? 0;
+      rows.sort((a, b) => rank(a) - rank(b));
+    }
   const grouped = (name: string, map: Map<string, string[]>) =>
     `export const ${name}={${[...map].map(([entity, rows]) => `${JSON.stringify(entity)}:{${rows.join(",\n")}}`).join(",\n")}} as const;\n`;
   const hooksSource = (name: string, groups: Map<string, Hook[]>) => {
@@ -257,15 +269,16 @@ export const renderDeclaredEdges = (
       relativePath: "apps/web/src/server/db/generated/declared-edges.gen.ts",
       source: rawSource(
         generatedHeader +
+          'import type {EntityEdgeOwner,NonEntityEdgeTable} from "../entity-edge-types";\n' +
           (deleteHooks.size || mergeHooks.size
             ? 'import type {DrizzleTransaction} from "~/server/db";\nimport type {EntityId} from "@cubby/schemas/identifiers";\n'
             : "") +
           (imports.size
             ? `import {${[...imports].sort().join(",")}} from "~/server/db/schema";\n`
             : "") +
-          grouped("DECLARED_EDGE_OVERRIDES", groups) +
+          grouped("ENTITY_EDGE_OVERRIDES", groups) +
           grouped("DECLARED_EDGE_ORDINARY", ordinary) +
-          `export const DECLARED_EDGE_OWNERS={${[...owners].map(([table, owner]) => `${JSON.stringify(table)}:${owner}`).join(",\n")}} as const;\n` +
+          `export const ENTITY_EDGE_OWNERS={${[...owners].map(([table, owner]) => `${JSON.stringify(table)}:${owner}`).join(",\n")}} as const satisfies Record<NonEntityEdgeTable,EntityEdgeOwner>;\n` +
           grouped("DECLARED_EDGE_DELETE_POLICIES", deletes) +
           (merges.size ? grouped("DECLARED_EDGE_MERGE_POLICIES", merges) : "") +
           hooksSource("DECLARED_EDGE_DELETE_HOOKS", deleteHooks) +

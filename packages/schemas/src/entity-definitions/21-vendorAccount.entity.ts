@@ -72,6 +72,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Fetched purchases retain the vendor account that supplied their evidence.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "disposition",
@@ -82,6 +83,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Purchases fetched through the duplicate account name the surviving account.",
             },
             handler: null,
+            order: 0,
           },
         },
       },
@@ -142,6 +144,7 @@ export const { definition, readSchemas } = defineEntityModel({
               description: "Import runs retain their vendor-account scope.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "disposition",
@@ -152,6 +155,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Import runs move their scope to the surviving account.",
             },
             handler: null,
+            order: 1,
           },
         },
       },
@@ -215,6 +219,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Replay-safe source claims retain their vendor-account scope.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "disposition",
@@ -225,6 +230,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Replay-safe source claims scope to the surviving account.",
             },
             handler: null,
+            order: 2,
           },
         },
       },

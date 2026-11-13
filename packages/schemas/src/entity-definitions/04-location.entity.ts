@@ -94,6 +94,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 module: "~/server/domains/location/repo/crud",
                 export: "refuseHomeLocation",
               },
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -159,6 +160,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A location still holding inventory can't be deleted — move or remove the inventory first.",
               },
               handler: null,
+              order: 1,
             },
             merge: {
               kind: "unsupported",
@@ -225,6 +227,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A location named by a current or planned planting cannot be deleted.",
               },
               handler: null,
+              order: 2,
             },
             merge: {
               kind: "unsupported",
@@ -291,6 +294,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "A location with dated garden observations cannot be deleted.",
               },
               handler: null,
+              order: 3,
             },
             merge: {
               kind: "unsupported",
@@ -360,6 +364,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
               },
               handler: null,
+              order: 4,
             },
             merge: {
               kind: "unsupported",
@@ -426,6 +431,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Deleting a location clears a photo group proposal's inventory location; a proposed group must then pick another before approval.",
               },
               handler: null,
+              order: 5,
             },
             merge: {
               kind: "unsupported",

@@ -1,7 +1,9 @@
 import type { EdgeRole, EdgeLiveness } from "@cubby/schemas/entity-integrity";
+import type { EntityManifest } from "@cubby/schemas/entity-manifest";
 import type { AnyColumn } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
-import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
+import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 export interface EntityEdge {
   /** The FK column, on the referencing table, that points at this entity's `id`. */
   column: AnyColumn;
@@ -43,4 +45,38 @@ export interface EdgeScope {
   value: string;
 }
 
-export const ENTITY_EDGE_OVERRIDES = DECLARED_EDGE_OVERRIDES;
+export type EntityEdgeOwner =
+  | { owner: AnyPgColumn }
+  | {
+      /** Joined on `via.table.id = <row>.<via.column>`. */
+      via: {
+        column: AnyPgColumn;
+        table: { id: AnyPgColumn };
+        owner: AnyPgColumn;
+      };
+    }
+  /**
+   * The owner's kind is not fixed by the table: `EntityAttachment` names any
+   * entity, so its kind is read from `Entity`.
+   */
+  | { ownerIdentity: AnyPgColumn }
+  /**
+   * `EntityLink`: the owner is `fromEntityId`, whose kind the row's link kind
+   * declares (`ENTITY_LINK_KINDS[kind].from`). The `.from` end of each kind is
+   * the owner column; the `.to` end is the edge.
+   */
+  | { linkFrom: AnyPgColumn }
+  | { excluded: string };
+
+type EdgeKey = {
+  [E in keyof typeof ENTITY_EDGES]: keyof (typeof ENTITY_EDGES)[E] & string;
+}[keyof typeof ENTITY_EDGES];
+type EdgeTable<K extends string> = K extends `EntityLink[${string}`
+  ? "EntityLink"
+  : K extends `${infer Table}.${string}`
+    ? Table
+    : never;
+export type NonEntityEdgeTable = Exclude<
+  EdgeTable<EdgeKey>,
+  NonNullable<EntityManifest[keyof EntityManifest]["dbTable"]>
+>;

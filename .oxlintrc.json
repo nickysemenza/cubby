@@ -443,7 +443,6 @@
       "files": [
         "packages/schemas/src/entity-definitions/**/*.ts",
         "packages/schemas/src/relationship-query-definitions.ts",
-        "packages/schemas/src/entity-links.ts",
         "packages/schemas/src/entity-link-catalog.gen.ts",
         "packages/schemas/src/entity-attachment.ts",
         "packages/schemas/src/automatic-rule.ts",

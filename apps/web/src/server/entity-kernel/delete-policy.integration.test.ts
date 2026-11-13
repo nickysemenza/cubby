@@ -2,7 +2,7 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   ENTITY_LINK_KINDS,
   entityLinkKinds,
-} from "@cubby/schemas/entity-links";
+} from "@cubby/schemas/entity-link-catalog";
 /**
  * Every declared delete disposition, checked at the database boundary.
  *

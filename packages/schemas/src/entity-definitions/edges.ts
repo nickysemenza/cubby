@@ -46,6 +46,7 @@ export type EdgePolicyReference = z.infer<typeof policyReference>;
 const operationPolicy = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("disposition"),
+    order: z.number().int().nonnegative(),
     disposition: operationDispositionSchema.extend({
       reason: text.optional(),
       label: text.optional(),

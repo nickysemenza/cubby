@@ -173,11 +173,11 @@ credits and reconcile visible breakdowns against totals before shipping a chart.
 Major entities soft-delete. Use `notDeleted`, including `exists`/`notExists`
 subqueries unless an `includes-deleted: <reason>` comment makes the exception
 intentional. Removal paths clean `SearchDocument` and `EntityEmbedding` in the
-same transaction and propagate dependent staleness. Declare exhaustive,
-operation-specific incoming-edge policy from `entity-incoming-edges.ts`.
-Every new entity-targeting FK needs a stable `ENTITY_EDGES` declaration and
-graph coverage or an explicit non-graph metadata classification. A non-entity
-source table also needs `ENTITY_EDGE_OWNERS`, even when excluded from the graph.
+same transaction and propagate dependent staleness. Declare each relationship with `defineEdge`, including storage, inverse, ownership, liveness
+and separate delete/merge policies with named executable hooks. The generator emits
+`ENTITY_EDGES` and `ENTITY_EDGE_OWNERS` from those declarations. Every entity-targeting FK
+needs graph coverage or an explicit non-graph metadata classification; non-entity source tables
+declare ownership even when excluded from the graph.
 Run both `entity-manifest-fk.unit.test.ts` and `entity-edge-owners.unit.test.ts`
 after adding an FK, including ledger child tables; the owner guard loads the
 actual graph projection and catches module-initialization failures. Populate new

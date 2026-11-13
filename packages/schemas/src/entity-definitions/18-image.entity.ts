@@ -100,6 +100,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "ImageProcessingJob.imageId",
               },
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -170,6 +171,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "SourceOrderObservation.primaryDocumentImageId",
               },
+              order: 1,
             },
             merge: {
               kind: "unsupported",
@@ -240,6 +242,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "SourceOrderObservation.screenshotImageId",
               },
+              order: 2,
             },
             merge: {
               kind: "unsupported",
@@ -310,6 +313,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "EntityAttachment.imageId",
               },
+              order: 3,
             },
             merge: {
               kind: "unsupported",
@@ -380,6 +384,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "PhotoRunImage.imageId",
               },
+              order: 4,
             },
             merge: {
               kind: "unsupported",
@@ -450,6 +455,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "ImageDerivative.imageId",
               },
+              order: 5,
             },
             merge: {
               kind: "unsupported",
@@ -521,6 +527,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "ImportPreparedOrder.primaryDocumentImageId",
               },
+              order: 6,
             },
             merge: {
               kind: "unsupported",
@@ -592,6 +599,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "ImportPreparedOrder.screenshotImageId",
               },
+              order: 7,
             },
             merge: {
               kind: "unsupported",
@@ -662,6 +670,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "OrderMailAttachment.imageId",
               },
+              order: 8,
             },
             merge: {
               kind: "unsupported",
@@ -732,6 +741,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 export: "clearImageEdge",
                 argument: "ImageSighting.imageId",
               },
+              order: 9,
             },
             merge: {
               kind: "unsupported",

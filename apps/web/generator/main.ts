@@ -110,6 +110,7 @@ const main = async () => {
     collectEdgeDeclarations,
     validateEdgeDeclarations,
     validateEdgeStorageCoverage,
+    collectStructuralEdgePaths,
   } = await import("./entities/edges.ts");
   const { validateEntityDeclarationImportBoundary } =
     await import("./entities/import-boundary.ts");
@@ -148,37 +149,13 @@ const main = async () => {
     ...collectEdgeDeclarations(declarations),
     ...declaredLinkEdges,
   ];
-  const legacyPaths = new Set(
-    entities.flatMap((entity) =>
-      entity.relations.flatMap((relation) =>
-        [
-          relation.provenance,
-          ...(relation.sources ?? []).map((source) => source.provenance),
-        ].flatMap((provenance) =>
-          provenance.kind === "local-path"
-            ? provenance.steps.map((step) => step.edge)
-            : [],
-        ),
-      ),
-    ),
-  );
-  validateEdgeDeclarations(edges, legacyPaths);
   await settle([
     await renderAgentPromptArtifact(ROOT),
     await renderPlaybookArtifact(ROOT),
   ]);
   await settle([
     ...renderEntityArtifacts(entities, modulesChildren),
-    ...renderDeclaredEdges(
-      edges,
-      entities,
-      modulesChildren,
-      new Set(
-        declarations
-          .filter((declaration) => declaration.edgeSource === "declaration")
-          .map((declaration) => String(declaration.key)),
-      ),
-    ),
+    ...renderDeclaredEdges(edges, entities, modulesChildren),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities, edges),
@@ -188,16 +165,11 @@ const main = async () => {
     ...renderBrowserRouteArtifacts(entities),
   ]);
   const { drizzleSchema } = await import("~/server/db/drizzle-schema");
-  validateEdgeStorageCoverage(
+  validateEdgeDeclarations(
     edges,
-    entities,
-    drizzleSchema,
-    new Set(
-      declarations
-        .filter((declaration) => declaration.edgeSource === "declaration")
-        .map((declaration) => String(declaration.key)),
-    ),
+    collectStructuralEdgePaths(entities, drizzleSchema),
   );
+  validateEdgeStorageCoverage(edges, entities, drizzleSchema);
   // Detector schemas depend on the entity artifacts above. Emit their lean
   // browser classification only after those canonical schemas can initialize.
   const { PROBLEM_CLASS } = await import("@cubby/schemas/problems");

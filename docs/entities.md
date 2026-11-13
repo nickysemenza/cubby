@@ -2915,29 +2915,37 @@ keeps its paged contract. Run rows open passive Problems.
 
 ### Relationship authorship
 
-Module edge inputs use `defineEdge` from `entity-definitions/edges.ts`; an entity declaration
-accepts them in `edges`, and a domain module can register the same `EdgeDefinition` values. Each
-physical declaration names its endpoints, forward and inverse cardinality, foreign-key column or
-link kind, row ownership, per-end meaning and liveness, and per-end delete and merge policies.
-A custom disposition names an exported policy function through `handler`; null uses the ordinary
-disposition executor. Unsupported operations carry an explicit reason. A composition names typed provenance sources, including local paths, queries, derived filters and
-external references, and inherits their ownership and policies without claiming storage.
-Polymorphic foreign keys name their entity-kind partition; a storage claim includes that partition.
-Link declarations own both endpoint meanings and collision policies; their catalog is a generated
-bootstrap leaf. Custom merge callbacks are named factory members whose typed context carries the
-transaction, plan, actor and result state. Delete policy references also name the `beforeLock`,
-`before`, `after` and `expand` phases; generation binds them at their operation phase.
-A relationship callback can return `{ edges }`; `r.declare(handle.named(...), inverseKey)` builds
-a composition from the typed handle and emits its navigation metadata from that declaration.
-Inverse endpoints are checked by TypeScript and generation. Generation rejects repeated physical
-storage (including overlapping polymorphic claims), duplicate keys and invalid composition paths.
-The physical schema check rejects undeclared foreign keys into declaration-owned endpoints and declarations whose
-columns or constraints do not exist; the server compiler checks named policy
-exports for existence and callability; policy implementations retain their branded identifier types.
+Each relationship has one declaration using `defineEdge` from `entity-definitions/edges.ts`.
+Entity and domain module inputs accept the same `EdgeDefinition` values. A physical edge states
+its endpoints, forward and inverse cardinality, FK column or link kind, ownership, per-end meaning
+and liveness, and separate delete/merge policies. Polymorphic FKs name their entity-kind partition;
+the storage claim includes that partition.
+
+Each executable policy declares its disposition and order. A custom policy names an exported
+function through `handler`; null selects the ordinary disposition executor. Delete policies also name
+the `beforeLock`, `before`, `after` and `expand` phases. Named factory members receive typed
+transaction, plan, actor and result state. Unsupported operations carry an explicit reason.
+
+Relationship callbacks return `{ edges }`. `r.declare(handle.named(...), inverseKey)` builds a
+composition from a typed handle. Its named local paths, queries, derived filters and external
+references emit navigation metadata and inherit physical ownership and policies without claiming
+storage. Link declarations own both endpoint meanings and merge collision rules.
+
+TypeScript and generation check inverse endpoints. Generation rejects duplicate keys, overlapping
+physical storage claims and invalid composition paths. Schema introspection checks every entity-targeting
+FK and verifies each declared column and constraint. The server compiler checks policy exports for
+existence and callability; policy functions retain their branded identifier types.
+
+Generation emits the link bootstrap catalog in
+`packages/schemas/src/entity-link-catalog.gen.ts` and the physical override, ownership and
+lifecycle bindings in `apps/web/src/server/db/generated/declared-edges.gen.ts`.
+`entity-edges.gen.ts` projects the complete incoming catalog from those declarations;
+foreign-key storage does not supply implicit lifecycle entries. Plain child-to-child FK hops
+provide composition topology through schema introspection, without granting entity deletion authority.
 
 Relationship authorship uses `entity-definitions/relationships.ts`. A stored singular identifier
-reference uses `r.field(key)`; its field owns the target used by storage, validation and the graph,
-and ordinary storage entries inherit it (explicit null opts out). `r.link(kind, direction)` and
+reference uses `r.field(key)`; its field supplies the typed target used by storage and validation, and its edge declaration owns
+the physical graph meaning and lifecycle policy. `r.link(kind, direction)` and
 `r.query(key, cardinality, reverse?)` inherit endpoints from their kind/query owners. `.named(key,
 label, options)` supplies presentation and explicit mutation policy; `.source(key, label)` adds a
 named evidence source. Traversable handles derive inverses mechanically, and `.through(next)`
@@ -3008,7 +3016,7 @@ public references and a non-null changed-row count for every affected-edge dispo
 restore. Delete and merge confirmations show an advisory impact list (`entity.connections` with an
 `operation`): each incoming edge group with its count and disposition. The mutation rechecks in its
 own transaction and its structured refusal is authoritative. Domain command and identity reservations
-that must precede the root row locks belong in the repository's `deleteHooks.beforeLock`;
+that must precede the root row locks are named by the edge's `beforeLock` policy reference;
 `beforeDelete` runs after them and owns guards and effects before edge dispositions. Financial deletion
 takes command keys and sorted occurrence locks in `beforeLock`; taking them in `beforeDelete` would
 invert the financial writer lock order.

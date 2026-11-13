@@ -3,7 +3,7 @@ import type { Amount } from "@cubby/schemas/codec";
  * Preserve keeper values; validate component cycles and surface irreconcilable slot conflicts. */
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ImpactItem } from "@cubby/schemas/entity-integrity";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import {
   type ExternalIdKind,
   externalIdKind,

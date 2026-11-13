@@ -11,7 +11,7 @@ import {
 } from "@cubby/schemas/entity-collection";
 import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import {
   displayGtin,
   type ExternalIdInput,

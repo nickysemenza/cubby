@@ -87,6 +87,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "~/server/domains/transaction-import/repo/source-transaction-record-lifecycle",
               export: "lockSourceObservationRemoval",
             },
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -155,6 +156,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A live explicit replacement decision requires its exact observation evidence.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -223,6 +225,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A live predecessor retains its exact reviewed replacement observation.",
             },
             handler: null,
+            order: 3,
           },
           merge: {
             kind: "unsupported",
@@ -290,6 +293,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Observation annotations and unresolved decisions remain retained.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "unsupported",
@@ -358,6 +362,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Original aliases remain explainable through observation tombstones.",
             },
             handler: null,
+            order: 4,
           },
           merge: {
             kind: "unsupported",
@@ -426,6 +431,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Imports retain original and subsequent memberships.",
             },
             handler: null,
+            order: 5,
           },
           merge: {
             kind: "unsupported",

@@ -77,6 +77,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Audit entries outlive the install; they keep their other attribution.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -148,6 +149,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/device/repo/edge-policies",
               export: "deleteDeviceSightings",
             },
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -220,6 +222,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/device/repo/edge-policies",
               export: "deleteDevicePushRegistrations",
             },
+            order: 2,
           },
           merge: {
             kind: "unsupported",

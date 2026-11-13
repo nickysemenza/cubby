@@ -120,8 +120,7 @@ const physicalEdges = <E extends RemovableEntity>(
   };
   return Object.entries(effectiveIncomingEdgePolicy(entity, policy))
     .map(([key, disposition]) => {
-      // SAFETY: each policy `satisfies IncomingEdgePolicy<E, …>`, so every key
-      // names an edge of this entity.
+      // SAFETY: generation checks policy keys against physical declarations for this entity.
       const edge = (INCOMING_EDGES[entity] as Record<string, IncomingEdge>)[
         key
       ]!;

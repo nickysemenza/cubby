@@ -84,6 +84,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "An account cannot be deleted while live financial transactions still retain settlement evidence against it.",
             },
             handler: null,
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -151,6 +152,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
             },
             handler: null,
+            order: 3,
           },
           merge: {
             kind: "unsupported",
@@ -219,6 +221,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "A reviewed Email association keeps naming the deleted account's tombstone; the review is history and is never rewritten.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -287,6 +290,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Original observation judgments retain their account tombstone; current assignments are guarded by the occurrence edge.",
             },
             handler: null,
+            order: 4,
           },
           merge: {
             kind: "unsupported",

@@ -76,6 +76,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Products retain their selected category until reassigned.",
             },
             handler: null,
+            order: 0,
           },
           merge: {
             kind: "unsupported",
@@ -146,6 +147,7 @@ export const { definition, readSchemas } = defineEntityModel({
               module: "~/server/domains/product-category/repo/product-category",
               export: "refuseBoundCategories",
             },
+            order: 1,
           },
           merge: {
             kind: "unsupported",
@@ -212,6 +214,7 @@ export const { definition, readSchemas } = defineEntityModel({
                 "Deleting a category clears it from a proposed photo group's new Product, which is then created unclassified.",
             },
             handler: null,
+            order: 2,
           },
           merge: {
             kind: "unsupported",

@@ -86,6 +86,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Deleting a meal soft-deletes its product and manual food entries.",
               },
               handler: null,
+              order: 0,
             },
             merge: {
               kind: "unsupported",
@@ -156,6 +157,7 @@ export const { definition, readSchemas } = defineEntityModel(
                 module: "~/server/domains/meal/repo/crud",
                 export: "removeSourcedPortions",
               },
+              order: 1,
             },
             merge: {
               kind: "unsupported",
@@ -222,6 +224,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Deleting a meal soft-deletes portions served at it; their source preparations are untouched.",
               },
               handler: null,
+              order: 2,
             },
             merge: {
               kind: "unsupported",
@@ -291,6 +294,7 @@ export const { definition, readSchemas } = defineEntityModel(
                   "Image associations are soft-deleted with the meal, and each file is\n      deleted too unless something else still references it.",
               },
               handler: null,
+              order: 3,
             },
             merge: {
               kind: "unsupported",

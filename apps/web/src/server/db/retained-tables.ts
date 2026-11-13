@@ -32,7 +32,7 @@ import {
   entityAttachmentStorage,
 } from "@cubby/schemas/entity-attachment";
 import { entitySchema, type Entity } from "@cubby/schemas/entity-core";
-import type { EntityLinkKind } from "@cubby/schemas/entity-links";
+import type { EntityLinkKind } from "@cubby/schemas/entity-link-catalog";
 import type {
   EntityId,
   DeviceId,
@@ -422,7 +422,7 @@ export const entityAttachment = pgTable(
  * Every many-to-many relationship between two entities (ADR 0007): a kit's
  * components, an order's products, a project's tools, a garden entry's
  * plantings, a wish's candidates, and task/project dependencies. Kinds and
- * their endpoint kinds are declared once in `@cubby/schemas/entity-links`;
+ * their endpoint kinds are declared once in `@cubby/schemas/entity-link-catalog`;
  * the CHECKs below are rendered from that map (`entity-link-schema.ts`), and
  * the derived-DDL trigger refuses a live link to a deleted entity.
  *

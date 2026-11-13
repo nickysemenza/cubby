@@ -21,10 +21,12 @@ export const collectEdgeDeclarations = (
       .map((edge) => defineEdge(edge)),
   );
 
+type StructuralEdgePath = { key: string; from: string; to: string };
+
 /** Inverses are navigation names; only physical declarations claim storage. */
 export const validateEdgeDeclarations = (
   edges: readonly EdgeDefinition[],
-  legacyPaths: ReadonlySet<string> = new Set(),
+  structuralPaths: readonly StructuralEdgePath[] = [],
 ): void => {
   const keys = new Set<string>();
   const storageOwners = new Map<string, string>();
@@ -70,23 +72,26 @@ export const validateEdgeDeclarations = (
       );
     storageOwners.set(key, edge.key);
   }
-  const paths = edges.flatMap((edge) => {
-    if (edge.storage.kind === "composition") return [];
-    if (edge.storage.kind === "link")
-      return [
-        {
-          key: `EntityLink[${edge.storage.linkKind}].from`,
-          from: `row:EntityLink[${edge.storage.linkKind}]`,
-          to: edge.from,
-        },
-        {
-          key: `EntityLink[${edge.storage.linkKind}].to`,
-          from: `row:EntityLink[${edge.storage.linkKind}]`,
-          to: edge.to,
-        },
-      ];
-    return [{ key: edge.storage.column, from: edge.from, to: edge.to }];
-  });
+  const paths = [
+    ...structuralPaths,
+    ...edges.flatMap((edge) => {
+      if (edge.storage.kind === "composition") return [];
+      if (edge.storage.kind === "link")
+        return [
+          {
+            key: `EntityLink[${edge.storage.linkKind}].from`,
+            from: `row:EntityLink[${edge.storage.linkKind}]`,
+            to: edge.from,
+          },
+          {
+            key: `EntityLink[${edge.storage.linkKind}].to`,
+            from: `row:EntityLink[${edge.storage.linkKind}]`,
+            to: edge.to,
+          },
+        ];
+      return [{ key: edge.storage.column, from: edge.from, to: edge.to }];
+    }),
+  ];
   for (const edge of edges) {
     if (edge.storage.kind !== "composition") continue;
     const sourceKeys = new Set<string>();
@@ -98,18 +103,13 @@ export const validateEdgeDeclarations = (
       sourceKeys.add(source.key);
       if (source.provenance.kind !== "local-path") continue;
       let reachable = new Set<string>([edge.from]);
-      let legacy = false;
       for (const step of source.provenance.steps) {
         const candidates = paths.filter((path) => path.key === step.edge);
-        if (!candidates.length && legacyPaths.has(step.edge)) {
-          legacy = true;
-          continue;
-        }
         const next = new Set(
           candidates.flatMap((path) => {
             const from = step.direction === "outgoing" ? path.from : path.to;
             const to = step.direction === "outgoing" ? path.to : path.from;
-            return legacy || reachable.has(from) ? [to] : [];
+            return reachable.has(from) ? [to] : [];
           }),
         );
         if (!next.size)
@@ -118,7 +118,7 @@ export const validateEdgeDeclarations = (
           );
         reachable = next;
       }
-      if (!legacy && !reachable.has(edge.to))
+      if (!reachable.has(edge.to))
         throw new EntityDeclarationError(
           `${edge.key}.${source.key} does not reach ${edge.to}.`,
         );
@@ -175,7 +175,6 @@ export const validateEdgeStorageCoverage = (
   edges: readonly EdgeDefinition[],
   entities: readonly CompiledEntity[],
   schema: typeof import("~/server/db/drizzle-schema").drizzleSchema,
-  declaredEntities: ReadonlySet<string>,
 ): void => {
   const tables = Object.values(schema).flatMap((value) =>
     is(value, PgTable) ? [value] : [],
@@ -228,7 +227,7 @@ export const validateEdgeStorageCoverage = (
     for (const key of config.foreignKeys) {
       const ref = key.reference(),
         target = byTable.get(getTableName(ref.foreignTable));
-      if (!target || !declaredEntities.has(target)) continue;
+      if (!target) continue;
       for (const [index, column] of ref.columns.entries()) {
         if (ref.foreignColumns[index]?.name !== "id") continue;
         const name = `${config.name}.${column.name}`;
@@ -246,4 +245,37 @@ export const validateEdgeStorageCoverage = (
       }
     }
   }
+};
+
+/** Plain child-to-child FK hops contribute topology without inventing entity lifecycle edges. */
+export const collectStructuralEdgePaths = (
+  entities: readonly CompiledEntity[],
+  schema: typeof import("~/server/db/drizzle-schema").drizzleSchema,
+): StructuralEdgePath[] => {
+  const entitiesByTable = new Map(
+    entities.flatMap((entity) =>
+      entity.table ? [[entity.table.name, entity.key] as const] : [],
+    ),
+  );
+  return Object.values(schema).flatMap((value) => {
+    if (!is(value, PgTable)) return [];
+    const config = getTableConfig(value),
+      from = entitiesByTable.get(config.name) ?? "row:" + config.name;
+    return config.foreignKeys.flatMap((key) => {
+      const ref = key.reference(),
+        target = getTableName(ref.foreignTable);
+      if (entitiesByTable.has(target)) return [];
+      return ref.columns.flatMap((column, index) =>
+        ref.foreignColumns[index]?.name === "id"
+          ? [
+              {
+                key: config.name + "." + column.name,
+                from,
+                to: "row:" + target,
+              },
+            ]
+          : [],
+      );
+    });
+  });
 };
