@@ -81,7 +81,7 @@ it("distinguishes a missing computation from successful empty", () => {
       Not recorded
     </FieldRecordValue>,
   );
-  expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
+  expect(screen.getByText("Waiting for Cubby")).toBeVisible();
   expect(screen.queryByText("Not recorded")).not.toBeInTheDocument();
   view.rerender(
     <FieldRecordValue
@@ -105,5 +105,5 @@ it("distinguishes a missing computation from successful empty", () => {
     </FieldRecordValue>,
   );
   expect(screen.getByText("None")).toBeVisible();
-  expect(screen.queryByLabelText("Not calculated yet")).not.toBeInTheDocument();
+  expect(screen.queryByText("Waiting for Cubby")).not.toBeInTheDocument();
 });

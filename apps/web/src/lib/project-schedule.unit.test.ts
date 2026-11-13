@@ -72,7 +72,7 @@ describe("detail schedule rows", () => {
       result: { kind: "missing" },
     });
     expect(buildDetailScheduleRows(root, [], [])[0]?.noDateLabel).toBe(
-      "Updating…",
+      "Waiting for Cubby",
     );
     expect(
       buildDetailScheduleRows(project("empty"), [], [])[0]?.noDateLabel,

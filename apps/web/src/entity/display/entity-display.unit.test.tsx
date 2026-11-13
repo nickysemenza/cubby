@@ -266,7 +266,7 @@ describe("declared entity displays", () => {
       renderRowCell(column.cell, record),
     );
     const view = render(<>{cell}</>, { wrapper: harness.wrapper });
-    expect(screen.getByLabelText("Not calculated yet")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for Cubby")).toBeInTheDocument();
     view.unmount();
     harness.dispose();
   });

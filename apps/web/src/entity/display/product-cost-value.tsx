@@ -3,7 +3,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
-import { MissingFieldValue } from "~/ui/derived/value-mark";
+import { WaitingValue } from "~/ui/derived/value-mark";
 import {
   Tooltip,
   TooltipContent,
@@ -17,7 +17,7 @@ export function ProductCostValue({
 }: {
   envelope: EntityFieldEnvelopeRead<"product", "output">["fields"]["cost"];
 }) {
-  if (envelope.result.kind === "missing") return <MissingFieldValue />;
+  if (envelope.result.kind === "missing") return <WaitingValue />;
   const cost = fieldValueOf(envelope);
   if (!cost) return <NoneValue />;
   if (cost.kind === "item") return formatCurrency(cost.amount);
