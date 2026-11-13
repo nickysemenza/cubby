@@ -20,11 +20,11 @@ WITH RECURSIVE redirects AS (
  SELECT id,kind,"mergedIntoId" target, ARRAY[id] path FROM "Entity" WHERE "mergedIntoId" IS NOT NULL
  UNION ALL SELECT r.id,r.kind,e."mergedIntoId",r.path||e.id FROM redirects r JOIN "Entity" e ON e.id=r.target WHERE e."mergedIntoId" IS NOT NULL AND NOT e.id=ANY(r.path)
 ), survivors AS (SELECT r.id,r.kind,r.target FROM redirects r JOIN "Entity" e ON e.id=r.target WHERE e."mergedIntoId" IS NULL), records AS (
-SELECT 'product'::text entity, 'Product'::text table_name, 'fields'::text scope_kind, 'product:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['tags','brandId','categoryId','ingredientId','growsPlantId']::text[] fields FROM "Product" r
-UNION ALL
-SELECT 'cookbook'::text entity, 'Cookbook'::text table_name, 'fields'::text scope_kind, 'cookbook:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['productId']::text[] fields FROM "Cookbook" r
-UNION ALL
-SELECT 'location'::text entity, 'Location'::text table_name, 'fields'::text scope_kind, 'location:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY[]::text[] fields FROM "Location" r
+SELECT 'product'::text entity, 'Product'::text table_name, 'fields'::text scope_kind, 'product:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['brandId','categoryId','ingredientId','growsPlantId']::text[] fields FROM "Product" r
+
+
+
+
 UNION ALL
 SELECT 'meal'::text entity, 'Meal'::text table_name, 'fields'::text scope_kind, 'meal:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['mealType','mealKind']::text[] fields FROM "Meal" r
 UNION ALL
@@ -33,20 +33,20 @@ UNION ALL
 SELECT 'task'::text entity, 'Task'::text table_name, 'fields'::text scope_kind, 'task:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['trade']::text[] fields FROM "Task" r
 UNION ALL
 SELECT 'vendor'::text entity, 'Vendor'::text table_name, 'fields'::text scope_kind, 'vendor:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['itemizationExpectation']::text[] fields FROM "Vendor" r
-UNION ALL
-SELECT 'financialAccount'::text entity, 'FinancialAccount'::text table_name, 'fields'::text scope_kind, 'financialAccount:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['providerVendorId']::text[] fields FROM "FinancialAccount" r
+
+
 UNION ALL
 SELECT 'planting'::text entity, 'Planting'::text table_name, 'fields'::text scope_kind, 'planting:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['status']::text[] fields FROM "Planting" r
 UNION ALL
 SELECT 'gardenEntry'::text entity, 'GardenEntry'::text table_name, 'fields'::text scope_kind, 'gardenEntry:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['kind']::text[] fields FROM "GardenEntry" r
 UNION ALL
-SELECT 'productCategory'::text entity, 'ProductCategory'::text table_name, 'fields'::text scope_kind, 'productCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji','feature']::text[] fields FROM "ProductCategory" r
+SELECT 'productCategory'::text entity, 'ProductCategory'::text table_name, 'fields'::text scope_kind, 'productCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji']::text[] fields FROM "ProductCategory" r
+
+
+
+
 UNION ALL
-SELECT 'run'::text entity, 'Run'::text table_name, 'fields'::text scope_kind, 'run:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY[]::text[] fields FROM "Run" r
-UNION ALL
-SELECT 'device'::text entity, 'Device'::text table_name, 'fields'::text scope_kind, 'device:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['productId']::text[] fields FROM "Device" r
-UNION ALL
-SELECT 'spendingCategory'::text entity, 'SpendingCategory'::text table_name, 'fields'::text scope_kind, 'spendingCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji','itemizationExpectation','productExpectation']::text[] fields FROM "SpendingCategory" r
+SELECT 'spendingCategory'::text entity, 'SpendingCategory'::text table_name, 'fields'::text scope_kind, 'spendingCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji']::text[] fields FROM "SpendingCategory" r
 UNION ALL
 SELECT 'financialTransaction', 'FinancialTransaction', 'bankEvent', coalesce(o.id::text,'manual:'||r.id), r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amount',coalesce(to_jsonb(r)->>'amountMinor',((to_jsonb(r)->>'amount')::numeric*100)::text)), ARRAY['accountId','kind','status','amount','transactionDate','postedDate','merchant','rawDescription','sourceCategory','notes','spendingCategoryId','itemizationExpectation']::text[] FROM "FinancialTransaction" r LEFT JOIN "SourceOccurrence" o ON o."acceptedTransactionId"=r.id AND o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored'
 UNION ALL
@@ -57,18 +57,20 @@ UNION ALL
 SELECT 'FinancialTransactionAllocation', 'FinancialTransactionAllocation', 'purchaseEvent', r."transactionId"::text, r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amountMinor',r."amountMinor"::text), ARRAY['transactionId','purchaseId','amountMinor','confirmsMerchant']::text[] FROM "FinancialTransactionAllocation" r
 UNION ALL
 SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=e."purchaseId" AND a."deletedAt" IS NULL),e."purchaseId"::text,e.id::text) FROM "Expense" e WHERE e.id=r."expenseId"),r.id::text), r.id, to_jsonb(r), ARRAY['expenseId','role','ledgerPartyId','weight']::text[] FROM "ExpenseAttribution" r
+), record_ids AS (
+ SELECT entity,id,min(scope_key) scope_key FROM records GROUP BY entity,id
 ), field_values AS (
- SELECT DISTINCT ON (r.entity,r.id,f.field) r.*, f.field, r.payload->f.field value, a.id audit_id, a.authority,
+ SELECT r.entity,r.id, f.field, r.payload->f.field value, a.id audit_id, a.authority,
  a."userId", a."oauthClientId", a.channel, a."createdAt" audit_at, a.changes, a.audit_value,
  -- Only an exact, affirmative automatic trail establishes Cubby ownership.
  a.authority IN ('automatic','released') AND a.audit_value=r.payload->f.field cubby_holds
- FROM records r CROSS JOIN LATERAL unnest(r.fields) f(field)
+ FROM record_ids k JOIN records r USING(entity,id,scope_key) CROSS JOIN LATERAL unnest(r.fields) f(field)
  LEFT JOIN LATERAL (SELECT a.*, CASE WHEN jsonb_typeof(a.changes->f.field->'to')='number' THEN CASE
  WHEN ((r.entity='financialTransaction' AND f.field='amount') OR (r.entity='purchase' AND f.field='statedTotal') OR (r.entity='expense' AND f.field='cost'))
   AND abs((a.changes->f.field->'to' #>> '{}')::numeric*100-round((a.changes->f.field->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((a.changes->f.field->'to' #>> '{}')::numeric*100)::text)
  WHEN r.entity='FinancialTransactionAllocation' AND f.field='amountMinor' AND (a.changes->f.field->'to' #>> '{}')::numeric=trunc((a.changes->f.field->'to' #>> '{}')::numeric) THEN to_jsonb(trunc((a.changes->f.field->'to' #>> '{}')::numeric)::text)
  ELSE a.changes->f.field->'to' END ELSE a.changes->f.field->'to' END audit_value FROM "AuditLog" a WHERE a."entityKind"=r.entity AND a."entityId"=r.id
-   AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true ORDER BY r.entity,r.id,f.field,r.scope_key
+   AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true
 ), source_answers AS (
  SELECT 'AiEvaluation'::text source_table, e.id, to_jsonb(e) legacy, e.feature, e.provenance->>'model' model,
  coalesce(e.provenance->>'promptVersion',(SELECT d->>'promptVersion' FROM jsonb_array_elements(coalesce(e.provenance->'dependencies','[]'::jsonb)) d WHERE d->>'feature'=e.feature LIMIT 1),'legacy:unknown') prompt_version, e."createdAt" created_at, e."runId" run_id,
@@ -150,11 +152,13 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  WHERE v.family='statement_transaction' AND v.event->>'authority'='member'
 ), connection_reviews AS (
  SELECT v.*, candidate.value candidate,
- coalesce((SELECT target FROM survivors WHERE id=src.id),src.id) source_id,
- coalesce((SELECT target FROM survivors WHERE id=dst.id),dst.id) target_id
+ coalesce((SELECT target FROM survivors WHERE id=coalesce(src_uuid.id,src_code.id)),src_uuid.id,src_code.id) source_id,
+ coalesce((SELECT target FROM survivors WHERE id=coalesce(dst_uuid.id,dst_code.id)),dst_uuid.id,dst_code.id) target_id
  FROM reviews v CROSS JOIN LATERAL (SELECT coalesce(v.evidence->'candidate',v.data->'candidate')) candidate(value)
- LEFT JOIN "Entity" src ON src.kind=candidate.value->'source'->>'entityKind' AND (src.id::text=candidate.value->'source'->>'entityId' OR src.shortcode=candidate.value->'source'->>'entityId')
- LEFT JOIN "Entity" dst ON dst.kind=candidate.value->'target'->>'entityKind' AND (dst.id::text=candidate.value->'target'->>'entityId' OR dst.shortcode=candidate.value->'target'->>'entityId')
+ LEFT JOIN "Entity" src_uuid ON src_uuid.kind=candidate.value->'source'->>'entityKind' AND src_uuid.id=CASE WHEN candidate.value->'source'->>'entityId' ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN (candidate.value->'source'->>'entityId')::uuid END
+ LEFT JOIN "Entity" src_code ON src_code.kind=candidate.value->'source'->>'entityKind' AND src_code.shortcode=candidate.value->'source'->>'entityId' 
+ LEFT JOIN "Entity" dst_uuid ON dst_uuid.kind=candidate.value->'target'->>'entityKind' AND dst_uuid.id=CASE WHEN candidate.value->'target'->>'entityId' ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' THEN (candidate.value->'target'->>'entityId')::uuid END
+ LEFT JOIN "Entity" dst_code ON dst_code.kind=candidate.value->'target'->>'entityKind' AND dst_code.shortcode=candidate.value->'target'->>'entityId' 
  WHERE v.family='recommendation'
 ), expected AS (
  SELECT 'recordKey'::text mapping, entity||':'||id source_id,
@@ -180,7 +184,7 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind',CASE WHEN value='null'::jsonb THEN 'none' ELSE 'set' END,'value',value,
  'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR audit_value IS DISTINCT FROM value OR channel='system' OR "userId"='cubby-system' THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
  'actorId',CASE WHEN authority IS NULL AND audit_value=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
- FROM field_values WHERE cubby_holds IS NOT TRUE
+ FROM field_values WHERE cubby_holds IS NOT TRUE AND value IS NOT NULL AND value<>'null'::jsonb
  UNION ALL
  SELECT 'answer',entity||':'||id||':'||field,jsonb_build_object('inputHash','legacy:field:'||entity||':'||id||':'||field,'feature','legacy:field','producer','model','promptVersion','legacy:unknown',
  'output',jsonb_build_object('value',value,'auditId',audit_id,'subject',entity||':'||id,'field',field),'createdAt',audit_at) FROM field_values WHERE cubby_holds
@@ -210,16 +214,6 @@ SELECT 'decision','Connection:'||id||':'||ord,jsonb_build_object('id',md5('cutov
  'channel','assignment','subject','connection/'||(candidate->>'relation')||':'||source_id||':'||target_id,'slot','link','field','link','kind','set',
  'value',event->>'verdict'='correct','actorKind',CASE WHEN event->>'authority'='member' THEN 'member' ELSE 'system' END,'actorId',event->>'actorUserId','at',(event->>'createdAt')::timestamp)
 FROM connection_reviews WHERE source_id IS NOT NULL AND target_id IS NOT NULL AND candidate->>'relation' IS NOT NULL AND (event->>'verdict' IN ('wrong','dismissed') OR event->>'verdict'='correct' AND event->>'intent'='apply')
-UNION ALL
-SELECT 'decision','AuditLog:release:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:release:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind','release','value',NULL,'actorKind',CASE WHEN a.channel='system' OR a."userId"='cubby-system' THEN 'system' WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority='released' AND EXISTS(SELECT 1 FROM field_values r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND r.field=f.key AND r.cubby_holds)
-
-UNION ALL
-SELECT 'decision','AuditLog:held:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:audit-held:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind',CASE WHEN f.value->'to'='null'::jsonb THEN 'none' ELSE 'set' END,'value',CASE WHEN jsonb_typeof(f.value->'to')='number' THEN CASE
- WHEN ((a."entityKind"='financialTransaction' AND f.key='amount') OR (a."entityKind"='purchase' AND f.key='statedTotal') OR (a."entityKind"='expense' AND f.key='cost'))
-  AND abs((f.value->'to' #>> '{}')::numeric*100-round((f.value->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((f.value->'to' #>> '{}')::numeric*100)::text)
- WHEN a."entityKind"='FinancialTransactionAllocation' AND f.key='amountMinor' AND (f.value->'to' #>> '{}')::numeric=trunc((f.value->'to' #>> '{}')::numeric) THEN to_jsonb(trunc((f.value->'to' #>> '{}')::numeric)::text)
- ELSE f.value->'to' END ELSE f.value->'to' END,'actorKind',CASE WHEN a.channel='system' OR a."userId"='cubby-system' THEN 'system' WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority IS NULL AND f.value ? 'to' AND EXISTS(SELECT 1 FROM field_values r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND r.field=f.key AND r.cubby_holds IS NOT TRUE AND r.value IS NOT DISTINCT FROM f.value->'to')
-
 UNION ALL
 SELECT 'decision','Suggestion:correction-veto:'||id||':'||ord,jsonb_build_object('id',md5('cutover:correction-veto:'||id||':'||ord)::uuid,
  'channel','veto','subject',entity||':'||"recordId",'slot',field||chr(31)||encode(sha256(convert_to("suggestedValue"::text,'UTF8')),'hex'),'field',field,'kind','veto','value',"suggestedValue",

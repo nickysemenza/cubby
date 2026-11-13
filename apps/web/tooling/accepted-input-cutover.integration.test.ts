@@ -198,27 +198,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
         [`product:${cutoverId(13)}`],
       )
     ).rows;
-    expect(held).toEqual([
-      {
-        field: "brandId",
-        kind: "none",
-        actorKind: "member",
-        actorId: "synthetic-cutover",
-      },
-      {
-        field: "growsPlantId",
-        kind: "none",
-        actorKind: "system",
-        actorId: null,
-      },
-      {
-        field: "ingredientId",
-        kind: "none",
-        actorKind: "system",
-        actorId: null,
-      },
-      { field: "tags", kind: "set", actorKind: "system", actorId: null },
-    ]);
+    expect(held).toEqual([]);
     expect(
       (
         await client.query(`SELECT output FROM "Answer" WHERE "inputHash"=$1`, [
@@ -734,20 +714,17 @@ it("matches the registered model feature envelope catalog", async () => {
     .parse(JSON.parse(acceptedInputCutoverSql().split("$features$")[1]!));
   const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
   const { buildRegistry } = await import("../src/server/kernel/registry");
-  const { writeFile } = await import("node:fs/promises");
-  await writeFile(
-    new URL("../../../artifacts/review-owned-targets.json", import.meta.url),
-    JSON.stringify(
-      [...buildRegistry(KERNEL_MODULES).reconcilers.values()].flatMap((r) =>
-        r.writes.map((t) => ({
-          scope: r.scope,
-          entity: t.entity,
-          table: t.name,
-          columns: t.columns,
-        })),
-      ),
-    ),
-  );
+  const projection = acceptedInputCutoverSql().split("), record_ids AS (")[0]!;
+  for (const r of buildRegistry(KERNEL_MODULES).reconcilers.values())
+    for (const target of r.writes) {
+      if (!target.columns.length || target.name === "EvidenceBinding") continue;
+      const recordLine = projection
+        .split("\n")
+        .find((line) => line.includes(`FROM "${target.name}" r`));
+      expect(recordLine).toBeDefined();
+      for (const column of target.columns)
+        expect(recordLine).toContain(`'${column}'`);
+    }
   expect(catalog).toEqual(
     modelAsks.map((a) => ({
       feature: a.feature,
