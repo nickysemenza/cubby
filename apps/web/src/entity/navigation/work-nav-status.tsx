@@ -1,8 +1,7 @@
-import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 
-import { useWorkPublicationBehind } from "~/entity/work-queue/work-publication-status";
+import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCount } from "~/lib/number-format";
 
@@ -18,13 +17,13 @@ function useWorkNavStatus() {
   });
   // Home's Needs-you read: one cached query, one count.
   const needsYou = useQuery({
-    ...workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
+    ...machinery.needsYou.queryOptions({}),
     refetchInterval: false,
   });
   // The count is the last good publication; Home and Work say how old.
-  const behind = useWorkPublicationBehind(needsYou.data?.meta.publication);
+  const behind = needsYou.isError ? "Read failed" : null;
   return {
-    needsYou: needsYou.data?.meta.totalCount ?? 0,
+    needsYou: needsYou.data?.count ?? 0,
     stuck: Boolean(data?.stuck.length),
     behind: behind !== null,
   };

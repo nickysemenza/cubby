@@ -1,8 +1,10 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
+import { runShortcode } from "@cubby/schemas/identifiers";
 import { machinery } from "@cubby/schemas/kernel/machinery";
 import { decisionChannel, decisionKind } from "@cubby/schemas/kernel/stage";
+import { needsYouPage, runWork } from "@cubby/schemas/kernel/work";
 import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
@@ -55,6 +57,23 @@ const DECISION_INVALIDATES = [
 export const machineryContract = defineContract(
   "machinery",
   {
+    needsYou: query({
+      exposure: "internal",
+      description: "Records with a gap supplied by a member, oldest first.",
+      input: z.strictObject({
+        limit: z.number().int().min(1).max(100).optional(),
+        offset: z.number().int().nonnegative().optional(),
+      }),
+      output: needsYouPage,
+      cache: { tags: ENTITY_ROOT_TAGS, profile: "live-status" },
+    }),
+    runWork: query({
+      exposure: "internal",
+      description: "Scopes, asks and passes carrying this Run.",
+      input: z.strictObject({ runId: runShortcode }),
+      output: runWork,
+      cache: { tags: ENTITY_ROOT_TAGS, profile: "live-status" },
+    }),
     read: query({
       description:
         "A record's machinery: its stage, every gap with its actions, every input in the order its reconciler used it, and drift when present. Null when the record's entity has no machinery capability. With `field`, the field scope of the same read.",

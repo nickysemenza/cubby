@@ -1,4 +1,3 @@
-import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
@@ -23,8 +22,8 @@ import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditL
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
+import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
-import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { QuerySection } from "~/ui/feedback/query-section";
 import { VisibleContent } from "~/ui/hooks/visible-content";
@@ -58,9 +57,7 @@ export const Route = createFileRoute("/")({
   loader: ({ context }) => {
     const asOf = getHomeAsOfWindow();
     void Promise.allSettled([
-      context.queryClient.prefetchQuery(
-        workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
-      ),
+      context.queryClient.prefetchQuery(machinery.needsYou.queryOptions({})),
       context.queryClient.prefetchInfiniteQuery(
         cursorQueryOptions(auditLog.list, { limit: 6 }),
       ),

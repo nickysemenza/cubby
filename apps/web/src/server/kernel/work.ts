@@ -69,7 +69,7 @@ export async function readNeedsYou(
       FROM "ScopeState" s WHERE s."mergedIntoKey" IS NULL
     ), records AS (
       SELECT DISTINCT m."scopeKind", m."scopeKey", e.kind AS entity, e.shortcode,
-        m.stage, m.gap->>${"input"} AS "firstGap", m.gap->>'since' AS since
+        m.stage, m.gap->>${"input"} AS "firstGap", m.gap->'actions' AS actions, m.gap->>'since' AS since
       FROM members m JOIN "RecordKey" k
         ON k."scopeKind" = m."scopeKind" AND k."scopeKey" = m."scopeKey"
         AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
@@ -77,7 +77,7 @@ export async function readNeedsYou(
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
       UNION
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage,
-        m.gap->>${"input"}, m.gap->>'since'
+        m.gap->>${"input"}, m.gap->'actions', m.gap->>'since'
       FROM members m JOIN "Entity" e ON m."scopeKey" = e.kind || ':' || e.id::text
       WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
@@ -91,7 +91,7 @@ export async function readNeedsYou(
       SELECT entity, shortcode,
         CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
           WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END AS stage,
-        "firstGap", since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "firstGap" IS NOT NULL
+        "firstGap", actions, since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "firstGap" IS NOT NULL
     ), page AS (
       SELECT * FROM eligible ORDER BY since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
     )

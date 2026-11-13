@@ -150,6 +150,12 @@ async function approveForRecord(
 }
 
 export const machineryHandlers = implementOperationDomain(machineryContract, {
+  needsYou: async (context, input) =>
+    (await import("~/server/kernel/api")).needsYou(context.db, input),
+  runWork: async (context, input) => {
+    const record = await recordOf(context.db, "run", input.runId);
+    return (await import("~/server/kernel/api")).runWork(context.db, record.id);
+  },
   read: async (context, input) => ({
     machinery: await readMachinery(context.db, context.actorContext, input),
   }),

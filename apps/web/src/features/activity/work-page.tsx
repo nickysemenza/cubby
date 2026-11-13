@@ -3,23 +3,16 @@ import {
   type WorkQueueUnit,
   type WorkQueueWait,
 } from "@cubby/schemas/job";
-import {
-  AGENT_BACKLOG_INPUT,
-  NEEDS_YOU_FILTERS,
-} from "@cubby/schemas/work-queue";
+import { AGENT_BACKLOG_INPUT } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
+import { NeedsYou } from "~/entity/machinery/needs-you";
 import { RetryJobsButton } from "~/features/job/retry-jobs";
-import { hasIncompleteWorkInputs } from "~/features/work-queue/work-input-status";
-import {
-  WorkQueue,
-  type WorkQueueMeta,
-} from "~/features/work-queue/work-queue-page";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
@@ -372,44 +365,6 @@ function UnknownStatus({
 }
 
 /**
- * One queue, grouped by reason. It stays mounted while empty so a new item
- * appears without a reload. Its total and the sidebar's are the same
- * published population, so they agree once both have read it.
- */
-function NeedsYouQueue() {
-  const [total, setTotal] = useState<number>();
-  const [incomplete, setIncomplete] = useState(false);
-  const onMeta = useCallback((meta: WorkQueueMeta) => {
-    setTotal(meta.totalCount);
-    setIncomplete(hasIncompleteWorkInputs(meta));
-  }, []);
-  const empty = total === 0 && !incomplete;
-  return (
-    <>
-      {empty ? (
-        <p className="text-base/5 font-medium text-foreground-strong">
-          Nothing needs you.
-        </p>
-      ) : null}
-      <div hidden={empty}>
-        <Section
-          headingAs="h2"
-          title="Needs you"
-          count={total === undefined ? undefined : formatCount(total)}
-        >
-          <WorkQueue
-            scope={NEEDS_YOU_FILTERS}
-            groupBy="reason"
-            label="Needs you"
-            onMeta={onMeta}
-          />
-        </Section>
-      </div>
-    </>
-  );
-}
-
-/**
  * Agent work never needs the member, so it is one quiet link with its size
  * and no badge. It opens the queue's Agent view, newest first.
  */
@@ -525,7 +480,7 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           resume={automatic.resume}
         />
       ) : null}
-      <NeedsYouQueue />
+      <NeedsYou />
       <nav
         aria-label="More work"
         className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"

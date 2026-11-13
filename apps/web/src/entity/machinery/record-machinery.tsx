@@ -42,7 +42,7 @@ export function useMachinery(ref: MachineryRef, enabled = true) {
 }
 
 /** Decisions and drift approval for one record, through `machinery.decide`. */
-function useMachineryActions(ref: MachineryRef) {
+export function useMachineryActions(ref: MachineryRef) {
   const decide = useMutation(machineryApi.decide.mutationOptions());
   const approve = useMutation(machineryApi.approveDrift.mutationOptions());
   return {

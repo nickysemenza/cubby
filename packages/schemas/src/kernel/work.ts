@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { passWork, kernelWaitCause } from "./machinery";
-import { kernelStage } from "./stage";
+import { kernelGap, kernelStage } from "./stage";
 
 export const needsYouPage = z.object({
   items: z.array(
@@ -10,6 +10,7 @@ export const needsYouPage = z.object({
       shortcode: z.string(),
       stage: kernelStage,
       firstGap: z.string(),
+      actions: kernelGap.shape.actions,
       since: z.iso.datetime().nullable(),
     }),
   ),
