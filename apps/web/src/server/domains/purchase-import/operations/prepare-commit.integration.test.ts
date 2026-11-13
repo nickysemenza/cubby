@@ -24,6 +24,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
@@ -1090,7 +1091,7 @@ describe("caller-driven purchase import writes", () => {
     "fills Other only without member purpose: %s",
     async (selection) => {
       const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-      const parentProject = await insertWithShortcode(ctx.db, "project", {
+      const parentProject = await insertFieldsFixture(ctx.db, "project", {
         name: "Synthetic purpose parent",
         defaultTrade: "plumbing",
       });
