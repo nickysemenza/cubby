@@ -37,6 +37,7 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
 import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { type FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
@@ -622,10 +623,11 @@ async function runStatementLabelBatch(
               spendingAdvice: input.spendingAdvice,
               usage,
               answers: entry.target.row.answers,
-              isLoan:
+              isLoan: liveHouseholdLoan(
                 preparation.accounts.find(
                   (account) => account.id === entry.current.judgment.accountId,
-                )?.identity.kind === "loan",
+                ),
+              ),
               admission,
             });
             if (!value) {
