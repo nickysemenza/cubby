@@ -129,7 +129,7 @@ export function isLoanPayment(
       description: descriptor.rawDescription,
       merchant: descriptor.merchant,
       sourceCategory: null,
-      loan: { providerVendorNames: [] },
+      loan: { providerVendorNames: [], proven: true },
     }).movementClass === "loan_payment"
   );
 }

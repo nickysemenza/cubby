@@ -21,7 +21,8 @@ export type StatementMovementInput = {
   description: string | null;
   merchant: string | null;
   sourceCategory: string | null;
-  loan: { providerVendorNames: readonly string[] } | null;
+  /** `proven: false` is a live household loan whose source/account binding did not verify. */
+  loan: { providerVendorNames: readonly string[]; proven: boolean } | null;
 };
 
 const normalize = (value: string) =>
@@ -47,6 +48,8 @@ export function statementLoanInput(
   observations: readonly { providerAccountId: string | null }[],
 ): StatementMovementInput["loan"] {
   if (!account || !liveHouseholdLoan(account)) return null;
+  // A known loan without a verified binding must stay in review, never read as ordinary.
+  const unproven = { providerVendorNames: [], proven: false };
   if (
     row.providerAccountId &&
     observations.some(
@@ -55,7 +58,7 @@ export function statementLoanInput(
         observation.providerAccountId !== row.providerAccountId,
     )
   )
-    return null;
+    return unproven;
   const scoped = row.providerAccountId
     ? accounts.filter((candidate) =>
         candidate.sourceAliases.some(
@@ -78,7 +81,7 @@ export function statementLoanInput(
       ),
     )
   )
-    return null;
+    return unproven;
   const matches = scoped.length
     ? scoped
     : accounts.filter((candidate) =>
@@ -91,12 +94,13 @@ export function statementLoanInput(
               alias.externalAccountId === row.providerAccountId),
         ),
       );
-  if (matches.length !== 1 || matches[0]!.id !== account.id) return null;
+  if (matches.length !== 1 || matches[0]!.id !== account.id) return unproven;
   return {
     providerVendorNames: [
       account.vendorName,
       ...(account.vendorAliases ?? []),
     ].filter((name): name is string => Boolean(name)),
+    proven: true,
   };
 }
 
@@ -108,6 +112,12 @@ export function statementEffectiveMovement(
       effectiveAmount: -input.providerAmount,
       movementClass: "standard",
       reviewReason: null,
+    };
+  if (!input.loan.proven)
+    return {
+      effectiveAmount: -input.providerAmount,
+      movementClass: "loan_unknown",
+      reviewReason: "Loan account binding requires review.",
     };
   const text = normalize(input.description ?? input.merchant ?? "");
   const interest =

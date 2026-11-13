@@ -4,7 +4,10 @@ import { statementEffectiveMovement } from "./statement-effective-movement";
 
 describe("statement effective movement", () => {
   it("projects loan classes independently of provider sign", () => {
-    const loan = { providerVendorNames: ["Example Lender", "Example Alias"] };
+    const loan = {
+      providerVendorNames: ["Example Lender", "Example Alias"],
+      proven: true,
+    };
     const cases = [
       [" INTEREST ON ESC ", -12, "escrow_interest", -12],
       ["Escrow interest", 12, "escrow_interest", -12],
@@ -49,5 +52,14 @@ describe("statement effective movement", () => {
         loan: null,
       }).effectiveAmount,
     ).toBe(12);
+    expect(
+      statementEffectiveMovement({
+        providerAmount: 100,
+        description: "Example deposit",
+        merchant: null,
+        sourceCategory: "Other Income",
+        loan: { providerVendorNames: [], proven: false },
+      }),
+    ).toMatchObject({ movementClass: "loan_unknown", effectiveAmount: -100 });
   });
 });

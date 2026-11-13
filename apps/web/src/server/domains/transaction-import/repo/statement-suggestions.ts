@@ -1523,7 +1523,7 @@ async function loanEvidence(
               grouped.find((g) => chargeId(g.charge) === row.key.slice(5))
                 ?.observations ?? [row],
             )
-          : { providerVendorNames: account.names },
+          : { providerVendorNames: account.names, proven: true },
     });
     if (movement.movementClass === "loan_payment")
       loanPayments.push({
@@ -2000,11 +2000,14 @@ async function finishProposal(
   providerScopeCharges?: readonly ChargeRef[],
 ): Promise<ChargeProposal> {
   suggestionJudgments.statement_transaction.parse(judgment);
+  // Spending derives from live Vendors; unchanged rows refresh it in place, so a
+  // Vendor or alias edit neither republishes nor reopens a dismissal.
+  const { spending: _spending, ...evidence } = judgment;
   const fingerprint = await sha256Hex(
     canonicalJson({
       ...STATEMENT_HASH_SCHEME,
       ...(providerScopeFingerprint ? { providerScopeFingerprint } : {}),
-      judgment,
+      judgment: evidence,
       observations: observations
         .map((row) => [
           row.id,

@@ -155,7 +155,7 @@ function spendingBlocker(input: {
       description: facts.source.rawDescription,
       merchant: facts.source.merchant,
       sourceCategory: null,
-      loan: { providerVendorNames: [] },
+      loan: { providerVendorNames: [], proven: true },
     }).movementClass === "escrow_disbursement" &&
     advice?.escrowDisbursement === true;
   const escrowRefund =
@@ -167,7 +167,7 @@ function spendingBlocker(input: {
       description: facts.source.rawDescription,
       merchant: facts.source.merchant,
       sourceCategory: null,
-      loan: { providerVendorNames: [] },
+      loan: { providerVendorNames: [], proven: true },
     }).movementClass === "escrow_refund";
   if (facts.account.identity.kind === "loan" && !escrow && !escrowRefund)
     return "Only a supported household loan escrow disbursement can book spending.";
