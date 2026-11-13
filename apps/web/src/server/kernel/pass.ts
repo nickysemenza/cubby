@@ -57,7 +57,7 @@ export async function startPass(
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
       "availableAt" = least("Pass"."availableAt", excluded."availableAt"),
-      "updatedAt" = now()`);
+      "wakeVersion" = "Pass"."wakeVersion" + 1, "updatedAt" = now()`);
   await wakeAfterCommit(db);
 }
 
@@ -109,11 +109,11 @@ export async function runOnePass(
     const result = await pass.run(db, claimed.cursor as Json | null, claim);
     await claim.fenced(async (tx) => {
       await repositoryQueries(tx).execute(sql`
-        UPDATE "Pass" SET cursor = ${JSON.stringify(result.cursor)}::jsonb,
-          "doneAt" = ${result.done ? sql`now()` : sql`NULL`},
-          "availableAt" = ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`},
+        UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${JSON.stringify(result.cursor)}::jsonb ELSE cursor END,
+          "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,
+          "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE least("availableAt", now()) END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
-          "waitCause" = ${result.done ? null : (result.waitCause ?? null)}, "lastError" = NULL, "updatedAt" = now()
+          "waitCause" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.done ? null : (result.waitCause ?? null)} ELSE NULL END, "lastError" = NULL, "updatedAt" = now()
         WHERE name = ${claimed.name} AND key = ${claimed.key}`);
     });
   } catch (error) {

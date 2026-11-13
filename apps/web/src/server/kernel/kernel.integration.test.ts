@@ -439,6 +439,49 @@ describe("evidence-facts kernel", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("keeps a wake and its newer cursor when a holder publishes an older completion or wait", async () => {
+    let page = 0;
+    const pass = definePass({
+      name: "fixture.wake-race",
+      async run(db, cursor) {
+        page++;
+        await repositoryQueries(db).execute(
+          sql`UPDATE "Pass" SET cursor = '{"page":2}'::jsonb WHERE name = ${pass.name}`,
+        );
+        await kernel.startPass(db, pass);
+        return {
+          cursor,
+          done: page === 1,
+          availableAt: new Date(Date.now() + 60_000),
+          waitCause: "funding",
+        };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "wake-race", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass, { cursor: { page: 1 } });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await runOnePass(ctx.db, kernel.registry);
+      const [row] = (
+        await repositoryQueries(ctx.db).execute<{
+          cursor: unknown;
+          done: boolean;
+          due: boolean;
+          waitCause: string | null;
+        }>(
+          sql`SELECT cursor, "doneAt" IS NOT NULL AS done, "availableAt" <= now() AS due, "waitCause" FROM "Pass" WHERE name = ${pass.name}`,
+        )
+      ).rows;
+      expect(row).toEqual({
+        cursor: { page: 2 },
+        done: false,
+        due: true,
+        waitCause: null,
+      });
+    }
+  });
+
   it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {
     const limit = { partition: "synthetic.agent-turn", slots: 2 };
     const ask = defineAsk({

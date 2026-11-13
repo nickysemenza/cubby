@@ -402,6 +402,7 @@ export const kernelPass = pgTable(
       .notNull()
       .default([]),
     ...claimColumns(),
+    wakeVersion: integer("wakeVersion").notNull().default(0),
     claimPartition: text("claimPartition"),
     maxAttempts: integer("maxAttempts").notNull().default(5),
     runId: uuid("runId"),

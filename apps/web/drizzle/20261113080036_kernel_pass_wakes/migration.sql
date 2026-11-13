@@ -1,0 +1,1 @@
+ALTER TABLE "Pass" ADD COLUMN "wakeVersion" integer DEFAULT 0 NOT NULL;

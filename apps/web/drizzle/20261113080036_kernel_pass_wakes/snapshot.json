@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "f70013e3-8e49-45b9-8990-fadac7286363",
+  "prevIds": [
+    "1f2d6008-4256-41b9-9e46-1184a4594e8b"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Pass",
+        "wakeVersion"
+      ],
+      "writes": [
+        "s|col|public.Pass.wakeVersion",
+        "n|col|public.Pass.wakeVersion",
+        "e|col|public.Pass.wakeVersion"
+      ],
+      "reads": [
+        "n|tbl|public.Pass",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Pass",
+        "name": "wakeVersion",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

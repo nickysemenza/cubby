@@ -460,6 +460,7 @@ async function claimAskGroup(
 }
 
 export type ClaimedPass = {
+  wakeVersion: number;
   name: string;
   key: string;
   cursor: unknown;
@@ -510,6 +511,7 @@ async function claimPassGroup(
       const names = [pass.name];
       const token = crypto.randomUUID();
       const result = await q.execute<{
+        wakeVersion: number;
         name: string;
         key: string;
         cursor: unknown;
@@ -527,7 +529,7 @@ async function claimPassGroup(
     UPDATE "Pass" p SET "claimToken" = ${token}::uuid, "claimPartition" = ${pass.claimLimit?.partition ?? null},
       "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
     FROM picked WHERE p.name = picked.name AND p.key = picked.key
-    RETURNING p.name, p.key, p.cursor, p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline`);
+    RETURNING p.name, p.key, p.cursor, p."wakeVersion", p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline`);
       const row = result.rows[0];
       return row ? { ...row, token, deadline: new Date(row.deadline) } : null;
     },
