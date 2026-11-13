@@ -89,7 +89,7 @@ describe("compact quality reads", () => {
         }),
         { wrapper: harness.wrapper },
       );
-      expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
+      expect(screen.getByText("Waiting for Cubby")).toBeVisible();
       expect(
         screen.getByRole("button", { name: "How data quality is determined" }),
       ).toBeVisible();

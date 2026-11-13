@@ -1,6 +1,5 @@
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import type { RunTargetState } from "@cubby/schemas/purchase-import";
-
-import type { BadgeVariant } from "~/ui/reui/badge";
 
 export const RUN_TARGET_STATE_LABEL = {
   pending: "Pending",
@@ -12,12 +11,13 @@ export const RUN_TARGET_STATE_LABEL = {
   unavailable: "Unavailable",
 } satisfies Record<RunTargetState, string>;
 
-export const RUN_TARGET_STATE_VARIANT = {
-  pending: "slate",
-  prepared: "default",
-  completed: "positive",
-  skipped: "slate",
-  unresolved: "warning",
-  needs_evidence: "warning",
-  unavailable: "destructive",
-} satisfies Record<RunTargetState, BadgeVariant>;
+/** Each target state as its stage; `StateBadge` draws it. */
+export const RUN_TARGET_STATE_STAGE = {
+  pending: "waiting",
+  prepared: "working",
+  completed: "done",
+  skipped: "ended",
+  unresolved: "needs_you",
+  needs_evidence: "waiting",
+  unavailable: "stuck",
+} satisfies Record<RunTargetState, KernelStage>;

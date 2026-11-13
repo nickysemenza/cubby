@@ -205,11 +205,17 @@ export function SuggestionBody({
   const chain = explain ? (
     explain(pendingLevel)
   ) : (
-    <DecisionLevels deciding={current !== null ? "own" : undefined}>
-      {(level) =>
-        level === "own" ? current : level === "pending" ? pendingLevel : null
-      }
-    </DecisionLevels>
+    <DecisionLevels
+      deciding={current !== null ? "own" : undefined}
+      rows={[
+        { level: "own", title: "Set here", children: current },
+        {
+          level: "pending",
+          title: "Cubby's suggestion",
+          children: pendingLevel,
+        },
+      ]}
+    />
   );
   return (
     // oxlint-disable-next-line jsx-a11y/click-events-have-key-events jsx-a11y/no-static-element-interactions -- Review controls own keyboard behavior; this wrapper only blocks the record row click.

@@ -47,7 +47,7 @@ describe.each(["compact", "full"] as const)(
 
     it("keeps an unpublished result distinct from zero and pricing counts", () => {
       show(envelope({ kind: "missing" }));
-      expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
+      expect(screen.getByText("Waiting for Cubby")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
     });
@@ -65,9 +65,7 @@ describe.each(["compact", "full"] as const)(
       expect(screen.getByText("—")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
-      expect(
-        screen.queryByLabelText("Not calculated yet"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByText("Waiting for Cubby")).not.toBeInTheDocument();
     });
 
     it("renders a successful numeric zero and its supplied pricing counts", () => {

@@ -2,11 +2,17 @@ import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import type { FieldOrigin } from "@cubby/schemas/field-authority";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
+import {
+  FIELD_RESET_LABEL,
+  FIELD_VETO_LABEL,
+} from "@cubby/schemas/field-envelope-presentation";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { useMutation } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
+import { useMachinery } from "~/entity/machinery/record-machinery";
+import { machinery as machineryApi } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { suggestion } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { authClient } from "~/lib/auth-client";
 import { formatInstant } from "~/lib/date-format";
@@ -25,7 +31,7 @@ const RESULT = {
     "Cubby decides this now. Your value stays until it finds a better one.",
 } satisfies Record<Action, string>;
 
-function writerName(
+export function writerName(
   writer: NonNullable<FieldOrigin["writer"]>,
   viewer: string | undefined,
 ) {
@@ -54,16 +60,21 @@ function originText(origin: FieldOrigin, viewer: string | undefined) {
 /**
  * Who set a suggested field's value and the actions that hand it over:
  * Keep or "Wrong, clear it" on Cubby's value, Let Cubby decide on a person's.
+ * For an entity with machinery, "Wrong, clear it" records a veto and Let
+ * Cubby decide a release; otherwise they go through field authority.
  */
 export function FieldOriginLine({
   data,
   origin,
   guess,
+  resetOffered = false,
 }: {
   data: FieldExplanationOutput;
   origin: FieldOrigin;
   /** The guess value, rendered by the caller as the field displays it. */
   guess: ReactNode;
+  /** The chain already offers Let Cubby decide as the field's reset. */
+  resetOffered?: boolean;
 }) {
   const session = authClient.useSession();
   const [done, setDone] = useState<Action | null>(null);
@@ -72,6 +83,11 @@ export function FieldOriginLine({
       onSuccess: (_, input) => setDone(input.action),
     }),
   );
+  const decide = useMutation(machineryApi.decide.mutationOptions());
+  const kernel = useMachinery({
+    entity: data.subject.entityKind,
+    id: data.subject.entityId,
+  });
   const entity = suggestable.safeParse(data.subject.entityKind).data;
   const assignment = data.envelope.current.assignment;
   const saved = assignment?.kind === "value";
@@ -80,6 +96,26 @@ export function FieldOriginLine({
   const run = (action: Action) => {
     if (!entity) return;
     setDone(null);
+    if (kernel.data?.machinery && action !== "keep") {
+      decide.mutate(
+        {
+          entity: data.subject.entityKind,
+          id: data.subject.entityId,
+          decisions: [
+            action === "clear"
+              ? {
+                  channel: "veto",
+                  kind: "veto",
+                  field: data.field,
+                  value: z.json().parse(saved ? assignment.value : null),
+                }
+              : { channel: "assignment", kind: "release", field: data.field },
+          ],
+        },
+        { onSuccess: () => setDone(action) },
+      );
+      return;
+    }
     authority.mutate({
       entity,
       id: data.subject.entityId,
@@ -111,7 +147,7 @@ export function FieldOriginLine({
           <Button
             variant="link"
             size="xs"
-            disabled={authority.isPending}
+            disabled={authority.isPending || decide.isPending}
             onClick={() => run("keep")}
           >
             Keep
@@ -121,10 +157,10 @@ export function FieldOriginLine({
             <Button
               variant="link"
               size="xs"
-              disabled={authority.isPending}
+              disabled={authority.isPending || decide.isPending}
               onClick={() => run("clear")}
             >
-              Wrong, clear it
+              {FIELD_VETO_LABEL}
             </Button>
           )}
         </div>
@@ -133,15 +169,16 @@ export function FieldOriginLine({
       canAct &&
       origin.holder === "person" &&
       origin.apply === "auto" &&
-      !origin.fillOnly ? (
+      !origin.fillOnly &&
+      !resetOffered ? (
         <div className="flex flex-wrap gap-2">
           <Button
             variant="link"
             size="xs"
-            disabled={authority.isPending}
+            disabled={authority.isPending || decide.isPending}
             onClick={() => run("release")}
           >
-            Let Cubby decide
+            {FIELD_RESET_LABEL}
           </Button>
         </div>
       ) : null}
@@ -149,8 +186,11 @@ export function FieldOriginLine({
       <output className="text-muted-foreground">
         {done ? RESULT[done] : null}
       </output>
-      {authority.error ? (
-        <ErrorDisplay error={authority.error} title="this change" />
+      {authority.error || decide.error ? (
+        <ErrorDisplay
+          error={authority.error ?? decide.error}
+          title="this change"
+        />
       ) : null}
     </div>
   );

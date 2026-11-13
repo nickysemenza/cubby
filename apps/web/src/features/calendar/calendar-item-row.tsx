@@ -59,9 +59,7 @@ function CalendarBeneficiaries({
       )}
     >
       {status ? (
-        <FieldValueMark envelope={status} interactive={false}>
-          {null}
-        </FieldValueMark>
+        <FieldValueMark envelope={status}>{null}</FieldValueMark>
       ) : null}
       {parties.map((party) => (
         <span

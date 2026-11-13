@@ -4,6 +4,7 @@ import {
   optionPhase,
 } from "@cubby/schemas/entity-definitions/definition";
 import { runWaitingOn } from "@cubby/schemas/job";
+import { kernelStage, type KernelStage } from "@cubby/schemas/kernel/stage";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
@@ -28,6 +29,7 @@ type StateOption = {
   label: string;
   color?: string;
   phase?: EntityPhase;
+  stage?: KernelStage;
   closed?: true;
   glyph?: { phosphor: string };
 };
@@ -58,16 +60,13 @@ export function fieldOptions(
         label: z.string(),
         color: z.string().optional(),
         phase: z.enum(["needs", "active", "finished"]).optional(),
+        stage: kernelStage.optional(),
         closed: z.literal(true).optional(),
         glyph: z.looseObject({ phosphor: z.string() }).optional(),
       }),
     )
     .parse(options);
 }
-
-/** A destructive option is a failure outcome: StateBadge draws it filled. */
-export const isFailureOption = (option: StateOption) =>
-  option.color === "var(--destructive)";
 
 /** The parts of one row's `presentation.state`, read from the declaration. */
 export function readRecordState<TRow extends object>(
@@ -86,7 +85,8 @@ export function readRecordState<TRow extends object>(
   return {
     option,
     phase: optionPhase(option),
-    failed: isFailureOption(option),
+    /** A declared Stuck option is a failure outcome. */
+    failed: option.stage === "stuck",
     reason: state.reason
       ? readRecordField(row, state.reason, optionalText)
       : null,
@@ -134,7 +134,6 @@ export const stateListRenderer =
                   reason={record.reason}
                   wait={record.wait}
                   stalled={record.stalled}
-                  failed={record.failed}
                 />
               ) : (
                 <NoneValue />

@@ -10,10 +10,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { verbDef } from "~/entity/actions/action-verbs";
-import {
-  fieldOptions,
-  isFailureOption,
-} from "~/entity/display/list-renderers/generic-state";
+import { fieldOptions } from "~/entity/display/list-renderers/generic-state";
 import { entities } from "~/entity/entities";
 import type { ServerTreeBatch } from "~/entity/hooks/use-server-tree-children";
 import { entityMetadata } from "~/entity/metadata";
@@ -60,7 +57,7 @@ function batchRollup(
       order.indexOf(right.option.phase ?? "finished"),
   );
   const failed = counted
-    .filter(({ option }) => isFailureOption(option))
+    .filter(({ option }) => option.stage === "stuck")
     .reduce((sum, { count }) => sum + count, 0);
   return { counted, failed, lead: counted[0] };
 }
@@ -210,7 +207,6 @@ export function BatchRow<TItem extends RowData>({
           option={lead.option}
           phase={lead.option.phase ?? "finished"}
           reason={counted.length > 1 ? rollup : null}
-          failed={isFailureOption(lead.option)}
         />
       );
     if (columnId === activityColumn && batch.latestActivity)

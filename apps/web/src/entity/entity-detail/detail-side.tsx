@@ -19,6 +19,7 @@ import {
 import { formatCount } from "~/lib/number-format";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
+import { StateMark } from "~/ui/records/state-badge";
 
 import { readPathValue } from "../read-path";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
@@ -48,16 +49,12 @@ export function declaredNeedsOf<E extends GenericDetailEntity>(
   return parsed.success ? (parsed.data ?? []) : [];
 }
 
-const needsMark = (failed: boolean) => (
-  <span
-    aria-hidden
-    className={
-      failed
-        ? "mt-1 block size-2 rounded-[1.5px] bg-destructive"
-        : "mt-1 block size-2 rounded-[1.5px] bg-needs"
-    }
-  />
-);
+const needsMark = (failed: boolean) =>
+  failed ? (
+    <StateMark kind="failed" className="mt-0.5" />
+  ) : (
+    <StateMark kind="needs" className="mt-1 block size-2 bg-needs" />
+  );
 
 /**
  * Needs you: the declared `side.needs` items (else the record's Work queue

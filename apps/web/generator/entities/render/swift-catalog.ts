@@ -4,6 +4,7 @@ import {
   fieldDisplayWire,
   type ManifestWire,
 } from "@cubby/schemas/compiler/manifest-wire";
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import { capitalize } from "@cubby/shared/text-case";
 import {
   excludedFilterValue,
@@ -271,6 +272,7 @@ const options = (
         closed?: true;
         glyph?: { phosphor: string; sfSymbol: string };
         phase?: "needs" | "active" | "finished";
+        stage?: KernelStage;
         explanation?: ManifestWire<"OptionExplanation">;
       }[]
     | null,
@@ -287,6 +289,7 @@ const options = (
           quiet,
           closed,
           phase,
+          stage,
           explanation,
         }) => ({
           value,
@@ -297,6 +300,7 @@ const options = (
           quiet,
           closed,
           phase,
+          stage,
           explanation: explanation && { ...explanation },
         }),
       );

@@ -266,7 +266,7 @@ describe("declared entity displays", () => {
       renderRowCell(column.cell, record),
     );
     const view = render(<>{cell}</>, { wrapper: harness.wrapper });
-    expect(screen.getByLabelText("Not calculated yet")).toBeInTheDocument();
+    expect(screen.getByText("Waiting for Cubby")).toBeInTheDocument();
     view.unmount();
     harness.dispose();
   });
@@ -1489,7 +1489,7 @@ it("edits the effective inherited checkbox and restores the nullable override", 
     save,
   );
   view.rerender(<>{explicitOverrides.stockTracked!().value}</>);
-  fireEvent.click(screen.getByRole("button", { name: "Use inherited" }));
+  fireEvent.click(screen.getByRole("button", { name: "Let Cubby decide" }));
   await waitFor(() =>
     expect(save).toHaveBeenCalledWith({
       id: record.id,

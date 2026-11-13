@@ -999,24 +999,28 @@ export const { definition, readSchemas } = defineEntityModel({
               quiet: true,
               label: "Reconciles",
               phase: "finished",
+              stage: "done",
               color: "positive",
             },
             {
               value: "refund_adjusted",
               label: "Refund-adjusted",
               phase: "finished",
+              stage: "done",
               color: "neutral-status",
             },
             {
               value: "mismatch",
               label: "Needs review",
               phase: "needs",
+              stage: "needs_you",
               color: "warning",
             },
             {
               value: "unknown",
               label: "No stated total",
               phase: "active",
+              stage: "waiting",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",

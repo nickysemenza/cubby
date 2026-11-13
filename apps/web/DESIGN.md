@@ -61,7 +61,7 @@ Layout widths follow the pane, not the viewport: a list or record pane of 1100px
 
 A list row's primary identity opens the record in the side inspector; checkboxes own batch selection and other cells retain editing/copying (J/K and visible step buttons move between rows, Enter opens the full page): a panel with a 15px title and mono key, the declared key numbers as one inline line under the header (`KeyNumbers layout="inline"`), compact facts with "Add…" for empty editable fields, and hairline-topped sections; below 768px it is a full-screen sheet.
 
-The full detail page spends width to save height. Its header is one block: breadcrumb with the area marker, title, kind tag (`KindTag`), state once (`StateBadge`), commands, then up to three declared label and value lines (64px label column) beside the labelled AI-written summary when the record has one. Below it a band holds Needs you (only when non-empty) and the declared key facts with 76px labels, side by side from 720px and stacked below. Then one continuous page of the declared section groups beside a sticky contents index with counts (a Jump to menu below 800px), so every section is reachable by scrolling. Entities without declared groups get Overview, Work, Evidence, Relations and Activity. Each group and section is a URL fragment. A field shown in the header or side column leaves its section, and a section's absent fields fold into one "N fields not recorded: …" line that expands to the Add controls; fields with a quality check or required validation stay visible. Activity groups entries by household day with a date and calendar-day relative-age gutter; “Show older” continues the existing cursor pages. Summary fields use the effective values the detail read carries; related records and report cells reuse their bounded canonical readers. Monthly spend readouts use portalled tooltips so strip clipping cannot hide edge values. The chart has one tab stop; arrow keys, Home and End move between labelled months without a second hidden copy of the data. The inspector omits a field section only when every value is blank and there is no edit/Add affordance, custom renderer, or quality finding; its key numbers and Edit action share one line. An empty editable stored field reads as a quiet "Add…" that opens the editor, and a derived one as a dash. Fact sections at least 40rem wide reflow into two columns, and three at 60rem; narrow fact lists (the inspector) give labels a fixed share and start every value on one left edge, with no dotted leaders. Needs you shows a count of visible attention rows. Field info icons appear on row hover or focus; a row with a quality finding keeps a visible marker. A small identity thumbnail (28px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
+The full detail page spends width to save height. Its header is one block: breadcrumb with the area marker, title, kind tag (`KindTag`), state once (`StateBadge`, or for an entity with a machinery capability the three machinery lines: the stage line, the first gap with its one action, and the count line that opens the machinery panel), commands, then up to three declared label and value lines (64px label column) beside the labelled AI-written summary when the record has one. Below it a band holds Needs you (only when non-empty) and the declared key facts with 76px labels, side by side from 720px and stacked below. Then one continuous page of the declared section groups beside a sticky contents index with counts (a Jump to menu below 800px), so every section is reachable by scrolling. Entities without declared groups get Overview, Work, Evidence, Relations and Activity. Each group and section is a URL fragment. A field shown in the header or side column leaves its section, and a section's absent fields fold into one "N fields not recorded: …" line that expands to the Add controls; fields with a quality check or required validation stay visible. Activity groups entries by household day with a date and calendar-day relative-age gutter; “Show older” continues the existing cursor pages. Summary fields use the effective values the detail read carries; related records and report cells reuse their bounded canonical readers. Monthly spend readouts use portalled tooltips so strip clipping cannot hide edge values. The chart has one tab stop; arrow keys, Home and End move between labelled months without a second hidden copy of the data. The inspector omits a field section only when every value is blank and there is no edit/Add affordance, custom renderer, or quality finding; its key numbers and Edit action share one line. An empty editable stored field reads as a quiet "Add…" that opens the editor, and a derived one as a dash. Fact sections at least 40rem wide reflow into two columns, and three at 60rem; narrow fact lists (the inspector) give labels a fixed share and start every value on one left edge, with no dotted leaders. Needs you shows a count of visible attention rows. Field info icons appear on row hover or focus; a row with a quality finding keeps a visible marker. A small identity thumbnail (28px) sits beside the title; the full gallery appears later in Images. Header actions wrap before squeezing identity. Lists retain compact workbench controls and horizontal table overflow rather than horizontal page overflow. Ownership evidence uses the shared RecordList in one content column.
 
 The hosted native Run evidence workspace shows its declared report and timeline sections before record facts. Facts remain available afterward; record metadata must not push the transcript and logs several screens below the initial view.
 
@@ -285,7 +285,7 @@ These are Cubby's own components, designed and built here rather than adopted fr
   An entity that declares a state field draws it with `StateBadge`, and one
   that declares a progress field draws it with `ProgressMeter`; neither has an
   entity-specific cell.
-- **`StateBadge`** (`ui/records/state-badge.tsx`) — one state on a row, a batch row and the detail header. Needs-you, stalled and failed are filled pills; running, queued, paused and done are a dot or glyph with a label (running is the running colour, queued a hollow dot, paused a pause glyph, done the done colour). The reason follows in muted text. A wait adds its queue position and estimate ("1st of 3 · about 2 min"); the header size adds what the estimate rests on.
+- **`StateBadge`** (`ui/records/state-badge.tsx`) — one state on a row, a batch row and the detail header, drawn from the option's declared stage, never its colour. Needs you and Stuck are filled pills (Needs you a square mark, Stuck an X, or a warning glyph when work stalled); Working, Waiting, Done and Ended are a dot or glyph with a label (Working is the running colour, Waiting a hollow dot or a pause glyph while paused, Done the done colour). `StateMark` gives the detail side's Needs you rows the same square and X. The reason follows in muted text. A wait adds its queue position and estimate ("1st of 3 · about 2 min"); the header size adds what the estimate rests on.
 - **`KindTag`** (`ui/records/kind-tag.tsx`) — the record's kind as a small neutral tag with its glyph, in the title cell at full width and in the detail header.
 - **`ProgressMeter`** (`ui/feedback/progress-meter.tsx`) — every progress surface: 12 or fewer units draw one segment per unit (named when the value has parts), more draw a proportional bar, and an unknown total draws a dashed track with the running count. Hollow means queued or missing. A `row` meter is a 40×5 track beside its label with the note appended; a `block` meter is a full-width track over its label. Paused work draws its completed share in the paused colour.
 - **`IndexedSections`** (`ui/data-table/indexed-sections.tsx`) — the continuous grouped page with its sticky contents index and Jump to menu; settings and analytics pages render through it.
@@ -594,12 +594,20 @@ applied", and pending approval counts the items actually approving.
 `entity/fields/explanation` holds the Why this value popover, which reuses entity
 links, evidence and existing mutation actions. Own values carry no mark.
 Inherited values have a muted leading ↳ in a 12px slot. A value Cubby set
-carries no mark. A value that has not been calculated reads Not
-calculated yet behind a quiet icon, or the field's normal dash. Marks preserve
+carries no mark. A value Cubby has not published reads Waiting for Cubby,
+and a published value whose inputs changed adds out of date; otherwise the
+field's normal dash. Marks preserve
 the table row height.
 
-Why this value is one viewport-bounded popover: a vertical chain in declared
-precedence order, with a filled deciding level and muted skipped levels. A
+Why this value is the field scope of the machinery panel in one
+viewport-bounded popover: a vertical chain in precedence order (Set here, From
+{source}, Worked out by Cubby, Waiting for {input} from {actor}), with a filled
+deciding level, muted skipped levels and each row's status as a visible word.
+The chain's rows are the same while the explanation loads, fails or is
+loaded; the row's envelope fills the deciding level first. An own level says
+"Set by {you / name}" or "Set to none by {actor}". The one reset action is Let
+Cubby decide, with its exact preview; for an entity with machinery it records
+a release, and "Wrong, clear it" records a veto. A
 suggest field's choice level carries one 12px secondary-ink origin line: "Set
 by Cubby · Nov 3 · 91% sure" with Keep and "Wrong, clear it"; "Set by Cubby ·
 Nov 3 · kept by you Nov 5"; "Set by you", a member's name, an agent's name or
@@ -607,7 +615,7 @@ Nov 3 · kept by you Nov 5"; "Set by you", a member's name, an agent's name or
 without an audit trail; and for an empty field "Not set. Cubby's guess is X,
 62% sure. It saves on its own at 85%." After an action the result stays in a
 status line rendered before it changes. Set,
-Use inherited, Accept and Reject belong to the affected level. Detail proposals
+Let Cubby decide, Accept and Reject belong to the affected level. Detail proposals
 retain inline Accept. Pending suggestion evidence and review actions remain available
 while the explanation query loads or fails; their enabled state follows the
 current suggestion. Forms place inheritance and explicit None controls inside
@@ -619,8 +627,11 @@ and allocated results retain their Mixed or Allocated label. An allocated
 result without a scalar value reads Allocated rather than Not set; its shares
 remain the source of project amounts. Quality checks and their exception controls share this
 explanation. Quality cards keep the explanation trigger available beside missing or failed results. Interpretations retain their readable result, caveats and next steps.
-Unknown computation times and causes remain unknown; no value shows a
-percentage, remaining count, ETA or queue position.
+Unknown computation times and causes remain unknown. A queue position and
+ETA appear only where the machinery read supplies them, in the stage line and
+the panel, and only when the actor is a queue or time; with too little
+history the panel says ETA unknown. No value shows a percentage or remaining
+count.
 
 Display image sources are read-only strips in precedence order, with a linked
 source header and the chosen cover outlined. Header and table thumbnails open
@@ -628,6 +639,25 @@ the chain; the Images section also renders it. Both read the record-level
 `fieldExplanation.imageChain` query and preserve its precedence order.
 
 Progress is drawn by `ProgressMeter` from a `ProgressValue`; see Custom-built signature components. Run detail and Run Work cells show the current phase's known processed/total counts; unknown totals draw the dashed indeterminate track. Client synchronization remains separate from execution progress.
+
+### Machinery panel
+
+One way to see what is happening to any record: each level answers one
+question, and a fact appears only at the highest level whose question it
+answers. A list row says the stage, who acts next and the first gap in six
+words or fewer. The detail header says why and what to do in three lines. The
+panel (`MachineryPanel`, one disclosure away from the count line) holds
+everything: every gap with its actions, queue position and ETA (or ETA
+unknown), attempts and next try; then every input in the order the reconciler
+used it, evidence linked by shortcode, answers with model, tier, cost, input
+hash and raw error under a Raw disclosure with Copy, decisions with channel,
+kind and what superseded them; then drift with its exact difference, ask
+count, estimated cost, Approve and Approve every change like this. A capped
+collection says "Showing 50 of 120". An unknown paid call says Cubby will not
+send it again on its own and offers the gap's actions. Row status is a word
+(Used, Skipped, Gap, Blocked, Failed) beside the SourceStack mark; the mark
+never carries meaning alone. Empty, the panel says Cubby has recorded no work
+on this yet; a failed read keeps the raw error and Retry.
 
 ### Activity and evaluation progress
 

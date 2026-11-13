@@ -3,6 +3,7 @@ import {
   type CompiledEntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { kernelStage } from "@cubby/schemas/kernel/stage";
 import { progressValueSchema } from "@cubby/schemas/progress";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -30,6 +31,7 @@ const optionSchema = z.looseObject({
   label: z.string(),
   color: z.string().optional(),
   phase: z.enum(["needs", "active", "finished"]).optional(),
+  stage: kernelStage.optional(),
   closed: z.literal(true).optional(),
 });
 
@@ -61,7 +63,6 @@ function stateRenderer(
             reason={declared.reason}
             wait={declared.wait}
             stalled={declared.stalled}
-            failed={declared.failed}
           />
         ) : (
           <NoneValue />
@@ -79,12 +80,8 @@ function stateRenderer(
       value: (
         <StateBadge
           size="header"
-          option={{ label: option?.label ?? raw, color: option?.color }}
+          option={{ label: option?.label ?? raw, stage: option?.stage }}
           phase={option ? optionPhase(option) : "active"}
-          failed={
-            option?.color === "destructive" ||
-            option?.color === "var(--destructive)"
-          }
         />
       ),
     };

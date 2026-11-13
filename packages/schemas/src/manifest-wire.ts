@@ -73,6 +73,7 @@ export const manifestWire = {
       quiet: "boolean?",
       closed: "boolean?",
       phase: "EntityPhase?",
+      stage: "KernelStage?",
       explanation: "OptionExplanation?",
     },
     {
@@ -83,6 +84,7 @@ export const manifestWire = {
         quiet: "nil",
         closed: "nil",
         phase: "nil",
+        stage: "nil",
         explanation: "nil",
       },
     },
@@ -90,6 +92,15 @@ export const manifestWire = {
   EnumOptionIcon: record({ phosphor: "string", sfSymbol: "string" }),
   /** Where a state option leaves its record (`ENTITY_PHASES`). */
   EntityPhase: raw({ needs: "needs", active: "active", finished: "finished" }),
+  /** The stage word a state option draws as (`kernelStage`). */
+  KernelStage: raw({
+    ended: "ended",
+    stuck: "stuck",
+    working: "working",
+    needsYou: "needs_you",
+    waiting: "waiting",
+    done: "done",
+  }),
   /** What choosing a kind option does, shown where a record explains its kind. */
   OptionExplanation: record({
     targets: "string",
