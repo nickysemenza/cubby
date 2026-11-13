@@ -27,7 +27,6 @@ import {
   type DecisionChoiceResult,
   type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
-import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { withFieldSuggestionBatch } from "~/server/ai/field-suggest/suggest-fields";
 import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import {
@@ -273,7 +272,6 @@ function prepareLabelledJudgment(
      */
     async advise(
       page?: FinancialSpendingPage,
-      usageFor?: Parameters<typeof adviseSpending>[1]["usageFor"],
     ): Promise<{ advice: FinancialSpendingAdvice | null } | undefined> {
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
@@ -304,21 +302,18 @@ function prepareLabelledJudgment(
         input.admission.reserve()
       ) {
         try {
-          const spending = await withAiInputs(false, () =>
-            adviseSpending(db, {
-              judgment,
-              answers,
-              owner: aiRunOwner(input.usage!.runId),
-              port: input.port,
-              spendingAdvice: input.spendingAdvice,
-              preparation: page,
-              usageFor,
-            }),
-          );
+          const spending = await adviseSpending(db, {
+            judgment,
+            answers,
+            owner: aiRunOwner(input.usage!.runId),
+            port: input.port,
+            spendingAdvice: input.spendingAdvice,
+            preparation: page,
+          });
           spendingComplete = true;
-          if (spending.result) {
-            Object.assign(answers, spending.result.answers);
-            return { advice: spending.result.advice };
+          if (spending) {
+            Object.assign(answers, spending.answers);
+            return { advice: spending.advice };
           }
           return { advice: null };
         } catch (error) {
@@ -685,20 +680,6 @@ async function runStatementLabelBatch(
       // Shared discovery is advisory; isolate failures through the existing per-charge path.
     }
     const finish = async () => {
-      const usages = new Map<string, DecisionChoiceArgs["usage"]>();
-      const usageFor = (operation: string) => {
-        let current = usages.get(operation);
-        if (!current) {
-          current = {
-            db,
-            runId: runId ?? undefined,
-            operation,
-            cacheStatus: "none",
-          };
-          usages.set(operation, current);
-        }
-        return current;
-      };
       const finishWave = (wave: typeof classified) =>
         withFieldSuggestionBatch(async () => {
           const advised = await settleDecisionWorkItems(
@@ -714,7 +695,7 @@ async function runStatementLabelBatch(
                   status: "fulfilled" as const,
                   value: {
                     labels: result.value,
-                    advised: await result.value.advise(spendingPage, usageFor),
+                    advised: await result.value.advise(spendingPage),
                   },
                 };
               } catch (reason) {

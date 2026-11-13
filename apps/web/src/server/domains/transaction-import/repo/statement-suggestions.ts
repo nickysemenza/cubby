@@ -201,19 +201,14 @@ import {
 import {
   prepareStatementSpending,
   prepareStatementSpendingPage,
+  prepareStatementSpendingFacts,
 } from "./statement-spending";
 
 const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 
-/**
- * Bump when only bulk-acceptability changes. Labels ride on top of the
- * evidence fingerprint, so a stricter clean rule would otherwise leave
- * labelled judgments looking current; this republishes them without
- * renaming the revision, which the automatic attach rule's measured windows
- * are keyed by.
- */
+/** Frozen storage hash scheme; question answers and policy stamps stay outside it. */
 const STATEMENT_HASH_SCHEME = {
   revision: "2026-11-12.1",
   cleanPolicy: "2026-11-12.1",
@@ -2611,6 +2606,7 @@ type StatementPublicationFacts = {
   states: Map<string, ChargeState>;
   history: Map<string, ChargePublicationHistory[]>;
   preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>;
+  spending: Awaited<ReturnType<typeof prepareStatementSpendingFacts>>;
 };
 
 const statementRevisionSuppresses = (
@@ -2725,17 +2721,31 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       tx,
       candidates.map(({ proposal }) => proposal),
     ),
-  load: async (tx, candidates) => ({
-    states: await currentChargeStates(
-      tx,
-      candidates.map(({ proposal }) => proposal.charge),
-    ),
-    preparation: await prepareFinancialStatementPreview(tx),
-    history: await priorStatementPublications(
-      tx,
-      candidates.map(({ proposal }) => proposal),
-    ),
-  }),
+  async load(tx, candidates, _batch, rows) {
+    const proposals = candidates.map(({ proposal }) => proposal);
+    const history = await priorStatementPublications(tx, proposals);
+    const answers = [...rows.flat(), ...[...history.values()].flat()].flatMap(
+      (row) => {
+        const parsed = statementAnswers.safeParse(row.answers);
+        const name =
+          parsed.success && parsed.data.merchant?.identity.value?.name;
+        return name ? [name] : [];
+      },
+    );
+    return {
+      states: await currentChargeStates(
+        tx,
+        proposals.map((proposal) => proposal.charge),
+      ),
+      preparation: await prepareFinancialStatementPreview(tx),
+      history,
+      spending: await prepareStatementSpendingFacts(
+        tx,
+        proposals.map((proposal) => proposal.judgment),
+        answers,
+      ),
+    };
+  },
   sameEvidenceUnchanged: false,
   async projectLoaded(tx, candidate, rows, producer, context) {
     const history = [
@@ -2771,13 +2781,22 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       judgment.create?.merchant?.trim() ||
       judgment.create?.rawDescription?.trim();
     const [named] = merchant
-      ? await resolveFinancialSpendingVendors(tx, [merchant])
+      ? await resolveFinancialSpendingVendors(
+          tx,
+          [merchant],
+          context.loaded.spending,
+        )
       : [];
     const vendorResolved = Boolean(named?.row && !named.candidates.length);
     const advice = financialSpendingAdvice.parse(
       statementAdviceFromAnswers(answers),
     );
-    judgment.spending = await prepareStatementSpending(tx, judgment, advice);
+    judgment.spending = await prepareStatementSpending(
+      tx,
+      judgment,
+      advice,
+      context.loaded.spending,
+    );
     judgment.clean =
       !needsStatementAnswers(judgment, answers, isLoan, vendorResolved) &&
       isClean(
@@ -2823,7 +2842,11 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       chargeSettled(state, proposal.judgment)
     )
       return { kind: "retire", reason: "settled" };
-    if (proposal.judgment.spending?.status === "already_booked")
+    if (
+      !proposal.judgment.reviewReason &&
+      proposal.judgment.recommended === "book" &&
+      proposal.judgment.spending?.status === "already_booked"
+    )
       return { kind: "retire", reason: "settled" };
     await retireRetainedStatementAdvice(tx, [proposal]);
     if (proposal.judgment.copies.length)

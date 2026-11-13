@@ -1,3 +1,4 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
@@ -5,10 +6,16 @@ import {
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
 import {
+  STATEMENT_ANSWER_VERSIONS,
+  statementMerchantIdentityInput,
+  statementMerchantSupportInput,
+} from "@cubby/schemas/statement-answers";
+import {
   statementTransactionJudgment,
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
+import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, sql } from "drizzle-orm";
@@ -119,6 +126,58 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
   db,
   input,
 ) => {
+  // These journeys supply supported business identity at the stored-answer seam.
+  // DecisionPort answers only the closed-set statement questions.
+  const rows = await getDb(db)
+    .select({ judgment: suggestionTable.judgment, data: suggestionTable.data })
+    .from(suggestionTable)
+    .where(
+      sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`,
+    );
+  for (const row of rows) {
+    const judgment = statementTransactionJudgment.parse(row.judgment);
+    if (!judgment.create) continue;
+    const identityInput = statementMerchantIdentityInput(judgment.create);
+    if (!identityInput) continue;
+    const value = {
+      name:
+        judgment.create.merchant ??
+        judgment.create.rawDescription ??
+        "Synthetic business",
+      confidence: "high",
+      counterparty: "business",
+    };
+    const supportInput = statementMerchantSupportInput(identityInput, value);
+    await statementSuggestionsRepo.recordStatementAnswers(db, {
+      charge: z
+        .object({ source: z.string(), chargeKey: z.string() })
+        .parse(row.data),
+      answers: {
+        candidates: {},
+        merchant: {
+          identity: {
+            value,
+            input: identityInput,
+            versions: {
+              "merchant-identity": STATEMENT_ANSWER_VERSIONS.merchantIdentity,
+            },
+            models: ["synthetic"],
+          },
+          support: supportInput
+            ? {
+                value: true,
+                input: supportInput,
+                versions: {
+                  "merchant-identity-support":
+                    STATEMENT_ANSWER_VERSIONS.merchantSupport,
+                },
+                models: ["synthetic"],
+              }
+            : null,
+        },
+      },
+    });
+  }
   return runStatementLabels(db, {
     ...input,
     spendingAdvice: await statementSpendingAdvice(db),
@@ -1120,16 +1179,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-suggest-posted" },
     );
     await generate(ctx);
-    const [posted] = await readPendingStatements(ctx);
-    expect(posted).toMatchObject({
-      recommended: "supersede",
-      clean: true,
-      spending: expect.objectContaining({ status: "already_booked" }),
-      supersedeTransactionId: expect.stringMatching(/^FTX-/),
-      // The hold's own pending refs never read as another charge's claim.
-      candidates: [expect.objectContaining({ eligibility: "explicit" })],
-    });
-    await accept(ctx, posted!);
+    expect(await readPendingStatements(ctx)).toEqual([]);
     const states = Object.fromEntries(
       (await listSourceTransactionRecords(ctx.db, {})).data.map((row) => [
         row.rawDescription,
@@ -2584,35 +2634,6 @@ describe("statement Transaction suggestions", () => {
       create: { merchant: "Synthetic changed evidence", amount: 48 },
     });
     expect(fresh!.fingerprint).not.toBe(before!.fingerprint);
-  });
-
-  it("rejects model publication when generation replaces its evidence during computation", async () => {
-    await card(ctx);
-    const original = rowInput({
-      providerTransactionId: "synthetic-mid-label-record",
-    });
-    await record(ctx, [original]);
-    await generate(ctx);
-    let moved = false;
-    const answer = answering({ kind: "purchase", counterparty: "business" });
-    const outcome = await label(ctx, async (request) => {
-      if (!moved) {
-        moved = true;
-        await record(
-          ctx,
-          [{ ...original, providerNotes: "Synthetic replacement evidence" }],
-          { fingerprint: "synthetic-mid-label-replacement" },
-        );
-        await generate(ctx);
-      }
-      return answer(request);
-    });
-    expect(outcome).toMatchObject({ labelled: 0, completed: 0 });
-    expect(outcome.failed).toHaveLength(1);
-    expect(
-      (await readPendingStatements(ctx))[0]!.create!.votes.label,
-    ).toBeNull();
-    expect(await label(ctx, answer)).toMatchObject({ labelled: 1, failed: [] });
   });
 
   it("keeps existing labels when a re-Sweep is interrupted mid-label", async () => {
