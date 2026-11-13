@@ -6,6 +6,7 @@ import { agentTurnAsk } from "~/server/domains/purchase-import/operations/agent-
 import { defineModule, type Pass } from "~/server/kernel/api";
 
 import { calendarInvalidatePass } from "./calendar-invalidate-pass";
+import { derivedSnapshotPass } from "./derived-snapshot-pass";
 import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
 import { purchaseDispatchPass } from "./purchase-dispatch-pass";
 import { retentionPass } from "./retention-pass";
@@ -13,6 +14,7 @@ import { runsReconcilePass } from "./runs/reconcile-pass";
 import { runExecutePass } from "./runs/run-pass";
 
 const WORKFLOW_PASSES: readonly Pass[] = [
+  derivedSnapshotPass,
   purchaseDispatchPass,
   retentionPass,
   purchaseDiscoveryPass,

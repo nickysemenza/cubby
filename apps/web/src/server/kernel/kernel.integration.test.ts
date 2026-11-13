@@ -1179,6 +1179,41 @@ describe("evidence-facts kernel", () => {
     }
   });
 
+  it("rolls back a Pass publication and its cursor together", async () => {
+    const pass = definePass({
+      name: "fixture.atomic-pass",
+      run: async () => ({
+        cursor: { page: 2 },
+        done: true,
+        publish: async (tx) => {
+          await repositoryQueries(tx).execute(
+            sql`INSERT INTO "KeyRev" (key, rev) VALUES ('synthetic:atomic-pass', 1)`,
+          );
+          throw new Error("Synthetic publication failure");
+        },
+      }),
+    });
+    const kernel = createKernel([
+      defineModule({ name: "atomic-pass", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass, { cursor: { page: 1 } });
+    await runOnePass(ctx.db, kernel.registry);
+    const q = repositoryQueries(ctx.db);
+    expect(
+      (
+        await q.execute<{ key: string }>(
+          sql`SELECT key FROM "KeyRev" WHERE key = 'synthetic:atomic-pass'`,
+        )
+      ).rows,
+    ).toEqual([]);
+    const [row] = (
+      await q.execute<{ cursor: unknown; done: boolean; attempts: number }>(
+        sql`SELECT cursor, "doneAt" IS NOT NULL AS done, attempts FROM "Pass" WHERE name = ${pass.name}`,
+      )
+    ).rows;
+    expect(row).toEqual({ cursor: { page: 1 }, done: false, attempts: 1 });
+  });
+
   it.each(["admit", "produce"] as const)(
     "does not restore a funding wait when reset races with %s",
     async (phase) => {

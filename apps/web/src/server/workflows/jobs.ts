@@ -5,21 +5,11 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
-import {
-  derivedRebuildDue,
-  derivedRebuildNext,
-} from "~/server/generic/derived/repo/rebuild";
-import {
-  rebuildDerived,
-  DerivedRebuildBusyError,
-} from "~/server/generic/derived/service/rebuild";
 import { type PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { kernelDueSql, kernelNextSql } from "~/server/kernel/runner";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
-
-import { derivedComputes } from "./derived-computes";
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundJobHandlers,
@@ -27,27 +17,6 @@ export const productionJobHandlers: JobHandlers = {
   Exclude<keyof typeof JOB_KIND_POLICY, "background.drain">,
   JobHandler
 >;
-
-/** Derived values keep one resumable hourly pass; a permit commits one page of it. */
-const derivedRebuildDrain: BackgroundDrain = {
-  name: "derived-rebuild",
-  covers: (unit, key) =>
-    unit === "derived-rebuild" && key.startsWith("derived-rebuild"),
-  label: (unit) =>
-    unit === "derived-rebuild" ? "Totals and search rebuild" : undefined,
-  due: () => derivedRebuildDue("derived-rebuild"),
-  next: derivedRebuildNext,
-  async page(db) {
-    try {
-      await rebuildDerived(db, derivedComputes);
-      return { claimed: 1 };
-    } catch (error) {
-      // Another permit holds the pass lease; its own successor continues it.
-      if (error instanceof DerivedRebuildBusyError) return { claimed: 0 };
-      throw error;
-    }
-  },
-};
 
 /** Each kernel page runs dirty scopes, asks and passes for at most this long. */
 const KERNEL_PAGE_BUDGET_MS = 20_000;
@@ -71,7 +40,6 @@ const kernelDrain: BackgroundDrain = {
 // Built per permit: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   kernelDrain,
-  derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
 ];
 

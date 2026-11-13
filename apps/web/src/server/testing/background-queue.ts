@@ -22,13 +22,10 @@ import {
   derivedSink,
   isDerivedSink,
 } from "~/server/generic/derived/repo/compute";
-import {
-  rebuildDerived,
-  DerivedRebuildBusyError,
-} from "~/server/generic/derived/service/rebuild";
+import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { claimJob, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
@@ -113,14 +110,9 @@ export async function drainStoredDerived(
   for (let round = 0; round < rounds; round++) {
     let finished = false;
     for (let page = 0; page < maxPages; page++) {
-      try {
-        if (!(await rebuildDerived(db, computes, { force: page === 0 }))) {
-          finished = true;
-          break;
-        }
-      } catch (error) {
-        if (!(error instanceof DerivedRebuildBusyError)) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 50));
+      if (!(await runSnapshotPage(db, computes, { force: page === 0 }))) {
+        finished = true;
+        break;
       }
     }
     if (!finished)
@@ -178,7 +170,7 @@ export async function drainDerivedPage(
     ),
   );
   for (let page = 0; page < 1_000; page++) {
-    const more = await rebuildDerived(db, observed, { force: page === 0 });
+    const more = await runSnapshotPage(db, observed, { force: page === 0 });
     if (!pending) return;
     if (!more) break;
   }

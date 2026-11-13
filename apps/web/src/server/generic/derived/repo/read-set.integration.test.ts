@@ -36,8 +36,8 @@ import {
   type DerivedAdapter,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
-import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
+import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import {
   createProductFixture,
@@ -213,7 +213,7 @@ describe("deterministic cache rebuild", () => {
     const adapters = Object.fromEntries(computes);
     const drain = async () => {
       for (let page = 0; page < 1_000; page++) {
-        if (!(await rebuildDerived(ctx.db, adapters, { force: page === 0 })))
+        if (!(await runSnapshotPage(ctx.db, adapters, { force: page === 0 })))
           return;
       }
       throw new Error("Synthetic deterministic pass exceeded its page bound");

@@ -1,34 +1,53 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import {
   derivedSink,
-  type DerivedAdapter,
   type DerivedComputes,
 } from "~/server/generic/derived/repo/compute";
-import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
+import {
+  readSnapshotState,
+  snapshotCursor,
+  DERIVED_SNAPSHOT_PASS,
+} from "~/server/generic/derived/repo/snapshot-state";
+import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
-import {
-  claimRebuild,
-  commitRebuildPage,
-  rebuildDeclarations,
-  requestDerivedRebuild,
-} from "./rebuild";
+import { rebuildDeclarations, requestDerivedRebuild } from "./rebuild";
 
-describe("hourly deterministic rebuild", () => {
+describe("hourly deterministic snapshot Pass", () => {
   const ctx = withTestDb();
-
-  it("shrinks abandoned pages, skips a repeatedly terminated record and refuses stale publication", async () => {
-    const products = await Promise.all(
-      ["Synthetic first", "Synthetic second", "Synthetic third"].map((name) =>
+  const cursor = async () =>
+    snapshotCursor(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(kernelPass)
+          .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS))
+      )[0]?.cursor,
+    );
+  const stubbed = (): DerivedComputes =>
+    Object.fromEntries(
+      Object.keys(derivedComputes).map((key) => [
+        key,
+        derivedSink({ prepare: async () => null, publish: async () => {} }),
+      ]),
+    );
+  const complete = async (computes: DerivedComputes) => {
+    for (let page = 0; page < 500; page++)
+      if (!(await runSnapshotPage(ctx.db, computes))) return;
+    throw new Error("Synthetic snapshot did not finish");
+  };
+  const products = (names: string[]) =>
+    Promise.all(
+      names.map((name) =>
         createProductIdentityFixture(
           ctx.db,
           makeProductInput({ name }),
@@ -36,241 +55,172 @@ describe("hourly deterministic rebuild", () => {
         ),
       ),
     );
-    const sorted = products.map((product) => product.entityId).sort();
+
+  it("shrinks abandoned pages and retains the prior value when a repeatedly terminated record is skipped", async () => {
+    const ids = (
+      await products(["Synthetic first", "Synthetic second", "Synthetic third"])
+    )
+      .map((row) => row.entityId)
+      .sort();
     const seen: string[][] = [];
     const computes = {
-      ...derivedComputes,
+      ...stubbed(),
       "product.price": Object.assign(
-        async (
-          _db: Parameters<typeof rebuildDerived>[0],
-          ids: readonly string[],
-        ) => {
-          seen.push([...ids]);
-          return new Map(ids.map((id) => [id, { value: 99, sort: 99 }]));
+        async (_db: typeof ctx.db, page: readonly string[]) => {
+          seen.push([...page]);
+          return new Map(page.map((id) => [id, { value: 99, sort: 99 }]));
         },
         { preparationBatchSize: 2 },
       ),
     };
-    // Repair requests join the active pass and never count as failed compute attempts.
-    await requestDerivedRebuild(ctx.db);
-    await requestDerivedRebuild(ctx.db);
-    expect(
-      (await getDb(ctx.db).select().from(derivedRebuild))[0]?.cursorAttempts,
-    ).toBe(0);
-    const abandon = async (count: number) => {
-      for (let index = 0; index < count; index++) {
-        expect(await claimRebuild(ctx.db)).not.toBeNull();
-        await getDb(ctx.db).execute(
-          sql`UPDATE "DerivedRebuild" SET "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'`,
-        );
-      }
-    };
-    await abandon(3);
-    await rebuildDerived(ctx.db, computes);
-    // The first page of a contended cursor is still one record. Later pages
-    // in the same call continue under the wall budget.
-    expect(seen[0]).toEqual([sorted[0]]);
+    expect(await requestDerivedRebuild(ctx.db)).toEqual({ existing: false });
+    expect(await requestDerivedRebuild(ctx.db)).toEqual({ existing: true });
+    expect((await cursor()).cursorAttempts).toBe(0);
     const price = rebuildDeclarations().find(
-      (declaration) => declaration.compute === "product.price",
-    );
-    if (!price) throw new Error("Expected the product price declaration");
-    const skippedId = sorted[1];
-    if (!skippedId) throw new Error("Expected a second product");
+      (entry) => entry.compute === "product.price",
+    )!;
     await getDb(ctx.db)
-      .execute(sql`INSERT INTO "ProductReadSnapshot" ("entityId", price, "priceComputedAt") VALUES (${skippedId}::uuid, 12, now())
-      ON CONFLICT ("entityId") DO UPDATE SET price = EXCLUDED.price`);
-    await getDb(ctx.db).execute(sql`
-      UPDATE "DerivedRebuild" SET
-        running = true,
-        target = ${price.target},
-        "afterId" = ${sorted[0]}::uuid,
-        "cursorAttempts" = 7,
-        "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours',
-        token = NULL,
-        "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'`);
+      .update(kernelPass)
+      .set({
+        cursor: {
+          ...(await cursor()),
+          target: price.target,
+          cursorAttempts: 3,
+        },
+      })
+      .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS));
+    await runSnapshotPage(ctx.db, computes);
+    expect(seen[0]).toEqual([ids[0]]);
+    await getDb(ctx.db).execute(
+      sql`INSERT INTO "ProductReadSnapshot" ("entityId", price, "priceComputedAt") VALUES (${ids[1]}::uuid, 12, now()) ON CONFLICT ("entityId") DO UPDATE SET price = excluded.price`,
+    );
+    await getDb(ctx.db)
+      .update(kernelPass)
+      .set({
+        cursor: {
+          ...(await cursor()),
+          target: price.target,
+          afterId: ids[0]!,
+          cursorAttempts: 7,
+        },
+      })
+      .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS));
     seen.length = 0;
-    await rebuildDerived(ctx.db, computes);
-    expect(seen.some((page) => page.includes(skippedId))).toBe(false);
-    const [skipped] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(skipped?.failures).toBeGreaterThanOrEqual(1);
-    expect(skipped?.error).toContain("repeated isolate termination");
-    const retained = await getDb(ctx.db).execute(
-      sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${skippedId}::uuid`,
-      "objects",
-    );
-    expect(retained).toEqual([{ value: 12 }]);
-    await getDb(ctx.db).execute(
-      sql`UPDATE "DerivedRebuild" SET "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours',
-        "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'`,
-    );
-    const old = await claimRebuild(ctx.db);
-    expect(old).not.toBeNull();
-    expect(await claimRebuild(ctx.db)).toBeNull();
-    await getDb(ctx.db).execute(
-      sql`UPDATE "DerivedRebuild" SET "leaseExpiresAt" = (now() AT TIME ZONE 'UTC') - interval '1 second'`,
-    );
-    expect(await claimRebuild(ctx.db)).not.toBeNull();
-    if (!old) throw new Error("Expected coarse lease");
-    let published = false;
+    await complete(computes);
+    expect(seen.some((page) => page.includes(ids[1]!))).toBe(false);
+    expect(await readSnapshotState(ctx.db)).toMatchObject({
+      running: false,
+      failures: 1,
+      error: expect.stringContaining("repeated isolate termination"),
+    });
     expect(
-      await commitRebuildPage(ctx.db, old, null, async () => {
-        published = true;
-      }),
-    ).toBe(false);
-    expect(published).toBe(false);
+      await getDb(ctx.db).execute(
+        sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[1]}::uuid`,
+        "objects",
+      ),
+    ).toEqual([{ value: 12 }]);
   });
 
   it("retains a failed target and completes later quality and search with the failure visible", async () => {
-    const products = await Promise.all(
-      [
-        "Synthetic before failure",
-        "Synthetic failed page",
-        "Synthetic after failure",
-      ].map((name) =>
-        createProductIdentityFixture(
-          ctx.db,
-          makeProductInput({ name }),
-          ctx.actor,
-        ),
-      ),
-    );
-    const ids = products.map((product) => product.entityId).sort();
-    const product = products[0];
-    if (!product) throw new Error("Expected synthetic product");
+    const rows = await products([
+      "Synthetic first",
+      "Synthetic failed page",
+      "Synthetic last",
+    ]);
+    const ids = rows.map((row) => row.entityId).sort();
     const realPhases = new Set(
       rebuildDeclarations()
         .filter(
-          (declaration) =>
-            declaration.rebuildPhase === "quality" ||
-            declaration.rebuildPhase === "search",
+          (entry) =>
+            entry.rebuildPhase === "quality" || entry.rebuildPhase === "search",
         )
-        .map((declaration) => declaration.compute),
+        .map((entry) => entry.compute),
     );
-    const computes: DerivedComputes = {
+    const computes = {
+      ...stubbed(),
       ...Object.fromEntries(
-        Object.entries(derivedComputes).map(([key, adapter]) => [
-          key,
-          realPhases.has(key)
-            ? adapter
-            : derivedSink({
-                prepare: async () => null,
-                publish: async () => {},
-              }),
-        ]),
+        Object.entries(derivedComputes).filter(([key]) => realPhases.has(key)),
       ),
       "product.price": Object.assign(
-        async (
-          _db: Parameters<typeof rebuildDerived>[0],
-          pageIds: readonly string[],
-        ) => {
-          if (pageIds.includes(ids[1] ?? ""))
+        async (_db: typeof ctx.db, page: readonly string[]) => {
+          if (page.includes(ids[1]!))
             throw new Error("Synthetic provider unavailable");
-          return new Map(pageIds.map((id) => [id, { value: 12, sort: 12 }]));
+          return new Map(page.map((id) => [id, { value: 12, sort: 12 }]));
         },
         { preparationBatchSize: 1 },
       ),
     };
-    let steps = 0;
-    let advanced = await rebuildDerived(ctx.db, computes, { force: true });
-    while (advanced) {
-      if (++steps > 100) throw new Error("Synthetic pass did not finish");
-      advanced = await rebuildDerived(ctx.db, computes);
-    }
-    const [finished] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(finished).toMatchObject({
+    await requestDerivedRebuild(ctx.db);
+    await complete(computes);
+    expect(await readSnapshotState(ctx.db)).toMatchObject({
       running: false,
       failures: 1,
-      passFailures: 1,
+      failedPages: 1,
+      finishedAt: expect.any(String),
+      error: expect.stringContaining("Synthetic provider unavailable"),
     });
-    expect(finished?.finishedAt).not.toBeNull();
-    expect(finished?.error).toContain("Synthetic provider unavailable");
-    const output = await getDb(ctx.db).execute(
-      sql`SELECT
-      EXISTS (SELECT 1 FROM "QualitySnapshot" WHERE "entityId" = ${product.entityId}::uuid) AS quality,
-      EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`,
-      "objects",
-    );
-    expect(output).toEqual([{ quality: true, search: true }]);
-    const later = await getDb(ctx.db).execute(
-      sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[2]}::uuid`,
-      "objects",
-    );
-    expect(later).toEqual([{ value: 12 }]);
-    // A failed completed pass cannot bypass the hourly gate or schedule a new full pass.
-    await getDb(ctx.db).execute(
-      sql`UPDATE "DerivedRebuild" SET "startedAt" = now() AT TIME ZONE 'UTC'`,
-    );
-    expect(await claimRebuild(ctx.db)).toBeNull();
-    // A requested new pass clears an earlier error before its repair stream starts.
-    const restarted = await claimRebuild(ctx.db, true);
-    expect(restarted?.target).toBe("product.price");
     expect(
-      (await getDb(ctx.db).select().from(derivedRebuild))[0]?.error,
-    ).toBeNull();
+      await getDb(ctx.db).execute(
+        sql`SELECT EXISTS (SELECT 1 FROM "QualitySnapshot" WHERE "entityId" = ${ids[0]}::uuid) AS quality, EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${ids[0]}::uuid AND "deletedAt" IS NULL) AS search`,
+        "objects",
+      ),
+    ).toEqual([{ quality: true, search: true }]);
+    expect(
+      await getDb(ctx.db).execute(
+        sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[2]}::uuid`,
+        "objects",
+      ),
+    ).toEqual([{ value: 12 }]);
+    await requestDerivedRebuild(ctx.db, { force: false });
+    expect((await readSnapshotState(ctx.db)).running).toBe(false);
+    await requestDerivedRebuild(ctx.db);
+    expect(await readSnapshotState(ctx.db)).toMatchObject({
+      running: true,
+      error: null,
+    });
   });
 
   it("retries a dropped connection on the same cursor without counting a failure", async () => {
-    await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic connection drop" }),
-      ctx.actor,
-    );
+    await products(["Synthetic connection drop"]);
+    const first = rebuildDeclarations()[0]!;
     const dropped = new Error("Failed query: begin", {
       cause: new Error("Connection terminated unexpectedly"),
     });
-    const start = rebuildDeclarations()[0];
-    if (!start) throw new Error("Expected a rebuild declaration");
-    const computes: DerivedComputes = Object.fromEntries(
-      Object.keys(derivedComputes).map((key): [string, DerivedAdapter] => [
-        key,
-        key === start.compute
-          ? Object.assign(
-              async () => {
-                throw dropped;
-              },
-              { preparationBatchSize: 1 },
-            )
-          : derivedSink({
-              prepare: async () => null,
-              publish: async () => {},
-            }),
-      ]),
-    );
-    let thrown: unknown;
-    try {
-      await rebuildDerived(ctx.db, computes, { force: true });
-    } catch (error) {
-      thrown = error;
-    }
-    expect(thrown).toBe(dropped);
-    const [once] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(once).toMatchObject({
-      target: start.target,
+    const computes = {
+      ...stubbed(),
+      [first.compute]: Object.assign(
+        async () => {
+          throw dropped;
+        },
+        { preparationBatchSize: 1 },
+      ),
+    };
+    await requestDerivedRebuild(ctx.db);
+    await runSnapshotPage(ctx.db, computes);
+    expect(await cursor()).toMatchObject({
+      target: first.target,
       afterId: null,
       cursorAttempts: 1,
       failures: 0,
       passFailures: 0,
       failedPages: 0,
-      token: null,
     });
-    expect(once?.error).toContain("Connection terminated unexpectedly");
-    // Batch size 1 skips once attempts exceed 3 * (floor(log2(1)) + 1).
-    const skipAfter = 3 * (Math.floor(Math.log2(1)) + 1);
-    const drops: unknown[] = [];
-    for (let extra = 0; extra < skipAfter; extra++) {
-      try {
-        await rebuildDerived(ctx.db, computes);
-        break;
-      } catch (error) {
-        drops.push(error);
-      }
+    expect((await cursor()).error).toContain(
+      "Connection terminated unexpectedly",
+    );
+    for (let retry = 0; retry < 3; retry++) {
+      await getDb(ctx.db)
+        .update(kernelPass)
+        .set({ availableAt: new Date(0) })
+        .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS));
+      await runSnapshotPage(ctx.db, computes);
     }
-    expect(drops.length).toBeGreaterThan(0);
-    expect(drops.every((error) => error === dropped)).toBe(true);
-    const [bounded] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(bounded?.failures).toBe(1);
-    expect(bounded?.error).toContain("repeated isolate termination");
-    // The skip keeps the drop that caused it.
-    expect(bounded?.error).toContain("Connection terminated unexpectedly");
+    expect(await cursor()).toMatchObject({
+      failures: 1,
+      error: expect.stringContaining("repeated isolate termination"),
+    });
+    expect((await cursor()).error).toContain(
+      "Connection terminated unexpectedly",
+    );
   });
 });

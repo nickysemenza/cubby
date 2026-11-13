@@ -3,12 +3,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
-import {
-  DERIVED_REBUILD_KEY,
-  derivedRebuild,
-} from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  DERIVED_SNAPSHOT_KEY,
+  DERIVED_SNAPSHOT_PASS,
+} from "~/server/generic/derived/repo/snapshot-state";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
 import {
@@ -43,18 +44,22 @@ describe("background work status", () => {
     finishedMinutes: number,
     failures = 0,
   ) => {
-    await getDb(ctx.db).delete(derivedRebuild);
     await getDb(ctx.db)
-      .insert(derivedRebuild)
+      .delete(kernelPass)
+      .where(eq(kernelPass.name, DERIVED_SNAPSHOT_PASS));
+    await getDb(ctx.db)
+      .insert(kernelPass)
       .values({
-        key: DERIVED_REBUILD_KEY,
-        running: true,
-        target: "product.price",
-        startedAt: minutesAgo(finishedMinutes + 60, now),
-        finishedAt: minutesAgo(finishedMinutes, now),
-        lastMovementAt: minutesAgo(finishedMinutes, now),
-        failures,
-        error: failures ? "Synthetic rebuild failure" : null,
+        name: DERIVED_SNAPSHOT_PASS,
+        key: DERIVED_SNAPSHOT_KEY,
+        cursor: {
+          target: "product.price",
+          startedAt: minutesAgo(finishedMinutes + 60, now).toISOString(),
+          finishedAt: minutesAgo(finishedMinutes, now).toISOString(),
+          lastMovementAt: minutesAgo(finishedMinutes, now).toISOString(),
+          failures,
+          error: failures ? "Synthetic rebuild failure" : null,
+        },
       });
   };
 

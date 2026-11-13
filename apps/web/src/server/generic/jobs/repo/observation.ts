@@ -27,13 +27,13 @@ import { eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
-import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { job, run } from "~/server/db/retained-tables";
 import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
+import { readSnapshotState } from "~/server/generic/derived/repo/snapshot-state";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import {
   DRAIN_RECORD_KIND,
@@ -503,7 +503,7 @@ async function observeWork(
     ...streams.flatMap((stream) => streamDrainUnit(stream.kind, drains) ?? []),
   ]);
   const activity: WorkActivity = {
-    rebuild: await readRebuildObservation(db),
+    rebuild: await readSnapshotState(db),
     measuredAt: now.toISOString(),
     windows: {
       paceMinutes: RECENT_MINUTES.pace,
@@ -685,24 +685,6 @@ function stoppedCause(unit: WorkQueueUnit, now: Date): string | null {
 }
 
 /** Rebuild observations read committed movement, never a prior pass's finish as a heartbeat. */
-export async function readRebuildObservation(db: Database) {
-  const [row] = await getDb(db).select().from(derivedRebuild);
-  return {
-    running: row?.running ?? false,
-    target: row?.target ?? null,
-    startedAt: row?.startedAt?.toISOString() ?? null,
-    finishedAt: row?.finishedAt?.toISOString() ?? null,
-    lastMovementAt: row?.lastMovementAt?.toISOString() ?? null,
-    cleanAt: row?.cleanAt?.toISOString() ?? null,
-    failures: row?.failures ?? 0,
-    error: row?.error ?? null,
-    durationsMs: row?.durationsMs ?? [],
-    pages: row?.pages ?? 0,
-    processedRecords: row?.processedRecords ?? 0,
-    failedPages: row?.failedPages ?? 0,
-    history: [...(row?.history ?? [])],
-  };
-}
 
 /**
  * A failing Job's streak start comes from its execution record; rows written

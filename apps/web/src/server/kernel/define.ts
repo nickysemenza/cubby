@@ -498,6 +498,8 @@ export type PassResult = {
   done: boolean;
   availableAt?: Date;
   waitCause?: KernelWaitCause;
+  /** Publish prepared output in the same fenced transaction as the cursor. */
+  publish?(tx: Database): Promise<void>;
 };
 
 export type Pass = {

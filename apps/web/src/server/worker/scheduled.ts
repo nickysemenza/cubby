@@ -39,6 +39,7 @@ async function runHourlyBackstop(
           { maintainJobs },
           { scheduleRunsReconcile },
           { runProductionKernel },
+          { requestDerivedRebuild },
         ] = await Promise.all([
           import("~/server/workflows/jobs"),
           import("~/server/generic/jobs/service/permits"),
@@ -46,13 +47,19 @@ async function runHourlyBackstop(
           import("~/server/workflows/job-maintenance"),
           import("~/server/workflows/runs/reconcile-pass"),
           import("~/server/kernel/api"),
+          import("~/server/generic/derived/repo/rebuild"),
         ]);
         await withTrace(
           "cf.scheduled.job",
           async () => {
             await ringDueDeviceWork(db);
             const errors: unknown[] = [];
-            for (const step of [scheduleRunsReconcile, maintainJobs])
+            for (const step of [
+              scheduleRunsReconcile,
+              maintainJobs,
+              (db: Parameters<typeof requestDerivedRebuild>[0]) =>
+                requestDerivedRebuild(db, { force: false }),
+            ])
               await step(db).catch((error: unknown) => errors.push(error));
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),

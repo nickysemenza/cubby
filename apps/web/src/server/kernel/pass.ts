@@ -109,6 +109,7 @@ export async function runOnePass(
     // SAFETY: the cursor column holds the JSON the pass last returned.
     const result = await pass.run(db, claimed.cursor as Json | null, claim);
     await claim.fenced(async (tx) => {
+      await result.publish?.(tx);
       await repositoryQueries(tx).execute(sql`
         UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${JSON.stringify(result.cursor)}::jsonb ELSE cursor END,
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,

@@ -1,4 +1,3 @@
-export { derivedRebuild } from "./derived-rebuild-schema";
 export { qualitySnapshot } from "./quality-snapshot-schema";
 export { job } from "./job-schema";
 export { workItem, workPublication } from "./work-item-schema";
