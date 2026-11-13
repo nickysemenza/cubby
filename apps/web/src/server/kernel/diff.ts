@@ -50,11 +50,10 @@ const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 
 export function difference(
   computed: Computed,
-  options: { releaseBaseline: boolean; newId?: () => string },
+  options: { releaseBaseline: boolean },
 ): Difference {
   const desired = computed.desired;
   if (!desired) throw new KernelContractError("No desired output to apply");
-  const newId = options.newId ?? (() => crypto.randomUUID());
   const result: Difference = {
     inserts: [],
     updates: [],
@@ -85,7 +84,7 @@ export function difference(
       result.inserts.push({
         target: record.target,
         naturalKey: record.naturalKey,
-        id: newId(),
+        id: record.id,
         values: { ...record.values },
       });
       continue;

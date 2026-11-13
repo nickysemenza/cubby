@@ -13,11 +13,13 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { manualEntry } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import { ledgerParty, transactionImport } from "~/server/db/schema";
+import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -56,6 +58,8 @@ import {
   chargeEvidence,
   fixtureModule,
   fixturePurchase,
+  fixtureExpense,
+  fixtureAllocation,
   fixtureReceipt,
   PURCHASE_SCOPE,
   PURCHASE_TABLE,
@@ -172,6 +176,99 @@ describe("evidence-facts kernel", () => {
     });
     await kernel.reconcileNow(ctx.db, [scope]);
     expect(seen.at(-1)).toBe(1);
+  });
+
+  it("retains a manual observation once without rewriting its original payload", async () => {
+    const kernel = createKernel([
+      defineModule({ name: "manual", evidence: [manualTransactionEvidence] }),
+    ]);
+    const id = crypto.randomUUID();
+    expect(
+      await kernel.append(ctx.db, [
+        evidenceRow(manualTransactionEvidence, {
+          id,
+          entity: "financialTransaction",
+          userId: ctx.actor.userId,
+          payload: { amount: 12.5 },
+        }),
+      ]),
+    ).toEqual([{ kind: "manualEntry", id }]);
+    expect(
+      await kernel.append(ctx.db, [
+        evidenceRow(manualTransactionEvidence, {
+          id,
+          entity: "financialTransaction",
+          userId: ctx.actor.userId,
+          payload: { amount: 30 },
+        }),
+      ]),
+    ).toEqual([]);
+    const [stored] = await repositoryQueries(ctx.db)
+      .select()
+      .from(manualEntry)
+      .where(eq(manualEntry.id, id));
+    expect(stored?.payload).toEqual({ amount: 12.5 });
+  });
+
+  it("creates linked records with stable ids in dependency order and leaks nothing on a fenced apply", async () => {
+    const { kernel, fixture } = kernelWith({ linked: true });
+    await kernel.append(ctx.db, [charge("ORD-LINKED", 1250)]);
+    const q = repositoryQueries(ctx.db);
+    const [claim] = await claimScopes(q, kernel.registry, "money", 10);
+    const [first] = await computeBatch(
+      q,
+      kernel.registry,
+      fixture.module.reconcilers[0]!,
+      [{ kind: claim!.kind, key: claim!.key }],
+      { locked: false, hideBaseline: false },
+    );
+    const [second] = await computeBatch(
+      q,
+      kernel.registry,
+      fixture.module.reconcilers[0]!,
+      [{ kind: claim!.kind, key: claim!.key }],
+      { locked: false, hideBaseline: false },
+    );
+    expect(first!.desired?.records.map((record) => record.id)).toEqual(
+      second!.desired?.records.map((record) => record.id),
+    );
+    await kernel.append(ctx.db, [charge("ORD-LINKED", 1400)]);
+    expect(
+      (
+        await applyComputed(
+          ctx.db,
+          kernel.registry,
+          fixture.module.reconcilers[0]!,
+          [first!],
+          [claim!],
+          { releaseBaseline: false, mode: "member" },
+        )
+      )[0]?.status,
+    ).toBe("conflict");
+    expect(await purchases(ctx.db)).toEqual([]);
+    expect(await q.select().from(fixtureExpense)).toEqual([]);
+    expect(await q.select().from(fixtureAllocation)).toEqual([]);
+    await settle(kernel);
+    const [parent] = await purchases(ctx.db);
+    const [line] = await q.select().from(fixtureExpense);
+    const [allocation] = await q.select().from(fixtureAllocation);
+    expect(line).toMatchObject({ purchaseId: parent!.id, amountMinor: 1400 });
+    expect(allocation).toMatchObject({
+      purchaseId: parent!.id,
+      expenseId: line!.id,
+      amountMinor: 1400,
+    });
+    expect(new Set([parent!.id, line!.id, allocation!.id]).size).toBe(3);
+    expect(first!.desired?.records.map((record) => record.id).sort()).toEqual(
+      [parent!.id, line!.id, allocation!.id].sort(),
+    );
+    await kernel.append(ctx.db, [receipt("ORD-LINKED", "Synthetic Grocer")]);
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]?.id).toBe(parent!.id);
+    expect((await q.select().from(fixtureExpense))[0]?.id).toBe(line!.id);
+    expect((await q.select().from(fixtureAllocation))[0]?.id).toBe(
+      allocation!.id,
+    );
   });
 
   it("reserves entity evidence atomically without leaking identities from a duplicate race", async () => {

@@ -167,6 +167,15 @@ Ask; `c.decision(channel, subject, field)` returns the decision in force;
 downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 `c.gap.time` declare what is missing and who supplies it.
 
+`c.record` returns the record's UUID. For an existing `RecordKey` it returns
+the retained id; for a new natural key it derives a UUID v8 from the scope
+kind, scope key, table and natural key using SHA-256. Contents never enter
+that identity. Other records declared in the same reconcile use that UUID as
+a foreign key. Apply preserves it, orders inserts by foreign-key dependency,
+and reserves entity shortcodes inside its transaction. A conflicted or failed
+apply leaves no identity, shortcode or `RecordKey` reservation. A cycle between
+new rows in different tables is refused before any record is inserted.
+
 ### 4. Kernel tables
 
 | Table             | Holds                                                                                                               |

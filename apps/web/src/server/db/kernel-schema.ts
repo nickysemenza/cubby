@@ -64,6 +64,17 @@ const enumCheck = <const V extends Record<string, string>>(
 
 const createdAt = () =>
   timestamp("createdAt", { mode: "date" }).notNull().defaultNow();
+
+/** A member-authored immutable observation; later edits are Decisions. */
+export const manualEntry = pgTable("ManualEntry", {
+  id: uuid("id")
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  entity: text("entity").notNull(),
+  userId: text("userId").notNull(),
+  payload: jsonb("payload").$type<KernelJson>().notNull(),
+  createdAt: createdAt(),
+});
 const updatedAt = () =>
   timestamp("updatedAt", { mode: "date" })
     .notNull()

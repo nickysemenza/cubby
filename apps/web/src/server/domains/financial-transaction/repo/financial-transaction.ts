@@ -36,6 +36,7 @@ import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-ed
 import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   notDeleted,
   touchUpdatedAt,
@@ -79,6 +80,7 @@ import {
   resolveAllocationInputs,
   writeAllocationSets,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { appendManualTransactions } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { financialTransactionSearch } from "~/server/domains/financial-transaction/repo/search-read-financial-transaction";
 import {
   findSettlementConflicts,
@@ -401,6 +403,15 @@ export async function createFinancialTransactions(
   const created = await createFinancialTransactionRows(
     tx,
     inputs.map((data, index) => ({ data, accountId: accountIds[index]! })),
+    actor,
+  );
+  await appendManualTransactions(
+    databaseForTransaction(tx),
+    created.flatMap((row, index) =>
+      inputs[index]!.sourceRefs.length
+        ? []
+        : [{ input: inputs[index]!, id: row.id }],
+    ),
     actor,
   );
   const named = await resolveAllocationInputs(

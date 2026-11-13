@@ -8,8 +8,8 @@
  */
 import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
 import type { KernelGap } from "@cubby/schemas/kernel/stage";
-import { getTableColumns, sql, type SQL } from "drizzle-orm";
-import type { PgColumn } from "drizzle-orm/pg-core";
+import { getTableColumns, getTableName, sql, type SQL } from "drizzle-orm";
+import { getTableConfig, type PgColumn } from "drizzle-orm/pg-core";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
@@ -70,6 +70,7 @@ import {
   rowKey,
   tableKey,
 } from "./keys";
+import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 
@@ -116,6 +117,49 @@ async function insertRecords(
   }
   // SAFETY: as above; the declared columns are this table's own.
   await q.insert(target.table).values(rows as never[]);
+}
+
+/** Dependency waves preserve foreign keys, including links within one table. */
+function orderedInserts(
+  inserts: Difference["inserts"],
+): Difference["inserts"][] {
+  const pending = new Map(
+    inserts.map((entry) => [`${entry.target.name}:${entry.id}`, entry]),
+  );
+  const groups: Difference["inserts"][] = [];
+  while (pending.size) {
+    const ready = [...pending.values()].filter((entry) => {
+      const columns = getTableColumns(entry.target.table);
+      return getTableConfig(entry.target.table).foreignKeys.every((fk) => {
+        const reference = fk.reference();
+        return reference.columns.every((column, index) => {
+          if (reference.foreignColumns[index]?.name !== "id") return true;
+          const property = Object.keys(columns).find(
+            (key) => columns[key] === column,
+          );
+          return (
+            !property ||
+            !pending.has(
+              `${getTableName(reference.foreignTable)}:${String(entry.values[property])}`,
+            )
+          );
+        });
+      });
+    });
+    if (!ready.length)
+      throw new KernelContractError(
+        "New reconciled records contain a foreign-key cycle",
+      );
+    const byTable = new Map<string, Difference["inserts"]>();
+    for (const entry of ready) {
+      pending.delete(`${entry.target.name}:${entry.id}`);
+      const rows = byTable.get(entry.target.name) ?? [];
+      rows.push(entry);
+      byTable.set(entry.target.name, rows);
+    }
+    groups.push(...byTable.values());
+  }
+  return groups;
 }
 
 /**
@@ -307,7 +351,7 @@ async function applyScope(
       ]);
     return [...groups.values()];
   };
-  for (const group of byTarget(diff.inserts)) {
+  for (const group of orderedInserts(diff.inserts)) {
     const target = group[0]!.target;
     const rows = group.map((entry) => ({ ...entry.values, id: entry.id }));
     await insertRecords(tx, q, target, rows);

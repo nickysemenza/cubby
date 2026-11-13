@@ -60,6 +60,24 @@ export const fixturePurchase = fixture.table("FixturePurchase", {
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });
 
+export const fixtureExpense = fixture.table("FixtureExpense", {
+  id: uuid("id").primaryKey(),
+  purchaseId: uuid("purchaseId")
+    .notNull()
+    .references(() => fixturePurchase.id),
+  amountMinor: integer("amountMinor").notNull(),
+});
+export const fixtureAllocation = fixture.table("FixtureAllocation", {
+  id: uuid("id").primaryKey(),
+  purchaseId: uuid("purchaseId")
+    .notNull()
+    .references(() => fixturePurchase.id),
+  expenseId: uuid("expenseId")
+    .notNull()
+    .references(() => fixtureExpense.id),
+  amountMinor: integer("amountMinor").notNull(),
+});
+
 /** Create the fixture schema once per database and empty it for each test. */
 export async function resetFixtureTables(db: Database): Promise<void> {
   // One statement per call: the query tracer reads one result per statement.
@@ -90,6 +108,10 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "deletedAt" timestamp,
       "createdAt" timestamp NOT NULL DEFAULT now(),
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureExpense" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "amountMinor" integer NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureAllocation" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "expenseId" uuid NOT NULL REFERENCES kernel_fixture."FixtureExpense"(id), "amountMinor" integer NOT NULL)`,
+    `DELETE FROM kernel_fixture."FixtureAllocation"`,
+    `DELETE FROM kernel_fixture."FixtureExpense"`,
     `DELETE FROM kernel_fixture."FixturePurchase"`,
     `DELETE FROM kernel_fixture."FixtureCharge"`,
     `DELETE FROM kernel_fixture."FixtureReceipt"`,
@@ -120,6 +142,7 @@ export const receiptEvidence = defineEvidence({
 });
 
 export type FixtureHooks = {
+  linked?: boolean;
   /** Runs inside each `load`, before it reads; tests mutate inputs here. */
   onLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
   /** Runs inside each `load`, after its reads and before the apply. */
@@ -173,6 +196,12 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     },
   );
   const categoryWrites = writes(fixturePurchase, ["category"]);
+  const expenseWrites = writes(fixtureExpense, ["purchaseId", "amountMinor"]);
+  const allocationWrites = writes(fixtureAllocation, [
+    "purchaseId",
+    "expenseId",
+    "amountMinor",
+  ]);
 
   const purchase = defineReconciler<{
     orderRef: string;
@@ -190,7 +219,11 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       source.bindings,
       source.table(fixtureCharge, ["orderRef", "amountMinor"]),
     ],
-    writes: [purchaseWrites, bindingWrites],
+    writes: [
+      purchaseWrites,
+      bindingWrites,
+      ...(hooks.linked ? [expenseWrites, allocationWrites] : []),
+    ],
     async load(reads, keys) {
       await hooks.onLoad?.(PURCHASE_SCOPE, keys);
       const entries = await Promise.all(
@@ -247,15 +280,29 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         : version >= 2 && observed
           ? observed.toUpperCase()
           : observed;
-      c.record(purchaseWrites, "event", {
+      const purchaseId = c.record(purchaseWrites, "event", {
         orderRef: input.orderRef,
         amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
         merchant,
         receiptId: receipt?.id ?? null,
       });
+      if (hooks.linked) {
+        const expenseId = c.record(expenseWrites, "expense", {
+          purchaseId,
+          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+        });
+        c.record(allocationWrites, "allocation", {
+          purchaseId,
+          expenseId,
+          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+        });
+      }
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));
-      return c.done();
+      const desired = c.done();
+      return hooks.linked
+        ? { ...desired, records: [...desired.records].reverse() }
+        : desired;
     },
   });
 

@@ -1,13 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { generateShortcode, moneyToMinor } from "@cubby/shared";
+import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import { unwrapDb, databaseForTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
@@ -33,19 +33,17 @@ import {
   sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
-  insertPayloadsWithIdentities,
-  isEntityShortcodeCollision,
-} from "~/server/entity-kernel/repo/entity-identity-writer";
-import {
   assertNotFuture,
   constraintViolation,
 } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { append, evidenceRow } from "~/server/kernel/api";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
+import { occurrenceEvidence, statementEvidence } from "./statement-evidence";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
 
@@ -165,56 +163,32 @@ async function insertOccurrences(
   rows: Omit<typeof sourceOccurrence.$inferInsert, "shortcode">[],
 ) {
   if (!rows.length) return [];
-  for (let attempt = 0; attempt < 10; attempt++) {
-    try {
-      return await unwrapDb(tx).transaction((nested) =>
-        insertPayloadsWithIdentities(
-          nested,
-          sourceOccurrence,
-          "sourceOccurrence",
-          rows.map((row) => ({
-            ...row,
-            shortcode: generateShortcode("sourceOccurrence"),
-          })),
-        ),
-      );
-    } catch (error) {
-      if (
-        !isEntityShortcodeCollision(error, "SourceOccurrence") ||
-        attempt === 9
-      )
-        throw error;
-    }
-  }
-  throw new Error("Failed to mint source occurrence identities");
+  const facts = await append(
+    databaseForTransaction(tx),
+    rows.map((row) => evidenceRow(occurrenceEvidence, row)),
+  );
+  return unwrapDb(tx)
+    .select()
+    .from(sourceOccurrence)
+    .where(
+      sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(facts.map((fact) => fact.id))})`,
+    );
 }
 async function insertObservations(
   tx: DrizzleTransaction,
   rows: Omit<typeof sourceTransactionRecord.$inferInsert, "shortcode">[],
 ) {
   if (!rows.length) return [];
-  for (let attempt = 0; attempt < 10; attempt++) {
-    try {
-      return await unwrapDb(tx).transaction((nested) =>
-        insertPayloadsWithIdentities(
-          nested,
-          sourceTransactionRecord,
-          "sourceTransactionRecord",
-          rows.map((row) => ({
-            ...row,
-            shortcode: generateShortcode("sourceTransactionRecord"),
-          })),
-        ),
-      );
-    } catch (error) {
-      if (
-        !isEntityShortcodeCollision(error, "SourceTransactionRecord") ||
-        attempt === 9
-      )
-        throw error;
-    }
-  }
-  throw new Error("Failed to mint source observation identities");
+  const facts = await append(
+    databaseForTransaction(tx),
+    rows.map((row) => evidenceRow(statementEvidence, row)),
+  );
+  return unwrapDb(tx)
+    .select()
+    .from(sourceTransactionRecord)
+    .where(
+      sql`${sourceTransactionRecord.id} = ANY(${uuidArrayParam(facts.map((fact) => fact.id))})`,
+    );
 }
 
 /** Intake changes evidence/head state only. Unknown revision order never changes accepted money. */

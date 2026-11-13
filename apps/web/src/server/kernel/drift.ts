@@ -95,7 +95,6 @@ async function proposeOrAdvance(
   if (computed.error !== null || !computed.desired) return "skipped";
   const diff = difference(computed, {
     releaseBaseline: true,
-    newId: () => "new",
   });
   if (semanticallyEmpty(diff) && !computed.missing.length) {
     await q.execute(sql`

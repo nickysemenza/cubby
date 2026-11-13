@@ -12,6 +12,7 @@ export {
   factKey,
   kernelPass,
   keyRev,
+  manualEntry,
   recordKey,
   scopeDep,
   scopeDirty,

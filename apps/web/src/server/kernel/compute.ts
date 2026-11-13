@@ -35,7 +35,13 @@ import {
   inputHashOf,
   type AskEnvelope,
 } from "./envelope";
-import { answerKey, decisionKey, hashCanonical, VETO_SEPARATOR } from "./keys";
+import {
+  answerKey,
+  decisionKey,
+  hashCanonical,
+  recordIdentity,
+  VETO_SEPARATOR,
+} from "./keys";
 import {
   createReads,
   idColumn,
@@ -185,6 +191,7 @@ export async function computeBatch(
         continue;
       }
       const pure = createPure(registry, reconciler, {
+        scope,
         owned: owned.get(scope.key) ?? [],
         answers,
         decisions,
@@ -516,6 +523,7 @@ function createPure(
   registry: KernelRegistry,
   reconciler: Reconciler,
   state: {
+    scope: ScopeRef;
     owned: readonly OwnedRecord[];
     answers: ReadonlyMap<string, { inputHash: string; output: Json | null }>;
     decisions: ReadonlyMap<string, readonly DecisionRow[]>;
@@ -676,19 +684,27 @@ function createPure(
     },
     record(target, naturalKey, values, options) {
       const declared = requireTarget(target);
+      const id =
+        state.owned.find(
+          (record) =>
+            record.target.name === declared.name &&
+            record.naturalKey === naturalKey,
+        )?.entityId ?? recordIdentity(state.scope, declared.name, naturalKey);
       for (const column of Object.keys(values))
         if (!declared.columns.includes(column))
           throw new KernelContractError(
             `Reconciler ${reconciler.scope} writes undeclared column ${declared.name}.${column}`,
           );
       // A rejected record is not created again when its evidence returns.
-      if (rejected.has(`${declared.name}\u0000${naturalKey}`)) return;
+      if (rejected.has(`${declared.name}\u0000${naturalKey}`)) return id;
       records.push({
+        id,
         target: declared,
         naturalKey,
         values: { ...values },
         provenance: { ...options?.provenance },
       });
+      return id;
     },
     retire(target, naturalKey, disposition) {
       retired.push({ target: requireTarget(target), naturalKey, disposition });

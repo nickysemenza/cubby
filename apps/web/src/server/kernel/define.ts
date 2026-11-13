@@ -335,7 +335,7 @@ export interface Pure {
     naturalKey: string,
     values: ColumnValues,
     options?: { provenance?: Record<string, string> },
-  ): void;
+  ): string;
   /**
    * Set declared columns of an existing record another scope owns (a
    * `fields` scope's `apply: "auto"` columns). Never creates or removes it.
@@ -392,6 +392,7 @@ export type Desired = {
 };
 
 export type DesiredRecord = {
+  readonly id: string;
   readonly target: ColumnRef;
   readonly naturalKey: string;
   readonly values: Readonly<ColumnValues>;

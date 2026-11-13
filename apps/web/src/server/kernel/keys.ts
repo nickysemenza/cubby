@@ -5,6 +5,8 @@
  */
 import { sha256Hex } from "@cubby/shared/sha256";
 
+import { sha256Text } from "~/server/lib/sha256-text";
+
 import type { FactRef, Json, Key, ScopeRef } from "./define";
 
 /** A row of a declared table, read by id. */
@@ -27,6 +29,25 @@ export const driftSubject = (scope: ScopeRef | { kind: string }) =>
 
 /** A record that existed at cutover; immutable. */
 export const legacyKey = (id: string) => `legacy:${id}`;
+
+/** UUID v8 from the immutable ownership key, never the record's contents. */
+export function recordIdentity(
+  scope: ScopeRef,
+  table: string,
+  naturalKey: string,
+): string {
+  const hash = sha256Text(
+    JSON.stringify([
+      "cubby.RecordKey",
+      scope.kind,
+      scope.key,
+      table,
+      naturalKey,
+    ]),
+  );
+  const variant = ((Number.parseInt(hash[16]!, 16) & 3) | 8).toString(16);
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-8${hash.slice(13, 16)}-${variant}${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
 
 /** Separates a veto slot's field from its value key; Postgres text holds no NUL. */
 export const VETO_SEPARATOR = "\u001f";

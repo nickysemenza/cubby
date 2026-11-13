@@ -11,6 +11,7 @@ import { runKernelModule } from "~/server/domains/run/service/run-summary";
 import { shipmentKernelModule } from "~/server/domains/shipment/service";
 import { embeddingKernelModule } from "~/server/generic/embedding/module";
 import { workflowKernelModule } from "~/server/workflows/kernel-passes";
+import { statementKernelModule } from "~/server/domains/transaction-import/service/statement-kernel";
 
 import type { DomainModule } from "./define";
 
@@ -20,6 +21,7 @@ export const KERNEL_MODULES: readonly DomainModule[] = [
   connectionKernelModule,
   runKernelModule,
   shipmentKernelModule,
+  statementKernelModule,
   fieldsKernelModule,
   workflowKernelModule,
 ];
