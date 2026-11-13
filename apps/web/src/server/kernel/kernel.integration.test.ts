@@ -1,0 +1,351 @@
+/**
+ * The kernel's dangerous rules (ADR 0029): order-independent convergence,
+ * the `seq` and `rev` fences, claim expiry, never resending an unknown ask,
+ * history protection, and decisions that outlive recomputation.
+ */
+import { eq, sql } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import type { Database } from "~/server/db/database";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
+
+import { createKernel, evidenceRow, recordSubject, type Kernel } from "./api";
+import { applyComputed } from "./apply";
+import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
+import { claimScopes } from "./claim";
+import { computeBatch } from "./compute";
+import {
+  CATEGORY_SCOPE,
+  chargeEvidence,
+  fixtureModule,
+  fixturePurchase,
+  PURCHASE_SCOPE,
+  PURCHASE_TABLE,
+  receiptEvidence,
+  resetFixtureTables,
+  type FixtureHooks,
+} from "./testing/kernel.fixtures";
+import { ASK } from "./vocab";
+
+const RUN = { budgetMs: 20_000 };
+
+describe("evidence-facts kernel", () => {
+  const ctx = withTestDb();
+  beforeEach(async () => {
+    await resetFixtureTables(ctx.db);
+  });
+
+  const kernelWith = (hooks: FixtureHooks = {}) => {
+    const fixture = fixtureModule({
+      categorize: async () => "Groceries",
+      ...hooks,
+    });
+    return { kernel: createKernel([fixture.module]), fixture };
+  };
+  const charge = (
+    orderRef: string,
+    amountMinor: number,
+    sourceRef = `stmt-${orderRef}-${amountMinor}`,
+  ) => evidenceRow(chargeEvidence, { sourceRef, orderRef, amountMinor });
+  const receipt = (
+    orderRef: string,
+    merchant: string,
+    extra: { sourceRef?: string; categoryHint?: string } = {},
+  ) =>
+    evidenceRow(receiptEvidence, {
+      sourceRef: extra.sourceRef ?? `mail-${orderRef}-${merchant}`,
+      orderRef,
+      amountMinor: 1250,
+      merchant,
+      categoryHint: extra.categoryHint ?? null,
+    });
+  const purchases = async (db: Database) =>
+    repositoryQueries(db)
+      .select()
+      .from(fixturePurchase)
+      .orderBy(fixturePurchase.orderRef);
+  const dirtyCount = async (db: Database) =>
+    Number(
+      (
+        await repositoryQueries(db).execute<{ n: number }>(
+          sql`SELECT count(*)::int AS n FROM "ScopeDirty"`,
+        )
+      ).rows[0]!.n,
+    );
+  const settle = (kernel: Kernel) => kernel.run(ctx.db, RUN);
+
+  it("converges two pieces of evidence to one record in either arrival order", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [charge("ORD-A", 1250)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [receipt("ORD-A", "Synthetic Grocer")]);
+    await settle(kernel);
+
+    await kernel.append(ctx.db, [receipt("ORD-B", "Synthetic Grocer")]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-B", 1250)]);
+    await settle(kernel);
+
+    const rows = await purchases(ctx.db);
+    expect(
+      rows.map(({ orderRef, amountMinor, merchant, category }) => ({
+        orderRef,
+        amountMinor,
+        merchant,
+        category,
+      })),
+    ).toEqual([
+      {
+        orderRef: "ORD-A",
+        amountMinor: 1250,
+        merchant: "Synthetic Grocer",
+        category: "Groceries",
+      },
+      {
+        orderRef: "ORD-B",
+        amountMinor: 1250,
+        merchant: "Synthetic Grocer",
+        category: "Groceries",
+      },
+    ]);
+    expect(await dirtyCount(ctx.db)).toBe(0);
+  });
+
+  it("writes nothing when an input changes during the load, and reruns the scope", async () => {
+    let loads = 0;
+    let storedDuringRerun: number | null = null;
+    const { kernel } = kernelWith({
+      onLoad: async (scope) => {
+        if (scope !== PURCHASE_SCOPE) return;
+        loads += 1;
+        if (loads === 1)
+          await kernel.append(ctx.db, [
+            charge("ORD-C", 900, "stmt-ORD-C-late"),
+          ]);
+        else storedDuringRerun = (await purchases(ctx.db)).length;
+      },
+    });
+    await kernel.append(ctx.db, [charge("ORD-C", 400, "stmt-ORD-C-early")]);
+
+    const outcomes = await kernel.reconcileNow(ctx.db, [
+      { kind: PURCHASE_SCOPE, key: "ORD-C" },
+    ]);
+
+    expect(outcomes.map((outcome) => outcome.status)).toEqual([
+      "conflict",
+      "waiting",
+    ]);
+    expect(storedDuringRerun).toBe(0);
+    const [stored] = await purchases(ctx.db);
+    expect(stored?.amountMinor).toBe(900);
+  });
+
+  it("cannot leave a scope clean when a key it read with no rows gains a row before its apply", async () => {
+    let raced = false;
+    const { kernel, fixture } = kernelWith({
+      afterLoad: async (scope) => {
+        if (scope !== CATEGORY_SCOPE || raced) return;
+        raced = true;
+        // The hint discovers only its own order's purchase scope; the category
+        // scope reaches it through the merchant key it just read empty.
+        await kernel.append(ctx.db, [
+          receipt("ORD-OTHER", "Synthetic Grocer", { categoryHint: "Pantry" }),
+        ]);
+      },
+    });
+    // The answer exists already, so no ask round trip reruns the scope.
+    await kernel.withAsk(ctx.db, fixture.categorize, {
+      merchant: "Synthetic Grocer",
+    });
+    await kernel.append(ctx.db, [
+      charge("ORD-D", 1250),
+      receipt("ORD-D", "Synthetic Grocer"),
+    ]);
+    await settle(kernel);
+
+    const [stored] = (await purchases(ctx.db)).filter(
+      (row) => row.orderRef === "ORD-D",
+    );
+    expect(raced).toBe(true);
+    expect(stored?.category).toBe("Pantry");
+    expect(await dirtyCount(ctx.db)).toBe(0);
+  });
+
+  it("does not publish through a lapsed claim", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [charge("ORD-E", 700)]);
+    const q = repositoryQueries(ctx.db);
+    const claimed = await claimScopes(q, kernel.registry, "money", 10);
+    const reconciler = kernel.registry.reconcilers.get(PURCHASE_SCOPE)!;
+    const computed = await computeBatch(
+      q,
+      kernel.registry,
+      reconciler,
+      claimed,
+      {
+        locked: false,
+        hideBaseline: false,
+      },
+    );
+    await q.execute(
+      sql`UPDATE "ScopeDirty" SET "claimDeadline" = now() - interval '1 second'`,
+    );
+
+    const outcomes = await applyComputed(
+      ctx.db,
+      kernel.registry,
+      reconciler,
+      computed,
+      claimed,
+      {
+        releaseBaseline: false,
+        mode: "background",
+      },
+    );
+
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(["failed"]);
+    expect(await purchases(ctx.db)).toEqual([]);
+    expect(await dirtyCount(ctx.db)).toBe(1);
+  });
+
+  it("never sends an unknown ask again", async () => {
+    let calls = 0;
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        calls += 1;
+        // The Worker stalls past its claim: expiry finds the sent ask first.
+        await repositoryQueries(ctx.db).execute(
+          sql`UPDATE "Ask" SET "claimDeadline" = now() - interval '1 second' WHERE state = ${ASK.sent}`,
+        );
+        await expireAsks(ctx.db, kernel.registry);
+        throw new Error("synthetic provider timeout");
+      },
+    });
+    // A waiting scope makes the ask the background runner's to run.
+    const waiting = {
+      scopes: [{ kind: CATEGORY_SCOPE, key: "synthetic-waiter" }],
+    };
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        fixture.categorize,
+        { merchant: "Synthetic Unknown Market" },
+        waiting,
+      ),
+    ).rejects.toThrow("synthetic provider timeout");
+
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        fixture.categorize,
+        { merchant: "Synthetic Unknown Market" },
+        waiting,
+      ),
+    ).rejects.toBeInstanceOf(AskUnknownError);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+    const [ask] = (
+      await repositoryQueries(ctx.db).execute<{ state: string }>(
+        sql`SELECT state FROM "Ask"`,
+      )
+    ).rows;
+    expect(ask?.state).toBe("unknown");
+    expect(calls).toBe(1);
+  });
+
+  it("turns a version change alone into a Drift proposal, not a record change", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-F", 1250),
+      receipt("ORD-F", "Synthetic Grocer"),
+    ]);
+    await settle(kernel);
+
+    const { kernel: next } = kernelWith({ purchaseVersion: 2 });
+    await settle(next);
+
+    const [stored] = await purchases(ctx.db);
+    expect(stored?.merchant).toBe("Synthetic Grocer");
+    expect(await dirtyCount(ctx.db)).toBe(0);
+    const [proposal] = (
+      await repositoryQueries(ctx.db).execute<{
+        proposalHash: string;
+        scopeKey: string;
+      }>(sql`SELECT "proposalHash", "scopeKey" FROM "Drift"`)
+    ).rows;
+    expect(proposal?.scopeKey).toBe("ORD-F");
+
+    await expect(
+      next.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind: PURCHASE_SCOPE, key: "ORD-F" },
+        proposal!.proposalHash,
+      ),
+    ).resolves.toBe("applied");
+    const [approved] = await purchases(ctx.db);
+    expect(approved?.merchant).toBe("SYNTHETIC GROCER");
+  });
+
+  it("keeps a member's decision through recomputation", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-G", 1250),
+      receipt("ORD-G", "Synthetic Grocer"),
+    ]);
+    await settle(kernel);
+    const [booked] = await purchases(ctx.db);
+
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject(PURCHASE_TABLE, booked!.id),
+        field: "merchant",
+        value: "Corner Market",
+      },
+    ]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [receipt("ORD-G", "Synthetic Grocer Revised")]);
+    await settle(kernel);
+
+    const [stored] = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixturePurchase)
+      .where(eq(fixturePurchase.id, booked!.id));
+    expect(stored?.merchant).toBe("Corner Market");
+  });
+
+  it("keeps a veto in force after a later assignment is released", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-H", 1250),
+      receipt("ORD-H", "Synthetic Grocer"),
+    ]);
+    await settle(kernel);
+    const [booked] = await purchases(ctx.db);
+    const subject = recordSubject(PURCHASE_TABLE, booked!.id);
+
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "veto",
+        kind: "veto",
+        subject,
+        field: "category",
+        value: "Groceries",
+      },
+      {
+        channel: "assignment",
+        kind: "set",
+        subject,
+        field: "category",
+        value: "Dining",
+      },
+      { channel: "assignment", kind: "release", subject, field: "category" },
+    ]);
+    await settle(kernel);
+
+    const [stored] = await purchases(ctx.db);
+    expect(stored?.category).toBeNull();
+  });
+});
