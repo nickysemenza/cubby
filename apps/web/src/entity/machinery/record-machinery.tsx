@@ -304,70 +304,75 @@ export function RecordMachineryHeader({
 function MachineryFacts({ read }: { read: Machinery }) {
   return (
     <Disclosure summary="Worker diagnostics">
-      <div className="grid gap-2 text-xs">
-        {read.scopes.map((scope) => (
-          <div key={`${scope.kind}:${scope.key}`}>
-            <p>
-              {scope.kind} · {scope.attempts} attempts ·{" "}
-              {scope.durationMs == null
-                ? "Duration unknown"
-                : `${scope.durationMs} ms`}
-            </p>
-            <p>
-              Last reconciled: {scope.reconciledAt ?? "Not reconciled yet"} ·
-              Next attempt: {scope.nextAt ?? "None"}
-            </p>
-            {scope.error ? (
-              <pre className="break-words whitespace-pre-wrap">
-                {scope.error.class}: {scope.error.raw}
-              </pre>
-            ) : null}
-          </div>
-        ))}
-        {read.asks.map((ask) => (
-          <div key={ask.inputHash}>
-            <p>
-              {ask.feature} · {ask.attempts} attempts · Next attempt:{" "}
-              {ask.nextAt}
-            </p>
-            <p>
-              Duration:{" "}
-              {ask.sentAt && ask.answeredAt
-                ? `${new Date(ask.answeredAt).getTime() - new Date(ask.sentAt).getTime()} ms`
-                : "Unknown"}
-            </p>
-            <p>
-              Sent: {ask.sentAt ?? "Not sent"} · Answered:{" "}
-              {ask.answeredAt ?? "Not answered"}
-            </p>
-            {ask.lastError ? (
-              <pre className="break-words whitespace-pre-wrap">
-                Ask: {ask.lastError}
-              </pre>
-            ) : null}
-          </div>
-        ))}
-        {read.passes?.map((pass) => (
-          <div key={`${pass.name}:${pass.key}`}>
-            <p>
-              {pass.name} · {pass.attempts} attempts ·{" "}
-              {pass.durationMs == null
-                ? "Duration unknown"
-                : `${pass.durationMs} ms`}
-            </p>
-            <p>
-              Updated: {pass.updatedAt ?? "Unknown"} · Next attempt:{" "}
-              {pass.availableAt}
-            </p>
-            {pass.lastError ? (
-              <pre className="break-words whitespace-pre-wrap">
-                Pass: {pass.lastError}
-              </pre>
-            ) : null}
-          </div>
-        ))}
-      </div>
+      <MachineryFactsBody read={read} />
     </Disclosure>
+  );
+}
+
+function MachineryFactsBody({ read }: { read: Machinery }) {
+  return (
+    <div className="grid gap-2 text-xs">
+      {read.scopes.map((scope) => (
+        <div key={`${scope.kind}:${scope.key}`}>
+          <p>
+            {scope.kind} · {scope.attempts} attempts ·{" "}
+            {scope.durationMs == null
+              ? "Duration unknown"
+              : `${scope.durationMs} ms`}
+          </p>
+          <p>
+            Last reconciled: {scope.reconciledAt ?? "Not reconciled yet"} · Next
+            attempt: {scope.nextAt ?? "None"}
+          </p>
+          {scope.error ? (
+            <pre className="break-words whitespace-pre-wrap">
+              {scope.error.class}: {scope.error.raw}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+      {read.asks.map((ask) => (
+        <div key={ask.inputHash}>
+          <p>
+            {ask.feature} · {ask.attempts} attempts · Next attempt: {ask.nextAt}
+          </p>
+          <p>
+            Duration:{" "}
+            {ask.sentAt && ask.answeredAt
+              ? `${new Date(ask.answeredAt).getTime() - new Date(ask.sentAt).getTime()} ms`
+              : "Unknown"}
+          </p>
+          <p>
+            Sent: {ask.sentAt ?? "Not sent"} · Answered:{" "}
+            {ask.answeredAt ?? "Not answered"}
+          </p>
+          {ask.lastError ? (
+            <pre className="break-words whitespace-pre-wrap">
+              Ask: {ask.lastError}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+      {read.passes?.map((pass) => (
+        <div key={`${pass.name}:${pass.key}`}>
+          <p>
+            {pass.name} · {pass.attempts} attempts ·{" "}
+            {pass.durationMs == null
+              ? "Duration unknown"
+              : `${pass.durationMs} ms`}
+          </p>
+          <p>
+            Updated: {pass.updatedAt ?? "Unknown"} · Next attempt:{" "}
+            {pass.availableAt}
+          </p>
+          {pass.lastError ? (
+            <pre className="break-words whitespace-pre-wrap">
+              Pass: {pass.lastError}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -379,6 +384,14 @@ export function RecordWorkerFacts({
   entity: Entity;
   id: string;
 }) {
+  return (
+    <Disclosure summary="Worker diagnostics">
+      <RecordWorkerFactsRead entity={entity} id={id} />
+    </Disclosure>
+  );
+}
+
+function RecordWorkerFactsRead({ entity, id }: { entity: Entity; id: string }) {
   const read = useMachinery({ entity, id });
   if (read.isError)
     return (
@@ -389,6 +402,6 @@ export function RecordWorkerFacts({
       />
     );
   return read.data?.machinery ? (
-    <MachineryFacts read={read.data.machinery} />
+    <MachineryFactsBody read={read.data.machinery} />
   ) : null;
 }

@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/source-transaction-record";
 import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { Client } from "pg";
+import { Pool } from "pg";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { expectStatementBudget } from "tooling/statement-budget";
@@ -22,11 +22,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 
+import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
 import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import {
   sourceHistoricalTransactionRows,
   sourceOccurrenceHasUnresolvedHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
+import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   databaseForTransaction,
@@ -117,15 +119,17 @@ const providerRow = (overrides: Partial<SourceTransactionRecordInput> = {}) =>
 
 /** Seed retained pre-boundary states directly; member writes still use the traced repository. */
 async function historicalEvidenceFixture<T>(
-  databaseUrl: string,
+  database: Database,
   seed: (db: ReturnType<typeof drizzle>) => Promise<T>,
 ) {
-  const client = new Client({ connectionString: databaseUrl });
-  await client.connect();
+  const traced = getDb(database);
+  if (!("$client" in traced) || !(traced.$client instanceof Pool))
+    throw new Error("Historical fixture needs a pool");
+  const pool = createPostgresPool(traced.$client.options);
   try {
-    await seed(drizzle(client));
+    await seed(drizzle({ client: pool }));
   } finally {
-    await client.end();
+    await pool.end();
   }
 }
 
@@ -332,13 +336,13 @@ describe("statement row ledger", () => {
     await getDb(ctx.db)
       .update(sourceOccurrence)
       .set({ currentObservationId: null });
-    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+    await historicalEvidenceFixture(ctx.db, async (db) =>
       db.update(sourceTransactionRecord).set({ rowPosition: null }),
     );
     await getDb(ctx.db)
       .update(transactionImportRecord)
       .set({ rowPosition: null, requestFingerprint: null });
-    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+    await historicalEvidenceFixture(ctx.db, async (db) =>
       db.update(sourceOccurrence).set({
         identityKind: "legacy",
         reviewState: "ready",
@@ -1867,7 +1871,7 @@ describe("statement row ledger", () => {
       },
     );
     // A historical legacy row cannot be created by modern intake.
-    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+    await historicalEvidenceFixture(ctx.db, async (db) =>
       db
         .update(sourceOccurrence)
         .set({
@@ -1908,7 +1912,7 @@ describe("statement row ledger", () => {
     async (overlap) => {
       await record([rowInput(), rowInput()]);
       const legacy = (await listSourceTransactionRecords(ctx.db, {})).data;
-      await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+      await historicalEvidenceFixture(ctx.db, async (db) =>
         db
           .update(sourceTransactionRecord)
           .set({ providerTransactionId: "synthetic-overlap" }),
@@ -1955,7 +1959,7 @@ describe("statement row ledger", () => {
       if (!target?.currentObservationId || !source || !other || !legacy[0])
         throw new Error("Synthetic reviewed overlap missing");
       if (overlap === "legacy alias") {
-        await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+        await historicalEvidenceFixture(ctx.db, async (db) =>
           db
             .update(sourceOccurrence)
             .set({
