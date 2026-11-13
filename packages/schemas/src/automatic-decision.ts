@@ -49,7 +49,6 @@ export const automaticDecisionRow = z.object({
     })
     .nullable(),
 });
-
 export const automaticDecisionListOut = z.object({
   items: z.array(automaticDecisionRow),
   totalCount: z.number().int().nonnegative(),
