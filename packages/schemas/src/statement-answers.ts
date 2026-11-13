@@ -33,25 +33,24 @@ export const statementCandidateQuestionInput = z.object({
     status: z.string(),
   }),
 });
-export const statementEscrowQuestionInput = z.object({
+const statementEscrowQuestionInput = z.object({
   merchant: z.string().nullable(),
   description: z.string().nullable(),
   sourceCategory: z.string().nullable(),
   amount: z.number().finite(),
 });
-export const statementMerchantQuestionInput = z.object({
+const statementMerchantQuestionInput = z.object({
   merchant: z.string(),
 });
-export const statementMerchantSupportQuestionInput =
+const statementMerchantSupportQuestionInput =
   statementMerchantQuestionInput.extend({ proposed: z.string() });
 
-export const statementEscrowAnswer = statementAnswer(z.boolean()).extend({
+const statementEscrowAnswer = statementAnswer(z.boolean()).extend({
   input: statementEscrowQuestionInput,
 });
-export type StatementEscrowAnswer = z.infer<typeof statementEscrowAnswer>;
 
 /** Identity and support are separate questions; support depends on identity. */
-export const statementMerchantAnswer = z.object({
+const statementMerchantAnswer = z.object({
   identity: statementAnswer(
     z.object({
       name: z.string().nullable(),
@@ -64,7 +63,6 @@ export const statementMerchantAnswer = z.object({
     .extend({ input: statementMerchantSupportQuestionInput })
     .nullable(),
 });
-export type StatementMerchantAnswer = z.infer<typeof statementMerchantAnswer>;
 
 /** Answers owned by spending advice; produced and validated by `adviseSpending`. */
 export const statementSpendingAnswers = z.object({

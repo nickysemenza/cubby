@@ -78,7 +78,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 const STATEMENT_LABEL_BATCH = 128;
 // Admit one default page together so a slow merchant does not serialize four waves.
 // Larger explicit pages still retain a bounded wave and the cooperative budget.
-export const STATEMENT_SPENDING_CONCURRENCY = 128;
+const STATEMENT_SPENDING_CONCURRENCY = 128;
 const log = createLogger("statement-suggestion-labels");
 
 const identityLabel = {

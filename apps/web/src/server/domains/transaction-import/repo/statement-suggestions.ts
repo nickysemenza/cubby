@@ -226,7 +226,7 @@ const HISTORY_MIN_TRANSACTIONS = 2;
  * Each holds a pooled connection, and a Worker invocation's pool holds two;
  * more only queue for a connection while holding their slot keys' turn.
  */
-export const STATEMENT_PUBLISH_CONCURRENCY = 2;
+const STATEMENT_PUBLISH_CONCURRENCY = 2;
 
 export function statementChargeFromWorkRef(ref: string): ChargeRef | null {
   const match = /^charge:([^:]+):(.+)$/.exec(ref);
@@ -2040,7 +2040,7 @@ async function finishProposal(
 }
 
 /** Model labels ride on the evidence fingerprint rather than replacing it. */
-export async function labelledProposal(
+async function labelledProposal(
   proposal: ChargeProposal,
   labelled: StatementTransactionJudgment,
 ): Promise<ChargeProposal> {
@@ -2627,7 +2627,7 @@ const statementRevisionSuppresses = (
     (row.fingerprint === f.fingerprint &&
       row.evidenceFingerprint === f.evidenceFingerprint));
 
-export function needsStatementAnswers(
+function needsStatementAnswers(
   judgment: StatementTransactionJudgment,
   answers: StatementAnswers,
   isLoan = false,
@@ -3325,7 +3325,7 @@ function statementOutcome(
  * dismissal holds for its current evidence revision, an unchanged fingerprint is left
  * alone, and anything else is retired before the new one takes the charge.
  */
-export async function publishChargeProposal(
+async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
   producer: SuggestionProducer,
@@ -3405,7 +3405,7 @@ const statementGenerationFailure = (
   message: runFailureText(error instanceof Error ? error : String(error)),
 });
 
-export async function buildChargeProposalsIsolated(
+async function buildChargeProposalsIsolated(
   db: Database,
   charges: readonly ChargeRef[],
   onFailure: (charge: ChargeRef, error: Error) => void,
@@ -3441,7 +3441,7 @@ export async function buildChargeProposalsIsolated(
 }
 
 /** Run `fn`, then refresh every charge it queued with `regenerateChargesAfterCommit` once. */
-export const coalesceChargeRefreshes = <T>(
+const coalesceChargeRefreshes = <T>(
   fn: () => Promise<T>,
   finish?: (flush: () => Promise<void>) => Promise<void>,
 ) => withAfterCommitScope(fn, finish);

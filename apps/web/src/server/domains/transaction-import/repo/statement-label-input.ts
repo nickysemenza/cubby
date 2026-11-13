@@ -1,11 +1,14 @@
-import { reusableStatementSpendingAnswers } from "@cubby/schemas/statement-answers";
+import {
+  reusableStatementSpendingAnswers,
+  statementAnswerMatches,
+} from "@cubby/schemas/statement-answers";
 import {
   statementAnswers,
   type StatementAnswers,
   type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** The statement evidence actually presented to all three decision features. */
 export function statementLabelSubject(judgment: StatementTransactionJudgment) {
@@ -41,20 +44,6 @@ export const statementAnswerVersions = {
   candidates: { "statement-charge-identity": "2026-11-12.1" },
 } as const;
 
-export function compatibleStatementAnswer(
-  answer: { input: unknown; versions: unknown } | undefined,
-  input: unknown,
-  versions: unknown,
-) {
-  return (
-    answer !== undefined &&
-    canonicalJson(jsonSnapshot.parse(answer.input)) ===
-      canonicalJson(jsonSnapshot.parse(input)) &&
-    canonicalJson(jsonSnapshot.parse(answer.versions)) ===
-      canonicalJson(jsonSnapshot.parse(versions))
-  );
-}
-
 /** Newest compatible answer wins independently for each question. */
 export function mergeStatementAnswers(
   judgment: StatementTransactionJudgment,
@@ -70,7 +59,7 @@ export function mergeStatementAnswers(
     for (const part of ["kind", "counterparty"] as const) {
       if (
         !result[part] &&
-        compatibleStatementAnswer(
+        statementAnswerMatches(
           answers[part],
           statement,
           statementAnswerVersions[part],
@@ -82,7 +71,7 @@ export function mergeStatementAnswers(
       const answer = answers.candidates[candidate.transactionId];
       if (
         !result.candidates[candidate.transactionId] &&
-        compatibleStatementAnswer(
+        statementAnswerMatches(
           answer,
           { statement, transaction: statementCandidateSubject(candidate) },
           statementAnswerVersions.candidates,
@@ -99,7 +88,7 @@ export function mergeStatementAnswers(
     } else if (
       !result.merchant.support &&
       spending.merchant?.support &&
-      compatibleStatementAnswer(
+      statementAnswerMatches(
         result.merchant.identity,
         spending.merchant.identity.input,
         spending.merchant.identity.versions,

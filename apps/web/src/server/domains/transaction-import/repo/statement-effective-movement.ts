@@ -2,7 +2,7 @@ import { cents } from "@cubby/shared";
 
 import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
 
-export type StatementMovementClass =
+type StatementMovementClass =
   | "standard"
   | "loan_payment"
   | "escrow_interest"

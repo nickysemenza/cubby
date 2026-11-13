@@ -158,23 +158,6 @@ export function statementP2PRail(
 }
 
 /**
- * A published create whose person label or history the current rail rule
- * reads as a business, so a republish re-decides it from the votes it holds.
- */
-export function offRailPerson(
-  create: Pick<
-    NonNullable<StatementTransactionJudgment["create"]>,
-    "rawDescription" | "merchant" | "counterparty"
-  >,
-) {
-  return (
-    (create.counterparty.label === "person" ||
-      create.counterparty.history === "person") &&
-    !statementP2PRail(create, create.counterparty)
-  );
-}
-
-/**
  * The kind a create records, from the sources' votes. An own-account move is
  * a transfer; a confident person label makes an outflow your share of a
  * shared cost (purchase) and an inflow a repayment (income); otherwise two

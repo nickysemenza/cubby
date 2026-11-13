@@ -1994,10 +1994,22 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "synthetic-retained-generation-labels" },
     );
     await generate(ctx);
-    await labelStatementSuggestions(ctx.db, {
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      runId,
-    });
+    // Retain paid answers before settlement so generation owns the money write.
+    const deferSettlement = vi
+      .spyOn(statementSettlement, "settleStatementPage")
+      .mockResolvedValue(new Map());
+    try {
+      await labelStatementSuggestions(ctx.db, {
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        runId,
+      });
+    } finally {
+      deferSettlement.mockRestore();
+    }
+    expect(
+      await getDb(ctx.db).select().from(financialTransaction),
+    ).toHaveLength(32);
+
     const replay = () =>
       generateStatementSuggestionPage(ctx.db, {
         servicesFor: buildCrudServices,

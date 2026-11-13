@@ -223,7 +223,7 @@ export const revisionSuppresses = (row: SuggestionRow, f: Fingerprints) =>
  * Take every slot's advisory lock in key order, then lock and read each
  * slot's history. Stable order keeps overlapping batches deadlock-free.
  */
-export async function lockSuggestionSlots<
+async function lockSuggestionSlots<
   Candidate,
   Row extends SuggestionRow,
   Reason extends string,
@@ -293,7 +293,7 @@ export async function lockSuggestionSlots<
 }
 
 /** Active rows equal to the candidate; a rule producer also matches equal evidence. */
-export async function unchangedSuggestions<
+async function unchangedSuggestions<
   Candidate,
   Row extends SuggestionRow,
   Reason extends string,
@@ -464,7 +464,7 @@ async function pruneReplacedSuggestions(tx: Database, ids: readonly string[]) {
  * settles each slot's earlier rows, except the row a publication replays by
  * key, which keeps its place.
  */
-export async function publishReplacements(
+async function publishReplacements(
   tx: Database,
   family: { replaced?: "retire" | "deactivate" | "keep" },
   replacements: readonly {
@@ -782,7 +782,7 @@ export async function publishExactSuggestion(
  * each item it left without an outcome runs through `one`, isolating only
  * the genuinely failed item.
  */
-export async function inSuggestionBatches<Item, Outcome>(
+async function inSuggestionBatches<Item, Outcome>(
   items: readonly Item[],
   input: {
     concurrency: number;
