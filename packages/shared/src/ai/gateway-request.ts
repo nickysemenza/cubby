@@ -1043,6 +1043,17 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
         routes.subscriptionFallback === "budgeted") &&
       !budgetedFallback;
   return async (input, init) => {
+    if (input instanceof Request) {
+      const source = new Request(input, init);
+      init = {
+        ...init,
+        method: source.method,
+        headers: source.headers,
+        body: source.body === null ? undefined : await source.clone().text(),
+        signal: source.signal,
+      };
+      input = source.url;
+    }
     const endpoint = endpointFor(routes.provider, requestUrl(input));
     let decoded: Promise<GatewayQuery> | undefined;
     const request: GatewayFetchRequest = {

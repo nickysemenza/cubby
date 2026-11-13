@@ -52,7 +52,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
 
   await page.setViewportSize({ width: 1440, height: 1100 });
   await gotoAuthenticatedPage(page, "/activity");
-  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  await expect(page.getByTestId("work-health")).toContainText(
+    /stuck|Catching up/i,
+  );
   await expect(page.getByRole("tab")).toHaveCount(0);
   const more = page.getByRole("navigation", { name: "More work" });
   await expect(more.getByRole("link", { name: "Suggestions" })).toBeVisible();
@@ -215,7 +217,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
 
   await page.setViewportSize({ width: 390, height: 844 });
   await gotoAuthenticatedPage(page, "/activity");
-  await expect(page.getByTestId("work-health")).toContainText(/background/i);
+  await expect(page.getByTestId("work-health")).toContainText(
+    /stuck|Catching up/i,
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,

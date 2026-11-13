@@ -146,12 +146,16 @@ describe("gateway paid-route admission", () => {
     "refuses the actual %s request without transmission when admission rejects",
     async (route) => {
       const transmit = vi.fn(async () => new Response("must not transmit"));
+      const controller = new AbortController();
       const onTransport = vi.fn();
       const onResponse = vi.fn();
       const send = gatewayFetchThrough({
         provider: "workers-ai",
         beforePaidRequest: async (request) => {
           expect(request.endpoint).toBe("run/typesafe/jev");
+          expect(request.headers.get("x-synthetic-request")).toBe("preserved");
+          controller.abort("Synthetic caller cancellation");
+          expect(request.signal?.reason).toBe("Synthetic caller cancellation");
           expect(await request.query()).toEqual({
             questions: [{ question: "Synthetic related mail?" }],
             normalized: true,
@@ -164,9 +168,15 @@ describe("gateway paid-route admission", () => {
         onTransport,
         onResponse,
       });
-      await expect(send(decisionUrl, decisionInit)).rejects.toThrow(
-        "Synthetic reservation refused.",
-      );
+      await expect(
+        send(
+          new Request(decisionUrl, {
+            ...decisionInit,
+            headers: { "x-synthetic-request": "preserved" },
+            signal: controller.signal,
+          }),
+        ),
+      ).rejects.toThrow("Synthetic reservation refused.");
       expect(transmit).not.toHaveBeenCalled();
       expect(onTransport).not.toHaveBeenCalled();
       expect(onResponse).not.toHaveBeenCalled();
