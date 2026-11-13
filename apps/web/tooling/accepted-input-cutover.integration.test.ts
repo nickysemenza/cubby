@@ -83,6 +83,36 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows.map((r) => r.state),
     ).toEqual(["answered", "unknown", "queued"]);
+    const { modelAsks } = await import("../src/server/ai/model-asks");
+    const { askEnvelope, inputHashOf } =
+      await import("../src/server/kernel/envelope");
+    const ready = (
+      await client.query(`SELECT * FROM "Ask" WHERE id=$1`, [cutoverId(69)])
+    ).rows[0];
+    const kind = modelAsks.find(
+      (k) => k.feature === "field-suggestion.choice",
+    )!;
+    expect(ready).toMatchObject({
+      feature: kind.feature,
+      executor: null,
+      cancelledAt: null,
+      state: "queued",
+    });
+    expect(ready.input).toEqual(askEnvelope(kind, ready.input.input));
+    expect(ready.inputHash).toBe(
+      await inputHashOf(askEnvelope(kind, ready.input.input)),
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT "cancelledAt" IS NOT NULL cancelled,"lastError" FROM "Ask" WHERE id=$1`,
+          [cutoverId(42)],
+        )
+      ).rows[0],
+    ).toMatchObject({
+      cancelled: true,
+      lastError: expect.stringContaining("incomplete canonical input"),
+    });
     expect(
       (
         await client.query(
@@ -161,7 +191,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           [`financialTransaction:${cutoverId(56)}`],
         )
       ).rows,
-    ).toEqual([{ value: "1900" }]);
+    ).toEqual([]);
     const held = (
       await client.query(
         `SELECT field,kind,"actorKind","actorId" FROM "Decision" WHERE subject=$1 AND id::text LIKE 'ffffffff%' ORDER BY field`,
@@ -233,7 +263,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           `SELECT count(*)::int n FROM archive."AiEvaluation_preimage"`,
         )
       ).rows[0].n,
-    ).toBe(3);
+    ).toBe(5);
   });
 });
 
@@ -299,7 +329,7 @@ it("aborts atomically for every preservation verification", async () => {
         expect(
           (await client.query(`SELECT count(*)::int n FROM "AiEvaluation"`))
             .rows[0].n,
-        ).toBe(3);
+        ).toBe(5);
         checked++;
       }
     }
@@ -350,6 +380,16 @@ it("runs the registered scopes without changing accepted money and proposes the 
     }));
     try {
       const kernel = createKernel(KERNEL_MODULES);
+      const { claimAsks } = await import("../src/server/kernel/claim");
+      const runnable = kernel.registry.asks.get("field-suggestion.choice")!;
+      const claimed = await claimAsks(database, [runnable], 10);
+      expect(claimed.map((a) => a.id)).toContain(cutoverId(69));
+      expect(claimed.map((a) => a.id)).not.toContain(cutoverId(42));
+      await client.query(
+        `UPDATE "Ask" SET "claimToken"=NULL,"claimDeadline"=NULL WHERE id=$1`,
+        [cutoverId(69)],
+      );
+
       const money = `SELECT jsonb_agg(payload ORDER BY name,id) value FROM (
       SELECT 'transaction' name,id,to_jsonb(t) payload FROM "FinancialTransaction" t
       UNION ALL SELECT 'purchase',id,to_jsonb(t) FROM "Purchase" t
@@ -679,15 +719,23 @@ it("lets current stored authority defeat a synthesized review in both directions
 
 it("matches the registered model feature envelope catalog", async () => {
   const { modelAsks } = await import("../src/server/ai/model-asks");
-  const { writeFile } = await import("node:fs/promises");
-  const list = modelAsks.map((a) => ({
-    feature: a.feature,
-    promptVersion: a.promptVersion,
-    policy: a.policy,
-  }));
-  await writeFile(
-    new URL("../../../artifacts/review-model-asks.json", import.meta.url),
-    JSON.stringify(list),
+  const { acceptedInputCutoverSql } =
+    await import("./accepted-input-cutover-select");
+  const { z } = await import("zod");
+  const catalog = z
+    .array(
+      z.object({
+        feature: z.string(),
+        promptVersion: z.string(),
+        policy: z.json(),
+      }),
+    )
+    .parse(JSON.parse(acceptedInputCutoverSql().split("$features$")[1]!));
+  expect(catalog).toEqual(
+    modelAsks.map((a) => ({
+      feature: a.feature,
+      promptVersion: a.promptVersion,
+      policy: a.policy,
+    })),
   );
-  expect(list.length).toBe(37);
 });

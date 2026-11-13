@@ -162,6 +162,34 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
       ],
     );
   }
+  const { FIELD_SUGGESTION_FEATURE } =
+    await import("../src/server/ai/policy/features");
+  for (const n of [69, 79])
+    await client.query(
+      `INSERT INTO "AiEvaluation" (id,"runId","workKey",feature,target,provenance,snapshot,state,attempts) VALUES ($1,$2,$3,'field_suggest',$4,$5,$6,'queued',0)`,
+      [
+        cutoverId(n),
+        cutoverId(14),
+        `synthetic:complete:${n}`,
+        {
+          kind: "field",
+          entity: "product",
+          recordId: cutoverId(13),
+          field: `ready${n}`,
+        },
+        { promptVersion: FIELD_SUGGESTION_FEATURE.promptVersion },
+        {
+          modelInput: {
+            kind: "choice",
+            model: FIELD_SUGGESTION_FEATURE.model,
+            subject: 'Synthetic subject with spaces, brackets [] and quotes "',
+            rules: "Synthetic rules",
+            choices: ["A", "B"],
+            allowNone: true,
+          },
+        },
+      ],
+    );
   await client.query(
     `UPDATE "AiEvaluation" SET "leaseToken"=$1,"leaseUntil"=now()+interval '1 hour' WHERE id=$2`,
     [cutoverId(61), cutoverId(41)],
