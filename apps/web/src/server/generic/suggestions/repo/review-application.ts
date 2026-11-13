@@ -113,7 +113,7 @@ export function executeReviewApplication(
           family.transactionBound !== false
             ? await query.for("update")
             : await query;
-        const applicableState = planApplicableState(state, prediction.family);
+        const applicableState = planApplicableState(state);
         if (!input.expectedFingerprint)
           throw new Error(
             "An applying review needs expectedFingerprint; send the listed row's fingerprint",

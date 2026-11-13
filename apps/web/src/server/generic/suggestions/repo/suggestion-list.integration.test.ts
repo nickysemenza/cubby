@@ -271,6 +271,22 @@ describe("cross-family Suggestion list", () => {
         })
       ).items.map((row) => row.suggestionId),
     ).toEqual([id]);
+    const count = (
+      await suggestionCountsByFamily(ctx.db, {
+        family: "field",
+        recordIds: [item.id],
+      })
+    ).families.find((row) => row.family === "field");
+    expect(count).toMatchObject({
+      pending: 1,
+      fields: [
+        expect.objectContaining({
+          entity: "product",
+          field: "categoryId",
+          pending: 1,
+        }),
+      ],
+    });
     for (const record of [current.output.id, proposed.output.id]) {
       const page = await listSuggestionPage(ctx.db, {
         family: "field",

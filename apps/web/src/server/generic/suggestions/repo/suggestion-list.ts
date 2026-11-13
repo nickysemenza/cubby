@@ -608,9 +608,7 @@ export async function suggestionCountsByFamily(
   const familyColumn = relationColumn("family");
   const strengthCount = (strength: SuggestionStrength) =>
     sql<number>`count(*) FILTER (WHERE ${relationColumn("strength")} = ${strength})::int`;
-  const fieldFamily = families.find(
-    (family) => suggestionFamilies[family].fieldHistory,
-  );
+  const fieldFamily = families.find((family) => family === "field");
   const [pendingRows, fieldRows] = [
     await getDb(db)
       .select({
@@ -652,12 +650,13 @@ export async function suggestionCountsByFamily(
         ...outcomes,
         fields: outcomes.fields.map((field) => ({
           ...field,
-          pending: suggestionFamilies[family].fieldHistory
-            ? (fieldRows.find(
-                (row) =>
-                  row.entity === field.entity && row.field === field.field,
-              )?.pending ?? 0)
-            : 0,
+          pending:
+            family === "field"
+              ? (fieldRows.find(
+                  (row) =>
+                    row.entity === field.entity && row.field === field.field,
+                )?.pending ?? 0)
+              : 0,
         })),
       };
     }),

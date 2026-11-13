@@ -1,0 +1,867 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "25e1638e-e917-4db9-a494-2b7e2a1d8237",
+  "prevIds": [
+    "3622d19a-ed28-4de7-95ec-152b6990deba"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ConnectionCandidateEvidence"
+      ],
+      "writes": [
+        "s|tbl|public.ConnectionCandidateEvidence",
+        "n|tbl|public.ConnectionCandidateEvidence",
+        "e|tbl|public.ConnectionCandidateEvidence",
+        "n|rel|public.ConnectionCandidateEvidence",
+        "n|type|public.ConnectionCandidateEvidence",
+        "n|rel|public.ConnectionCandidateEvidence_pkey",
+        "n|rel|public.ConnectionCandidateEvidence_fingerprint_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "MailHandlingReceipt"
+      ],
+      "writes": [
+        "s|tbl|public.MailHandlingReceipt",
+        "n|tbl|public.MailHandlingReceipt",
+        "e|tbl|public.MailHandlingReceipt",
+        "n|rel|public.MailHandlingReceipt",
+        "n|type|public.MailHandlingReceipt",
+        "n|rel|public.MailHandlingReceipt_pkey",
+        "n|rel|public.MailHandlingReceipt_key_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|tbl|public.PhotoInventoryEvidence",
+        "n|tbl|public.PhotoInventoryEvidence",
+        "e|tbl|public.PhotoInventoryEvidence",
+        "n|rel|public.PhotoInventoryEvidence",
+        "n|type|public.PhotoInventoryEvidence",
+        "n|rel|public.PhotoInventoryEvidence_pkey",
+        "n|rel|public.PhotoInventoryEvidence_fingerprint_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AskScope",
+        "receipt"
+      ],
+      "writes": [
+        "s|col|public.AskScope.receipt",
+        "n|col|public.AskScope.receipt",
+        "e|col|public.AskScope.receipt"
+      ],
+      "reads": [
+        "n|tbl|public.AskScope",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AskScope",
+        "sequence"
+      ],
+      "writes": [
+        "s|col|public.AskScope.sequence",
+        "n|col|public.AskScope.sequence",
+        "e|col|public.AskScope.sequence"
+      ],
+      "reads": [
+        "n|tbl|public.AskScope",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AskScope",
+        "cancelledAt"
+      ],
+      "writes": [
+        "s|col|public.AskScope.cancelledAt",
+        "n|col|public.AskScope.cancelledAt",
+        "e|col|public.AskScope.cancelledAt"
+      ],
+      "reads": [
+        "n|tbl|public.AskScope",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ConnectionCandidateEvidence",
+        "ConnectionCandidateEvidence_scope_idx"
+      ],
+      "writes": [
+        "s|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "n|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "e|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "n|rel|public.ConnectionCandidateEvidence_scope_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ConnectionCandidateEvidence",
+        "n|sch|public",
+        "n|col|public.ConnectionCandidateEvidence.scopeKey"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "MailHandlingReceipt"
+      ],
+      "writes": [
+        "s|fk|public.MailHandlingReceipt.MailHandlingReceipt_runId_Run_id_fkey",
+        "n|fk|public.MailHandlingReceipt.MailHandlingReceipt_runId_Run_id_fkey",
+        "e|fk|public.MailHandlingReceipt.MailHandlingReceipt_runId_Run_id_fkey",
+        "n|con|public.MailHandlingReceipt.MailHandlingReceipt_runId_Run_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.MailHandlingReceipt",
+        "n|sch|public",
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.MailHandlingReceipt.runId",
+        "n|col|public.Run.id",
+        "e|uniqueness|public.Run.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "MailHandlingReceipt"
+      ],
+      "writes": [
+        "s|fk|public.MailHandlingReceipt.MailHandlingReceipt_emailId_Email_id_fkey",
+        "n|fk|public.MailHandlingReceipt.MailHandlingReceipt_emailId_Email_id_fkey",
+        "e|fk|public.MailHandlingReceipt.MailHandlingReceipt_emailId_Email_id_fkey",
+        "n|con|public.MailHandlingReceipt.MailHandlingReceipt_emailId_Email_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.MailHandlingReceipt",
+        "n|sch|public",
+        "n|tbl|public.Email",
+        "n|sch|public",
+        "n|col|public.MailHandlingReceipt.emailId",
+        "n|col|public.Email.id",
+        "e|uniqueness|public.Email.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "n|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "e|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "n|con|public.PhotoInventoryEvidence.PhotoInventoryEvidence_locationId_Location_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.PhotoInventoryEvidence",
+        "n|sch|public",
+        "n|tbl|public.Location",
+        "n|sch|public",
+        "n|col|public.PhotoInventoryEvidence.locationId",
+        "n|col|public.Location.id",
+        "e|uniqueness|public.Location.id"
+      ]
+    },
+    {
+      "statementType": "create_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "PhotoInventoryEvidence"
+      ],
+      "writes": [
+        "s|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "n|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "e|fk|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey",
+        "n|con|public.PhotoInventoryEvidence.PhotoInventoryEvidence_runId_Run_id_fkey"
+      ],
+      "reads": [
+        "n|tbl|public.PhotoInventoryEvidence",
+        "n|sch|public",
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.PhotoInventoryEvidence.runId",
+        "n|col|public.Run.id",
+        "e|uniqueness|public.Run.id"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ConnectionCandidateEvidence",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "MailHandlingReceipt",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "PhotoInventoryEvidence",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AskScope",
+        "name": "receipt",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AskScope",
+        "name": "sequence",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AskScope",
+        "name": "cancelledAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "scopeKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "fingerprint",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "sourceEntity",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "sourceId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "targetEntity",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "targetId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "candidate",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "basis",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "runId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "emailId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "key",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "receipt",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "locationId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "runId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "fingerprint",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "sourceSnapshot",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "result",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_scope_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "MailHandlingReceipt_runId_Run_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "runId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Run",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "MailHandlingReceipt_emailId_Email_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "emailId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Email",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_locationId_Location_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "locationId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Location",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_runId_Run_id_fkey",
+        "nameExplicit": false,
+        "columns": [
+          "runId"
+        ],
+        "schemaTo": "public",
+        "tableTo": "Run",
+        "columnsTo": [
+          "id"
+        ],
+        "onUpdate": "NO ACTION",
+        "onDelete": "NO ACTION",
+        "entityType": "fks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "MailHandlingReceipt_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_fingerprint_key",
+        "nameExplicit": true,
+        "columns": [
+          "fingerprint"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailHandlingReceipt",
+        "name": "MailHandlingReceipt_key_key",
+        "nameExplicit": true,
+        "columns": [
+          "key"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "PhotoInventoryEvidence",
+        "name": "PhotoInventoryEvidence_fingerprint_key",
+        "nameExplicit": true,
+        "columns": [
+          "fingerprint"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    }
+  ]
+}

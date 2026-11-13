@@ -29,7 +29,6 @@ import type { RemovableEntity } from "~/server/generic/removal/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { assertNoOrdinaryReferences } from "~/server/generic/removal/repo/ordinary-reference-guard";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { repointSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 /** Preserve original text in keeper/donor order, deduplicating only exact note values. */
 export { mergeNotes } from "~/server/lib/merge-notes";
@@ -184,7 +183,6 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   await assertNoOrdinaryReferences(tx, entity, ids);
   // Field, Email link and import finding projections follow the survivor; a
   // duplicate open finding is retired there, never deleted.
-  await repointSuggestionTargetsTx(tx, entity, keepId, loserIds);
   await repointRunFindingTargetsTx(tx, entity, keepId, loserIds);
   if (entity === "purchase")
     await repointEmailDecisionTargetsTx(

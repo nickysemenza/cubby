@@ -267,7 +267,7 @@ export async function reviewAutomaticPage<T>(
     for (const { item, prediction, input } of planned) {
       const state = locked.get(item.suggestionId);
       try {
-        const applicable = planApplicableState(state, prediction.family);
+        const applicable = planApplicableState(state);
         // A receipt or review under this operation is a replay; the single
         // review path verifies and returns it.
         if (

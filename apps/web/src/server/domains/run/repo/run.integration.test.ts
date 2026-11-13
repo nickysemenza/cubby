@@ -12,6 +12,7 @@ import {
   run as runTable,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
@@ -21,7 +22,6 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRun, runScaffold } from "./run";
-import { readRunPass } from "~/server/domains/run/repo/run-execution";
 
 const collisionGenerator = (
   first: string,

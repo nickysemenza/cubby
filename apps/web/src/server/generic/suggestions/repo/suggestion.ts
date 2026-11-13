@@ -1,4 +1,3 @@
-import { connectionCandidate } from "@cubby/schemas/entity-connections";
 import {
   suggestionChildHandle,
   type suggestionPublication,
@@ -6,10 +5,7 @@ import {
   feedbackEvent,
   suggestionDecision,
 } from "@cubby/schemas/suggestion";
-import {
-  CORRECTION_OUTCOME_RECEIPT_KIND,
-  correctionAuthorityReceiptKinds,
-} from "@cubby/schemas/suggestion-correction";
+import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -20,14 +16,11 @@ import {
   repositoryTransactionDatabase as withTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import { suggestionTable } from "~/server/db/retained-tables";
-import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 
 import {
   decisionForOperation,
   type StoredDecision,
 } from "./suggestion-decisions";
-
-const candidateKey = connectionCandidate.keyof().enum;
 
 /** A matching operation ID alone never proves that a domain mutation committed. */
 export function assertApplicationReceipt(
@@ -102,14 +95,6 @@ export async function recordFeedbackWithInsertion(
         family: suggestionTable.family,
         subject: suggestionTable.subject,
         decisions: suggestionTable.decisions,
-        // Only the endpoints: evidence need not cross per review.
-        candidate: sql<unknown>`jsonb_build_object(${sql.join(
-          [candidateKey.relation, candidateKey.source, candidateKey.target].map(
-            (key) =>
-              sql`${key}::text, ${suggestionTable.evidence}->'candidate'->${key}`,
-          ),
-          sql`, `,
-        )})`,
       })
       .from(suggestionTable)
       .where(eq(suggestionTable.id, suggestionId))
@@ -148,42 +133,6 @@ export async function recordFeedbackWithInsertion(
         decisions: sql`${suggestionTable.decisions} || ${JSON.stringify([decision])}::jsonb`,
       })
       .where(eq(suggestionTable.id, suggestionId));
-    // A member's review of an Email-to-Purchase connection protects that Email,
-    // and the protecting read has one owner. The two rows share an id, so a
-    // command's Feedback and its frontier name the same review.
-    if (
-      row.authority === "member" &&
-      prediction.subject.kind === "recommendation" &&
-      prediction.subject.entity === "email" &&
-      prediction.subject.scope === "connection.email-purchase" &&
-      !correctionAuthorityReceiptKinds.options.some(
-        (kind) =>
-          kind ===
-          z.object({ kind: z.string() }).safeParse(row.metadata).data?.kind,
-      )
-    ) {
-      await appendEmailReview(transactionDb, {
-        id: row.id,
-        family: "recommendation",
-        subjectId: suggestionId,
-        emailId: prediction.subject.recordId,
-        originalId: null,
-        checksum: null,
-        operationId: row.operationId,
-        verdict: row.verdict,
-        correction: row.correction,
-        reason: row.reason,
-        evidence: row.evidence,
-        intent: row.intent,
-        authority: row.authority,
-        actorUserId: row.actorUserId,
-        subject: {
-          ...prediction.subject,
-          candidate: z.json().parse(prediction.candidate),
-        },
-        metadata: row.metadata,
-      });
-    }
     return { event: row, inserted: true };
   });
 }

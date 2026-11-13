@@ -336,7 +336,7 @@ describe("Suggestion publication and transitions", () => {
     ]);
   });
 
-  it("retires a removed record's rows", async () => {
+  it("retains stored recommendation history when its record is removed", async () => {
     const product = await productFixture(ctx, "Synthetic removed parity item");
     const productId = await recordId(ctx.db, product.id, "product");
     const published = await publishExactSuggestion(
@@ -347,7 +347,7 @@ describe("Suggestion publication and transitions", () => {
       retireSuggestionTargetsTx(tx, "product", [productId]),
     );
     const [live] = await liveRows(ctx, [published.id]);
-    expect(live).toMatchObject({ active: false, status: "superseded" });
+    expect(live).toMatchObject({ active: true, status: "pending" });
     // History stays: the Suggestion row is untouched.
     expect(
       await getDb(ctx.db)

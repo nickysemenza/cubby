@@ -22,6 +22,7 @@ import {
   expireAsks,
 } from "./ask";
 import { nextWakeSql, claimAsk, claimPass, releaseClaim } from "./claim";
+import { kernelDueSql } from "./runner";
 import {
   fixtureModule,
   chargeEvidence,
@@ -55,6 +56,13 @@ describe("external Ask lifecycle", () => {
       wake: string | null;
     }>(sql`SELECT ${nextWakeSql()} AS wake`);
     expect(next.rows[0]?.wake).toBeNull();
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{ unit: string }>(
+          kernelDueSql(),
+        )
+      ).rows,
+    ).toEqual([]);
     const claim = await claimExternalAsk(ctx.db, kind, {
       id,
       executor: "synthetic-device",

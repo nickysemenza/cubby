@@ -132,20 +132,12 @@ export function planApplicationReceipt(
   return priorOutcome;
 }
 
-export function planApplicableState(
-  state: SuggestionStateRow | undefined,
-  family: SuggestionFamily,
-) {
+export function planApplicableState(state: SuggestionStateRow | undefined) {
   if (!state?.active || state.status === "superseded")
     throw new Error(
       "Suggestion evidence is stale; request a fresh suggestion before applying",
     );
-  if (
-    state.status === "applied" ||
-    (isReviewFamily(family) &&
-      suggestionFamilies[family].fieldHistory &&
-      state.status !== "pending")
-  )
+  if (state.status === "applied")
     throw new Error(
       "Suggestion already resolved by another command; request a fresh suggestion",
     );
@@ -154,12 +146,8 @@ export function planApplicableState(
 
 export function planReviewHistory(
   input: Review,
-  family: SuggestionFamily,
   state:
-    | Pick<
-        typeof suggestionTable.$inferSelect,
-        "id" | "active" | "status" | "data"
-      >
+    | Pick<typeof suggestionTable.$inferSelect, "id" | "active" | "status">
     | undefined,
 ) {
   if (state?.active && input.suppression) {
@@ -175,8 +163,7 @@ export function planReviewHistory(
   }
   if (
     state &&
-    (state.active ||
-      (isReviewFamily(family) && suggestionFamilies[family].fieldHistory)) &&
+    state.active &&
     !["applied", "superseded"].includes(state.status) &&
     input.verdict !== "uncertain"
   ) {
@@ -187,13 +174,6 @@ export function planReviewHistory(
         input.verdict === "wrong"
           ? ("rejected" as const)
           : ("resolved" as const),
-      reviewKey:
-        isReviewFamily(family) &&
-        suggestionFamilies[family].fieldHistory &&
-        input.verdict === "wrong"
-          ? z.object({ reviewKey: z.string().nullable() }).safeParse(state.data)
-              .data?.reviewKey
-          : null,
     };
   }
   return { kind: "unchanged" as const, status: state?.status ?? "historical" };

@@ -119,7 +119,7 @@ export type Produced<O> = {
 export type ProduceContext = {
   db: Database;
   signal: AbortSignal;
-  ask: { id: string; inputHash: string };
+  ask: { id: string; inputHash: string; promptVersion?: string };
   runId: string | null;
 };
 

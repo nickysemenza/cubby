@@ -67,7 +67,7 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "embeddings" | "images" | "jobs" | "asks";
+  name: "runs" | "images" | "jobs" | "asks";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };

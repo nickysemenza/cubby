@@ -930,6 +930,76 @@ it("budgets oversized embedding inputs before provider submission", async () => 
 
 // A queued Ask runs from its stored parameters, including an overridden tier.
 describe("queued model request", () => {
+  it("validates replayed Answers and limits semantic repair to one distinct Ask", async () => {
+    const api = await import("~/server/kernel/api");
+    const answer = vi.spyOn(api, "withAsk");
+    const bad = { value: { score: 0 }, model: FAST_MODEL };
+    const good = { value: { score: 1 }, model: FAST_MODEL };
+    const feature = {
+      ...PRODUCT_IDENTIFICATION_FEATURE,
+      schema: z.object({ score: z.number() }),
+    };
+    const context = {
+      db,
+      operation: "synthetic.replay-validation",
+      validate: (value: { score: number }) =>
+        value.score === 1
+          ? { ok: true as const }
+          : { ok: false as const, issues: ["Synthetic score must be one"] },
+    };
+    try {
+      answer.mockResolvedValueOnce(bad).mockResolvedValueOnce(good);
+      expect(await runStructuredFeature(feature, request, context)).toEqual({
+        score: 1,
+      });
+      expect(answer).toHaveBeenCalledTimes(2);
+      expect(answer.mock.calls[0]![2]).not.toEqual(answer.mock.calls[1]![2]);
+      answer.mockReset();
+      answer.mockResolvedValueOnce(bad).mockResolvedValueOnce(bad);
+      await expect(
+        runStructuredFeature(feature, request, context),
+      ).rejects.toThrow("Synthetic score must be one");
+      expect(answer).toHaveBeenCalledTimes(2);
+    } finally {
+      answer.mockRestore();
+    }
+  });
+
+  it("captures output policy changes in a prepared field question", async () => {
+    const { captureAiInput, withAiInputs } =
+      await import("./evaluation-inputs");
+    const capture = (maxTokens: number) =>
+      withAiInputs(true, () =>
+        captureAiInput(
+          { ...LOCATION_DESCRIPTION_FEATURE, maxTokens },
+          "synthetic-policy",
+          request,
+        ),
+      );
+    const first = (await capture(333)).questions[0]!;
+    const changed = (await capture(334)).questions[0]!;
+    expect(first.policy).toMatchObject({
+      tier: LOCATION_DESCRIPTION_FEATURE.tier,
+      maxTokens: 333,
+      outputRevision: z.toJSONSchema(LOCATION_DESCRIPTION_FEATURE.schema),
+    });
+    expect(first).not.toEqual(changed);
+    const { JobEvidenceObsoleteError } =
+      await import("~/server/generic/jobs/errors");
+    await expect(
+      withAiInputs(
+        false,
+        () =>
+          captureAiInput(
+            { ...LOCATION_DESCRIPTION_FEATURE, maxTokens: 334 },
+            "synthetic-policy",
+            request,
+          ),
+        { expected: [first] },
+      ),
+    ).rejects.toBeInstanceOf(JobEvidenceObsoleteError);
+  });
+
   it("replays the captured schema, token cap and tier", async () => {
     const runtime = await import("./run-feature");
     const { modelAsks } = await import("./model-asks");
@@ -959,7 +1029,11 @@ describe("queued model request", () => {
           db,
           runId: null,
           signal: new AbortController().signal,
-          ask: { id: crypto.randomUUID(), inputHash: "synthetic-replay" },
+          ask: {
+            id: crypto.randomUUID(),
+            inputHash: "synthetic-replay",
+            promptVersion: "synthetic-captured-prompt",
+          },
         },
       );
       const [feature, saved, usage] = replay.mock.calls[0]!;
@@ -967,6 +1041,7 @@ describe("queued model request", () => {
         model: FAST_MODEL,
         tier: "quality",
         maxTokens: 333,
+        promptVersion: "synthetic-captured-prompt",
       });
       expect(feature.schema.parse({ description: "Synthetic shelf" })).toEqual({
         description: "Synthetic shelf",

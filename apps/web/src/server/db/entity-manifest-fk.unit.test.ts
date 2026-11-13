@@ -69,8 +69,7 @@ const NON_ENTITY_FK_TARGETS = {
     "stable source package identities for retained tracking evidence",
   Suggestion:
     "immutable typed judgment history shared by current projections and Feedback",
-  AiEvaluation:
-    "durable per-target inference and publication bookkeeping owned by a Run",
+  AiEvaluation: "retained model results awaiting migration into kernel Answers",
   Ask: "the kernel's owed producer call (ADR 0029), not a domain entity",
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
@@ -121,6 +120,22 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "PhotoInventoryEvidence.locationId": {
+    classification: "metadata",
+    reason: "immutable photo observations retain their original location",
+  },
+  "PhotoInventoryEvidence.runId": {
+    classification: "metadata",
+    reason: "records the Run that requested the photo observation",
+  },
+  "MailHandlingReceipt.runId": {
+    classification: "metadata",
+    reason: "retains the requesting Run's exact mail handling receipt",
+  },
+  "MailHandlingReceipt.emailId": {
+    classification: "metadata",
+    reason: "retains the original Email addressed by a mail handling receipt",
+  },
   "SourceObservationAnnotation.observationId": {
     classification: "ownership",
     reason:

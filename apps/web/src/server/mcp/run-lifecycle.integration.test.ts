@@ -1,7 +1,7 @@
 import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -14,15 +14,18 @@ import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiUsage,
+  kernelPass,
   appSettings,
   runControlEvent,
   run as runTable,
 } from "~/server/db/schema";
 import { retainedMailFixture } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { admitMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
+import {
+  readRunPass,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -364,11 +367,15 @@ describe("Mail import switch and discovery through MCP", () => {
       .update(runTable)
       .set({ status: "completed", endedAt: new Date() })
       .where(eq(runTable.id, classificationOnly.id));
-    await updateJobs(
-      ctx.db,
-      { key: `run:${classificationOnly.id}` },
-      { state: "completed" },
-    );
+    await getDb(ctx.db)
+      .update(kernelPass)
+      .set({ doneAt: new Date() })
+      .where(
+        and(
+          eq(kernelPass.name, RUN_EXECUTE_PASS),
+          eq(kernelPass.key, classificationOnly.id),
+        ),
+      );
     const enabled = await call("run", enable());
     expect(enabled.isError).not.toBe(true);
     expect(enabled.structuredContent).toMatchObject({
@@ -390,16 +397,10 @@ describe("Mail import switch and discovery through MCP", () => {
       executionPolicy: "import",
     });
     if (!discovery) throw new Error("Expected discovery Run");
-    expect(
-      await readJobs(ctx.db, { key: `run:${discovery.id}` }).then((rows) =>
-        rows.map(({ input, state }) => ({ state, input })),
-      ),
-    ).toEqual([
-      {
-        state: "queued",
-        input: { runId: discovery.id, purpose: "mail_discovery" },
-      },
-    ]);
+    expect(await readRunPass(ctx.db, discovery.id)).toMatchObject({
+      state: "due",
+      generation: 1,
+    });
   });
 
   // Failure modes: household funding (budgets, a recorded credit refusal with
@@ -523,7 +524,12 @@ describe("Mail import switch and discovery through MCP", () => {
       ).isError,
     ).toBe(true);
     expect(await getDb(ctx.db).select().from(runTable)).toEqual([]);
-    expect(await readJobs(ctx.db, { kind: "run.execute" })).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(kernelPass)
+        .where(eq(kernelPass.name, RUN_EXECUTE_PASS)),
+    ).toEqual([]);
   });
 
   const agentRun = async (purpose?: "mail_import") => {

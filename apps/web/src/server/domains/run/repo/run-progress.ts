@@ -14,18 +14,17 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
+import {
+  isPassRunPurpose,
+  readRunPass,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import {
   assertWorkflowEffect,
   currentRunExecution,
 } from "~/server/workflows/runs/execution";
-
-import {
-  isPassRunPurpose,
-  readRunPass,
-  RUN_EXECUTE_PASS,
-} from "~/server/domains/run/repo/run-execution";
 
 /** The execution behind a Run's detail: its Pass, or the mail discovery Job. */
 async function readRunWorkflow(

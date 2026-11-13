@@ -8,7 +8,7 @@ import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 import type { KeyedTable } from "./define";
 import { markDirty } from "./dirty";
-import { rowKey } from "./keys";
+import { rowKey, tableKey } from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
@@ -68,10 +68,13 @@ export async function repointOwnedReference(
         .returning(),
   );
   const changed = await markDirty(repositoryQueries(tx), registry, {
-    keys: [...before, ...rows].flatMap((row) => [
-      rowKey(config.name, String(row.id)),
-      ...targets.flatMap((target) => target.keys?.(row) ?? []),
-    ]),
+    keys: [
+      ...(rows.length ? [tableKey(config.name)] : []),
+      ...[...before, ...rows].flatMap((row) => [
+        rowKey(config.name, String(row.id)),
+        ...targets.flatMap((target) => target.keys?.(row) ?? []),
+      ]),
+    ],
     reason: "reference-repoint",
     discovers: rows.flatMap((row) =>
       targets.flatMap((target) => target.discovers?.(row) ?? []),

@@ -13,7 +13,6 @@ import { grantPaid } from "~/server/ai/funding-wait";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
-import { isPassRunPurpose } from "~/server/domains/run/repo/run-execution";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
@@ -23,8 +22,7 @@ import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 import { cancelRunPass } from "./run-pass";
 
 /**
- * `run.control` stops or retries the Run's execution (its Pass, or the mail
- * discovery Job) and its child demand.
+ * `run.control` stops or retries the Run's Pass and its child demand.
  * Domain progress and receipts survive an explicit retry.
  * Only the member whose mailbox or search it is may control it.
  */

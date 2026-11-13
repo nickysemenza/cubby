@@ -1,10 +1,10 @@
-import type { SearchableEntity } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   eq,
   getTableColumns,
   inArray,
+  notInArray,
   or,
   is,
   sql,
@@ -13,7 +13,6 @@ import {
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
-import { type Database } from "~/server/db/database";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
 import {
   type RepositoryQueryInput,
@@ -40,34 +39,6 @@ export async function suggestionCandidateKey(
     .map((value) => String(value ?? ""))
     .join("\u001f");
   return `v1:${await sha256Hex(tuple)}`;
-}
-
-export async function getActiveSuggestionSuppressionKeys(
-  db: Database,
-  input: {
-    entityKind: SearchableEntity;
-    entityId: string;
-    suggestionKind: string;
-  },
-): Promise<Set<string>> {
-  const rows = await getDb(db)
-    .select({ suppression: suggestionTable.suppression })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.entity, input.entityKind),
-        eq(suggestionTable.recordId, input.entityId),
-        eq(suggestionTable.active, true),
-        eq(suggestionTable.family, "recommendation"),
-      ),
-    );
-  return new Set(
-    rows.flatMap(({ suppression }) =>
-      suppression?.scope === input.suggestionKind
-        ? [suppression.candidateKey]
-        : [],
-    ),
-  );
 }
 
 /** Evidence is immutable and can be very wide; nothing that moves a Suggestion reads it. */
@@ -239,30 +210,12 @@ export async function retireSuggestionTargetsTx(
     tx,
     and(
       eq(suggestionTable.entity, entityKind),
+      notInArray(suggestionTable.family, ["field", "recommendation"]),
       or(
         inArray(suggestionTable.recordId, ids),
         inArray(sql`${suggestionTable.data}->>'otherId'`, ids),
       ),
     ),
     retired,
-  );
-}
-
-/** Repoint only current projections onto a merge survivor; subjects never change. */
-export async function repointSuggestionTargetsTx(
-  tx: DrizzleTransaction,
-  entity: string,
-  keepId: string,
-  loserIds: readonly string[],
-) {
-  if (!loserIds.length) return;
-  await transitionSuggestionStates(
-    tx,
-    and(
-      eq(suggestionTable.entity, entity),
-      inArray(suggestionTable.recordId, [...loserIds]),
-      eq(suggestionTable.family, "field"),
-    ),
-    { recordId: keepId, status: "superseded", confirmedValue: null },
   );
 }

@@ -140,6 +140,249 @@ export const { definition, readSchemas } = defineEntityModel({
   key: "run",
   edges: [
     defineEdge({
+      key: "PhotoInventoryEvidence.runId",
+      from: "row:PhotoInventoryEvidence",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.PhotoInventoryEvidence.runId",
+        from: "run",
+        to: "row:PhotoInventoryEvidence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "PhotoInventoryEvidence.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "The Run that requested the immutable photo observation.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "The Run that requested the immutable photo observation.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "MailHandlingReceipt.runId",
+      from: "row:MailHandlingReceipt",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.MailHandlingReceipt.runId",
+        from: "run",
+        to: "row:MailHandlingReceipt",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "MailHandlingReceipt.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "The Run that retains the mail handling receipt.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "The Run that retains the mail handling receipt.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+
+    defineEdge({
+      key: "AiEvaluationRequest.runId",
+      from: "row:AiEvaluationRequest",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.AiEvaluationRequest.runId",
+        from: "run",
+        to: "row:AiEvaluationRequest",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "AiEvaluationRequest.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Per-Run work membership and publication receipts.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "AI work requests",
+        description:
+          "Frozen work membership and independent receipts requested by this Run.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Request receipts retain their Run identity through archival and deletion.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "AiEvaluation.runId",
+      from: "row:AiEvaluation",
+      to: "run",
+      cardinality: "one",
+      inverse: {
+        key: "run.incoming.AiEvaluation.runId",
+        from: "run",
+        to: "row:AiEvaluation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "AiEvaluation.runId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Durable inference and publication history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "AI evaluations",
+        description:
+          "Durable target evaluation and publication history owned by this Run.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Evaluation receipts retain their generating Run through archival and deletion.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
       key: "Run.parentRunId",
       from: "run",
       to: "run",

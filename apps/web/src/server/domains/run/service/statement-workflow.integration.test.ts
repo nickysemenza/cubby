@@ -1,3 +1,4 @@
+import { askState } from "@cubby/schemas/kernel/machinery";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -158,6 +159,12 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       await getDb(ctx.db).execute(
         sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = 'run.execute' AND key = ${runId}`,
       );
+      // Advancing the synthetic Date also makes this Run's queued Asks due in PostgreSQL.
+      await getDb(ctx.db).execute(sql`
+        UPDATE "Ask" a SET "availableAt" = now()
+        WHERE a.state = ${askState.enum.queued} AND EXISTS (
+          SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId}::uuid
+        )`);
       await advanceRunPass(ctx.db);
     }
     const [saved] = await getDb(ctx.db)

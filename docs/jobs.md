@@ -68,39 +68,26 @@ table stays named `Job` because `Task` is the household entity's table.
 
 ## Coarse Jobs and work items
 
-A Job is a unit of execution, not a unit of household work. Work that fans out
-over many records is a **drain** over **items** held on the rows that owe them:
-Kernel scopes, Asks and Passes own durable work. A legacy drain unit keeps
-only its rotation record; an item's
-ticket says which intent a page may settle, so a re-mark during a page takes a
-new ticket, and the page clears only what it claimed.
+A Job is a unit of execution. Kernel scopes, Asks and Passes own durable
+work. A kernel permit claims bounded batches, reconciles scopes, produces
+Answers and advances Pass pages. Model Answers survive a later consumer
+publication failure.
 
-`rowDrain` (`generic/background/drains.ts`) is the single claim → prepare →
-publish helper for bounded legacy work. It claims a page,
-prepares outside transactions and publishes chunks of at most 25 weighted
-items. Domain locks precede item locks. An isolated publication error splits
-the chunk until only the failing item backs off or exhausts; committed siblings
-never replay. Adapters declare their own backoff and optional attempt limit. AI
-evaluation supplies real lease-checking transactions, including SERIALIZABLE
-publication; paid results survive publication failure on the evaluation row.
-No synthetic Job context or claim generation stands in for that ownership.
+A drain declares SQL for when it is due now and when it is next due. Its
+domain owns the cursor and publication transaction; a lost permit leaves
+the work owed. Published and failed counts record committed settlements.
+An empty page publishes nothing and schedules nothing.
 
-Published and failed counts record committed settlements, once each even when
-a serializable transaction replays. Retained items stay owed. Each drain
-declares SQL for when it is due now and when it is next due; an empty page
-publishes nothing and schedules nothing.
-
-The production drain units (`workflows/jobs.ts`) include one unit per AI
-evaluation feature (`ai-evaluation:<feature>`), the resumable derived rebuild
-(`derived-rebuild`, one pass with its own row, not items), Email purchase
-discovery and Run summary publication. The kernel drain runs scopes, Asks and
-Passes.
+The production permit units are declared in `workflows/jobs.ts`. The kernel
+owns model Asks, image and embedding work and resumable Passes. Ended-Run
+summaries are fields scopes. Derived rebuild and Email purchase discovery
+advance their own bounded pages.
 
 Email purchase discovery holds one AppSettings cursor, publishes
-`connection.email-purchase` recommendation Suggestions for Emails whose
-retained evidence suggests a purchase link, and repeats hourly (its cursor's
+connection candidate evidence for Emails whose retained evidence suggests a purchase link,
+reconciles their review gaps, and repeats hourly (its cursor's
 `nextAt` is its next due time). It runs deterministic SQL: no model, no Run and
-no evaluation.
+no model call.
 
 One-record work stays a Job. Job `generation` is the supersession fence and the
 Run execution attempt number. Outcomes live on domain owners; Jobs retain no
@@ -348,7 +335,7 @@ everything else:
   inside a drain; a retryable error backs off; anything else fails an attempt.
 
 Producers use `repo/producer.ts`, member and Run controls `repo/operator.ts`,
-drains `rowDrain`, and readers `repo/job-reads.ts` (rows by identity, a Run's
+drains `generic/background/drains.ts`, and readers `repo/job-reads.ts` (rows by identity, a Run's
 live lease, stopped Run executions). The queue core and selection
 (`repo/queue.ts`), `db/job-schema.ts` and the `Job` table object are private to
 `generic/jobs`, tests included: oxlint's `no-restricted-imports` and
@@ -357,9 +344,9 @@ declare or aggregate the tables. Tests seed, age, lock, claim and inspect that
 state through `generic/jobs/jobs.fixtures.ts`. Whole-model consumers (the
 database client, migrations checks, test setup) import `db/drizzle-schema.ts`.
 
-A resumed Run's evaluation item is rechecked under Run locks before a prepared
-parked item can be cleared. Vector publication locks the current search
-document and verifies its revision inside the Pass claim fence.
+Model admission rechecks its requesting Run before send. Consumers recheck Run
+and source fences before publishing an Answer's effect. Vector publication locks
+the current search document and verifies its revision inside the Pass claim fence.
 
 ### Statement pages
 
@@ -552,7 +539,7 @@ releases funding-paused discovery, then makes due the
 model Asks waiting on `funding`, and embeddings and image jobs waiting on `ai_funding_window`, then
 brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
 report them as `waiting`: the import and discovery Runs eligible for release,
-the Ask, evaluation, embedding and image waits, all queued Jobs the wake brings
+the Ask, embedding and image waits, all queued Jobs the wake brings
 forward, and when funding waits retry on their own. Released discovery is not
 counted or released again until a new funding stop clears its release marker. Automatic
 mailbox admission joins the retained Run. Run control refusals are
@@ -565,15 +552,11 @@ end time for failed or cancelled execution; a member pause stays open-ended.
 Running Sweeps and mail reclassification support member pause/resume through
 the Run lifecycle, preserving their steps, scope and committed progress.
 
-Failed-work recovery leaves cancelled evaluations and withdrawn shared requests
-stopped, including their original receipts and superseded historical work. An
-explicit Retry run on a member-cancelled Run revokes that member stop: its
-interrupted steps reopen, member-cancelled owned evaluations get linked
-replacements, and withdrawn requests rejoin any still-live shared evaluation
-without a retry link to themselves. The stored member-cancellation marker has
-one schema owner. A cancelled Run may also resume an interrupted or queued step
-after all of its evaluations settled; that step still needs to publish its
-final tally. Other cancellations remain stopped.
+Failed-work recovery preserves withdrawn AskScope demand and its receipts. An
+explicit Retry run revives its requester links and exhausted unsent work; an
+unknown sent Ask requires an explicit outcome decision. Shared Answers and other
+Runs' live demand survive cancellation. Interrupted Run steps retain their
+committed checkpoints and resume through the current execution plan.
 
 Retry failed on a cancelled Sweep step with no failed items directs the member
 to Retry run; actual failures remain retryable without reviving the cancelled
@@ -589,11 +572,10 @@ admission still apply. A completed Pass without retained work remains refused.
 Executed workflow retries can resume the same Run and its committed steps; a
 retry does not always create a successor.
 
-AI refresh recovery requires a durable owned or requested evaluation roster,
-including terminal rows and retry handoffs. With no roster, Retry run, Resume
+Retained `ai_refresh` Runs have no current fields execution scope. Retry, Resume
 and "Run now, paid allowed" refuse before launching or recording a paid grant.
-The execution driver retains a raw failure rather than completing an unknown
-scope. Discovery metadata is not a target roster.
+Field work starts through a field Sweep Run whose AskScope rows retain its demand.
+The execution driver reports an unknown scope instead of completing it.
 
 A failed Mail reclassification with no durable roster can be closed only by an
 explicitly authorized correction after every original identity and
@@ -849,6 +831,11 @@ the Ask queued with wait cause `funding` and does not spend an attempt. Automati
 AI Stop is checked at admission. A sent call's Answer is retained even when its
 requesting Run stops while the call is in flight.
 
+The Ask envelope retains its prompt version, model policy, parameters and output
+schema across deployment. Consumer validation also checks replayed Answers. A
+semantic failure permits one repair question with its own Ask; the original paid
+Answer stays retained. A changed prepared field question is obsolete before send.
+
 A producer call moves queued → sent → answered. A sent call whose claim lapses
 without an Answer becomes unknown and is never automatically resent. A member
 settles its outcome explicitly. Exhausted unsent attempts stay visible; an
@@ -941,47 +928,28 @@ and performs one bounded image-execution repair. Retention prunes one page of
   fourteen. Failed and unfinished Passes stay. Answers, Asks, decisions,
   scope state, record ownership and drift proposals stay: they carry retained
   results, provenance, deduplication or unresolved work.
-- Pending Suggestions never expire: a field guess stays the picker's guess
-  until its inputs change, and statement and recommendation Suggestions wait
-  for a member.
+- Undecided field and connection gaps stay visible under current evidence until a
+  Decision resolves them. A field guess follows its scope's Answer. Stored money-family
+  Suggestions retain their owning review and retention policy.
 
 ### Recovery attention
 
-Work excludes a retained failed evaluation after its owned retry receipt hands
-off to a replacement, or after all remaining live requesters have handed off. A
-shared failure remains visible while any uncancelled requester still needs that
-original evaluation. Retry history and diagnostics remain stored.
+Model recovery reads live AskScope requesters and Ask states. Unknown outcomes and
+exhausted unsent work remain visible; answered work retains its Answer and requester
+receipt. A withdrawn requester does not discard shared results or another Run's demand.
 
-Three history guards keep settled work from advertising recovery; Work and the
-Run `needsAttention` value share them:
+Runs explicitly cancelled or aborted by a member, and permanently retired
+coordinators, stay in history without advertising execution recovery. Ended
+scheduled routine kinds without an executor are suppressed only when no live Job,
+Ask requester roster, unresolved image job, active finding or proposed photo group
+requires attention. Manual Runs, funding stops and current executors remain visible.
+The read does not retire or rewrite a Run, step or transcript.
 
-- Runs explicitly cancelled or aborted by a member, and permanently retired
-  coordinators, stay in history without advertising execution recovery.
-- Ended scheduled routine step kinds without an executor leave recovery
-  attention only when they have no live Job, owned or requested evaluation
-  roster, unresolved image job, active finding or proposed photo group. Manual
-  Runs, funding stops and current executors remain visible. The manifest
-  declares this history; no Run, step or transcript is retired or rewritten by
-  the read.
-- A failed `ai_refresh` Run with `ai_work_failed` stops advertising recovery
-  when it has a durable owned roster, all current owned and requested
-  evaluations are terminal (including blocked), and no live Job or unresolved
-  image job remains. Effective request receipts and cancellation follow
-  evaluation tally semantics. Retry handoffs can transfer responsibility to
-  another owner and must resolve to retained evaluations; an applicable request
-  receipt takes precedence. Malformed, missing, self-linked or cyclic targets,
-  and chains exceeding 64 edges, keep recovery visible; the path checks defend
-  against manual repairs as well as current forward-only writers. Paid
-  `result_ready` work and current failures retain recovery.
-
-The Runs attention saved view and stuck rollup additionally use
-`ATTENTION_RUN_PURPOSES`, which omits routine kinds; Work retains actionable
-routine failures. These are single-statement projections: evaluation-only
-settlement becomes visible on the next poll without a synthetic Run change.
-Failed status, diagnostics, results, requests, member cancellations and
-conversations remain stored. Stalled execution, source Problems, findings and
-pending photo proposals keep independent review paths. These projections do
-not retire coordinators.
+The Runs attention saved view and stuck rollup use `ATTENTION_RUN_PURPOSES`, which
+omits routine kinds; Work retains actionable routine failures. Ask and requester
+settlement is visible on the next read. Failed status, diagnostics, paid results,
+requester receipts and conversations remain stored. Source Problems, findings and
+pending photo proposals have independent review paths.
 
 ### Coordinator transcript retention
 
@@ -1025,8 +993,8 @@ A Sweep covers statements and fields; its stored purpose is `sweep`. Field
 sweeps use the `field_roster` / `field_evaluate` steps. Start them with
 `run.sweep` and a field family containing entity, fields and filters; inspect
 and pause/resume them with regular Run reads and controls. There are no
-separate AI sweep operations or model overrides on a Run; each evaluation keeps
-its own pinned model and evidence.
+separate AI sweep operations or model overrides on a Run; every Ask captures its
+model policy, complete question and evidence, and AskScope carries the requesting Run.
 
 Step ETA uses at least three consecutive progress intervals (up to twelve),
 including elapsed queue and handoff time between observations. Observed
@@ -1254,9 +1222,8 @@ of the rows marked "session", and rows marked "no Run" can have none.
 Default Run lists and counts omit the retained `ai_suggest` and `background`
 purposes, omit `ai_refresh`, `connection_discovery` and `derived_refresh` once
 they ended, and omit `mail_discovery` once it completed. An explicit purpose
-filter includes them, and direct record reads still work. Automatic AI
-evaluation and field refresh create no Run, so their AI usage and evaluations
-can have none; automatic mailbox discovery keeps its `mail_discovery` Run with
+filter includes them, and direct record reads still work. Automatic field
+reconciliation creates no Run, so its Asks and usage may have none; automatic mailbox discovery keeps its `mail_discovery` Run with
 each admitted import as a child Run. Queue runtime failures
 receive three delivery retries in addition to the durable Job's execution retry
 policy.

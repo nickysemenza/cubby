@@ -32,7 +32,6 @@ export interface SuggestionFamilyDeclaration<F extends SuggestionListFamily>
   applicationKind?: NonNullable<Review["application"]>["kind"];
   applicationError?: string;
   supportsDraft?: boolean;
-  fieldHistory?: boolean;
   financial?: boolean;
   suppressionKey?: (subject: Extract<Prediction["subject"], { kind: F }>) => {
     scope: string;

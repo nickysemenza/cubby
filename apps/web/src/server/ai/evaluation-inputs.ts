@@ -4,6 +4,8 @@ import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
+
 import type { AiFeature } from "./policy/features";
 
 export const preparedQuestion = z.object({
@@ -11,6 +13,7 @@ export const preparedQuestion = z.object({
   promptVersion: z.string(),
   model: z.string(),
   operation: z.string(),
+  policy: z.record(z.string(), z.json()).optional(),
   input: z.json(),
 });
 const capturedInput = capturedFieldInput;
@@ -41,7 +44,12 @@ export const markPreparationIncomplete = () => {
   if (current?.providerFree) current.incomplete = true;
 };
 export async function captureAiInput(
-  feature: Pick<AiFeature, "feature" | "promptVersion" | "model">,
+  feature: Pick<AiFeature, "feature" | "promptVersion" | "model"> &
+    Partial<Pick<AiFeature, "tier">> & {
+      maxTokens?: number;
+      effort?: string;
+      schema?: z.ZodType;
+    },
   operation: string,
   input: unknown,
 ) {
@@ -50,6 +58,14 @@ export async function captureAiInput(
   const question = preparedQuestion.parse({
     ...feature,
     operation,
+    policy: {
+      tier: feature.tier ?? null,
+      maxTokens: feature.maxTokens ?? null,
+      effort: feature.effort ?? null,
+      outputRevision: feature.schema
+        ? z.record(z.string(), z.json()).parse(z.toJSONSchema(feature.schema))
+        : "decision-choice.v1",
+    },
     input: z.json().parse(input),
   });
   if (
@@ -58,7 +74,9 @@ export async function captureAiInput(
       (expected) => JSON.stringify(expected) === JSON.stringify(question),
     )
   )
-    throw new Error("The prepared field question changed before send");
+    throw new JobEvidenceObsoleteError(
+      "The prepared field question changed before send",
+    );
   current.questions.push(question);
   current.inputs.push({
     feature: feature.feature,

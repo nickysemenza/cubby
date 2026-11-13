@@ -166,7 +166,7 @@ export const modelAsks = declarations.map((feature) =>
     },
     label: feature.feature,
     admit: (db, context) => admitModel(db, feature.tier, context),
-    produce: (input, { db, runId }) =>
+    produce: (input, { db, runId, ask }) =>
       produceModel(async () => {
         const usage = {
           db,
@@ -180,7 +180,10 @@ export const modelAsks = declarations.map((feature) =>
           const value = await (
             await import("./decision-model")
           ).runDecisionChoice({
-            feature,
+            feature: {
+              ...feature,
+              promptVersion: ask.promptVersion ?? feature.promptVersion,
+            },
             ...input,
             usage,
             decisionModel: input.model,
@@ -200,6 +203,7 @@ export const modelAsks = declarations.map((feature) =>
         ).runStructuredFeature<unknown>(
           {
             ...feature,
+            promptVersion: ask.promptVersion ?? feature.promptVersion,
             model: input.model,
             tier: input.tier ?? feature.tier,
             ...(input.parameters

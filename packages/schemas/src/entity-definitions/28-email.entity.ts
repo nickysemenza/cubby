@@ -138,6 +138,75 @@ export const { definition, readSchemas } = defineEntityModel({
   key: "email",
   edges: [
     defineEdge({
+      key: "MailHandlingReceipt.emailId",
+      from: "row:MailHandlingReceipt",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.MailHandlingReceipt.emailId",
+        from: "email",
+        to: "row:MailHandlingReceipt",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "MailHandlingReceipt.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable workflow evidence retains its source references.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "source",
+        description: "Mail handling receipts retain their original Email.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Mail handling receipts retain their original Email.",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "evidence",
+        description: "Mail handling receipts retain their original Email.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Mail handling receipts retain their original Email.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            order: 99,
+            handler: null,
+            disposition: {
+              code: "preserve-mailhandlingreceipt",
+              effect: "preserve",
+              description:
+                "Mail handling receipts retain their original Email.",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+
+    defineEdge({
       key: "ShipmentSourceCapture.emailId",
       from: "row:ShipmentSourceCapture",
       to: "email",

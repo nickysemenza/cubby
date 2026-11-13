@@ -20,14 +20,13 @@ import {
   emailCandidateObservation,
 } from "~/server/db/schema";
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
-import { withJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { mailDiscoveryBackpressure } from "~/server/workflows/runs/lifecycle";
+import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
@@ -467,20 +466,16 @@ describe("Gmail final publication concurrency", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    await enqueueJob(ctx.db, {
-      key: "maintenance.purchase-discovery",
-      kind: "maintenance.purchase-discovery",
+    const execution = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      status: "running",
+      trigger: "manual",
       input: {
-        kind: "maintenance.purchase-discovery",
-        requestedAt: "2026-01-15T14:00:00.000Z",
+        mailboxId: "synthetic-lock-timeout",
+        scopedQueries: [],
+        executionPolicy: "classification_only",
       },
     });
-    const [queued] = await readJobs(ctx.db, {
-      key: "maintenance.purchase-discovery",
-    });
-    if (!queued) throw new Error("Missing discovery job");
-    const claim = await claimJob(ctx.db, queued.id);
-    if (!claim) throw new Error("Missing discovery claim");
     const held = signal<void>();
     const release = signal<void>();
     const holder = withTransaction(ctx.db, async (tx) => {
@@ -494,7 +489,7 @@ describe("Gmail final publication concurrency", () => {
     let caught: unknown;
     let deferred: Error | undefined;
     try {
-      await withJobExecution(ctx.db, claim, async () => {
+      await withRunPassFixture(ctx.db, execution, async () => {
         try {
           await publishGmailEvidence(
             ctx.db,
@@ -509,7 +504,7 @@ describe("Gmail final publication concurrency", () => {
             async () => null,
           );
         } catch (error) {
-          // The drain classifies this wait while the Job execution is current.
+          // The Pass classifies this wait while its Run execution is current.
           caught = error;
           deferred = mailDiscoveryBackpressure(error as Error);
           throw error;

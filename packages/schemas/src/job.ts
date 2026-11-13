@@ -482,21 +482,6 @@ const workQueueUnit = z.object({
 });
 export type WorkQueueUnit = z.infer<typeof workQueueUnit>;
 
-/**
- * AI evaluations of one feature in one state. `oldestAt` is the oldest row's
- * creation; `errorClass` is the most common stored error's name. `blocked`
- * counts rows blocked within `windows.blockedDays`.
- */
-const aiEvaluationBacklog = z.object({
-  feature: z.string(),
-  label: z.string(),
-  state: z.enum(["queued", "result_ready", "blocked"]),
-  count: z.number().int().positive(),
-  oldestAt: z.iso.datetime(),
-  errorClass: z.string().nullable(),
-});
-export type AiEvaluationBacklog = z.infer<typeof aiEvaluationBacklog>;
-
 export const workActivity = z.object({
   rebuild: rebuildObservation,
   measuredAt: z.iso.datetime(),
@@ -505,12 +490,10 @@ export const workActivity = z.object({
     completedMinutes: z.number().int().positive(),
     failedMinutes: z.number().int().positive(),
     outcomeMinutes: z.number().int().positive(),
-    blockedDays: z.number().int().positive(),
   }),
   streams: z.array(workStream),
   /** Every permit unit that is live or ran within `windows.outcomeMinutes`. */
   queue: z.array(workQueueUnit),
-  evaluations: z.array(aiEvaluationBacklog),
 });
 export type WorkActivity = z.infer<typeof workActivity>;
 

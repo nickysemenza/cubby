@@ -31,7 +31,6 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
-import { getActiveSuggestionSuppressionKeys } from "~/server/generic/suggestions/repo/suggestion-state";
 import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
@@ -295,18 +294,6 @@ describe("semantic search background tasks", () => {
         },
       }),
     ).rejects.toThrow("Suggestion not found");
-    for (const suggestionKind of [
-      "product.duplicate",
-      "product.tag-propagation",
-      "product.related",
-    ]) {
-      const keys = await getActiveSuggestionSuppressionKeys(ctx.db, {
-        entityKind: "product",
-        entityId: source.entityId,
-        suggestionKind,
-      });
-      expect(keys.size).toBe(0);
-    }
   });
 
   it("embeds a fresh projection once, then skips it as fresh", async () => {

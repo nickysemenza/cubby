@@ -900,51 +900,69 @@ export async function runStructuredFeature<T>(
     const { withAsk } = await import("~/server/kernel/api");
     const media = await identifyMedia(request, ctx.db);
     const kind = modelAskFor(spec);
-    const input = structuredModelInput(spec, media.sent, ctx.answerRevision);
-    const result = await withAsk(
-      ctx.db,
-      {
-        ...kind,
-        async produce() {
-          let model = spec.model;
-          let details: { raw: string; tier: string } | undefined;
-          const value = await produceModel(() =>
-            runStructuredFeature(
-              spec,
-              media.sent,
-              {
-                ...ctx,
-                applicationCache: false,
-                onProduced: (response) => {
-                  details = response;
-                  ctx.onProduced?.(response);
+    // Domain validation also applies to replayed Answers. A repair changes
+    // the question and therefore has its own durable Ask and paid result.
+    let question = media.sent;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const sent = question;
+      const input = structuredModelInput(spec, sent, ctx.answerRevision);
+      const result = await withAsk(
+        ctx.db,
+        {
+          ...kind,
+          async produce() {
+            let model = spec.model;
+            let details: { raw: string; tier: string } | undefined;
+            const value = await produceModel(() =>
+              runStructuredFeature(
+                spec,
+                sent,
+                {
+                  ...ctx,
+                  applicationCache: false,
+                  validate: undefined,
+                  onProduced: (response) => {
+                    details = response;
+                    ctx.onProduced?.(response);
+                  },
+                  onAnswered: (answered) => {
+                    model = answered;
+                  },
                 },
-                onAnswered: (answered) => {
-                  model = answered;
-                },
-              },
-              ports,
-            ),
-          );
-          return {
-            output: { value: z.json().parse(value), model },
-            model,
-            tier: spec.tier,
-            ...details,
-          };
+                ports,
+              ),
+            );
+            return {
+              output: { value: z.json().parse(value), model },
+              model,
+              tier: spec.tier,
+              ...details,
+            };
+          },
         },
-      },
-      input,
-      {
-        runId: ctx.runId,
-        record: ctx.entity
-          ? { entity: ctx.entity.entityKind, id: ctx.entity.entityId }
-          : undefined,
-      },
-    );
-    const model = supportedChatModelSchema.safeParse(result.model);
-    if (model.success) ctx.onAnswered?.(model.data);
-    return spec.schema.parse(result.value);
+        input,
+        {
+          runId: ctx.runId,
+          record: ctx.entity
+            ? { entity: ctx.entity.entityKind, id: ctx.entity.entityId }
+            : undefined,
+        },
+      );
+      const model = supportedChatModelSchema.safeParse(result.model);
+      if (model.success) ctx.onAnswered?.(model.data);
+      const value = spec.schema.parse(result.value);
+      const checked = ctx.validate?.(value);
+      if (!checked || checked.ok) return value;
+      if (attempt === 1)
+        throw new Error(
+          `Structured output for "${spec.feature}" is invalid: ${checked.issues.join("; ")}`,
+        );
+      question = {
+        ...sent,
+        messages: [...sent.messages, buildRepairTurn(checked.issues, value)],
+      };
+    }
+    throw new Error("Structured validation exhausted its repair");
   }
   const placeCall = async (
     callRequest: AiChatRequest,

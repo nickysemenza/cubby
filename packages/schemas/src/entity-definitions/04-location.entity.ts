@@ -30,6 +30,75 @@ export const { definition, readSchemas } = defineEntityModel(
     key: "location",
     edges: [
       defineEdge({
+        key: "PhotoInventoryEvidence.locationId",
+        from: "row:PhotoInventoryEvidence",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.PhotoInventoryEvidence.locationId",
+          from: "location",
+          to: "row:PhotoInventoryEvidence",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "PhotoInventoryEvidence.locationId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason: "Immutable workflow evidence retains its source references.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "source",
+          description: "Photo observations retain the location at capture.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason: "Photo observations retain the location at capture.",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "evidence",
+          description: "Photo observations retain the location at capture.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason: "Photo observations retain the location at capture.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              order: 99,
+              handler: null,
+              disposition: {
+                code: "preserve-photoinventoryevidence",
+                effect: "preserve",
+                description:
+                  "Photo observations retain the location at capture.",
+              },
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+
+      defineEdge({
         key: "Location.parentId",
         from: "location",
         to: "location",

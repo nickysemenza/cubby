@@ -3675,7 +3675,7 @@ runner-up and its probability, the basis fields read, and a provenance caption (
 usage). Jev and Clef return no prose, so those facts are the reasoning. A tree suggestion keeps the
 model's selected category and confidence; ancestor probability never substitutes for a leaf decision,
 and ancestors of the current category stay suppressed as corrections. Percentages describe model
-confidence, not correctness. Suggestions stay available to evaluation after review.
+confidence, not correctness. Answers and Decisions remain available for calibration after review.
 
 Classification suggestions choose existing taxonomy references from metadata and retained
 original-image evidence; confirmed description corrections outrank model text. Taxonomy contents are

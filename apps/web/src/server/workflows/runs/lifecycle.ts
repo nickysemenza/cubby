@@ -96,7 +96,7 @@ export const recordRunProgress = (
     detail,
   });
 
-/** An aborted Mail snapshot waits on its canonical Job without spending attempts. */
+/** An aborted Mail snapshot waits on its Run Pass without spending attempts. */
 export function mailDiscoveryBackpressure(
   error: UnparsedError,
 ): Error | undefined {
@@ -141,8 +141,8 @@ export async function launchWorkflowRun(
   input: LaunchWorkflowRunInput & { automatic?: false },
 ): Promise<LaunchedWorkflowRun>;
 /**
- * Run is provenance/history. Its `run.execute` Pass (the Job, for mail
- * discovery) owns execution, retry, pause and cancellation.
+ * Run is provenance/history. Its `run.execute` Pass owns execution, retry,
+ * pause and cancellation.
  */
 export async function launchWorkflowRun(
   db: Database,

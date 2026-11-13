@@ -467,7 +467,11 @@ async function executeClaimed(
         produced = await kind.produce!(entry.input, {
           db,
           signal: controller.signal,
-          ask: { id: ask.id, inputHash: ask.inputHash },
+          ask: {
+            id: ask.id,
+            inputHash: ask.inputHash,
+            promptVersion: kind.promptVersion,
+          },
           runId: requesters.get(ask.id) ?? null,
         });
         produced = { ...produced, output: kind.output.parse(produced.output) };
@@ -589,9 +593,11 @@ export async function runQueuedAsks(
   if (!claimed.length) return 0;
   const entries = claimed.map((ask) => {
     const kind = registry.asks.get(ask.feature)!;
-    const envelope = z.object({ input: z.unknown() }).parse(ask.input);
+    const envelope = z
+      .object({ input: z.unknown(), promptVersion: z.string() })
+      .parse(ask.input);
     return {
-      kind,
+      kind: { ...kind, promptVersion: envelope.promptVersion },
       input: envelope.input,
       ask: { ...ask, maxAttempts: kind.maxAttempts },
     };

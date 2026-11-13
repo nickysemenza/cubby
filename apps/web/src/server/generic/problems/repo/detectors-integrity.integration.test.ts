@@ -36,6 +36,8 @@ import {
   ledgerSourceClaim,
   mailboxCursor,
   photoRunImage,
+  photoInventoryEvidence,
+  mailHandlingReceipt,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -1713,6 +1715,27 @@ const SOURCE_FACTORIES = {
       kind: "liveness-fixture",
       inputFingerprint: uniq("input-fingerprint"),
     }),
+
+  "PhotoInventoryEvidence.runId": async (db, targetId) => {
+    const location = await mkLocation(db);
+    return insertAndReturn(db, photoInventoryEvidence, {
+      locationId: location.id,
+      runId: targetId,
+      fingerprint: uniq("photo-observation"),
+      sourceSnapshot: {},
+      result: {},
+    });
+  },
+
+  "MailHandlingReceipt.runId": async (db, targetId) => {
+    const email = await mkEmail(db);
+    return insertAndReturn(db, mailHandlingReceipt, {
+      runId: targetId,
+      emailId: email.id,
+      key: uniq("mail-handling"),
+      receipt: {},
+    });
+  },
 
   "RunStep.runId": (db, targetId) =>
     insertAndReturn(db, runStep, {

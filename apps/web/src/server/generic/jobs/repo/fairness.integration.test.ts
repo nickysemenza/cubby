@@ -139,6 +139,12 @@ describe("durable Job selection", () => {
       kind: "synthetic.b-progress",
       input: {},
     });
+    // Both timestamps use the database clock, so host/VM clock skew cannot
+    // put the synthetic drain ahead of these already-due Jobs.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: sql`now() - interval '1 second'` })
+      .where(inArray(job.id, [busy.id, progress.id]));
     const recovery = (id: string) => ({
       at: expect.any(Date),
       source: "job.lease-recovery",

@@ -1,5 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
-import { z } from "zod";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -15,7 +14,6 @@ import {
 import type { Review } from "./review";
 import { planReviewHistory, type Prediction } from "./review-plan";
 
-const stateDataObject = z.record(z.string(), z.json());
 export async function settleReviewHistory(
   db: Database,
   input: Review,
@@ -29,13 +27,12 @@ export async function settleReviewHistory(
         id: suggestionTable.id,
         active: suggestionTable.active,
         status: suggestionTable.status,
-        data: suggestionTable.data,
       })
       .from(suggestionTable)
       .where(eq(suggestionTable.id, prediction.id))
       .for("update")
       .limit(1);
-    const plan = planReviewHistory(input, prediction.family, state);
+    const plan = planReviewHistory(input, state);
     if (plan.kind === "suppression") {
       await transitionSuggestionState(transactionDb, plan.id, {
         suppression: plan.suppression,
@@ -44,27 +41,12 @@ export async function settleReviewHistory(
       return "resolved";
     }
     if (plan.kind === "transition") {
-      const { id, reviewKey, nextStatus } = plan;
+      const { id, nextStatus } = plan;
       await transitionSuggestionStates(
         transactionDb,
-        or(
-          eq(suggestionTable.id, id),
-          reviewKey
-            ? and(
-                eq(suggestionTable.family, "field"),
-                eq(suggestionTable.status, "pending"),
-                sql`${suggestionTable.data}->>'reviewKey' = ${reviewKey}`,
-              )
-            : undefined,
-        ),
-        (row) => ({
+        eq(suggestionTable.id, id),
+        () => ({
           status: nextStatus,
-          ...(reviewKey && {
-            data: {
-              ...stateDataObject.parse(row.data ?? {}),
-              governingFeedbackId: event.id,
-            },
-          }),
           ...(input.correction.present && {
             correctValue: input.correction.value,
           }),

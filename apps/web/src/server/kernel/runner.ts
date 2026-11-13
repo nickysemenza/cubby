@@ -170,7 +170,7 @@ export const kernelDueSql = (): SQL => sql`
         WHERE "availableAt" <= now() AND attempts < ${MAX_SCOPE_ATTEMPTS}
           AND ("claimToken" IS NULL OR "claimDeadline" <= now())),
       (SELECT min("availableAt") FROM "Ask"
-        WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND "availableAt" <= now()
+        WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND "availableAt" <= now()
           AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
           AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
       (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent} AND "claimDeadline" <= now()),

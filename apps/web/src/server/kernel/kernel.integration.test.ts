@@ -730,6 +730,42 @@ describe("evidence-facts kernel", () => {
     expect(calls).toBe(1);
   });
 
+  it("preserves a queued request's prompt version across producer declarations", async () => {
+    const { kernel, fixture } = kernelWith();
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      execution: false,
+    });
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        {
+          ...fixture.categorize,
+          promptVersion: "synthetic-original",
+          admit: async () => {
+            throw new JobDeferredError(
+              "Synthetic funding",
+              new Date(Date.now() + 60_000),
+              "ai_funding_window",
+            );
+          },
+        },
+        { merchant: "Synthetic Original Prompt" },
+        { runId },
+      ),
+    ).rejects.toThrow("Synthetic funding");
+    await repositoryQueries(ctx.db).execute(
+      sql`UPDATE "Ask" SET "availableAt"=now() WHERE feature=${fixture.categorize.feature}`,
+    );
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
+    const answers = await repositoryQueries(ctx.db).execute<{
+      promptVersion: string;
+    }>(
+      sql`SELECT "promptVersion" FROM "Answer" WHERE feature=${fixture.categorize.feature}`,
+    );
+    expect(answers.rows).toEqual([{ promptVersion: "synthetic-original" }]);
+  });
+
   it("refuses funding before sent without spending an attempt", async () => {
     let calls = 0;
     const { kernel, fixture } = kernelWith({
@@ -942,6 +978,13 @@ describe("evidence-facts kernel", () => {
       .select()
       .from(fixtureReceipt)
       .where(eq(fixtureReceipt.sourceRef, "mail-ORD-G-Synthetic Grocer"));
+    const rosterRev = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{ rev: number }>(
+          sql`SELECT coalesce(max(rev), 0)::int AS rev FROM "KeyRev" WHERE key=${`table:${PURCHASE_TABLE}`}`,
+        )
+      ).rows[0]!.rev;
+    const beforeRepoint = await rosterRev();
     const changed = await repositoryTransactionDatabase(ctx.db, (tx) =>
       kernel.repointOwnedReference(tx, {
         table: fixturePurchase,
@@ -951,6 +994,7 @@ describe("evidence-facts kernel", () => {
       }),
     );
     expect(changed).toBe(1);
+    expect(await rosterRev()).toBe(beforeRepoint + 1);
     expect(
       await repositoryTransactionDatabase(ctx.db, (tx) =>
         kernel.repointOwnedReference(tx, {
@@ -962,6 +1006,7 @@ describe("evidence-facts kernel", () => {
         }),
       ),
     ).toBe(0);
+    expect(await rosterRev()).toBe(beforeRepoint + 1);
     const [repointed] = await purchases(ctx.db);
     expect(repointed?.receiptId).toBe(originalReceipt!.id);
     await expect(

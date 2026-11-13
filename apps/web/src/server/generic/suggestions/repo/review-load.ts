@@ -1,7 +1,4 @@
-import {
-  suggestionFamily,
-  mailDecisionFamily,
-} from "@cubby/schemas/suggestion";
+import { mailDecisionFamily } from "@cubby/schemas/suggestion";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -23,8 +20,7 @@ export async function loadReviewPrediction(db: Database, input: Review) {
         subject: suggestionTable.subject,
         judgment: suggestionTable.judgment,
         producer: suggestionTable.producer,
-        // Only field application consumes captured correction inputs; history must not load unrelated snapshots.
-        evidence: sql`CASE WHEN ${suggestionTable.family} = ${suggestionFamily.enum.field} AND ${input.intent === "apply"} THEN ${suggestionTable.evidence} ELSE NULL END`,
+        evidence: sql`NULL`,
       })
       .from(suggestionTable)
       .where(
