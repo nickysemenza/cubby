@@ -10,7 +10,10 @@ import { sleep } from "@cubby/shared/retry";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import {
+  repositoryParentDatabase,
+  repositoryQueries,
+} from "~/server/db/repository-access.boundary";
 
 import { runClaimedScopes } from "./apply";
 import { expireAsks, runQueuedAsks } from "./ask";
@@ -104,7 +107,8 @@ export async function reconcileNow(
     discovers: scopes,
     reason: "reconcile-now",
   });
-  const deadline = Date.now() + (options.waitMs ?? 5_000);
+  const transactional = repositoryParentDatabase(db) !== undefined;
+  const deadline = Date.now() + (transactional ? 0 : (options.waitMs ?? 5_000));
   const pending = new Map(
     scopes.map((scope) => [`${scope.kind}\u0000${scope.key}`, scope]),
   );

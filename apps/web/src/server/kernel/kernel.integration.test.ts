@@ -73,6 +73,7 @@ import {
   fenceClaim,
 } from "./claim";
 import { computeBatch } from "./compute";
+import { householdWrite } from "./gate";
 import { runOnePass } from "./pass";
 import { ownedColumns } from "./registry";
 import {
@@ -977,6 +978,26 @@ describe("evidence-facts kernel", () => {
     expect(storedDuringRerun).toBe(0);
     const [stored] = await purchases(ctx.db);
     expect(stored?.amountMinor).toBe(900);
+  });
+
+  it("returns waiting without sleeping when a member transaction encounters a held claim", async () => {
+    const { kernel } = kernelWith();
+    const scope = { kind: PURCHASE_SCOPE, key: "ORD-HELD" };
+    await kernel.append(ctx.db, [charge(scope.key, 100)]);
+    const claims = await claimScopes(
+      repositoryQueries(ctx.db),
+      kernel.registry,
+      "money",
+      1,
+      [scope],
+    );
+    expect(claims).toHaveLength(1);
+    const started = performance.now();
+    const outcomes = await householdWrite(ctx.db, (tx) =>
+      kernel.reconcileNow(tx, [scope]),
+    );
+    expect(outcomes.map((item) => item.status)).toEqual(["waiting"]);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   it("retains Run requester links for queued and already answered scope inputs", async () => {
