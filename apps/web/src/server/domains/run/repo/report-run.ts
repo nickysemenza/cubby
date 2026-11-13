@@ -798,7 +798,8 @@ function progressAge(progress: RunLiveProgress): string | null {
 }
 
 /**
- * The Job behind a Run: its current generation and state with the raw error,
+ * The execution behind a Run (its Pass, or the mail discovery Job): its
+ * current generation and state with the raw error,
  * with cancel while it runs and retry once it failed. A retry starts a new
  * generation that resumes from the Run's saved progress.
  */
@@ -843,12 +844,12 @@ function workflowBlocks(
     records(
       [
         row("workflow", {
-          title: `Attempt ${workflow.attempt} · Job ${workflow.instanceId}`,
-          body: `Job ${state}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
+          title: `Attempt ${workflow.attempt} · ${workflow.instanceId}`,
+          body: `Execution ${state}${workflow.instance?.error ? `: ${workflow.instance.error}` : ""}`,
           actions,
         }),
       ],
-      { title: "Job" },
+      { title: "Execution" },
     ),
   ];
 }

@@ -48,6 +48,13 @@ import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
 import {
+  readDuePassPositions,
+  readRunPasses,
+  runPassRollup,
+  runPassStalled,
+  runPassWorking,
+} from "~/server/domains/run/repo/run-execution";
+import {
   memberStoppedRunPredicate,
   settledAiRunPredicate,
   retiredRunPredicate,
@@ -116,13 +123,20 @@ function runDemandPairs(runIds: readonly RunId[] | SQL): SQL {
 
 /** The list filter/sort and the rollup share the same demand and stall test. */
 export function runStalledSql(now = new Date()): SQL<boolean> {
-  const demand = runDemandPairs(sql`SELECT ${outer(run.id)}`);
   const at = sql`${now.toISOString()}::timestamp`;
-  // A Run's open image rows are demand too, on their own execution columns.
-  const images = sql`"ImageProcessingJob" p WHERE p."runId" = ${outer(run.id)}`;
+  // A Run's `run.execute` Pass stalls when it stays due and unclaimed; a live claim is progress.
   return sql<boolean>`(
     NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
-    AND (${runHasLiveJobs(outer(run.id))}
+    AND NOT ${runPassWorking(outer(run.id))}
+    AND (${runPassStalled(outer(run.id), at, RUN_STALL_MS)} OR ${runJobsStalled(at)}))`;
+}
+
+/** The owned Jobs and image rows of a Run have demand and saw no claim or completion for the stall window. */
+function runJobsStalled(at: SQL): SQL<boolean> {
+  const demand = runDemandPairs(sql`SELECT ${outer(run.id)}`);
+  const images = sql`"ImageProcessingJob" p WHERE p."runId" = ${outer(run.id)}`;
+  return sql<boolean>`(
+    (${runHasLiveJobs(outer(run.id))}
       OR EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending}))
     AND NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
       WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
@@ -376,7 +390,17 @@ export async function readRunRollups(
         "objects",
       ),
     ]);
+  const [passes, passPositions] = await Promise.all([
+    readRunPasses(db, ids),
+    readDuePassPositions(db, ids),
+  ]);
   const lastById = new Map<RunId, Date>();
+  for (const pass of passes.values())
+    // SAFETY: a `run.execute` Pass is keyed by its Run's id.
+    progress.push({
+      runId: pass.runId as RunId,
+      last: pass.updatedAt.getTime(),
+    });
   for (const row of [...progress, ...imageProgress]) {
     const known = lastById.get(row.runId);
     if (row.last !== null && (!known || known.getTime() < row.last))
@@ -394,6 +418,11 @@ export async function readRunRollups(
       if (tally.expired) expiredLeases += tally.count;
       else counts[parsed.data] = (counts[parsed.data] ?? 0) + tally.count;
     }
+    const pass = runPassRollup(
+      passes.get(entry.id),
+      passPositions.get(entry.id),
+    );
+    if (pass) counts[pass.reason] = (counts[pass.reason] ?? 0) + 1;
     const owner = ownerById.get(entry.id);
     const last = lastById.get(entry.id) ?? null;
     const waitingForFunding =
@@ -402,6 +431,7 @@ export async function readRunRollups(
         owner.status === runStatus.enum.needs_review);
     const stalled = owner?.stalled ?? false;
     const runGroups = groups.filter((group) => group.runId === entry.id);
+    const passGroup = pass?.group ?? null;
     return {
       runId: runShortcode.parse(entry.shortcode),
       counts,
@@ -418,15 +448,18 @@ export async function readRunRollups(
             ? new Date(owner.fundingResume)
             : null,
         waitingForFunding,
-        groups: runGroups.map((group) => ({
-          kind: group.kind,
-          reason: group.reason,
-          mine: group.mine,
-          position: group.position,
-          total: group.total,
-          nextAt: new Date(group.nextAt),
-          errorClass: group.errorClass,
-        })),
+        groups: [
+          ...runGroups.map((group) => ({
+            kind: group.kind,
+            reason: group.reason,
+            mine: group.mine,
+            position: group.position,
+            total: group.total,
+            nextAt: new Date(group.nextAt),
+            errorClass: group.errorClass,
+          })),
+          ...(passGroup ? [passGroup] : []),
+        ],
         perMinute: new Map(
           runGroups.map((group) => [
             group.kind,

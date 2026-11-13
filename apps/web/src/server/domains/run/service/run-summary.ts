@@ -33,6 +33,7 @@ import {
   startPass,
   withAsk,
 } from "~/server/kernel/api";
+import { WORKFLOW_PASSES } from "~/server/workflows/kernel-passes";
 
 import { readRunById } from "../repo/run";
 import { listRunStepsForRuns } from "../repo/run-step";
@@ -116,7 +117,7 @@ const runSummaryPass = definePass({
 export const runKernelModule = defineModule({
   name: "run",
   asks: [runSummaryAsk],
-  passes: [runSummaryPass],
+  passes: [runSummaryPass, ...WORKFLOW_PASSES],
   // A Run shows the asks it waits on directly (its summary) in its machinery.
   machinery: [{ entity: "run", owning: null, fields: false, quality: false }],
 });

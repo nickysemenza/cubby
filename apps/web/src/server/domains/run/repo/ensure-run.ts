@@ -31,6 +31,8 @@ import {
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { isPassRunPurpose } from "./run-execution";
+
 export type EnsureRunInput = {
   purpose: RunPurpose;
   /** A roster builder admits execution only after its final page; evaluation Jobs already own its work. */
@@ -144,13 +146,24 @@ export async function ensureRun(
       !completed &&
       input.execution !== false &&
       isExecutedRunPurpose(input.purpose)
-    )
-      await enqueueJob(tx, {
-        key: `run:${row.id}`,
-        kind: "run.execute",
-        input: { runId: row.id, purpose: input.purpose },
-        runId: row.id,
-      });
+    ) {
+      if (isPassRunPurpose(input.purpose)) {
+        const { startRunPass } =
+          await import("~/server/workflows/runs/run-pass");
+        await startRunPass(tx, {
+          runId: row.id,
+          purpose: input.purpose,
+          generation: 1,
+          restart: false,
+        });
+      } else
+        await enqueueJob(tx, {
+          key: `run:${row.id}`,
+          kind: "run.execute",
+          input: { runId: row.id, purpose: input.purpose },
+          runId: row.id,
+        });
+    }
     // Refresh telemetry must not invalidate the family that is publishing it.
     await recordChange(tx, {
       kind: row.purpose === "derived_refresh" ? "projection" : "source",

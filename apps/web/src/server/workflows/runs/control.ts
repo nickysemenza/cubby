@@ -28,6 +28,7 @@ import {
   runStep,
   run as runTable,
 } from "~/server/db/schema";
+import { isPassRunPurpose } from "~/server/domains/run/repo/run-execution";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
@@ -35,6 +36,7 @@ import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
 
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
+import { cancelRunPass } from "./run-pass";
 
 /** Kinds whose evaluations name the Run as owner; a Sweep owns its connection evaluations. */
 const ownsAiWork = (purpose: ExecutedRunPurpose) =>
@@ -46,7 +48,8 @@ const requestsAiWork = (purpose: ExecutedRunPurpose) =>
   !OWNED_AI_WORK_PURPOSES.some((owned) => owned === purpose);
 
 /**
- * `run.control` stops or retries the Run's universal Job and its child demand.
+ * `run.control` stops or retries the Run's execution (its Pass, or the mail
+ * discovery Job) and its child demand.
  * Domain progress and receipts survive an explicit retry.
  * Only the member whose mailbox or search it is may control it.
  */
@@ -114,8 +117,11 @@ export async function controlWorkflowRun(
         .update(runTable)
         .set({ status: "paused" })
         .where(eq(runTable.id, row.id));
-      const execution = await readJob(tx, { key: `run:${row.id}` });
-      if (execution) await pauseJob(tx, execution.id);
+      if (isPassRunPurpose(purpose)) await cancelRunPass(tx, row.id);
+      else {
+        const execution = await readJob(tx, { key: `run:${row.id}` });
+        if (execution) await pauseJob(tx, execution.id);
+      }
     });
     return;
   }
@@ -234,6 +240,7 @@ export async function controlWorkflowRun(
         "The Run finished before it was cancelled",
       );
     await cancelRunJobs(tx, row.id);
+    await cancelRunPass(tx, row.id);
     // Cancellation ends execution, without inventing item failures or losing its retry cursor.
     await database
       .update(runStep)

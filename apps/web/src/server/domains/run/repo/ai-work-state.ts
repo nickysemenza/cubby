@@ -23,8 +23,10 @@ import {
 } from "~/server/db/helpers";
 import { aiEvaluation, run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
+import {
+  assertWorkflowEffect,
+  currentRunExecution,
+} from "~/server/workflows/runs/execution";
 
 export type RunRow = typeof run.$inferSelect;
 export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
@@ -73,14 +75,13 @@ export async function writeRunningAttemptProgress(
   set: RunUpdate,
   options: { requireNoOwnedPendingWork?: boolean } = {},
 ) {
-  const execution = currentJobExecution();
+  const execution = currentRunExecution();
   if (
     !execution ||
-    execution.claim.kind !== "run.execute" ||
-    execution.claim.key !== `run:${runId}` ||
-    execution.claim.generation !== attempt
+    execution.runId !== runId ||
+    execution.generation !== attempt
   )
-    throw new Error("Run checkpoint requires its current universal Job claim");
+    throw new Error("Run checkpoint requires its current execution claim");
   const write = async (target: Database) => {
     const written = await getDb(target)
       .update(run)
