@@ -862,18 +862,29 @@ describe("member-only exact original relevance correction", () => {
     "retains the reviewed discarded original with %s resolution without admission",
     async (classification) => {
       const f = await fixture();
-      expect(
-        await correctEmailRelevance(
-          ctx.db,
-          { ...f.input, classification },
-          ctx.actor,
-        ),
-      ).toEqual({
+      const corrected = await correctEmailRelevance(
+        ctx.db,
+        { ...f.input, classification },
+        ctx.actor,
+      );
+      expect(corrected).toEqual({
         id: f.email.shortcode,
-        checksum: f.input.reviewedChecksum,
+        checksum: f.email.checksum,
         classification,
         originalAvailable: true,
       });
+      // The returned identity remains usable for another correction of the same bytes.
+      expect(
+        await correctEmailRelevance(
+          ctx.db,
+          {
+            ...f.input,
+            classification,
+            expectedChecksum: corrected.checksum,
+          },
+          ctx.actor,
+        ),
+      ).toEqual(corrected);
       const after = await evidence();
       expect(after.emails).toHaveLength(1);
       expect(after.emails[0]).toMatchObject({

@@ -467,7 +467,7 @@ export async function publishPreparedEmailRelevanceCorrection(
     .where(eq(emailTable.id, current.id));
   return correctEmailRelevanceOut.parse({
     id: input.id,
-    checksum,
+    checksum: current.checksum,
     classification: input.classification,
     originalAvailable: true,
   });
