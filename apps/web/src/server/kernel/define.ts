@@ -191,11 +191,31 @@ export function defineAsk<I, O>(spec: {
   };
 }
 
+export type IndexChange = {
+  table: string;
+  id: string;
+  before: ColumnValues | null;
+  after: ColumnValues | null;
+};
+export type IndexMembership = {
+  id: string;
+  values: readonly string[];
+  matches: boolean;
+};
+
 export type ReadIndex = {
   readonly table: KeyedTable;
   readonly name: string;
   values(row: ColumnValues): string[];
   where(values: readonly string[]): SQL;
+  /** A joined predicate publishes membership from the complete committed graph. */
+  related?: {
+    tables: readonly KeyedTable[];
+    load(
+      db: Database,
+      changes: readonly IndexChange[],
+    ): Promise<readonly IndexMembership[]>;
+  };
 };
 
 export function defineReadIndex<T extends KeyedTable>(
@@ -204,6 +224,7 @@ export function defineReadIndex<T extends KeyedTable>(
     name: string;
     values(row: InferSelectModel<T>): string[];
     where(values: readonly string[]): SQL;
+    related?: ReadIndex["related"];
   },
 ): ReadIndex {
   // SAFETY: the index receives rows selected from its declared table.

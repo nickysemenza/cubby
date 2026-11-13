@@ -980,6 +980,36 @@ describe("evidence-facts kernel", () => {
     expect(stored?.amountMinor).toBe(900);
   });
 
+  it("publishes a locked fallback with newly created output keys", async () => {
+    const { kernel } = kernelWith();
+    const scope = { kind: PURCHASE_SCOPE, key: "ORD-LOCKED" };
+    await kernel.append(ctx.db, [charge(scope.key, 100)]);
+    await repositoryQueries(ctx.db).execute(
+      sql`UPDATE "ScopeDirty" SET conflicts=3 WHERE "scopeKind"=${scope.kind}`,
+    );
+    const claims = await claimScopes(
+      repositoryQueries(ctx.db),
+      kernel.registry,
+      "money",
+      1,
+      [scope],
+    );
+    const outcomes = await runClaimedScopes(
+      ctx.db,
+      kernel.registry,
+      kernel.registry.reconcilers.get(scope.kind)!,
+      claims,
+      { mode: "background", releaseBaseline: false },
+    );
+    expect(outcomes.map((item) => item.status)).toEqual(["waiting"]);
+    expect(await purchases(ctx.db)).toEqual([
+      expect.objectContaining({ orderRef: scope.key, amountMinor: 100 }),
+    ]);
+    expect(
+      await repositoryQueries(ctx.db).select().from(fixturePurchase),
+    ).toHaveLength(1);
+  });
+
   it("releases a locked-run deadlock without spending an attempt", async () => {
     const reconciler = defineReconciler({
       scope: "fixture.deadlock",

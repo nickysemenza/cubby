@@ -10,6 +10,7 @@ import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { shiftPlainDate } from "~/lib/household-date";
 import {
   withDatabaseOperationMetrics,
   withDatabaseOperationPhase,
@@ -364,6 +365,64 @@ describe("statement spending review and re-import", () => {
     expect((await ledgerRows()).expenses).toHaveLength(1);
   });
 
+  it("retains old partly paid candidates and invalidates them when their capacity closes", async () => {
+    const setup = await fixture("old-partial");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const purchase = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller!.shortcode,
+      date: "2020-01-01",
+    });
+    const line = await createRepoIdentity(ctx, "expense", {
+      name: "Synthetic partly paid history",
+      purchaseId: purchase.output.id,
+      date: "2020-01-01",
+      cost: 100,
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+    });
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: setup.account.output.id,
+      amount: 10,
+      kind: "purchase",
+      status: "posted",
+      transactionDate: "2020-01-01",
+      postedDate: "2020-01-01",
+      allocations: [{ purchaseId: purchase.output.id, amount: 10 }],
+    });
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const applied = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action: "book", kindOverride: "purchase" },
+      }),
+    );
+    expect(applied.status).toBe("waiting");
+    expect((await ledgerRows()).purchases).toHaveLength(1);
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction)
+      .where(eq(financialTransaction.shortcode, applied.transactionId!));
+    await updateExpense(ctx.db, line.output.id, { cost: 10 }, ctx.actor);
+    const pending = await getDb(ctx.db).execute<{ n: number }>(
+      sql`SELECT count(*)::int n FROM "ScopeDirty" WHERE "scopeKind"='purchaseEvent' AND "scopeKey"=${transaction!.id}`,
+    );
+    expect(pending.rows).toEqual([{ n: 1 }]);
+    const outcomes = await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: transaction!.id },
+    ]);
+    expect(outcomes.flatMap((outcome) => outcome.gaps)).toEqual([]);
+    expect((await ledgerRows()).purchases).toHaveLength(2);
+  });
+
   it("keeps an ambiguous kernel charge unbooked until a same decision", async () => {
     const setup = await fixture("kernel-ambiguous");
     const [seller] = await getDb(ctx.db)
@@ -557,10 +616,15 @@ describe("statement spending review and re-import", () => {
         identity: { kind: "credit_card", network: "visa" },
         ledgerPartyId: owner.output.id,
       });
+      const [budgetAccount] = await getDb(ctx.db)
+        .select()
+        .from(financialAccount)
+        .where(eq(financialAccount.shortcode, account.output.id));
+      const rowAccountId = budgetAccount!.id;
       let seededScopes: { kind: string; key: string }[] = [];
       if (count === 32) {
         const [seller] = await insertManyWithShortcode(ctx.db, "vendor", [
-          { name: "Synthetic historical seller" },
+          { name: "Synthetic budget merchant 0" },
         ]);
         const historical = await withKernelApply(null, () =>
           insertManyWithShortcode(
@@ -569,11 +633,53 @@ describe("statement spending review and re-import", () => {
             Array.from({ length: 2048 }, (_, index) => ({
               vendorId: seller!.id,
               displayLabel: `Synthetic history ${index}`,
-              date: "2024-01-01",
+              date: shiftPlainDate("2024-01-01", -index),
             })),
           ),
         );
-        seededScopes = historical.map((row) => ({
+        const transactions = await withKernelApply(null, () =>
+          insertManyWithShortcode(
+            ctx.db,
+            "financialTransaction",
+            historical.map((row) => ({
+              accountId: rowAccountId,
+              kind: "purchase",
+              status: "posted",
+              amount: 1000n,
+              transactionDate: row.date,
+              postedDate: row.date,
+              merchant: "Synthetic budget merchant 0",
+            })),
+          ),
+        );
+        await withKernelApply(null, async () => {
+          await insertManyWithShortcode(
+            ctx.db,
+            "expense",
+            historical.map((row) => ({
+              purchaseId: row.id,
+              name: "Synthetic settled history",
+              cost: 1000n,
+              date: "2024-01-01",
+              economicRole: "vendor",
+              lineKind: "principal",
+              costType: "materials",
+              trade: "other",
+              future: false,
+            })),
+          );
+          await getDb(ctx.db)
+            .insert(financialTransactionAllocation)
+            .values(
+              historical.map((row, index) => ({
+                purchaseId: row.id,
+                transactionId: transactions[index]!.id,
+                amountMinor: 1000n,
+                confirmsMerchant: false,
+              })),
+            );
+        });
+        seededScopes = transactions.map((row) => ({
           kind: "purchaseEvent",
           key: row.id,
         }));
@@ -592,7 +698,9 @@ describe("statement spending review and re-import", () => {
       await insertManyWithShortcode(
         ctx.db,
         "vendor",
-        merchants.map((name) => ({ name })),
+        merchants
+          .filter((_, index) => count !== 32 || index !== 0)
+          .map((name) => ({ name })),
       );
       await recordSourceTransactionRecords(
         ctx.db,
@@ -723,11 +831,11 @@ describe("statement spending review and re-import", () => {
       (SELECT sum("amountMinor")::text FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocated`);
       expect(totals.rows[0]).toEqual({
         purchases: count + seededScopes.length,
-        expenses: count,
-        allocations: count,
+        expenses: count + seededScopes.length,
+        allocations: count + seededScopes.length,
         bindings: count,
-        cost: String(count * 1000),
-        allocated: String(count * 1000),
+        cost: String((count + seededScopes.length) * 1000),
+        allocated: String((count + seededScopes.length) * 1000),
       });
     },
   );

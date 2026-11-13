@@ -65,10 +65,11 @@ export const expenseAttributions = defineReadIndex(expenseAttribution, {
     sql`${expenseAttribution.expenseId} = ANY(${columnArrayParam(values)})`,
 });
 export const vendorPurchases = defineReadIndex(purchase, {
-  name: "purchase.vendor",
-  values: (row) => (row.vendorId ? [row.vendorId] : []),
+  name: "purchase.vendorDate",
+  values: (row) =>
+    row.vendorId && row.date ? [`${row.vendorId}:${row.date}`] : [],
   where: (values) =>
-    sql`${purchase.vendorId} = ANY(${columnArrayParam(values)})`,
+    sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ vendor: value.slice(0, 36), date: value.slice(37) })))}::jsonb) candidate(vendor uuid,date text) WHERE ${purchase.vendorId}=candidate.vendor AND ${purchase.date}::text=candidate.date)`,
 });
 export const amountPayments = defineReadIndex(purchasePaymentEvidence, {
   name: "payment.amount",

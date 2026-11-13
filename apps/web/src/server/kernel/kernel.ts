@@ -286,7 +286,9 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           ...indexed.flatMap((row) => row.keys),
         );
       }
-      const indexes = bound.indexes.get(name) ?? [];
+      const indexes = (bound.indexes.get(name) ?? []).filter(
+        (index) => !index.related,
+      );
       if (indexes.length && write.ids.length) {
         const q = repositoryQueries(db);
         const kind = `index:${name}`;
@@ -322,6 +324,37 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
         evidenceKeys.push(
           ...previous.map((row) => row.key),
           ...indexed.flatMap((row) => row.keys),
+        );
+      }
+      for (const index of new Map(
+        [...bound.indexes.values()]
+          .flat()
+          .filter((index) => index.related)
+          .map((index) => [index.name, index]),
+      ).values()) {
+        const table = index.related!.tables.find(
+          (table) => getTableName(table) === name,
+        );
+        if (!table || !write.ids.length) continue;
+        const rows = await repositoryQueries(db)
+          .select()
+          .from(table)
+          .where(inArray(idColumn(table), [...write.ids]));
+        const memberships = await index.related!.load(
+          db,
+          rows.map((row) => ({
+            table: name,
+            id: String(row.id),
+            before: null,
+            after: row,
+          })),
+        );
+        evidenceKeys.push(
+          ...memberships.flatMap((row) =>
+            row.matches
+              ? row.values.map((value) => indexKey(index.name, value))
+              : [],
+          ),
         );
       }
       if (!read && !discovers.length && !evidenceKeys.length) return 0;

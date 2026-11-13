@@ -61,6 +61,9 @@ import type {
   ColumnRef,
   ColumnValues,
   Key,
+  IndexChange,
+  ReadIndex,
+  IndexMembership,
   Outcome,
   Reconciler,
   ScopeRef,
@@ -304,7 +307,9 @@ function plannedKeys(
     keys.add(rowKey(target.name, String(row.id)));
     keys.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) keys.add(key);
-    for (const index of registry.indexes.get(target.name) ?? [])
+    for (const index of (registry.indexes.get(target.name) ?? []).filter(
+      (index) => !index.related,
+    ))
       for (const value of index.values(row))
         keys.add(indexKey(index.name, value));
   };
@@ -371,6 +376,72 @@ async function mergeOutputKeys(
       : []),
   ]);
 }
+
+function indexChanges(
+  computed: readonly Computed[],
+  options: ApplyOptions,
+): IndexChange[] {
+  return computed.flatMap((item) => {
+    if (!item.desired || item.error) return [];
+    const diff = difference(item, options);
+    return [
+      ...diff.inserts.map((entry) => ({
+        table: entry.target.name,
+        id: entry.id,
+        before: null,
+        after: { ...entry.values, id: entry.id },
+      })),
+      ...diff.updates.map((entry) => ({
+        table: entry.target.name,
+        id: entry.id,
+        before: { ...entry.row, ...entry.seen },
+        after: entry.row,
+      })),
+      ...diff.removals.map((entry) => ({
+        table: entry.target.name,
+        id: entry.id,
+        before: entry.row,
+        after: null,
+      })),
+    ];
+  });
+}
+async function relatedMemberships(
+  db: Database,
+  registry: KernelRegistry,
+  changes: readonly IndexChange[],
+) {
+  const result = new Map<ReadIndex, readonly IndexMembership[]>();
+  const indexes = new Map(
+    [...registry.indexes.values()]
+      .flat()
+      .filter((index) => index.related)
+      .map((index) => [index.name, index]),
+  );
+  for (const index of indexes.values()) {
+    if (
+      !changes.some((change) =>
+        index.related!.tables.some(
+          (table) => getTableName(table) === change.table,
+        ),
+      )
+    )
+      continue;
+    result.set(index, await index.related!.load(db, changes));
+  }
+  return result;
+}
+const membershipKeys = (
+  memberships: ReadonlyMap<ReadIndex, readonly IndexMembership[]>,
+  matching: boolean,
+) =>
+  [...memberships].flatMap(([index, rows]) =>
+    rows.flatMap((row) =>
+      !matching || row.matches
+        ? row.values.map((value) => indexKey(index.name, value))
+        : [],
+    ),
+  );
 
 /** Lock the union once, then compare every scope against that one input fence. */
 async function fenceBatch(
@@ -501,8 +572,14 @@ async function applyBatch(
   options: ApplyOptions,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
+  const membershipsBefore = await relatedMemberships(
+    tx,
+    registry,
+    indexChanges(computed, options),
+  );
   const fenced = await fenceBatch(q, computed, claims, [
     ...plannedKeys(computed, options, registry),
+    ...membershipKeys(membershipsBefore, false),
     ...(await mergeOutputKeys(q, computed, options)),
   ]);
   const plans: Plan[] = [];
@@ -628,7 +705,9 @@ async function applyBatch(
     changed.add(rowKey(target.name, String(row.id)));
     changed.add(`record:${recordEntity(target)}:${String(row.id)}`);
     for (const key of target.keys?.(row) ?? []) changed.add(key);
-    for (const index of registry.indexes.get(target.name) ?? [])
+    for (const index of (registry.indexes.get(target.name) ?? []).filter(
+      (index) => !index.related,
+    ))
       for (const value of index.values(row))
         changed.add(indexKey(index.name, value));
     discovered.push(...(target.discovers?.(row) ?? []));
@@ -664,7 +743,9 @@ async function applyBatch(
         }
         await insertRows(q, recordKey, recordKeys);
         const indexed = combined.inserts.flatMap((entry) => {
-          const indexes = registry.indexes.get(entry.target.name) ?? [];
+          const indexes = (
+            registry.indexes.get(entry.target.name) ?? []
+          ).filter((index) => !index.related);
           const row = { ...entry.values, id: entry.id };
           return indexes.length
             ? [
@@ -785,6 +866,34 @@ async function applyBatch(
     provenance,
   );
 
+  const membershipsAfter = await relatedMemberships(
+    tx,
+    registry,
+    indexChanges(
+      plans.filter((plan) => !plan.heldBaseline).map((plan) => plan.computed),
+      options,
+    ),
+  );
+  const lockedMembershipKeys = new Set(
+    membershipKeys(membershipsBefore, false),
+  );
+  const previousChangedMemberships = new Map(
+    [...membershipsBefore].map(([index, rows]) => {
+      const affected = new Set(
+        (membershipsAfter.get(index) ?? []).map((row) => row.id),
+      );
+      return [index, rows.filter((row) => affected.has(row.id))] as const;
+    }),
+  );
+  const relatedKeys = [
+    ...membershipKeys(previousChangedMemberships, true),
+    ...membershipKeys(membershipsAfter, true),
+  ];
+  if (relatedKeys.some((key) => !lockedMembershipKeys.has(key)))
+    throw new KernelConflict(
+      "Joined predicate membership moved after its fence",
+    );
+  for (const key of relatedKeys) changed.add(key);
   await withDatabaseOperationPhase("dependencies", async () => {
     await fileBatchAsks(q, plans);
     const asks = await batchAsks(q, plans);
@@ -835,15 +944,14 @@ async function applyBatch(
       keys: [...plan.computed.keys.keys()],
     }));
     await q.execute(sql`
-      MERGE INTO "ScopeDep" d USING (
-        SELECT wanted.kind, wanted.key AS scope_key, dependency.value AS dependency_key
-        FROM jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS wanted(kind text, key text, keys jsonb)
-        CROSS JOIN LATERAL jsonb_array_elements_text(wanted.keys) AS dependency(value)
-      ) AS desired ON d."scopeKind" = desired.kind AND d."scopeKey" = desired.scope_key AND d.key = desired.dependency_key
-      WHEN NOT MATCHED THEN INSERT ("scopeKind", "scopeKey", key) VALUES (desired.kind, desired.scope_key, desired.dependency_key)
-      WHEN NOT MATCHED BY SOURCE AND (d."scopeKind", d."scopeKey") IN (
-        SELECT wanted.kind, wanted.key FROM unnest(${orderedTextArrayParam(states.map((state) => state.scopeKind))}, ${orderedTextArrayParam(states.map((state) => state.scopeKey))}) AS wanted(kind, key)
-      ) THEN DELETE`);
+      DELETE FROM "ScopeDep" d USING unnest(${orderedTextArrayParam(states.map((state) => state.scopeKind))}, ${orderedTextArrayParam(states.map((state) => state.scopeKey))}) AS wanted(kind,key)
+      WHERE d."scopeKind"=wanted.kind AND d."scopeKey"=wanted.key`);
+    await q.execute(sql`
+      INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+      SELECT wanted.kind,wanted.key,dependency.value
+      FROM jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS wanted(kind text,key text,keys jsonb)
+      CROSS JOIN LATERAL jsonb_array_elements_text(wanted.keys) dependency(value)
+      ON CONFLICT DO NOTHING`);
     await insertRows(
       q,
       scopeState,
@@ -1142,9 +1250,21 @@ async function runLocked(
         lane: reconciler.lane,
         mode: options.mode,
       });
+      const memberships = await relatedMemberships(
+        tx,
+        registry,
+        indexChanges([prepared!], options),
+      );
       const lockedRevisions = await lockKeyRevs(
         q,
-        [...prepared!.keys.keys()].sort(),
+        [
+          ...new Set([
+            ...prepared!.keys.keys(),
+            ...plannedKeys([prepared!], options, registry),
+            ...membershipKeys(memberships, false),
+            ...(await mergeOutputKeys(q, [prepared!], options)),
+          ]),
+        ].sort(),
       );
       const [computed] = await computeBatch(q, registry, reconciler, [scope], {
         db: tx,
@@ -1153,13 +1273,28 @@ async function runLocked(
         hideBaseline: options.hideBaseline ?? false,
       });
       if (isConflict(computed!.error)) throw computed!.error;
+      const currentMemberships = await relatedMemberships(
+        tx,
+        registry,
+        indexChanges([computed!], options),
+      );
       if (
-        plannedKeys([computed!], options, registry).some(
-          (key) => !lockedRevisions.has(key),
-        )
+        [
+          ...plannedKeys([computed!], options, registry),
+          ...membershipKeys(currentMemberships, false),
+        ].some((key) => !lockedRevisions.has(key))
       )
         throw new LockedReadChangedError();
-      return applyOne(tx, registry, computed!, claimed, options);
+      const current = await q.execute<{ seq: string }>(
+        sql`SELECT seq FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`,
+      );
+      return applyOne(
+        tx,
+        registry,
+        computed!,
+        { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
+        options,
+      );
     });
   } catch (error) {
     if (isConflict(error)) {

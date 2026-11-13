@@ -314,4 +314,4 @@ export { cancelRunAsks, retryRunAsks } from "./requesters";
 export { releaseFundingWaits } from "./claim";
 
 export { defineReadIndex } from "./define";
-export type { ReadIndex } from "./define";
+export type { ReadIndex, IndexChange, IndexMembership } from "./define";

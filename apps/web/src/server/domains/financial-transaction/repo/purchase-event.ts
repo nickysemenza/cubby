@@ -11,7 +11,7 @@ import {
 import { minorToMoney } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
-import { householdLocalDate } from "~/lib/household-date";
+import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import {
@@ -85,6 +85,7 @@ import {
   purchasePayments,
   vendorNames,
 } from "./money-read-indexes";
+import { partlyPaidPurchases } from "./purchase-candidate-index";
 
 type Input = {
   key: string;
@@ -138,7 +139,7 @@ const tableReads = [
   source.table(
     purchase,
     purchaseRecords.columns as (keyof typeof purchase.$inferSelect)[],
-    [vendorPurchases],
+    [vendorPurchases, partlyPaidPurchases],
   ),
   // SAFETY: the target declares columns of this exact table.
   source.table(
@@ -298,31 +299,47 @@ export const purchaseEvent = defineReconciler<Input>({
       ...(await reads.rows(financialTransaction, keys)).values(),
     ];
     const subjects = keys.map((key) => `purchaseEvent:${key}`);
-    const [manuals, choices, initialVendors, bankOwners] = await Promise.all([
-      reads.facts(
-        manualTransactionEvidence,
-        keys.map((key) => `purchaseEvent:${key}`),
-      ),
-      reads.select(
-        decision,
-        subjects.map(decisionKey),
-        sql`${decision.subject} = ANY(${textArrayParam(subjects)})`,
-      ),
-      reads.lookup(
-        vendor,
-        vendorNames,
-        transactions.flatMap((row) =>
-          [row.merchant, row.rawDescription]
-            .filter((name): name is string => !!name)
-            .map((name) => name.trim().toLowerCase()),
+    const [manuals, choices, initialVendors, bankOwners, ownAllocationEntries] =
+      await Promise.all([
+        reads.facts(
+          manualTransactionEvidence,
+          keys.map((key) => `purchaseEvent:${key}`),
         ),
-      ),
-      reads.select(
-        recordKey,
-        keys.map((key) => `record:financialTransaction:${key}`),
-        sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(keys)}::uuid[])`,
-      ),
-    ]);
+        reads.select(
+          decision,
+          subjects.map(decisionKey),
+          sql`${decision.subject} = ANY(${textArrayParam(subjects)})`,
+        ),
+        reads.lookup(
+          vendor,
+          vendorNames,
+          transactions.flatMap((row) =>
+            [row.merchant, row.rawDescription]
+              .filter((name): name is string => !!name)
+              .map((name) => name.trim().toLowerCase()),
+          ),
+        ),
+        reads.select(
+          recordKey,
+          keys.map((key) => `record:financialTransaction:${key}`),
+          sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(keys)}::uuid[])`,
+        ),
+        Promise.all(
+          keys.map(
+            async (key) =>
+              [
+                key,
+                await reads
+                  .for(key)
+                  .lookup(
+                    financialTransactionAllocation,
+                    transactionAllocations,
+                    [key],
+                  ),
+              ] as const,
+          ),
+        ),
+      ]);
     const strings = (value: unknown): string[] =>
       typeof value === "string"
         ? [value]
@@ -406,9 +423,21 @@ export const purchaseEvent = defineReconciler<Input>({
         ? [{ id: row.id, table: parsed.table, values: parsed.values }]
         : [];
     });
+    const ownAllocationsByScope = new Map(ownAllocationEntries);
+    const retainedPurchases = await reads.rows(
+      purchase,
+      [...ownAllocationsByScope.values()].flat().map((row) => row.purchaseId),
+    );
+    const retainedVendors = await reads.rows(
+      vendor,
+      [...retainedPurchases.values()].flatMap((row) =>
+        row.vendorId ? [row.vendorId] : [],
+      ),
+    );
     const vendors = unique([
       ...initialVendors,
       ...namedVendors,
+      ...retainedVendors.values(),
       ...(await reads.rows(vendor, referenceIds("vendor"))).values(),
     ]);
     const inputs = await Promise.all(
@@ -422,24 +451,90 @@ export const purchaseEvent = defineReconciler<Input>({
         );
         const ownIds = (table: string) =>
           ownSeeds.filter((row) => row.table === table).map((row) => row.id);
+        const currentAllocations = ownAllocationsByScope.get(key) ?? [];
+        const currentChoices = choices.filter(
+          (row) => row.subject === `purchaseEvent:${key}`,
+        );
+        const matchedAnswer = saved.find(
+          (row) =>
+            row.inputHash ===
+            hashes[transactions.findIndex((row) => row.id === key)],
+        );
+        const answerName =
+          matchedAnswer?.output &&
+          typeof matchedAnswer.output === "object" &&
+          !Array.isArray(matchedAnswer.output) &&
+          typeof matchedAnswer.output.name === "string"
+            ? matchedAnswer.output.name
+            : null;
+        const names = new Set(
+          [
+            transaction?.merchant?.trim() ||
+              transaction?.rawDescription?.trim(),
+            answerName,
+            ...currentChoices
+              .filter(
+                (row) =>
+                  row.field === "vendorName" && typeof row.value === "string",
+              )
+              .map((row) => String(row.value)),
+          ]
+            .filter((name): name is string => !!name)
+            .map((name) => name.trim().toLowerCase()),
+        );
+        const retainedIds = new Set(
+          currentAllocations.flatMap((row) => {
+            const purchase = retainedPurchases.get(row.purchaseId);
+            return purchase?.vendorId ? [purchase.vendorId] : [];
+          }),
+        );
+        const selected = new Set(
+          currentChoices
+            .filter((row) => row.field === "vendorId")
+            .flatMap((row) =>
+              typeof row.value === "string" ? [row.value] : [],
+            ),
+        );
+        const relevantVendors = vendors.filter(
+          (row) =>
+            retainedIds.has(row.id) ||
+            selected.has(row.id) ||
+            selected.has(row.shortcode) ||
+            [row.name, ...row.aliases].some((name) =>
+              names.has(name.trim().toLowerCase()),
+            ),
+        );
         const [
           ownAllocations,
           candidatePurchases,
+          openPurchases,
           exactPayments,
           ownedPurchases,
           bindings,
           occurrences,
           accounts,
         ] = await Promise.all([
-          scoped.lookup(
-            financialTransactionAllocation,
-            transactionAllocations,
-            [key],
-          ),
+          Promise.resolve(currentAllocations),
           scoped.lookup(
             purchase,
             vendorPurchases,
-            vendors.map((row) => row.id),
+            relevantVendors.flatMap((row) =>
+              transaction &&
+              (transaction.transactionDate ?? transaction.postedDate)
+                ? Array.from(
+                    { length: 29 },
+                    (_, index) =>
+                      `${row.id}:${shiftPlainDate((transaction.transactionDate ?? transaction.postedDate)!, index - 14)}`,
+                  )
+                : [],
+            ),
+          ),
+          scoped.lookup(
+            purchase,
+            partlyPaidPurchases,
+            transaction?.kind === "refund"
+              ? []
+              : relevantVendors.map((row) => row.id),
           ),
           scoped.lookup(
             purchasePaymentEvidence,
@@ -470,6 +565,7 @@ export const purchaseEvent = defineReconciler<Input>({
         const purchaseIds = [
           ...new Set([
             ...candidatePurchases.map((row) => row.id),
+            ...openPurchases.map((row) => row.id),
             ...ownedPurchases.keys(),
             ...exactPayments.map((row) => row.purchaseId),
             ...ownAllocations.map((row) => row.purchaseId),
@@ -485,17 +581,23 @@ export const purchaseEvent = defineReconciler<Input>({
           ),
           scoped.lookup(purchasePaymentEvidence, purchasePayments, purchaseIds),
         ]);
-        const [settlementTransactions, attributions] = await Promise.all([
-          scoped.rows(
-            financialTransaction,
-            allocations.map((row) => row.transactionId),
-          ),
-          scoped.lookup(
-            expenseAttribution,
-            expenseAttributions,
-            expenses.map((row) => row.id),
-          ),
-        ]);
+        const [settlementTransactions, attributions, settlementAllocations] =
+          await Promise.all([
+            scoped.rows(
+              financialTransaction,
+              allocations.map((row) => row.transactionId),
+            ),
+            scoped.lookup(
+              expenseAttribution,
+              expenseAttributions,
+              expenses.map((row) => row.id),
+            ),
+            scoped.lookup(
+              financialTransactionAllocation,
+              transactionAllocations,
+              [...new Set(allocations.map((row) => row.transactionId))],
+            ),
+          ]);
         const allTransactions = unique([
           ...transactions.filter((row) => row.id === key),
           ...settlementTransactions.values(),
@@ -554,7 +656,11 @@ export const purchaseEvent = defineReconciler<Input>({
             parties: [...parties.values()],
             purchases: [...purchases.values()],
             expenses,
-            allocations: unique([...ownAllocations, ...allocations]),
+            allocations: unique([
+              ...ownAllocations,
+              ...allocations,
+              ...settlementAllocations,
+            ]),
             attributions,
             vendors: allVendors,
             categories: [...categories.values()],
