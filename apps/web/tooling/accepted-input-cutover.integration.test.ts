@@ -80,6 +80,37 @@ it("carries held values, paid results, redirects and every accepted money row", 
       `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId") VALUES ($1,$2,$3)`,
       [cutoverId(101), cutoverId(41), cutoverId(14)],
     );
+    // A member's Keep after an automatic acceptance makes the value theirs.
+    await client.query(
+      `UPDATE "Product" SET tags=ARRAY['synthetic-kept'] WHERE id=$1`,
+      [cutoverId(13)],
+    );
+    await client.query(
+      `INSERT INTO "AuditLog" (id,"entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ($1,'product',$2,'update','{"tags":{"from":[],"to":["synthetic-kept"]}}','cubby-system','automatic','2026-01-04')`,
+      [cutoverId(102), cutoverId(13)],
+    );
+    await client.query(
+      `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,"acceptanceReceipt",decisions) VALUES ($1,'synthetic:kept','field','{}','{}','product',$2,'tags','["synthetic-kept"]','synthetic-model',$3,$4)`,
+      [
+        cutoverId(103),
+        cutoverId(13),
+        JSON.stringify({
+          auditIds: [cutoverId(102)],
+          acceptedAt: "2026-01-04T00:00:00.000Z",
+        }),
+        JSON.stringify([
+          {
+            id: cutoverId(104),
+            operationId: `keep:${cutoverId(103)}`,
+            verdict: "correct",
+            intent: "history",
+            authority: "member",
+            actorUserId: "synthetic-keeper",
+            createdAt: "2026-01-05T00:00:00.000Z",
+          },
+        ]),
+      ],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -342,14 +373,43 @@ it("carries held values, paid results, redirects and every accepted money row", 
         actorKind: "member",
         actorId: "synthetic-cutover",
       },
+      {
+        field: "tags",
+        kind: "set",
+        actorKind: "member",
+        actorId: "synthetic-keeper",
+      },
     ]);
     expect(
       (
-        await client.query(`SELECT output FROM "Answer" WHERE "inputHash"=$1`, [
-          `legacy:field:product:${cutoverId(13)}:categoryId`,
-        ])
-      ).rows[0].output.value,
-    ).toBeNull();
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='tags' AND kind='release'`,
+          [`product:${cutoverId(13)}`],
+        )
+      ).rows,
+    ).toEqual([]);
+    // The fields scope finds a Cubby-held value at its baseline Ask's envelope.
+    const { fieldBaselineAsk } = await import("../src/server/ai/fields/ask");
+    const baselines = (
+      await client.query(
+        `SELECT "inputHash",output FROM "Answer" WHERE feature='legacy:field' AND output->>'subject'=$1 ORDER BY output->>'field'`,
+        [`product:${cutoverId(13)}`],
+      )
+    ).rows;
+    expect(baselines.map((r) => r.output.field)).toEqual(["categoryId"]);
+    expect(baselines[0].inputHash).toBe(
+      await inputHashOf(
+        askEnvelope(fieldBaselineAsk, {
+          entity: "product",
+          recordId: cutoverId(13),
+          field: "categoryId",
+        }),
+      ),
+    );
+    expect(baselines[0].output).toMatchObject({
+      value: null,
+      record: { categoryId: null, tags: ["synthetic-kept"] },
+    });
     expect(
       (
         await client.query(
@@ -923,6 +983,21 @@ it("matches the registered model feature envelope catalog", async () => {
   const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
   const { buildRegistry } = await import("../src/server/kernel/registry");
   const projection = acceptedInputCutoverSql().split("), record_ids AS (")[0]!;
+  const { fieldsPlans } = await import("../src/server/ai/fields/repo/plan");
+  const lines = projection.split("\n");
+  for (const plan of fieldsPlans().values()) {
+    const recordLine = lines.find((line) =>
+      line.includes(`FROM "${plan.tableName}" r`),
+    );
+    expect(recordLine).toContain(`'${plan.entity}'::text entity`);
+    expect(recordLine).toContain("'fields'::text scope_kind");
+    expect(recordLine?.match(/ARRAY\[([^\]]*)\]::text\[\] fields/)?.[1]).toBe(
+      plan.fields
+        .filter((field) => field.apply !== "offer")
+        .map((field) => `'${field.key}'`)
+        .join(","),
+    );
+  }
   for (const r of buildRegistry(KERNEL_MODULES).reconcilers.values())
     for (const target of r.writes) {
       if (!target.columns.length || target.name === "EvidenceBinding") continue;
