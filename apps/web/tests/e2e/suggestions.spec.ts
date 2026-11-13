@@ -24,7 +24,10 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
-import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
+import {
+  suggestionReviewBatchOut,
+  suggestionReviewOut,
+} from "@cubby/schemas/suggestion";
 
 import {
   createEntityFixture,
@@ -149,6 +152,8 @@ test("reviews a field suggestion for a named record", async ({
         )[0]?.categoryId,
     )
     .toBe(await resolveOrThrow(db, "productCategory", category.id));
+  await page.reload();
+  await waitForAppHydration(page);
   await expect(field).toHaveCount(0);
 });
 
@@ -239,8 +244,24 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
     page.getByRole("option", { name: /Cubby's guess, 21% sure/ }),
   ).toBeVisible();
   // With an empty search, Enter picks Cubby's guess.
+  const picked = page.waitForResponse((response) =>
+    dispatchesOperation(response.request(), "suggestion.review"),
+  );
   await page.keyboard.press("Enter");
+  expect(
+    await operationResult(
+      await picked,
+      "suggestion.review",
+      suggestionReviewOut,
+    ),
+  ).toMatchObject({ status: "waiting" });
+  await reconcileNow(db, [{ kind: "fields", key: `product:${openId}` }]);
   await expect.poll(brandOf(openId)).toBe(guessedId);
+  await page.reload();
+  await waitForAppHydration(page);
+  await expect(
+    page.getByText(guessedName, { exact: true }).first(),
+  ).toBeVisible();
 });
 
 // Prune acceptance acknowledges the remaining saved tags, not the removed token.
