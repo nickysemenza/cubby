@@ -1967,8 +1967,11 @@ describe("evidence-facts kernel", () => {
       sql`UPDATE "Ask" SET "availableAt"=now() WHERE feature=${fixture.categorize.feature}`,
     );
     expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(2);
-    const receipts = await repositoryQueries(ctx.db)
-      .execute(sql`SELECT s."scopeKey", s.sequence, s.receipt
+    const receipts = await repositoryQueries(ctx.db).execute<{
+      scopeKey: string;
+      sequence: number;
+      receipt: { requester: string };
+    }>(sql`SELECT s."scopeKey", s.sequence, s.receipt
       FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
       WHERE a."promptVersion" = ${fixture.categorize.promptVersion} AND s."scopeKind" = ${"synthetic"}
       ORDER BY s."scopeKey"`);
@@ -2324,8 +2327,10 @@ describe("evidence-facts kernel", () => {
     expect(await repositoryQueries(ctx.db).select().from(drift)).toEqual([]);
     const third = createKernel([module(3)]);
     await settle(third);
-    const fenced = await repositoryQueries(ctx.db)
-      .execute(sql`SELECT "scopeKey", version FROM "ScopeState"
+    const fenced = await repositoryQueries(ctx.db).execute<{
+      scopeKey: string;
+      version: number;
+    }>(sql`SELECT "scopeKey", version FROM "ScopeState"
       WHERE "scopeKind" = ${scope.kind}`);
     expect(fenced.rows).toEqual(
       expect.arrayContaining(
