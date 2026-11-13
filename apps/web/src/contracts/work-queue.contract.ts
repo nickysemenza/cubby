@@ -3,11 +3,15 @@ import {
   workQueueOutSchema,
   workQueueRecordInput,
 } from "@cubby/schemas/work-queue";
-import { workStatus } from "@cubby/schemas/work-status";
+import {
+  workDiagnostics,
+  workRetryTarget,
+  workStatus,
+} from "@cubby/schemas/work-status";
 import { z } from "zod";
 
 import { ENTITY_ROOT_TAGS, type CacheTag } from "~/contracts/cache-policy";
-import { defineContract, query } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 /**
  * The work sources read records, their related evidence and ownership, data
@@ -33,6 +37,20 @@ export const workQueueContract = defineContract(
       output: workStatus,
       // Not entity roots: a status mounted in the shell must not refetch on every write.
       cache: { tags: [["run"], ["workQueue"]] },
+    }),
+    diagnostics: query({
+      description:
+        "Kernel scopes, asks and passes by kind: due, claimed, waiting, oldest waiting and raw failures.",
+      input: z.strictObject({}),
+      output: workDiagnostics,
+      cache: { tags: [["workQueue"]], profile: "live-status" },
+    }),
+    retry: mutation({
+      description:
+        "Retry one Stuck scope, ask or pass, clearing its attempts and making it available.",
+      input: workRetryTarget,
+      output: z.object({ retried: z.boolean() }),
+      invalidates: ["workQueue"],
     }),
     queue: query({
       exposure: "internal",

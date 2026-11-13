@@ -31,3 +31,31 @@ export const workStatus = z.object({
   stuck: z.array(workStuckItem),
 });
 export type WorkStatus = z.infer<typeof workStatus>;
+
+/** Durable queue diagnostics; retries name one exhausted item. */
+export const workRetryTarget = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("scope"), kind: z.string(), key: z.string() }),
+  z.object({ type: z.literal("ask"), id: z.uuid() }),
+  z.object({ type: z.literal("pass"), kind: z.string(), key: z.string() }),
+]);
+export const workDiagnostics = z.object({
+  groups: z.array(
+    z.object({
+      type: z.enum(["scope", "ask", "pass"]),
+      kind: z.string(),
+      due: z.number(),
+      claimed: z.number(),
+      waiting: z.number(),
+      stuck: z.number(),
+      oldestWaiting: z.iso.datetime().nullable(),
+    }),
+  ),
+  failures: z.array(
+    z.object({
+      target: workRetryTarget,
+      error: z.string(),
+      at: z.iso.datetime(),
+    }),
+  ),
+});
+export type WorkDiagnostics = z.infer<typeof workDiagnostics>;

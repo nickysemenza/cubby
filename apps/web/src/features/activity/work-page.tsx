@@ -16,6 +16,14 @@ import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "~/ui/primitives/table";
 
 /** Past this the list only counts the rest; a page of warnings stops being read. */
 const STUCK_ROW_CAP = 8;
@@ -284,6 +292,7 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           resume={automatic.resume}
         />
       ) : null}
+      <KernelDiagnostics />
       <NeedsYou />
       <nav
         aria-label="More work"
@@ -312,5 +321,73 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
         ) : null}
       </nav>
     </Stack>
+  );
+}
+
+/** Counts and failures come from durable kernel rows rather than record-gap sampling. */
+function KernelDiagnostics() {
+  const read = useQuery(workQueue.diagnostics.queryOptions({}));
+  const retry = useMutation(
+    workQueue.retry.mutationOptions({ onSuccess: () => void read.refetch() }),
+  );
+  return (
+    <Section headingAs="h2" title="Queue and evaluations">
+      {read.isError ? <p role="alert">{read.error.message}</p> : null}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {[
+              "Work",
+              "Kind",
+              "Due",
+              "Claimed",
+              "Waiting",
+              "Stuck",
+              "Oldest waiting",
+            ].map((label) => (
+              <TableHead key={label}>{label}</TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {read.data?.groups.map((group) => (
+            <TableRow key={`${group.type}:${group.kind}`}>
+              <TableCell>{group.type}</TableCell>
+              <TableCell>{group.kind}</TableCell>
+              <TableCell>{group.due}</TableCell>
+              <TableCell>{group.claimed}</TableCell>
+              <TableCell>{group.waiting}</TableCell>
+              <TableCell>{group.stuck}</TableCell>
+              <TableCell>{group.oldestWaiting ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {read.data?.failures.map((failure) => (
+        <div
+          key={JSON.stringify(failure.target)}
+          className="grid gap-1 border-b border-border py-2"
+        >
+          <span className="text-xs">
+            {failure.target.type === "ask"
+              ? failure.target.id
+              : `${failure.target.kind}: ${failure.target.key}`}
+          </span>
+          <pre className="text-xs break-words whitespace-pre-wrap">
+            {failure.error}
+          </pre>
+          <Button
+            size="xs"
+            variant="outline"
+            className="justify-self-start"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate(failure.target)}
+          >
+            Retry
+          </Button>
+        </div>
+      ))}
+      {retry.error ? <p role="alert">{retry.error.message}</p> : null}
+    </Section>
   );
 }
