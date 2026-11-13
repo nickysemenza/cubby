@@ -53,6 +53,7 @@ export const fixturePurchase = fixture.table("FixturePurchase", {
   orderRef: text("orderRef").notNull(),
   amountMinor: integer("amountMinor").notNull(),
   merchant: text("merchant"),
+  receiptId: uuid("receiptId").references(() => fixtureReceipt.id),
   category: text("category"),
   deletedAt: timestamp("deletedAt", { mode: "date" }),
   createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
@@ -84,13 +85,14 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "orderRef" text NOT NULL,
       "amountMinor" integer NOT NULL,
       merchant text,
+      "receiptId" uuid REFERENCES kernel_fixture."FixtureReceipt"(id),
       category text,
       "deletedAt" timestamp,
       "createdAt" timestamp NOT NULL DEFAULT now(),
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
+    `DELETE FROM kernel_fixture."FixturePurchase"`,
     `DELETE FROM kernel_fixture."FixtureCharge"`,
     `DELETE FROM kernel_fixture."FixtureReceipt"`,
-    `DELETE FROM kernel_fixture."FixturePurchase"`,
   ])
     await repositoryQueries(db).execute(sql.raw(statement));
 }
@@ -158,7 +160,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
 
   const purchaseWrites = writes(
     fixturePurchase,
-    ["orderRef", "amountMinor", "merchant"],
+    ["orderRef", "amountMinor", "merchant", "receiptId"],
     {
       discovers: (row) => [{ kind: CATEGORY_SCOPE, key: row.id }],
       // The absorbed purchase is retired; the kernel settles who owns the survivor.
@@ -249,6 +251,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         orderRef: input.orderRef,
         amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
         merchant,
+        receiptId: receipt?.id ?? null,
       });
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));

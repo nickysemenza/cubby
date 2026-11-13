@@ -29,7 +29,12 @@ import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { askIsStuck, askMemberGap, type AskCondition } from "./ask-gap";
+import {
+  askGapState,
+  askIsStuck,
+  askMemberGap,
+  type AskCondition,
+} from "./ask-gap";
 import { auditApply } from "./audit";
 import {
   ClaimLapsedError,
@@ -427,7 +432,7 @@ async function applyScope(
     else if (ask)
       gaps[index] = {
         ...gap,
-        askState: ask.state === "sent" ? "sent" : "queued",
+        askState: askGapState(ask),
       };
   }
 

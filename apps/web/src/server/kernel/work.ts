@@ -74,18 +74,24 @@ export async function readNeedsYou(
         ON k."scopeKind" = m."scopeKind" AND k."scopeKey" = m."scopeKey"
         AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
       JOIN "Entity" e ON e.id = k."entityId" AND e.kind = k.entity
-      WHERE m.gap IS NOT NULL AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+      WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
       UNION
       SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage,
         m.gap->>${"input"}, m.gap->>'since'
       FROM members m JOIN "Entity" e ON m."scopeKey" = e.kind || ':' || e.id::text
-      WHERE m."scopeKind" IN ('fields', 'quality') AND m.gap IS NOT NULL
+      WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
     ), ranked AS (
-      SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY since NULLS LAST, "scopeKind", "scopeKey") AS rank
+      SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY ("firstGap" IS NULL), since NULLS LAST, "scopeKind", "scopeKey") AS rank,
+        min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1
+          WHEN ${STAGE.working} THEN 2 WHEN ${STAGE.needsYou} THEN 3 WHEN ${STAGE.waiting} THEN 4 ELSE 5 END)
+          OVER (PARTITION BY entity, shortcode) AS severity
       FROM records
     ), eligible AS (
-      SELECT entity, shortcode, stage, "firstGap", since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL
+      SELECT entity, shortcode,
+        CASE severity WHEN 0 THEN ${STAGE.ended} WHEN 1 THEN ${STAGE.stuck} WHEN 2 THEN ${STAGE.working}
+          WHEN 3 THEN ${STAGE.needsYou} WHEN 4 THEN ${STAGE.waiting} ELSE ${STAGE.done} END AS stage,
+        "firstGap", since FROM ranked WHERE rank = 1 AND shortcode IS NOT NULL AND "firstGap" IS NOT NULL
     ), page AS (
       SELECT * FROM eligible ORDER BY since NULLS LAST, entity, shortcode LIMIT ${limit} OFFSET ${offset}
     )

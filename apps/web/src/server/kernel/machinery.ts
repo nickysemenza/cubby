@@ -43,7 +43,7 @@ import {
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 
-import { askIsStuck, askMemberGap } from "./ask-gap";
+import { askGapState, askIsStuck, askMemberGap } from "./ask-gap";
 import { MAX_SCOPE_ATTEMPTS } from "./claim";
 import { computeBatch } from "./compute";
 import type { ColumnValues, Json, ScopeRef } from "./define";
@@ -528,15 +528,7 @@ export async function machinery(
         const state = stateOf(scope);
         return {
           ...gap,
-          askState: ask
-            ? ask.cancelled
-              ? "abandoned"
-              : ask.state === "unknown"
-                ? "unknown"
-                : ask.state === "sent"
-                  ? "sent"
-                  : "queued"
-            : null,
+          askState: ask ? askGapState(ask) : null,
           queue,
           attempts: ask
             ? {

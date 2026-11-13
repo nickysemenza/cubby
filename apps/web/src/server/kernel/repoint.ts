@@ -1,5 +1,5 @@
 /** Reference policies may repoint owned foreign keys without replacing their reconciler. */
-import { getTableColumns, inArray, sql } from "drizzle-orm";
+import { getTableColumns, inArray } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -48,17 +48,30 @@ export async function repointOwnedReference(
     throw new KernelContractError(
       `${config.name}.${column} cannot be detached`,
     );
-  const rows = await withKernelApply(null, () =>
-    repositoryQueries(tx)
-      .update(table)
-      .set({ [column]: toId })
-      .where(inArray(reference, [...fromIds]))
-      .returning({ id: sql<string>`${columns.id}::text` }),
+  const targets = owner.writes.filter((target) => target.table === table);
+  const q = repositoryQueries(tx);
+  const before = await q
+    .select()
+    .from(table)
+    .where(inArray(reference, [...fromIds]));
+  const rows = await withKernelApply(
+    null,
+    async () =>
+      await repositoryQueries(tx)
+        .update(table)
+        .set({ [column]: toId })
+        .where(inArray(reference, [...fromIds]))
+        .returning(),
   );
   const changed = await markDirty(repositoryQueries(tx), registry, {
-    keys: rows.map((row) => rowKey(config.name, row.id)),
+    keys: [...before, ...rows].flatMap((row) => [
+      rowKey(config.name, String(row.id)),
+      ...targets.flatMap((target) => target.keys?.(row) ?? []),
+    ]),
     reason: "reference-repoint",
-    discovers: [],
+    discovers: rows.flatMap((row) =>
+      targets.flatMap((target) => target.discovers?.(row) ?? []),
+    ),
   });
   if (changed) await wakeAfterCommit(tx);
   return rows.length;

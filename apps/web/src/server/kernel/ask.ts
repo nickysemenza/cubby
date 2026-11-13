@@ -353,7 +353,6 @@ async function executeClaimed(
   runId: string | null,
 ): Promise<AskResult<unknown>[]> {
   const q = repositoryQueries(db);
-  if (entries[0]) await wakeClaimRecovery(entries[0].ask.deadline);
   const results: AskResult<unknown>[] = entries.map(() => ({
     status: "failed",
     error: new Error("Ask not run"),
@@ -520,6 +519,7 @@ export async function withAsk<I, O>(
     throw inFlight(
       "Another worker holds this ask's claim; no duplicate call was placed.",
     );
+  await wakeClaimRecovery(new Date(claimed.rows[0].deadline));
   const [result] = await executeClaimed(
     db,
     registry,

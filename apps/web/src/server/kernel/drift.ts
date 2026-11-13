@@ -37,6 +37,7 @@ import {
 import { driftSubject, hashCanonical } from "./keys";
 import type { KernelRegistry } from "./registry";
 import { fromIso, isoText } from "./sql-time";
+import { wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -203,6 +204,7 @@ async function claimForApproval(
     attempts: number;
     conflicts: number;
     updatedAt: string;
+    deadline: string;
   }>(sql`
     INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "claimToken", "claimDeadline", "claimedSeq")
     VALUES (${scope.kind}, ${scope.key}, ${registry.laneOf(scope.kind)}, 1, ${"drift-approved"},
@@ -210,8 +212,9 @@ async function claimForApproval(
     ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET "claimToken" = excluded."claimToken",
       "claimDeadline" = excluded."claimDeadline", "claimedSeq" = "ScopeDirty".seq
     WHERE "ScopeDirty"."claimToken" IS NULL OR "ScopeDirty"."claimDeadline" <= now()
-    RETURNING seq, attempts, conflicts, ${isoText(sql`"updatedAt"`)} AS "updatedAt"`);
+    RETURNING seq, attempts, conflicts, ${isoText(sql`"updatedAt"`)} AS "updatedAt", ${isoText(sql`"claimDeadline"`)} AS deadline`);
   const row = result.rows[0];
+  if (row) await wakeClaimRecovery(new Date(row.deadline));
   return row
     ? {
         kind: scope.kind,
@@ -220,6 +223,7 @@ async function claimForApproval(
         attempts: row.attempts,
         conflicts: row.conflicts,
         dirtiedAt: fromIso(row.updatedAt) ?? new Date(),
+        deadline: new Date(row.deadline),
         token,
       }
     : null;
