@@ -1,5 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { askState, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
+import { sql } from "drizzle-orm";
 
 import {
   AiBudgetExhaustedError,
@@ -8,6 +10,7 @@ import {
   readAiBudget,
 } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 /** Admit paid work against its Run's confirmed allowance. */
 export async function admitPaid(db: Database, call: { runId?: RunId }) {
@@ -64,13 +67,29 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "evaluations" | "embeddings" | "images" | "jobs";
+  name: "runs" | "evaluations" | "embeddings" | "images" | "jobs" | "asks";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };
 
 /** A funding change counts and releases the same rows, in wake order. */
 export const fundingWaiters: readonly FundingWait[] = [
+  {
+    name: "asks",
+    async count(db) {
+      const result = await repositoryQueries(db).execute<{ n: number }>(sql`
+        SELECT count(*)::int AS n FROM "Ask"
+        WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL`);
+      return result.rows[0]!.n;
+    },
+    async wake(db, now) {
+      const result = await repositoryQueries(db).execute<{ id: string }>(sql`
+        UPDATE "Ask" SET "waitCause" = NULL, "availableAt" = ${now}, "updatedAt" = ${now}
+        WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL
+        RETURNING id`);
+      return result.rows.length;
+    },
+  },
   {
     name: "runs",
     async count(db, now) {

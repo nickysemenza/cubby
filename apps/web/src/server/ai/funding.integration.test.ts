@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
+import { ask } from "~/server/db/kernel-schema";
 import { aiEvaluation, aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -194,7 +195,7 @@ describe("AI funding availability", () => {
 
   // Failure mode: after a member funds a source, evaluations parked for
   // funding keep waiting until the six-hour window ends.
-  it("wakes evaluations waiting for funding, and only those", async () => {
+  it("wakes evaluations and asks waiting for funding, and only those", async () => {
     const later = new Date(Date.now() + 60 * 60_000);
     const row = (waitCause: string) => ({
       executionKind: "ai_refresh" as const,
@@ -222,11 +223,31 @@ describe("AI funding availability", () => {
       .insert(aiEvaluation)
       .values([row("ai_funding_window"), row("provider_capacity")])
       .returning({ id: aiEvaluation.id });
+    const [fundingAsk, providerAsk, unknownAsk] = await getDb(ctx.db)
+      .insert(ask)
+      .values(
+        (
+          [
+            { state: "queued", waitCause: "funding" },
+            { state: "queued", waitCause: "provider_capacity" },
+            { state: "unknown", waitCause: "funding" },
+          ] as const
+        ).map((state) => ({
+          inputHash: crypto.randomUUID(),
+          feature: "synthetic.funding",
+          producer: "model" as const,
+          promptVersion: "1",
+          input: {},
+          availableAt: later,
+          ...state,
+        })),
+      )
+      .returning({ id: ask.id });
     // The funding page names what the wake brings back and when it retries.
     expect((await readAiFundingStatus(ctx.db)).waiting).toEqual({
       resumeAt: expect.any(String),
       runs: 0,
-      work: 1,
+      work: 2,
     });
     const waiter = fundingWaiters.find(
       (entry) => entry.name === "evaluations",
@@ -249,6 +270,20 @@ describe("AI funding availability", () => {
     expect(woken?.waitCause).toBeNull();
     expect(woken?.runAt?.getTime()).toBeLessThanOrEqual(Date.now());
     expect((await read(provider!.id))?.waitCause).toBe("provider_capacity");
+    const asks = fundingWaiters.find((entry) => entry.name === "asks")!;
+    expect(await asks.count(ctx.db, now)).toBe(1);
+    expect(await asks.wake(ctx.db, now, true)).toBe(1);
+    expect(await asks.count(ctx.db, now)).toBe(0);
+    const storedAsks = await getDb(ctx.db).select().from(ask);
+    expect(
+      storedAsks.find((row) => row.id === fundingAsk!.id)?.waitCause,
+    ).toBeNull();
+    expect(
+      storedAsks.find((row) => row.id === providerAsk!.id)?.waitCause,
+    ).toBe("provider_capacity");
+    expect(storedAsks.find((row) => row.id === unknownAsk!.id)?.state).toBe(
+      "unknown",
+    );
   });
 
   it("counts and releases eligible Run and Job rows in a funding wake", async () => {
