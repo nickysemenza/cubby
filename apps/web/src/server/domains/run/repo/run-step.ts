@@ -285,6 +285,15 @@ export async function finishStepRunRow(
 ) {
   return withTransactionDatabase(db, async (tx) => {
     const failed = outcome.failedLabels.length > 0;
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: run,
+      entity: "run",
+      ids: [runId],
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(tx, write);
     const [finished] = await getDb(tx)
       .update(run)
       .set({
@@ -301,14 +310,7 @@ export async function finishStepRunRow(
       )
       .returning({ id: run.id, purpose: run.purpose, trigger: run.trigger });
     if (finished) {
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(tx, {
-        table: run,
-        entity: "run",
-        ids: [runId],
-        columns: ["status", "endedAt", "failureCode"],
-      });
+      await kernel.emitWrites(tx, write);
       await recordChange(tx, {
         kind: finished.purpose === "derived_refresh" ? "projection" : "source",
         categories: ["run"],

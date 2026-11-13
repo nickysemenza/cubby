@@ -43,6 +43,15 @@ export async function readRunShortcode(db: Database, runId: RunId) {
  * image work for as long as that backlog lasts.
  */
 async function endBudgetPausedPass(db: Database, runId: RunId) {
+  const kernel = await import("~/server/kernel/api");
+  const write = {
+    table: run,
+    entity: "run",
+    ids: [runId],
+    columns: ["status", "endedAt", "failureCode"],
+  };
+  // Revisions before the Run row, the order a kernel apply takes.
+  await kernel.lockWrites(db, write);
   const [ended] = await getDb(db)
     .update(run)
     .set({
@@ -60,15 +69,7 @@ async function endBudgetPausedPass(db: Database, runId: RunId) {
       ),
     )
     .returning({ id: run.id });
-  if (ended)
-    await (
-      await import("~/server/kernel/api")
-    ).emitWrites(db, {
-      table: run,
-      entity: "run",
-      ids: [runId],
-      columns: ["status", "endedAt", "failureCode"],
-    });
+  if (ended) await kernel.emitWrites(db, write);
   return Boolean(ended);
 }
 

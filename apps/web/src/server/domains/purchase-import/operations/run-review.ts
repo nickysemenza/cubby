@@ -37,6 +37,7 @@ import { z } from "zod";
 import { stopForFunding } from "~/server/ai/funding-wait";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
+  databaseForTransaction,
   getDb,
   notDeleted,
   withTransaction,
@@ -268,6 +269,10 @@ async function reconcileSettledRunOnce(
       operationId: `${input.operationId}:required-audit`,
     });
     const settled = await withTransaction(db, async (tx) => {
+      // The gate before the Run row lock; completing the Run dirties it.
+      await (
+        await import("~/server/kernel/api")
+      ).enterHouseholdGate(databaseForTransaction(tx));
       const [locked] = await tx
         .select({
           status: runTable.status,

@@ -66,6 +66,12 @@ export async function writeRunningAttemptProgress(
     execution.generation !== attempt
   )
     throw new Error("Run checkpoint requires its current execution claim");
+  const checkpoint = {
+    table: run,
+    entity: "run",
+    ids: [runId],
+    columns: Object.keys(set),
+  };
   const write = async (target: Database) => {
     const written = await getDb(target)
       .update(run)
@@ -80,12 +86,7 @@ export async function writeRunningAttemptProgress(
     if (written[0]) {
       await (
         await import("~/server/kernel/api")
-      ).emitWrites(target, {
-        table: run,
-        entity: "run",
-        ids: [runId],
-        columns: Object.keys(set),
-      });
+      ).emitWrites(target, checkpoint);
       await (
         await import("./work-progress")
       ).checkpointRunWorkProgress(target, written[0].shortcode);
@@ -105,6 +106,8 @@ export async function writeRunningAttemptProgress(
   };
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
+    // Revisions before the Run row, the order a kernel apply takes.
+    await (await import("~/server/kernel/api")).lockWrites(tx, checkpoint);
     // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
     // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded
     // UPDATE a fresh snapshot that sees work discovery committed under the lock.

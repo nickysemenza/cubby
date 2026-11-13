@@ -310,7 +310,12 @@ Raw source observations remain insert-only.
 
 Every transaction that writes a money-lane column first takes
 `pg_advisory_xact_lock(HOUSEHOLD_WRITE)` and runs at read committed. This is
-the money-write advisory lock. Claim partitions use separate short
+the household write gate. Every other transaction that raises or locks a
+`KeyRev` row or upserts a `ScopeDirty` row holds it too: each kernel statement
+that takes those locks carries the gate, and a writer that locks records ahead
+of its kernel writes takes the gate before them. Transactions that mutate
+kernel inputs therefore never interleave their kernel locks, including a member
+transaction that decides, reconciles and writes again. Claim partitions use separate short
 admission locks shared by Ask and Pass claims; producer calls happen after
 those transactions close. Money applies use no serializable transactions. A synchronous reconcile inside a
 member transaction returns waiting immediately for a claim held by another
@@ -335,33 +340,34 @@ A member decision that invokes an authored field writer opens `householdWrite`
 before inserting its Decisions, so the writer enters with the gate held.
 
 Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
-then the `ScopeDirty` row, then the record rows, which is the order a mutation
-takes them in. A gated transaction that dirties scopes first locks the
-revisions those scopes last read, and an authored writer locks the revisions
-its write will raise before it updates the row. A
+then the `ScopeDirty` row, then the record rows. The gate binds that order: a
+transaction holding it may take further revision locks after dirty or record
+locks without a cycle, because no other kernel writer runs beside it. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
 count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
-transaction: it discovers the read set, takes the gate when the lane is money,
+transaction: it discovers the read set, takes the gate,
 locks the union of input and planned output keys in sorted order, then reloads,
 computes and fences the dirty row in that bounded transaction. A newly needed
 key retries without spending an attempt. Producer calls stay outside it.
 
-Catalog scopes use the same fence without the gate. A catalog apply also
+Catalog scopes use the same fence and take the gate with their first revision
+lock. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the
 same record wins and the scope reruns.
 
 Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. A batch's set-based writes publish
 atomically; session timeouts bound in-flight statements. A member's write
-uses a 2 second `lock_timeout` and reports a timeout or a deadlock as a
-retryable wait.
+uses a 2 second `lock_timeout` and reports a lock timeout as a retryable
+wait.
 
-A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions. This gives concurrent commands one lock order; an input-only transaction remains ungated.
+A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions; an input-only transaction takes it with its first revision raise.
 
-Evidence-only appends and decision-only inserts take no gate; a rejection that invokes
-a money entity's deletion policy takes the gate before that policy runs; unique constraints on
-source identity decide a race between two writers of the same evidence.
+Evidence appends and decision inserts take the gate with the revisions they raise; a
+rejection that invokes a money entity's deletion policy takes the gate before that policy
+runs; unique constraints on source identity decide a race between two writers of the same
+evidence.
 
 ### 7. Three work forms, one claim
 
@@ -557,7 +563,7 @@ otherwise it stores the recomputed proposal, which must be approved again.
 The sweep loads and computes a page outside any transaction, then publishes it
 with its cursor in the pass's fenced transaction: it locks the page's input
 revisions once and writes its scope states, dependencies and proposals as
-sets. Its tables hold no money-lane column, so it takes no write gate. A scope
+sets. It takes the write gate with those revision locks. A scope
 whose revisions moved retains its previous version, dependencies and
 proposal; one that went dirty retains its version and dependencies.
 

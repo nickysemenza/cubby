@@ -82,7 +82,11 @@ export {
   AskUnknownError,
   type AskWaiters,
 } from "./ask";
-export { householdWrite, HouseholdWriteBusyError } from "./gate";
+export {
+  enterHouseholdGate,
+  householdWrite,
+  HouseholdWriteBusyError,
+} from "./gate";
 export { OwnedColumnWriteError } from "~/server/db/owned-columns";
 export {
   entityMerge,
@@ -174,7 +178,7 @@ export async function emitWrites(
   return (await productionKernel()).emitWrites(db, write);
 }
 
-/** Lock what `emitWrites` will raise for these rows, before the writer updates them. */
+/** Take the household write gate before a writer locks the rows `emitWrites` will key. */
 export async function lockWrites(
   db: Database,
   write: {

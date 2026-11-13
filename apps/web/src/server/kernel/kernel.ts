@@ -39,21 +39,16 @@ import {
   type Pass,
   type ScopeRef,
 } from "./define";
-import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
+import { insertFactKeys, markDirty } from "./dirty";
 import {
   approveDrift,
   approveDriftClass,
   versionSweepPass,
   type ApprovalOutcome,
 } from "./drift";
-import { householdWrite } from "./gate";
+import { enterHouseholdGate, householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import {
-  indexedKeys,
-  membershipKeys,
-  reindexRows,
-  relatedMemberships,
-} from "./index-keys";
+import { membershipKeys, reindexRows, relatedMemberships } from "./index-keys";
 import { rowKey, tableKey, columnKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
@@ -119,9 +114,9 @@ export type Kernel = {
     },
   ): Promise<number>;
   /**
-   * Lock, before an authored writer updates rows, the revisions its
-   * `emitWrites` will raise for them: a kernel apply takes revisions before
-   * the rows it updates, so writers take them in the same order.
+   * Take the household write gate before an authored writer locks the rows
+   * its `emitWrites` will key: kernel locks follow the gate, so a writer that
+   * held a row while waiting for the gate could deadlock a gated apply.
    */
   lockWrites(
     db: Database,
@@ -236,23 +231,7 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
     withAsk: (db, kind, input, options) =>
       withAsk(db, bound, kind, input, options),
     async lockWrites(db, write) {
-      const name =
-        typeof write.table === "string"
-          ? write.table
-          : getTableName(write.table);
-      if (!write.ids.length) return;
-      const keys = [
-        ...(readsColumns(name, write.columns)
-          ? [
-              tableKey(name),
-              ...write.columns.map((column) => columnKey(name, column)),
-              ...write.ids.map((id) => rowKey(name, id)),
-            ]
-          : []),
-        ...(await indexedKeys(repositoryQueries(db), bound, name, write.ids)),
-      ];
-      if (keys.length)
-        await lockKeyRevs(repositoryQueries(db), [...new Set(keys)].sort());
+      if (write.ids.length) await enterHouseholdGate(db);
     },
     async emitWrites(db, write) {
       const name =

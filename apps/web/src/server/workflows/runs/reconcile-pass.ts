@@ -63,7 +63,17 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
       AND (p."claimToken" IS NULL OR p."claimDeadline" <= now())
       AND (r.status = ${runStatus.enum.running}
         OR (r.status = ${runStatus.enum.paused_auth} AND r."failureCode" = 'execution_limit'))
-    LIMIT 100 FOR UPDATE OF r SKIP LOCKED`);
+    LIMIT 100`);
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: (await import("~/server/db/retained-tables")).run,
+      entity: "run",
+      ids: stuck.rows.map((row) => row.id),
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run rows, the order a kernel apply takes; each
+    // update re-checks the status it reads.
+    await kernel.lockWrites(tx, write);
     let failed = 0;
     for (const row of stuck.rows) {
       const updated = await q.execute<{ id: string }>(sql`
@@ -72,16 +82,8 @@ async function reconcileStuckRunPasses(db: Database): Promise<number> {
       WHERE id = ${row.id}::uuid AND (status = ${runStatus.enum.running}
         OR (status = ${runStatus.enum.paused_auth} AND "failureCode" = 'execution_limit'))
       RETURNING id`);
-      if (updated.rows.length) {
-        await (
-          await import("~/server/kernel/api")
-        ).emitWrites(tx, {
-          table: (await import("~/server/db/retained-tables")).run,
-          entity: "run",
-          ids: [row.id],
-          columns: ["status", "endedAt", "failureCode"],
-        });
-      }
+      if (updated.rows.length)
+        await kernel.emitWrites(tx, { ...write, ids: [row.id] });
       failed += updated.rows.length;
     }
     return failed;

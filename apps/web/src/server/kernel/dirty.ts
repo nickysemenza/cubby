@@ -6,6 +6,10 @@
  * in the same upsert form, so a load's dependency registration and a
  * concurrent mutation serialize per key: either the apply sees the mutation
  * and conflicts, or the mutation sees the committed `ScopeDep` and dirties.
+ *
+ * Each statement here that locks `KeyRev` or `ScopeDirty` first takes the
+ * household write gate (section 6), so transactions that mutate kernel inputs
+ * never interleave their kernel locks.
  */
 import { sql } from "drizzle-orm";
 
@@ -13,7 +17,7 @@ import { textArrayParam } from "~/server/db/helpers/array-param";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 
 import type { Key, ScopeRef } from "./define";
-import { holdsHouseholdGate } from "./gate";
+import { takeHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 
 type Q = Pick<RepositoryQueryClient, "execute">;
@@ -22,8 +26,9 @@ type Q = Pick<RepositoryQueryClient, "execute">;
 async function raiseKeys(q: Q, keys: readonly Key[]): Promise<void> {
   if (!keys.length) return;
   await q.execute(sql`
+    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate})
     INSERT INTO "KeyRev" (key, rev)
-    SELECT key, 1 FROM unnest(${textArrayParam(keys)}) AS keys(key) ORDER BY key
+    SELECT key, 1 FROM unnest(${textArrayParam(keys)}) AS keys(key), gate ORDER BY key
     ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev + 1`);
 }
 
@@ -37,8 +42,9 @@ export async function lockKeyRevs(
 ): Promise<Map<Key, number>> {
   if (!keys.length) return new Map();
   const result = await q.execute<{ key: string; rev: string | number }>(sql`
+    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate})
     INSERT INTO "KeyRev" (key, rev)
-    SELECT key, 0 FROM unnest(${textArrayParam(keys)}) AS keys(key) ORDER BY key
+    SELECT key, 0 FROM unnest(${textArrayParam(keys)}) AS keys(key), gate ORDER BY key
     ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
     RETURNING key, rev`);
   return new Map(result.rows.map((row) => [row.key, Number(row.rev)]));
@@ -72,10 +78,6 @@ export type DirtyInput = {
  * them or that the mutation discovers. A new input clears attempts and backoff:
  * the scope runs again under the current rules. Unregistered scope kinds are
  * skipped. Returns how many scopes were dirtied.
- *
- * A gated transaction may apply the scopes it dirties, which locks their read
- * revisions. It first locks the revisions those scopes last read, so it takes
- * `KeyRev` before `ScopeDirty` as an ungated mutation does.
  */
 export async function markDirty(
   q: Q,
@@ -99,25 +101,18 @@ export async function markDirty(
     })),
   );
   const result = await q.execute<{ n: string | number }>(sql`
-    WITH lanes (kind, lane) AS (VALUES ${lanes}),
+    WITH gate AS MATERIALIZED (SELECT ${takeHouseholdGate}),
+    lanes (kind, lane) AS (VALUES ${lanes}),
     targets AS (
       SELECT dep."scopeKind" AS kind, dep."scopeKey" AS key FROM "ScopeDep" dep
       WHERE ${input.keys.length ? sql`dep.key = ANY(${textArrayParam(input.keys)})` : sql`false`}
       UNION
       SELECT found.kind, found.key FROM jsonb_to_recordset(${discovered}::jsonb) AS found(kind text, key text)
-    ), reads AS (
-      INSERT INTO "KeyRev" (key, rev)
-      SELECT DISTINCT dep.key, 0 FROM "ScopeDep" dep
-      JOIN targets ON dep."scopeKind" = targets.kind AND dep."scopeKey" = targets.key
-      WHERE ${holdsHouseholdGate}
-      ORDER BY dep.key
-      ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
-      RETURNING 1
     ), upserted AS (
       INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "availableAt")
       SELECT targets.kind, targets.key, lanes.lane, 1, ${input.reason}, now()
-      FROM targets JOIN lanes ON lanes.kind = targets.kind
-      WHERE (SELECT count(*) FROM reads) >= 0 AND NOT EXISTS (
+      FROM targets JOIN lanes ON lanes.kind = targets.kind CROSS JOIN gate
+      WHERE NOT EXISTS (
         SELECT 1 FROM jsonb_to_recordset(${JSON.stringify([...(input.excludes ?? []), ...(input.exclude ? [input.exclude] : [])])}::jsonb) AS excluded(kind text, key text)
         WHERE excluded.kind = targets.kind AND excluded.key = targets.key
       )

@@ -198,6 +198,10 @@ export async function settleReviewedMailRun(
   actorUserId: ActorContext["userId"],
 ) {
   await withTransaction(db, async (tx) => {
+    // The gate before the Run row lock; completing the Run dirties it.
+    await (
+      await import("~/server/kernel/api")
+    ).enterHouseholdGate(databaseForTransaction(tx));
     const [row] = await tx
       .select({ id: runTable.id })
       .from(runFinding)

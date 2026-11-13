@@ -1,9 +1,10 @@
 import type { KernelLane } from "@cubby/schemas/kernel/machinery";
 /**
  * The household write gate (ADR 0029 section 6): every transaction that
- * writes a money-lane column takes this one transaction-scoped advisory lock
- * at read committed. `SET LOCAL` timeouts let Postgres release the gate when
- * a Worker dies mid-transaction.
+ * writes a money-lane column, raises or locks a kernel revision, or dirties a
+ * scope takes this one transaction-scoped advisory lock at read committed.
+ * `SET LOCAL` timeouts let Postgres release the gate when a Worker dies
+ * mid-transaction.
  */
 import { sql } from "drizzle-orm";
 
@@ -45,6 +46,22 @@ export class HouseholdWriteBusyError extends WorkRetryableError {
   }
 }
 
+/**
+ * Take the household write gate; re-entrant within a transaction. Every
+ * statement that locks a `KeyRev` or `ScopeDirty` row for a mutation carries
+ * it, so a transaction holds the gate before its first kernel lock.
+ */
+export const takeHouseholdGate = sql`pg_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`;
+
+/**
+ * Take the gate at the start of a writer that locks records ahead of its
+ * kernel writes; a writer that held a record while waiting for the gate could
+ * deadlock a gated apply.
+ */
+export async function enterHouseholdGate(db: Database): Promise<void> {
+  await repositoryQueries(db).execute(sql`SELECT ${takeHouseholdGate}`);
+}
+
 /** Whether this transaction holds the household write gate. */
 export const holdsHouseholdGate = sql`EXISTS (
   SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
@@ -79,14 +96,12 @@ export async function enterWriteTransaction(
       "The household write gate must be the transaction's first lock; open householdWrite at the mutation boundary",
     );
   if (options.lane === "money")
-    await q.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended('cubby:household-write', 0))`,
-    );
+    await q.execute(sql`SELECT ${takeHouseholdGate}`);
 }
 
 /**
  * A member or service write to money-lane columns: read committed, the gate,
- * and a lock timeout or deadlock reported as {@link HouseholdWriteBusyError}.
+ * and a lock timeout reported as {@link HouseholdWriteBusyError}.
  */
 export async function householdWrite<T>(
   db: Database,
@@ -102,11 +117,7 @@ export async function householdWrite<T>(
       return work(tx);
     });
   } catch (error) {
-    // A deadlock is retried like a lock wait; lock order is what prevents it.
-    if (
-      options.mode === "member" &&
-      ["55P03", "40P01"].includes(findPgError(error)?.code ?? "")
-    )
+    if (options.mode === "member" && findPgError(error)?.code === "55P03")
       throw new HouseholdWriteBusyError(error);
     throw error;
   }

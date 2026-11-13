@@ -399,6 +399,15 @@ export async function markRunFailed(
 ) {
   const runId = runEntityId.parse(input.runId);
   const run = await withTransaction(db, async (tx) => {
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: runTable,
+      entity: "run",
+      ids: [runId],
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(databaseForTransaction(tx), write);
     const [failed] = await tx
       .update(runTable)
       .set({
@@ -426,14 +435,7 @@ export async function markRunFailed(
         ledgerPartyId: runTable.ledgerPartyId,
       });
     if (!failed) return failed;
-    await (
-      await import("~/server/kernel/api")
-    ).emitWrites(databaseForTransaction(tx), {
-      table: runTable,
-      entity: "run",
-      ids: [runId],
-      columns: ["status", "endedAt", "failureCode"],
-    });
+    await kernel.emitWrites(databaseForTransaction(tx), write);
     await recordChange(tx, {
       kind: "source",
       categories: ["run"],
@@ -539,6 +541,17 @@ export async function controlRun(
   return withTransaction(db, async (tx) => {
     if (scope.vendorAccountId)
       await advisoryXactLock(tx, "run-vendor-account", scope.vendorAccountId);
+    const kernel = await import("~/server/kernel/api");
+    const ended = {
+      table: runTable,
+      entity: "run",
+      ids: [scope.runId],
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // A cancel ends the Run: revisions before the Run row lock below, the
+    // order a kernel apply takes.
+    if (input.action === "cancel" || input.action === "abort")
+      await kernel.lockWrites(databaseForTransaction(tx), ended);
     const [locked] = await tx
       .select({
         status: runTable.status,
@@ -807,14 +820,7 @@ export async function controlRun(
         })
         .where(eq(runTable.id, scope.runId));
       await cancelRunWork(tx, scope.runId);
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(databaseForTransaction(tx), {
-        table: runTable,
-        entity: "run",
-        ids: [scope.runId],
-        columns: ["status", "endedAt", "failureCode"],
-      });
+      await kernel.emitWrites(databaseForTransaction(tx), ended);
       await failOperationsForRun(
         tx,
         scope.runId,

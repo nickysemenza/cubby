@@ -24,17 +24,23 @@ export const advisoryLockKey = (
   key: string,
 ) => JSON.stringify([namespace, key]);
 
+/** The household write gate's lock identity (ADR 0029 section 6, `kernel/gate.ts`). */
+const HOUSEHOLD_WRITE_GATE = "cubby:household-write";
+
 /**
  * Take every key's transaction lock in one statement, deduplicated and sorted
  * by JavaScript code-unit order of the hashed identity, so overlapping sets
- * cannot deadlock.
+ * cannot deadlock. `afterGate` takes the household write gate first, for a
+ * writer whose record locks precede its kernel writes.
  */
 export async function advisoryXactLocks(
   tx: Pick<RepositoryQueryClient, "execute">,
   namespace: AdvisoryLockNamespace,
   keys: readonly string[],
+  options: { afterGate?: boolean } = {},
 ): Promise<void> {
   await advisoryXactLockSequence(tx, [
+    ...(options.afterGate ? [[HOUSEHOLD_WRITE_GATE]] : []),
     [...new Set(keys.map((key) => advisoryLockKey(namespace, key)))].sort(),
   ]);
 }

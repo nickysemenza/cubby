@@ -135,6 +135,15 @@ export async function controlWorkflowRun(
     );
   await withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: runTable,
+      entity: "run",
+      ids: [row.id],
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(tx, write);
     const [cancelled] = await database
       .update(runTable)
       .set({
@@ -156,14 +165,7 @@ export async function controlWorkflowRun(
         "RUN_CONTROL_REFUSED",
         "The Run finished before it was cancelled",
       );
-    await (
-      await import("~/server/kernel/api")
-    ).emitWrites(tx, {
-      table: runTable,
-      entity: "run",
-      ids: [row.id],
-      columns: ["status", "endedAt", "failureCode"],
-    });
+    await kernel.emitWrites(tx, write);
     await cancelRunPass(tx, row.id);
     // Cancellation ends execution, without inventing item failures or losing its retry cursor.
     await database
@@ -180,7 +182,7 @@ export async function controlWorkflowRun(
           eq(runStep.state, runStepState.enum.running),
         ),
       );
-    await (await import("~/server/kernel/api")).cancelRunAsks(tx, row.id);
+    await kernel.cancelRunAsks(tx, row.id);
   });
   await recordRunProgress(db, row.id, "cancelled", MEMBER_CANCELLED_AI_WORK, {
     attempt: row.attempt,

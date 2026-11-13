@@ -8,7 +8,12 @@ import { runStatus } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { runAfterCommit, withTransaction } from "~/server/db/helpers/core";
+import { textArrayParam } from "~/server/db/helpers/array-param";
+import {
+  databaseForTransaction,
+  runAfterCommit,
+  withTransaction,
+} from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
@@ -63,16 +68,35 @@ const failedUnstartedDispatch = sql`j.name='purchase.dispatch' AND j.attempts >=
 /** Returns how many Runs it failed. */
 export async function reconcileCoordinatorDispatches(db: Database) {
   return withTransaction(db, async (tx) => {
+    const candidates = await tx.execute<{ id: RunId }>(
+      sql`SELECT r.id FROM "Run" r, "Pass" j WHERE ${failedUnstartedDispatch}`,
+      "objects",
+    );
+    if (!candidates.length) return 0;
+    const kernel = await import("~/server/kernel/api");
+    const write = {
+      table: "Run",
+      entity: "run",
+      ids: candidates.map((row) => row.id),
+      columns: ["status", "endedAt", "failureCode"],
+    };
+    // Revisions before the Run rows, the order a kernel apply takes.
+    await kernel.lockWrites(databaseForTransaction(tx), write);
     const rows = await tx.execute<{
       id: RunId;
       purpose: string;
     }>(
       sql`UPDATE "Run" r SET status=${runStatus.enum.dispatch_failed}, "failureCode"=${runStatus.enum.dispatch_failed},
     "dispatchError"=j."lastError", "endedAt"=now(), "updatedAt"=now()
-    FROM "Pass" j WHERE ${failedUnstartedDispatch}
+    FROM "Pass" j WHERE r.id = ANY(${textArrayParam(write.ids)}::uuid[]) AND ${failedUnstartedDispatch}
       RETURNING r.id, r.purpose`,
       "objects",
     );
+    if (rows.length)
+      await kernel.emitWrites(databaseForTransaction(tx), {
+        ...write,
+        ids: rows.map((row) => row.id),
+      });
     for (const { id, purpose } of rows)
       await (await runPurposeLifecycle(purpose))?.dispatchFailed?.(tx, id);
     return rows.length;

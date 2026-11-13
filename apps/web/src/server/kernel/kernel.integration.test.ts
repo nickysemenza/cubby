@@ -1261,9 +1261,10 @@ describe("evidence-facts kernel", () => {
     expect(performance.now() - started).toBeLessThan(1000);
   });
 
-  it("orders a gated member reconcile and an ungated append to one scope without a deadlock", async () => {
+  it("serializes a multi-step member write and an append without a deadlock", async () => {
     const { kernel } = kernelWith();
     const scope = { kind: PURCHASE_SCOPE, key: "ORD-ORDER" };
+    const other = { kind: PURCHASE_SCOPE, key: "ORD-A" };
     await kernel.append(ctx.db, [charge(scope.key, 100)]);
     await settle(kernel);
     const [booked] = await purchases(ctx.db);
@@ -1271,8 +1272,9 @@ describe("evidence-facts kernel", () => {
     const onDecided = new Promise<void>((resolve) => (decided = resolve));
     let resume!: () => void;
     const onResume = new Promise<void>((resolve) => (resume = resolve));
-    // The member dirties the scope, then applies it; the append raises the
-    // scope's read key, then dirties it.
+    // The member dirties the scope, then appends another order's charge and
+    // applies the scope. The append carries both orders: without the gate it
+    // would hold the other order's key while waiting on this scope.
     const member = householdWrite(ctx.db, async (tx) => {
       await kernel.decide(tx, ctx.actor, [
         {
@@ -1285,10 +1287,14 @@ describe("evidence-facts kernel", () => {
       ]);
       decided();
       await onResume;
+      await kernel.append(tx, [charge(other.key, 50)]);
       return kernel.reconcileNow(tx, [scope]);
     });
     await onDecided;
-    const appended = kernel.append(ctx.db, [charge(scope.key, 140)]);
+    const appended = kernel.append(ctx.db, [
+      charge(other.key, 70),
+      charge(scope.key, 140),
+    ]);
     await vi.waitUntil(
       async () =>
         (
@@ -1303,10 +1309,10 @@ describe("evidence-facts kernel", () => {
     const [outcomes] = await Promise.all([member, appended]);
     expect(outcomes.map((item) => item.status)).not.toContain("failed");
     await settle(kernel);
-    expect((await purchases(ctx.db))[0]).toMatchObject({
-      amountMinor: 140,
-      merchant: "Member seller",
-    });
+    expect(await purchases(ctx.db)).toMatchObject([
+      { orderRef: other.key },
+      { orderRef: scope.key, amountMinor: 140, merchant: "Member seller" },
+    ]);
   });
 
   it("retains Run requester links for queued and already answered scope inputs", async () => {

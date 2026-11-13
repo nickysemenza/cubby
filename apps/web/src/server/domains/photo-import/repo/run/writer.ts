@@ -874,6 +874,11 @@ export async function commitPhotoGroup(
     },
     () =>
       withTransactionDatabase(db, async (transactionDb) => {
+        // The commit's record writes dirty kernel scopes: the gate before
+        // its Run and target row locks.
+        await (
+          await import("~/server/kernel/api")
+        ).enterHouseholdGate(transactionDb);
         const result = await doCommit(
           transactionDb,
           servicesFor,

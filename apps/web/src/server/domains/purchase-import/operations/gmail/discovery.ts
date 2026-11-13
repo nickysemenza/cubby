@@ -888,26 +888,30 @@ export async function finishMailDiscovery(
   if (!claimed) return { kind: "stopped" };
   if (claimed.progress.page)
     throw new Error("Cannot complete discovery with an unprocessed page");
-  const [finished] = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "completed",
-      dispatchError: null,
-      endedAt: now,
-      routine: claimed.progress.saved === 0 && claimed.progress.events === 0,
-      progress: patchProgress({ phase: "completed" }),
-    })
-    .where(eligibleAttempt(params))
-    .returning({ id: runTable.id });
-  if (finished)
-    await (
-      await import("~/server/kernel/api")
-    ).emitWrites(db, {
-      table: runTable,
-      entity: "run",
-      ids: [finished.id],
-      columns: ["status", "endedAt"],
-    });
+  const kernel = await import("~/server/kernel/api");
+  const write = {
+    table: runTable,
+    entity: "run",
+    ids: [runEntityId.parse(params.runId)],
+    columns: ["status", "endedAt"],
+  };
+  const finished = await withTransactionDatabase(db, async (tx) => {
+    // The gate before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(tx, write);
+    const [row] = await getDb(tx)
+      .update(runTable)
+      .set({
+        status: "completed",
+        dispatchError: null,
+        endedAt: now,
+        routine: claimed.progress.saved === 0 && claimed.progress.events === 0,
+        progress: patchProgress({ phase: "completed" }),
+      })
+      .where(eligibleAttempt(params))
+      .returning({ id: runTable.id });
+    if (row) await kernel.emitWrites(tx, write);
+    return row;
+  });
   if (finished)
     await recordRunProgress(
       db,

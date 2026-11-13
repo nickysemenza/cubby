@@ -75,23 +75,27 @@ export async function finishReclassifyRun(
   notes: readonly string[],
   receiptFailure = false,
 ) {
-  // A budget pause (`needs_review`) keeps its status and failure code.
-  await getDb(db)
-    .update(run)
-    .set({
-      status: receiptFailure ? "failed" : "completed",
-      endedAt: new Date(),
-      notes: notes.length ? notes.join("\n").slice(0, 2_000) : null,
-      updatedAt: new Date(),
-    })
-    .where(and(eq(run.id, runId), eq(run.status, "running")));
-  await (
-    await import("~/server/kernel/api")
-  ).emitWrites(db, {
+  const kernel = await import("~/server/kernel/api");
+  const write = {
     table: run,
     entity: "run",
     ids: [runId],
     columns: ["status", "endedAt", "failureCode"],
+  };
+  await withTransactionDatabase(db, async (tx) => {
+    // The gate before the Run row, the order a kernel apply takes.
+    await kernel.lockWrites(tx, write);
+    // A budget pause (`needs_review`) keeps its status and failure code.
+    await getDb(tx)
+      .update(run)
+      .set({
+        status: receiptFailure ? "failed" : "completed",
+        endedAt: new Date(),
+        notes: notes.length ? notes.join("\n").slice(0, 2_000) : null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(run.id, runId), eq(run.status, "running")));
+    await kernel.emitWrites(tx, write);
   });
 }
 
