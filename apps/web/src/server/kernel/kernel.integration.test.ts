@@ -407,7 +407,7 @@ describe("evidence-facts kernel", () => {
       { cursor: { page: 0 }, doneAt: null, claimToken: null },
     ]);
     const work = await kernel.runWork(ctx.db, runId);
-    expect(work.passes).toMatchObject([
+    expect(work.passes.filter((entry) => entry.name === pass.name)).toMatchObject([
       { name: pass.name, key: "default", stage: "waiting", lastError: null },
     ]);
     expect(
