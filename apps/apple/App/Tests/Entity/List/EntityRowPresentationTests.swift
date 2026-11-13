@@ -12,6 +12,14 @@ struct EntityRowPresentationTests {
         #expect(RecordMachineryHeader.inlineAction(["It was not sent: ask again", "Keep unknown"]) == nil)
     }
 
+    @Test func listDecodesTheServerMachinerySummary() throws {
+        // entity-read-media-factory + kernel/machinery.machineryListFields.
+        let row = try JSONDecoder().decode(JSONValue.self, from: Data(#"{"id":"PRD-2345","machinery":{"attempts":0,"costMicros":0,"stage":"needs_you","nextActor":"you","firstGap":"a receipt","eta":null}}"#.utf8))
+        #expect(MachineryListLine.text(row) == "Needs you · you · a receipt")
+        #expect(MachineryListLine.text(["machinery": .null]) == nil)
+        #expect(MachineryListLine.text([:]) == nil)
+    }
+
     private func field(_ value: JSONValue) -> JSONValue {
         [
             "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],

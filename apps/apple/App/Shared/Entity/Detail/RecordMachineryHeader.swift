@@ -78,12 +78,14 @@ struct RecordMachineryHeader: View {
 struct MachineryListLine: View {
     let raw: JSONValue
     static func text(_ raw: JSONValue) -> String? {
-        guard let stage = raw.recordValue("stage")?.stringValue else { return nil }
-        var words = [FieldEnvelopePresentation.stageLabel(stage)]
-        if let actor = raw.recordValue("nextActor")?.stringValue {
-            words.append(FieldEnvelopePresentation.actorLabel(actor))
+        guard let value = raw["machinery"], value != .null,
+            let read = try? value.decoded(MachineryListFields.self)
+        else { return nil }
+        var words = [FieldEnvelopePresentation.stageLabel(read.stage.rawValue)]
+        if let actor = read.nextActor {
+            words.append(FieldEnvelopePresentation.actorLabel(actor.rawValue))
         }
-        if let gap = raw.recordValue("firstGap")?.stringValue {
+        if let gap = read.firstGap {
             words.append(gap.split(whereSeparator: \.isWhitespace).prefix(6).joined(separator: " "))
         }
         return words.joined(separator: " · ")
@@ -99,5 +101,5 @@ struct MachineryListLine: View {
     RecordMachineryHeader(model: MachineryModel(), subject: .init(entity: .product, id: "PRD-4K7M"))
 }
 #Preview("Machinery list line") {
-    MachineryListLine(raw: ["stage": "needs_you", "nextActor": "you", "firstGap": "a receipt"])
+    MachineryListLine(raw: ["machinery": ["stage": "needs_you", "nextActor": "you", "firstGap": "a receipt", "attempts": 0, "costMicros": 0, "eta": .null]])
 }
