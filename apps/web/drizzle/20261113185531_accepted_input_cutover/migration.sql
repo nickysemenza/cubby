@@ -59,12 +59,19 @@ UNION ALL
 SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=e."purchaseId" AND a."deletedAt" IS NULL),e."purchaseId"::text,e.id::text) FROM "Expense" e WHERE e.id=r."expenseId"),r.id::text), r.id, to_jsonb(r), ARRAY['expenseId','role','ledgerPartyId','weight']::text[] FROM "ExpenseAttribution" r
 ), record_ids AS (
  SELECT entity,id,min(scope_key) scope_key FROM records GROUP BY entity,id
+), audited_money_fields AS MATERIALIZED (
+ SELECT a."entityKind" entity,a."entityId" id,array_agg(DISTINCT f.field) fields
+ FROM "AuditLog" a CROSS JOIN LATERAL jsonb_object_keys(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f(field)
+ WHERE a."entityKind" IN ('financialTransaction','purchase','expense','FinancialTransactionAllocation','ExpenseAttribution')
+ GROUP BY a."entityKind",a."entityId"
 ), field_values AS (
  SELECT r.entity,r.id, f.field, r.payload->f.field value, a.id audit_id, a.authority,
  a."userId", a."oauthClientId", a.channel, a."createdAt" audit_at, a.changes, a.audit_value,
  -- Only an exact, affirmative automatic trail establishes Cubby ownership.
  a.authority IN ('automatic','released') AND a.audit_value=r.payload->f.field cubby_holds
- FROM record_ids k JOIN records r USING(entity,id,scope_key) CROSS JOIN LATERAL unnest(r.fields) f(field)
+ FROM record_ids k JOIN records r USING(entity,id,scope_key)
+ LEFT JOIN audited_money_fields audited USING(entity,id)
+ CROSS JOIN LATERAL unnest(CASE WHEN r.scope_kind='fields' THEN r.fields ELSE ARRAY(SELECT field FROM unnest(r.fields) field WHERE field=ANY(coalesce(audited.fields,ARRAY[]::text[])) OR r.entity='purchase' AND field='purchaserOverrideId') END) f(field)
  LEFT JOIN LATERAL (SELECT a.*, CASE WHEN jsonb_typeof(a.changes->f.field->'to') IN ('number','string') AND (a.changes->f.field->'to' #>> '{}') ~ '^[+-]?[0-9]+([.][0-9]+)?$' THEN CASE
  WHEN ((r.entity='financialTransaction' AND f.field='amount') OR (r.entity='purchase' AND f.field='statedTotal') OR (r.entity='expense' AND f.field='cost'))
   AND abs((a.changes->f.field->'to' #>> '{}')::numeric*100-round((a.changes->f.field->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((a.changes->f.field->'to' #>> '{}')::numeric*100)::text)
