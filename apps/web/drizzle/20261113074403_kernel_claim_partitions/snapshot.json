@@ -1,0 +1,81 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "1f2d6008-4256-41b9-9e46-1184a4594e8b",
+  "prevIds": [
+    "52c76c22-7e39-4e5c-a7c3-b7186b8e6abe"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Ask",
+        "claimPartition"
+      ],
+      "writes": [
+        "s|col|public.Ask.claimPartition",
+        "n|col|public.Ask.claimPartition",
+        "e|col|public.Ask.claimPartition"
+      ],
+      "reads": [
+        "n|tbl|public.Ask",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Pass",
+        "claimPartition"
+      ],
+      "writes": [
+        "s|col|public.Pass.claimPartition",
+        "n|col|public.Pass.claimPartition",
+        "e|col|public.Pass.claimPartition"
+      ],
+      "reads": [
+        "n|tbl|public.Pass",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Ask",
+        "name": "claimPartition",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Pass",
+        "name": "claimPartition",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

@@ -95,9 +95,7 @@ export async function runOnePass(
   db: Database,
   registry: KernelRegistry,
 ): Promise<boolean> {
-  const claimed = await claimPass(repositoryQueries(db), [
-    ...registry.passes.keys(),
-  ]);
+  const claimed = await claimPass(db, [...registry.passes.values()]);
   if (!claimed) return false;
   const pass = registry.passes.get(claimed.name)!;
   const target = {

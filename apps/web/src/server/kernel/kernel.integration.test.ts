@@ -1,12 +1,14 @@
+import { ledgerPartyId } from "@cubby/schemas/identifiers";
+import { askProducer } from "@cubby/schemas/kernel/machinery";
+import { eq, inArray, sql } from "drizzle-orm";
+import { withTestDb } from "tooling/test-setup";
+import { beforeEach, describe, expect, it } from "vitest";
 /**
  * The kernel's dangerous rules (ADR 0029): order-independent convergence,
  * the `seq` and `rev` fences, claim expiry, never resending an unknown ask,
  * history protection, and decisions that outlive recomputation.
  */
-import { ledgerPartyId } from "@cubby/schemas/identifiers";
-import { eq, inArray, sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -22,6 +24,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   createKernel,
   defineModule,
+  defineAsk,
   defineEvidence,
   definePass,
   evidenceRow,
@@ -30,7 +33,16 @@ import {
 } from "./api";
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
-import { claimPass, ClaimLapsedError, claimScopes, fenceClaim } from "./claim";
+import {
+  claimAsk,
+  claimAsks,
+  releaseClaim,
+  cancelClaimable,
+  claimPass,
+  ClaimLapsedError,
+  claimScopes,
+  fenceClaim,
+} from "./claim";
 import { computeBatch } from "./compute";
 import { runOnePass } from "./pass";
 import {
@@ -407,14 +419,16 @@ describe("evidence-facts kernel", () => {
       { cursor: { page: 0 }, doneAt: null, claimToken: null },
     ]);
     const work = await kernel.runWork(ctx.db, runId);
-    expect(work.passes.filter((entry) => entry.name === pass.name)).toMatchObject([
+    expect(
+      work.passes.filter((entry) => entry.name === pass.name),
+    ).toMatchObject([
       { name: pass.name, key: "default", stage: "waiting", lastError: null },
     ]);
     expect(
       (await kernel.machinery(ctx.db, ctx.actor, { entity: "run", id: runId }))
         .passes,
     ).toEqual(work.passes);
-    const next = await claimPass(repositoryQueries(ctx.db), [pass.name]);
+    const next = await claimPass(ctx.db, [pass]);
     expect(next).not.toBeNull();
     await expect(
       fenceClaim(
@@ -423,6 +437,81 @@ describe("evidence-facts kernel", () => {
         next!.token,
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {
+    const limit = { partition: "synthetic.agent-turn", slots: 2 };
+    const ask = defineAsk({
+      feature: "fixture.partition",
+      producer: "model",
+      promptVersion: "1",
+      input: z.string(),
+      output: z.string(),
+      claimLimit: limit,
+    });
+    const pass = definePass({
+      name: "fixture.partition",
+      claimLimit: limit,
+      run: async (_db, cursor) => ({ cursor, done: true }),
+    });
+    const kernel = createKernel([
+      defineModule({ name: "partition", asks: [ask], passes: [pass] }),
+    ]);
+    const q = repositoryQueries(ctx.db);
+    const rows = await q.execute<{
+      id: string;
+    }>(sql`INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input)
+      SELECT 'synthetic-partition-' || n, ${ask.feature}, ${askProducer.enum.model}, '1', '{}'::jsonb FROM generate_series(1, 8) n RETURNING id`);
+    const ids = rows.rows.map((row) => row.id);
+    await q.execute(
+      sql`INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey") SELECT id, '$run', 'synthetic' FROM "Ask" WHERE feature = ${ask.feature}`,
+    );
+    await kernel.startPass(ctx.db, pass);
+    const first = await claimAsk(ctx.db, ids[0]!, limit);
+    const heldPass = await claimPass(ctx.db, [pass]);
+    expect(first).not.toBeNull();
+    expect(heldPass).not.toBeNull();
+    expect(await claimAsk(ctx.db, ids[1]!, limit)).toBeNull();
+    expect(await claimAsks(ctx.db, [ask], 8)).toEqual([]);
+    const [parked] = (
+      await q.execute<{ waitCause: string; attempts: number; future: boolean }>(
+        sql`SELECT "waitCause", attempts, "availableAt" > now() AS future FROM "Ask" WHERE id = ${ids[1]!}::uuid`,
+      )
+    ).rows;
+    expect(parked).toEqual({
+      waitCause: "provider_capacity",
+      attempts: 0,
+      future: true,
+    });
+    await releaseClaim(q, { table: "Ask", id: ids[0]! }, first!.token);
+    await q.execute(
+      sql`UPDATE "Ask" SET "availableAt" = now() WHERE feature = ${ask.feature}`,
+    );
+    const batch = await claimAsks(ctx.db, [ask], 8);
+    expect(batch).toHaveLength(1);
+    await cancelClaimable(q, {
+      table: "Pass",
+      name: pass.name,
+      key: "default",
+    });
+    await q.execute(
+      sql`UPDATE "Ask" SET "availableAt" = now() WHERE feature = ${ask.feature}`,
+    );
+    const concurrent = await Promise.all(
+      ids.slice(2).map((id) => claimAsk(ctx.db, id, limit)),
+    );
+    expect(concurrent.filter(Boolean)).toHaveLength(1);
+    await q.execute(
+      sql`UPDATE "Ask" SET "claimDeadline" = now() - interval '1 second' WHERE id = ${batch[0]!.id}::uuid`,
+    );
+    await expect(
+      fenceClaim(q, { table: "Ask", id: batch[0]!.id }, batch[0]!.token),
+    ).rejects.toBeInstanceOf(ClaimLapsedError);
+    expect(await claimAsk(ctx.db, batch[0]!.id, limit)).not.toBeNull();
+    const live = await q.execute<{ n: number }>(
+      sql`SELECT count(*)::int AS n FROM "Ask" WHERE "claimPartition" = ${limit.partition} AND "claimToken" IS NOT NULL AND "claimDeadline" > now()`,
+    );
+    expect(live.rows[0]?.n).toBe(2);
   });
 
   it("never sends an unknown ask again", async () => {

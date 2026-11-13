@@ -135,6 +135,9 @@ export type AskPolicy = {
   outputRevision?: string;
 };
 
+/** Household-wide admission shared by Ask and Pass claims. */
+export type ClaimLimit = { readonly partition: string; readonly slots: number };
+
 export type AskKind<I = unknown, O = unknown> = {
   readonly type: "ask";
   readonly feature: string;
@@ -144,6 +147,7 @@ export type AskKind<I = unknown, O = unknown> = {
   readonly output: z.ZodType<O>;
   readonly policy: AskPolicy;
   readonly maxAttempts: number;
+  readonly claimLimit?: ClaimLimit;
   /** Member-facing name of what this ask supplies, for its gap. */
   readonly label: string;
   // Methods, so an AskKind<I, O> is an AskKind of the registry's shared shape.
@@ -163,6 +167,7 @@ export function defineAsk<I, O>(spec: {
   output: z.ZodType<O>;
   policy?: AskPolicy;
   maxAttempts?: number;
+  claimLimit?: ClaimLimit;
   label?: string;
   admit?(db: Database): Promise<void>;
   produce?(input: I, context: ProduceContext): Promise<Produced<O>>;
@@ -449,6 +454,7 @@ export type PassResult = {
 
 export type Pass = {
   readonly type: "pass";
+  readonly claimLimit?: ClaimLimit;
   readonly name: string;
   readonly key?: (input: Json) => string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
@@ -456,6 +462,7 @@ export type Pass = {
 
 export function definePass(spec: {
   name: string;
+  claimLimit?: ClaimLimit;
   key?(input: Json): string;
   run(db: Database, cursor: Json | null, claim: Claim): Promise<PassResult>;
 }): Pass {

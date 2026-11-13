@@ -32,6 +32,7 @@ import type { AskOutcome } from "./ask-gap";
 import {
   backoffMs,
   claimAsks,
+  claimAsk,
   rawError,
   renewClaim,
   settleFailure,
@@ -43,9 +44,8 @@ import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
 import { answerKey } from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
-import { isoText } from "./sql-time";
 import { ASK, PASS_WAITER, RECORD_WAITER, RUN_WAITER } from "./vocab";
-import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
+import { wakeAfterCommit } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -508,18 +508,11 @@ export async function withAsk<I, O>(
     throw new AskExhaustedError(
       `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
     );
-  const token = crypto.randomUUID();
-  const claimed = await q.execute<{ attempts: number; deadline: string }>(sql`
-    UPDATE "Ask" SET "claimToken" = ${token}::uuid,
-      "claimDeadline" = now() + make_interval(secs => 90)
-    WHERE id = ${row.id}::uuid AND state = ${ASK.queued} AND "cancelledAt" IS NULL
-      AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-    RETURNING attempts, ${isoText(sql`"claimDeadline"`)} AS deadline`);
-  if (!claimed.rows[0])
+  const claimed = await claimAsk(db, row.id, kind.claimLimit);
+  if (!claimed)
     throw inFlight(
-      "Another worker holds this ask's claim; no duplicate call was placed.",
+      "Another worker holds this ask or its claim partition is full.",
     );
-  await wakeClaimRecovery(new Date(claimed.rows[0].deadline));
   const [result] = await executeClaimed(
     db,
     registry,
@@ -532,9 +525,9 @@ export async function withAsk<I, O>(
           inputHash,
           feature: kind.feature,
           input: envelope,
-          attempts: claimed.rows[0].attempts,
-          deadline: new Date(claimed.rows[0].deadline),
-          token,
+          attempts: claimed.attempts,
+          deadline: claimed.deadline,
+          token: claimed.token,
           maxAttempts: row.maxAttempts,
         },
       },
@@ -552,11 +545,7 @@ export async function runQueuedAsks(
   limit: number,
 ): Promise<number> {
   const runnable = [...registry.asks.values()].filter((kind) => kind.produce);
-  const claimed = await claimAsks(
-    repositoryQueries(db),
-    runnable.map((kind) => kind.feature),
-    limit,
-  );
+  const claimed = await claimAsks(db, runnable, limit);
   if (!claimed.length) return 0;
   const entries = claimed.map((ask) => {
     const kind = registry.asks.get(ask.feature)!;

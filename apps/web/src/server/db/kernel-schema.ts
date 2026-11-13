@@ -173,6 +173,7 @@ export const ask = pgTable(
     input: jsonb("input").notNull(),
     state: text("state").$type<AskState>().notNull().default("queued"),
     ...claimColumns(),
+    claimPartition: text("claimPartition"),
     maxAttempts: integer("maxAttempts").notNull().default(3),
     cancelledAt: timestamp("cancelledAt", { mode: "date" }),
     sentAt: timestamp("sentAt", { mode: "date" }),
@@ -401,6 +402,7 @@ export const kernelPass = pgTable(
       .notNull()
       .default([]),
     ...claimColumns(),
+    claimPartition: text("claimPartition"),
     maxAttempts: integer("maxAttempts").notNull().default(5),
     runId: uuid("runId"),
     doneAt: timestamp("doneAt", { mode: "date" }),

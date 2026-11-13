@@ -45,6 +45,7 @@ export {
   type AskKind,
   type Binding,
   type Claim,
+  type ClaimLimit,
   type ColumnRef,
   type AnsweredValue,
   type DecisionInForce,
