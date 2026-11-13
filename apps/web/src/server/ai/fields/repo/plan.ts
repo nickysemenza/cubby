@@ -142,6 +142,8 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
         ...(entity === "run"
           ? [
               "purpose",
+              "routine",
+              "trigger",
               "status",
               "failureCode",
               "startedAt",
