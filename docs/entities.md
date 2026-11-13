@@ -3500,12 +3500,12 @@ order; a type check requires them to list every declared entity and field.
 ### Suggestion storage and review
 
 Field proposals are retained Answers. The `fields` reconciler exposes an undecided proposal as a
-ScopeState decision gap; assignments and vetoes are independent append-only Decisions. Connection
-candidates are immutable evidence, and the `connections` reconciler offers Link and Dismiss decisions.
-Review reads the current gap and evidence, fences the source, and appends intent in the same transaction
+ScopeState decision gap; assignments and vetoes are independent append-only Decisions.
+Field review reads the current gap and evidence, fences the source, and appends intent in the same transaction
 as any authored domain write. It never grades an Answer into operational authority. A corrected null
 is an explicit None. Exact command replay returns the original result; conflicting operation-id reuse
 is refused. Replayed Answers acquire an AskScope link for every requesting Run.
+Connection candidates retain their evidence; Link and Dismiss use the existing suggestion and import writers.
 
 A form prediction changes only its draft. Saving uses the ordinary entity writer, which records the
 chosen assignment. Saved field guesses are accepted through their Decision action; rejecting a saved

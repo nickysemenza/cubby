@@ -8,6 +8,11 @@ read" rule of [ADR 0024](0024-repository-read-declaration.md). It amends item 1
 of ADR 0028 for one case (section 9). Everything else in those ADRs stays in
 force, including ADR 0026's occurrence, head-selection and proof rules.
 
+The implemented scopes are `bankEvent`, statement-first `purchaseEvent` and
+`fields`. `paymentMatch`, `transferPair`, `shipment`, `emailState` and order
+evidence use the existing import code. The remaining scope descriptions below
+state the intended architecture.
+
 Where an older ADR conflicts with this one, this one wins, and the older ADR
 is edited or reduced to a stub as [the index](README.md) describes.
 

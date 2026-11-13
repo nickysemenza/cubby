@@ -17,7 +17,9 @@ separate live-only unique index still enforces active observation identity.
 
 Pure policy lives under `apps/web/src/server/domains/<domain>/policy/`.
 Repositories load evidence and submit observations and decisions. The kernel
-owns applying the money reconcilers under its household write gate. Empty searches are evidence too: loaders must supply empty arrays
+applies `bankEvent` and statement-first `purchaseEvent` under its household
+write gate. Order and Email evidence, payment matching, transfer pairing and
+shipment state use the existing import writers. Empty searches are evidence too: loaders must supply empty arrays
 and explicit missing rows rather than omit competing candidates.
 
 | Domain / module                                         | Decision and read inputs                                                                                                                                                                                                                                                                                                                                                                                      |
@@ -352,10 +354,9 @@ they have the original page content.
 Original shipment captures enter through the kernel's `append` as
 `shipment.capture` evidence. The source-key/checksum constraint decides duplicate
 intake; replay reads the retained capture without updating it. Capture row and
-source keys index the evidence for reconcilers. Email captures discover the
-Email's `emailState` scope, and evidence visibility belongs to the capturing
-member. Package observations supply shipment identity separately from the raw
-capture.
+source keys retain its provenance. Evidence visibility belongs to the capturing
+member. Shipment and Email outcomes use the existing import writers; package
+observations supply shipment identity separately from the raw capture.
 
 Email agents route package observations through `shipments.record` and use
 `purchase_import.mail_resolve` for association/disposition; linked resolutions
