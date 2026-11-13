@@ -259,7 +259,9 @@ export function MachineryStateFallback({
   children: ReactNode;
 }) {
   const read = useMachinery({ entity, id });
-  return read.data?.machinery ? null : <>{children}</>;
+  return read.isSuccess && read.data.machinery === null ? (
+    <>{children}</>
+  ) : null;
 }
 
 /**

@@ -11,6 +11,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { useMachinery } from "~/entity/machinery/record-machinery";
 import { entityMetadata } from "~/entity/metadata";
 import {
   RecordWorkQueueRow,
@@ -79,7 +80,9 @@ function NeedsYou<E extends GenericDetailEntity>({
   // failure they are what the failure left, so they take its mark.
   const itemsFailed =
     readRecordState(queryClient, entity, record)?.failed === true;
-  const queue = useRecordWorkQueue(record.id, declared === undefined);
+  const machinery = useMachinery({ entity, id: record.id });
+  const legacy = machinery.isSuccess && machinery.data.machinery === null;
+  const queue = useRecordWorkQueue(record.id, legacy && declared === undefined);
   const rows = declared === undefined ? queue.rows : [];
   const named = new Set(
     rows.flatMap((row) => row.gaps.map((gap): string => gap.check)),
@@ -88,6 +91,7 @@ function NeedsYou<E extends GenericDetailEntity>({
     ({ check }) => !named.has(check.check),
   );
   const count = items.length + rows.length + quality.length;
+  if (!legacy) return null;
   if (queue.error && declared === undefined)
     return <ErrorDisplay error={queue.error} title="Needs you" />;
   if (count === 0) return null;
