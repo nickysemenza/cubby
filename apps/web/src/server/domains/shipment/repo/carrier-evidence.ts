@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { escapeLike, notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   vendor,
@@ -353,20 +354,20 @@ export function carrierClaimsConflict(
 /** Only links in the checksum-verified Email original are independent URL evidence.
  * The submitted tracking-page URL and strings synthesized during extraction are not.
  */
-export function carrierCaptureEvidence(
-  capture: Pick<
-    typeof shipmentSourceCapture.$inferSelect,
-    "source" | "originalContent"
-  >,
-): CarrierSourceEvidence {
-  if (capture.source.kind !== "email")
+export function carrierCaptureEvidence(capture: {
+  source: { kind: string; content?: string | null };
+  originalContent: {
+    bodyText?: string | null;
+    bodyHtml?: string | null;
+  } | null;
+}): CarrierSourceEvidence {
+  if (capture.source.kind !== "email") {
+    const content = capture.source.content ?? "";
     return {
-      texts: [
-        capture.source.content,
-        wasm.compact_email_html(capture.source.content).text,
-      ],
+      texts: [content, wasm.compact_email_html(content).text],
       links: [],
     };
+  }
   const original = capture.originalContent;
   const compact = original?.bodyHtml
     ? wasm.compact_email_html(original.bodyHtml)
@@ -521,18 +522,36 @@ export async function loadCarrierHistory(
     ],
     sql` UNION `,
   );
-  const rows = await database
-    .select({
-      id: shipmentSourceCapture.id,
-      source: shipmentSourceCapture.source,
-      originalContent: shipmentSourceCapture.originalContent,
-      bound,
-      events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture}."id" AND o."supersededById" IS NULL), '[]'::jsonb)`,
-    })
-    .from(shipmentSourceCapture)
-    .where(sql`${shipmentSourceCapture.id} IN (${candidates})`)
-    .limit(2001);
-  const selected = rows.slice(0, 2000);
+  const idRows = await database.execute<{ id: string }>(
+    sql`SELECT id FROM (${candidates}) candidate LIMIT 2001`,
+    "objects",
+  );
+  const selectedIds = idRows.slice(0, 2000).map((row) => row.id);
+  const rows = selectedIds.length
+    ? await database
+        .select({
+          id: shipmentSourceCapture.id,
+          // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- kind is a retained source JSON key.
+          kind: sql<string>`${shipmentSourceCapture.source}->>'kind'`,
+          // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- content is a retained source JSON key.
+          content: sql<
+            string | null
+          >`${shipmentSourceCapture.source}->>'content'`,
+          bodyText: sql<
+            string | null
+          >`${shipmentSourceCapture.originalContent}->>'bodyText'`,
+          bodyHtml: sql<
+            string | null
+          >`${shipmentSourceCapture.originalContent}->>'bodyHtml'`,
+          bound,
+          events: sql<unknown>`coalesce((SELECT jsonb_agg(o.event) FROM ${shipmentObservationCapture} oc JOIN ${shipmentObservation} o ON o.id = oc."observationId" WHERE oc."captureId" = ${shipmentSourceCapture}."id" AND o."supersededById" IS NULL), '[]'::jsonb)`,
+        })
+        .from(shipmentSourceCapture)
+        .where(
+          sql`${shipmentSourceCapture.id} = ANY(${uuidArrayParam(selectedIds)})`,
+        )
+    : [];
+  const selected = rows;
   // A capture can contain an admitted package and another held package. Only
   // current events naming this reference can date its claims; otherwise keep them conservatively.
   const windows = await database.execute(
@@ -589,11 +608,17 @@ export async function loadCarrierHistory(
               trackingNumber: reference,
               extraTrackingNumbers: [],
             },
-            carrierCaptureEvidence(row),
+            carrierCaptureEvidence({
+              source: { kind: row.kind, content: row.content },
+              originalContent: {
+                bodyText: row.bodyText,
+                bodyHtml: row.bodyHtml,
+              },
+            }),
           )
         ).explicit,
       );
     }
   }
-  return { claims, truncated: rows.length > 2000, window };
+  return { claims, truncated: idRows.length > 2000, window };
 }

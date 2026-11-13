@@ -69,7 +69,7 @@ import { acceptFinancialTransferPair } from "~/server/domains/financial-transact
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import {
   sourceObservationFacts,
-  sourceObservationFrom,
+  sourceObservationFactsFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { hasStatementOccurrence } from "~/server/domains/transaction-import/repo/statement-charge";
@@ -1492,7 +1492,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
     );
   const rows = await unwrapDb(db).execute<{ providerStatus: unknown }>(
     sql`
-    SELECT "providerStatus" FROM ${sourceObservationFrom} WHERE source=${leg.charge.source}
+    SELECT "providerStatus" FROM ${sourceObservationFactsFrom} WHERE source=${leg.charge.source}
       AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND ${notDeleted("SourceTransactionRecord")}
   `,
     "objects",

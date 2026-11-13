@@ -245,8 +245,8 @@ that claimed work sends exactly one successor permit for the earliest owed work
 across Jobs, leases and drains (`nextDueAt`): now if anything is due, else
 delayed until it is due (at most twelve hours). A permit that claimed nothing,
 including an over-produced one, exits after its one selection query and sends
-nothing, and a failed drain page sends no successor; so wake chains end when
-the household goes idle. Each Job claim and each cloud image claim also sends
+nothing, and a failed drain page sends no successor; so wake chains end in
+one delayed permit at the hour. Each Job claim and each cloud image claim also sends
 one recovery permit due when that claim's own lease lapses, naming the claim
 (Job lease token, image attempt), so a killed invocation is recovered without
 waiting for cron. A Job recovery runs only if that lease lapsed unsettled; an

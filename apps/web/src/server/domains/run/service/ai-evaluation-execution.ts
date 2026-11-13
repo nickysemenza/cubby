@@ -12,7 +12,11 @@ import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import { pauseRunForAiWork, readRunStatus } from "../repo/ai-work-state";
 import { executeAiRefreshTarget, type AiRefreshPorts } from "./ai-refresh";
-import { executeAiWorkTarget, type AiWorkPorts } from "./ai-work";
+import {
+  executeAiWorkTarget,
+  withRunActorPage,
+  type AiWorkPorts,
+} from "./ai-work";
 
 export type AiEvaluationPorts = AiRefreshPorts & AiWorkPorts;
 
@@ -39,7 +43,8 @@ export const runAiEvaluationExecution = (
     (await readRunStatus(db, runEntityId.parse(runId))) === "paused",
   // Field items of one page share their reference rosters; each project roster
   // read aggregates every project's allocations.
-  withPage: withFieldSuggestionPreparation,
+  withPage: (work) =>
+    withFieldSuggestionPreparation(() => withRunActorPage(work)),
   resumeFundingStopped: async (db, runIds) => {
     await resumeFundingStoppedRuns(
       db,

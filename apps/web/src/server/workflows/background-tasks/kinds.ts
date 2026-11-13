@@ -126,9 +126,9 @@ const BACKGROUND_TASK_KINDS = {
   "maintenance.purchase-discovery": {
     schema: maintenancePurchaseDiscoveryTaskSchema,
     key: (task) => task.kind,
-    run: async (db) => {
+    run: async (db, task) => {
       const { discoverPurchases } = await import("~/server/workflows/catch-up");
-      await discoverPurchases(db);
+      await discoverPurchases(db, { senderAfter: task.senderAfter ?? null });
       return "succeeded";
     },
   },

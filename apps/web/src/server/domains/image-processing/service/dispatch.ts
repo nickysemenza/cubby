@@ -57,8 +57,12 @@ export type CloudImageDispatchOptions = {
  */
 const CLOUD_IMAGE_LEASE_MS = 16 * 60_000;
 
-/** An AVIF identification waits this long for a device to prepare its rendition. */
-const RENDITION_WAIT_MS = 10 * 60_000;
+/**
+ * An AVIF identification waits this long for a device to prepare its rendition.
+ * `bringImageProcessingForward` already sets `runAt` to now when that rendition
+ * is stored, so the wait does not have to poll inside the suspend gap.
+ */
+const RENDITION_WAIT_MS = 60 * 60_000;
 
 const cloudExecutor = (name: string) => ({
   kind: "cloud" as const,

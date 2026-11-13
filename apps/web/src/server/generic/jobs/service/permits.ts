@@ -5,7 +5,7 @@
  * `max_concurrency` is the only concurrency bound. A permit that ran a unit
  * sends exactly one successor when anything is owed; a permit that found
  * nothing exits after that one query and sends nothing, so wake chains end
- * when the household goes idle.
+ * in one delayed permit at the hour.
  */
 import type { JobExecution } from "@cubby/schemas/job";
 import type { PermitRecovery } from "@cubby/schemas/queue-messages";

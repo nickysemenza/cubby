@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import {
@@ -33,7 +35,7 @@ import {
   readAiRefreshWorkSummary,
   guardAiEvaluationAttempt,
   readAiEvaluationReceipt,
-  readRun,
+  readRunActor,
   writeRunningAttemptProgress,
   type AiEvaluationRow,
   type RunRow,
@@ -188,6 +190,23 @@ export async function aiWorkItems(db: Database, owner: RunRow) {
   );
 }
 
+const runActorPage = new AsyncLocalStorage<
+  Map<string, Awaited<ReturnType<typeof readRunActor>> | null>
+>();
+
+/** One actor read per Run on an AI-work page. Direct calls still read narrowly. */
+export const withRunActorPage = <T>(work: () => Promise<T>) =>
+  runActorPage.run(new Map(), work);
+
+async function runActorFor(db: Database, runId: RunRow["id"]) {
+  const page = runActorPage.getStore();
+  const key = String(runId);
+  if (page?.has(key)) return page.get(key) ?? undefined;
+  const actor = await readRunActor(db, runId);
+  page?.set(key, actor ?? null);
+  return actor;
+}
+
 /** Reclassification and suggestion sweep evaluate one claimed item; the drain owns failures. */
 export async function executeAiWorkTarget(
   db: Database,
@@ -198,7 +217,7 @@ export async function executeAiWorkTarget(
   if (item.executionKind === "mail_reclassify")
     await executeReclassificationTarget(db, item, ports.reclassification);
   else {
-    const owner = item.runId && (await readRun(db, item.runId));
+    const owner = item.runId && (await runActorFor(db, item.runId));
     if (!owner)
       throw new JobEvidenceObsoleteError(
         "Suggestion sweep Run no longer exists",

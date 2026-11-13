@@ -25,6 +25,7 @@ import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
 import {
   and,
   eq,
+  getTableName,
   isNull,
   or,
   sql,
@@ -34,7 +35,7 @@ import {
 import { alias, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import { qualitySnapshot } from "~/server/db/retained-tables";
 import { storedEntryFor } from "~/server/generic/data-quality/repo/entry";
 import { relatedGapCondition } from "~/server/generic/data-quality/repo/sql";
@@ -286,8 +287,8 @@ export const entityProblemSources = (
             : sql`false`;
         }
         // Labels and routing (owner subqueries) are base columns, not facts:
-        // the base evaluates them only for admitted candidates, while the
-        // materialized facts relation covers every record.
+        // the base evaluates them only for admitted candidates. The facts
+        // relation is not-deleted records that can match.
         const routedColumns: Record<string, SQL> = {};
         const routedNames = new Map<string, string>();
         if (typeof read.columns === "function")
@@ -309,7 +310,7 @@ export const entityProblemSources = (
               }
               routes.set(`${index}:${key}`, name);
             }
-        const factQuery = getDb(db)
+        const factRows = getDb(db)
           .select({
             code: sql`${read.table.shortcode}`.as("code"),
             ...Object.fromEntries(
@@ -317,7 +318,18 @@ export const entityProblemSources = (
             ),
           })
           .from(read.table)
-          .where(recordScope(scope, sql`${read.table.shortcode}`));
+          .where(
+            and(
+              recordScope(scope, sql`${read.table.shortcode}`),
+              notDeleted(getTableName(read.table)),
+            ),
+          );
+        // Predicates name the fact relation and the stored table. The scan
+        // alias is hidden inside factRows, so the filter joins the table again.
+        const canMatch = or(...Object.values(columns));
+        const factQuery = canMatch
+          ? sql`(SELECT ${sql.identifier(factName)}.* FROM (${factRows}) ${sql.identifier(factName)} INNER JOIN ${read.table} ON ${read.table.shortcode} = ${sql.identifier(factName)}.code AND ${notDeleted(read.table)} WHERE ${canMatch})`
+          : factRows;
         const root = getDb(db)
           .select({
             code: sql`${read.table.shortcode}`.as("code"),

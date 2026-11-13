@@ -18,7 +18,14 @@ import {
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 
 const log = createLogger("email-purchase-discovery");
-const PASS_INTERVAL_MS = 60 * 60_000;
+
+/** The next UTC hour, so a finished pass lands with cron and the derived pass. */
+function nextUtcHour(now = Date.now()) {
+  const next = new Date(now);
+  next.setUTCMinutes(0, 0, 0);
+  next.setUTCHours(next.getUTCHours() + 1);
+  return next;
+}
 
 /**
  * Publishes the Suggestions that propose a retained Email's purchase link.
@@ -67,10 +74,10 @@ export const emailPurchaseDiscoveryDrain: BackgroundDrain = {
       const next =
         emails.length === EMAIL_PURCHASE_PAGE ? emails.at(-1)!.id : null;
       return {
-        // The page ran even when it found nothing: its successor waits an hour.
+        // The page ran even when it found nothing: its successor waits for the hour.
         result: {
           claimed: Math.max(1, emails.length),
-          nextAt: next ? null : new Date(Date.now() + PASS_INTERVAL_MS),
+          nextAt: next ? null : nextUtcHour(),
         },
         next,
       };

@@ -196,8 +196,9 @@ const LEARN_PAGE = 50;
 export async function learnAcceptedSenders(
   db: Db,
   actor: ActorContext,
+  knownAttributions?: Awaited<ReturnType<typeof readSenderAttributions>>,
 ): Promise<{ more: boolean }> {
-  const proofs = await readSenderAttributions(db);
+  const proofs = knownAttributions ?? (await readSenderAttributions(db));
   const client = unwrapDb(db);
   const vendors = await client
     .select({

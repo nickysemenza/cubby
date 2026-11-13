@@ -55,12 +55,29 @@ import {
 } from "./financial-convergence";
 import { updateFinancialTransaction } from "./financial-transaction";
 
+const correctionObservationColumns = {
+  source: sourceObservationColumns.source,
+  externalId: sourceObservationColumns.externalId,
+  reviewState: sourceObservationColumns.reviewState,
+  occurrenceId: sourceObservationColumns.occurrenceId,
+  withdrawnAt: sourceObservationColumns.withdrawnAt,
+  withdrawalImportId: sourceObservationColumns.withdrawalImportId,
+  current: sourceObservationColumns.current,
+  supersededByRowId: sourceObservationColumns.supersededByRowId,
+  amount: sourceObservationColumns.amount,
+  providerStatus: sourceObservationColumns.providerStatus,
+  providerAccountId: sourceObservationColumns.providerAccountId,
+  statementDate: sourceObservationColumns.statementDate,
+  acceptedTransactionId: sourceObservationColumns.acceptedTransactionId,
+  accountId: sourceObservationColumns.accountId,
+};
+
 const correctionObservations = (
   db: Database,
   ids: readonly SourceTransactionRecordId[],
 ) =>
   getDb(db)
-    .select(sourceObservationColumns)
+    .select(correctionObservationColumns)
     .from(sql`${sourceObservationsForPage(ids)} "SourceTransactionRecord"`);
 type Observation = Awaited<ReturnType<typeof correctionObservations>>[number];
 type EvidenceVerification =

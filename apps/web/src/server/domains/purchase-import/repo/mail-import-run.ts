@@ -649,8 +649,30 @@ export async function admitMailImport(
     !input.automatic &&
     !input.parentRunId &&
     input.messageIds.every((id) => selectedSources.has(id));
+  // After the member lock. A plain read would keep the snapshot from before
+  // that wait. Sharing the Vendor row makes an exclusion that committed
+  // during the wait abort this attempt; the retry reads the new proof.
+  const senderIdentityFor = async (tx: DrizzleTransaction) => {
+    if (!input.senderRecheck) return undefined;
+    const sender = input.senderRecheck.sender;
+    await tx
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(
+        and(
+          notDeleted(vendor),
+          or(
+            sql`EXISTS (SELECT 1 FROM unnest(${vendor.orderEmailSenders}) AS known(address) WHERE lower(trim(known.address)) = ${sender})`,
+            sql`${vendor.orderEmailSenderPolicies} ? ${sender}`,
+          ),
+        ),
+      )
+      .for("share");
+    return (await readSenderAttributions(tx, [sender]))[0];
+  };
   const admit = (writeDb: Database) =>
     withTransaction(writeDb, async (tx) => {
+      await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
       const [parent] = input.parentRunId
         ? await tx
             .select({
@@ -747,13 +769,13 @@ export async function admitMailImport(
                 )
               : undefined;
       let newEvidenceAt: Date | undefined = input.waitRecheck?.settledAt;
+      // After the member lock, so an exclusion that committed while this
+      // attempt waited is the proof this attempt uses.
+      const senderIdentity = await senderIdentityFor(tx);
       if (input.senderRecheck) {
-        const [identity] = await readSenderAttributions(tx, [
-          input.senderRecheck.sender,
-        ]);
         if (
-          identity?.state !== "verified" ||
-          identity.vendorId !== input.senderRecheck.vendorId ||
+          senderIdentity?.state !== "verified" ||
+          senderIdentity.vendorId !== input.senderRecheck.vendorId ||
           sources.some(
             (source) =>
               senderAddress(source.sender) !== input.senderRecheck?.sender,
@@ -1112,16 +1134,23 @@ const waitedSourceSettledSql = sql`SELECT max(at) AS at FROM (
     AND awaited.result #>> '{mailOutcome,judgment,kind}' IN (${"imported"}, ${"linked"})
 ) source`;
 
-export async function importPendingEmails(db: Database) {
+export async function importPendingEmails(
+  db: Database,
+  options: {
+    knownAttributions?: Awaited<ReturnType<typeof readSenderAttributions>>;
+    /** Resume the sender scan after this Email in this mailbox. */
+    senderAfter?: { mailboxId: string; afterId: string } | null;
+  } = {},
+) {
   const { listMemberMailboxes } =
     await import("~/server/domains/purchase-import/repo/gmail/targets");
   const { mailImportEnabled } =
     await import("~/server/domains/purchase-import/repo/mail-import-settings");
   const { retainedEmailImportContentCondition } =
     await import("~/server/domains/purchase-import/repo/email-content");
-  const identities = (await readSenderAttributions(db)).filter(
-    (row) => row.state === "verified" && row.vendorId !== null,
-  );
+  const identities = (
+    options.knownAttributions ?? (await readSenderAttributions(db))
+  ).filter((row) => row.state === "verified" && row.vendorId !== null);
   const recheckIdentities = await Promise.all(
     identities.map(async (row) => ({
       sender: row.sender,
@@ -1133,6 +1162,12 @@ export async function importPendingEmails(db: Database) {
     })),
   );
   const errors: unknown[] = [];
+  const mailboxes = await listMemberMailboxes(db);
+  let resume = options.senderAfter ?? null;
+  if (resume && !mailboxes.some((row) => row.mailboxId === resume?.mailboxId))
+    resume = null;
+  let skipping = resume !== null;
+  let senderAfter: { mailboxId: string; afterId: string } | null = null;
   try {
     // A Purchase that gained a Shipment's order number holds that Shipment.
     await withTransactionDatabase(db, (tx) =>
@@ -1141,7 +1176,11 @@ export async function importPendingEmails(db: Database) {
   } catch (error) {
     errors.push(error);
   }
-  for (const target of await listMemberMailboxes(db)) {
+  for (const target of mailboxes) {
+    if (skipping) {
+      if (target.mailboxId !== resume?.mailboxId) continue;
+      skipping = false;
+    }
     const actorId = target.userId;
     if (!actorId) continue;
     if (!(await mailImportEnabled(db, target.mailboxId))) continue;
@@ -1418,9 +1457,13 @@ export async function importPendingEmails(db: Database) {
     if (!recheckIdentities.length) continue;
     // Select the narrow metadata once; originals and accepted Purchase evidence
     // stay in bounded pages. Admission rechecks current eligibility under locks.
+    const senderAfterId =
+      resume?.mailboxId === target.mailboxId ? resume.afterId : undefined;
+    if (resume?.mailboxId === target.mailboxId) resume = null;
     const senderRows = await getDb(db)
       .select({
         id: orderMail.id,
+        emailId: emailTable.id,
         sender: sql<string>`sender_identity.sender`,
         vendorId: sql<string>`sender_identity."vendorId"`,
         revision: sql<string>`sender_identity.revision`,
@@ -1477,98 +1520,103 @@ export async function importPendingEmails(db: Database) {
           retainedEmailImportContentCondition(),
           untouchedAutomaticUnresolved(false, undefined, false),
           sql`NOT EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`,
+          senderAfterId
+            ? sql`${emailTable.id} > ${senderAfterId}::uuid`
+            : undefined,
         ),
       )
-      .orderBy(asc(emailTable.id));
-    for (let offset = 0; offset < senderRows.length; offset += 50) {
-      const page = senderRows.slice(offset, offset + 50);
-      const originals = await readRetainedMail(db, {
-        ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
-        orderMailIds: page.map((row) => row.id),
-      });
-      const complete = originals.filter((original) => {
-        const content = mailReadContent(original.content, {});
-        return !content.truncated && content.nextByteOffset === null;
-      });
-      const identifiers = new Map(
-        [...(await readEmailMailKeysForMails(db, complete))].map(
-          ([id, keys]) => [id, keys.orderKeys],
-        ),
+      .orderBy(asc(emailTable.id))
+      .limit(50);
+    const page = senderRows;
+    const originals = await readRetainedMail(db, {
+      ledgerPartyIds: [parseEntityId("ledgerParty", target.ledgerPartyId)],
+      orderMailIds: page.map((row) => row.id),
+    });
+    const complete = originals.filter((original) => {
+      const content = mailReadContent(original.content, {});
+      return !content.truncated && content.nextByteOffset === null;
+    });
+    const identifiers = new Map(
+      [...(await readEmailMailKeysForMails(db, complete))].map(([id, keys]) => [
+        id,
+        keys.orderKeys,
+      ]),
+    );
+    const imported = await importedPurchaseRechecks(db, target.ledgerPartyId, {
+      orderIds: [...new Set([...identifiers.values()].flat())],
+      vendorIds: [...new Set(page.map((row) => row.vendorId))],
+    });
+    const candidates: {
+      id: string;
+      sender: string;
+      vendorId: string;
+      revision: string;
+      purchase?: PurchaseRecheck;
+    }[] = [];
+    for (const row of page) {
+      const printed = new Set(identifiers.get(row.id) ?? []);
+      const relevant = imported.filter(
+        (candidate) =>
+          candidate.vendorId === row.vendorId &&
+          printed.has(normalizeOrderKey(candidate.orderId)) &&
+          row.outcomeAt &&
+          new Date(candidate.evidenceAt) > row.outcomeAt,
       );
-      const imported = await importedPurchaseRechecks(
-        db,
-        target.ledgerPartyId,
-        {
-          orderIds: [...new Set([...identifiers.values()].flat())],
-          vendorIds: [...new Set(page.map((row) => row.vendorId))],
-        },
-      );
-      const candidates: {
-        id: string;
-        sender: string;
-        vendorId: string;
-        revision: string;
-        purchase?: PurchaseRecheck;
-      }[] = [];
-      for (const row of page) {
-        const printed = new Set(identifiers.get(row.id) ?? []);
-        const relevant = imported.filter(
-          (candidate) =>
-            candidate.vendorId === row.vendorId &&
-            printed.has(normalizeOrderKey(candidate.orderId)) &&
-            row.outcomeAt &&
-            new Date(candidate.evidenceAt) > row.outcomeAt,
-        );
-        for (const candidate of relevant) {
-          const purchase = {
-            purchaseId: candidate.purchaseId,
-            orderId: candidate.orderId,
-            evidenceFingerprint: candidate.evidenceFingerprint,
-          };
-          candidates.push({
-            id: row.id,
+      for (const candidate of relevant) {
+        const purchase = {
+          purchaseId: candidate.purchaseId,
+          orderId: candidate.orderId,
+          evidenceFingerprint: candidate.evidenceFingerprint,
+        };
+        candidates.push({
+          id: row.id,
+          sender: row.sender,
+          vendorId: row.vendorId,
+          purchase,
+          revision: await senderRecheckRevision({
             sender: row.sender,
             vendorId: row.vendorId,
             purchase,
-            revision: await senderRecheckRevision({
-              sender: row.sender,
-              vendorId: row.vendorId,
-              purchase,
-            }),
-          });
-        }
-        if (!relevant.length && row.senderEligible)
-          candidates.push({
-            id: row.id,
-            sender: row.sender,
-            vendorId: row.vendorId,
-            revision: row.revision,
-          });
+          }),
+        });
       }
-      const groups = new Map<string, typeof candidates>();
-      for (const row of candidates)
-        groups.set(row.revision, [...(groups.get(row.revision) ?? []), row]);
-      for (const group of groups.values()) {
-        const identity = group[0];
-        if (!identity) continue;
-        try {
-          await admitMailImport(db, {
-            ledgerPartyId: target.ledgerPartyId,
-            userId: actorId,
-            mailboxId: target.mailboxId,
-            automatic: true,
-            messageIds: group.map((row) => row.id),
-            senderRecheck: {
-              sender: identity.sender,
-              vendorId: identity.vendorId,
-              ...(identity.purchase ? { purchase: identity.purchase } : {}),
-            },
-          });
-        } catch (error) {
-          errors.push(error);
-        }
+      if (!relevant.length && row.senderEligible)
+        candidates.push({
+          id: row.id,
+          sender: row.sender,
+          vendorId: row.vendorId,
+          revision: row.revision,
+        });
+    }
+    const groups = new Map<string, typeof candidates>();
+    for (const row of candidates)
+      groups.set(row.revision, [...(groups.get(row.revision) ?? []), row]);
+    for (const group of groups.values()) {
+      const identity = group[0];
+      if (!identity) continue;
+      try {
+        await admitMailImport(db, {
+          ledgerPartyId: target.ledgerPartyId,
+          userId: actorId,
+          mailboxId: target.mailboxId,
+          automatic: true,
+          messageIds: group.map((row) => row.id),
+          senderRecheck: {
+            sender: identity.sender,
+            vendorId: identity.vendorId,
+            ...(identity.purchase ? { purchase: identity.purchase } : {}),
+          },
+        });
+      } catch (error) {
+        errors.push(error);
       }
     }
+    if (senderRows.length === 50) {
+      const last = senderRows.at(-1);
+      if (last)
+        senderAfter = { mailboxId: target.mailboxId, afterId: last.emailId };
+      break;
+    }
   }
-  return { errors };
+  return { errors, senderAfter };
 }

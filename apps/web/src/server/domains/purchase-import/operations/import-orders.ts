@@ -198,15 +198,16 @@ async function preparedOrderVendor(
         distinctFrom: order.vendor.distinctFrom,
       }
     : null;
-  const vendorCandidates = seller
-    ? (await importVendorCandidates(db, seller)).map(
-        ({ candidate }) => candidate,
-      )
+  const vendorCandidateRows = seller
+    ? await importVendorCandidates(db, seller)
     : [];
+  const vendorCandidates = vendorCandidateRows.map(
+    ({ candidate }) => candidate,
+  );
   const vendorId = order.vendorId
     ? await resolveOrThrow(db, "vendor", order.vendorId)
     : seller
-      ? await resolveImportVendor(db, seller, actor)
+      ? await resolveImportVendor(db, seller, actor, vendorCandidateRows)
       : scope.vendorId;
   if (!vendorId)
     throw new Error("Name each order's Vendor (vendorId or vendor.name).");

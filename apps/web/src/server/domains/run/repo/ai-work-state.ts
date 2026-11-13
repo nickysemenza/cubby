@@ -42,6 +42,21 @@ export async function readRun(
   return row;
 }
 
+/** Actor columns for one sweep page. Omits progress history and Run input. */
+export async function readRunActor(db: Database, runId: RunRow["id"]) {
+  const [row] = await getDb(db)
+    .select({
+      id: run.id,
+      actorUserId: run.actorUserId,
+      channel: run.channel,
+      oauthClientId: run.oauthClientId,
+      deviceId: run.deviceId,
+    })
+    .from(run)
+    .where(eq(run.id, runId));
+  return row;
+}
+
 export async function readRunStatus(db: Database, runId: RunRow["id"]) {
   const [row] = await getDb(db)
     .select({ status: run.status })

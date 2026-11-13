@@ -1785,7 +1785,8 @@ Product matched/mismatched quantity filters use the published Quantity Variance;
 has no comparison state, and an edit keeps the previous membership until publication.
 
 Work Problems project filter values, readiness and related predicates into a materialized facts
-relation per entity and request, then compute membership and label/authority columns once in its
+relation of not-deleted records that can match a certain or possible Problem, per entity and
+request, then compute membership and label/authority columns once in its
 base, admitting only records matching a certain or possible Problem. Bound values are part of
 expression reuse. Compact reason arms only filter that base; reason declarations own actions and
 ordering; possible matches with missing publications add completeness warnings, never actionable
@@ -2375,7 +2376,7 @@ reports keep every rule.
 
 `DerivedRebuild` holds one coarse pass cursor (target and last committed UUID), a single-writer
 lease, cursor attempts, pass failures and the last three wall-clock durations. Each background
-permit publishes one page: at most 50 identities, with adapters declaring a smaller
+permit publishes pages until a 20-second wall budget: at most 50 identities each, with adapters declaring a smaller
 `preparationBatchSize` (default 20; the recipe ingredient graph stays at 20). Cursor-attempt
 shrinking bounds a retry independently. Publication, cursor advancement, page counters and movement
 time commit together. Reading ids and recording the page attempt share one CTE that commits before

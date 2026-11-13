@@ -77,21 +77,25 @@ function recentFilterConditions(filters: AiUsageRecentFilters = {}) {
 
 /** Full-history filter choices, independent of summary windows and row limits. */
 export async function listAiUsageFilterOptions(db: Database) {
-  const rows = await getDb(db)
-    .selectDistinct({
-      provider: aiUsage.provider,
-      model: aiUsage.model,
-      feature: aiUsage.feature,
-    })
-    .from(aiUsage);
-  const values = (key: keyof (typeof rows)[number]) =>
-    [...new Set(rows.map((row) => row[key]))].sort((a, b) =>
-      a.localeCompare(b),
-    );
+  const database = getDb(db);
+  const sorted = (values: readonly string[]) =>
+    [...new Set(values)].sort((a, b) => a.localeCompare(b));
+  const [features, models, providers] = await Promise.all([
+    database.selectDistinct({ feature: aiUsage.feature }).from(aiUsage),
+    database.selectDistinct({ model: aiUsage.model }).from(aiUsage),
+    // Newest provider per model, then the distinct set. (model, createdAt) is indexed.
+    database.execute<{ provider: string }>(sql`
+      SELECT DISTINCT provider FROM (
+        SELECT DISTINCT ON (${aiUsage.model}) ${aiUsage.provider} AS provider
+        FROM ${aiUsage}
+        ORDER BY ${aiUsage.model}, ${aiUsage.createdAt} DESC
+      ) model_provider
+    `),
+  ]);
   return {
-    provider: values("provider"),
-    model: values("model"),
-    feature: values("feature"),
+    provider: sorted(providers.rows.map((row) => row.provider)),
+    model: sorted(models.map((row) => row.model)),
+    feature: sorted(features.map((row) => row.feature)),
   };
 }
 
@@ -174,11 +178,14 @@ const summaryRow = z.object({
   durationMs: z.coerce.number(),
 });
 
+const usageRates = sql`${aiUsage.costEvidence}#>'{standard,pricingSnapshot,rates}'`;
+const usageAvoided = sql`${aiUsage.costEvidence}->'avoidedUsage'`;
+const usageReason = sql`${aiUsage.costEvidence}->>'billingReason'`;
+
 /**
- * Usage per household day and call shape. A 90-day window holds millions of
- * rows: each row's cost evidence is read once into scalars before grouping,
- * so the aggregate hashes narrow rows. Sorting rows that still carried the
- * evidence spilled over a gigabyte to disk and outlasted the MCP deadline.
+ * Usage per household day and call shape. Group keys stay scalars. Rate and
+ * avoided JSON is read inside each aggregate, not carried through a CTE, so
+ * the hash does not spill those documents to disk.
  */
 export async function summarizeAiUsage(
   db: Database,
@@ -188,75 +195,55 @@ export async function summarizeAiUsage(
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   // One row per job multiplies a long window's rows by its job count.
   const byJob = groupBy === "by_job";
+  const day = householdDaySql(aiUsage.createdAt);
+  const jobId = byJob ? aiUsage.jobId : sql`NULL::text`;
   const result = await getDb(db).execute<z.input<typeof summaryRow>>(sql`
-    WITH usage AS MATERIALIZED (
-      SELECT
-        ${householdDaySql(aiUsage.createdAt)} AS day,
-        ${aiUsage.feature} AS feature,
-        ${aiUsage.provider} AS provider,
-        ${aiUsage.model} AS model,
-        ${aiUsage.operation} AS operation,
-        ${aiUsage.jobKind} AS job_kind,
-        ${byJob ? aiUsage.jobId : sql`NULL::text`} AS job_id,
-        ${aiUsage.cacheStatus} AS cache_status,
-        ${aiUsage.applicationCacheStatus} AS application_cache_status,
-        ${aiUsage.transport} AS transport,
-        ${aiUsage.inputTokens} AS input_tokens,
-        ${aiUsage.outputTokens} AS output_tokens,
-        ${aiUsage.cacheReadTokens} AS cache_read_tokens,
-        ${aiUsage.cacheWriteTokens} AS cache_write_tokens,
-        ${aiUsage.standardCost} AS standard_cost,
-        ${aiUsage.chargedCost} AS charged_cost,
-        ${aiUsage.durationMs} AS duration_ms,
-        ${failedWithoutUsage} AS failed_without_usage,
-        ${aiUsage.costEvidence}->>'billingReason' AS reason,
-        ${aiUsage.costEvidence}#>'{standard,pricingSnapshot,rates}' AS rates,
-        ${aiUsage.costEvidence}->'avoidedUsage' AS avoided
-      FROM ${aiUsage}
-      WHERE ${aiUsage.createdAt} >= ${since}
-    )
     SELECT
-      to_char(day, 'YYYY-MM-DD') AS "day",
-      feature AS "feature",
-      provider AS "provider",
-      model AS "model",
-      operation AS "operation",
-      job_kind AS "jobKind",
-      job_id AS "jobId",
-      cache_status AS "cacheStatus",
-      application_cache_status AS "applicationCacheStatus",
-      transport AS "transport",
-      coalesce(sum(input_tokens), 0)::bigint AS "inputTokens",
-      coalesce(sum(output_tokens), 0)::bigint AS "outputTokens",
-      coalesce(sum(cache_read_tokens), 0)::bigint AS "cacheReadTokens",
-      coalesce(sum(cache_write_tokens), 0)::bigint AS "cacheWriteTokens",
-      coalesce(sum(standard_cost), 0)::float8 AS "standardCost",
-      coalesce(sum(charged_cost), 0)::float8 AS "chargedCost",
-      count(*) FILTER (WHERE standard_cost IS NULL AND NOT failed_without_usage) AS "standardUnpricedCount",
-      count(*) FILTER (WHERE charged_cost IS NULL AND NOT failed_without_usage) AS "chargedUnpricedCount",
-      coalesce(sum(standard_cost - charged_cost) FILTER (WHERE standard_cost IS NOT NULL AND charged_cost IS NOT NULL), 0)::float8 AS "savings",
-      count(*) FILTER (WHERE standard_cost IS NOT NULL AND charged_cost IS NOT NULL) AS "comparedCalls",
+      to_char(${day}, 'YYYY-MM-DD') AS "day",
+      ${aiUsage.feature} AS "feature",
+      ${aiUsage.provider} AS "provider",
+      ${aiUsage.model} AS "model",
+      ${aiUsage.operation} AS "operation",
+      ${aiUsage.jobKind} AS "jobKind",
+      ${jobId} AS "jobId",
+      ${aiUsage.cacheStatus} AS "cacheStatus",
+      ${aiUsage.applicationCacheStatus} AS "applicationCacheStatus",
+      ${aiUsage.transport} AS "transport",
+      coalesce(sum(${aiUsage.inputTokens}), 0)::bigint AS "inputTokens",
+      coalesce(sum(${aiUsage.outputTokens}), 0)::bigint AS "outputTokens",
+      coalesce(sum(${aiUsage.cacheReadTokens}), 0)::bigint AS "cacheReadTokens",
+      coalesce(sum(${aiUsage.cacheWriteTokens}), 0)::bigint AS "cacheWriteTokens",
+      coalesce(sum(${aiUsage.standardCost}), 0)::float8 AS "standardCost",
+      coalesce(sum(${aiUsage.chargedCost}), 0)::float8 AS "chargedCost",
+      count(*) FILTER (WHERE ${aiUsage.standardCost} IS NULL AND NOT ${failedWithoutUsage}) AS "standardUnpricedCount",
+      count(*) FILTER (WHERE ${aiUsage.chargedCost} IS NULL AND NOT ${failedWithoutUsage}) AS "chargedUnpricedCount",
+      coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) FILTER (WHERE ${aiUsage.standardCost} IS NOT NULL AND ${aiUsage.chargedCost} IS NOT NULL), 0)::float8 AS "savings",
+      count(*) FILTER (WHERE ${aiUsage.standardCost} IS NOT NULL AND ${aiUsage.chargedCost} IS NOT NULL) AS "comparedCalls",
       count(*) AS "count",
-      count(*) FILTER (WHERE failed_without_usage) AS "failedWithoutUsageCount",
+      count(*) FILTER (WHERE ${failedWithoutUsage}) AS "failedWithoutUsageCount",
       ARRAY[${sql.join(
-        BILLING_REASONS.map((reason) => sql`bool_or(reason = ${reason})`),
+        BILLING_REASONS.map(
+          (reason) => sql`bool_or(${usageReason} = ${reason})`,
+        ),
         sql`, `,
       )}] AS "reasons",
-      ${splitClass("input_tokens", "inputTokens", "input")} AS "splitInput",
-      ${splitClass("cache_write_tokens", "cacheWriteTokens", "cache_write")} AS "splitCacheWrite",
-      ${splitClass("cache_read_tokens", "cacheReadTokens", "cache_read")} AS "splitCacheRead",
-      ${splitClass("output_tokens", "outputTokens", "output")} AS "splitOutput",
-      coalesce(sum(standard_cost) FILTER (WHERE rates IS NULL), 0)::float8 AS "unsplitCost",
-      count(*) FILTER (WHERE rates IS NULL AND NOT failed_without_usage) AS "unsplitCount",
+      ${splitClass(aiUsage.inputTokens, "inputTokens", "input")} AS "splitInput",
+      ${splitClass(aiUsage.cacheWriteTokens, "cacheWriteTokens", "cache_write")} AS "splitCacheWrite",
+      ${splitClass(aiUsage.cacheReadTokens, "cacheReadTokens", "cache_read")} AS "splitCacheRead",
+      ${splitClass(aiUsage.outputTokens, "outputTokens", "output")} AS "splitOutput",
+      coalesce(sum(${aiUsage.standardCost}) FILTER (WHERE ${usageRates} IS NULL), 0)::float8 AS "unsplitCost",
+      count(*) FILTER (WHERE ${usageRates} IS NULL AND NOT ${failedWithoutUsage}) AS "unsplitCount",
       ${savedFor("plan")} AS "savedPlan",
       ${savedFor("subscriber_credit")} AS "savedSubscriberCredit",
       ${savedFor("cache")} AS "savedCache",
       ${savedFor("discount")} AS "savedDiscount",
-      coalesce(sum(duration_ms), 0)::bigint AS "durationMs"
-    FROM usage
-    GROUP BY day, feature, provider, model, operation, job_kind, job_id,
-      cache_status, application_cache_status, transport
-    ORDER BY day DESC, feature, model
+      coalesce(sum(${aiUsage.durationMs}), 0)::bigint AS "durationMs"
+    FROM ${aiUsage}
+    WHERE ${aiUsage.createdAt} >= ${since}
+    GROUP BY ${day}, ${aiUsage.feature}, ${aiUsage.provider}, ${aiUsage.model},
+      ${aiUsage.operation}, ${aiUsage.jobKind}, ${jobId}, ${aiUsage.cacheStatus},
+      ${aiUsage.applicationCacheStatus}, ${aiUsage.transport}
+    ORDER BY ${day} DESC, ${aiUsage.feature}, ${aiUsage.model}
   `);
   return z
     .array(summaryRow)
@@ -298,15 +285,15 @@ export async function summarizeAiUsage(
 
 /** One token class's standard cost from each row's own rate snapshot. */
 function splitClass(
-  column: string,
+  column: AnyColumn,
   avoidedKey: string,
   rate: "input" | "cache_write" | "cache_read" | "output",
 ) {
-  return sql`coalesce(sum(coalesce(CASE WHEN avoided IS NOT NULL THEN (avoided->>${avoidedKey})::numeric ELSE ${sql.raw(column)} END, 0) * coalesce((rates->>${rate})::numeric, 0) / 1000000) FILTER (WHERE rates IS NOT NULL), 0)::float8`;
+  return sql`coalesce(sum(coalesce(CASE WHEN ${usageAvoided} IS NOT NULL THEN (${usageAvoided}->>${avoidedKey})::numeric ELSE ${column} END, 0) * coalesce((${usageRates}->>${rate})::numeric, 0) / 1000000) FILTER (WHERE ${usageRates} IS NOT NULL), 0)::float8`;
 }
 
 const savedFor = (reason: AiCostEvidence["billingReason"]) =>
-  sql`coalesce(sum(standard_cost - charged_cost) FILTER (WHERE standard_cost IS NOT NULL AND charged_cost IS NOT NULL AND reason = ${reason}), 0)::float8`;
+  sql`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) FILTER (WHERE ${aiUsage.standardCost} IS NOT NULL AND ${aiUsage.chargedCost} IS NOT NULL AND ${usageReason} = ${reason}), 0)::float8`;
 
 const runUsageCursor = jsonCursor(
   z.object({ createdAt: z.iso.datetime(), id: z.uuid() }),
