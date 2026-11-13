@@ -10,6 +10,10 @@ UNION ALL SELECT 'Purchase',id,id,date_trunc('month',date)::date,"statedTotalMin
 UNION ALL SELECT 'FinancialTransaction',id,NULL,date_trunc('month',"transactionDate")::date,"amountMinor" FROM "FinancialTransaction"
 UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation";
 --> statement-breakpoint
+CREATE TEMP TABLE cutover_money_totals ON COMMIT DROP AS
+ SELECT source,CASE WHEN grouping(owner)=0 THEN 'purchase' WHEN grouping(month_key)=0 THEN 'month' ELSE 'overall' END bucket,owner,month_key,count(*) n,sum(amount)::numeric amount
+ FROM cutover_money GROUP BY GROUPING SETS ((source),(source,owner),(source,month_key));
+--> statement-breakpoint
 CREATE TEMP TABLE cutover_expected ON COMMIT DROP AS
 -- cutover:select:start
 WITH RECURSIVE redirects AS (
@@ -329,21 +333,25 @@ INSERT INTO "FactKey" (key,"factKind","factId")
 SELECT row->'payload'->'acceptedScope'->>'kind'||':'||(row->'payload'->'acceptedScope'->>'key'),'manualEntry',row->>'id'
 FROM cutover_expected WHERE mapping='manualEntry' ON CONFLICT DO NOTHING;
 --> statement-breakpoint
+CREATE TEMP VIEW cutover_money_readback AS
+ SELECT DISTINCT ON (m.payload->>'table',m.payload->>'naturalKey') m.payload->>'table' source,substr(m.payload->>'naturalKey',8)::uuid id,
+ CASE WHEN m.payload->>'table'='Purchase' THEN substr(m.payload->>'naturalKey',8)::uuid ELSE (m.payload->'values'->>'purchaseId')::uuid END owner,
+ date_trunc('month',coalesce(m.payload->'values'->>'transactionDate',m.payload->'values'->>'date')::date)::date month_key,
+ (CASE m.payload->>'table' WHEN 'Expense' THEN m.payload->'values'->>'cost' WHEN 'Purchase' THEN m.payload->'values'->>'statedTotal' ELSE coalesce(m.payload->'values'->>'amountMinor',m.payload->'values'->>'amount') END)::numeric amount
+ FROM "ManualEntry" m JOIN cutover_expected e ON e.mapping='manualEntry' AND e.row->>'id'=m.id::text
+ WHERE m.payload->>'table' IN ('Expense','Purchase','FinancialTransaction','FinancialTransactionAllocation');
+--> statement-breakpoint
 UPDATE "RecordKey" k SET "mergedAt"=coalesce(e."deletedAt",now() AT TIME ZONE 'UTC')
 FROM "Entity" e WHERE k."naturalKey"='legacy:'||e.id AND e."mergedIntoId" IS NOT NULL;
 --> statement-breakpoint
 DO $verify$ BEGIN
 
+ IF EXISTS (SELECT 1 FROM cutover_money m LEFT JOIN cutover_money_readback d USING(source,id) WHERE d.id IS NULL OR m.amount::numeric IS DISTINCT FROM d.amount) THEN RAISE EXCEPTION 'Accepted-input cutover: money row preservation mismatch'; END IF;
  IF EXISTS (
- SELECT 1 FROM cutover_money m LEFT JOIN cutover_expected e ON e.mapping='manualEntry' AND e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id
- WHERE (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric IS DISTINCT FROM m.amount::numeric
- ) THEN RAISE EXCEPTION 'Accepted-input cutover: money row preservation mismatch'; END IF;
- IF EXISTS (
- WITH copied AS (
- SELECT DISTINCT ON (m.source,m.id) m.*, (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric copied
- FROM cutover_money m JOIN cutover_expected e ON e.mapping='manualEntry' AND e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id ORDER BY m.source,m.id
- ) SELECT 1 FROM copied m GROUP BY GROUPING SETS ((m.source),(m.source,m.owner),(m.source,m.month_key))
- HAVING sum(m.amount) IS DISTINCT FROM sum(m.copied)
+ WITH actual AS (
+ SELECT source,CASE WHEN grouping(owner)=0 THEN 'purchase' WHEN grouping(month_key)=0 THEN 'month' ELSE 'overall' END bucket,owner,month_key,count(*) n,sum(amount)::numeric amount
+ FROM cutover_money_readback GROUP BY GROUPING SETS ((source),(source,owner),(source,month_key))
+ ) (SELECT * FROM cutover_money_totals EXCEPT SELECT * FROM actual) UNION ALL (SELECT * FROM actual EXCEPT SELECT * FROM cutover_money_totals)
  ) THEN RAISE EXCEPTION 'Accepted-input cutover: money totals preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='recordKey' AND NOT EXISTS (SELECT 1 FROM "RecordKey" t WHERE t."scopeKind"::text=e.row->>'scopeKind' AND t."scopeKey"::text=e.row->>'scopeKey' AND t."entity"::text=e.row->>'entity' AND t."naturalKey"::text=e.row->>'naturalKey' AND coalesce(to_jsonb(t)->'scopeKind','null'::jsonb)=coalesce(e.row->'scopeKind','null'::jsonb) AND coalesce(to_jsonb(t)->'scopeKey','null'::jsonb)=coalesce(e.row->'scopeKey','null'::jsonb) AND coalesce(to_jsonb(t)->'entity','null'::jsonb)=coalesce(e.row->'entity','null'::jsonb) AND coalesce(to_jsonb(t)->'naturalKey','null'::jsonb)=coalesce(e.row->'naturalKey','null'::jsonb) AND coalesce(to_jsonb(t)->'entityId','null'::jsonb)=coalesce(e.row->'entityId','null'::jsonb) AND coalesce(to_jsonb(t)->'rejectedAt','null'::jsonb)=coalesce(e.row->'rejectedAt','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: recordKey preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='manualEntry' AND NOT EXISTS (SELECT 1 FROM "ManualEntry" t WHERE t."id"::text=e.row->>'id' AND coalesce(to_jsonb(t)->'id','null'::jsonb)=coalesce(e.row->'id','null'::jsonb) AND coalesce(to_jsonb(t)->'entity','null'::jsonb)=coalesce(e.row->'entity','null'::jsonb) AND coalesce(to_jsonb(t)->'userId','null'::jsonb)=coalesce(e.row->'userId','null'::jsonb) AND coalesce(to_jsonb(t)->'payload','null'::jsonb)=coalesce(e.row->'payload','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: manualEntry preservation mismatch'; END IF;

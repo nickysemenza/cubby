@@ -284,7 +284,7 @@ it("aborts atomically for every preservation verification", async () => {
     );
     const corrupt = {
       "money row": "UPDATE cutover_money SET amount=amount+1",
-      "money totals": "UPDATE cutover_money SET amount=amount+1",
+      "money totals": `UPDATE "ManualEntry" SET payload=jsonb_set(payload,'{values,purchaseId}',to_jsonb('${cutoverId(5)}'::text)) WHERE payload->>'naturalKey'='legacy:${cutoverId(7)}'`,
       recordKey: 'DELETE FROM "RecordKey"',
       manualEntry: 'DELETE FROM "ManualEntry"',
       binding: 'DELETE FROM "EvidenceBinding"',
