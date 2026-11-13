@@ -1,8 +1,8 @@
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { getDb } from "~/server/db/helpers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { seedSplitSettlementPrerequisite } from "./fixtures/finance";
@@ -18,7 +18,7 @@ test("preserves residual allocations and saves a reviewed split without booking 
   const merchant = `Synthetic Outfitters ${Date.now()}`;
   const seed = await seedSplitSettlementPrerequisite(page, merchant);
   const { db } = await createEvidenceHarnessContext(page);
-  const partial = await insertWithShortcode(db, "financialTransaction", {
+  const partial = await insertFieldsFixture(db, "financialTransaction", {
     accountId: seed.transaction.accountId,
     kind: "purchase",
     status: "posted",

@@ -1,3 +1,4 @@
+import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { and, eq, isNull } from "drizzle-orm";
 
@@ -27,11 +28,11 @@ test.describe("split and attach, with the server's rules", () => {
     const vendor = await insertWithShortcode(db, "vendor", {
       name: `Synthetic split vendor ${stamp}`,
     });
-    const target = await insertWithShortcode(db, "purchase", {
+    const target = await insertFieldsFixture(db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const source = await insertWithShortcode(db, "expense", {
+    const source = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic kit ${stamp}`,
       cost: 3000n,
@@ -94,16 +95,16 @@ test.describe("split and attach, with the server's rules", () => {
     const vendor = await insertWithShortcode(db, "vendor", {
       name: `Synthetic attach vendor ${stamp}`,
     });
-    const target = await insertWithShortcode(db, "purchase", {
+    const target = await insertFieldsFixture(db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const free = await insertWithShortcode(db, "expense", {
+    const free = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic loose board ${stamp}`,
       cost: 1250n,
     });
-    const untouched = await insertWithShortcode(db, "expense", {
+    const untouched = await insertFieldsFixture(db, "expense", {
       ...line,
       name: `Synthetic other board ${stamp}`,
       cost: 300n,
