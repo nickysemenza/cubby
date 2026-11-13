@@ -28,17 +28,22 @@ public struct RecordState: Sendable, Hashable {
     ) {
         self.option = option
         phase = option.statePhase
-        role =
-            switch option.stage {
+        let declared = option.stage ?? (phase == .needs ? .needsYou : phase == .finished ? .ended : .working)
+        if stalled {
+            role = .stalled
+        } else if declared == .working || declared == .waiting {
+            if waitReason == "paused" { role = .paused }
+            else if let waitReason, waitReason != "in_progress" { role = .queued }
+            else { role = declared == .working ? .running : .queued }
+        } else {
+            role = switch declared {
             case .needsYou: .needs
             case .stuck: .stalled
-            case .working: .running
-            case .waiting: .queued
             case .done: .done
-            case .ended: .ended
-            case nil: .ended
+            default: .ended
             }
-        label = option.stage.map { FieldEnvelopePresentation.stageLabel($0.rawValue) } ?? option.label
+        }
+        label = stalled ? FieldEnvelopePresentation.stageLabel("stuck") : option.label
         trailing = reason ?? waitLabel.map { Self.withoutLabel($0, label: option.label) }
         self.jobs = jobs
     }
