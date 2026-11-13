@@ -1252,8 +1252,8 @@ queue size. It takes the `run` and `workQueue` cache tags, not entity roots.
 `RUN_KINDS` owns Run purpose, triggers, effects and declared steps.
 `JOB_KIND_POLICY` co-locates each Job kind's member explanation with its
 execution policy. Runs declare `purpose` as their `presentation.kind`, and each
-purpose option's `explanation` is its `RUN_KINDS` explanation, shown on every
-Run as "What a {label} does". `mail_import` is labelled "Email import" and
+purpose option's `explanation` is its `RUN_KINDS` explanation, folded behind
+the native kind tag. `mail_import` is labelled "Email import" and
 `mail_discovery` "Inbox scan".
 
 A Run's words are composed on the server (`domains/run/run-phrases.ts`) from

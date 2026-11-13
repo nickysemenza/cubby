@@ -177,17 +177,10 @@ export async function inlineExplanation(page: Page, control: Locator) {
   return page.locator(`[id="${panelId}"]`);
 }
 
-/**
- * Select the record tab whose panel holds the section with this id, as a
- * member would, and return the section once it shows.
- */
+/** Scroll the record section with this id into view and return it. */
 export async function showDetailSection(page: Page, id: string) {
   const section = page.locator(`[id="${id}"]`);
-  const tab = await page
-    .getByRole("tabpanel", { includeHidden: true })
-    .filter({ has: section })
-    .getAttribute("aria-labelledby");
-  await page.locator(`[id="${tab}"]`).click();
+  await section.scrollIntoViewIfNeeded();
   await expect(section).toBeVisible();
   return section;
 }

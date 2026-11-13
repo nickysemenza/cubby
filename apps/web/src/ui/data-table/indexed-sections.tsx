@@ -82,7 +82,7 @@ export interface IndexedSectionGroup {
   sections: IndexedSection[];
 }
 
-export function normalizedHash(hash: string) {
+function normalizedHash(hash: string) {
   return hash.startsWith("#") ? hash.slice(1) : hash;
 }
 
@@ -102,7 +102,7 @@ export function SectionPair({ children }: { children: ReactNode }) {
   );
 }
 
-export const sectionIsFolded = (
+const sectionIsFolded = (
   section: IndexedSection,
   state: SectionIndexState | undefined,
 ) =>
@@ -217,7 +217,7 @@ export function SectionStack({
  * Known-empty sections read as one quiet line at the end of their group. A
  * name unfolds its section, which keeps the section's own Add and Open all.
  */
-export function FoldedSectionsLine({
+function FoldedSectionsLine({
   sections,
   pending,
   onUnfold,
@@ -553,9 +553,8 @@ function currentAtLine(targets: readonly HTMLElement[], line: number) {
 /**
  * One continuous, mounted page of grouped sections with a sticky contents
  * index on a wide surface (a "Jump to" menu below 800px), scroll-tracked
- * current entry, and URL fragments that keep Back/Forward. Settings and the
- * long analytical pages render through it; record details use
- * `DetailWorkspace`.
+ * current entry, and URL fragments that keep Back/Forward. Record details,
+ * Settings and the long analytical pages render through it.
  */
 export function IndexedSections({
   groups,
