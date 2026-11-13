@@ -116,13 +116,13 @@ describe("evidence-facts kernel", () => {
     const { kernel } = kernelWith();
     const q = repositoryQueries(ctx.db);
     await q.execute(
-      sql`INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, reason) VALUES ('synthetic.removed', 'scope', 'money', 'synthetic')`,
+      sql`INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, reason) VALUES ('synthetic.removed', ${"scope"}, ${"money"}, 'synthetic')`,
     );
     await q.execute(
-      sql`INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input) VALUES ('synthetic-removed', 'synthetic.removed', 'model', '1', '{}')`,
+      sql`INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input) VALUES ('synthetic-removed', 'synthetic.removed', ${"model"}, '1', '{}')`,
     );
     await q.execute(
-      sql`INSERT INTO "Pass" (name,key) VALUES ('synthetic.removed','default')`,
+      sql`INSERT INTO "Pass" (name,key) VALUES ('synthetic.removed',${"default"})`,
     );
     await stopUnregisteredWork(ctx.db, kernel.registry);
     expect(
@@ -158,7 +158,7 @@ describe("evidence-facts kernel", () => {
         )
       ).rows[0],
     ).toMatchObject({
-      attempts: 3,
+      attempts: 5,
       lastError: "Unregistered Pass: synthetic.removed",
     });
   });

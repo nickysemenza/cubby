@@ -670,8 +670,8 @@ export async function stopUnregisteredWork(
       WHERE NOT (name = ANY(${textArrayParam([...registry.passes.keys()])})) AND attempts < "maxAttempts"
         AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ("claimToken" IS NULL OR "claimDeadline" <= now())
     ) INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "errorClass", error)
-      SELECT "scopeKind", "scopeKey", 0, 'unregistered', 'stuck', 'failed', "lastError" FROM scopes
-      ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET stage = 'stuck', "errorClass" = 'failed', error = excluded.error`);
+      SELECT "scopeKind", "scopeKey", 0, 'unregistered', ${"stuck"}, ${"failed"}, "lastError" FROM scopes
+      ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET stage = ${"stuck"}, "errorClass" = ${"failed"}, error = excluded.error`);
 }
 
 /** Clear funding waits atomically; version live holders so an older refusal cannot put them back. */

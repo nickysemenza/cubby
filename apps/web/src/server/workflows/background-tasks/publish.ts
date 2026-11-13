@@ -23,7 +23,8 @@ type PendingWake = {
   ring?: boolean;
   queue?: BackgroundQueueProducer;
 };
-const pendingWakes = new AsyncLocalStorage<{ wake: PendingWake | null }>();
+type WakeBatch = { wake: PendingWake | null };
+const pendingWakes = new AsyncLocalStorage<WakeBatch>();
 function enrollWake(state: { wake: PendingWake | null }, request: PendingWake) {
   const first = state.wake;
   state.wake =
@@ -37,7 +38,7 @@ export async function coalesceBackgroundWakes<T>(
   work: () => Promise<T>,
 ): Promise<T> {
   if (pendingWakes.getStore()) return work();
-  const pending: { wake: PendingWake | null } = { wake: null };
+  const pending: WakeBatch = { wake: null };
   const result = await pendingWakes.run(pending, work);
   const earliest = pending.wake;
   if (earliest) {

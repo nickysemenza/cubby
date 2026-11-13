@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { shiftPlainDate } from "~/lib/household-date";
+import { modelInput } from "~/server/ai/model-asks";
 import {
   withDatabaseOperationMetrics,
   withDatabaseOperationPhase,
@@ -18,7 +19,7 @@ import {
 import { getDb } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
-import { evidenceBinding, drift } from "~/server/db/kernel-schema";
+import { evidenceBinding, drift, ask } from "~/server/db/kernel-schema";
 import {
   expense,
   financialTransaction,
@@ -39,6 +40,7 @@ import { decideStatement } from "~/server/domains/transaction-import/repo/statem
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
+import { runQueuedAsks } from "~/server/kernel/ask";
 import { productionKernel } from "~/server/kernel/kernel";
 
 import { recordSourceTransactionRecords } from "./source-transaction-record";
@@ -52,6 +54,7 @@ describe("statement spending review and re-import", () => {
     providerTransactionId: string | null = null,
     ownerKind: "member" | "household" = "member",
     amount = 42.5,
+    knownVendor = true,
   ) {
     const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
@@ -70,7 +73,8 @@ describe("statement spending review and re-import", () => {
         },
       ],
     });
-    await createRepoIdentity(ctx, "vendor", { name: "Synthetic Orchard" });
+    if (knownVendor)
+      await createRepoIdentity(ctx, "vendor", { name: "Synthetic Orchard" });
     const category = await createEntity(
       buildKernelContext(ctx.db, ctx.actor.userId),
       "spendingCategory",
@@ -221,6 +225,160 @@ describe("statement spending review and re-import", () => {
       sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
     );
     expect(after.rows).toEqual(before.rows);
+  });
+  it("files statement and merchant Asks and keeps abstentions and peer transfers unbooked", async () => {
+    const setup = await fixture("synthetic-producer", "member", 42.5, false);
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    const scope = { kind: "bankEvent", key: occurrence!.id };
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "accountId",
+        value: setup.account.output.id,
+      },
+    ]);
+    await reconcileNow(ctx.db, [scope]);
+    const kernel = await productionKernel();
+    let kind: string | null = null;
+    let party = "business";
+    const called: string[] = [];
+    const registry = {
+      ...kernel.registry,
+      asks: new Map(
+        [...kernel.registry.asks].map(([feature, spec]) => [
+          feature,
+          {
+            ...spec,
+            admit: undefined,
+            produce: async (raw: unknown) => {
+              const input = modelInput.parse(raw);
+              called.push(feature);
+              if (input.kind !== "choice")
+                return {
+                  output: {
+                    value: {
+                      name: "Synthetic Orchard",
+                      confidence: "high",
+                      counterparty: "business",
+                    },
+                    model: "synthetic",
+                  },
+                };
+              const choice =
+                feature === "statement-counterparty"
+                  ? party
+                  : feature === "merchant-identity-support"
+                    ? "supported_business"
+                    : kind;
+              return {
+                output: {
+                  value: {
+                    selectedIndex:
+                      choice === null ? null : input.choices.indexOf(choice),
+                    confidence: "high",
+                  },
+                  model: "synthetic",
+                },
+              };
+            },
+          },
+        ]),
+      ),
+    };
+    await runQueuedAsks(ctx.db, registry, 4);
+    expect(called).toEqual(
+      expect.arrayContaining([
+        "statement-transaction-kind",
+        "statement-counterparty",
+      ]),
+    );
+    const abstention = await reconcileNow(ctx.db, [scope]);
+    expect(abstention[0]?.gaps.length).toBeGreaterThan(0);
+    expect((await ledgerRows()).transactions).toHaveLength(0);
+    // A new input envelope gets a fresh producer answer for the peer rail case.
+    const peerInput = {
+      ...setup.input,
+      import: { ...setup.input.import, fingerprint: "synthetic-peer-import" },
+      rows: setup.input.rows.map((row) => ({
+        ...row,
+        providerTransactionId: "synthetic-peer",
+        rawDescription: "VENMO PAYMENT SYNTHETIC PERSON",
+        sourceCategory: "Transfer",
+      })),
+    };
+    await recordSourceTransactionRecords(ctx.db, peerInput, ctx.actor);
+    const [peer] = await getDb(ctx.db)
+      .select()
+      .from(sourceOccurrence)
+      .where(eq(sourceOccurrence.providerIdentity, "synthetic-peer"));
+    const peerScope = { kind: "bankEvent", key: peer!.id };
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${peer!.id}`,
+        field: "accountId",
+        value: setup.account.output.id,
+      },
+    ]);
+    await reconcileNow(ctx.db, [peerScope]);
+    kind = "account_transfer";
+    party = "person";
+    await runQueuedAsks(ctx.db, registry, 4);
+    const peerResult = await reconcileNow(ctx.db, [peerScope]);
+    expect(peerResult[0]?.gaps.length).toBeGreaterThan(0);
+    expect((await ledgerRows()).transactions).toHaveLength(0);
+    // Member classification lets the original charge reach merchant identity.
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "kind",
+        value: "purchase",
+      },
+    ]);
+    await reconcileNow(ctx.db, [scope]);
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: transaction!.id },
+    ]);
+    expect(
+      (await getDb(ctx.db).select().from(ask)).map((row) => row.feature),
+    ).toContain("merchant-identity");
+    await runQueuedAsks(ctx.db, registry, 4);
+    expect(called).toContain("merchant-identity");
+  });
+  it("lets a newer finance apply kind override supersede a member edit", async () => {
+    const setup = await fixture("synthetic-kind-override");
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action: "create", kindOverride: "other" },
+      }),
+    );
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    await updateFinancialTransaction(
+      ctx.db,
+      transaction!.shortcode,
+      { kind: "adjustment" },
+      ctx.actor,
+    );
+    expect((await ledgerRows()).transactions[0]?.kind).toBe("adjustment");
+    await applyKernelCharge(setup);
+    expect((await ledgerRows()).transactions[0]?.kind).toBe("purchase");
   });
   const applyKernelCharge = async (
     setup: Awaited<ReturnType<typeof fixture>>,
@@ -863,6 +1021,20 @@ describe("statement spending review and re-import", () => {
         };
       });
       console.log("statement-kernel-budget", JSON.stringify(measured));
+      const settledFanout = await getDb(ctx.db).execute<{
+        kind: string;
+        n: number;
+        historical: number;
+      }>(
+        sql`SELECT "scopeKind" AS kind, count(*)::int n, count(*) FILTER (WHERE "scopeKey"=ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "ScopeDirty" GROUP BY "scopeKind"`,
+      );
+      expect(
+        settledFanout.rows.reduce((sum, row) => sum + row.historical, 0),
+      ).toBe(0);
+      console.log(
+        "statement-kernel-settled-fanout",
+        JSON.stringify({ charges: count, pending: settledFanout.rows }),
+      );
       const totals = await getDb(ctx.db).execute<{
         purchases: number;
         expenses: number;

@@ -1,3 +1,4 @@
+import type { statementEscrowInput } from "@cubby/schemas/statement-answers";
 import { z } from "zod";
 
 import {
@@ -5,38 +6,36 @@ import {
   modelOutput,
   structuredModelInput,
   type ModelInput,
+  type ModelOutput,
 } from "~/server/ai/model-asks";
 import {
+  STATEMENT_TRANSACTION_KIND_FEATURE,
+  STATEMENT_COUNTERPARTY_FEATURE,
+  STATEMENT_CHARGE_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_SUPPORT_FEATURE,
   LOAN_ESCROW_DISBURSEMENT_FEATURE,
 } from "~/server/ai/policy/features";
 import type { AiDecisionFeature } from "~/server/ai/policy/features";
 
-export const merchantIdentityAsk = modelAskFor(MERCHANT_IDENTITY_FEATURE);
-export const merchantSupportAsk = modelAskFor(
-  MERCHANT_IDENTITY_SUPPORT_FEATURE,
-);
-export const escrowAsk = modelAskFor(LOAN_ESCROW_DISBURSEMENT_FEATURE);
+const merchantIdentityAsk = modelAskFor(MERCHANT_IDENTITY_FEATURE);
+const merchantSupportAsk = modelAskFor(MERCHANT_IDENTITY_SUPPORT_FEATURE);
+const escrowAsk = modelAskFor(LOAN_ESCROW_DISBURSEMENT_FEATURE);
 
 /** Freeze the complete prompt and transport parameters before hashing the Ask. */
-export const merchantIdentityRequest = (input: {
-  merchant: string;
-}): ModelInput =>
+const merchantIdentityRequest = (input: { merchant: string }): ModelInput =>
   structuredModelInput(
     MERCHANT_IDENTITY_FEATURE,
     MERCHANT_IDENTITY_FEATURE.request(input),
   );
-export function choiceRequest(
+function choiceRequest(
   feature: AiDecisionFeature & {
     prompt: (subject: string) => { subject: string; rules: string };
     choices: readonly string[];
   },
-  input: unknown,
+  input: string,
 ): ModelInput {
-  const prompt = feature.prompt(
-    typeof input === "string" ? input : JSON.stringify(input),
-  );
+  const prompt = feature.prompt(input);
   return {
     kind: "choice",
     model: feature.model,
@@ -46,7 +45,7 @@ export function choiceRequest(
     allowNone: false,
   };
 }
-export function choiceAnswer(
+function choiceAnswer(
   output: unknown,
   choices: readonly string[],
 ): string | null {
@@ -63,20 +62,40 @@ export function choiceAnswer(
     ? (choices[result.data.selectedIndex] ?? null)
     : null;
 }
-export function merchantAnswer(output: unknown) {
+function merchantAnswer(output: unknown) {
   const envelope = modelOutput.safeParse(output);
   const parsed = MERCHANT_IDENTITY_FEATURE.schema.safeParse(
     envelope.success ? envelope.data.value : null,
   );
   return parsed.success ? parsed.data : null;
 }
-export const supportRequest = (input: { merchant: string; proposed: string }) =>
-  choiceRequest(MERCHANT_IDENTITY_SUPPORT_FEATURE, input);
-export const escrowRequest = (input: unknown) =>
-  choiceRequest(LOAN_ESCROW_DISBURSEMENT_FEATURE, input);
-export const supportAnswer = (output: unknown) =>
+const supportRequest = (input: { merchant: string; proposed: string }) =>
+  choiceRequest(MERCHANT_IDENTITY_SUPPORT_FEATURE, JSON.stringify(input));
+const escrowRequest = (
+  input: NonNullable<ReturnType<typeof statementEscrowInput>>,
+) => choiceRequest(LOAN_ESCROW_DISBURSEMENT_FEATURE, JSON.stringify(input));
+const supportAnswer = (output: ModelOutput) =>
   choiceAnswer(output, MERCHANT_IDENTITY_SUPPORT_FEATURE.choices) ===
   "supported_business";
-export const escrowAnswer = (output: unknown) =>
+const escrowAnswer = (output: ModelOutput) =>
   choiceAnswer(output, LOAN_ESCROW_DISBURSEMENT_FEATURE.choices) ===
   "escrow_disbursement";
+
+export const statementAsks = {
+  statementKindAsk: modelAskFor(STATEMENT_TRANSACTION_KIND_FEATURE),
+  counterpartyAsk: modelAskFor(STATEMENT_COUNTERPARTY_FEATURE),
+  chargeIdentityAsk: modelAskFor(STATEMENT_CHARGE_IDENTITY_FEATURE),
+  choiceRequest,
+  choiceAnswer,
+};
+export const purchaseAsks = {
+  merchantIdentityAsk,
+  merchantIdentityRequest,
+  merchantAnswer,
+  supportRequest,
+  supportAnswer,
+  escrowRequest,
+  escrowAnswer,
+  merchantSupportAsk,
+  escrowAsk,
+};

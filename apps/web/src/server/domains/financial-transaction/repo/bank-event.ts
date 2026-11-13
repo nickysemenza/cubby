@@ -44,6 +44,7 @@ import {
   writes,
 } from "~/server/kernel/api";
 import type { Pure } from "~/server/kernel/api";
+import { recordIdentity } from "~/server/kernel/keys";
 
 import { manualTransactionEvidence } from "./manual-evidence";
 import {
@@ -74,17 +75,13 @@ export const bankTransactionWrites = writes(
   },
 );
 
-import { modelAskFor } from "~/server/ai/model-asks";
 import {
   STATEMENT_TRANSACTION_KIND_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_CHARGE_IDENTITY_FEATURE,
 } from "~/server/ai/policy/features";
 
-import { choiceRequest, choiceAnswer } from "./purchase-asks";
-const statementKindAsk = modelAskFor(STATEMENT_TRANSACTION_KIND_FEATURE);
-const counterpartyAsk = modelAskFor(STATEMENT_COUNTERPARTY_FEATURE);
-const chargeIdentityAsk = modelAskFor(STATEMENT_CHARGE_IDENTITY_FEATURE);
+import type { statementAsks } from "../service/purchase-asks";
 
 const manualHistory = defineReadIndex(manualEntry, {
   name: "manualTransaction.accountMerchant",
@@ -102,7 +99,7 @@ const manualHistory = defineReadIndex(manualEntry, {
   where: (
     values,
   ) => sql`EXISTS (SELECT 1 FROM jsonb_to_recordset(${JSON.stringify(values.map((value) => ({ account: value.split(":")[0], merchant: value.slice(value.indexOf(":") + 1) })))}::jsonb) wanted(account text,merchant text)
-    WHERE ${manualEntry.entity}='financialTransaction' AND ${manualEntry.payload}->>'accountId'=wanted.account AND lower(trim(${manualEntry.payload}->>'merchant'))=wanted.merchant)`,
+    WHERE ${manualEntry.entity}=${"financialTransaction"} AND ${manualEntry.payload}->>'accountId'=wanted.account AND lower(trim(${manualEntry.payload}->>'merchant'))=wanted.merchant)`,
 });
 
 type Account = typeof financialAccount.$inferSelect & {
@@ -126,575 +123,615 @@ const retained = (c: Pure) => {
   return c.done();
 };
 
-function deriveBankValues({
-  input,
-  observation,
-  manual,
-  resolved,
-  kindAssigned,
-  c,
-}: {
-  input: BankInput;
-  observation: typeof sourceTransactionRecord.$inferSelect | undefined;
-  manual: FinancialTransactionCreateInput | null;
-  resolved: Account;
-  kindAssigned: boolean;
-  c: Pure;
-}) {
-  const movement = observation
-    ? statementEffectiveMovement({
-        providerAmountMinor: observation.providerAmount,
-        description: observation.rawDescription,
-        merchant: observation.merchant,
-        sourceCategory: observation.sourceCategory,
-        loan: statementLoanInput(
-          {
-            source: observation.source,
-            account: observation.accountDescriptor,
-            providerAccountId: observation.providerAccountId,
-          },
-          resolved,
-          input.accounts,
-          input.observations,
-        ),
-      })
-    : null;
-  if (movement?.reviewReason) {
-    c.gap.decision(movement.reviewReason);
-    return null;
-  }
-  const amount = movement?.effectiveAmountMinor ?? moneyToMinor(manual!.amount);
-  const rule = observation
-    ? statementTransactionKind({
-        amountMinor: amount,
-        sourceCategory: observation.sourceCategory,
-        rawDescription: observation.rawDescription,
-        accountKind: resolved.identity.kind,
-      })
-    : null;
-  let kind = manual?.kind ?? rule?.kind ?? "other";
-  if (observation && !kindAssigned) {
-    const question = {
-      descriptor: observation.rawDescription,
-      merchant: observation.merchant,
-      category: observation.sourceCategory,
-      date: observation.statementDate,
-      amount: minorToMoney(amount),
-      status: observation.providerStatus,
-      accountKind: resolved.identity.kind,
-    };
-    const answer = c.answer(
-      statementKindAsk,
-      choiceRequest(STATEMENT_TRANSACTION_KIND_FEATURE, question),
-    );
-    const counterpartyAnswer = c.answer(
-      counterpartyAsk,
-      choiceRequest(STATEMENT_COUNTERPARTY_FEATURE, question),
-    );
-    const label =
-      answer.status === "answered"
-        ? choiceAnswer(
-            answer.output,
-            STATEMENT_TRANSACTION_KIND_FEATURE.choices,
-          )
-        : null;
-    const party =
-      counterpartyAnswer.status === "answered"
-        ? choiceAnswer(
-            counterpartyAnswer.output,
-            STATEMENT_COUNTERPARTY_FEATURE.choices,
-          )
-        : null;
-    const history = input.history
-      .filter((row) => row.id !== input.occurrence?.acceptedTransactionId)
-      .map(
-        (row) =>
-          c.decision(
-            "assignment",
-            recordSubject("financialTransaction", row.id),
-            "kind",
-          )?.value ?? row.kind,
-      )
-      .filter((value) => financialTransactionKind.safeParse(value).success);
-    const historyKinds = [...new Set(history)];
-    const businessHistory = input.history.some((row) => {
-      const advice = c.decision(
-        "assignment",
-        `purchaseEvent:${row.id}`,
-        "advice",
-      )?.value;
-      return (
-        advice &&
-        typeof advice === "object" &&
-        !Array.isArray(advice) &&
-        advice.counterparty === "business"
-      );
-    });
-    const own = input.accounts.map((account) => ({
-      id: account.id,
-      kind: account.identity.kind,
-      names: [
-        account.name,
-        account.vendorName ?? "",
-        ...(account.vendorAliases ?? []),
-        ...account.sourceAliases.map((alias) => alias.alias),
-      ],
-      ledgerPartyId: account.ledgerPartyId,
-    }));
-    const transfer = ownAccountNamed(
-      `${observation.rawDescription ?? ""} ${observation.merchant ?? ""}`,
-      own.find((row) => row.id === resolved.id)!,
-      own,
-    );
-    const decision = decideStatementKind({
-      amountMinor: amount,
-      votes: {
-        rule: rule?.kindSource === "rule" ? rule.kind : null,
-        label: financialTransactionKind.safeParse(label).success
-          ? financialTransactionKind.parse(label)
-          : null,
-        history:
-          historyKinds.length > 1
-            ? "mixed"
-            : historyKinds.length
-              ? financialTransactionKind.parse(historyKinds[0])
-              : null,
-      },
-      counterparty: {
-        label: party === "person" || party === "business" ? party : null,
-        history: businessHistory ? "business" : null,
-        storedValue: resolved.identity.kind === "stored_value",
-      },
-      transfer,
-      descriptor: observation,
-    });
-    kind = decision.kind;
-    if (
-      !label ||
-      !kindAgreed(
-        {
-          ...decision,
-          rawDescription: observation.rawDescription,
+export function createBankEvent({
+  statementKindAsk,
+  counterpartyAsk,
+  chargeIdentityAsk,
+  choiceRequest,
+  choiceAnswer,
+}: typeof statementAsks) {
+  // oxlint-disable-next-line complexity -- movement, kind voting and counterparty checks must agree before booking.
+  function deriveBankValues({
+    input,
+    observation,
+    manual,
+    resolved,
+    kindAssigned,
+    c,
+  }: {
+    input: BankInput;
+    observation: typeof sourceTransactionRecord.$inferSelect | undefined;
+    manual: FinancialTransactionCreateInput | null;
+    resolved: Account;
+    kindAssigned: boolean;
+    c: Pure;
+  }) {
+    const movement = observation
+      ? statementEffectiveMovement({
+          providerAmountMinor: observation.providerAmount,
+          description: observation.rawDescription,
           merchant: observation.merchant,
-        },
-        transfer,
-      )
-    ) {
-      c.gap.decision(
-        `the statement transaction kind (${kind}); the votes and counterparty require review`,
-      );
+          sourceCategory: observation.sourceCategory,
+          loan: statementLoanInput(
+            {
+              source: observation.source,
+              account: observation.accountDescriptor,
+              providerAccountId: observation.providerAccountId,
+            },
+            resolved,
+            input.accounts,
+            input.observations,
+          ),
+        })
+      : null;
+    if (movement?.reviewReason) {
+      c.gap.decision(movement.reviewReason);
       return null;
     }
-  }
-  const values = {
-    accountId: resolved.id,
-    amount,
-    kind,
-    status: manual?.status ?? observation?.providerStatus ?? "observed",
-    transactionDate:
-      manual?.transactionDate ?? observation?.statementDate ?? null,
-    postedDate:
-      manual?.postedDate ??
-      (observation?.providerStatus === "posted"
-        ? observation.statementDate
-        : null),
-    merchant: manual?.merchant ?? observation?.merchant ?? null,
-    rawDescription:
-      manual?.rawDescription ?? observation?.rawDescription ?? null,
-    sourceCategory:
-      manual?.sourceCategory ?? observation?.sourceCategory ?? null,
-    notes: manual?.notes ?? null,
-    spendingCategoryId: null,
-    itemizationExpectation: manual?.itemizationExpectation ?? null,
-  };
-  return values;
-}
-
-export const bankEvent = defineReconciler<BankInput>({
-  scope: "bankEvent",
-  lane: "money",
-  version: 1,
-  reads: [
-    source.evidence(occurrenceEvidence),
-    source.evidence(statementEvidence),
-    source.evidence(manualTransactionEvidence),
-    source.table(manualEntry, ["entity", "payload"], [manualHistory]),
-    source.table(
-      financialTransaction,
-      [
-        "accountId",
-        "amount",
-        "kind",
-        "merchant",
-        "transactionDate",
-        "postedDate",
-        "deletedAt",
-      ],
-      [transactionCandidates],
-    ),
-    source.table(
-      sourceOccurrence,
-      [
-        "currentObservationId",
-        "accountId",
-        "reviewState",
-        "disposition",
-        "withdrawnAt",
-        "acceptedTransactionId",
-        "supersededByOccurrenceId",
-      ],
-      [acceptedOccurrences],
-    ),
-    source.table(financialAccount, [
-      "identity",
-      "providerVendorId",
-      "sourceAliases",
-      "ledgerPartyId",
-      "deletedAt",
-    ]),
-    source.table(ledgerParty, ["kind", "deletedAt"]),
-    source.table(vendor, ["name", "aliases", "deletedAt"]),
-  ],
-  writes: [bankTransactionWrites],
-  asks: [statementKindAsk, counterpartyAsk, chargeIdentityAsk],
-  async load(reads, keys) {
-    const [accountRows, parties] = await Promise.all([
-      reads.select(financialAccount, [], notDeleted(financialAccount)),
-      reads.select(ledgerParty, [], notDeleted(ledgerParty)),
-    ]);
-    const providers = await reads.rows(
-      vendor,
-      accountRows.flatMap((account) =>
-        account.identity.kind === "loan" && account.providerVendorId
-          ? [account.providerVendorId]
-          : [],
-      ),
-    );
-    const accounts = accountRows.map((account): Account => ({
-      ...account,
-      ledgerParty:
-        parties.find((party) => party.id === account.ledgerPartyId) ?? null,
-      vendorName: providers.get(account.providerVendorId ?? "")?.name ?? null,
-      vendorAliases:
-        providers.get(account.providerVendorId ?? "")?.aliases ?? null,
-    }));
-    return new Map(
-      await Promise.all(
-        keys.map(async (key) => {
-          const scoped = reads.for(key);
-          const occurrence = key.startsWith("manual:")
-            ? null
-            : ((await scoped.rows(sourceOccurrence, [key])).get(key) ?? null);
-          const manualId = key.startsWith("manual:")
-            ? key.slice(7)
-            : occurrence?.acceptedTransactionId;
-          const [observations, manuals] = await Promise.all([
-            scoped.facts(
-              statementEvidence,
-              occurrence ? [`occurrence:${occurrence.id}`] : [],
-            ),
-            scoped.facts(
-              manualTransactionEvidence,
-              manualId ? [`manual:${manualId}`] : [],
-            ),
-          ]);
-          const observationsForScope =
-            observations.get(`occurrence:${key}`) ?? [];
-          const current = observationsForScope.find(
-            (row) => row.id === occurrence?.currentObservationId,
-          );
-          const dates = current
-            ? Array.from({ length: POSTING_WINDOW_DAYS * 2 + 1 }, (_, index) =>
-                shiftPlainDate(
-                  current.statementDate,
-                  index - POSTING_WINDOW_DAYS,
-                ),
-              )
-            : [];
-          const candidates = current
-            ? await scoped.lookup(
-                financialTransaction,
-                transactionCandidates,
-                accounts.flatMap((account) =>
-                  dates.flatMap((date) => [
-                    `${account.id}:${current.providerAmount}:${date}`,
-                    `${account.id}:${-current.providerAmount}:${date}`,
-                  ]),
-                ),
-              )
-            : [];
-          const past = current?.merchant
-            ? await scoped.lookup(
-                manualEntry,
-                manualHistory,
-                accounts.flatMap((account) =>
-                  [account.id, account.shortcode].map(
-                    (id) => `${id}:${current.merchant!.trim().toLowerCase()}`,
-                  ),
-                ),
-              )
-            : [];
-          const history = past.flatMap((row) => {
-            const saved = row.payload;
-            return saved &&
-              typeof saved === "object" &&
-              !Array.isArray(saved) &&
-              typeof saved.kind === "string"
-              ? [{ id: row.id, kind: saved.kind }]
-              : [];
-          });
-          const accepted = await scoped.lookup(
-            sourceOccurrence,
-            acceptedOccurrences,
-            candidates.map((row) => row.id),
-          );
-          return [
-            key,
-            {
-              key,
-              occurrence,
-              observations: observations.get(`occurrence:${key}`) ?? [],
-              manual: manuals.get(`manual:${manualId}`)?.[0] ?? null,
-              accounts,
-              history,
-              candidates: candidates.filter(
-                (row) =>
-                  !accepted.some(
-                    (owner) =>
-                      owner.acceptedTransactionId === row.id &&
-                      !owner.deletedAt,
-                  ),
-              ),
-            },
-          ] as const;
-        }),
-      ),
-    );
-  },
-  // oxlint-disable-next-line complexity -- bank identity, evidence and assignment refusals form one atomic money plan.
-  reconcile(input, c) {
-    const owner = input.occurrence;
-    const subject = `bank:${input.key}`;
-    const naturalKey = c.existing(bankTransactionWrites)[0] ?? "transaction";
-    const existing = c.recordId(bankTransactionWrites, naturalKey);
-    const record = existing
-      ? recordSubject("financialTransaction", existing)
-      : subject;
-    if (
-      c.decision("rejection", record)?.kind === "reject" ||
-      c.decision("rejection", subject)?.kind === "reject"
-    )
-      return retained(c);
-    if (
-      owner &&
-      (owner.deletedAt ||
-        owner.withdrawnAt ||
-        owner.supersededByOccurrenceId ||
-        owner.disposition === "ignored")
-    ) {
-      if (existing)
-        c.gap.unsupported(
-          "accepted transaction evidence is withdrawn or out of scope",
-        );
-      return retained(c);
-    }
-    if (owner && owner.reviewState !== "ready") {
-      c.gap.decision("the source occurrence identity and current observation");
-      return retained(c);
-    }
-    if (owner?.acceptedTransactionId && !existing) {
-      const accepted = c.reference(
-        "financialTransaction",
-        owner.acceptedTransactionId,
+    const amount =
+      movement?.effectiveAmountMinor ?? moneyToMinor(manual!.amount);
+    const rule = observation
+      ? statementTransactionKind({
+          amountMinor: amount,
+          sourceCategory: observation.sourceCategory,
+          rawDescription: observation.rawDescription,
+          accountKind: resolved.identity.kind,
+        })
+      : null;
+    let kind = manual?.kind ?? rule?.kind ?? "other";
+    if (observation && !kindAssigned) {
+      const question = {
+        descriptor: observation.rawDescription,
+        merchant: observation.merchant,
+        category: observation.sourceCategory,
+        date: observation.statementDate,
+        amount: minorToMoney(amount),
+        status: observation.providerStatus,
+        accountKind: resolved.identity.kind,
+      };
+      const answer = c.answer(
+        statementKindAsk,
+        choiceRequest(
+          STATEMENT_TRANSACTION_KIND_FEATURE,
+          JSON.stringify(question),
+        ),
       );
-      if (!accepted) {
+      const counterpartyAnswer = c.answer(
+        counterpartyAsk,
+        choiceRequest(STATEMENT_COUNTERPARTY_FEATURE, JSON.stringify(question)),
+      );
+      const label =
+        answer.status === "answered"
+          ? choiceAnswer(
+              answer.output,
+              STATEMENT_TRANSACTION_KIND_FEATURE.choices,
+            )
+          : null;
+      const party =
+        counterpartyAnswer.status === "answered"
+          ? choiceAnswer(
+              counterpartyAnswer.output,
+              STATEMENT_COUNTERPARTY_FEATURE.choices,
+            )
+          : null;
+      const resolvedHistory = input.history.flatMap((row) => {
+        const id =
+          c.reference("financialTransaction", row.id) ??
+          c.reference(
+            "financialTransaction",
+            recordIdentity(
+              { kind: "bankEvent", key: `manual:${row.id}` },
+              bankTransactionWrites.name,
+              "transaction",
+            ),
+          );
+        return id ? [{ ...row, id }] : [];
+      });
+      const history = resolvedHistory
+        .filter((row) => row.id !== input.occurrence?.acceptedTransactionId)
+        .map(
+          (row) =>
+            c.decision(
+              "assignment",
+              recordSubject("financialTransaction", row.id),
+              "kind",
+            )?.value ?? row.kind,
+        )
+        .filter((value) => financialTransactionKind.safeParse(value).success);
+      const historyKinds = [...new Set(history)];
+      const businessHistory = resolvedHistory.some((row) => {
+        const advice = c.decision(
+          "assignment",
+          `purchaseEvent:${row.id}`,
+          "advice",
+        )?.value;
+        return (
+          advice &&
+          typeof advice === "object" &&
+          !Array.isArray(advice) &&
+          advice.counterparty === "business"
+        );
+      });
+      const own = input.accounts.map((account) => ({
+        id: account.id,
+        kind: account.identity.kind,
+        names: [
+          account.name,
+          account.vendorName ?? "",
+          ...(account.vendorAliases ?? []),
+          ...account.sourceAliases.map((alias) => alias.alias),
+        ],
+        ledgerPartyId: account.ledgerPartyId,
+      }));
+      const transfer = ownAccountNamed(
+        `${observation.rawDescription ?? ""} ${observation.merchant ?? ""}`,
+        own.find((row) => row.id === resolved.id)!,
+        own,
+      );
+      const decision = decideStatementKind({
+        amountMinor: amount,
+        votes: {
+          rule: rule?.kindSource === "rule" ? rule.kind : null,
+          label: financialTransactionKind.safeParse(label).success
+            ? financialTransactionKind.parse(label)
+            : null,
+          history:
+            historyKinds.length > 1
+              ? "mixed"
+              : historyKinds.length
+                ? financialTransactionKind.parse(historyKinds[0])
+                : null,
+        },
+        counterparty: {
+          label: party === "person" || party === "business" ? party : null,
+          history: businessHistory ? "business" : null,
+          storedValue: resolved.identity.kind === "stored_value",
+        },
+        transfer,
+        descriptor: observation,
+      });
+      kind = decision.kind;
+      if (
+        !label ||
+        !kindAgreed(
+          {
+            ...decision,
+            rawDescription: observation.rawDescription,
+            merchant: observation.merchant,
+          },
+          transfer,
+        )
+      ) {
         c.gap.decision(
-          "the accepted transaction identity cannot be resolved; retain the stored acceptance",
+          `the statement transaction kind (${kind}); the votes and counterparty require review`,
+        );
+        return null;
+      }
+    }
+    const values = {
+      accountId: resolved.id,
+      amount,
+      kind,
+      status: manual?.status ?? observation?.providerStatus ?? "observed",
+      transactionDate:
+        manual?.transactionDate ?? observation?.statementDate ?? null,
+      postedDate:
+        manual?.postedDate ??
+        (observation?.providerStatus === "posted"
+          ? observation.statementDate
+          : null),
+      merchant: manual?.merchant ?? observation?.merchant ?? null,
+      rawDescription:
+        manual?.rawDescription ?? observation?.rawDescription ?? null,
+      sourceCategory:
+        manual?.sourceCategory ?? observation?.sourceCategory ?? null,
+      notes: manual?.notes ?? null,
+      spendingCategoryId: null,
+      itemizationExpectation: manual?.itemizationExpectation ?? null,
+    };
+    return values;
+  }
+
+  const bankEvent = defineReconciler<BankInput>({
+    scope: "bankEvent",
+    lane: "money",
+    version: 1,
+    reads: [
+      source.evidence(occurrenceEvidence),
+      source.evidence(statementEvidence),
+      source.evidence(manualTransactionEvidence),
+      source.table(manualEntry, ["entity", "payload"], [manualHistory]),
+      source.table(
+        financialTransaction,
+        [
+          "accountId",
+          "amount",
+          "kind",
+          "merchant",
+          "transactionDate",
+          "postedDate",
+          "deletedAt",
+        ],
+        [transactionCandidates],
+      ),
+      source.table(
+        sourceOccurrence,
+        [
+          "currentObservationId",
+          "accountId",
+          "reviewState",
+          "disposition",
+          "withdrawnAt",
+          "acceptedTransactionId",
+          "supersededByOccurrenceId",
+        ],
+        [acceptedOccurrences],
+      ),
+      source.table(financialAccount, [
+        "identity",
+        "providerVendorId",
+        "sourceAliases",
+        "ledgerPartyId",
+        "deletedAt",
+      ]),
+      source.table(ledgerParty, ["kind", "deletedAt"]),
+      source.table(vendor, ["name", "aliases", "deletedAt"]),
+    ],
+    writes: [bankTransactionWrites],
+    asks: [statementKindAsk, counterpartyAsk, chargeIdentityAsk],
+    async load(reads, keys) {
+      const [accountRows, parties] = await Promise.all([
+        reads.select(financialAccount, [], notDeleted(financialAccount)),
+        reads.select(ledgerParty, [], notDeleted(ledgerParty)),
+      ]);
+      const providers = await reads.rows(
+        vendor,
+        accountRows.flatMap((account) =>
+          account.identity.kind === "loan" && account.providerVendorId
+            ? [account.providerVendorId]
+            : [],
+        ),
+      );
+      const accounts = accountRows.map((account): Account => ({
+        ...account,
+        ledgerParty:
+          parties.find((party) => party.id === account.ledgerPartyId) ?? null,
+        vendorName: providers.get(account.providerVendorId ?? "")?.name ?? null,
+        vendorAliases:
+          providers.get(account.providerVendorId ?? "")?.aliases ?? null,
+      }));
+      return new Map(
+        await Promise.all(
+          keys.map(async (key) => {
+            const scoped = reads.for(key);
+            const occurrence = key.startsWith("manual:")
+              ? null
+              : ((await scoped.rows(sourceOccurrence, [key])).get(key) ?? null);
+            const manualId = key.startsWith("manual:")
+              ? key.slice(7)
+              : occurrence?.acceptedTransactionId;
+            const [observations, manuals] = await Promise.all([
+              scoped.facts(
+                statementEvidence,
+                occurrence ? [`occurrence:${occurrence.id}`] : [],
+              ),
+              scoped.facts(
+                manualTransactionEvidence,
+                manualId ? [`manual:${manualId}`] : [],
+              ),
+            ]);
+            const observationsForScope =
+              observations.get(`occurrence:${key}`) ?? [];
+            const current = observationsForScope.find(
+              (row) => row.id === occurrence?.currentObservationId,
+            );
+            const dates = current
+              ? Array.from(
+                  { length: POSTING_WINDOW_DAYS * 2 + 1 },
+                  (_, index) =>
+                    shiftPlainDate(
+                      current.statementDate,
+                      index - POSTING_WINDOW_DAYS,
+                    ),
+                )
+              : [];
+            const candidates = current
+              ? await scoped.lookup(
+                  financialTransaction,
+                  transactionCandidates,
+                  accounts.flatMap((account) =>
+                    dates.flatMap((date) => [
+                      `${account.id}:${current.providerAmount}:${date}`,
+                      `${account.id}:${-current.providerAmount}:${date}`,
+                    ]),
+                  ),
+                )
+              : [];
+            const past = current?.merchant
+              ? await scoped.lookup(
+                  manualEntry,
+                  manualHistory,
+                  accounts.flatMap((account) =>
+                    [account.id, account.shortcode].map(
+                      (id) => `${id}:${current.merchant!.trim().toLowerCase()}`,
+                    ),
+                  ),
+                )
+              : [];
+            const history = past.flatMap((row) => {
+              const saved = row.payload;
+              return saved &&
+                typeof saved === "object" &&
+                !Array.isArray(saved) &&
+                typeof saved.kind === "string"
+                ? [{ id: row.id, kind: saved.kind }]
+                : [];
+            });
+            const accepted = await scoped.lookup(
+              sourceOccurrence,
+              acceptedOccurrences,
+              candidates.map((row) => row.id),
+            );
+            return [
+              key,
+              {
+                key,
+                occurrence,
+                observations: observations.get(`occurrence:${key}`) ?? [],
+                manual: manuals.get(`manual:${manualId}`)?.[0] ?? null,
+                accounts,
+                history,
+                candidates: candidates.filter(
+                  (row) =>
+                    !accepted.some(
+                      (owner) =>
+                        owner.acceptedTransactionId === row.id &&
+                        !owner.deletedAt,
+                    ),
+                ),
+              },
+            ] as const;
+          }),
+        ),
+      );
+    },
+    // oxlint-disable-next-line complexity -- bank identity, evidence and assignment refusals form one atomic money plan.
+    reconcile(input, c) {
+      const owner = input.occurrence;
+      const subject = `bank:${input.key}`;
+      const naturalKey = c.existing(bankTransactionWrites)[0] ?? "transaction";
+      const existing = c.recordId(bankTransactionWrites, naturalKey);
+      const record = existing
+        ? recordSubject("financialTransaction", existing)
+        : subject;
+      if (
+        c.decision("rejection", record)?.kind === "reject" ||
+        c.decision("rejection", subject)?.kind === "reject"
+      )
+        return retained(c);
+      if (
+        owner &&
+        (owner.deletedAt ||
+          owner.withdrawnAt ||
+          owner.supersededByOccurrenceId ||
+          owner.disposition === "ignored")
+      ) {
+        if (existing)
+          c.gap.unsupported(
+            "accepted transaction evidence is withdrawn or out of scope",
+          );
+        return retained(c);
+      }
+      if (owner && owner.reviewState !== "ready") {
+        c.gap.decision(
+          "the source occurrence identity and current observation",
         );
         return retained(c);
       }
-      c.attach(bankTransactionWrites, `accepted:${accepted}`, accepted);
-      c.emit({ kind: "purchaseEvent", key: accepted });
-      return c.done();
-    }
-    if (naturalKey.startsWith("accepted:")) {
-      if (existing) c.emit({ kind: "purchaseEvent", key: existing });
-      return retained(c);
-    }
-    const observation = input.observations.find(
-      (row) => row.id === owner?.currentObservationId,
-    );
-    const manual =
-      input.manual && !input.occurrence
-        ? financialTransactionCreateInput.parse(input.manual.payload)
-        : null;
-    const assigned = (field: string) => {
-      const decisions = [
-        record,
-        subject,
-        ...(owner ? [recordSubject("sourceOccurrence", owner.id)] : []),
-      ].flatMap((identity) => {
-        const decision = c.decision("assignment", identity, field);
-        return decision ? [decision] : [];
-      });
-      return (
-        decisions.sort(
-          (a, b) => b.at.getTime() - a.at.getTime() || b.id.localeCompare(a.id),
-        )[0] ?? null
-      );
-    };
-    const accountDecision = assigned("accountId");
-    if (accountDecision?.kind === "none") {
-      c.gap.decision("the financial account");
-      return retained(c);
-    }
-    const decidedAccount =
-      typeof accountDecision?.value === "string"
-        ? c.reference("financialAccount", accountDecision.value)
-        : null;
-    if (accountDecision?.kind === "set" && !decidedAccount) {
-      c.gap.decision("a live financial account for the assignment");
-      return retained(c);
-    }
-    const account =
-      input.accounts.find((candidate) => candidate.id === decidedAccount) ??
-      input.accounts.find((candidate) => candidate.id === owner?.accountId) ??
-      input.accounts.find(
-        (candidate) =>
-          candidate.id ===
-          (manual ? c.reference("financialAccount", manual.accountId) : null),
-      );
-    const matching = account
-      ? [account]
-      : input.accounts.filter((candidate) =>
-          candidate.sourceAliases.some(
-            (alias) =>
-              alias.source === owner?.source &&
-              (observation?.providerAccountId
-                ? alias.externalAccountId === observation.providerAccountId
-                : alias.alias.trim().toLowerCase() ===
-                  observation?.accountDescriptor.trim().toLowerCase()),
-          ),
+      if (owner?.acceptedTransactionId && !existing) {
+        const accepted = c.reference(
+          "financialTransaction",
+          owner.acceptedTransactionId,
         );
-    const resolved = matching.length === 1 ? matching[0] : null;
-    if (!resolved || (!observation && !manual)) {
-      c.gap.decision(
-        resolved ? "the current source observation" : "the financial account",
-        {
-          actions: input.accounts.map((account) => ({
-            channel: "assignment",
-            kind: "set",
-            subject,
-            field: "accountId",
-            value: account.shortcode,
-            label: `Use ${account.name}`,
-          })),
-        },
-      );
-      return retained(c);
-    }
-    const values = deriveBankValues({
-      input,
-      observation,
-      manual,
-      resolved,
-      kindAssigned: assigned("kind") !== null,
-      c,
-    });
-    if (!values) return retained(c);
-    const provenance: Record<string, string> = {};
-    for (const field of bankTransactionWrites.columns) {
-      const decision = assigned(field);
-      if (!decision) continue;
-      let value = decision.kind === "none" ? null : decision.value;
-      if (typeof value === "string" && field === "accountId")
-        value = c.reference("financialAccount", value);
-      if (typeof value === "string" && field === "spendingCategoryId")
-        value = c.reference("spendingCategory", value);
-      Object.assign(values, {
-        [field]:
-          field === "amount" && typeof value === "string"
-            ? BigInt(value)
-            : value,
-      });
-      provenance[field] = decision.id;
-    }
-    if (!existing && owner && !owner.acceptedTransactionId) {
-      const date = values.transactionDate ?? values.postedDate;
-      const candidates = input.candidates.filter(
-        (row) =>
-          !row.deletedAt &&
-          row.accountId === resolved.id &&
-          row.amount === values.amount &&
-          date &&
-          (row.transactionDate ?? row.postedDate) &&
-          withinPostingDateWindow(
-            date,
-            (row.transactionDate ?? row.postedDate)!,
-          ),
-      );
-      const same = candidates.filter(
-        (row) =>
-          c.decision(
-            "identity",
-            subject,
-            recordSubject("financialTransaction", row.id),
-          )?.kind === "same",
-      );
-      const unresolved = candidates.filter(
-        (row) =>
-          c.decision(
-            "identity",
-            subject,
-            recordSubject("financialTransaction", row.id),
-          )?.kind !== "distinct",
-      );
-      if (same.length === 1) {
-        c.attach(bankTransactionWrites, `accepted:${same[0]!.id}`, same[0]!.id);
-        c.emit({ kind: "purchaseEvent", key: same[0]!.id });
+        if (!accepted) {
+          c.gap.decision(
+            "the accepted transaction identity cannot be resolved; retain the stored acceptance",
+          );
+          return retained(c);
+        }
+        c.attach(bankTransactionWrites, `accepted:${accepted}`, accepted);
+        c.emit({ kind: "purchaseEvent", key: accepted });
         return c.done();
       }
-      if (unresolved.length) {
-        for (const row of unresolved)
-          c.answer(
-            chargeIdentityAsk,
-            choiceRequest(STATEMENT_CHARGE_IDENTITY_FEATURE, {
-              statement: observation
-                ? {
-                    descriptor: observation.rawDescription,
-                    merchant: observation.merchant,
-                    date: observation.statementDate,
-                    amount: minorToMoney(values.amount),
-                  }
-                : null,
-              transaction: { ...row, amount: minorToMoney(row.amount) },
-            }),
+      if (naturalKey.startsWith("accepted:")) {
+        if (existing) c.emit({ kind: "purchaseEvent", key: existing });
+        return retained(c);
+      }
+      const observation = input.observations.find(
+        (row) => row.id === owner?.currentObservationId,
+      );
+      const manual =
+        input.manual && !input.occurrence
+          ? financialTransactionCreateInput.parse(input.manual.payload)
+          : null;
+      const assigned = (field: string) => {
+        const decisions = [
+          record,
+          subject,
+          ...(owner ? [recordSubject("sourceOccurrence", owner.id)] : []),
+        ].flatMap((identity) => {
+          const decision = c.decision("assignment", identity, field);
+          return decision ? [decision] : [];
+        });
+        return (
+          decisions.sort(
+            (a, b) =>
+              b.at.getTime() - a.at.getTime() || b.id.localeCompare(a.id),
+          )[0] ?? null
+        );
+      };
+      const accountDecision = assigned("accountId");
+      if (accountDecision?.kind === "none") {
+        c.gap.decision("the financial account");
+        return retained(c);
+      }
+      const decidedAccount =
+        typeof accountDecision?.value === "string"
+          ? c.reference("financialAccount", accountDecision.value)
+          : null;
+      if (accountDecision?.kind === "set" && !decidedAccount) {
+        c.gap.decision("a live financial account for the assignment");
+        return retained(c);
+      }
+      const account =
+        input.accounts.find((candidate) => candidate.id === decidedAccount) ??
+        input.accounts.find((candidate) => candidate.id === owner?.accountId) ??
+        input.accounts.find(
+          (candidate) =>
+            candidate.id ===
+            (manual ? c.reference("financialAccount", manual.accountId) : null),
+        );
+      const matching = account
+        ? [account]
+        : input.accounts.filter((candidate) =>
+            candidate.sourceAliases.some(
+              (alias) =>
+                alias.source === owner?.source &&
+                (observation?.providerAccountId
+                  ? alias.externalAccountId === observation.providerAccountId
+                  : alias.alias.trim().toLowerCase() ===
+                    observation?.accountDescriptor.trim().toLowerCase()),
+            ),
           );
+      const resolved = matching.length === 1 ? matching[0] : null;
+      if (!resolved || (!observation && !manual)) {
         c.gap.decision(
-          "whether this statement charge and the existing transaction are the same or distinct",
+          resolved ? "the current source observation" : "the financial account",
           {
-            actions: unresolved.flatMap((row) => [
-              {
-                channel: "identity",
-                kind: "same",
-                subject,
-                field: recordSubject("financialTransaction", row.id),
-                label: `Same transaction: ${row.shortcode}`,
-              },
-              {
-                channel: "identity",
-                kind: "distinct",
-                subject,
-                field: recordSubject("financialTransaction", row.id),
-                label: `Distinct transaction: ${row.shortcode}`,
-              },
-            ]),
+            actions: input.accounts.map((account) => ({
+              channel: "assignment",
+              kind: "set",
+              subject,
+              field: "accountId",
+              value: account.shortcode,
+              label: `Use ${account.name}`,
+            })),
           },
         );
         return retained(c);
       }
-    }
-    c.record(bankTransactionWrites, naturalKey, values, { provenance });
-    return c.done();
-  },
-});
+      const values = deriveBankValues({
+        input,
+        observation,
+        manual,
+        resolved,
+        kindAssigned: assigned("kind") !== null,
+        c,
+      });
+      if (!values) return retained(c);
+      const provenance: Record<string, string> = {};
+      for (const field of bankTransactionWrites.columns) {
+        const decision = assigned(field);
+        if (!decision) continue;
+        let value = decision.kind === "none" ? null : decision.value;
+        if (typeof value === "string" && field === "accountId")
+          value = c.reference("financialAccount", value);
+        if (typeof value === "string" && field === "spendingCategoryId")
+          value = c.reference("spendingCategory", value);
+        Object.assign(values, {
+          [field]:
+            field === "amount" && typeof value === "string"
+              ? BigInt(value)
+              : value,
+        });
+        provenance[field] = decision.id;
+      }
+      if (!existing && owner && !owner.acceptedTransactionId) {
+        const date = values.transactionDate ?? values.postedDate;
+        const candidates = input.candidates.filter(
+          (row) =>
+            !row.deletedAt &&
+            row.accountId === resolved.id &&
+            row.amount === values.amount &&
+            date &&
+            (row.transactionDate ?? row.postedDate) &&
+            withinPostingDateWindow(
+              date,
+              (row.transactionDate ?? row.postedDate)!,
+            ),
+        );
+        const same = candidates.filter(
+          (row) =>
+            c.decision(
+              "identity",
+              subject,
+              recordSubject("financialTransaction", row.id),
+            )?.kind === "same",
+        );
+        const unresolved = candidates.filter(
+          (row) =>
+            c.decision(
+              "identity",
+              subject,
+              recordSubject("financialTransaction", row.id),
+            )?.kind !== "distinct",
+        );
+        if (same.length === 1) {
+          c.attach(
+            bankTransactionWrites,
+            `accepted:${same[0]!.id}`,
+            same[0]!.id,
+          );
+          c.emit({ kind: "purchaseEvent", key: same[0]!.id });
+          return c.done();
+        }
+        if (unresolved.length) {
+          for (const row of unresolved)
+            c.answer(
+              chargeIdentityAsk,
+              choiceRequest(
+                STATEMENT_CHARGE_IDENTITY_FEATURE,
+                JSON.stringify({
+                  statement: observation
+                    ? {
+                        descriptor: observation.rawDescription,
+                        merchant: observation.merchant,
+                        date: observation.statementDate,
+                        amount: minorToMoney(values.amount),
+                      }
+                    : null,
+                  transaction: { ...row, amount: minorToMoney(row.amount) },
+                }),
+              ),
+            );
+          c.gap.decision(
+            "whether this statement charge and the existing transaction are the same or distinct",
+            {
+              actions: unresolved.flatMap((row) => [
+                {
+                  channel: "identity",
+                  kind: "same",
+                  subject,
+                  field: recordSubject("financialTransaction", row.id),
+                  label: `Same transaction: ${row.shortcode}`,
+                },
+                {
+                  channel: "identity",
+                  kind: "distinct",
+                  subject,
+                  field: recordSubject("financialTransaction", row.id),
+                  label: `Distinct transaction: ${row.shortcode}`,
+                },
+              ]),
+            },
+          );
+          return retained(c);
+        }
+      }
+      c.record(bankTransactionWrites, naturalKey, values, { provenance });
+      return c.done();
+    },
+  });
+
+  return bankEvent;
+}
