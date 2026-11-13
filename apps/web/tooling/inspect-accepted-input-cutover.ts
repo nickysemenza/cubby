@@ -7,11 +7,12 @@ if (!url || process.argv.length !== 3)
   throw new Error(
     "Usage: pnpm --dir apps/web exec tsx tooling/inspect-accepted-input-cutover.ts <database-url>",
   );
-const client = new Client({
-  connectionString: url,
-  application_name: "cubby-cutover-inspect",
-});
+let client: Client | undefined;
 try {
+  client = new Client({
+    connectionString: url,
+    application_name: "cubby-cutover-inspect",
+  });
   await client.connect();
   await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
   await client.query("SET LOCAL statement_timeout='120s'");
@@ -93,5 +94,5 @@ try {
   );
   process.exitCode = 1;
 } finally {
-  await client.end();
+  await client?.end();
 }
