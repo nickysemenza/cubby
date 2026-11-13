@@ -32,7 +32,6 @@ import {
   structuredModelInput,
   type ModelInput,
 } from "~/server/ai/model-asks";
-import { produceModel } from "~/server/ai/model-call-context";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   buildLocationAnalysisFingerprint,
@@ -323,28 +322,27 @@ export async function describeLocation(
       ...kind,
       admit:
         ai === productionLocationVisionAiPort ? kind.admit : async () => {},
-      produce: () =>
-        produceModel(async () => {
-          const result = await ai.describeLocation(
-            images.map((photo) => photo.url),
-            location.name,
-            {
-              db,
-              ...owner,
-              operation: "locationDescription",
-              applicationCache: false,
-              entity: { entityKind: "location", entityId: locationId },
-            },
-          );
-          return {
-            output: {
-              value: z.json().parse(result),
-              model: LOCATION_DESCRIPTION_FEATURE.model,
-            },
+      produce: async () => {
+        const result = await ai.describeLocation(
+          images.map((photo) => photo.url),
+          location.name,
+          {
+            db,
+            ...owner,
+            operation: "locationDescription",
+            applicationCache: false,
+            entity: { entityKind: "location", entityId: locationId },
+          },
+        );
+        return {
+          output: {
+            value: z.json().parse(result),
             model: LOCATION_DESCRIPTION_FEATURE.model,
-            tier: LOCATION_DESCRIPTION_FEATURE.tier,
-          };
-        }),
+          },
+          model: LOCATION_DESCRIPTION_FEATURE.model,
+          tier: LOCATION_DESCRIPTION_FEATURE.tier,
+        };
+      },
     },
     input,
     {
@@ -566,28 +564,27 @@ export async function detectInventoryItems(
       ...kind,
       admit:
         ai === productionLocationVisionAiPort ? kind.admit : async () => {},
-      produce: () =>
-        produceModel(async () => {
-          const result = await ai.detectInventoryItems(
-            images.map((photo) => photo.url),
-            location.name,
-            {
-              db,
-              ...owner,
-              operation: "locationInventoryDetection",
-              applicationCache: false,
-              entity: { entityKind: "location", entityId: locationId },
-            },
-          );
-          return {
-            output: {
-              value: z.json().parse(result),
-              model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
-            },
+      produce: async () => {
+        const result = await ai.detectInventoryItems(
+          images.map((photo) => photo.url),
+          location.name,
+          {
+            db,
+            ...owner,
+            operation: "locationInventoryDetection",
+            applicationCache: false,
+            entity: { entityKind: "location", entityId: locationId },
+          },
+        );
+        return {
+          output: {
+            value: z.json().parse(result),
             model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
-            tier: LOCATION_INVENTORY_DETECTION_FEATURE.tier,
-          };
-        }),
+          },
+          model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
+          tier: LOCATION_INVENTORY_DETECTION_FEATURE.tier,
+        };
+      },
     },
     input,
     { runId: owner.runId, record: { entity: "location", id: locationId } },

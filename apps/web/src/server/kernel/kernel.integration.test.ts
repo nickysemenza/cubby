@@ -39,6 +39,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 import * as backgroundTasks from "~/server/workflows/background-tasks/publish";
 
@@ -63,6 +64,7 @@ import { applyComputed, runClaimedScopes } from "./apply";
 import {
   AskUnknownError,
   expireAsks,
+  queueAsk,
   runQueuedAsks,
   settleAskOutcome,
 } from "./ask";
@@ -1617,12 +1619,15 @@ describe("evidence-facts kernel", () => {
     "does not restore a funding wait when reset races with %s",
     async (phase) => {
       const until = new Date(Date.now() + 3_600_000);
+      // A producer's admission declares that its refusal sent nothing.
       const refuse = async () => {
         await releaseFundingWaits(ctx.db);
-        throw new WorkDeferredError(
-          "Synthetic refusal",
-          until,
-          "ai_funding_window",
+        throw refusedBeforeSending(
+          new WorkDeferredError(
+            "Synthetic refusal",
+            until,
+            "ai_funding_window",
+          ),
         );
       };
       const ask = defineAsk({
@@ -1654,13 +1659,84 @@ describe("evidence-facts kernel", () => {
         )
       ).rows;
       expect(row).toEqual({
-        state: phase === "admit" ? "queued" : "unknown",
+        state: "queued",
         due: true,
         waitCause: null,
         attempts: 0,
       });
     },
   );
+
+  it("re-queues a batch refused for funding after sent and runs it after the reset", async () => {
+    let budget = 2;
+    let calls = 0;
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        if (budget-- <= 0)
+          throw refusedBeforeSending(
+            new WorkDeferredError(
+              "Synthetic paid budget reached",
+              new Date(Date.now() + 3_600_000),
+              "ai_funding_window",
+            ),
+          );
+        calls++;
+        return "Groceries";
+      },
+    });
+    const merchants = ["A", "B", "C", "D", "E"].map(
+      (letter) => `Synthetic Budget Shop ${letter}`,
+    );
+    for (const merchant of merchants)
+      await queueAsk(
+        ctx.db,
+        fixture.categorize,
+        { merchant },
+        { scopes: [{ kind: CATEGORY_SCOPE, key: merchant }] },
+      );
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(5);
+    const states = async () =>
+      (
+        await repositoryQueries(ctx.db).execute<{
+          state: string;
+          waitCause: string | null;
+          attempts: number;
+          sentAt: string | null;
+        }>(
+          sql`SELECT state, "waitCause", attempts, "sentAt" FROM "Ask" WHERE feature = ${fixture.categorize.feature} ORDER BY state`,
+        )
+      ).rows;
+    expect(await states()).toEqual([
+      ...Array.from({ length: 2 }, () => ({
+        state: "answered",
+        waitCause: null,
+        attempts: 0,
+        sentAt: expect.any(String),
+      })),
+      ...Array.from({ length: 3 }, () => ({
+        state: "queued",
+        waitCause: "funding",
+        attempts: 0,
+        sentAt: null,
+      })),
+    ]);
+    // Each Answer's cost is the charged cost of the usage its call wrote.
+    expect(
+      (
+        await repositoryQueries(ctx.db)
+          .select({ costMicros: answer.costMicros })
+          .from(answer)
+          .where(eq(answer.feature, fixture.categorize.feature))
+      ).map((row) => row.costMicros),
+    ).toEqual([10, 10]);
+    budget = Infinity;
+    await releaseFundingWaits(ctx.db);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(3);
+    expect(calls).toBe(5);
+    expect(new Set((await states()).map((row) => row.state))).toEqual(
+      new Set(["answered"]),
+    );
+  });
 
   it("leaves hosted model Asks to their Pass and wakes it when the retained Answer arrives", async () => {
     const ask = defineAsk({

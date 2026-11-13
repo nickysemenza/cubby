@@ -68,7 +68,6 @@ import { withAiBudget, withPlanBudget } from "~/server/ai/budget";
 import { stopForFunding } from "~/server/ai/funding-wait";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
-import { insideModelAsk, produceModel } from "~/server/ai/model-call-context";
 import {
   MODEL_FOR_TIER,
   type AiChatRequest,
@@ -91,6 +90,7 @@ import {
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
+import { insideProduce } from "~/server/kernel/produce-ledger";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
@@ -895,7 +895,7 @@ export async function runStructuredFeature<T>(
       reasoning: "Input preparation",
     });
   }
-  if (ctx.db && !insideModelAsk() && ports === productionStructuredRunPorts) {
+  if (ctx.db && !insideProduce() && ports === productionStructuredRunPorts) {
     const { modelAskFor, structuredModelInput } = await import("./model-asks");
     const { withAsk } = await import("~/server/kernel/api");
     const media = await identifyMedia(request, ctx.db);
@@ -915,24 +915,22 @@ export async function runStructuredFeature<T>(
           async produce() {
             let model = spec.model;
             let details: { raw: string; tier: string } | undefined;
-            const value = await produceModel(() =>
-              runStructuredFeature(
-                spec,
-                sent,
-                {
-                  ...ctx,
-                  applicationCache: false,
-                  validate: undefined,
-                  onProduced: (response) => {
-                    details = response;
-                    ctx.onProduced?.(response);
-                  },
-                  onAnswered: (answered) => {
-                    model = answered;
-                  },
+            const value = await runStructuredFeature(
+              spec,
+              sent,
+              {
+                ...ctx,
+                applicationCache: false,
+                validate: undefined,
+                onProduced: (response) => {
+                  details = response;
+                  ctx.onProduced?.(response);
                 },
-                ports,
-              ),
+                onAnswered: (answered) => {
+                  model = answered;
+                },
+              },
+              ports,
             );
             return {
               output: { value: z.json().parse(value), model },

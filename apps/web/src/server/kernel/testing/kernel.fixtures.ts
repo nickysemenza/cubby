@@ -171,16 +171,31 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     output: z.object({ category: z.string() }),
     policy: { tier: "fast" },
     label: "a category",
-    async produce(input) {
+    async produce(input, { db }) {
       const category = await (
         hooks.categorize ?? (async () => "Uncategorized")
       )(input.merchant);
-      return {
-        output: { category },
-        model: "fixture-model",
-        tier: "fast",
-        costMicros: 10,
-      };
+      // The Answer's cost comes from the usage rows its call wrote.
+      const { recordAiUsage } = await import("~/server/ai/usage");
+      const { emitTelemetry } =
+        await import("~/server/observability/telemetry");
+      await recordAiUsage(
+        db,
+        {
+          provider: "fixture",
+          model: "fixture-model",
+          feature: "fixture.categorize",
+          operation: "fixture.categorize",
+          chargedCost: 0.00001,
+          durationMs: 1,
+          transport: "gateway",
+        },
+        {
+          emit: emitTelemetry,
+          snapshot: async () => ({ amount: null, evidence: null }),
+        },
+      );
+      return { output: { category }, model: "fixture-model", tier: "fast" };
     },
     estimateCostMicros: () => 10,
   });

@@ -23,7 +23,6 @@ import { z } from "zod";
 import { cachedCall } from "~/server/ai/adapters";
 import { type GatewayMetadata, gatewayFetch } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
-import { insideModelAsk, produceModel } from "~/server/ai/model-call-context";
 import {
   buildChoiceInput,
   type DecisionChoiceInput,
@@ -43,6 +42,7 @@ import {
   recordApplicationCacheHit,
   recordFeatureUsage,
 } from "~/server/ai/run-feature";
+import { insideProduce } from "~/server/kernel/produce-ledger";
 
 import { aiWorkDeferral, withCooperativeAiWork } from "./cooperative-work";
 import {
@@ -584,7 +584,7 @@ async function runDecisionChoiceInternal(
       probability: 0,
       ranked: [],
     };
-  if (args.usage.db && !insideModelAsk() && !args.port) {
+  if (args.usage.db && !insideProduce() && !args.port) {
     const { modelAskFor } = await import("./model-asks");
     const { withAsk } = await import("~/server/kernel/api");
     const kind = modelAskFor(feature);
@@ -593,14 +593,12 @@ async function runDecisionChoiceInternal(
       {
         ...kind,
         async produce() {
-          const value = await produceModel(() =>
-            runDecisionChoiceInternal(
-              {
-                ...args,
-                usage: { ...args.usage, applicationCache: false },
-              },
-              pending,
-            ),
+          const value = await runDecisionChoiceInternal(
+            {
+              ...args,
+              usage: { ...args.usage, applicationCache: false },
+            },
+            pending,
           );
           return {
             output: { value: z.json().parse(value), model: feature.model },

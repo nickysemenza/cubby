@@ -35,6 +35,7 @@ import {
   type StructuredRunPorts,
 } from "~/server/ai/run-feature";
 import { getDb } from "~/server/db/helpers";
+import { answer } from "~/server/db/kernel-schema";
 import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -167,6 +168,13 @@ describe("AiUsage accounting", () => {
         gatewayLogId: "log-decision",
         cacheStatus: "none",
       });
+      // The Ask's Answer carries the charged cost of the usage its call wrote.
+      const answers = await getDb(ctx.db)
+        .select({ costMicros: answer.costMicros })
+        .from(answer);
+      expect(answers).toEqual([
+        { costMicros: Math.round(Number(rows[0]!.chargedCost) * 1_000_000) },
+      ]);
     },
   );
 

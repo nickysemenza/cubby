@@ -19,8 +19,18 @@ import type { GatewayProvider } from "@cubby/shared/ai/models";
 import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
 import { getTestAiGateway, getAiGatewayEgress } from "~/server/cf-env";
+import {
+  markTransmitted,
+  refusedBeforeSending,
+} from "~/server/kernel/produce-ledger";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
-import { coordinatedGatewayRequest } from "./gateway-egress-client";
+import { AiWorkDeferredError } from "./cooperative-work";
+import {
+  coordinatedGatewayRequest,
+  GatewayAdmissionWaitError,
+  gatewayProviderStop,
+} from "./gateway-egress-client";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -113,6 +123,52 @@ export function gatewayEnvironment(): AiGatewayEnvironment {
   });
 }
 
+/** A pre-request admission refusal sent nothing; the Ask that waits on it re-queues. */
+async function admission<T>(admit: () => Promise<T>): Promise<T> {
+  try {
+    return await admit();
+  } catch (error) {
+    throw refusedBeforeSending(error);
+  }
+}
+
+/**
+ * A classified funding or configuration stop is the provider refusing the
+ * request without paid work; every other response may have been billed.
+ */
+async function received(response: Response): Promise<Response> {
+  if (!response.ok) {
+    const body = await response
+      .clone()
+      .text()
+      .catch(() => "");
+    const stop = gatewayProviderStop(response.status, body);
+    if (stop) {
+      refusedBeforeSending(stop);
+      return response;
+    }
+  }
+  markTransmitted();
+  return response;
+}
+
+/** The egress object's shared-capacity wait refuses before the provider sees the request. */
+function egressAdmissionWait(error: unknown): WorkDeferredError | null {
+  const until =
+    error instanceof GatewayAdmissionWaitError
+      ? error.retryAt
+      : error instanceof AiWorkDeferredError
+        ? error.until
+        : null;
+  return until === null
+    ? null
+    : new WorkDeferredError(
+        "AI Gateway admission is waiting for shared capacity",
+        new Date(until),
+        "provider_capacity",
+      );
+}
+
 /**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
@@ -145,29 +201,39 @@ export function gatewayFetch(
     onRecoveredErrorResponse: opts.onRecoveredErrorResponse,
     onTransport: opts.onTransport,
     requestTimeoutMs: opts.requestTimeoutMs,
-    chatGpt: chatGptInference,
+    chatGpt: (body, options) =>
+      chatGptInference(body, {
+        ...options,
+        onSelected: () => {
+          markTransmitted();
+          options?.onSelected?.();
+        },
+      }),
     subscriptionRequired: opts.subscriptionRequired,
     subscriptionFallback: opts.subscriptionFallback,
     flex: opts.flex,
-    beforePaidRequest: async (request) => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-      await opts.beforePaidRequest?.(request);
-    },
-    beforePlanRequest: async (request) => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-      return (await opts.beforePlanRequest?.(request)) ?? null;
-    },
+    beforePaidRequest: (request) =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+        await opts.beforePaidRequest?.(request);
+      }),
+    beforePlanRequest: (request) =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+        return (await opts.beforePlanRequest?.(request)) ?? null;
+      }),
     // Credits have no budget, but a workflow that lost its Job still must not
     // transmit on them.
-    beforeCreditRequest: async () => {
-      await (
-        await import("~/server/workflows/runs/execution")
-      ).assertWorkflowCurrent();
-    },
+    beforeCreditRequest: () =>
+      admission(async () => {
+        await (
+          await import("~/server/workflows/runs/execution")
+        ).assertWorkflowCurrent();
+      }),
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;
@@ -179,14 +245,16 @@ export function gatewayFetch(
           "cf-aig-metadata",
           JSON.stringify(controls.metadata),
         );
-        return testGateway.fetch(
-          `https://ai-gateway.test/${provider}/${request.endpoint}`,
-          {
+        return testGateway
+          .fetch(`https://ai-gateway.test/${provider}/${request.endpoint}`, {
             method: request.init?.method ?? "POST",
             headers: request.headers,
             body: request.init?.body,
-          },
-        );
+          })
+          .then(received, (error: unknown) => {
+            markTransmitted();
+            throw error;
+          });
       };
     },
     // Every runtime binds the egress object; it owns admission and holds.
@@ -196,7 +264,21 @@ export function gatewayFetch(
       );
       if (!egress)
         throw new Error("AI Gateway requires the AI_GATEWAY_EGRESS binding");
-      return coordinatedGatewayRequest(egress, provider, request, controls);
+      let response: Response;
+      try {
+        response = await coordinatedGatewayRequest(
+          egress,
+          provider,
+          request,
+          controls,
+        );
+      } catch (error) {
+        const wait = egressAdmissionWait(error);
+        if (wait) throw refusedBeforeSending(error, wait);
+        markTransmitted();
+        throw error;
+      }
+      return received(response);
     },
   });
 }
