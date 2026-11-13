@@ -52,6 +52,10 @@ const operationPolicy = z.discriminatedUnion("kind", [
     }),
     /** Null means the ordinary disposition executor; custom policy names a function. */
     handler: policyReference.nullable(),
+    before: policyReference.optional(),
+    after: policyReference.optional(),
+    beforeLock: policyReference.optional(),
+    expand: policyReference.optional(),
   }),
   z.strictObject({ kind: z.literal("unsupported"), reason: text }),
 ]);

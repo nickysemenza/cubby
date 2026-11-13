@@ -9,7 +9,11 @@ import { generatedHeader, rawSource } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 import { EntityDeclarationError } from "../source.ts";
 
-type Hook = { key: string; handler: EdgePolicyReference };
+type Hook = {
+  key: string;
+  handler: EdgePolicyReference;
+  stage: "overrides" | "beforeDelete" | "afterDelete" | "beforeLock" | "expand";
+};
 
 /** Physical declarations emit literal keys; functions retain custom transaction policy. */
 export const renderDeclaredEdges = (
@@ -155,11 +159,19 @@ export const renderDeclaredEdges = (
         const policy = edge.policies[end.end][operation];
         if (policy.kind === "unsupported") continue;
         add(map, end.entity, `${key}:${JSON.stringify(policy.disposition)}`);
-        if (policy.handler)
-          hooks.set(end.entity, [
-            ...(hooks.get(end.entity) ?? []),
-            { key: end.key, handler: policy.handler },
-          ]);
+        const refs = [
+          ["overrides", policy.handler],
+          ["beforeDelete", policy.before],
+          ["afterDelete", policy.after],
+          ["beforeLock", policy.beforeLock],
+          ["expand", policy.expand],
+        ] as const;
+        for (const [stage, handler] of refs)
+          if (handler)
+            hooks.set(end.entity, [
+              ...(hooks.get(end.entity) ?? []),
+              { key: end.key, handler, stage },
+            ]);
       }
     }
   }
@@ -176,9 +188,42 @@ export const renderDeclaredEdges = (
         ).values(),
       ];
       const direct = (entry: Hook) =>
-        `async(tx:DrizzleTransaction,ids:EntityId<${JSON.stringify(entity)}>[]):Promise<void> => (await import(${JSON.stringify(entry.handler.module)})).${entry.handler.export}(tx,ids${entry.handler.argument ? `,${JSON.stringify(entry.handler.argument)}` : ""})`;
+        `async(tx:DrizzleTransaction,ids:EntityId<${JSON.stringify(entity)}>[]):Promise<${entry.stage === "expand" ? `EntityId<${JSON.stringify(entity)}>[]` : "void"}> => (await import(${JSON.stringify(entry.handler.module)})).${entry.handler.export}(tx,ids${entry.handler.argument ? `,${JSON.stringify(entry.handler.argument)}` : ""})`;
+      const stages = (
+        values: readonly Hook[],
+        value: (entry: Hook) => string,
+      ) => {
+        const overrides = values
+          .filter((e) => e.stage === "overrides")
+          .map((e) => `${JSON.stringify(e.key)}:${value(e)}`);
+        const fields = [`overrides:{${overrides.join(",\n")}}`];
+        for (const stage of [
+          "beforeDelete",
+          "afterDelete",
+          "beforeLock",
+          "expand",
+        ] as const) {
+          const refs = [
+            ...new Map(
+              values
+                .filter((e) => e.stage === stage)
+                .map((e) => [
+                  `${e.handler.module}#${e.handler.export}#${e.handler.argument ?? ""}`,
+                  e,
+                ]),
+            ).values(),
+          ];
+          if (!refs.length) continue;
+          if (refs.length > 1)
+            throw new EntityDeclarationError(
+              `${entity}: compose ${stage} in one named policy function.`,
+            );
+          fields.push(`${stage}:${value(refs[0]!)}`);
+        }
+        return `{${fields.join(",\n")}}`;
+      };
       if (!factories.length)
-        return `${JSON.stringify(entity)}:{overrides:{${entries.map((entry) => `${JSON.stringify(entry.key)}:${direct(entry)}`).join(",\n")}}}`;
+        return `${JSON.stringify(entity)}:${stages(entries, direct)}`;
       const context = factories
         .map(
           (ref) =>
@@ -191,17 +236,17 @@ export const renderDeclaredEdges = (
             `const factory${index}=(await import(${JSON.stringify(ref.module)})).${ref.export}(context);`,
         )
         .join("\n");
-      const values = entries
-        .map((entry) => {
-          const index = factories.findIndex(
-            (ref) =>
-              ref.module === entry.handler.module &&
-              ref.export === entry.handler.export,
-          );
-          return `${JSON.stringify(entry.key)}:${entry.handler.member ? `factory${index}[${JSON.stringify(entry.handler.member)}]` : direct(entry)}`;
-        })
-        .join(",\n");
-      return `${JSON.stringify(entity)}:async(context:${context})=>{${calls}\nreturn {overrides:{${values}}};}`;
+      const result = stages(entries, (entry) => {
+        const index = factories.findIndex(
+          (ref) =>
+            ref.module === entry.handler.module &&
+            ref.export === entry.handler.export,
+        );
+        return entry.handler.member
+          ? `factory${index}[${JSON.stringify(entry.handler.member)}]`
+          : direct(entry);
+      });
+      return `${JSON.stringify(entity)}:async(context:${context})=>{${calls}\nreturn ${result};}`;
     });
     return `export const ${name}={${bindings.join(",\n")}} as const;\n`;
   };

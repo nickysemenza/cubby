@@ -3,11 +3,11 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { recipeSchemaBindings } from "~/entity/generated/entity-schema-bindings.recipe.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { recipe } from "~/server/db/schema";
 import {
   deleteRecipes,
-  RECIPE_DELETE_EDGE_POLICY,
   recipeScaffold,
 } from "~/server/domains/recipe/repo/crud";
 import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";
@@ -47,7 +47,7 @@ describe("delete effect snapshot contention", () => {
     let attempts = 0;
     const binding = defineRepository("recipe", {
       schemas: recipeSchemaBindings,
-      lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
+      lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.recipe },
       scaffold: recipeScaffold,
       delete: async (context) => {
         if (++attempts === 1) {
@@ -85,7 +85,7 @@ describe("delete effect snapshot contention", () => {
       ctx.db,
       "recipe",
       [subject.id],
-      RECIPE_DELETE_EDGE_POLICY,
+      DECLARED_EDGE_DELETE_POLICIES.recipe,
       async (tx) => {
         if (!interrupted) {
           interrupted = true;
@@ -112,7 +112,7 @@ describe("delete effect snapshot contention", () => {
         ctx.db,
         "recipe",
         [subject.id],
-        RECIPE_DELETE_EDGE_POLICY,
+        DECLARED_EDGE_DELETE_POLICIES.recipe,
         async (tx) => {
           attempts++;
           await runAfterCommit(tx, async () => {

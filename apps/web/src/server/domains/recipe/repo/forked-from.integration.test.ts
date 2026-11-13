@@ -2,7 +2,7 @@
  * `Recipe.forkedFromRecipeId` — a nullable self-FK lineage pointer (no "fork"
  * action; the pointer is a plain field settable via create/update). Covers the
  * create/update round trip, the self-reference guard, and the delete
- * disposition (`RECIPE_DELETE_EDGE_POLICY["Recipe.forkedFromRecipeId"]`,
+ * disposition (`DECLARED_EDGE_DELETE_POLICIES.recipe["Recipe.forkedFromRecipeId"]`,
  * effect "detach" — deleting the recipe a fork points at clears the pointer
  * rather than cascading to the fork itself).
  */

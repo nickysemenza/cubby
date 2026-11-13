@@ -60,7 +60,6 @@ import {
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
-  ingredient,
   inventoryEntry,
   ledgerSourceClaim,
   ledgerTransfer,
@@ -83,7 +82,6 @@ import {
   purchase,
   purchasePaymentEvidence,
   recipe,
-  recipeSection,
   recipeSectionIngredient,
   plant,
   planting,
@@ -657,58 +655,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  recipe: {
-    ...edges({
-      "RecipeSection.recipeId": {
-        column: recipeSection.recipeId,
-        role: "composition",
-        label: "recipe sections",
-        description:
-          'A named section (e.g. "For the crust") that structures this recipe\'s ingredient list; meaningless outside the recipe it belongs to.',
-        liveness: { kind: "must-target-live" },
-      },
-      "Ingredient.recipeId": {
-        column: ingredient.recipeId,
-        role: "reference",
-        label: "sub-recipe ingredient lines",
-        description:
-          "An ingredient line in another recipe's section that uses this recipe as a sub-recipe (composition) rather than a plain ingredient.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Deleting a recipe deliberately preserves the recipe-as-ingredient pointer " +
-            "(`preserve-sub-recipe-pointer` in RECIPE_DELETE_EDGE_POLICY, " +
-            "apps/web/src/server/domains/recipe/repo/crud.ts) so parent recipes still resolve " +
-            "the tombstone for staleness detection and recompute, instead of silently " +
-            "losing a line.",
-        },
-      },
-      "MealRecipe.recipeId": {
-        column: mealRecipe.recipeId,
-        role: "association",
-        label: "meal-plan entries",
-        description:
-          "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
-        liveness: { kind: "must-target-live" },
-      },
-      "EntityAttachment.entityId": {
-        column: entityAttachment.entityId,
-        role: "media",
-        label: "recipe photos",
-        description: "A photo attached to this recipe.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Recipe.forkedFromRecipeId": {
-        column: recipe.forkedFromRecipeId,
-        role: "hierarchy",
-        label: "forks",
-        description:
-          "A recipe that records this one as the recipe it was forked from — a lineage pointer only, enforced by the Recipe self-FK.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...externalIdEdgesFor("recipe"),
-  },
+
   ingredient: edges({
     "MealFoodEntry.ingredientId": {
       column: mealFoodEntry.ingredientId,

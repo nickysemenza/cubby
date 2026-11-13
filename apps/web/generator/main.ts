@@ -148,9 +148,14 @@ const main = async () => {
   const legacyPaths = new Set(
     entities.flatMap((entity) =>
       entity.relations.flatMap((relation) =>
-        relation.provenance.kind === "local-path"
-          ? relation.provenance.steps.map((step) => step.edge)
-          : [],
+        [
+          relation.provenance,
+          ...(relation.sources ?? []).map((source) => source.provenance),
+        ].flatMap((provenance) =>
+          provenance.kind === "local-path"
+            ? provenance.steps.map((step) => step.edge)
+            : [],
+        ),
       ),
     ),
   );

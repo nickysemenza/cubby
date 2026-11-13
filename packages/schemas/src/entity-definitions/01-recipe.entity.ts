@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -26,6 +27,418 @@ import { z } from "zod";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "recipe",
+    edges: [
+      defineEdge({
+        key: "Recipe.forkedFromRecipeId",
+        from: "recipe",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.Recipe.forkedFromRecipeId",
+          from: "recipe",
+          to: "recipe",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Recipe.forkedFromRecipeId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "recipe",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "hierarchy",
+          label: "forks",
+          description:
+            "A recipe that records this one as the recipe it was forked from — a lineage pointer only, enforced by the Recipe self-FK.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clear-fork-pointer",
+                effect: "detach",
+                description:
+                  "A deleted recipe's forks have their forkedFromRecipeId pointer nulled out — a fork is a full independent recipe, so it survives its parent's deletion, just without the lineage pointer.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Ingredient.recipeId",
+        from: "ingredient",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.Ingredient.recipeId",
+          from: "recipe",
+          to: "ingredient",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Ingredient.recipeId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "ingredient",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "sub-recipe ingredient lines",
+          description:
+            "An ingredient line in another recipe's section that uses this recipe as a sub-recipe (composition) rather than a plain ingredient.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "Deleting a recipe deliberately preserves the recipe-as-ingredient pointer (`preserve-sub-recipe-pointer` in RECIPE_DELETE_EDGE_POLICY, apps/web/src/server/domains/recipe/repo/crud.ts) so parent recipes still resolve the tombstone for staleness detection and recompute, instead of silently losing a line.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "preserve-sub-recipe-pointer",
+                effect: "preserve",
+                description:
+                  "A deleted recipe's sub-recipe pointer is left untouched — parent recipes are recomputed and re-resolved rather than having this edge cascaded or guarded.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "RecipeSection.recipeId",
+        from: "row:RecipeSection",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.RecipeSection.recipeId",
+          from: "recipe",
+          to: "row:RecipeSection",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "RecipeSection.recipeId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "RecipeSection.recipeId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "composition",
+          label: "recipe sections",
+          description:
+            'A named section (e.g. "For the crust") that structures this recipe\'s ingredient list; meaningless outside the recipe it belongs to.',
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-owned-row",
+                effect: "soft-delete",
+                description:
+                  "A recipe's sections, and their ingredient lines, are soft-deleted along with it.",
+              },
+              handler: null,
+              before: {
+                module: "~/server/domains/recipe/repo/crud",
+                export: "removeRecipeGrandchildren",
+              },
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "MealRecipe.recipeId",
+        from: "row:MealRecipe",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.MealRecipe.recipeId",
+          from: "recipe",
+          to: "row:MealRecipe",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "MealRecipe.recipeId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "MealRecipe.mealId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "association",
+          label: "meal-plan entries",
+          description:
+            "A join row placing this recipe on the meal calendar; the meal and the recipe each exist independently of the pairing.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Meal-plan associations are soft-deleted with the recipe; the meals themselves are not.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "recipe/EntityAttachment.entityId",
+        from: "row:EntityAttachment",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.EntityAttachment.entityId",
+          from: "recipe",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityAttachment.entityKind",
+            value: "recipe",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "recipe photos",
+          description: "A photo attached to this recipe.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Image associations are soft-deleted with the recipe, and each file is\n      deleted too unless something else still references it.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "recipe/EntityExternalId.entityId",
+        from: "row:EntityExternalId",
+        to: "recipe",
+        cardinality: "one",
+        inverse: {
+          key: "recipe.incoming.EntityExternalId.entityId",
+          from: "recipe",
+          to: "row:EntityExternalId",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityExternalId.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityExternalId.entityKind",
+            value: "recipe",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityExternalId.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "metadata",
+          label: "external ids",
+          description:
+            "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-metadata",
+                effect: "soft-delete",
+                description:
+                  "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Recipe", plural: "Recipes" },
     route: {
       listColumns: {
@@ -1369,64 +1782,83 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("cookbookId").named("cookbook", "Cookbook"),
-    r.field("forkedFromRecipeId").named("forkedFrom", "Forked from", {
-      inverseOmit:
-        "The recipe page is custom; a recipe's forks are reached from each fork's Forked from field.",
-    }),
-    r.images(),
-    r
-      .path("ingredient", "many", [
-        { edge: "RecipeSection.recipeId", direction: "incoming" },
-        {
-          edge: "RecipeSectionIngredient.recipeSectionId",
-          direction: "incoming",
-        },
-        {
-          edge: "RecipeSectionIngredient.ingredientId",
-          direction: "outgoing",
-        },
-      ])
-      .named("ingredients", "Ingredients", { view: { columnGroup: "Recipe" } }),
-    r
-      .path("recipe", "many", [
-        { edge: "RecipeSection.recipeId", direction: "incoming" },
-        {
-          edge: "RecipeSectionIngredient.recipeSectionId",
-          direction: "incoming",
-        },
-        {
-          edge: "RecipeSectionIngredient.ingredientId",
-          direction: "outgoing",
-        },
-        { edge: "Ingredient.recipeId", direction: "outgoing" },
-      ])
-      .named("sub-recipes", "Sub-recipes"),
-    r
-      .path("meal", "many", [
-        { edge: "MealRecipe.recipeId", direction: "incoming" },
-        { edge: "MealRecipe.mealId", direction: "outgoing" },
-      ])
-      .named("meals", "Meals", {
-        view: {
-          columnGroup: "Source & use",
-          order: "newest",
-          inverseKey: "meal.recipes",
-        },
-        sources: [
-          r
-            .path("meal", "many", [
-              { edge: "MealRecipe.recipeId", direction: "incoming" },
-              {
-                edge: "MealRecipePortion.mealRecipeId",
-                direction: "incoming",
-              },
-              { edge: "MealRecipePortion.mealId", direction: "outgoing" },
-            ])
-            .source("served-portions", "Served portions"),
-        ],
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("cookbookId").named("cookbook", "Cookbook"),
+        "cookbook.recipes",
+      ),
+      r.declare(
+        r.field("forkedFromRecipeId").named("forkedFrom", "Forked from", {
+          inverseOmit:
+            "The recipe page is custom; a recipe's forks are reached from each fork's Forked from field.",
+        }),
+        "recipe.recipe.forkedFrom",
+      ),
+      r.declare(r.images(), "image.recipe.images"),
+      r.declare(
+        r
+          .path("ingredient", "many", [
+            { edge: "RecipeSection.recipeId", direction: "incoming" },
+            {
+              edge: "RecipeSectionIngredient.recipeSectionId",
+              direction: "incoming",
+            },
+            {
+              edge: "RecipeSectionIngredient.ingredientId",
+              direction: "outgoing",
+            },
+          ])
+          .named("ingredients", "Ingredients", {
+            view: { columnGroup: "Recipe" },
+          }),
+        "ingredient.recipes",
+      ),
+      r.declare(
+        r
+          .path("recipe", "many", [
+            { edge: "RecipeSection.recipeId", direction: "incoming" },
+            {
+              edge: "RecipeSectionIngredient.recipeSectionId",
+              direction: "incoming",
+            },
+            {
+              edge: "RecipeSectionIngredient.ingredientId",
+              direction: "outgoing",
+            },
+            { edge: "Ingredient.recipeId", direction: "outgoing" },
+          ])
+          .named("sub-recipes", "Sub-recipes"),
+        "recipe.recipe.sub-recipes",
+      ),
+      r.declare(
+        r
+          .path("meal", "many", [
+            { edge: "MealRecipe.recipeId", direction: "incoming" },
+            { edge: "MealRecipe.mealId", direction: "outgoing" },
+          ])
+          .named("meals", "Meals", {
+            view: {
+              columnGroup: "Source & use",
+              order: "newest",
+              inverseKey: "meal.recipes",
+            },
+            sources: [
+              r
+                .path("meal", "many", [
+                  { edge: "MealRecipe.recipeId", direction: "incoming" },
+                  {
+                    edge: "MealRecipePortion.mealRecipeId",
+                    direction: "incoming",
+                  },
+                  { edge: "MealRecipePortion.mealId", direction: "outgoing" },
+                ])
+                .source("served-portions", "Served portions"),
+            ],
+          }),
+        "meal.recipes",
+      ),
+    ],
+  }),
   readSchemas,
 );

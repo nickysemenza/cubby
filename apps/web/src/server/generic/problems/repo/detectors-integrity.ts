@@ -25,7 +25,7 @@ import { entityRefKey, type Entity } from "@cubby/schemas/entity";
  * **Why `Ingredient.recipeId` is exempt.** It is the one edge marked
  * `allow-target-deleted` in `ENTITY_EDGE_SEMANTICS`: deleting a recipe
  * deliberately preserves the recipe-as-ingredient pointer
- * (`preserve-sub-recipe-pointer` in `RECIPE_DELETE_EDGE_POLICY`,
+ * (`preserve-sub-recipe-pointer` in `DECLARED_EDGE_DELETE_POLICIES.recipe`,
  * `apps/web/src/server/domains/recipe/repo/crud.ts`) so parent recipes that used the
  * deleted recipe as a sub-recipe can still resolve the tombstone for
  * staleness detection and cascading recompute, instead of silently losing an

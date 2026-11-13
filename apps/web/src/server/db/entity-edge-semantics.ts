@@ -33,7 +33,7 @@
  * role doesn't change because the operation does. What an operation actually
  * does — block, detach, hard-delete, repoint, and so on — is an
  * `OperationDisposition`, decided per call site (see `PRODUCT_EDGE_ROLES` in
- * `repo/product/edge-roles.ts` and `RECIPE_DELETE_EDGE_POLICY` in
+ * `repo/product/edge-roles.ts` and `DECLARED_EDGE_DELETE_POLICIES.recipe` in
  * `repo/recipe/crud.ts` for two operations that disposition the same kind of
  * edge differently). Nothing here encodes delete/merge/detach behavior, and
  * nothing here should ever need to change when an operation's policy changes.

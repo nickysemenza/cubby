@@ -327,7 +327,7 @@ export async function updateRecipeBasicProperties(
   if (!hasBasicUpdates(updates)) return {};
 
   // Lineage pointer only ("Recipe.forkedFromRecipeId" — see
-  // RECIPE_DELETE_EDGE_POLICY in crud.ts).
+  // DECLARED_EDGE_DELETE_POLICIES.recipe in crud.ts).
   const forkedFromRecipeId = await resolveForkedFromRecipeIdUpdate(
     tx,
     recipeId,

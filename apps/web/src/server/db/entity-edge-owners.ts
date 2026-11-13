@@ -29,7 +29,6 @@ import {
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
-  mealRecipe,
   mealRecipePortion,
   photoRunImage,
   runStep,
@@ -87,14 +86,13 @@ export const ENTITY_EDGE_OWNERS = {
     owner: financialTransactionAllocation.transactionId,
   },
 
-  MealRecipe: { owner: mealRecipe.mealId },
   MealRecipePortion: { owner: mealRecipePortion.mealId },
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
   ShipmentObservation: { excluded: WORKFLOW },
   ShipmentSourcePackage: { excluded: WORKFLOW },
   ShipmentSourceCapture: { excluded: WORKFLOW },
-  RecipeSection: { owner: recipeSection.recipeId },
+
   RecipeSectionIngredient: {
     via: {
       column: recipeSectionIngredient.recipeSectionId,

@@ -116,7 +116,15 @@ const policyReferences = (edge: EdgeDefinition): EdgePolicyReference[] => {
   if ("kind" in edge.policies) return [];
   return Object.values(edge.policies).flatMap((end) =>
     Object.values(end).flatMap((policy) =>
-      policy.kind === "disposition" && policy.handler ? [policy.handler] : [],
+      policy.kind === "disposition"
+        ? [
+            policy.handler,
+            policy.before,
+            policy.after,
+            policy.beforeLock,
+            policy.expand,
+          ].filter((ref): ref is EdgePolicyReference => ref != null)
+        : [],
     ),
   );
 };
