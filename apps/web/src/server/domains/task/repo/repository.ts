@@ -1,4 +1,5 @@
 import { taskSchemaBindings } from "~/entity/generated/entity-schema-bindings.task.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -9,7 +10,6 @@ import {
   createTask,
   createTaskRead,
   deleteTasks,
-  TASK_DELETE_EDGE_POLICY,
   updateTask,
   updateTaskRead,
 } from "./crud";
@@ -17,7 +17,7 @@ import { taskScaffold } from "./lookup";
 
 export const taskRepository = defineRepository("task", {
   schemas: taskSchemaBindings,
-  lifecycle: { delete: TASK_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.task },
   scaffold: taskScaffold,
   create: asActor(createTask),
   createRead: (ctx, data, fields) =>

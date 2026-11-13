@@ -78,7 +78,6 @@ import {
   project,
   purchase,
   purchasePaymentEvidence,
-  planting,
   sourceTransactionRecord,
   sourceObservationAnnotation,
   sourceOccurrence,
@@ -880,34 +879,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  task: {
-    ...edges({
-      "Task.parentTaskId": {
-        column: task.parentTaskId,
-        role: "hierarchy",
-        label: "sub-tasks",
-        description: "A child task nested under this one.",
-        liveness: { kind: "must-target-live" },
-      },
-      "EntityAttachment.entityId": {
-        column: entityAttachment.entityId,
-        role: "media",
-        label: "task photos",
-        description: "A photo attached to this task.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Planting.taskId": {
-        column: planting.taskId,
-        role: "history",
-        label: "plantings",
-        description:
-          "A planting retains the task whose completion produced it.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...linkEdgesFor("task"),
-    ...externalIdEdgesFor("task"),
-  },
   vendor: edges({
     "Shipment.carrierId": {
       column: shipment.carrierId,

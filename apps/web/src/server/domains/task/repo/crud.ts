@@ -5,7 +5,6 @@ import {
   type TaskUpdateInput,
 } from "@cubby/schemas/entities/task";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   ProductId,
   ProductShortcode,
@@ -25,7 +24,8 @@ import { type ListReadRow } from "~/entity/model/list-read-fields";
 import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   associatePendingImages,
   batchUpdateWithCaseWhen,
@@ -75,44 +75,6 @@ import { taskDependencyIds } from "./task-relations";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
-
-export const TASK_DELETE_EDGE_POLICY = {
-  "Task.parentTaskId": {
-    code: "cascade-live-child",
-    effect: "soft-delete",
-    description:
-      "A deleted task's live subtasks are soft-deleted alongside it — they're checklist items with no independent existence.",
-  },
-  "EntityLink[taskDependency].from": {
-    code: "soft-delete-dependency",
-    effect: "soft-delete",
-    description:
-      "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
-  },
-  "EntityLink[taskDependency].to": {
-    code: "soft-delete-dependency",
-    effect: "soft-delete",
-    description:
-      "Blocks/blocked-by dependency links naming the task (or a cascaded subtask) are soft-deleted with it.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the task, and each file is\n      deleted too unless something else still references it.",
-  },
-  "Planting.taskId": {
-    code: "clear-live-fk-with-audit",
-    effect: "detach",
-    description: "A planting outlives the task that produced it.",
-  },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
-    description:
-      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
-  },
-} as const satisfies IncomingEdgePolicy<"task", OperationDisposition>;
 
 type TaskUpdateData = TaskUpdateInput["data"];
 
@@ -845,11 +807,18 @@ const liveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
  * no independent existence (they're checklist items represented via their
  * parent), so they join the removal set and get every disposition too.
  */
-export const deleteTasks = policyDelete("task", TASK_DELETE_EDGE_POLICY, {
-  expand: async (tx, ids) => [
-    ...new Set([
-      ...ids,
-      ...(await liveSubtasks(tx, ids)).map((subtask) => subtask.id),
-    ]),
-  ],
-});
+export const deleteTasks = policyDelete(
+  "task",
+  DECLARED_EDGE_DELETE_POLICIES.task,
+  DECLARED_EDGE_DELETE_HOOKS.task,
+);
+
+export const expandTaskRemoval = async (
+  tx: DrizzleTransaction,
+  ids: TaskId[],
+): Promise<TaskId[]> => [
+  ...new Set([
+    ...ids,
+    ...(await liveSubtasks(tx, ids)).map((subtask) => subtask.id),
+  ]),
+];
