@@ -18,7 +18,6 @@ import type { AnyColumn } from "drizzle-orm";
 
 import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import {
-  vendor,
   shipment,
   shipmentObservation,
   shipmentSourceCapture,
@@ -71,8 +70,6 @@ import {
   runPushRegistration,
   runStep,
   product,
-  productCategory,
-  spendingCategory,
   project,
   purchase,
   purchasePaymentEvidence,
@@ -717,53 +714,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       label: "captured images",
       description:
         "The member an image's capture is derived (or manually confirmed) as belonging to.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
-
-  spendingCategory: edges({
-    "ProductCategory.spendingCategoryId": {
-      column: productCategory.spendingCategoryId,
-      role: "reference",
-      label: "Product category mappings",
-      description:
-        "A reviewed Product Category maps spending to this category.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Vendor.defaultSpendingCategoryId": {
-      column: vendor.defaultSpendingCategoryId,
-      role: "reference",
-      label: "Merchant spending defaults",
-      description:
-        "A reviewed merchant context defaults spending to this category.",
-      liveness: { kind: "must-target-live" },
-    },
-    "SpendingCategory.parentId": {
-      column: spendingCategory.parentId,
-      role: "hierarchy",
-      label: "Spending category",
-      description: "The spending classification selected for this record.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Purchase.spendingCategoryId": {
-      column: purchase.spendingCategoryId,
-      role: "reference",
-      label: "Spending category",
-      description: "The spending classification selected for this record.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Expense.spendingCategoryId": {
-      column: expense.spendingCategoryId,
-      role: "reference",
-      label: "Spending category",
-      description: "The spending classification selected for this record.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialTransaction.spendingCategoryId": {
-      column: financialTransaction.spendingCategoryId,
-      role: "reference",
-      label: "Spending category",
-      description: "The spending classification selected for this record.",
       liveness: { kind: "must-target-live" },
     },
   }),

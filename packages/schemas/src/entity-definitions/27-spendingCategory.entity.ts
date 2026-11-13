@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { aliasList, idField, readOnly, timestampField } from "./field-policy";
 import { productCategoryShortcode } from "../identifier-fields";
 import { recordEmojiField } from "../emoji";
@@ -10,6 +11,436 @@ const expectation = z.enum(["unknown", "required", "not_expected"]);
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "spendingCategory",
+  edges: [
+    defineEdge({
+      key: "Vendor.defaultSpendingCategoryId",
+      from: "vendor",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.Vendor.defaultSpendingCategoryId",
+        from: "spendingCategory",
+        to: "vendor",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Vendor.defaultSpendingCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "vendor",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Merchant spending defaults",
+        description:
+          "A reviewed merchant context defaults spending to this category.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-vendor-defaults",
+              effect: "block",
+              description:
+                "Update merchant spending defaults before deleting their target.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Merchant spending defaults move to the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Purchase.spendingCategoryId",
+      from: "purchase",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.Purchase.spendingCategoryId",
+        from: "spendingCategory",
+        to: "purchase",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Purchase.spendingCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "purchase",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Spending category",
+        description: "The spending classification selected for this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-purchases",
+              effect: "block",
+              description:
+                "Reclassify purchases before deleting their spending category.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description: "Purchase defaults move to the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "FinancialTransaction.spendingCategoryId",
+      from: "financialTransaction",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.FinancialTransaction.spendingCategoryId",
+        from: "spendingCategory",
+        to: "financialTransaction",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialTransaction.spendingCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "financialTransaction",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Spending category",
+        description: "The spending classification selected for this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-transactions",
+              effect: "block",
+              description:
+                "Reclassify transactions before deleting their spending category.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Transaction categories move to the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Expense.spendingCategoryId",
+      from: "expense",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.Expense.spendingCategoryId",
+        from: "spendingCategory",
+        to: "expense",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Expense.spendingCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "expense",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Spending category",
+        description: "The spending classification selected for this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-expenses",
+              effect: "block",
+              description:
+                "Reclassify expenses before deleting their spending category.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Explicit Expense categories move to the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ProductCategory.spendingCategoryId",
+      from: "productCategory",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.ProductCategory.spendingCategoryId",
+        from: "spendingCategory",
+        to: "productCategory",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ProductCategory.spendingCategoryId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "productCategory",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Product category mappings",
+        description:
+          "A reviewed Product Category maps spending to this category.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-product-mappings",
+              effect: "block",
+              description:
+                "Update Product Category spending mappings before deleting their target.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Product Category mappings move to the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SpendingCategory.parentId",
+      from: "spendingCategory",
+      to: "spendingCategory",
+      cardinality: "one",
+      inverse: {
+        key: "spendingCategory.incoming.SpendingCategory.parentId",
+        from: "spendingCategory",
+        to: "spendingCategory",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SpendingCategory.parentId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "spendingCategory",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "hierarchy",
+        label: "Spending category",
+        description: "The spending classification selected for this record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-children",
+              effect: "block",
+              description:
+                "Reparent child categories before deleting their parent.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "repoint-to-survivor",
+              effect: "repoint",
+              description:
+                "Child categories move under the surviving category.",
+            },
+            handler: null,
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Spending Category", plural: "Spending Categories" },
   route: {
     basePath: "spending-categories",
@@ -524,33 +955,50 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("parentId").named("parent", "Parent category"),
-    r
-      .path("spendingCategory", "many", [
-        { edge: "SpendingCategory.parentId", direction: "incoming" },
-      ])
-      .named("children", "Subcategories"),
-    r
-      .path("purchase", "many", [
-        { edge: "Purchase.spendingCategoryId", direction: "incoming" },
-      ])
-      .named("purchases", "Purchases", { view: { order: "newest" } }),
-    r
-      .path("expense", "many", [
-        { edge: "Expense.spendingCategoryId", direction: "incoming" },
-      ])
-      .named("expenses", "Expense overrides"),
-    r
-      .path("financialTransaction", "many", [
-        {
-          edge: "FinancialTransaction.spendingCategoryId",
-          direction: "incoming",
-        },
-      ])
-      .named("transactions", "Transactions", {
-        view: { order: "newest", defaultVisible: true },
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("parentId").named("parent", "Parent category"),
+        "spendingCategory.children",
+      ),
+      r.declare(
+        r
+          .path("spendingCategory", "many", [
+            { edge: "SpendingCategory.parentId", direction: "incoming" },
+          ])
+          .named("children", "Subcategories"),
+        "spendingCategory.parent",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Purchase.spendingCategoryId", direction: "incoming" },
+          ])
+          .named("purchases", "Purchases", { view: { order: "newest" } }),
+        "purchase.spendingCategory",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            { edge: "Expense.spendingCategoryId", direction: "incoming" },
+          ])
+          .named("expenses", "Expense overrides"),
+        "expense.spendingCategory",
+      ),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            {
+              edge: "FinancialTransaction.spendingCategoryId",
+              direction: "incoming",
+            },
+          ])
+          .named("transactions", "Transactions", {
+            view: { order: "newest", defaultVisible: true },
+          }),
+        "financialTransaction.spendingCategory",
+      ),
+    ],
+  }),
   readSchemas,
 );

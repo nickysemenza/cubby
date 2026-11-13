@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/spendingCategory";
 import { spendingCategoryRawOut as rawSpendingCategoryOut } from "@cubby/schemas/entity-contracts/spendingCategory";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { EntityId, ShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   ENTITY_NOT_FOUND_REASON,
@@ -26,7 +25,8 @@ import {
   inheritedSourceSql,
 } from "~/server/db/computed/effective-field";
 import type { CategoryStockTracking } from "~/server/db/computed/product-category-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -316,41 +316,6 @@ const update = defineMutationWriter({
  * Merge is keeper-wins: every reference moves to the keeper and children
  * reparent under it. The keeper's own name and expectations stay unchanged.
  */
-const SPENDING_CATEGORY_MERGE_EDGE_POLICY = {
-  "SpendingCategory.parentId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Child categories move under the surviving category.",
-  },
-  "ProductCategory.spendingCategoryId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Product Category mappings move to the surviving category.",
-  },
-  "Vendor.defaultSpendingCategoryId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Merchant spending defaults move to the surviving category.",
-  },
-  "Purchase.spendingCategoryId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Purchase defaults move to the surviving category.",
-  },
-  "Expense.spendingCategoryId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Explicit Expense categories move to the surviving category.",
-  },
-  "FinancialTransaction.spendingCategoryId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Transaction categories move to the surviving category.",
-  },
-} as const satisfies IncomingEdgePolicy<
-  "spendingCategory",
-  OperationDisposition
->;
 
 const spendingCategoryCode = spendingCategorySchemaBindings.id;
 const mergeInput = z.object({
@@ -426,7 +391,7 @@ async function mergeSpendingCategories(
       assertReviewedSpendingClassification(tx, "spendingCategoryMerge");
     const repointed = await applyMergePolicy(tx, {
       entity: "spendingCategory",
-      policy: SPENDING_CATEGORY_MERGE_EDGE_POLICY,
+      policy: DECLARED_EDGE_MERGE_POLICIES.spendingCategory,
       keepId,
       loserIds,
       liveOnly: false,
@@ -455,44 +420,8 @@ async function mergeSpendingCategories(
 export const spendingCategoryRepository = defineRepository("spendingCategory", {
   schemas: spendingCategorySchemaBindings,
   lifecycle: {
-    merge: SPENDING_CATEGORY_MERGE_EDGE_POLICY,
-    delete: {
-      "SpendingCategory.parentId": {
-        code: "block-children",
-        effect: "block",
-        description: "Reparent child categories before deleting their parent.",
-      },
-      "ProductCategory.spendingCategoryId": {
-        code: "block-product-mappings",
-        effect: "block",
-        description:
-          "Update Product Category spending mappings before deleting their target.",
-      },
-      "Vendor.defaultSpendingCategoryId": {
-        code: "block-vendor-defaults",
-        effect: "block",
-        description:
-          "Update merchant spending defaults before deleting their target.",
-      },
-      "Purchase.spendingCategoryId": {
-        code: "block-purchases",
-        effect: "block",
-        description:
-          "Reclassify purchases before deleting their spending category.",
-      },
-      "Expense.spendingCategoryId": {
-        code: "block-expenses",
-        effect: "block",
-        description:
-          "Reclassify expenses before deleting their spending category.",
-      },
-      "FinancialTransaction.spendingCategoryId": {
-        code: "block-transactions",
-        effect: "block",
-        description:
-          "Reclassify transactions before deleting their spending category.",
-      },
-    },
+    merge: DECLARED_EDGE_MERGE_POLICIES.spendingCategory,
+    delete: DECLARED_EDGE_DELETE_POLICIES.spendingCategory,
   },
   scaffold: spendingCategoryScaffold,
   create: asActor(create),
