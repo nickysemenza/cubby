@@ -301,13 +301,19 @@ extension FieldEnvelopePresentation {
             parts.append("\(result.applied) \(result.applied == 1 ? "change applied" : "changes applied").")
         }
         if result.stale > 0 {
-            parts.append("\(result.stale) \(result.stale == 1 ? "proposal changed" : "proposals changed"). Review the current difference and approve again.")
+            parts.append(
+                "\(result.stale) \(result.stale == 1 ? "proposal changed" : "proposals changed"). Review the current difference and approve again."
+            )
         }
         if result.busy > 0 {
-            parts.append("\(result.busy) \(result.busy == 1 ? "record is" : "records are") being worked on. Try approval again.")
+            parts.append(
+                "\(result.busy) \(result.busy == 1 ? "record is" : "records are") being worked on. Try approval again."
+            )
         }
         if result.missing > 0 {
-            parts.append("\(result.missing) \(result.missing == 1 ? "record has" : "records have") no current proposal. Refresh the machinery.")
+            parts.append(
+                "\(result.missing) \(result.missing == 1 ? "record has" : "records have") no current proposal. Refresh the machinery."
+            )
         }
         return parts.joined(separator: " ")
     }
@@ -347,10 +353,11 @@ extension FieldEnvelopePresentation {
 
     public static func stageLine(_ read: Machinery) -> String {
         let stage = stageLabel(read.stage.rawValue)
-        guard let gap = read.gaps.items.first, let actor = read.nextActor else { return stage }
+        guard let gap = read.gaps.items.first else { return stage }
+        let actor = gap.actor
         let mode = read.stage == .working ? "working" : "waiting"
         let base = "\(stage) · \(mode) for \(gap.input) from \(actorLabel(actor))"
-        guard let queue = gap.queue else { return base }
+        guard actor != "you", let queue = gap.queue else { return base }
         let position = "\(queue.position) of \(queue.of) in line"
         return queue.eta.map { "\(base) · \(position) · \(etaLabel(instant($0)))" } ?? "\(base) · \(position)"
     }

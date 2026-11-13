@@ -32,16 +32,21 @@ public struct RecordState: Sendable, Hashable {
         if stalled {
             role = .stalled
         } else if declared == .working || declared == .waiting {
-            if waitReason == "paused" { role = .paused }
-            else if let waitReason, waitReason != "in_progress" { role = .queued }
-            else { role = declared == .working ? .running : .queued }
-        } else {
-            role = switch declared {
-            case .needsYou: .needs
-            case .stuck: .stalled
-            case .done: .done
-            default: .ended
+            if waitReason == "paused" {
+                role = .paused
+            } else if let waitReason, waitReason != "in_progress" {
+                role = .queued
+            } else {
+                role = declared == .working ? .running : .queued
             }
+        } else {
+            role =
+                switch declared {
+                case .needsYou: .needs
+                case .stuck: .stalled
+                case .done: .done
+                default: .ended
+                }
         }
         label = stalled ? FieldEnvelopePresentation.stageLabel("stuck") : option.label
         trailing = reason ?? waitLabel.map { Self.withoutLabel($0, label: option.label) }

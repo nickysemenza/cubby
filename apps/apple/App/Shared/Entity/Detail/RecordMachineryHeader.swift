@@ -19,14 +19,16 @@ struct RecordMachineryHeader: View {
                 Text(Words.stageLine(read)).font(.subheadline.weight(.medium))
                 WrappingFactsLayout(spacing: 4) {
                     if let gap = read.gaps.items.first {
-                        if let since = gap.since { Text("Since \(Words.instant(since))") }
+                        if read.stage == .ended || read.stage == .done {
+                            Text(Words.gapSentence(gap))
+                        } else if let since = gap.since {
+                            Text("Since \(Words.instant(since))")
+                        }
                         if let action = Self.inlineAction(gap.actions) {
                             Button(action.label) {
                                 Task { await model.act(app, subject: subject, field: nil, action: action) }
                             }
                             .disabled(model.pending)
-                        } else if gap.since == nil {
-                            Text(Words.gapSentence(gap))
                         }
                     } else {
                         Text(Words.noGapLabel)
@@ -83,7 +85,7 @@ struct MachineryListLine: View {
         else { return nil }
         var words = [FieldEnvelopePresentation.stageLabel(read.stage.rawValue)]
         if let actor = read.nextActor {
-            words.append(FieldEnvelopePresentation.actorLabel(actor.rawValue))
+            words.append(FieldEnvelopePresentation.actorLabel(actor))
         }
         if let gap = read.firstGap {
             words.append(gap.split(whereSeparator: \.isWhitespace).prefix(6).joined(separator: " "))
@@ -101,5 +103,10 @@ struct MachineryListLine: View {
     RecordMachineryHeader(model: MachineryModel(), subject: .init(entity: .product, id: "PRD-4K7M"))
 }
 #Preview("Machinery list line") {
-    MachineryListLine(raw: ["machinery": ["stage": "needs_you", "nextActor": "you", "firstGap": "a receipt", "attempts": 0, "costMicros": 0, "eta": .null]])
+    MachineryListLine(raw: [
+        "machinery": [
+            "stage": "needs_you", "nextActor": "you", "firstGap": "a receipt", "attempts": 0, "costMicros": 0,
+            "eta": .null,
+        ]
+    ])
 }
