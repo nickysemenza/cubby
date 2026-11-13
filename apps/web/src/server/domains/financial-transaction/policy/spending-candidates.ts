@@ -119,3 +119,47 @@ export function decideSpendingCandidates(
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 }
+
+export type CandidateSettlementFacts = {
+  /** Remaining capacity for this charge; null when a line is unpriced or a settlement is uncertain. */
+  availableMinor: bigint | null;
+  paymentsMinor: readonly bigint[];
+  /** Same-direction settlements by other charges, and whether each is provably another bank event. */
+  otherSettlements: readonly { distinctEvent: boolean }[];
+  /** A member identity decision names this candidate. */
+  decided: boolean;
+};
+
+/**
+ * Reads: each candidate's remaining capacity for this charge, retained payment
+ * amounts, its settlements by other charges with their bank-event proof, and
+ * whether a member decided its identity. A review-only candidate blocks only
+ * while its capacity is unknown or open. A nearby candidate stops blocking
+ * only when its capacity is exactly zero, no retained payment names this
+ * amount, and every other settlement is provably another bank event: spent
+ * capacity alone may be this same charge booked twice.
+ */
+export function blockingSpendingCandidates<
+  T extends { id: string; explicit: boolean; reviewOnly: boolean },
+>(
+  input: { amountMinor: bigint; refund: boolean },
+  candidates: readonly T[],
+  facts: ReadonlyMap<string, CandidateSettlementFacts>,
+): T[] {
+  const abs = (value: bigint) => (value < 0n ? -value : value);
+  return candidates.filter((candidate) => {
+    const fact = facts.get(candidate.id);
+    if (!fact || fact.decided || candidate.explicit) return true;
+    if (candidate.reviewOnly)
+      return fact.availableMinor === null || fact.availableMinor > 0n;
+    return (
+      input.refund ||
+      fact.availableMinor !== 0n ||
+      !fact.otherSettlements.length ||
+      fact.otherSettlements.some((settlement) => !settlement.distinctEvent) ||
+      fact.paymentsMinor.some(
+        (amount) => abs(amount) === abs(input.amountMinor),
+      )
+    );
+  });
+}

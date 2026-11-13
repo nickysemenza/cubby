@@ -7,8 +7,9 @@ import { minorToMoney, moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/household-date";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { manualEntry } from "~/server/db/kernel-schema";
+import { manualEntry, recordKey } from "~/server/db/kernel-schema";
 import {
   financialAccount,
   financialTransaction,
@@ -78,7 +79,6 @@ export const bankTransactionWrites = writes(
 import {
   STATEMENT_TRANSACTION_KIND_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
-  STATEMENT_CHARGE_IDENTITY_FEATURE,
 } from "~/server/ai/policy/features";
 
 import type { statementAsks } from "../service/purchase-asks";
@@ -115,6 +115,8 @@ type BankInput = {
   accounts: Account[];
   candidates: (typeof financialTransaction.$inferSelect)[];
   history: { id: string; kind: string | null }[];
+  /** Another bank event attaches, or another live occurrence accepts, this scope's transaction. */
+  shared: boolean;
 };
 
 const retained = (c: Pure) => {
@@ -126,7 +128,6 @@ const retained = (c: Pure) => {
 export function createBankEvent({
   statementKindAsk,
   counterpartyAsk,
-  chargeIdentityAsk,
   choiceRequest,
   choiceAnswer,
 }: typeof statementAsks) {
@@ -376,14 +377,32 @@ export function createBankEvent({
       ]),
       source.table(ledgerParty, ["kind", "deletedAt"]),
       source.table(vendor, ["name", "aliases", "deletedAt"]),
+      source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
     ],
     writes: [bankTransactionWrites],
-    asks: [statementKindAsk, counterpartyAsk, chargeIdentityAsk],
+    asks: [statementKindAsk, counterpartyAsk],
     async load(reads, keys) {
-      const [accountRows, parties] = await Promise.all([
+      const [accountRows, parties, owned] = await Promise.all([
         reads.select(financialAccount, [], notDeleted(financialAccount)),
         reads.select(ledgerParty, [], notDeleted(ledgerParty)),
+        // A scope's own RecordKey changes only through its own apply.
+        reads.select(
+          recordKey,
+          [],
+          sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.scopeKey}=ANY(${textArrayParam(keys)})`,
+        ),
       ]);
+      const ownIds = [...new Set(owned.map((row) => row.entityId))];
+      const [sharing, accepting] = ownIds.length
+        ? await Promise.all([
+            reads.select(
+              recordKey,
+              ownIds.map((id) => `record:financialTransaction:${id}`),
+              sql`${recordKey.scopeKind}='bankEvent' AND ${recordKey.entity}=${"financialTransaction"} AND ${recordKey.entityId}=ANY(${textArrayParam(ownIds)}::uuid[])`,
+            ),
+            reads.lookup(sourceOccurrence, acceptedOccurrences, ownIds),
+          ])
+        : [[], []];
       const providers = await reads.rows(
         vendor,
         accountRows.flatMap((account) =>
@@ -472,6 +491,7 @@ export function createBankEvent({
               acceptedOccurrences,
               candidates.map((row) => row.id),
             );
+            const own = owned.find((row) => row.scopeKey === key)?.entityId;
             return [
               key,
               {
@@ -481,6 +501,19 @@ export function createBankEvent({
                 manual: manuals.get(`manual:${manualId}`)?.[0] ?? null,
                 accounts,
                 history,
+                shared:
+                  !!own &&
+                  (sharing.some(
+                    (row) => row.entityId === own && row.scopeKey !== key,
+                  ) ||
+                    accepting.some(
+                      (row) =>
+                        row.acceptedTransactionId === own &&
+                        row.id !== key &&
+                        !row.deletedAt &&
+                        !row.withdrawnAt &&
+                        !row.supersededByOccurrenceId,
+                    )),
                 candidates: candidates.filter(
                   (row) =>
                     !accepted.some(
@@ -516,7 +549,27 @@ export function createBankEvent({
           owner.supersededByOccurrenceId ||
           owner.disposition === "ignored")
       ) {
-        if (existing)
+        // A confirmed withdrawal or supersession removes the transaction this
+        // scope created, and with it its generated booking, unless another
+        // bank event shares it or a member decision holds it.
+        const decided =
+          !!existing &&
+          (c.assignments(record).size > 0 ||
+            [...c.assignments(`purchaseEvent:${existing}`).keys()].some(
+              (field) => field !== "book",
+            ));
+        if (
+          existing &&
+          naturalKey === "transaction" &&
+          !owner.deletedAt &&
+          owner.disposition !== "ignored" &&
+          !input.shared &&
+          !decided
+        ) {
+          c.retire(bankTransactionWrites, naturalKey, "remove");
+          return c.done();
+        }
+        if (existing && !input.shared)
           c.gap.unsupported(
             "accepted transaction evidence is withdrawn or out of scope",
           );
@@ -686,24 +739,6 @@ export function createBankEvent({
           return c.done();
         }
         if (unresolved.length) {
-          for (const row of unresolved)
-            c.answer(
-              chargeIdentityAsk,
-              choiceRequest(
-                STATEMENT_CHARGE_IDENTITY_FEATURE,
-                JSON.stringify({
-                  statement: observation
-                    ? {
-                        descriptor: observation.rawDescription,
-                        merchant: observation.merchant,
-                        date: observation.statementDate,
-                        amount: minorToMoney(values.amount),
-                      }
-                    : null,
-                  transaction: { ...row, amount: minorToMoney(row.amount) },
-                }),
-              ),
-            );
           c.gap.decision(
             "whether this statement charge and the existing transaction are the same or distinct",
             {
