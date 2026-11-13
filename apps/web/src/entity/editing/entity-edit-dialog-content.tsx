@@ -372,9 +372,6 @@ export function EntityEditDialogContent<E extends EditableEntity>({
   );
   // A failure after the submit itself succeeded (the shell's own invariant,
   // a caller's `onSuccess`) still has to be seen; it joins the banner.
-  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
-    null,
-  );
   const formId = useId();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const pending = isSubmitting || session.isPending;
@@ -457,16 +454,6 @@ export function EntityEditDialogContent<E extends EditableEntity>({
                   `${request.entity} ${request.operation} returned no entity result.`,
                 );
               }
-              const saved = z.object({ id: z.string() }).parse(result.result);
-              const acknowledge = receiptHandler.current;
-              void Promise.resolve()
-                .then(() => acknowledge?.(saved.id))
-                .catch((error) => {
-                  showErrorToast(
-                    error,
-                    "Saved, but suggestion acknowledgement failed",
-                  );
-                });
               toast.success(presentation.successMessage(result.result));
               toastMutationWarnings(result.result.sideEffects);
               // Success before close: a create-from-picker caller resolves its
@@ -495,7 +482,6 @@ export function EntityEditDialogContent<E extends EditableEntity>({
         {evidence}
         <FieldSuggestionProvider
           entity={suggestionEntity}
-          receiptHandler={receiptHandler}
           mode={request.operation === "create" ? "create" : "edit"}
           fieldKeys={intentFields}
           staticBasis={staticBasis}

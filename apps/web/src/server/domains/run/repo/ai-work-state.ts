@@ -116,3 +116,22 @@ export async function writeRunningAttemptProgress(
     return write(tx);
   });
 }
+
+/** Recheck receiving after a Sweep's field Answers have reached their projections. */
+export async function settleFieldSweepEffects(
+  db: Database,
+  id: string,
+  actor: import("@cubby/schemas/context").ActorContext,
+) {
+  const { sql } = await import("drizzle-orm");
+  const products = await getDb(db).execute<{
+    id: string;
+  }>(sql`SELECT DISTINCT k.input->${"input"}->>${"recordId"} AS id
+    FROM "AskScope" s JOIN "Ask" k ON k.id=s."askId" WHERE s."runId"=${id}::uuid AND k.feature=${"field-suggestion"}
+      AND k.input->${"input"}->>${"entity"}=${"product"} AND k.input->${"input"}->>${"field"}=${"categoryId"}`);
+  const { settleArrivedFindingsForProduct } =
+    await import("~/server/domains/purchase-import/repo/findings");
+  const { productId } = await import("@cubby/schemas/identifiers");
+  for (const row of products.rows)
+    await settleArrivedFindingsForProduct(db, productId.parse(row.id), actor);
+}

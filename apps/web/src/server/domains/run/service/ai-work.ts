@@ -2,6 +2,7 @@ import { mailReclassificationCheckpoint } from "@cubby/schemas/email-actions";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
 import type { Database } from "~/server/db";
+import { readReclassificationReceipts } from "~/server/domains/purchase-import/repo/gmail/reclassification-receipt";
 import {
   type ReclassificationPorts,
   executeReclassificationTarget,
@@ -23,9 +24,17 @@ export async function advanceAiWorkRun(
 ) {
   const owner = await claimWorkflowRun(db, params);
   if (!owner) return null;
+  if (owner.purpose === "ai_refresh")
+    throw new Error("This Run has no current fields scope to resume");
   const input = mailReclassifyRunInput.parse(owner.input);
   const saved = mailReclassificationCheckpoint.safeParse(owner.progress);
   const results = saved.success ? [...saved.data.results] : [];
+  const durable = await readReclassificationReceipts(db, owner.id);
+  for (const target of input.emails.slice(results.length)) {
+    const receipt = durable.find((row) => row.emailId === target.emailId);
+    if (!receipt) break;
+    results.push(receipt.result);
+  }
   const target = input.emails[results.length];
   if (target)
     results.push(

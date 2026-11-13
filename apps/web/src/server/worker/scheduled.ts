@@ -4,7 +4,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
 import { TELEMETRY_SCHEMA_VERSION } from "~/lib/http-cache";
-import { getSourceRelease, withCfEnv } from "~/server/cf-env";
+import { withCfEnv } from "~/server/cf-env";
 import { db, withInvocationDb } from "~/server/db";
 import { isMaintenanceMode } from "~/server/http/maintenance";
 import { withInvocationTrace, withTrace } from "~/server/observability/tracing";
@@ -36,7 +36,6 @@ async function runHourlyBackstop(
           { productionPermitRuntime },
           { runPermit, sendSuccessor },
           { ringDueDeviceWork },
-          { publishAiRefreshActivation },
           { maintainJobs },
           { scheduleRunsReconcile },
           { runProductionKernel },
@@ -44,7 +43,6 @@ async function runHourlyBackstop(
           import("~/server/workflows/jobs"),
           import("~/server/generic/jobs/service/permits"),
           import("~/server/domains/image-processing/repo/image-processing-ring"),
-          import("~/server/workflows/ai-refresh-startup"),
           import("~/server/workflows/job-maintenance"),
           import("~/server/workflows/runs/reconcile-pass"),
           import("~/server/kernel/api"),
@@ -52,18 +50,13 @@ async function runHourlyBackstop(
         await withTrace(
           "cf.scheduled.job",
           async () => {
-            // The first tick after a deploy activates that version's AI policy.
-            // A failure here must not stop the backstop; the next tick tries again.
-            await publishAiRefreshActivation(
-              db,
-              env.CF_VERSION_METADATA.id,
-              getSourceRelease(env).commit,
-            ).catch((error: unknown) => Sentry.captureException(error));
             await ringDueDeviceWork(db);
             const errors: unknown[] = [];
             for (const step of [scheduleRunsReconcile, maintainJobs])
               await step(db).catch((error: unknown) => errors.push(error));
-            await runProductionKernel(db, {budgetMs: 20_000}).catch((error: unknown) => errors.push(error));
+            await runProductionKernel(db, { budgetMs: 20_000 }).catch(
+              (error: unknown) => errors.push(error),
+            );
             const runtime = productionPermitRuntime(db, (error, unit) =>
               Sentry.withScope((scope) => {
                 if (unit) scope.setTag("cubby.background.unit", unit);

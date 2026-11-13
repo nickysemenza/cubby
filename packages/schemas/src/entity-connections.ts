@@ -201,9 +201,6 @@ const connectionEdge = z
       )
     );
   }, "Connection relation requires its canonical distinct endpoints");
-export type ConnectionEdge = z.infer<typeof connectionEdge>;
-export const connectionEdgeKey = (edge: ConnectionEdge): string =>
-  `${edge.relation}:${edge.source.entityKind}:${edge.source.entityId}:${edge.target.entityKind}:${edge.target.entityId}`;
 
 export const connectionCandidate = connectionEdge.safeExtend({
   label: z.string().min(1),

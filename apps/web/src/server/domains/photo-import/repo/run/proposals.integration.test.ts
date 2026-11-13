@@ -3,7 +3,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
 import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -14,8 +14,8 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { decision } from "~/server/db/kernel-schema";
 import {
-  suggestionTable,
   aiAnalysis,
   image,
   run as runTable,
@@ -708,13 +708,10 @@ describe("photo group proposals", () => {
       tags: ["synthetic", "reviewed"],
     });
     const states = await getDb(ctx.db)
-      .select({
-        status: suggestionTable.status,
-        active: suggestionTable.active,
-      })
-      .from(suggestionTable)
-      .where(eq(suggestionTable.recordId, original.entityId));
-    expect(states).toContainEqual({ status: "applied", active: false });
+      .select({ kind: decision.kind, field: decision.field })
+      .from(decision)
+      .where(eq(decision.subject, `product:${original.entityId}`));
+    expect(states).toContainEqual({ kind: "set", field: "notes" });
     const replay = await approvePhotoGroupProposals(
       ctx.db,
       buildCrudServices,
@@ -859,14 +856,6 @@ describe("photo group proposals", () => {
         );
       const suggestion = saved.proposals[0]?.review?.fieldSuggestions?.[0];
       expect(suggestion?.field).toBe("brandId");
-      const [pending] = await getDb(ctx.db)
-        .select({
-          active: suggestionTable.active,
-          status: suggestionTable.status,
-        })
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, suggestion!.id));
-      expect(pending).toEqual({ active: false, status: "pending" });
       await proposePhotoGroups(
         ctx.db,
         buildCrudServices,
@@ -912,8 +901,18 @@ describe("photo group proposals", () => {
         undefined,
         ctx.actor,
       );
-      const [rejected] = await readSuggestionDecisions(ctx.db, suggestion!.id);
-      expect(rejected?.verdict).toBe("wrong");
+      const [rejected] = await getDb(ctx.db)
+        .select({ kind: decision.kind })
+        .from(decision)
+        .where(
+          and(
+            eq(decision.subject, `product:${original.entityId}`),
+            eq(decision.channel, "veto"),
+            eq(decision.field, "brandId"),
+          ),
+        )
+        .limit(1);
+      expect(rejected?.kind).toBe("veto");
       await expect(
         proposePhotoGroups(
           ctx.db,
@@ -970,11 +969,17 @@ describe("photo group proposals", () => {
       expect(approved.proposals[0]?.review?.fieldSuggestions).toContainEqual(
         newSuggestion,
       );
-      const [oldReview] = await getDb(ctx.db)
-        .select({ status: suggestionTable.status })
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, suggestion!.id));
-      expect(oldReview?.status).toBe("rejected");
+      const retainedVeto = await getDb(ctx.db)
+        .select({ kind: decision.kind })
+        .from(decision)
+        .where(
+          and(
+            eq(decision.subject, `product:${original.entityId}`),
+            eq(decision.channel, "veto"),
+            eq(decision.field, "brandId"),
+          ),
+        );
+      expect(retainedVeto).toContainEqual({ kind: "veto" });
     },
   );
 
@@ -1132,10 +1137,17 @@ describe("photo group proposals", () => {
           .where(eq(vendor.name, name)),
       ).toHaveLength(kind === "new" ? 1 : 0);
       const [receipt] = await getDb(ctx.db)
-        .select({ status: suggestionTable.status })
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, refs![0]!.id));
-      expect(receipt?.status).toBe("applied");
+        .select({ kind: decision.kind })
+        .from(decision)
+        .where(
+          and(
+            eq(decision.subject, `product:${original.entityId}`),
+            eq(decision.field, "brandId"),
+          ),
+        )
+        .orderBy(desc(decision.at), desc(decision.id))
+        .limit(1);
+      expect(receipt?.kind).toBe("set");
       const [photoReceipt] = await getDb(ctx.db)
         .select({ receipt: photoRunImage.commitReceipt })
         .from(photoRunImage)

@@ -1,13 +1,14 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { sweepRunInput } from "@cubby/schemas/run-fields";
+import { sql } from "drizzle-orm";
 import { and, eq } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import { fieldAsk, fieldAskInput } from "~/server/ai/fields/ask";
 import { getDb } from "~/server/db/helpers";
 import { product, productCategory, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -61,10 +62,6 @@ describe("post-commit category suggestions", () => {
   };
 
   it("sweeps exactly the created Products and settles the arrival prompt once they are untracked", async () => {
-    await activateAiRefresh(ctx.db, "synthetic-release", {
-      enabled: true,
-      startDiscovery: false,
-    });
     await getDb(ctx.db)
       .update(productCategory)
       .set({ stockTracked: false })
@@ -172,9 +169,53 @@ describe("post-commit category suggestions", () => {
     });
     expect(await arrived()).toEqual([{ status: "open" }]);
 
-    await driveAiWork(ctx.db, sweep!.id, {
-      sweep: { context, ...sweepPorts },
-    });
+    await driveAiWork(
+      ctx.db,
+      sweep!.id,
+      {
+        sweep: { context, ...sweepPorts },
+      },
+      undefined,
+      async () => {
+        const queued = await getDb(ctx.db).execute<{
+          input: { input: unknown };
+        }>(
+          sql`SELECT k.input FROM "Ask" k JOIN "AskScope" s ON s."askId"=k.id WHERE s."runId"=${sweep!.id} AND k.feature=${"field-suggestion"} AND k.state=${"queued"}`,
+        );
+        const { withAsk, reconcileNow } = await import("~/server/kernel/api");
+        for (const row of queued.rows) {
+          const input = fieldAskInput.parse(row.input.input);
+          await withAsk(
+            ctx.db,
+            {
+              ...fieldAsk,
+              admit: async () => {},
+              produce: async () => ({
+                output: {
+                  outcome: "pick",
+                  proposal:
+                    input.field === "categoryId"
+                      ? {
+                          value: taxonomyId("food"),
+                          label: "Food",
+                          confidence: 0.97,
+                          runnerUp: null,
+                        }
+                      : null,
+                },
+              }),
+            },
+            input,
+            { runId: sweep!.id },
+          );
+        }
+        await reconcileNow(
+          ctx.db,
+          created.map((row) => ({ kind: "fields", key: `product:${row.id}` })),
+          { runId: sweep!.id },
+        );
+      },
+    );
     expect(
       (
         await getDb(ctx.db)

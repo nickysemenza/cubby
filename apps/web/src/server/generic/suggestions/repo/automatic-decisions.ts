@@ -1,4 +1,3 @@
-import { fieldAutomationCause } from "@cubby/schemas/ai-evaluation";
 import {
   automaticDecisionListInput,
   automaticDecisionListOut,
@@ -28,7 +27,6 @@ import {
   readSuggestionRecordRefs,
   resolveStoredRecordRefs,
 } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
-import { readFieldSuggestions } from "~/server/generic/suggestions/repo/suggestion-review";
 import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { automaticSuggestionEligibility } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 
@@ -89,8 +87,8 @@ export async function listAutomaticDecisions(
         ${rule} AS "automaticRule", true AS "applicationVerified", latest.verdict,
         (latest."createdAt"::timestamptz AT TIME ZONE 'UTC') AS "reviewedAt", s.active, s.status,
         s."createdAt" AS "sortAt", NULL::jsonb AS refs
-        ${from} WHERE ${admission} ${reviewFilter}`,
-      count: sql`SELECT count(*)::int AS count ${from} WHERE ${admission} ${reviewFilter}`,
+        ${from} WHERE s.family NOT IN (${"field"}, ${"recommendation"}) AND ${admission} ${reviewFilter}`,
+      count: sql`SELECT count(*)::int AS count ${from} WHERE s.family NOT IN (${"field"}, ${"recommendation"}) AND ${admission} ${reviewFilter}`,
     });
   }
   if (mailFamily || !input.family)
@@ -147,28 +145,6 @@ export async function listAutomaticDecisions(
     .filter((row) => row.refs === null)
     .map((row) => row.id);
   const stored = await readSuggestionRecordRefs(db, suggestionIds);
-  const fieldIds = rows
-    .filter((row) => row.family === suggestionFamily.enum.field)
-    .map((row) => row.id);
-  const fieldRows = new Map(
-    (await readFieldSuggestions(db, fieldIds)).map((row) => [
-      row.suggestionId,
-      row,
-    ]),
-  );
-  const causes = new Map(
-    fieldIds.length
-      ? (
-          await unwrapDb(db).execute<{ id: string; cause: unknown }>(
-            sql`SELECT id::text, data->${"cause"} AS cause FROM "Suggestion"
-              WHERE id = ANY(${uuidArrayParam(fieldIds)})`,
-          )
-        ).rows.flatMap((row) => {
-          const cause = fieldAutomationCause.safeParse(row.cause).data;
-          return cause ? [[row.id, cause] as const] : [];
-        })
-      : [],
-  );
   const mailRefs = await resolveStoredRecordRefs(
     db,
     rows.flatMap((row) =>
@@ -205,8 +181,8 @@ export async function listAutomaticDecisions(
       reviewedAt: row.reviewedAt
         ? new Date(row.reviewedAt).toISOString()
         : null,
-      field: fieldRows.get(row.id) ?? null,
-      cause: causes.get(row.id) ?? null,
+      field: null,
+      cause: null,
       correction:
         row.active &&
         row.status !== "applied" &&

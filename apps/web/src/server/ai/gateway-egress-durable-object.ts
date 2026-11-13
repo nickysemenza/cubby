@@ -119,11 +119,6 @@ function terminalStreamError(tail: string): string | null | undefined {
 
 /** One identity per gateway; subscription requests never enter this object. */
 export class AiGatewayEgressDurableObject extends DurableObject<Env> {
-  /** Read the running DO code, never a caller's or a retained observation's version. */
-  async currentDeploymentVersion(): Promise<string> {
-    return this.env.CF_VERSION_METADATA.id;
-  }
-
   private readonly db;
 
   constructor(ctx: DurableObjectState, env: Env) {

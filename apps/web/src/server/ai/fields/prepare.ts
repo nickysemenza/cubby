@@ -80,12 +80,6 @@ export async function prepareSavedField(
     const envelope = fieldEnvelopeFor(record, key);
     return envelope ? fieldValueOf(envelope) : null;
   };
-  const target = fieldEnvelopeFor(record, field);
-  if (
-    Object.hasOwn(governed, field) &&
-    (!target || target.result.kind === "missing")
-  )
-    return null;
   // Effective values drive the question; the envelope keeps assignment intent.
   const basis: Record<string, string | null> = Object.fromEntries(
     request.keys.map((key) => [key, basisValueOf(valueOf(key))]),

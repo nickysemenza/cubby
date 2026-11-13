@@ -718,7 +718,41 @@ export async function seedPerformanceCorpus(
     );
     await tx.insert(location).values(shelf);
     await batches(extraVendors, (rows) => tx.insert(vendor).values(rows));
-    await batches(products, (rows) => tx.insert(product).values(rows));
+    const { splitFieldsValues } =
+      await import("~/server/ai/fields/repo/field-decisions");
+    const { fieldsPlanOf } = await import("~/server/ai/fields/repo/plan");
+    const { decide, reconcileNow } = await import("~/server/kernel/api");
+    const preparedProducts = products.map((row) => ({
+      row,
+      fields: splitFieldsValues(fieldsPlanOf("product"), row),
+    }));
+    await batches(
+      preparedProducts.map(({ fields }) => fields.authored),
+      (rows) => tx.insert(product).values(rows),
+    );
+    await decide(
+      databaseForTransaction(tx),
+      context.actorContext,
+      preparedProducts.flatMap(({ row, fields }) =>
+        Object.entries(fields.owned).map(([field, value]) => ({
+          channel: "assignment" as const,
+          kind: value == null ? ("none" as const) : ("set" as const),
+          subject: `product:${row.id}`,
+          field,
+          value: z.json().parse(value),
+        })),
+      ),
+    );
+    for (let offset = 0; offset < products.length; offset += 50) {
+      const outcomes = await reconcileNow(
+        databaseForTransaction(tx),
+        products
+          .slice(offset, offset + 50)
+          .map((row) => ({ kind: "fields", key: `product:${row.id}` })),
+      );
+      const failed = outcomes.find((outcome) => outcome.status === "failed");
+      if (failed) throw failed.cause ?? new Error(failed.error);
+    }
     await batches(links, (rows) => tx.insert(entityLink).values(rows));
     await batches(inventory, (rows) => tx.insert(inventoryEntry).values(rows));
     // Run-routed Purchases reference their Run.

@@ -603,7 +603,7 @@ export async function captureConnectionBasis(
  * whose source is not a payload row), so a locked publication need not
  * resolve the source again.
  */
-export async function captureConnectionEvidence(
+async function captureConnectionEvidence(
   db: Database,
   raw: ConnectionCandidate,
   lock = false,

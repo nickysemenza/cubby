@@ -1,6 +1,5 @@
 import {
   aboutSpanText,
-  type AiEvaluationBacklog,
   type WorkQueueUnit,
   type WorkQueueWait,
 } from "@cubby/schemas/job";
@@ -188,12 +187,6 @@ function BackgroundWork({
   );
 }
 
-const AI_STATE_LABEL = {
-  queued: "Queued",
-  result_ready: "Answered, not saved",
-  blocked: "Blocked",
-} as const satisfies Record<AiEvaluationBacklog["state"], string>;
-
 const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
 
 /**
@@ -289,56 +282,6 @@ function QueueUnitRow({
   );
 }
 
-/** AI evaluations waiting or recently blocked, one row per feature. */
-function EvaluationBacklog({
-  rows,
-  now,
-}: {
-  rows: readonly AiEvaluationBacklog[];
-  now: number;
-}) {
-  const features = [...new Set(rows.map((row) => row.feature))];
-  return (
-    <ul>
-      {features.map((feature) => {
-        const states = rows.filter((row) => row.feature === feature);
-        return (
-          <li
-            key={feature}
-            className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]"
-          >
-            <div className="min-w-0">
-              <p className="font-medium text-foreground-strong">
-                {states[0]?.label}
-              </p>
-              <p className={`${factClass} break-all`}>{feature}</p>
-            </div>
-            <div className="min-w-0">
-              {states.map((row) => (
-                <p key={row.state}>
-                  <span className="font-mono tabular-nums">
-                    {formatCount(row.count)}
-                  </span>{" "}
-                  {AI_STATE_LABEL[row.state].toLowerCase()}
-                  <span className="text-muted-foreground">
-                    , oldest created {formatRelative(row.oldestAt, now)}
-                    {row.errorClass ? `; most common error ` : ""}
-                  </span>
-                  {row.errorClass ? (
-                    <code className="font-mono text-xs break-all">
-                      {row.errorClass}
-                    </code>
-                  ) : null}
-                </p>
-              ))}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 function QueueDetailsBody({ now }: { now: number }) {
   const activity = useQuery(job.activity.queryOptions(STATUS_INPUT));
   if (activity.isError && !activity.data)
@@ -392,21 +335,6 @@ function QueueDetailsBody({ now }: { now: number }) {
           <p className="py-2">Nothing ran or waited.</p>
         )}
       </div>
-      <Section headingAs="h3" title="AI evaluations">
-        {data.evaluations.length ? (
-          <>
-            <p className="max-w-prose text-muted-foreground">
-              Evaluations still owed, and those blocked in the last{" "}
-              {formatCount(data.windows.blockedDays)} days.
-            </p>
-            <EvaluationBacklog rows={data.evaluations} now={now} />
-          </>
-        ) : (
-          <p className="text-muted-foreground">
-            No evaluations are waiting or recently blocked.
-          </p>
-        )}
-      </Section>
     </Stack>
   );
 }

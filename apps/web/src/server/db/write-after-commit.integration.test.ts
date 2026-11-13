@@ -188,11 +188,14 @@ describe("repository writes publish after their commit", () => {
         BACKGROUND_QUEUE: {
           send: async () => {},
           sendBatch: async (
-            messages: Iterable<{ body: BackgroundTaskMessage }>,
+            messages: Iterable<{
+              body: BackgroundTaskMessage;
+              delaySeconds?: number;
+            }>,
           ) => {
-            for (const { body } of messages) {
+            for (const { body, delaySeconds } of messages) {
               published.push(body);
-              await observe();
+              if (!delaySeconds) await observe();
             }
           },
         },

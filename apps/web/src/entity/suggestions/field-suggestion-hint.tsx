@@ -45,7 +45,7 @@ export function FieldSuggestionHint({
         const suggestionId =
           suggestion?.suggestionId ??
           (outcome?.kind === "evaluated" ? outcome.suggestionId : undefined);
-        if (!suggestionId) throw new Error("Suggestion Suggestion is missing");
+        if (!suggestionId) return;
         await suggestionApi.review.call({
           suggestionId,
           operationId: crypto.randomUUID(),

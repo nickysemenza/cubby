@@ -1,12 +1,10 @@
 /** MCP must return the same gap transition as UI writes, retain source
  * explanations, reject blank notes, and stop honoring changed evidence. */
 import { dataQuality } from "@cubby/schemas/data-quality";
-import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { requireActor } from "~/server/http/request-context";
@@ -62,12 +60,9 @@ describe("availability explanations through MCP", () => {
     const cleared = dataQuality.parse((await call("clear")).structuredContent);
     expect(cleared.gaps.map((gap) => gap.check)).toContain("product_brand");
     await call("set", note);
-    await getDb(ctx.db)
-      .update(product)
-      .set({
-        brandId: await findOrCreateVendor(ctx.db, "Synthetic recorded maker"),
-      })
-      .where(eq(product.id, saved.entityId));
+    await setFieldsFixture(ctx.db, "product", saved.entityId, {
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic recorded maker"),
+    });
     const changed = (
       await loadDataQualities(ctx.db, "product", [saved.entityId])
     ).get(saved.entityId)!;

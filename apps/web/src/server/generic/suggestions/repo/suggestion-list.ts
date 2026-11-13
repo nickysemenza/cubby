@@ -257,9 +257,12 @@ async function preparedFacts(
 ) {
   const { families, touching, matchedFamilies, familyScope } =
     prepared ?? (await scopedFamilyQuery(db, filters));
-  if (touching?.size === 0) return { families, relation: factRelation([]) };
   const selected = families.filter(
-    (family) => !matchedFamilies || matchedFamilies.has(family),
+    (family) =>
+      family === "field" ||
+      family === "recommendation" ||
+      !matchedFamilies ||
+      matchedFamilies.has(family),
   );
   const keyed: SuggestionKey[] = [];
   const parts: SQL[] = [];
@@ -271,10 +274,24 @@ async function preparedFacts(
       continue;
     }
     keyed.push(
-      ...(await presentation.keys(db, familyScope)).filter(
+      ...(
+        await presentation.keys(
+          db,
+          family === "field" || family === "recommendation"
+            ? {
+                ...familyScope,
+                records: familyScope.records,
+                suggestionIds: undefined,
+              }
+            : familyScope,
+        )
+      ).filter(
         (key) =>
           (filters.status !== "pending" || key.automaticRule === null) &&
-          (!touching || touching.has(key.suggestionId)),
+          (key.family === "field" ||
+            key.family === "recommendation" ||
+            !touching ||
+            touching.has(key.suggestionId)),
       ),
     );
   }
@@ -429,6 +446,7 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
       recordEntity: undefined,
       recordIds: undefined,
     },
+    records: query.records,
     suggestionIds: touching ? [...touching] : undefined,
   };
   return {

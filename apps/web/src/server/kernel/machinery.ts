@@ -688,6 +688,7 @@ async function resetPreview(
     reconciler,
     [{ kind: FIELDS_SCOPE, key: recordScopeKey(ref.entity, ref.id) }],
     {
+      db,
       locked: false,
       hideBaseline: false,
       released: [{ subject: recordSubject(ref.entity, ref.id), field }],

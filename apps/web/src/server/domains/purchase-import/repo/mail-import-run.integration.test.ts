@@ -1326,8 +1326,10 @@ describe("mail research admission", () => {
     try {
       await discoverPurchases(ctx.db);
       expect(
-        await readJobs(ctx.db, { kind: "maintenance.purchase-discovery" }),
-      ).toMatchObject([{ state: "queued" }]);
+        await getDb(ctx.db).execute(
+          sql`SELECT name FROM "Pass" WHERE name=${"purchase.discovery"}`,
+        ),
+      ).toMatchObject({ rows: [{ name: "purchase.discovery" }] });
       let owners = await getDb(ctx.db)
         .select()
         .from(run)

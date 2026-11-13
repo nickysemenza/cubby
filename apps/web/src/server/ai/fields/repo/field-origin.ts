@@ -36,6 +36,7 @@ const proposal = z.object({
   confidence: z.number(),
 });
 const usedAnswer = z.object({
+  id: z.uuid(),
   inputHash: z.string(),
   at: z.coerce.date(),
   output: z.object({
@@ -51,7 +52,7 @@ async function readUsedAnswer(
   field: string,
 ) {
   const result = await repositoryQueries(db).execute<FieldsRow>(sql`
-    SELECT a."inputHash", a."createdAt" AS at, a.output
+    SELECT k.id, a."inputHash", a."createdAt" AS at, a.output
     FROM "ScopeState" s
     CROSS JOIN LATERAL jsonb_array_elements(s.inputs) used
     JOIN "Answer" a ON a."inputHash" = used->>${"inputHash"}
@@ -71,7 +72,7 @@ async function readCubbyWrite(
   field: string,
 ) {
   const result = await repositoryQueries(db).execute<FieldsRow>(sql`
-    SELECT a."inputHash", l."createdAt" AS at, a.output
+    SELECT k.id, a."inputHash", l."createdAt" AS at, a.output
     FROM "AuditLog" l
     CROSS JOIN LATERAL jsonb_array_elements(l.provenance->${"inputs"}) used
     JOIN "Answer" a ON a."inputHash" = used->>${"inputHash"}
@@ -143,8 +144,8 @@ export async function readFieldGuess(
     return null;
   const reference = plan.field.reference;
   return {
-    suggestionId: answer.inputHash,
-    fingerprint: answer.inputHash,
+    suggestionId: answer.id,
+    fingerprint: answer.id,
     value: await publicValue(db, reference, guess.value),
     confidence: guess.confidence,
     runnerUp: guess.runnerUp

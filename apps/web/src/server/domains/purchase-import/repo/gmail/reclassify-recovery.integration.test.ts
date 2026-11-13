@@ -8,9 +8,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluationRequest, email, run } from "~/server/db/schema";
+import { mailHandlingReceipt, email, run } from "~/server/db/schema";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
@@ -195,12 +194,14 @@ describe("durable member reclassification recovery", () => {
       FOR EACH ROW EXECUTE FUNCTION synthetic_receipt_failure()`),
     );
     try {
-      await reclassifyEmails(
-        ctx.db,
-        { ids: [first.shortcode, second.shortcode] },
-        ctx.actor,
-        { triage: f.triage, relevance: f.relevance },
-      );
+      await expect(
+        reclassifyEmails(
+          ctx.db,
+          { ids: [first.shortcode, second.shortcode] },
+          ctx.actor,
+          { triage: f.triage, relevance: f.relevance },
+        ),
+      ).rejects.toThrow("Failed query");
     } finally {
       await db.execute(
         sql.raw('DROP TRIGGER synthetic_receipt_failure ON "Run"'),
@@ -221,11 +222,6 @@ describe("durable member reclassification recovery", () => {
       recorded!.shortcode,
       f.owner,
     );
-    const [execution] = await readJobs(ctx.db, {
-      key: `run:${recorded!.id}`,
-    });
-    expect(execution?.state).toBe("failed");
-    expect(execution?.error).toContain("Synthetic checkpoint failure");
     expect(recovered?.receipts).toMatchObject({
       complete: true,
       results: [{ id: first.shortcode }, { id: second.shortcode }],
@@ -310,8 +306,8 @@ describe("durable member reclassification recovery", () => {
       mailReclassificationCheckpoint.parse(recorded!.progress).results,
     ).toHaveLength(1);
     await getDb(ctx.db)
-      .delete(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.runId, recorded!.id));
+      .delete(mailHandlingReceipt)
+      .where(eq(mailHandlingReceipt.runId, recorded!.id));
     await getDb(ctx.db)
       .update(run)
       .set({ progress: null, notes: "Synthetic legacy note" })

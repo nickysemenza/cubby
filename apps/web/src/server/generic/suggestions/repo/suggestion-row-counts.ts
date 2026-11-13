@@ -1,6 +1,4 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { suggestionFamily } from "@cubby/schemas/suggestion";
-import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
 import { and, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -9,29 +7,25 @@ import {
   isTransaction,
   unwrapDb,
 } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { requested } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
-import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { suggestionStateAdmission } from "~/server/generic/suggestions/repo/suggestion-touching";
 
-/** Count pending review publications on their primary record, excluding field guesses. */
+/** Count current decision gaps and the retained money-family review proposals. */
 export async function loadSuggestionRowCounts(
   db: Database | DrizzleTransaction,
   entity: string,
   ids: readonly string[],
 ): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, number>(ids.map((id) => [id, 0]));
   if (!ids.length) return counts;
   const database = isTransaction(db) ? databaseForTransaction(db) : db;
   const records = requested(ids.map((id) => ({ entity, id })));
   const rows = await unwrapDb(db)
     .select({
       recordId: suggestionTable.recordId,
-      ids: sql<string[]>`array_agg(${suggestionTable.id})`,
-      fieldIds: sql<
-        string[]
-      >`coalesce(array_agg(${suggestionTable.id}) filter (where ${suggestionTable.family} = ${suggestionFamily.enum.field}), '{}'::uuid[])`,
+      count: sql<number>`count(*)::int`,
     })
     .from(suggestionTable)
     .where(
@@ -44,9 +38,11 @@ export async function loadSuggestionRowCounts(
           database,
           {
             kind: "suggestions",
-            families: Object.keys(suggestionFamilies)
-              .map((family) => suggestionFamily.parse(family))
-              .filter(isReviewFamily),
+            families: [
+              "statement_transaction",
+              "transfer_pair",
+              "product_pair",
+            ],
             status: suggestionStatus.enum.pending,
           },
           {
@@ -59,31 +55,21 @@ export async function loadSuggestionRowCounts(
       ),
     )
     .groupBy(suggestionTable.recordId);
-  const fieldIds = rows.flatMap((row) => row.fieldIds);
-  // A disposition filter keeps guesses in the keys, so one pass labels them.
-  const filters = {
-    ...suggestionListFilters.parse({}),
-    disposition: ["guess"],
-  };
-  const keys = fieldIds.length
-    ? await suggestionFamilies.field.keys(database, {
-        filters,
-        suggestionIds: fieldIds,
-      })
-    : [];
-  // The default queue lists field keys that are not guesses; rows the keys
-  // drop (an Automatic rule will apply them) are not listed either.
-  const listed = new Set(
-    keys
-      .filter((key) => key.columns.disposition !== "guess")
-      .map((key) => key.suggestionId),
-  );
-  const field = new Set(fieldIds);
-  for (const row of rows)
-    if (row.recordId)
-      counts.set(
-        row.recordId,
-        row.ids.filter((id) => !field.has(id) || listed.has(id)).length,
-      );
+  for (const row of rows) if (row.recordId) counts.set(row.recordId, row.count);
+  const kernel = await unwrapDb(db).execute<{
+    recordId: string;
+    count: number;
+  }>(sql`
+    WITH gaps AS (
+      SELECT split_part(s."scopeKey", ':', 1) AS entity, split_part(s."scopeKey", ':', 2) AS "recordId", s."scopeKey" || ':' || coalesce(gap->${"actions"}->0->>${"field"}, gap::text) AS key
+      FROM "ScopeState" s, jsonb_array_elements(s.gaps) gap WHERE s."scopeKind"=${"fields"} AND gap->>${"kind"}=${"decision"}
+      UNION ALL
+      SELECT endpoints.entity, endpoints.id::text, s."scopeKey" FROM "ScopeState" s
+      JOIN LATERAL (SELECT e.* FROM "ConnectionCandidateEvidence" e WHERE e."scopeKey"=s."scopeKey" ORDER BY e."createdAt" DESC, e.id DESC LIMIT 1) e ON true
+      CROSS JOIN LATERAL (VALUES (e."sourceEntity",e."sourceId"),(e."targetEntity",e."targetId")) endpoints(entity,id)
+      WHERE s."scopeKind"=${"connections"} AND jsonb_array_length(s.gaps)>0
+    ) SELECT "recordId", count(DISTINCT key)::int AS count FROM gaps WHERE entity=${entity} AND "recordId"=ANY(${textArrayParam(ids)}) GROUP BY "recordId"`);
+  for (const row of kernel.rows)
+    counts.set(row.recordId, (counts.get(row.recordId) ?? 0) + row.count);
   return counts;
 }

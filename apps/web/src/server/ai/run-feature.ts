@@ -128,6 +128,8 @@ export interface AiRunContext<T = unknown> extends Pick<
    * kernel Ask claims its `inputHash` on the same response cache.
    */
   applicationCache?: boolean;
+  /** Saved artifact metadata covered by the model Ask envelope. */
+  answerRevision?: z.infer<ReturnType<typeof z.json>>;
   /**
    * Skip the gateway's response cache despite an identical request body —
    * what a "regenerate" action needs, since an unchanged prompt would
@@ -153,6 +155,8 @@ export interface AiRunContext<T = unknown> extends Pick<
    * ladder changes.
    */
   onAnswered?: (model: SupportedChatModel) => void;
+  /** The retained response supplied to the kernel Answer writer. */
+  onProduced?: (details: { raw: string; tier: string }) => void;
 }
 
 interface Answered<T> {
@@ -892,21 +896,18 @@ export async function runStructuredFeature<T>(
     });
   }
   if (ctx.db && !insideModelAsk() && ports === productionStructuredRunPorts) {
-    const { modelAskFor } = await import("./model-asks");
+    const { modelAskFor, structuredModelInput } = await import("./model-asks");
     const { withAsk } = await import("~/server/kernel/api");
     const media = await identifyMedia(request, ctx.db);
     const kind = modelAskFor(spec);
-    const input = {
-      kind: "structured" as const,
-      request: media.sent,
-      model: spec.model,
-    };
+    const input = structuredModelInput(spec, media.sent, ctx.answerRevision);
     const result = await withAsk(
       ctx.db,
       {
         ...kind,
         async produce() {
           let model = spec.model;
+          let details: { raw: string; tier: string } | undefined;
           const value = await produceModel(() =>
             runStructuredFeature(
               spec,
@@ -914,6 +915,10 @@ export async function runStructuredFeature<T>(
               {
                 ...ctx,
                 applicationCache: false,
+                onProduced: (response) => {
+                  details = response;
+                  ctx.onProduced?.(response);
+                },
                 onAnswered: (answered) => {
                   model = answered;
                 },
@@ -925,6 +930,7 @@ export async function runStructuredFeature<T>(
             output: { value: z.json().parse(value), model },
             model,
             tier: spec.tier,
+            ...details,
           };
         },
       },
@@ -1040,6 +1046,7 @@ export async function runStructuredFeature<T>(
           },
         );
       }
+      ctx.onProduced?.({ raw: JSON.stringify(message), tier: spec.tier });
       return { value, model: answeredBy(message) };
     } catch (error) {
       // A failed call is still a call on its transport — a connected ChatGPT

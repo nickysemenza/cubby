@@ -14,34 +14,12 @@ import {
   type RunAiSummary,
   runSummaryAnalysis,
 } from "@cubby/schemas/run-fields";
-import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 
-/**
- * Runs that ended before this instant are never summarized; the summary Job
- * covers Runs reaching their end state from here on.
- */
-export const RUN_SUMMARY_CUTOFF = new Date("2026-11-12T00:00:00.000Z");
-
 /** The ISO instant a generation names, as `toISOString` writes it. */
-export const runSummaryGeneration = (endedAt: Date) => endedAt.toISOString();
-
-/** Scalar: a live summary exists for `runId`'s generation `endedAt`. */
-export const runSummaryWrittenSql = (
-  runId: AnyColumn | SQL,
-  endedAt: AnyColumn | SQL,
-): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM "ScopeState" state
-  CROSS JOIN LATERAL jsonb_array_elements(state.inputs) used
-  JOIN "Answer" a ON a."inputHash" = used->>'inputHash'
-  LEFT JOIN "Ask" asked ON asked.id = a."askId"
-  WHERE state."scopeKind" = ${"fields"} AND state."scopeKey" = ${"run:"} || ${runId}::text
-    AND a.feature = ${RUN_SUMMARY_FEATURE_ID}
-    AND coalesce(a.output->'value'->>${"generation"},
-      (asked.input#>>'{input,request,messages,0,content}')::jsonb->>'endedAt')::timestamp
-      = date_trunc('milliseconds', ${endedAt})
-)`;
+const runSummaryGeneration = (endedAt: Date) => endedAt.toISOString();
 
 /** The current summary of each ended Run on a page, by Run id. */
 export async function readRunAiSummaries(
@@ -59,8 +37,8 @@ export async function readRunAiSummaries(
     result: unknown;
     updatedAt: Date | string;
   }>(sql`SELECT wanted.id AS "entityId", a.model,
-    jsonb_build_object(${"text"}, coalesce(a.output->'value'->>${"text"}, a.output->>${"text"}),
-      ${"generation"}, coalesce(a.output->'value'->>${"generation"},
+    jsonb_build_object(${"text"}::text, coalesce(a.output->'value'->>${"text"}, a.output->>${"text"}),
+      ${"generation"}::text, coalesce(a.output->'value'->>${"generation"},
         (asked.input#>>'{input,request,messages,0,content}')::jsonb->>'endedAt')) AS result,
     a."createdAt" AS "updatedAt"
     FROM unnest(${uuidArrayParam(ended.map((row) => row.id))}) AS wanted(id)

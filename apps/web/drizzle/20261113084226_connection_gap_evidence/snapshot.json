@@ -1,0 +1,273 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "c4f0be16-2c32-4a12-9823-13c15b202624",
+  "prevIds": [
+    "a0bdc2e9-8c06-4c1c-b1ce-4e791c4cd67a"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ConnectionCandidateEvidence"
+      ],
+      "writes": [
+        "s|tbl|public.ConnectionCandidateEvidence",
+        "n|tbl|public.ConnectionCandidateEvidence",
+        "e|tbl|public.ConnectionCandidateEvidence",
+        "n|rel|public.ConnectionCandidateEvidence",
+        "n|type|public.ConnectionCandidateEvidence",
+        "n|rel|public.ConnectionCandidateEvidence_pkey",
+        "n|rel|public.ConnectionCandidateEvidence_fingerprint_key"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ConnectionCandidateEvidence",
+        "ConnectionCandidateEvidence_scope_idx"
+      ],
+      "writes": [
+        "s|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "n|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "e|idx|public.ConnectionCandidateEvidence_scope_idx",
+        "n|rel|public.ConnectionCandidateEvidence_scope_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ConnectionCandidateEvidence",
+        "n|sch|public",
+        "n|col|public.ConnectionCandidateEvidence.scopeKey"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ConnectionCandidateEvidence",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "scopeKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "fingerprint",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "sourceEntity",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "sourceId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "targetEntity",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "targetId",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "candidate",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "basis",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_scope_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ConnectionCandidateEvidence",
+        "name": "ConnectionCandidateEvidence_fingerprint_key",
+        "nameExplicit": true,
+        "columns": [
+          "fingerprint"
+        ],
+        "nullsNotDistinct": false,
+        "entityType": "uniques"
+      }
+    }
+  ]
+}

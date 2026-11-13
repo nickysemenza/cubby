@@ -24,6 +24,7 @@ import type { ApplicationTerms } from "~/server/generic/suggestions/repo/suggest
 import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
+import { reviewGap } from "./gap-review";
 import { executeReviewApplication } from "./review-application";
 import { settleReviewHistory } from "./review-history";
 import { loadReviewPrediction } from "./review-load";
@@ -199,6 +200,10 @@ async function settleReview(
   automatic: AutomaticReview | null,
   emailScope?: EmailEvidenceWriteScope,
 ) {
+  if (!automatic) {
+    const gap = await reviewGap(db, context, input);
+    if (gap) return gap;
+  }
   const authority = automatic ? "automatic" : "member";
   const loaded = await loadReviewPrediction(db, input);
   if (loaded.kind === "mail") {

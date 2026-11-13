@@ -279,8 +279,8 @@ async function observeClassification(
   const { dependencyStamps } =
     await import("~/server/ai/policy/refresh-manifest");
   const manifest = await (
-    await import("~/server/ai/repo/ai-refresh")
-  ).producingAiManifest(db);
+    await import("~/server/ai/policy/refresh-manifest")
+  ).compiledRefreshManifest();
   const dependencies = dependencyStamps(manifest, [
     ...(input.refreshDependencies ?? []).map((stamp) => stamp.feature),
     ...calls.flatMap((entry) => (entry?.operation ? [entry.operation] : [])),

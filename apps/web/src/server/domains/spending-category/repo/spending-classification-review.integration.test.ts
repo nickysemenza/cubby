@@ -8,6 +8,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -146,9 +147,7 @@ describe("reviewed spending classification", () => {
       productCategoryId: parseShortcodeFor("productCategory", target.shortcode),
     };
     const preview = await previewSpendingClassificationReview(ctx.db, request);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Product" SET "categoryId"=NULL WHERE id=${item.id}`,
-    );
+    await setFieldsFixture(ctx.db, "product", item.id, { categoryId: null });
     await expect(
       applySpendingClassificationReview(context(), {
         request,

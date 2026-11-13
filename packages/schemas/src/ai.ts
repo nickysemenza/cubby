@@ -14,7 +14,7 @@ import type {
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { dateTime } from "./codec";
-import { batchOutSchema } from "./batch";
+
 import {
   productFieldEnvelopeFields,
   productPublicReadFields,
@@ -107,8 +107,6 @@ export const locationDescriptionSchema = z.object({
   confidence: confidence,
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
-
-export { type AiAnalysisEntityKind } from "./ai-analysis-fields";
 
 /** @public Names a generated native model. */
 export const aiCacheStatus = z.enum(["hit", "miss"]);
@@ -778,27 +776,12 @@ export type FieldSuggestionOutcome = z.infer<
 >;
 
 /** The most questions one settled read prepares; a list page batches up to it. */
-const SETTLED_SUGGESTION_QUESTION_MAX = 50;
+
 /**
  * A single-field `suggestFields` question a form already asked. A remembered
  * decline answers every record sharing the basis.
  */
-const settledSuggestionQuestion = fieldSuggestionsInput
-  .pick({ entityId: true, basisMode: true, basis: true })
-  .extend({ field: z.string().min(1) });
-export type SettledSuggestionQuestion = z.infer<
-  typeof settledSuggestionQuestion
->;
-export const settledSuggestionQuestionsInput = z.object({
-  entity: z.enum(shortcodeEntities),
-  questions: z
-    .array(settledSuggestionQuestion)
-    .min(1)
-    .max(SETTLED_SUGGESTION_QUESTION_MAX),
-});
-export type SettledSuggestionQuestionsInput = z.infer<
-  typeof settledSuggestionQuestionsInput
->;
+
 /**
  * While a question's basis, its field's decision policy and the decision
  * inputs prepared from saved data are unchanged, its remembered decline
@@ -806,15 +789,6 @@ export type SettledSuggestionQuestionsInput = z.infer<
  * live. A reopened question also names the `inputRevision` its live ask
  * carries, so a cached answer to the old inputs is never reused.
  */
-const settledSuggestionAnswer = z.object({
-  outcome: fieldSuggestionOutcomeSchema.nullable(),
-  revision: z.string().nullable(),
-});
-export type SettledSuggestionAnswer = z.infer<typeof settledSuggestionAnswer>;
-/** Positional with `questions`; one failed question never fails its siblings. */
-export const settledSuggestionQuestionsOut = batchOutSchema(
-  settledSuggestionAnswer,
-);
 
 /** Input for classifying one external identifier's `kind` from its shape and source. */
 export const externalIdKindSuggestionInput = z.object({

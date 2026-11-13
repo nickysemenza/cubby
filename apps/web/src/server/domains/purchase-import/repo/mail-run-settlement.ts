@@ -12,7 +12,11 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  notDeleted,
+  withTransaction,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import {
   email as emailTable,
   ledgerParty,
@@ -171,6 +175,14 @@ export async function completeSettledMailRun(
       updatedAt: now,
     })
     .where(eq(runTable.id, runId));
+  await (
+    await import("~/server/kernel/api")
+  ).emitWrites(databaseForTransaction(tx), {
+    table: runTable,
+    entity: "run",
+    ids: [runId],
+    columns: ["status", "endedAt", "updatedAt"],
+  });
   await retryTransientMailGaps(tx, runId, outcomes);
   await recordChange(tx, { kind: "source", categories: ["email", "run"] });
 }

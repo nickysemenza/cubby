@@ -15,7 +15,7 @@ import {
 
 /**
  * `aiDescription` is not a column: the read that loaded the row attaches the
- * latest live `location-description` AiAnalysis text (`ai-description.ts`).
+ * current `location-description` Answer in the fields scope.
  */
 type LocationSelect = typeof location.$inferSelect & {
   aiDescription?: string | null;

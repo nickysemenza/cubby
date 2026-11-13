@@ -54,6 +54,18 @@ nodes and edges) declare `page.refetch`: the page is the member's whole result,
 never cut to `pageSize`, read again at half the page size when oversized, and
 continued only while a branch reports a `nextOffset`.
 
+## Field and model work
+
+`machinery_read.read` reads the record's gaps, Answers and Decisions. Its field
+scope is selected with `field`. `machinery.decide` records the actions offered
+by a gap or an assignment, veto or release on the record's own field.
+`suggestions_read.list` presents undecided field and connection gaps;
+`suggestions.review` records their Decisions. A decided field or connection is
+read from Decisions, and a paid model result is read from Answer. A field Sweep
+is a Run, and its AskScope requester links carry that Run even when an Answer
+is replayed. Funding refusal leaves an Ask queued with cause `funding`.
+An unknown sent call requires an explicit outcome decision before another send.
+
 ## Runs and Burn-down
 
 Run-delegated mutations execute permitted writes without a separate approval.

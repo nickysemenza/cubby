@@ -145,8 +145,9 @@ export async function reconcileNow(
   if (options.runId) {
     const q = repositoryQueries(db);
     await q.execute(sql`
-      INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId")
-      SELECT DISTINCT a.id, ${"run"}, ${options.runId}, ${options.runId}::uuid
+      INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId", receipt)
+      SELECT DISTINCT a.id, ${"run"}, ${options.runId}, ${options.runId}::uuid,
+        (SELECT jsonb_build_object(${"answer"}::text, jsonb_build_object(${"inputHash"}::text, saved."inputHash")) FROM "Answer" saved WHERE saved."inputHash"=a."inputHash")
       FROM jsonb_to_recordset(${JSON.stringify(scopes)}::jsonb) AS wanted(kind text, key text)
       JOIN "ScopeState" state ON state."scopeKind" = wanted.kind AND state."scopeKey" = wanted.key
       JOIN "Ask" a ON EXISTS (
@@ -171,7 +172,7 @@ export const kernelDueSql = (): SQL => sql`
       (SELECT min("availableAt") FROM "Ask"
         WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND "availableAt" <= now()
           AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-          AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id)),
+          AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
       (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent} AND "claimDeadline" <= now()),
       (SELECT min("availableAt") FROM "Pass"
         WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()

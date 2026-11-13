@@ -34,7 +34,6 @@ import {
   STATEMENT_COUNTERPARTY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
 } from "~/server/ai/policy/features";
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { liveHouseholdLoan } from "~/server/domains/financial-account/policy/purchaser";
 import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
@@ -45,6 +44,7 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
+import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementLabelSubject,
@@ -472,9 +472,7 @@ async function runStatementLabelBatch(
     waitingUntil: null,
     paused: null,
   };
-  const active =
-    input.port !== undefined ||
-    (await readAiRefreshActivation(db))?.enabled === true;
+  const active = input.port !== undefined || !(await readAutomaticAiStop(db));
   if (!active) return { ...empty, active: false };
   const limit = Math.min(
     input.limit ??

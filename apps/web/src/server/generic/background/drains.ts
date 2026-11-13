@@ -79,7 +79,7 @@ export type BackgroundDrain = {
 };
 
 /** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */
-export const stopsDrainPage = (error: UnparsedError) =>
+const stopsDrainPage = (error: UnparsedError) =>
   stopsPage(classifyJobFailure(error));
 
 /** Items per publication transaction; an adapter may weight heavy items. */
@@ -97,7 +97,6 @@ type DrainPublication = {
 };
 
 type RowContext = Pick<JobContext, "signal" | "fenced">;
-export type DrainContext = JobContext & { name: string; attemptToken: string };
 
 type RowDrainSpec<P> = {
   /** Domain-owned transaction/check seam, used for evaluation lease checks. */

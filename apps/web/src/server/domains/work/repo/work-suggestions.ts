@@ -1,6 +1,4 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import { and, getTableName, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -10,9 +8,7 @@ import { entityIdentity } from "~/server/db/schema";
 import { workRecordFactsFor } from "~/server/domains/work/repo/record-facts";
 import { workSourceAuthority } from "~/server/domains/work/repo/record-owners";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
-import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
 import {
   pendingSuggestionRecordsSql,
   UNAPPLIED_CORRECTION_REASON,
@@ -43,30 +39,6 @@ const source: WorkSource = {
     [UNAPPLIED_CORRECTION_REASON]: "Unapplied member correction",
   }).map(([family, label]) => ({ key: `suggestions:${family}`, label })),
   candidates: async (db, scope) => {
-    // A record read discovers its own suggestions; the unscoped queue reads State.
-    const ids = scope.record
-      ? await touchingSuggestionIds(db, {
-          entity: scope.record.entity,
-          includeRelated: true,
-          records: [
-            {
-              entity: scope.record.entity,
-              id: await resolveOrThrow(
-                db,
-                scope.record.entity,
-                scope.record.id,
-              ),
-              code: scope.record.id,
-            },
-          ],
-          eligibility: {
-            kind: "suggestions",
-            families: suggestionListFamily.options,
-            status: suggestionStatus.enum.pending,
-          },
-        })
-      : null;
-    if (ids?.size === 0) return null;
     const liveIdentity = sql`${notDeleted(alias(entityIdentity, "work_identity"))} AND work_identity."mergedIntoId" IS NULL`;
     const queries = await Promise.all(
       shortcodeEntities
@@ -107,7 +79,7 @@ const source: WorkSource = {
           sql: sql`SELECT family, entity, token,
             CASE WHEN token ~ ${UUID_PATTERN} THEN token::uuid END AS record_uuid
             FROM (${pendingSuggestionRecordsSql(
-              ids ? [...ids] : undefined,
+              undefined,
               new Set(
                 admittedReasons(scope, source.reasons).map((reason) =>
                   reason.key.slice("suggestions:".length),

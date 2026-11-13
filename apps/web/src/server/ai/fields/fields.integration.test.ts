@@ -8,6 +8,7 @@ import type { ProjectId } from "@cubby/schemas/identifiers";
 import { FIELDS_SCOPE } from "@cubby/schemas/kernel/capability";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -16,6 +17,7 @@ import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createKernel, defineAsk, defineModule } from "~/server/kernel/api";
 
 import { fieldAnswer, fieldAskInput, type FieldAnswer } from "./ask";
@@ -113,5 +115,48 @@ describe("fields scope", () => {
     });
     await kernel.run(ctx.db, RUN);
     expect((await stored(id)).kind).toBe("garden");
+  });
+  it("keeps vetoes independent of corrections and replays only the exact field command", async () => {
+    const record = await createRepoEntity(ctx, "project", {
+      name: "Synthetic field review",
+      kind: "household",
+    });
+    const first = await seedFieldSuggestion(ctx.db, {
+      entity: "project",
+      recordId: record.entityId,
+      field: "emoji",
+      suggestedValue: "🪴",
+      confidence: 0.6,
+    });
+    const command = {
+      suggestionId: first.id,
+      operationId: "synthetic-field-command",
+      verdict: "wrong" as const,
+      intent: "apply" as const,
+      expectedFingerprint: first.id,
+      correction: { present: true as const, value: "🛠️" },
+    };
+    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
+    expect((await stored(record.entityId)).emoji).toBe("🛠️");
+    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
+      receipt,
+    );
+    await expect(
+      reviewSuggestion(ctx.db, kernelCtx(ctx), {
+        ...command,
+        correction: { present: true, value: "🌱" },
+      }),
+    ).rejects.toThrow("different review");
+    const { decision } = await import("~/server/db/kernel-schema");
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(decision)
+      .where(eq(decision.subject, `project:${record.entityId}`));
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ channel: "veto", value: "🪴" }),
+        expect.objectContaining({ channel: "assignment", value: "🛠️" }),
+      ]),
+    );
   });
 });

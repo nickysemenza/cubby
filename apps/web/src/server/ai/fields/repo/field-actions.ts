@@ -15,7 +15,6 @@ import type { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { decide, reconcileNow } from "~/server/kernel/api";
 import { recordSubject } from "~/server/kernel/keys";
 
 import { assignmentsInForce } from "./field-decisions";
@@ -27,6 +26,7 @@ export async function applyFieldAuthorityAction(
   actor: ActorContext,
   raw: z.input<typeof fieldAuthorityActionInput>,
 ): Promise<z.output<typeof fieldAuthorityActionOut>> {
+  const { decide, reconcileNow } = await import("~/server/kernel/api");
   const input = fieldAuthorityActionInput.parse(raw);
   const plan = fieldPlan(input.entity, input.field);
   if (!plan)

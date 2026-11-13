@@ -36,13 +36,20 @@ import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 /** Paid work belongs to a live running Run. */
 export async function assertRunExecutable(db: Database, runId: RunId) {
   const [current] = await unwrapDb(db)
-    .select({ status: run.status, retiredAt: run.retiredAt })
+    .select({
+      status: run.status,
+      retiredAt: run.retiredAt,
+      trigger: run.trigger,
+    })
     .from(run)
     .where(and(eq(run.id, runId), notDeleted(run)))
     .limit(1);
   if (!current || current.retiredAt)
     throw new Error("Run is no longer available for paid work.");
-  if (current.status !== "running")
+  if (
+    current.status !== "running" &&
+    !(current.trigger === "ephemeral" && current.status === "completed")
+  )
     throw new Error("Run is no longer executable.");
   return current;
 }

@@ -6,6 +6,13 @@ import { z } from "zod";
 
 import type { AiFeature } from "./policy/features";
 
+export const preparedQuestion = z.object({
+  feature: z.string(),
+  promptVersion: z.string(),
+  model: z.string(),
+  operation: z.string(),
+  input: z.json(),
+});
 const capturedInput = capturedFieldInput;
 export type CapturedInput = z.infer<typeof capturedInput>;
 const scope = new AsyncLocalStorage<{
@@ -14,6 +21,8 @@ const scope = new AsyncLocalStorage<{
   /** Set when a provider-free preparation skipped an input it needed. */
   incomplete: boolean;
   inputs: CapturedInput[];
+  questions: z.infer<typeof preparedQuestion>[];
+  expected?: readonly z.infer<typeof preparedQuestion>[];
 }>();
 
 /** Preparation uses the live roster/rendering path, but makes no transport or usage call. */
@@ -38,6 +47,19 @@ export async function captureAiInput(
 ) {
   const current = scope.getStore();
   if (!current) return;
+  const question = preparedQuestion.parse({
+    ...feature,
+    operation,
+    input: z.json().parse(input),
+  });
+  if (
+    current.expected &&
+    !current.expected.some(
+      (expected) => JSON.stringify(expected) === JSON.stringify(question),
+    )
+  )
+    throw new Error("The prepared field question changed before send");
+  current.questions.push(question);
   current.inputs.push({
     feature: feature.feature,
     promptVersion: feature.promptVersion,
@@ -49,16 +71,27 @@ export async function captureAiInput(
 export async function withAiInputs<T>(
   prepareOnly: boolean,
   work: () => Promise<T>,
-  options: { providerFree?: boolean; captureToParent?: boolean } = {},
+  options: {
+    providerFree?: boolean;
+    captureToParent?: boolean;
+    expected?: readonly z.infer<typeof preparedQuestion>[];
+  } = {},
 ) {
   const parent = scope.getStore();
   const store = {
     prepareOnly,
-    providerFree: prepareOnly && options.providerFree === true,
+    providerFree: options.providerFree === true,
     incomplete: false,
     inputs: new Array<CapturedInput>(),
+    questions: new Array<z.infer<typeof preparedQuestion>>(),
+    expected: options.expected,
   };
   const result = await scope.run(store, work);
   if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
-  return { result, inputs: store.inputs, incomplete: store.incomplete };
+  return {
+    result,
+    inputs: store.inputs,
+    questions: store.questions,
+    incomplete: store.incomplete,
+  };
 }

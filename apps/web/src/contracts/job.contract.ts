@@ -196,7 +196,7 @@ export const jobContract = defineContract(
     }),
     activity: query({
       description:
-        "Live work by Job kind: running, due, backing off, scheduled and paused counts, completions per minute over the last 5 minutes, completions in 15 minutes, failures in 60 minutes, the last completion, the oldest due Job and the active Runs it serves. Internal maintenance kinds are omitted from streams. `queue` explains waiting work per Job kind and drain unit over the last hour: rows claimed, rows by latest outcome (only the latest execution is stored, so a Job that deferred many times counts once), oldest due work, leases, a drain unit's latest page, and a Job kind's waiting Jobs grouped by wait reason and Run purpose with the Runs at the head of its claim order. `evaluations` counts AI evaluations by feature and state (queued, result_ready, and blocked in the last 7 days) with the oldest row and most common error.",
+        "Live work by Job kind: running, due, backing off, scheduled and paused counts, completions per minute over the last 5 minutes, completions in 15 minutes, failures in 60 minutes, the last completion, the oldest due Job and the active Runs it serves. Internal maintenance kinds are omitted from streams. `queue` explains waiting work per Job kind and drain unit over the last hour: rows claimed, rows by latest outcome (only the latest execution is stored, so a Job that deferred many times counts once), oldest due work, leases, a drain unit's latest page, and a Job kind's waiting Jobs grouped by wait reason and Run purpose with the Runs at the head of its claim order.",
       input: z.strictObject({}),
       output: workActivity,
       cache: { tags: [["run"]], profile: "live-status" },

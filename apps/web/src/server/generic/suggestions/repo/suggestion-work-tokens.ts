@@ -52,18 +52,24 @@ export function pendingSuggestionRecordsSql(
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
   const { recommendation, statement_transaction } = suggestionFamily.enum;
   const declared = [
-    suggestionFamily.enum.field,
     suggestionFamily.enum.transfer_pair,
     suggestionFamily.enum.product_pair,
   ].filter(admits);
   const branches = [
+    ...(admits("field")
+      ? [
+          sql`SELECT ${"field"}::text AS family, split_part(s."scopeKey", ':', 1) AS entity, split_part(s."scopeKey", ':', 2) AS token
+      FROM "ScopeState" s WHERE s."scopeKind"='fields' AND EXISTS (
+        SELECT 1 FROM jsonb_array_elements(s.gaps) gap, jsonb_array_elements(gap->'actions') action WHERE action ? ${"field"})
+      ${ids ? sql`AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.inputs) used JOIN "Ask" k ON k."inputHash"=used->>'inputHash' WHERE k.id=ANY(${uuidArrayParam(ids)}))` : sql``}`,
+        ]
+      : []),
     ...(admits(recommendation)
       ? [
-          sql`SELECT s.family, s.entity, s."recordId"::text AS token
-      FROM "Suggestion" s WHERE ${pending([recommendation])}`,
-          sql`SELECT s.family, s.data #>> '{connectionTarget,entityKind}', s.data #>> '{connectionTarget,entityId}'
-      FROM "Suggestion" s
-      WHERE ${pending([recommendation])} AND jsonb_typeof(s.data->'connectionTarget') = 'object'`,
+          sql`SELECT ${"recommendation"}::text AS family, endpoints.entity, endpoints.token FROM "ScopeState" s
+      JOIN LATERAL (SELECT e.* FROM "ConnectionCandidateEvidence" e WHERE e."scopeKey"=s."scopeKey" ORDER BY e."createdAt" DESC, e.id DESC LIMIT 1) e ON true
+      CROSS JOIN LATERAL (VALUES (e."sourceEntity",e."sourceId"::text),(e."targetEntity",e."targetId"::text)) endpoints(entity,token)
+      WHERE s."scopeKind"=${"connections"} AND jsonb_array_length(s.gaps)>0`,
         ]
       : []),
     // Statement review belongs to the account, not every settlement reference:
@@ -80,7 +86,7 @@ export function pendingSuggestionRecordsSql(
       ? [
           sql`SELECT ${UNAPPLIED_CORRECTION_REASON}::text AS family, s.entity, s."recordId"::text AS token
       FROM "Suggestion" s
-      WHERE s.status = ${suggestionStatus.enum.superseded}
+      WHERE s.family NOT IN (${"field"}, ${"recommendation"}) AND s.status = ${suggestionStatus.enum.superseded}
         AND s.decisions <> '[]'::jsonb
         AND s.decisions @> ${JSON.stringify([{ authority: "member", correction: { present: true } }])}::jsonb
         ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`,

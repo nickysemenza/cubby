@@ -246,55 +246,17 @@ export async function settleFieldEdits(
     ),
   ];
   const scope = await recordFieldEdits(db, actor, plan, recordId, edits);
-  if (scope)
-    await (await kernel()).reconcileNow(db, [scope], { waitMs: 2_000 });
-}
-
-/** Which of these fields Cubby holds: no assignment decision is in force on them. */
-export async function cubbyHeldFields(
-  db: Database,
-  inputs: readonly {
-    id: string;
-    entity: ShortcodeEntity;
-    recordId: string;
-    field: string;
-  }[],
-): Promise<Set<string>> {
-  if (!inputs.length) return new Set();
-  const rows = z
-    .array(z.object({ subject: z.string(), slot: z.string() }))
-    .parse(
-      (
-        await repositoryQueries(db).execute<FieldsRow>(sql`
-          SELECT newest.subject, newest.slot FROM (
-            SELECT DISTINCT ON (d.subject, d.slot) d.subject, d.slot, d.kind
-            FROM "Decision" d
-            JOIN jsonb_to_recordset(${JSON.stringify(
-              inputs.map((input) => ({
-                subject: recordSubject(input.entity, input.recordId),
-                slot: input.field,
-              })),
-            )}::jsonb) AS r(subject text, slot text)
-              ON d.subject = r.subject AND d.slot = r.slot
-            WHERE d.channel = ${ASSIGNMENT}
-            ORDER BY d.subject, d.slot, d.at DESC, d.id DESC
-          ) newest
-          WHERE newest.kind <> ${RELEASE}`)
-      ).rows,
-    );
-  const personHeld = new Set(
-    rows.map((row) => `${row.subject}\u0000${row.slot}`),
-  );
-  return new Set(
-    inputs
-      .filter(
-        (input) =>
-          !personHeld.has(
-            `${recordSubject(input.entity, input.recordId)}\u0000${input.field}`,
-          ),
-      )
-      .map((input) => input.id),
-  );
+  if (scope) {
+    const outcomes = await (
+      await kernel()
+    ).reconcileNow(db, [scope], { waitMs: 2_000 });
+    const failed = outcomes.find((outcome) => outcome.status === "failed");
+    if (failed)
+      throw (
+        failed.cause ??
+        new Error(failed.error ?? "Field assignment could not be applied")
+      );
+  }
 }
 
 /**
@@ -347,7 +309,17 @@ export function holdFieldsValues<V extends object>(
         actor,
         plan,
         recordId,
-        before ?? {},
+        before ??
+          (mode === "update" && plan && Object.keys(owned).length
+            ? ((await (
+                await import("./stored-field")
+              ).readStoredColumns(
+                database,
+                plan,
+                recordId,
+                Object.keys(owned),
+              )) ?? {})
+            : {}),
         owned,
         changes ??
           (mode === "create"

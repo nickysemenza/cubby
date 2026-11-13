@@ -10,6 +10,7 @@ import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -178,9 +179,9 @@ describe("derived field explanations against canonical records", () => {
       parentId: f.category.id,
       spendingCategoryMode: "blocked",
     });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Product" SET "categoryId"=${blocked.id} WHERE id=${f.product.id}`,
-    );
+    await setFieldsFixture(ctx.db, "product", f.product.id, {
+      categoryId: blocked.id,
+    });
     const explanation = await explainExpenseCategory(f.line);
     expect(fieldValueOf(explanation.envelope)).toBe(f.deliberate.shortcode);
     expect(explanation.resolutionEvidence?.fallbackSource?.entityId).toBe(

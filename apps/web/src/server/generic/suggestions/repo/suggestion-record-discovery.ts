@@ -1,4 +1,3 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   statementTransactionAction,
@@ -36,41 +35,6 @@ const primary = ref(sql`s.entity`, sql`s."recordId"::text`);
 export const one = sql`jsonb_build_array(${primary})`;
 
 export const reviewQueryBuilder = new QueryBuilder();
-
-export const referenceFields = Object.entries(entityFieldModels).flatMap(
-  ([entity, model]) =>
-    model.fields.flatMap((field) => {
-      const target = referenceEntity.safeParse(field.reference?.entity);
-      return target.success
-        ? [{ entity, field: field.key, target: target.data }]
-        : [];
-    }),
-);
-const fieldValues = (value: SQL) =>
-  sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
-const referenceValues = sql`${fieldValues(sql`s."suggestedValue"`)} || ${fieldValues(sql`s."currentValue"`)}`;
-
-const fieldReferencesFor = (requested?: readonly string[]) => {
-  const references = referenceFields
-    .filter(({ target }) => !requested || requested.includes(target))
-    .map(
-      ({ entity, field, target }) =>
-        sql`WHEN s.entity = ${entity} AND s.field = ${field} THEN COALESCE((SELECT jsonb_agg(${ref(sql`${target}`, sql`COALESCE(v->>'id', v #>> '{}')`)})
-    FROM jsonb_array_elements(${referenceValues}) v), '[]'::jsonb)`,
-    );
-  return references.length
-    ? sql`CASE ${sql.join(references, sql` `)} ELSE '[]'::jsonb END`
-    : sql`'[]'::jsonb`;
-};
-
-export const fieldRecords = (requested?: readonly string[]) =>
-  sql`${one} || ${fieldReferencesFor(requested)}`;
-
-export const endpoint = (end: "source" | "target") =>
-  ref(
-    sql`s.evidence->'candidate'->${end}->>'entityKind'`,
-    sql`s.evidence->'candidate'->${end}->>'entityId'`,
-  );
 
 export const leg = (end: "outflow" | "inflow") => sql`jsonb_build_array(
   ${ref(sql`${entities.financialAccount}`, sql`s.judgment->${end}->>'accountId'`)},

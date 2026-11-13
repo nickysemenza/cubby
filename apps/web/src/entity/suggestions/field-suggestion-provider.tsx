@@ -30,7 +30,6 @@ import {
 import { useFormContext, useFormState, useWatch } from "react-hook-form";
 import { z } from "zod";
 
-import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Button } from "~/ui/primitives/button";
 
@@ -74,8 +73,6 @@ export interface FieldSuggestionContextValue {
   clearAutoFilled: (field: string) => void;
   /** Whether `field` currently holds this provider's own untouched write. */
   isAutoFilled: (field: string) => boolean;
-  reviewDraft: (field: string, proposal: FieldSuggestion) => Promise<void>;
-  acknowledgeSaved: (recordId: string) => Promise<void>;
   readonly applyFinanceCategory: ReturnType<
     typeof useFinanceCategoryApply
   >["apply"];
@@ -180,7 +177,6 @@ export function FieldSuggestionProvider({
   fieldKeys,
   record,
   scopeKey,
-  receiptHandler,
   children,
 }: {
   entity: ShortcodeEntity;
@@ -203,56 +199,11 @@ export function FieldSuggestionProvider({
    * intent while edit-mode suggestions are reviewed as explicit alternatives. */
   record?: unknown;
   scopeKey?: string;
-  receiptHandler?: { current: ((recordId: string) => Promise<void>) | null };
   children: ReactNode;
 }) {
   const queryClient = useQueryClient();
   useEntityMetadata(entity);
   const form = useFormContext();
-  const reviewedDrafts = useRef(
-    new Map<string, { suggestionId: string; proposal: FieldSuggestion }>(),
-  );
-  const reviewDraft = useCallback(
-    async (field: string, proposal: FieldSuggestion) => {
-      if (!proposal.suggestionId)
-        throw new Error("Suggestion Suggestion is missing");
-      await suggestionApi.review.call({
-        suggestionId: proposal.suggestionId,
-        operationId: crypto.randomUUID(),
-        verdict: "correct",
-        intent: "draft",
-      });
-      reviewedDrafts.current.set(field, {
-        suggestionId: proposal.suggestionId,
-        proposal,
-      });
-    },
-    [],
-  );
-  const acknowledgeSaved = useCallback(
-    async (recordId: string) => {
-      for (const [field, reviewed] of reviewedDrafts.current) {
-        const savedValue = basisValueOf(
-          form.getValues(paths?.[field] ?? field),
-        );
-        if (
-          reviewed.proposal.operation === "set" &&
-          savedValue !== reviewed.proposal.value
-        )
-          continue;
-        await suggestionApi.review.call({
-          suggestionId: reviewed.suggestionId,
-          operationId: crypto.randomUUID(),
-          verdict: "correct",
-          intent: "apply",
-          application: { kind: "saved_field", recordId },
-        });
-        reviewedDrafts.current.delete(field);
-      }
-    },
-    [form, paths],
-  );
-  if (receiptHandler) receiptHandler.current = acknowledgeSaved;
   const [batchFailure, setBatchFailure] = useState<unknown>(null);
   const persistedEntityId =
     mode === "edit" ? financeSuggestionEntityId(entity, record) : undefined;
@@ -610,22 +561,9 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
-      reviewDraft,
-      acknowledgeSaved,
       applyFinanceCategory: async (suggestion) => {
         try {
-          if (!suggestion.suggestionId)
-            throw new Error("Suggestion Suggestion is missing");
           const saved = await applyFinanceCategory(suggestion);
-          const receipt = await suggestionApi.review.call({
-            suggestionId: suggestion.suggestionId,
-            operationId: crypto.randomUUID(),
-            verdict: "correct",
-            intent: "apply",
-            application: { kind: "saved_field", recordId: saved.entityId },
-          });
-          if (!receipt.applied)
-            throw new Error("Saved suggestion feedback was not recorded.");
           return saved;
         } catch (error) {
           await Promise.all([refetchSuggested(), refetchAlternatives()]);
@@ -650,8 +588,6 @@ export function FieldSuggestionProvider({
       markAutoFilled,
       clearAutoFilled,
       isAutoFilled,
-      reviewDraft,
-      acknowledgeSaved,
       applyFinanceCategory,
       refetchSuggested,
       refetchAlternatives,
@@ -677,21 +613,8 @@ export function FieldSuggestionProvider({
       batch.map(({ key }) => [key, form.getValues(paths?.[key] ?? key)]),
     );
     try {
-      const saved = await financeApply.applyMany(
-        batch.map(({ proposal }) => proposal),
-      );
+      await financeApply.applyMany(batch.map(({ proposal }) => proposal));
       for (const { key, proposal } of batch) {
-        if (!proposal.suggestionId)
-          throw new Error("Suggestion Suggestion is missing");
-        const receipt = await suggestionApi.review.call({
-          suggestionId: proposal.suggestionId,
-          operationId: crypto.randomUUID(),
-          verdict: "correct",
-          intent: "apply",
-          application: { kind: "saved_field", recordId: saved.entityId },
-        });
-        if (!receipt.applied)
-          throw new Error("Saved suggestion feedback was not recorded.");
         const path = paths?.[key] ?? key;
         const latestDraft = form.getValues(path);
         const changedDuringApply =

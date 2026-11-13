@@ -8,6 +8,7 @@ import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -41,7 +42,6 @@ import {
   touchingSuggestionQuery,
 } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { buildCrudServices } from "~/server/http/request-context";
-import { decide, recordSubject } from "~/server/kernel/api";
 import {
   createProductFixture,
   makeProductInput,
@@ -141,15 +141,6 @@ async function fieldSuggestion(
   confidence: number,
   createdAt: Date,
 ) {
-  await decide(ctx.db, ctx.actor, [
-    {
-      channel: "assignment",
-      kind: "set",
-      subject: recordSubject("product", product.entityId),
-      field,
-      value: `Synthetic current ${field}`,
-    },
-  ]);
   const row = await seedFieldSuggestion(
     ctx.db,
     {
@@ -158,7 +149,10 @@ async function fieldSuggestion(
       field,
       // Cubby disagreeing with a person's value is what the queue lists.
       currentValue: `Synthetic current ${field}`,
-      suggestedValue: `Synthetic ${field}`,
+      suggestedValue:
+        field === "categoryId"
+          ? taxonomyShortcode("food")
+          : `Synthetic ${field}`,
       confidence,
       model: "typesafe/jev",
       kind: "correction",
@@ -261,14 +255,14 @@ describe("cross-family Suggestion list", () => {
     const proposed = await createRepoEntity(ctx, "productCategory", {
       name: "Synthetic proposed tools",
     });
-    const id = await fieldSuggestion(ctx, item, "categoryId", 0.9, new Date());
-    await getDb(ctx.db)
-      .update(suggestionTable)
-      .set({
-        currentValue: current.output.id,
-        suggestedValue: proposed.output.id,
-      })
-      .where(eq(suggestionTable.id, id));
+    const { id } = await seedFieldSuggestion(ctx.db, {
+      entity: "product",
+      recordId: item.entityId,
+      field: "categoryId",
+      currentValue: current.output.id,
+      suggestedValue: proposed.output.id,
+      confidence: 0.9,
+    });
     expect(
       (
         await listSuggestionPage(ctx.db, {
@@ -601,7 +595,7 @@ describe("cross-family Suggestion list", () => {
       makeProductInput({ name: "Synthetic exclusion product" }),
       ctx.actor,
     );
-    await fieldSuggestion(ctx, product, "model", 0.95, new Date());
+    await fieldSuggestion(ctx, product, "categoryId", 0.95, new Date());
     const page = await listSuggestionPage(ctx.db, {});
     expect(page.items).toHaveLength(2);
     expect(

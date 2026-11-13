@@ -1,7 +1,4 @@
-import {
-  seedFieldSuggestion,
-  stampCurrentFieldProvenance,
-} from "tooling/shared-suggestion-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { eq, inArray } from "drizzle-orm";
 
 import { getDb } from "~/server/db/helpers";
@@ -59,7 +56,6 @@ test("Changes by Cubby lists a value Cubby set and Wrong, clear it empties the f
         .from(productTable)
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId ?? null;
-  await stampCurrentFieldProvenance(db, suggestion, "product", "categoryId");
   const applied = await applyAutomaticRules(db, [suggestion.id], {
     context: buildCrudServices,
   });

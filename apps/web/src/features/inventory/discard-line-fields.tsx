@@ -36,7 +36,6 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
   form,
   productId,
   productName,
-  receiptHandler,
 }: {
   form: UseFormReturn<TFieldValues>;
   /** Basis for the trade suggestion. `undefined` when the discard spans more
@@ -45,7 +44,6 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
    * basis rule, so the provider fields no targets rather than guess. */
   productId?: ProductShortcode;
   productName?: string;
-  receiptHandler?: { current: ((recordId: string) => Promise<void>) | null };
 }) {
   const tradeOptions = useTradeOptions();
   // SAFETY: `TFieldValues extends DiscardLineFieldValues` guarantees `date`
@@ -68,7 +66,6 @@ export function DiscardLineFields<TFieldValues extends DiscardLineFieldValues>({
     <FormProvider {...form}>
       <FieldSuggestionProvider
         entity="expense"
-        receiptHandler={receiptHandler}
         mode="create"
         staticBasis={
           productId ? { productId, name: productName ?? null } : undefined

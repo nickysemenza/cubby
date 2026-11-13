@@ -6,7 +6,6 @@ import {
 export {
   suggestionChildHandle,
   suggestionSuppression,
-  suggestionReviewReference,
 } from "./suggestion-reference";
 import {
   productShortcode,

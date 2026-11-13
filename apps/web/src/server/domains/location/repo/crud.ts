@@ -35,14 +35,12 @@ import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
-import {
-  LOCATION_DESCRIPTION_FEATURE_ID,
-  locationAiDescriptionSql,
-} from "~/server/db/computed/location-ai-description";
+import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
+  databaseForTransaction,
   associatePendingImages,
   buildOrderBy,
   buildPartialUpdateValues,
@@ -59,7 +57,6 @@ import {
 import { outer } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
-  aiAnalysis,
   inventoryReadSnapshot,
   entityAttachment,
   image,
@@ -765,7 +762,7 @@ export const locationScaffold = listScaffold("location", location, {
   read: {
     search: locationSearchRead,
     columns: {
-      // Not a column: the latest live AiAnalysis text. A single-table select
+      // Not a column: the current fields-scope Answer text. A single-table select
       // renders an interpolated column bare, so the row is qualified by hand.
       aiDescription: locationAiDescriptionSql(outer(location.id)),
       // The rolled-up valuation the list cell and record read show; the
@@ -1061,47 +1058,28 @@ export const locationSearch = async (
   };
 };
 
-/**
- * Set or clear a location's AI description outside the model run. The
- * description is the latest live `location-description` AiAnalysis, so
- * "clear" retires those analyses (a location whose last photo was removed has
- * nothing left to describe) and "set" records a manual one that outranks the
- * older analyses without disturbing their cache. `describeLocation` writes
- * its own analysis through `upsertAiAnalysis` and never needs this.
- */
+/** Manual text is an assignment; clearing reopens the location's analysis scope. */
 export const updateLocationAiDescription = async (
   db: Database | DrizzleTransaction,
   id: LocationId,
   aiDescription: string | null,
 ) => {
   await withTransactionOn(db, async (tx) => {
-    const client = unwrapDb(tx);
-    await client
-      .update(aiAnalysis)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(aiAnalysis.entityKind, "location"),
-          eq(aiAnalysis.entityId, id),
-          eq(aiAnalysis.feature, LOCATION_DESCRIPTION_FEATURE_ID),
-          aiDescription === null ? undefined : eq(aiAnalysis.model, "manual"),
-          notDeleted(aiAnalysis),
-        ),
-      );
-    if (aiDescription !== null)
-      await client.insert(aiAnalysis).values({
-        entityKind: "location",
-        entityId: id,
-        feature: LOCATION_DESCRIPTION_FEATURE_ID,
-        model: "manual",
-        promptVersion: "manual",
-        inputFingerprint: `manual:${id}`,
-        result: { description: aiDescription, confidence: "low" },
-      });
-    await recordChange(tx, {
-      kind: "source",
-      categories: ["location"],
-    });
+    const { decide, reconcileNow } = await import("~/server/kernel/api");
+    const { systemActor } = await import("@cubby/schemas/context");
+    const target = databaseForTransaction(tx);
+    await decide(target, systemActor(), [
+      {
+        channel: "assignment",
+        kind: aiDescription === null ? "release" : "set",
+        subject: `location-description/${id}`,
+        field: "text",
+        value: aiDescription,
+        scopes: [{ kind: "fields", key: `location:${id}` }],
+      },
+    ]);
+    await reconcileNow(target, [{ kind: "fields", key: `location:${id}` }]);
+    await recordChange(tx, { kind: "source", categories: ["location"] });
   });
 };
 

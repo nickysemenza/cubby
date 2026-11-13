@@ -4,6 +4,7 @@ import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-trans
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -637,8 +638,8 @@ describe("MCP catalog", () => {
         channel: "assignment",
         kind: "set",
         subject: recordSubject("product", product.id),
-        field: "model",
-        value: "Synthetic current model",
+        field: "categoryId",
+        value: null,
       },
     ]);
     await seedFieldSuggestion(
@@ -647,10 +648,10 @@ describe("MCP catalog", () => {
         runId,
         entity: "product",
         recordId: product.id,
-        field: "model",
+        field: "categoryId",
         // A Disagreement: the queue lists what needs a person.
-        currentValue: "Synthetic current model",
-        suggestedValue: "Synthetic model",
+        currentValue: null,
+        suggestedValue: taxonomyShortcode("food"),
         confidence: 0.9,
         model: "typesafe/jev",
         kind: "correction",

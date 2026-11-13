@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -8,13 +8,11 @@ import {
   derivedRebuild,
 } from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
 import {
   readBackgroundWorkStatus as readStatus,
-  readWorkActivity as readActivity,
   type DrainDue,
 } from "./observation";
 import { enqueueJob } from "./producer";
@@ -36,11 +34,6 @@ const readBackgroundWorkStatus = async (
   now = new Date(),
   extra: readonly DrainDue[] = [],
 ) => readStatus(db, now, await declarations(extra));
-const readWorkActivity = async (
-  db: Database,
-  now = new Date(),
-  extra: readonly DrainDue[] = [],
-) => readActivity(db, now, await declarations(extra));
 
 describe("background work status", () => {
   const ctx = withTestDb();
@@ -136,112 +129,6 @@ describe("background work status", () => {
     expect((await readBackgroundWorkStatus(ctx.db, now)).stuck).toEqual([]);
   });
 
-  it("keeps current failures visible and recognizes obsolete work finishing", async () => {
-    const now = new Date();
-    const retryReceipt = { retryEvaluationId: crypto.randomUUID() };
-    const rows = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values(
-        [retryReceipt, null, null, { retryEvaluationId: "invalid" }].map(
-          (receipt) => ({
-            executionKind: "ai_refresh" as const,
-            feature: "field-suggestion",
-            workKey: crypto.randomUUID(),
-            target: {
-              kind: "field" as const,
-              entity: "product",
-              recordId: crypto.randomUUID(),
-              field: "name",
-              suggestionIds: [],
-            },
-            provenance: {
-              dependencies: [],
-              inputFingerprint: "synthetic",
-              optionFingerprint: "synthetic",
-              model: null,
-            },
-            snapshot: {},
-            state: "failed" as const,
-            receipt,
-            error: "Synthetic retained failure",
-          }),
-        ),
-      )
-      .returning({ id: aiEvaluation.id });
-    const firstRun = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "maintenance",
-      trigger: "manual",
-      status: "completed",
-      execution: false,
-    });
-    const secondRun = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "maintenance",
-      trigger: "manual",
-      status: "completed",
-      execution: false,
-    });
-    await getDb(ctx.db)
-      .insert(aiEvaluationRequest)
-      .values([
-        { runId: firstRun, evaluationId: rows[1]!.id, receipt: retryReceipt },
-        { runId: firstRun, evaluationId: rows[2]!.id, receipt: retryReceipt },
-        { runId: secondRun, evaluationId: rows[2]!.id },
-      ]);
-    const failures = async () =>
-      (await readBackgroundWorkStatus(ctx.db, now)).stuck.filter(
-        (item) => item.key === "ai.evaluation:field-suggestion:failing",
-      );
-    expect(await failures()).toEqual([
-      expect.objectContaining({
-        body: "2 work items need attention after failures.",
-      }),
-    ]);
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({ receipt: retryReceipt })
-      .where(eq(aiEvaluationRequest.runId, secondRun));
-    expect(await failures()).toEqual([
-      expect.objectContaining({
-        body: "1 work item needs attention after failures.",
-      }),
-    ]);
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({ state: aiEvaluation.state })
-          .from(aiEvaluation)
-      ).every((row) => row.state === "failed"),
-    ).toBe(true);
-
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "obsolete", runAt: null, updatedAt: minutesAgo(40, now) });
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "queued", runAt: minutesAgo(40, now), receipt: null })
-      .where(eq(aiEvaluation.id, rows[0]!.id));
-    const stopped = async () =>
-      (await readBackgroundWorkStatus(ctx.db, now)).stuck.filter(
-        (item) => item.key === "ai.evaluation:field-suggestion",
-      );
-    expect(await stopped()).toHaveLength(1);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ updatedAt: minutesAgo(1, now) })
-      .where(eq(aiEvaluation.id, rows[1]!.id));
-    expect(await stopped()).toEqual([]);
-    const activity = await readWorkActivity(ctx.db, now);
-    expect(
-      activity.streams.find(
-        (stream) => stream.kind === "ai.evaluation:field-suggestion",
-      ),
-    ).toMatchObject({
-      due: 1,
-      completed: 0,
-      completedPerMinute: 0,
-      lastCompletedAt: minutesAgo(1, now).toISOString(),
-    });
-  });
   it("names why stopped work waits, a failing drain unit and unsaved answers", async () => {
     const now = new Date();
     const execution = (
@@ -341,61 +228,6 @@ describe("background work status", () => {
         lastExecution: execution("deferred", 40, 40),
       },
     );
-    const answer = (feature: string) => ({
-      executionKind: "ai_refresh" as const,
-      feature,
-      workKey: crypto.randomUUID(),
-      target: {
-        kind: "field" as const,
-        entity: "product",
-        recordId: crypto.randomUUID(),
-        field: "name",
-        suggestionIds: [],
-      },
-      provenance: {
-        dependencies: [],
-        inputFingerprint: "synthetic",
-        optionFingerprint: "synthetic",
-        model: null,
-      },
-      snapshot: {},
-      state: "result_ready" as const,
-    });
-    await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values([
-        // A failed publication waiting out its backoff: owed and unsaved.
-        {
-          ...answer("field-suggestion"),
-          runAt: minutesAgo(-5, now),
-          failingSince: minutesAgo(60, now),
-          error: JSON.stringify({
-            causes: [
-              { name: "SnapshotWriteConflictError", message: "synthetic" },
-            ],
-          }),
-        },
-        // A funding wait parks its answer on purpose, however old the row.
-        {
-          ...answer("product-identity"),
-          runAt: minutesAgo(-5, now),
-          waitCause: "ai_funding_window",
-          failingSince: minutesAgo(60, now),
-          updatedAt: minutesAgo(60, now),
-        },
-        // So does a postponement, and a row parked for a stopped requester.
-        {
-          ...answer("product-identity"),
-          runAt: minutesAgo(-5, now),
-          updatedAt: minutesAgo(60, now),
-        },
-        {
-          ...answer("product-identity"),
-          runAt: null,
-          updatedAt: minutesAgo(60, now),
-        },
-      ]);
-
     const status = await readBackgroundWorkStatus(ctx.db, now, [
       {
         name: "synthetic",
@@ -407,14 +239,6 @@ describe("background work status", () => {
     ]);
     const item = (key: string) =>
       status.stuck.find((entry) => entry.key === key);
-    expect(item("run.execute")).toMatchObject({
-      body: expect.stringMatching(
-        /^3 Maintenance Runs keep deferring on provider capacity\. Nothing has finished for 45 minutes\./u,
-      ),
-      diagnostic: expect.stringContaining(
-        "run.execute: 3 claimed, 0 succeeded, 3 deferred, 0 failed",
-      ),
-    });
     expect(item("drain:synthetic-unit:failing")).toMatchObject({
       title: "synthetic-unit keeps failing",
       diagnostic: expect.stringContaining("Synthetic drain page failure"),
@@ -430,40 +254,5 @@ describe("background work status", () => {
       body: "It has never been given a turn. Its work has waited 40 minutes.",
     });
     expect(item("drain:synthetic-fresh")).toBeUndefined();
-    expect(item("ai.evaluation:field-suggestion:unpublished")).toMatchObject({
-      body: expect.stringContaining("1 AI answer has waited 60 minutes"),
-      diagnostic: expect.stringContaining("SnapshotWriteConflictError"),
-    });
-    expect(item("ai.evaluation:product-identity:unpublished")).toBeUndefined();
-
-    const activity = await readWorkActivity(ctx.db, now);
-    expect(
-      activity.queue.find((unit) => unit.unit === "run.execute"),
-    ).toMatchObject({
-      type: "job",
-      claimed: 3,
-      deferred: 3,
-      waits: [
-        {
-          reason: "provider_capacity",
-          runPurpose: "maintenance",
-          count: 3,
-          deferred: 3,
-        },
-      ],
-    });
-    expect(activity.evaluations).toEqual([
-      expect.objectContaining({
-        feature: "field-suggestion",
-        state: "result_ready",
-        count: 1,
-        errorClass: "SnapshotWriteConflictError",
-      }),
-      expect.objectContaining({
-        feature: "product-identity",
-        state: "result_ready",
-        count: 3,
-      }),
-    ]);
   });
 });

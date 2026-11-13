@@ -9,7 +9,6 @@ import { withTestDb } from "tooling/test-setup";
 import { expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
@@ -90,10 +89,6 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
     }),
     ctx.actor,
   );
-  await activateAiRefresh(ctx.db, "synthetic-workflow", {
-    enabled: true,
-    manifest: {},
-  });
 
   let now = Date.now();
   vi.useFakeTimers({ toFake: ["Date"] });

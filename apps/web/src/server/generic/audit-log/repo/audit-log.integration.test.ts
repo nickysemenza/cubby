@@ -136,6 +136,8 @@ describe("getAuditLog — channel + time window", () => {
       const page = await getAuditLog(ctx.db, {
         limit: 2,
         channel,
+        createdAtFrom: timestamp.toISOString(),
+        createdAtTo: timestamp.toISOString(),
         cursor,
       });
       entryKeys.push(...page.entries.map((entry) => entry.entryKey));

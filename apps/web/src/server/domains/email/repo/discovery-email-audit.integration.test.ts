@@ -3,23 +3,17 @@ import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
-import {
-  aiEvaluation,
-  aiEvaluationRequest,
-  email,
-  run,
-} from "~/server/db/schema";
+import { mailHandlingReceipt, email, run } from "~/server/db/schema";
 import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { loadMailDiscoveryRead } from "~/server/domains/purchase-import/repo/gmail/discovery-run-read";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
-import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -78,12 +72,6 @@ it("retains reused discovery decisions without consuming queued reclassification
       emails: [{ emailId: selected.id, checksum }],
     },
   });
-  await prepareReclassification(ctx.db, reclassificationId, [selected]);
-  const [queuedBefore] = await getDb(ctx.db)
-    .select()
-    .from(aiEvaluation)
-    .where(eq(aiEvaluation.runId, reclassificationId));
-  if (!queuedBefore) throw new Error("Missing queued reclassification");
   const owners = [];
   for (let index = 0; index < 2; index++) {
     const owner = await insertWithShortcode(ctx.db, "run", {
@@ -130,48 +118,20 @@ it("retains reused discovery decisions without consuming queued reclassification
       .set({ status: "completed" })
       .where(eq(run.id, owner.id));
   }
-  expect(
-    (
-      await getDb(ctx.db)
-        .select()
-        .from(aiEvaluation)
-        .where(eq(aiEvaluation.id, queuedBefore.id))
-    )[0],
-  ).toEqual(queuedBefore);
   const requests = await getDb(ctx.db)
-    .select({
-      runId: aiEvaluationRequest.runId,
-      evaluationId: aiEvaluation.id,
-      executionKind: aiEvaluation.executionKind,
-      state: aiEvaluation.state,
-      receipt: aiEvaluation.receipt,
-    })
-    .from(aiEvaluationRequest)
-    .innerJoin(
-      aiEvaluation,
-      eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
-    )
+    .select()
+    .from(mailHandlingReceipt)
     .where(
-      inArray(aiEvaluationRequest.runId, [
-        reclassificationId,
-        ...owners.map((owner) => owner.id),
-      ]),
+      inArray(
+        mailHandlingReceipt.runId,
+        owners.map((owner) => owner.id),
+      ),
     );
-  expect(
-    requests
-      .filter((request) => request.runId === reclassificationId)
-      .map((request) => request.evaluationId),
-  ).toEqual([queuedBefore.id]);
+  expect(requests.some((row) => row.runId === reclassificationId)).toBe(false);
   for (const owner of owners) {
     const handled = requests.filter((request) => request.runId === owner.id);
     expect(handled).toHaveLength(2);
-    for (const request of handled) {
-      expect(request).toMatchObject({
-        executionKind: "mail_discovery",
-        state: "completed",
-      });
-      expect(request.receipt).not.toBeNull();
-    }
+    expect(handled.every((request) => request.receipt != null)).toBe(true);
   }
   await getDb(ctx.db)
     .update(email)
@@ -239,10 +199,6 @@ it("retains reused discovery decisions without consuming queued reclassification
     .update(run)
     .set({ status: "completed" })
     .where(eq(run.id, historicalId));
-  // The pre-partition enroller attached discovery demand to a manual execution frame.
-  await getDb(ctx.db)
-    .insert(aiEvaluationRequest)
-    .values({ runId: historicalId, evaluationId: queuedBefore.id });
   const [historical] = await getDb(ctx.db)
     .select()
     .from(run)
@@ -254,7 +210,7 @@ it("retains reused discovery decisions without consuming queued reclassification
         ledgerPartyId: party.id,
       })
     )?.emails,
-  ).toMatchObject({ coverage: "incomplete", total: 0, items: [] });
+  ).toMatchObject({ coverage: "complete", total: 0, items: [] });
   await expect(
     loadMailDiscoveryRead(ctx.db, owners[0]!.shortcode, {
       userId: userId.parse("synthetic-foreign"),
@@ -400,18 +356,9 @@ it("does not count candidate extraction publication as another handled Email", a
     },
   );
   const requests = await getDb(ctx.db)
-    .select({ receipt: aiEvaluation.receipt })
-    .from(aiEvaluationRequest)
-    .innerJoin(
-      aiEvaluation,
-      eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
-    )
-    .where(
-      and(
-        eq(aiEvaluationRequest.runId, owner.id),
-        eq(aiEvaluation.executionKind, "mail_discovery"),
-      ),
-    );
+    .select()
+    .from(mailHandlingReceipt)
+    .where(eq(mailHandlingReceipt.runId, owner.id));
   expect(requests).toHaveLength(1);
   expect(requests[0]?.receipt).toMatchObject({ outcome: "classified" });
 });

@@ -27,7 +27,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { locationDescriptionInput } from "~/server/ai/fields/analysis";
-import { modelAskFor, type ModelInput } from "~/server/ai/model-asks";
+import {
+  modelAskFor,
+  structuredModelInput,
+  type ModelInput,
+} from "~/server/ai/model-asks";
 import { produceModel } from "~/server/ai/model-call-context";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
@@ -523,7 +527,7 @@ export interface DetectedInventoryResult extends DetectedInventory {
 
 /**
  * Detect inventory items from location photos.
- * Returns detected items for user review — does not persist anything.
+ * Appends the observation as evidence and returns detected items for review.
  */
 export async function detectInventoryItems(
   db: Database,
@@ -546,15 +550,14 @@ export async function detectInventoryItems(
     { locationName: location.name, images },
   );
   const kind = modelAskFor(LOCATION_INVENTORY_DETECTION_FEATURE);
-  const input: ModelInput = {
-    kind: "structured",
-    model: LOCATION_INVENTORY_DETECTION_FEATURE.model,
-    request: LOCATION_INVENTORY_DETECTION_FEATURE.request(
+  const input: ModelInput = structuredModelInput(
+    LOCATION_INVENTORY_DETECTION_FEATURE,
+    LOCATION_INVENTORY_DETECTION_FEATURE.request(
       images.map((photo) => photo.url),
       location.name,
     ),
-    revision: { inputFingerprint },
-  };
+    { inputFingerprint },
+  );
   const cached = await readModelAnswer(db, kind, input);
   const { withAsk } = await import("~/server/kernel/api");
   const answer = await withAsk(

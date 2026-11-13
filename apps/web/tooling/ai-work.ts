@@ -54,6 +54,7 @@ export async function driveAiWork(
   id: RunId,
   ports: AiWorkPorts = {},
   plan?: StepPlan,
+  afterPage?: () => Promise<void>,
 ) {
   for (let cycle = 0; cycle < 205; cycle++) {
     const execution = await readRunPass(db, id);
@@ -72,6 +73,7 @@ export async function driveAiWork(
       }
       return !(await advanceAiWorkRun(db, params, ports));
     });
+    await afterPage?.();
     if (done) {
       await repositoryQueries(db).execute(
         sql`UPDATE "Pass" SET "doneAt" = now() WHERE name = 'run.execute' AND key = ${id}`,

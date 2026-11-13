@@ -19,7 +19,9 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { ledgerParty, transactionImport } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
   cancelRunAsks,
@@ -27,6 +29,8 @@ import {
   createKernel,
   defineModule,
   defineAsk,
+  defineReconciler,
+  source,
   defineEvidence,
   definePass,
   evidenceRow,
@@ -107,6 +111,68 @@ describe("evidence-facts kernel", () => {
       ).rows[0]!.n,
     );
   const settle = (kernel: Kernel) => kernel.run(ctx.db, RUN);
+
+  it("dirties prepared roster readers when an empty declared table gains a row", async () => {
+    const seen: number[] = [];
+    const scope = { kind: "fixture.roster", key: "synthetic" };
+    const reconciler = defineReconciler({
+      scope: scope.kind,
+      version: 1,
+      lane: "catalog",
+      reads: [source.table(fixtureReceipt, ["sourceRef"])],
+      writes: [],
+      async load(reads, keys) {
+        return new Map(
+          await Promise.all(
+            keys.map(
+              async (key) =>
+                [
+                  key,
+                  await reads
+                    .for(key)
+                    .prepare(
+                      [fixtureReceipt],
+                      async (db) =>
+                        (
+                          await repositoryQueries(db)
+                            .select()
+                            .from(fixtureReceipt)
+                        ).length,
+                    ),
+                ] as const,
+            ),
+          ),
+        );
+      },
+      reconcile(count, c) {
+        seen.push(count);
+        return c.done();
+      },
+    });
+    const module = fixtureModule();
+    const kernel = createKernel([
+      module.module,
+      defineModule({ name: "roster", reconcilers: [reconciler] }),
+    ]);
+    await kernel.emitWrites(ctx.db, {
+      table: fixtureReceipt,
+      ids: [],
+      columns: ["sourceRef"],
+      discovers: [scope],
+    });
+    await kernel.reconcileNow(ctx.db, [scope]);
+    expect(seen.at(-1)).toBe(0);
+    await kernel.append(ctx.db, [
+      receipt("SYNTHETIC-ROSTER", "Synthetic grocer"),
+    ]);
+    await kernel.emitWrites(ctx.db, {
+      table: fixtureReceipt,
+      ids: [],
+      columns: ["sourceRef"],
+    });
+    await kernel.reconcileNow(ctx.db, [scope]);
+    expect(seen.at(-1)).toBe(1);
+  });
 
   it("reserves entity evidence atomically without leaking identities from a duplicate race", async () => {
     const evidence = defineEvidence({
@@ -332,6 +398,16 @@ describe("evidence-facts kernel", () => {
     expect(work.asks).toEqual(
       expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
     );
+    const receipts = await repositoryQueries(ctx.db).execute<{
+      receipt: unknown;
+    }>(
+      sql`SELECT receipt FROM "AskScope" WHERE "runId"=${runId}::uuid AND "scopeKind"=${"run"}`,
+    );
+    expect(receipts.rows).toEqual([
+      expect.objectContaining({
+        receipt: { answer: { inputHash: expect.any(String) } },
+      }),
+    ]);
   });
 
   it("cannot leave a scope clean when a key it read with no rows gains a row before its apply", async () => {
@@ -625,6 +701,14 @@ describe("evidence-facts kernel", () => {
       { merchant: "Synthetic Replay Shop" },
       { runId: second },
     );
+    const receipts = await repositoryQueries(ctx.db).execute<{
+      receipt: { answer: { inputHash: string } };
+    }>(
+      sql`SELECT receipt FROM "AskScope" WHERE "scopeKind"=${"run"} AND "runId"=${second}::uuid`,
+    );
+    expect(receipts.rows[0]?.receipt.answer.inputHash).toMatch(
+      /^[a-f0-9]{64}$/u,
+    );
     expect(admittedFor).toBe(first);
     expect(calls).toBe(1);
     await cancelRunAsks(ctx.db, first);
@@ -644,6 +728,75 @@ describe("evidence-facts kernel", () => {
       expect.arrayContaining([expect.objectContaining({ state: "answered" })]),
     );
     expect(calls).toBe(1);
+  });
+
+  it("refuses funding before sent without spending an attempt", async () => {
+    let calls = 0;
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        calls++;
+        return "Groceries";
+      },
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "background",
+      execution: false,
+    });
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        {
+          ...fixture.categorize,
+          admit: async () => {
+            throw new JobDeferredError(
+              "Synthetic funding stop",
+              new Date(Date.now() + 60_000),
+              "ai_funding_window",
+            );
+          },
+        },
+        { merchant: "Synthetic Funding Shop" },
+        { runId },
+      ),
+    ).rejects.toThrow("Synthetic funding stop");
+    const rows = await repositoryQueries(ctx.db).execute<{
+      state: string;
+      sentAt: string | null;
+      waitCause: string;
+      attempts: number;
+    }>(
+      sql`SELECT state, "sentAt", "waitCause", attempts FROM "Ask" WHERE feature=${fixture.categorize.feature}`,
+    );
+    expect(rows.rows).toEqual([
+      { state: "queued", sentAt: null, waitCause: "funding", attempts: 0 },
+    ]);
+    await repositoryQueries(ctx.db).execute(
+      sql`UPDATE "Ask" SET "availableAt"=now() WHERE feature=${fixture.categorize.feature}`,
+    );
+    await cancelRunAsks(ctx.db, runId);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+    expect(calls).toBe(0);
+  });
+
+  it("retains the original database failure for a transactional field writer", async () => {
+    const { kernel } = kernelWith();
+    const q = repositoryQueries(ctx.db);
+    await q.execute(
+      sql`ALTER TABLE kernel_fixture."FixturePurchase" ADD CONSTRAINT fixture_positive_test CHECK ("amountMinor">0)`,
+    );
+    try {
+      await kernel.append(ctx.db, [charge("ORD-CONSTRAINT", -1)]);
+      const outcomes = await kernel.reconcileNow(ctx.db, [
+        { kind: PURCHASE_SCOPE, key: "ORD-CONSTRAINT" },
+      ]);
+      const failed = outcomes.find((outcome) => outcome.status === "failed");
+      expect(findPgError(failed?.cause)?.code).toBe("23514");
+      expect(failed?.error).toContain("fixture_positive_test");
+    } finally {
+      await q.execute(
+        sql`ALTER TABLE kernel_fixture."FixturePurchase" DROP CONSTRAINT fixture_positive_test`,
+      );
+    }
   });
 
   it("never sends an unknown ask again", async () => {

@@ -4,8 +4,8 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { seedModelAnswer as upsertAiAnalysis } from "~/server/ai/model-answer.fixtures";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
-import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createRecipe } from "~/server/domains/recipe/repo/crud";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

@@ -13,6 +13,7 @@
  * asked here; a `review` field's answer comes from an in-line question.
  */
 import { auditLogActionSchema } from "@cubby/schemas/audit";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { FIELDS_SCOPE } from "@cubby/schemas/kernel/capability";
@@ -27,8 +28,11 @@ import {
   valueKey,
   type FieldValue,
 } from "~/server/ai/policy/field-rules";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { decision } from "~/server/db/kernel-schema";
 import { auditLog } from "~/server/db/retained-tables";
+import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import {
   defineReconciler,
   recordSubject,
@@ -69,8 +73,48 @@ type FieldsInput = {
   /** Values each field held before a later write replaced them. */
   replaced: ReadonlyMap<string, readonly string[]>;
   precedents: ReadonlyMap<string, readonly Precedent[]>;
+  questions?: ReadonlyMap<string, FieldAskInput["questions"]>;
 };
 
+// Catalog membership, reference labels and inherited contexts used by field preparation.
+const fieldSourceTables = [...new Set(Object.values(SHORTCODE_TABLE))];
+function fieldSources(plan: EntityFieldsPlan, field: FieldPlan) {
+  const tables = new Set<import("drizzle-orm/pg-core").PgTable>();
+  if (field.reference) tables.add(SHORTCODE_TABLE[field.reference]);
+  if (field.parents.length) tables.add(plan.table);
+  if (plan.entity === "productCategory" && field.key === "feature")
+    tables.add(plan.table);
+  for (const basis of field.basis) {
+    const model = entityFieldModels[plan.entity].fields.find(
+      (model) => model.key === basis,
+    );
+    const ref = model && "reference" in model ? model.reference : null;
+    if (
+      ref &&
+      "entity" in ref &&
+      typeof ref.entity === "string" &&
+      Object.hasOwn(SHORTCODE_TABLE, ref.entity)
+    ) {
+      // SAFETY: Object.hasOwn above proves this target belongs to the generated table map.
+      tables.add(SHORTCODE_TABLE[ref.entity as keyof typeof SHORTCODE_TABLE]);
+    }
+  }
+  return [...tables];
+}
+function fieldInput(input: FieldsInput, field: FieldPlan): FieldAskInput {
+  return {
+    entity: input.entity,
+    field: field.key,
+    recordId: input.id,
+    row: Object.fromEntries(
+      [...new Set([...field.basis, field.key])].map((key) => [
+        key,
+        fieldJson(input.row![key]),
+      ]),
+    ),
+    precedents: [...(input.precedents.get(field.key) ?? [])],
+  };
+}
 const SCOPE_KEY = /^([A-Za-z][\w-]*):([0-9a-f-]{36})$/u;
 
 /** The record a `fields` scope key names. */
@@ -210,6 +254,7 @@ async function loadPrecedents(
 async function load(
   reads: Reads,
   keys: readonly string[],
+  prepare = false,
 ): Promise<Map<string, FieldsInput>> {
   const inputs = new Map<string, FieldsInput>();
   const groups = new Map<ShortcodeEntity, { key: string; id: string }[]>();
@@ -225,6 +270,20 @@ async function load(
     [...groups].map(async ([entity, items]) => {
       const plan = fieldsPlans().get(entity)!;
       const ids = items.map((item) => item.id);
+      const held = prepare
+        ? await reads.select(
+            decision,
+            [],
+            sql`${decision.channel}=${"assignment"} AND ${decision.subject}=ANY(${textArrayParam(items.map((item) => `${entity}:${item.id}`))})`,
+          )
+        : [];
+      held.sort(
+        (a, b) => b.at.getTime() - a.at.getTime() || b.id.localeCompare(a.id),
+      );
+      const assignments = new Map<string, string>();
+      for (const row of held)
+        if (!assignments.has(`${row.subject}:${row.field}`))
+          assignments.set(`${row.subject}:${row.field}`, row.kind);
       const [rows, replaced] = await Promise.all([
         Promise.all(
           items.map(
@@ -274,6 +333,39 @@ async function load(
             ]),
           ),
         });
+        const loaded = inputs.get(item.key)!;
+        if (prepare && loaded.row && entity !== "run") {
+          loaded.questions = new Map(
+            await Promise.all(
+              plan.fields
+                .filter(
+                  (field) =>
+                    field.apply !== "review" &&
+                    (!assignments.has(`${entity}:${item.id}:${field.key}`) ||
+                      assignments.get(`${entity}:${item.id}:${field.key}`) ===
+                        "release") &&
+                    (blank(loaded.row![field.key]) || !field.fillOnly) &&
+                    field.basis.some((key) => !blank(loaded.row![key])),
+                )
+                .map(async (field) => {
+                  const prepared = await reads
+                    .for(item.key)
+                    .prepare(fieldSources(plan, field), async (db) => {
+                      const result = await (
+                        await import("./produce")
+                      ).produceFieldAnswer(
+                        db,
+                        fieldInput(loaded, field),
+                        null,
+                        true,
+                      );
+                      return result.output.questions ?? [];
+                    });
+                  return [field.key, prepared] as const;
+                }),
+            ),
+          );
+        }
       }
     }),
   );
@@ -312,13 +404,16 @@ export function fieldsReconciler(
     version: FIELDS_VERSION,
     reads: [
       // SAFETY: as above.
-      ...plans.map((plan) => source.table(plan.table, plan.reads as never[])),
+      ...fieldSourceTables.map((table) =>
+        source.table(table, Object.keys(getTableColumns(table)) as never[]),
+      ),
       source.table(auditLog, ["changes"]),
+      source.table(decision, ["subject", "field", "channel", "kind", "at"]),
       ...analysisSources,
     ],
     writes: [...writeRefs.values()],
     asks: [ask, analysisAsk("location"), analysisAsk("run")],
-    load,
+    load: (reads, keys) => load(reads, keys, ask === fieldAsk),
     reconcile(input, c) {
       const plan = fieldsPlans().get(input.entity)!;
       const row = input.row;
@@ -359,6 +454,7 @@ export function fieldsReconciler(
               ]),
             ),
             precedents: [...(input.precedents.get(field.key) ?? [])],
+            questions: input.questions?.get(field.key),
           };
           const answer = c.answer(ask, askInput);
           if (answer.status === "answered") proposal = answer.output.proposal;
@@ -388,6 +484,31 @@ export function fieldsReconciler(
         });
         if (verdict.kind === "write" && target)
           c.patch(target, input.id, { [field.key]: verdict.value });
+        else if (
+          proposal &&
+          !assignment &&
+          valueKey(proposal.value) !== valueKey(current)
+        )
+          c.gap.decision(`Review ${field.key}`, {
+            actions: [
+              {
+                channel: "assignment",
+                kind: "set",
+                subject,
+                field: field.key,
+                value: proposal.value,
+                label: "Use this value",
+              },
+              {
+                channel: "veto",
+                kind: "veto",
+                subject,
+                field: field.key,
+                value: proposal.value,
+                label: "Wrong",
+              },
+            ],
+          });
       }
       return c.done();
     },

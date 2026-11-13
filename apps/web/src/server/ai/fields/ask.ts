@@ -1,16 +1,8 @@
-/**
- * The field Ask (ADR 0029 section 1): one decision-model question about one
- * saved record's field. Its declared input is what the `fields` reconciler
- * loaded: the record's stored basis and field columns and its precedents.
- * The producer (`produce.ts`) reads the record through the canonical
- * selected-detail reader for labels and effective values, and refuses to
- * answer when the stored columns no longer equal the input, so an Answer
- * always describes the input its hash covers.
- */
+/** A saved field question includes its stored basis, precedents and fully prepared model questions. */
 import { z } from "zod";
 
+import { preparedQuestion } from "~/server/ai/evaluation-inputs";
 import { precedentSchema } from "~/server/ai/fields/repo/precedents";
-import { produceModel } from "~/server/ai/model-call-context";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { defineAsk } from "~/server/kernel/api";
 
@@ -21,6 +13,7 @@ export const fieldAskInput = z.object({
   /** The record's stored basis and field columns, by column key. */
   row: z.record(z.string(), z.json()),
   precedents: z.array(precedentSchema),
+  questions: z.array(preparedQuestion).optional(),
 });
 export type FieldAskInput = z.infer<typeof fieldAskInput>;
 
@@ -57,11 +50,9 @@ export const fieldAsk = defineAsk({
   // Loaded on call: the producer's graph (rosters, domain readers) stays out
   // of the module list the kernel and the write boundary load.
   produce: async (input, context) =>
-    produceModel(async () =>
-      (await import("./produce")).produceFieldAnswer(
-        context.db,
-        input,
-        context.runId,
-      ),
+    (await import("./produce")).produceFieldAnswer(
+      context.db,
+      input,
+      context.runId,
     ),
 });

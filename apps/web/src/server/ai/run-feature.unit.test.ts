@@ -142,6 +142,7 @@ it("reports the answering model to the caller", async () => {
     },
   };
   const answered: string[] = [];
+  const raw: string[] = [];
   await runStructuredFeature(
     PRODUCT_IDENTIFICATION_FEATURE,
     { systemPrompts: ["frame"], messages: [] },
@@ -149,10 +150,13 @@ it("reports the answering model to the caller", async () => {
       runId,
       operation: "suggestCategory",
       onAnswered: (model) => answered.push(model),
+      onProduced: (details) => raw.push(details.raw),
     },
     answering,
   );
   expect(answered).toEqual(["claude-sonnet-5-5"]);
+  expect(raw).toHaveLength(1);
+  expect(JSON.parse(raw[0]!)).toMatchObject({ model: "claude-sonnet-5-5" });
 });
 
 // Regression: answers stored under one output schema replayed indefinitely
@@ -922,4 +926,55 @@ it("budgets oversized embedding inputs before provider submission", async () => 
   expect(batches.flat()[0]).toMatch(/^product: Synthetic cabinet/);
   expect(result).toEqual([[1], [2], [1]]);
   expect(original.length).toBeGreaterThan(batches.flat()[0]!.length);
+});
+
+// A queued Ask runs from its stored parameters, including an overridden tier.
+describe("queued model request", () => {
+  it("replays the captured schema, token cap and tier", async () => {
+    const runtime = await import("./run-feature");
+    const { modelAsks } = await import("./model-asks");
+    const kind = modelAsks.find(
+      (ask) => ask.feature === "location-description",
+    )!;
+    const replay = vi
+      .spyOn(runtime, "runStructuredFeature")
+      .mockResolvedValueOnce({ description: "Synthetic shelf" });
+    try {
+      await kind.produce!(
+        {
+          kind: "structured",
+          request,
+          model: FAST_MODEL,
+          tier: "quality",
+          parameters: {
+            maxTokens: 333,
+            schema: {
+              type: "object",
+              properties: { description: { type: "string" } },
+              required: ["description"],
+            },
+          },
+        },
+        {
+          db,
+          runId: null,
+          signal: new AbortController().signal,
+          ask: { id: crypto.randomUUID(), inputHash: "synthetic-replay" },
+        },
+      );
+      const [feature, saved, usage] = replay.mock.calls[0]!;
+      expect(feature).toMatchObject({
+        model: FAST_MODEL,
+        tier: "quality",
+        maxTokens: 333,
+      });
+      expect(feature.schema.parse({ description: "Synthetic shelf" })).toEqual({
+        description: "Synthetic shelf",
+      });
+      expect(saved).toEqual(request);
+      expect(usage.applicationCache).toBe(false);
+    } finally {
+      replay.mockRestore();
+    }
+  });
 });

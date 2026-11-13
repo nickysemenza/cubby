@@ -26,7 +26,8 @@ type AutomaticCandidate = {
 };
 
 export interface SuggestionFamilyDeclaration<F extends SuggestionListFamily>
-  extends SuggestionFamilyPresentation<F>, Handler {
+  extends SuggestionFamilyPresentation<F>, Omit<Handler, "apply"> {
+  apply?: Handler["apply"];
   family: F;
   applicationKind?: NonNullable<Review["application"]>["kind"];
   applicationError?: string;

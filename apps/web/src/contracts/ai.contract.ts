@@ -126,7 +126,7 @@ export const aiContract = defineContract(
     suggestFields: query({
       exposure: "capability",
       description:
-        "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint ai.apply_finance_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
+        "Model Answers for field questions about a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint ai.apply_finance_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       modelBacked: true,
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
@@ -148,7 +148,7 @@ export const aiContract = defineContract(
     stopAutomaticWork: mutation({
       exposure: "capability",
       description:
-        "Stop automatic AI work until a member resumes it: discovery admits nothing, owed evaluations are parked, and an answer already in flight is not published. Work a member or agent session owns is unaffected.",
+        "Stop automatic AI work until a member resumes it: queued automatic model Asks wait before send. Paid Answers already in flight are retained. Work a member or agent session owns is unaffected.",
       command: { label: "Stop automatic AI work", confirmation: null },
       input: zod.strictObject({}),
       output: zod.object({ parked: zod.number().int().nonnegative() }),

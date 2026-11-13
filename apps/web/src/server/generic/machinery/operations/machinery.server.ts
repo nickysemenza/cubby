@@ -15,15 +15,8 @@ import { z } from "zod";
 import { machineryContract } from "~/contracts/machinery.contract";
 import type { Database } from "~/server/db/database";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  approveDrift,
-  approveDriftClass,
-  decide,
-  machinery,
-  recordSubject,
-  resolveForRead,
-} from "~/server/kernel/api";
-import { productionKernel } from "~/server/kernel/kernel";
+import { authoredFieldWriter } from "~/server/generic/machinery/repo/field-decisions";
+import { buildCrudServices } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 const shortcodeEntity = z.enum(shortcodeEntities);
@@ -34,10 +27,11 @@ type DecideInput = z.output<typeof machineryContract.ops.decide.input>;
 export async function machineryCapabilityOf(
   entity: string,
 ): Promise<MachineryCapability | null> {
-  return (await productionKernel()).registry.machinery.get(entity) ?? null;
+  return (await import("~/server/kernel/api")).machineryCapability(entity);
 }
 
 async function recordOf(db: Database, entity: Entity, code: string) {
+  const { resolveForRead } = await import("~/server/kernel/api");
   const resolved = await resolveForRead(db, code);
   if (!resolved || resolved.entity !== entity) {
     const shortcode = shortcodeEntity.safeParse(entity);
@@ -58,6 +52,7 @@ async function readMachinery(
 ): Promise<Machinery | null> {
   if (!(await machineryCapabilityOf(input.entity))) return null;
   const record = await recordOf(db, input.entity, input.id);
+  const { machinery } = await import("~/server/kernel/api");
   return machinery(
     db,
     viewer,
@@ -97,6 +92,8 @@ async function decideForRecord(
       "MACHINERY_DECISION_NOT_OFFERED",
       `${input.entity} records have no machinery to decide on`,
     );
+  const { decide, machinery, recordSubject } =
+    await import("~/server/kernel/api");
   const record = await recordOf(db, input.entity, input.id);
   const subject = recordSubject(input.entity, record.id);
   const read = await machinery(db, viewer, {
@@ -119,6 +116,13 @@ async function decideForRecord(
       field: decision.field ?? null,
       value: decision.value ?? null,
     })),
+    {
+      field: authoredFieldWriter({
+        ...buildCrudServices(db),
+        db,
+        actorContext: viewer,
+      }),
+    },
   );
   return { decisions };
 }
@@ -128,6 +132,8 @@ async function approveForRecord(
   viewer: ActorContext,
   input: z.output<typeof machineryContract.ops.approveDrift.input>,
 ) {
+  const { approveDrift, approveDriftClass } =
+    await import("~/server/kernel/api");
   const counts = { applied: 0, stale: 0, busy: 0, missing: 0 };
   const read = await readMachinery(db, viewer, input);
   if (!read?.drift || read.drift.proposalHash !== input.proposalHash) {

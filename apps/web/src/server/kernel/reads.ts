@@ -19,6 +19,7 @@ import {
 } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
+import type { Database } from "~/server/db";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { evidenceBinding, factKey } from "~/server/db/kernel-schema";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
@@ -33,7 +34,7 @@ import type {
   Reconciler,
 } from "./define";
 import { lockKeyRevs, readKeyRevs } from "./dirty";
-import { bindingEventKey, bindingFactKey, rowKey } from "./keys";
+import { bindingEventKey, bindingFactKey, rowKey, tableKey } from "./keys";
 
 export class KernelContractError extends Error {
   override name = "KernelContractError";
@@ -84,6 +85,11 @@ export class KeyLedger {
 
 /** The reads one scope makes; every read records its keys for that scope. */
 export interface ScopeReads {
+  /** Prepare a source-derived question under tracked roster revisions. The callback is read-only and makes no producer call. */
+  prepare<T>(
+    tables: readonly PgTable[],
+    load: (db: Database) => Promise<T>,
+  ): Promise<T>;
   rows<T extends KeyedTable>(
     table: T,
     ids: readonly string[],
@@ -121,6 +127,7 @@ type Pending<T> = {
 };
 
 export type ReadMode = {
+  db?: Database;
   /** Locked runs hold each key's revision row from its read to commit. */
   locked: boolean;
   /** The version sweep derives without baseline bindings. */
@@ -235,6 +242,17 @@ export function createReads(
   });
 
   const scopeReads = (scopes: readonly string[]): ScopeReads => ({
+    async prepare(tables, load) {
+      if (!mode.db)
+        throw new KernelContractError(
+          "Prepared sources require the computation database",
+        );
+      const keys = tables.map((table) => tableKey(requireTable(table)));
+      const revs = await revisions(keys);
+      const value = await load(mode.db);
+      recordAll(scopes, revs, keys);
+      return value;
+    },
     async rows<T extends KeyedTable>(table: T, ids: readonly string[]) {
       const name = requireTable(table);
       let reader = rowReaders.get(name);

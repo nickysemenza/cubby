@@ -46,7 +46,7 @@ import {
 } from "./drift";
 import { householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { rowKey } from "./keys";
+import { rowKey, tableKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
@@ -226,7 +226,9 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       const discovers = [...(write.discovers ?? []), ...started];
       if (!read && !discovers.length) return 0;
       const dirtied = await markDirty(repositoryQueries(db), bound, {
-        keys: read ? write.ids.map((id) => rowKey(name, id)) : [],
+        keys: read
+          ? [tableKey(name), ...write.ids.map((id) => rowKey(name, id))]
+          : [],
         discovers,
         reason: `write:${name}`,
       });

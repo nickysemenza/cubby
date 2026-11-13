@@ -27,7 +27,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { type FC, useEffect, useId, useMemo, useRef } from "react";
+import { type FC, useEffect, useId, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 
@@ -35,7 +35,6 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { DiscardLineFields } from "~/features/inventory/discard-line-fields";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
-import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -132,9 +131,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
   onComplete,
 }) => {
   const adjustInventoryId = useId();
-  const receiptHandler = useRef<((recordId: string) => Promise<void>) | null>(
-    null,
-  );
   const entries = product.inventoryEntry;
   const soleEntry = entries.length === 1 ? entries[0] : undefined;
 
@@ -164,12 +160,7 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
       `Discarded ${Math.abs(result.storedQuantity)} × ${product.name}${
         result.inventory?.removed ? " — shelf entry removed" : ""
       }`,
-    onSuccess: async (result) => {
-      try {
-        await receiptHandler.current?.(result.expenseId);
-      } catch (error) {
-        showErrorToast(error);
-      }
+    onSuccess: async () => {
       await onComplete?.();
       close(false);
     },
@@ -297,7 +288,6 @@ export const ProductDiscardDialog: FC<ProductDiscardDialogProps> = ({
                   fraction
                 />
                 <DiscardLineFields
-                  receiptHandler={receiptHandler}
                   form={form}
                   productId={product.id}
                   productName={product.name}

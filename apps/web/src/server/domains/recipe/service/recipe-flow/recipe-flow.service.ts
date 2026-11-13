@@ -12,7 +12,6 @@ import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-rea
 
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
-import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -24,8 +23,7 @@ import {
   recipeFlowOrThrow,
   type RecipeFlowReadPorts,
 } from "~/server/domains/recipe/repo/recipe-flow-state";
-
-import { validateRecipeFlowPlan } from "./validation";
+import { validateRecipeFlowPlan } from "~/server/domains/recipe/repo/recipe-flow-validation";
 
 type PersistFlowArtifactInput = {
   feature: typeof RECIPE_FLOW_PRIMARY_FEATURE;
@@ -51,7 +49,7 @@ export interface RecipeFlowPorts extends RecipeFlowReadPorts {
 
 const productionRecipeFlowPorts: RecipeFlowPorts = {
   ...productionRecipeFlowReadPorts,
-  persistArtifact: async (db, recipeId, input) => {
+  persistArtifact: async (_db, _recipeId, input) => {
     const artifact = recipeFlowArtifactSchema.parse({
       plan: input.plan,
       guidance: input.guidance,
@@ -61,16 +59,7 @@ const productionRecipeFlowPorts: RecipeFlowPorts = {
       promptVersion: input.feature.promptVersion,
       generatedAt: new Date(),
     });
-    return await upsertAiAnalysis(
-      db,
-      {
-        entityKind: "recipe",
-        entityId: recipeId,
-        feature: input.feature,
-        inputFingerprint: input.fingerprint,
-      },
-      artifact,
-    );
+    return artifact;
   },
   recordFeatureUsage,
   generateRecipeFlow: (...args) => getAiClient().generateRecipeFlow(...args),
@@ -193,6 +182,11 @@ export async function generateRecipeFlow(
       // the request body is unchanged, so an unforced call would be served
       // the very flow the user asked to replace.
       force: input.force,
+      answerRevision: {
+        contentFingerprint: fingerprint,
+        guidance,
+        ...(input.force ? { regeneration: crypto.randomUUID() } : {}),
+      },
       // The runner's own repair pass now owns rejecting an invalid
       // candidate (one retry, then throw) — this used to be a second call
       // this service placed by hand. `assessRecipeFlowCandidate` below is

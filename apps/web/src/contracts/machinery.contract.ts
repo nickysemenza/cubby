@@ -1,4 +1,6 @@
 import { entitySchema } from "@cubby/schemas/entity";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { anyShortcodeSchema } from "@cubby/schemas/identifiers";
 import { machinery } from "@cubby/schemas/kernel/machinery";
 import { decisionChannel, decisionKind } from "@cubby/schemas/kernel/stage";
 import { z } from "zod";
@@ -9,7 +11,7 @@ import { defineContract, mutation, query } from "~/contracts/define";
 const machineryRecord = z.strictObject({
   entity: entitySchema,
   /** The record's public shortcode. */
-  id: z.string().min(1),
+  id: anyShortcodeSchema(shortcodeEntities),
 });
 
 const machineryDecision = z.strictObject({
@@ -89,5 +91,5 @@ export const machineryContract = defineContract(
       invalidates: DECISION_INVALIDATES,
     }),
   },
-  { exposure: "view" },
+  { exposure: "capability" },
 );

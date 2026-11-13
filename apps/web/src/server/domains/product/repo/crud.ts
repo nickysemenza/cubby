@@ -2403,7 +2403,12 @@ export const quickCreateProductRecord = async (
   // Product behind for the recovery to find instead of the winner.
   const { newProduct } = await withTransaction(db, async (tx) => {
     const brandId = await resolveProductBrand(tx, data.brandId);
-    const productValues = { ...values, brandId };
+    const fields = holdFieldsValues(
+      "product",
+      { ...values, brandId },
+      "create",
+    );
+    const productValues = fields.values;
     // An explicit `shortcode` only comes from the import/restore path, which is
     // replaying a code that already exists; everything else mints one through
     // `insertWithShortcode` so it gets the collision retry.
@@ -2418,11 +2423,7 @@ export const quickCreateProductRecord = async (
       await applyPrimaryBarcode(tx, inserted.id, incomingGtin);
     }
 
-    await holdFieldsValues("product", productValues, "create").settle(
-      tx,
-      actor,
-      inserted.id,
-    );
+    await fields.settle(tx, actor, inserted.id);
     await logAuditEntry(tx, actor, {
       entityKind: "product",
       entityId: inserted.id,

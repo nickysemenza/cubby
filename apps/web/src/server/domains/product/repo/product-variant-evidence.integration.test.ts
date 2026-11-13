@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable, inventoryEntry, product } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -139,12 +140,14 @@ describe("retained Product identity conflict guards", () => {
     await retainHistory(ids, {
       snapshots: [{ verifiedModel: "SYNTH-A" }, { verifiedModel: "SYNTH-B" }],
     });
-    await getDb(ctx.db)
-      .update(product)
-      .set({
-        brandId: await findOrCreateVendor(ctx.db, "Corrected synthetic maker"),
-      })
-      .where(inArray(product.id, [...ids]));
+    const correctedBrand = await findOrCreateVendor(
+      ctx.db,
+      "Corrected synthetic maker",
+    );
+    for (const id of ids)
+      await setFieldsFixture(ctx.db, "product", id, {
+        brandId: correctedBrand,
+      });
     expect(await prepareProductIdentityPair(ctx.db, ids)).toMatchObject({
       conflict: false,
       verification: "pending_verification",

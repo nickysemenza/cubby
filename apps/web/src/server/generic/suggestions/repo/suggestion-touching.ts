@@ -73,7 +73,12 @@ export function suggestionStateAdmission(
       eligibility.family ? eq(s.family, eligibility.family) : undefined,
     );
   return and(
-    inArray(s.family, [...eligibility.families]),
+    inArray(
+      s.family,
+      eligibility.families.filter(
+        (family) => family !== "field" && family !== "recommendation",
+      ),
+    ),
     eq(s.status, eligibility.status),
     eligibility.status === suggestionStatus.enum.pending ? s.active : undefined,
     eligibility.runCode

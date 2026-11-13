@@ -3,24 +3,32 @@ import {
   type RecipeFlowArtifact,
   type RecipeFlowState,
   recipeFlowArtifactSchema,
+  recipeFlowAiPlanSchema,
+  safeNormalizeRecipeFlowAiPlan,
 } from "@cubby/schemas/recipe-flow";
 import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 import { sha256Hex } from "@cubby/shared/sha256";
+import { sql } from "drizzle-orm";
+import { z } from "zod";
 
 import { RECIPE_FLOW_IDENTITY } from "~/server/ai/policy/feature-identity";
-import {
-  listAiAnalysesForEntityFeature,
-  type StoredAiAnalysis,
-} from "~/server/ai/repo/ai-analysis";
 import type { Database } from "~/server/db";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { readRecipeById } from "~/server/domains/recipe/repo/crud";
+import { validateRecipeFlowPlan } from "~/server/domains/recipe/repo/recipe-flow-validation";
 import { createAppError } from "~/server/errors/app-error";
 
 /**
  * The stored recipe walkthrough and whether it still matches the recipe. Reads
  * never generate; `service/recipe-flow/recipe-flow.service.ts` owns generation.
  */
-type FlowCandidate = StoredAiAnalysis<RecipeFlowArtifact>;
+type FlowCandidate = {
+  inputFingerprint: string;
+  model: string;
+  promptVersion: string;
+  result: RecipeFlowArtifact;
+  updatedAt: Date;
+};
 
 export interface RecipeFlowReadPorts {
   readonly getRecipe: (
@@ -35,14 +43,75 @@ export interface RecipeFlowReadPorts {
 
 export const productionRecipeFlowReadPorts: RecipeFlowReadPorts = {
   getRecipe: readRecipeById,
-  listCandidates: async (db, recipeId) =>
-    await listAiAnalysesForEntityFeature(db, {
-      entityKind: "recipe",
-      entityId: recipeId,
-      feature: RECIPE_FLOW_IDENTITY.feature,
-      promptVersion: RECIPE_FLOW_IDENTITY.promptVersion,
-      schema: recipeFlowArtifactSchema,
-    }),
+  listCandidates: async (db, recipeId) => {
+    const recipe = await readRecipeById(db, recipeId);
+    const warningsFor = (plan: RecipeFlowArtifact["plan"]) => {
+      const validation = recipe ? validateRecipeFlowPlan(recipe, plan) : null;
+      return validation?.ok ? validation.warnings : [];
+    };
+    const selected = await repositoryQueries(db).execute<{
+      output: unknown;
+      model: string | null;
+      promptVersion: string;
+      createdAt: Date;
+      revision: unknown;
+    }>(sql`
+      SELECT DISTINCT a.output, a.model, a."promptVersion", a."createdAt", k.input->${"input"}->${"revision"} AS revision
+      FROM "Answer" a JOIN "Ask" k ON k.id=a."askId" JOIN "AskScope" s ON s."askId"=k.id
+      WHERE a.feature=${RECIPE_FLOW_IDENTITY.feature} AND a."promptVersion"=${RECIPE_FLOW_IDENTITY.promptVersion}
+        AND s."scopeKind"=${"record"} AND s."scopeKey"=${`recipe:${recipeId}`}
+      ORDER BY a."createdAt" DESC LIMIT 50`);
+    return selected.rows.flatMap((raw) => {
+      const row = z
+        .object({
+          output: z.object({ value: z.unknown() }),
+          model: z.string(),
+          promptVersion: z.string(),
+          createdAt: z.coerce.date(),
+          revision: z.object({
+            contentFingerprint: z.string(),
+            guidance: z.string().nullable(),
+          }),
+        })
+        .safeParse(raw);
+      if (!row.success) return [];
+      const retained = recipeFlowArtifactSchema.safeParse(
+        row.data.output.value,
+      );
+      if (retained.success)
+        return [
+          {
+            inputFingerprint: row.data.revision.contentFingerprint,
+            model: row.data.model,
+            promptVersion: row.data.promptVersion,
+            result: retained.data,
+            updatedAt: row.data.createdAt,
+          },
+        ];
+      const candidate = recipeFlowAiPlanSchema.safeParse(row.data.output.value);
+      if (!candidate.success) return [];
+      const plan = safeNormalizeRecipeFlowAiPlan(candidate.data);
+      if (!plan.success) return [];
+      const artifact = recipeFlowArtifactSchema.parse({
+        plan: plan.data,
+        guidance: row.data.revision.guidance,
+        contentFingerprint: row.data.revision.contentFingerprint,
+        model: row.data.model,
+        promptVersion: row.data.promptVersion,
+        generatedAt: row.data.createdAt,
+        warnings: recipe ? warningsFor(plan.data) : [],
+      });
+      return [
+        {
+          inputFingerprint: artifact.contentFingerprint,
+          model: artifact.model,
+          promptVersion: artifact.promptVersion,
+          result: artifact,
+          updatedAt: row.data.createdAt,
+        },
+      ];
+    });
+  },
 };
 
 export interface RecipeFlowPromptInput {

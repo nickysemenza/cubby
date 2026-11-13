@@ -85,6 +85,8 @@ export async function controlWorkflowRun(
     });
     return;
   }
+  if (purpose === "ai_refresh")
+    throw new Error("This Run has no current fields scope to resume");
   if (input.action === "run_now_paid") {
     // Every background frontier Workflow shares funding admission. Discovery
     // grants also cover its child imports; unrelated auth pauses stay blocked.

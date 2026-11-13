@@ -25,7 +25,20 @@ export async function produceFieldAnswer(
   db: Database,
   input: FieldAskInput,
   runId: string | null,
-): Promise<Produced<FieldAnswer>> {
+  prepareOnly = false,
+): Promise<
+  Produced<
+    FieldAnswer & {
+      questions?: import("zod").z.infer<
+        typeof import("~/server/ai/evaluation-inputs").preparedQuestion
+      >[];
+    }
+  >
+> {
+  if (!prepareOnly && !input.questions)
+    throw new JobEvidenceObsoleteError(
+      "The field question has no prepared model inputs",
+    );
   const plan = fieldPlan(input.entity, input.field);
   if (!plan)
     throw new Error(`${input.entity}.${input.field} is not a fields column`);
@@ -72,24 +85,38 @@ export async function produceFieldAnswer(
     }
   }
   const operation = `suggestFields.${prepared.entity}.${input.field}`;
-  const { result: evaluated, inputs } = await withAiInputs(false, () =>
-    suggestFields(
-      db,
-      aiRunOwner(runId ? runEntityId.parse(runId) : null),
-      {
-        entity: prepared.entity,
-        entityId: prepared.publicId,
-        targets: [input.field],
-        basisMode: "provided",
-        basis: prepared.basis,
-      },
-      {
-        applicationCache: false,
-        recordId: input.recordId,
-        precedentText: precedentLines(input.precedents, labelById),
-      },
-    ),
+  const captured = await withAiInputs(
+    prepareOnly,
+    () =>
+      suggestFields(
+        db,
+        aiRunOwner(runId ? runEntityId.parse(runId) : null),
+        {
+          entity: prepared.entity,
+          entityId: prepared.publicId,
+          targets: [input.field],
+          basisMode: "provided",
+          basis: prepared.basis,
+        },
+        {
+          applicationCache: false,
+          decisionModel: FIELD_SUGGESTION_FEATURE.model,
+          recordId: input.recordId,
+          precedentText: precedentLines(input.precedents, labelById),
+        },
+      ),
+    { providerFree: true, expected: prepareOnly ? undefined : input.questions },
   );
+  const { result: evaluated, inputs } = captured;
+  if (prepareOnly)
+    return {
+      output: {
+        proposal: null,
+        outcome: "prepared",
+        questions: captured.questions,
+      },
+      model: null,
+    };
   const model =
     [...inputs].reverse().find((call) => call.operation === operation)?.model ??
     null;

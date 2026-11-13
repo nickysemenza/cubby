@@ -158,7 +158,7 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
           current,
           reconciler,
           rows.rows.map((row) => ({ kind: reconciler.scope, key: row.key })),
-          { locked: false, hideBaseline: true },
+          { db, locked: false, hideBaseline: true },
         );
         await claim.fenced(async (tx) => {
           for (const scope of computed)
@@ -268,6 +268,7 @@ export async function approveDrift(
   if (!claimed) return "busy";
   const reconciler = registry.reconcilers.get(scope.kind)!;
   const [computed] = await computeBatch(q, registry, reconciler, [scope], {
+    db,
     locked: false,
     hideBaseline: true,
   });

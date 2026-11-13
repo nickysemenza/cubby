@@ -568,6 +568,27 @@ export const ledgerSourceClaim = pgTable(
  */
 
 /** One immutable observation from a location photo pass. */
+export const connectionCandidateEvidence = pgTable(
+  "ConnectionCandidateEvidence",
+  {
+    id: pkUuid(),
+    scopeKey: text("scopeKey").notNull(),
+    fingerprint: text("fingerprint")
+      .notNull()
+      .unique("ConnectionCandidateEvidence_fingerprint_key"),
+    sourceEntity: text("sourceEntity").notNull(),
+    sourceId: uuid("sourceId").notNull(),
+    targetEntity: text("targetEntity").notNull(),
+    targetId: uuid("targetId").notNull(),
+    candidate: jsonb("candidate").notNull().$type<KernelJson>(),
+    basis: jsonb("basis").notNull().$type<KernelJson>(),
+    createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("ConnectionCandidateEvidence_scope_idx").on(table.scopeKey),
+  ],
+);
+
 export const mailHandlingReceipt = pgTable("MailHandlingReceipt", {
   id: pkUuid(),
   runId: uuid("runId")
@@ -885,10 +906,6 @@ type AppSettingValue =
   | null
   | AppSettingValue[]
   | { [key: string]: AppSettingValue };
-
-// Activation identity is shared by its writer and prepared-evidence read fences.
-export const AI_REFRESH_ACTIVATION_SETTINGS_ID =
-  "00000000-0000-4000-8000-000000000074";
 
 export const appSettings = pgTable("AppSettings", {
   id: pkUuid(),

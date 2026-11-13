@@ -2,6 +2,7 @@ import { emailReclassifyResult } from "@cubby/schemas/email-actions";
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
 import type { Database } from "~/server/db";
+import { readReclassificationReceipts } from "~/server/domains/purchase-import/repo/gmail/reclassification-receipt";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import type { RunRow } from "~/server/domains/run/repo/ai-work-state";
 
@@ -63,6 +64,12 @@ export async function executeReclassificationTarget(
     runId: owner.id,
     reclassify: true,
   });
+  const published = (await readReclassificationReceipts(db, owner.id)).find(
+    (row) =>
+      row.key ===
+      `${owner.id}:reclassification:${current.id}:${target.checksum}`,
+  );
+  if (published) return published.result;
   const after = await readReclassifiedEmail(db, current.id);
   if (!after || after.deletedAt || after.status === "deleted")
     return result("removed", after);

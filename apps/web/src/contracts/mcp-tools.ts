@@ -61,6 +61,14 @@ const usdaFood = (output: {
 
 /** MCP-only metadata: kernel verbs, tool descriptions, and schema/output shaping. */
 export const MCP_TOOL_DESCRIPTIONS = {
+  machinery_read: {
+    description:
+      "Read record and field machinery: gaps, model Answers, Decisions and owed Asks.",
+  },
+  machinery: {
+    description:
+      "Record the Decisions offered by a record's gaps or approve its exact drift proposal.",
+  },
   activity: { description: "What changed recently, and what needs fixing." },
   ai: {
     description: "Agent-facing AI operations, usage, and suggestion work.",

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb, mapImages } from "~/server/db/helpers";
@@ -21,7 +22,6 @@ import {
   sourceTransactionRecord,
   image,
   imageDerivative,
-  product,
   vendor,
 } from "~/server/db/schema";
 import {
@@ -902,10 +902,9 @@ describe("entity display image resolver", () => {
         { name: "Labelled borrowed ingredient" },
         ctx.actor,
       );
-      await getDb(ctx.db)
-        .update(product)
-        .set({ ingredientId: ingredient.entityId })
-        .where(eq(product.id, labelledProduct.entityId));
+      await setFieldsFixture(ctx.db, "product", labelledProduct.entityId, {
+        ingredientId: ingredient.entityId,
+      });
       const borrowed = await withDisplayImages(
         ctx.db,
         "ingredient",

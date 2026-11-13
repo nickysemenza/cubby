@@ -23,7 +23,7 @@ export class GatewayAdmissionWaitError extends Error {
     super("AI Gateway admission is waiting for shared capacity");
   }
 }
-export const gatewayAdmissionWait = (error: UnparsedError) =>
+const gatewayAdmissionWait = (error: UnparsedError) =>
   findErrorCause(
     error,
     (cause): cause is GatewayAdmissionWaitError =>

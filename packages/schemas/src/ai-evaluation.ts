@@ -59,17 +59,8 @@ export const suggestionSupersessionReceipt = z.object({
 export type SuggestionSupersessionReceipt = z.infer<
   typeof suggestionSupersessionReceipt
 >;
-/** Domain states only: retry and lease state belong to the drain's work item. */
-export const aiEvaluationState = z.enum([
-  "queued",
-  "result_ready",
-  "completed",
-  "blocked",
-  "failed",
-  "obsolete",
-  "cancelled",
-]);
-export const aiExecutionKind = z.enum([
+
+const aiExecutionKind = z.enum([
   "ai_refresh",
   "mail_reclassify",
   "suggestion_sweep",
@@ -93,9 +84,8 @@ export const fieldAutomationCause = z.object({
   ]),
   ref: z.string().optional(),
 });
-export type FieldAutomationCause = z.infer<typeof fieldAutomationCause>;
 
-export const aiEvaluationTarget = z.discriminatedUnion("kind", [
+const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.field),
     entity: z.string(),

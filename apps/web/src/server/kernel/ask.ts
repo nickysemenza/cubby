@@ -102,6 +102,12 @@ async function readAnswerOutput(
   return row ? row.output : undefined;
 }
 
+/** Every requester retains a durable reference to the Answer, including a replay. */
+async function recordAnswerReceipts(q: Q, askId: string, inputHash: string) {
+  await q.execute(sql`UPDATE "AskScope" s SET receipt=jsonb_build_object(${"answer"}::text, jsonb_build_object(${"inputHash"}::text, a."inputHash"))
+    FROM "Answer" a WHERE s."askId"=${askId}::uuid AND a."inputHash"=${inputHash} AND s.receipt IS NULL`);
+}
+
 type AskRow = {
   id: string;
   state: string;
@@ -168,6 +174,7 @@ async function ensureAsk(
       SELECT ${row.id}::uuid, w.kind, w.key, w."runId"::uuid
       FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS w(kind text, key text, "runId" text)
       ON CONFLICT DO NOTHING`);
+  await recordAnswerReceipts(q, row.id, inputHash);
   return row;
 }
 
@@ -257,6 +264,7 @@ async function commitAnswer(
         runId,
       })
       .onConflictDoNothing();
+    await recordAnswerReceipts(q, ask.id, ask.inputHash);
     // A late receipt may settle the attempt; applies still fence on their inputs.
     await q.execute(sql`
       UPDATE "Ask" SET state = ${ASK.answered}, "answeredAt" = now(), "claimToken" = NULL,

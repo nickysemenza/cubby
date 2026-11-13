@@ -21,7 +21,7 @@ const automaticFeatures = new Set([
   "mailbox-triage",
   "mailbox-relevance",
 ]);
-export const fieldPolicyKey = (entity: string, field: string) =>
+const fieldPolicyKey = (entity: string, field: string) =>
   `field:${entity}.${field}`;
 
 /** Field work depends on review and automatic assignment policy as well as inference. */
@@ -127,30 +127,4 @@ export function dependencyStamps(
     .flatMap((feature) =>
       manifest[feature] ? [{ feature, ...manifest[feature] }] : [],
     );
-}
-
-export function dependenciesCurrent(
-  provenance: AiProvenance,
-  manifest: AiRefreshManifest,
-) {
-  return provenance.dependencies.every((stamp) => {
-    const active = manifest[stamp.feature];
-    return (
-      active &&
-      active.promptVersion === stamp.promptVersion &&
-      active.policyFingerprint === stamp.policyFingerprint &&
-      active.generation === stamp.generation
-    );
-  });
-}
-
-export function fieldDependencyKeys(entity: string, field: string) {
-  const policy = fieldDecisionRows().find(
-    (row) => row.entity === entity && row.field === field,
-  );
-  return [
-    "field-suggestion",
-    fieldPolicyKey(entity, field),
-    ...(policy?.roster ? ["selection-overflow"] : []),
-  ];
 }

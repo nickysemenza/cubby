@@ -173,7 +173,7 @@ describe("list selection and relation loading", () => {
       (await loadSuggestionRowCounts(ctx.db, "task", [listed.id])).get(
         listed.id,
       ),
-    ).toBe(0);
+    ).toBe(1);
   });
 
   it("keeps quality aliases and exact totals when loading an ordered page", async () => {

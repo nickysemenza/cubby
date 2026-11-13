@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 
-import { modelAskFor, type ModelInput } from "~/server/ai/model-asks";
+import {
+  modelAskFor,
+  structuredModelInput,
+  type ModelInput,
+} from "~/server/ai/model-asks";
 import {
   LOCATION_DESCRIPTION_FEATURE,
   RUN_SUMMARY_FEATURE,
@@ -60,10 +64,9 @@ export async function loadAnalysis(
       [rowKey("Run", id)],
       sql`${runStep.runId} = ${id}`,
     );
-    return {
-      kind: "structured",
-      model: RUN_SUMMARY_FEATURE.model,
-      request: RUN_SUMMARY_FEATURE.request({
+    return structuredModelInput(
+      RUN_SUMMARY_FEATURE,
+      RUN_SUMMARY_FEATURE.request({
         purpose: row.purpose,
         status: row.status,
         failureCode: row.failureCode,
@@ -77,7 +80,7 @@ export async function loadAnalysis(
           skipped: step.skipped,
         })),
       }),
-    };
+    );
   }
   return null;
 }
@@ -92,19 +95,18 @@ export function locationDescriptionInput(
   images: readonly { id: string; url: string; updatedAt: Date }[],
 ): ModelInput {
   const ordered = [...images].sort((a, b) => a.id.localeCompare(b.id));
-  return {
-    kind: "structured",
-    model: LOCATION_DESCRIPTION_FEATURE.model,
-    request: LOCATION_DESCRIPTION_FEATURE.request(
+  return structuredModelInput(
+    LOCATION_DESCRIPTION_FEATURE,
+    LOCATION_DESCRIPTION_FEATURE.request(
       ordered.map((photo) => photo.url),
       name,
     ),
-    revision: {
+    {
       locationName: name,
       images: ordered.map((photo) => ({
         id: photo.id,
         updatedAt: photo.updatedAt.toISOString(),
       })),
     },
-  };
+  );
 }

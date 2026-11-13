@@ -114,12 +114,6 @@ export async function rosterSuggestionTargets(
         ].map((key) => [key, basisValueOf(valueOf(key))]),
       );
       for (const field of input.fields) {
-        const envelope = fieldEnvelopeFor(row, field);
-        if (
-          Object.hasOwn(governedFields, field) &&
-          (!envelope || envelope.result.kind === "missing")
-        )
-          continue;
         const currentValue = suggestionValueSchema.parse(
           valueOf(field) ?? null,
         );

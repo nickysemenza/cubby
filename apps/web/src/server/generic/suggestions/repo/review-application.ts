@@ -22,7 +22,6 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion";
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import { acknowledgeSavedField } from "~/server/generic/suggestions/repo/suggestion-field-receipt";
 import {
   changedTerms,
   reviewKey,
@@ -101,15 +100,7 @@ export function executeReviewApplication(
       let applicationResult: z.infer<
         typeof suggestionReviewOut
       >["applicationResult"];
-      if (input.application?.kind === "saved_field") {
-        ({ event } = await writeReview(transactionDb));
-        await acknowledgeSavedField(transactionDb, context, prediction, {
-          recordId: input.application.recordId,
-          operationId: input.operationId,
-          correction: input.correction,
-          commandFeedback: event,
-        });
-      } else {
+      {
         if ("lockForApply" in family && family.lockForApply)
           await family.lockForApply(transactionDb, prediction);
         const query = getDb(transactionDb)
@@ -155,7 +146,7 @@ export function executeReviewApplication(
           applicableState,
         );
         applicationResult =
-          (await family.apply(
+          (await family.apply!(
             transactionDb,
             { ...context, db: transactionDb },
             applicableState,

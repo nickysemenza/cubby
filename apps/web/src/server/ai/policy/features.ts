@@ -3,7 +3,7 @@
  *
  * Every feature-runner call is declared here once — tier (which
  * decides the model), token cap, reasoning effort, whether the gateway may
- * cache it, the prompt version the AiAnalysis store keys on, and the schema
+ * cache it, the prompt version the Answer envelope keys on, and the schema
  * the model must return. `run-feature.ts` (or `decision-model.ts`) alone reads a
  * record to actually place a call, so a gateway-wide policy change (a cache
  * TTL, a new middleware, a tier's model) is one edit here or there rather
@@ -11,7 +11,7 @@
  *
  * `model` is DERIVED from `tier` ({@link MODEL_FOR_TIER}): retiering a
  * feature moves its model, and swapping a tier's model moves every feature on
- * it. The AiAnalysis fingerprint and cache key read `model` off the record,
+ * it. The Answer envelope and cache key read `model` off the record,
  * so both follow automatically. A chat feature's tier is its ceiling: the
  * runner answers on the fast tier first and spends each stronger tier once,
  * only on an unusable or invalid answer (ADR 0027).

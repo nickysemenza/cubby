@@ -10,7 +10,6 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type {
   StatementSuggestionOut,
   StatementTransactionAction,
@@ -38,7 +37,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
-import { suggestionCounts } from "~/server/generic/suggestions/repo/suggestion-review";
+import { suggestionCounts } from "~/server/generic/suggestions/repo/field-gaps";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 type ShortcodeEntity = SuggestionRecordRef["entity"];
@@ -179,7 +178,7 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
 export const verbs = (...list: Action["verb"][]): Action[] =>
   list.map((verb) => ({ verb, ownerOnly: false }));
 
-export const qualityImpact = (check: DataCheck): SuggestionImpact => ({
+const qualityImpact = (check: DataCheck): SuggestionImpact => ({
   kind: "quality_check",
   label: dataCheckPresentation[check].satisfiedLabel,
   qualityCheck: check,
@@ -204,7 +203,7 @@ export const keyBase = (key: SuggestionKey) => ({
 
 // ---------------------------------------------------------------- field
 
-export const fieldChecks = new Map<string, DataCheck[]>();
+const fieldChecks = new Map<string, DataCheck[]>();
 for (const [entity, checks] of Object.entries(dataChecksByEntity))
   for (const check of checks.options) {
     const placement = dataCheckPresentation[check].placement;
@@ -217,18 +216,6 @@ for (const [entity, checks] of Object.entries(dataChecksByEntity))
     const key = `${entity}.${placement.field}`;
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
-
-/**
- * A field Suggestion's only evidence is the decision model's confidence, and
- * confidence alone never makes a Suggestion strong or clean (terminology:
- * Strength; ADR 0016 amendment). Its Automatic rule, not bulk accept, is
- * what may apply a confident Addition unattended.
- */
-export const fieldStrength = (confidence: number): SuggestionStrength =>
-  confidence >= 0.85 ? "medium" : "weak";
-
-export const shortcodeEntity = z.enum(shortcodeEntities);
-export const fieldKind = z.enum(["correction", "addition"]);
 
 // ---------------------------------------------------- statement_transaction
 
@@ -326,7 +313,7 @@ export const connectionImpact = {
 
 // Acquisition discovery's indexed lexical/semantic retrieval; every other
 // candidate comes from deterministic record evidence.
-export const RETRIEVED_REASON = "Retrieved from ";
+const RETRIEVED_REASON = "Retrieved from ";
 
 export const connectionStrength = (
   evidence: z.infer<typeof connectionEvidence>,
@@ -354,14 +341,6 @@ export const connectionActions = (proposal: ConnectionProposal): Action[] => {
     ...verbs("reject", "dismiss", "never_suggest"),
   ];
 };
-
-export const connectionImpactCount = sql.join(
-  Object.entries(connectionImpact).map(
-    ([relation, impacts]) =>
-      sql`WHEN ${`connection.${relation}`} THEN ${impacts.filter((impact) => "qualityCheck" in impact).length}::int`,
-  ),
-  sql` `,
-);
 
 export async function transferPairRows(
   db: Database,

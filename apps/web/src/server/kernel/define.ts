@@ -529,4 +529,6 @@ export type Outcome = {
   status: "applied" | "conflict" | "failed" | "waiting" | "clean";
   gaps: readonly KernelGap[];
   error?: string;
+  /** Original failure for transactional writers; persisted diagnostics use error. */
+  cause?: unknown;
 };

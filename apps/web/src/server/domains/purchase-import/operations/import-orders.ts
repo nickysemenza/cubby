@@ -37,6 +37,7 @@ import {
   getDb,
   notDeleted,
   withTransaction,
+  databaseForTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
@@ -1043,6 +1044,15 @@ async function finalizeReviewRun(
         ),
       )
       .returning({ purpose: runTable.purpose, input: runTable.input });
+    if (stopped)
+      await (
+        await import("~/server/kernel/api")
+      ).emitWrites(databaseForTransaction(tx), {
+        table: runTable,
+        entity: "run",
+        ids: [runId],
+        columns: ["status", "endedAt", "updatedAt"],
+      });
     if (stopped?.purpose === "mail_import" && stopped.input !== null)
       await releaseUnsettledMailRunSources(tx, runEntityId.parse(runId));
   });
@@ -1489,6 +1499,14 @@ export async function commitPurchaseImport(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.runId));
+        await (
+          await import("~/server/kernel/api")
+        ).emitWrites(transactionDb, {
+          table: runTable,
+          entity: "run",
+          ids: [scope.runId],
+          columns: ["status", "endedAt", "updatedAt"],
+        });
         await recordChange(transactionDb, {
           kind: "source",
           categories: ["run"],

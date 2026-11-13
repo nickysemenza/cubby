@@ -80,58 +80,6 @@ export type SuggestionPublication = {
   projection?: Partial<typeof suggestionTable.$inferInsert>;
 };
 
-/** Builds field evidence; suggestion-publication owns immutable publication and replay. */
-export function fieldSuggestionPublication(
-  projection: Omit<
-    typeof suggestionTable.$inferInsert,
-    "id" | "family" | "publicationKey" | "subject" | "judgment"
-  > & {
-    field: string;
-    recordId: string;
-  },
-): SuggestionPublication {
-  const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
-  const model = projection.model ?? "unknown";
-  return {
-    input: {
-      publicationKey: `field:${crypto.randomUUID()}`,
-      family: "field",
-      subject: {
-        kind: "field",
-        entity: projection.entity,
-        recordId: projection.recordId,
-        field: projection.field,
-      },
-      judgment: {
-        value: z.json().parse(projection.suggestedValue ?? null),
-        confidence: projection.confidence ?? 0,
-        runnerUpValue: z.json().parse(projection.runnerUpValue ?? null),
-        runnerUpConfidence: projection.runnerUpConfidence ?? null,
-        kind: projection.kind ?? "addition",
-      },
-      fingerprint:
-        projection.provenance?.inputFingerprint ??
-        projection.financeReviewFingerprint ??
-        null,
-      producer:
-        model === "unknown"
-          ? null
-          : {
-              kind: "model",
-              model,
-              revision: null,
-              runId: projection.runId ?? null,
-              evaluationId: projection.evaluationId ?? null,
-            },
-      evidence: {
-        currentValue: z.json().parse(projection.currentValue ?? null),
-        provenance: projection.provenance ?? null,
-      },
-    },
-    projection: { ...projection, data },
-  };
-}
-
 /** Recording a grade is independent of applying a correction or changing authority. */
 export async function recordFeedback(
   db: Database,

@@ -135,6 +135,8 @@ const actionCapability = {
   "spending_classification_write.apply": "generic_mutation",
   "ai.apply_finance_category_suggestion": "member_decision",
   "entity_graph.discover": "member_decision",
+  "machinery.decide": "member_decision",
+  "machinery.approve_drift": "member_decision",
 } as const satisfies Record<CubbyMcpMutationAction, RunCapability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>

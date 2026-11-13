@@ -907,6 +907,15 @@ export async function finishMailDiscovery(
     .where(eligibleAttempt(params))
     .returning({ id: runTable.id });
   if (finished)
+    await (
+      await import("~/server/kernel/api")
+    ).emitWrites(db, {
+      table: runTable,
+      entity: "run",
+      ids: [finished.id],
+      columns: ["status", "endedAt"],
+    });
+  if (finished)
     await recordRunProgress(
       db,
       {

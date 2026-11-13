@@ -9,6 +9,8 @@ import type { FactRef, Json, Key, ScopeRef } from "./define";
 
 /** A row of a declared table, read by id. */
 export const rowKey = (table: string, id: string): Key => `row:${table}:${id}`;
+/** Membership and values of a declared roster, including an empty roster. */
+export const tableKey = (table: string): Key => `table:${table}`;
 /** Every decision on one subject, across channels. */
 export const decisionKey = (subject: string): Key => `decision:${subject}`;
 export const answerKey = (inputHash: string): Key => `answer:${inputHash}`;

@@ -3,11 +3,11 @@ import { TEST_ACTOR, TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { seedModelAnswer as upsertAiAnalysis } from "~/server/ai/model-answer.fixtures";
 import {
   LOCATION_DESCRIPTION_FEATURE,
   buildLocationAnalysisFingerprint,
 } from "~/server/ai/policy/features";
-import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   createInventoryFixture,

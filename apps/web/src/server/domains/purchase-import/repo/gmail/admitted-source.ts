@@ -147,6 +147,13 @@ export async function publishGmailEvidence<T>(
         .where(inArray(run.id, runIds))
         .orderBy(asc(run.id))
         .for("no key update");
+    if (input.runId)
+      await (
+        await import("~/server/domains/run/repo/execution-context")
+      ).assertRunExecutable(
+        databaseForTransaction(tx),
+        runEntityId.parse(input.runId),
+      );
     const decline = async (
       reason: "removed" | "frozen" | "changed",
       _current: typeof emailTable.$inferSelect | null,
@@ -159,6 +166,34 @@ export async function publishGmailEvidence<T>(
           observationId,
           outcome: reason,
         });
+      if (input.runId && input.expected) {
+        const [owner] = await tx
+          .select({ purpose: run.purpose })
+          .from(run)
+          .where(eq(run.id, runEntityId.parse(input.runId)));
+        if (owner?.purpose === "mail_reclassify")
+          await (
+            await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt")
+          ).saveReclassificationReceipt(
+            databaseForTransaction(tx),
+            input.runId,
+            input.expected,
+            {
+              result: {
+                id: (
+                  await import("@cubby/schemas/identifiers")
+                ).parseShortcodeFor("email", input.expected.shortcode),
+                outcome: reason,
+                classification: null,
+                stage: null,
+                conflict: false,
+                error: null,
+              },
+              observationId,
+              sourceChecksum: input.expected.checksum,
+            },
+          );
+      }
       return null;
     };
     if (!party) return decline("removed", null);
@@ -203,6 +238,28 @@ export async function publishGmailEvidence<T>(
         observationId,
         outcome: input.removed ? "removed" : undefined,
       });
+    if (input.runId && input.expected) {
+      const [owner] = await tx
+        .select({ purpose: run.purpose })
+        .from(run)
+        .where(eq(run.id, runEntityId.parse(input.runId)));
+      if (owner?.purpose === "mail_reclassify") {
+        const { reclassificationReceipt, saveReclassificationReceipt } =
+          await import("~/server/domains/purchase-import/repo/gmail/reclassification-receipt");
+        await saveReclassificationReceipt(
+          txDb,
+          input.runId,
+          input.expected,
+          await reclassificationReceipt(
+            txDb,
+            input.expected,
+            observationId,
+            result,
+            input.removed,
+          ),
+        );
+      }
+    }
     return result;
   };
   if (scope !== undefined) {

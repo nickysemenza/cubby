@@ -1,12 +1,3 @@
-import { z } from "zod";
-import { fieldSuggestionPublication } from "~/server/generic/suggestions/repo/suggestion";
-import { publishExactSuggestions } from "~/server/generic/suggestions/repo/suggestion-publication";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import {
-  dependencyStamps,
-  fieldDependencyKeys,
-} from "~/server/ai/policy/refresh-manifest";
-import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
@@ -15,7 +6,6 @@ import type { Database } from "~/server/db";
 import {
   emailClassificationObservation,
   emailReview,
-  suggestionTable,
 } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
@@ -98,48 +88,116 @@ export async function seedEmailClassificationFeedback(
   });
 }
 
+/** Seed a retained field Answer and the reconciler gap presented to a member. */
 export async function seedFieldSuggestion(
   db: Database,
-  projection: Parameters<typeof fieldSuggestionPublication>[0],
+  projection: {
+    entity: string;
+    recordId: string;
+    field: string;
+    suggestedValue?: unknown;
+    currentValue?: unknown;
+    confidence?: number;
+    model?: string;
+    runId?: string | null;
+    createdAt?: Date;
+    kind?: string;
+    status?: string;
+    data?: unknown;
+    runnerUpValue?: string | null;
+    runnerUpConfidence?: number | null;
+  },
   _served = true,
 ) {
-  const data = z.record(z.string(), z.json()).parse(projection.data ?? {});
-  if (!("connectionEvidence" in data) && !("liveInputFingerprint" in data))
-    data.liveInputFingerprint = await fieldInputFingerprint(
-      db,
-      projection.entity,
-      projection.recordId,
-      projection.field,
+  const { fieldAsk } = await import("~/server/ai/fields/ask");
+  const { withAsk } = await import("~/server/kernel/api");
+  const { ask, answer } = await import("~/server/db/kernel-schema");
+  const { resolveOrThrow } =
+    await import("~/server/generic/shortcode/repo/shortcode-resolver");
+  const { fieldReviewPlan } = await import("~/server/ai/fields/repo/plan");
+  const plan = fieldReviewPlan(projection.entity, projection.field);
+  const stored = async (value: string) =>
+    plan?.field.reference
+      ? await resolveOrThrow(db, plan.field.reference, value)
+      : value;
+  const proposal =
+    projection.suggestedValue == null
+      ? null
+      : {
+          value: await stored(String(projection.suggestedValue)),
+          label: null,
+          confidence: projection.confidence ?? 0.8,
+          runnerUp: projection.runnerUpValue
+            ? {
+                value: await stored(projection.runnerUpValue),
+                label: null,
+                confidence: projection.runnerUpConfidence ?? 0,
+              }
+            : null,
+        };
+  const input = {
+    entity: projection.entity,
+    recordId: projection.recordId,
+    field: projection.field,
+    row: { synthetic: randomUUID() },
+    precedents: [],
+  };
+  await withAsk(
+    db,
+    {
+      ...fieldAsk,
+      admit: async () => {},
+      produce: async () => ({
+        output: { proposal, outcome: proposal ? "pick" : "none" },
+        model: projection.model ?? "synthetic",
+      }),
+    },
+    input,
+    {
+      runId: projection.runId ?? undefined,
+      record: { entity: projection.entity, id: projection.recordId },
+    },
+  );
+  const [row] = await getDb(db)
+    .select({ id: ask.id, inputHash: answer.inputHash })
+    .from(ask)
+    .innerJoin(answer, eq(answer.askId, ask.id))
+    .where(
+      sql`${ask.input}->${"input"}->'row'->>'synthetic'=${input.row.synthetic}`,
     );
-  const [row] = await publishExactSuggestions(db, [
-    fieldSuggestionPublication({ ...projection, data }),
-  ]);
-  if (!row) throw new Error("Synthetic field publication returned no row");
-  return row;
-}
-
-/**
- * Stamp a seeded field Suggestion with the current executable AI policy, as a
- * real evaluation would, so the automatic gate can apply it.
- */
-export async function stampCurrentFieldProvenance(
-  db: Database,
-  suggestion: { id: string },
-  entity: string,
-  field: string,
-) {
+  if (!row) throw new Error("Synthetic Answer missing");
+  const subject = `${projection.entity}:${projection.recordId}`;
+  const used = [{ kind: "answer", inputHash: row.inputHash }];
+  const gaps =
+    proposal && plan
+      ? [
+          {
+            kind: "decision",
+            input: "Review field",
+            actor: { kind: "member" },
+            actions: [
+              {
+                channel: "assignment",
+                kind: "set",
+                subject,
+                field: projection.field,
+                value: proposal.value,
+              },
+            ],
+          },
+        ]
+      : [];
   await getDb(db)
-    .update(suggestionTable)
-    .set({
-      provenance: {
-        dependencies: dependencyStamps(
-          await producingAiManifest(db),
-          fieldDependencyKeys(entity, field),
-        ),
-        inputFingerprint: "synthetic",
-        optionFingerprint: "synthetic",
-        model: "typesafe/jev",
-      },
-    })
-    .where(eq(suggestionTable.id, suggestion.id));
+    .execute(sql`INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, inputs, gaps)
+    VALUES ('fields', ${subject}, 1, 'synthetic', ${"needs_you"}, ${JSON.stringify(used)}::jsonb, ${JSON.stringify(gaps)}::jsonb)
+    ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET inputs="ScopeState".inputs || excluded.inputs, gaps="ScopeState".gaps || excluded.gaps`);
+  await getDb(db).execute(
+    sql`DELETE FROM "ScopeDirty" WHERE "scopeKind"=${"fields"} AND "scopeKey"=${subject}`,
+  );
+  return {
+    ...projection,
+    id: row.id,
+    fingerprint: row.id,
+    family: "field" as const,
+  };
 }

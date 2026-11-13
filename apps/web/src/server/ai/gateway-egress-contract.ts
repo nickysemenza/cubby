@@ -64,7 +64,6 @@ export type CreditRefusal = Omit<
   "kind"
 >;
 export interface AiGatewayEgressRpc {
-  currentDeploymentVersion(): Promise<string>;
   fetch(request: Request): Promise<Response>;
   admit(
     bucket: string,

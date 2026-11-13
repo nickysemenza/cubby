@@ -72,6 +72,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import {
@@ -477,6 +478,21 @@ const pointEdgeAt = async (
     physical(edge);
   const table = sql.identifier(tableName);
   const column = sql.identifier(columnName);
+  if (
+    tableName === "Product" &&
+    ["ingredientId", "categoryId", "growsPlantId", "brandId"].includes(
+      columnName,
+    )
+  ) {
+    const found = await getDb(db).execute<{ id: string }>(
+      sql`SELECT id FROM "Product" WHERE id::text <> ${targetId} AND "deletedAt" IS NULL LIMIT 1`,
+    );
+    if (!found.rows[0]) return false;
+    await setFieldsFixture(db, "product", found.rows[0].id, {
+      [columnName]: targetId,
+    });
+    return true;
+  }
   const attempt = (statement: SQL) =>
     getDb(db)
       .transaction(

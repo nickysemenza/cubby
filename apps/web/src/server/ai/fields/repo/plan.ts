@@ -183,3 +183,49 @@ export function fieldPlan(
   const found = plan?.fields.find((candidate) => candidate.key === field);
   return plan && found ? { entity: plan, field: found } : null;
 }
+
+/** The physical target of a field decision, including authored producer proposals. */
+export function fieldReviewPlan(
+  entity: string,
+  field: string,
+): ReturnType<typeof fieldPlan> {
+  const owned = fieldPlan(entity, field);
+  if (owned) return owned;
+  if (!isShortcodeEntity(entity)) return null;
+  const table = SHORTCODE_TABLE[entity];
+  if (
+    !Object.hasOwn(getTableColumns(table), field) ||
+    ["id", "shortcode", "createdAt", "updatedAt", "deletedAt"].includes(field)
+  )
+    return null;
+  const model = entityFieldModels[entity].fields.find(
+    (model) => model.key === field,
+  );
+  if (!model) return null;
+  const ref = "reference" in model ? model.reference : null;
+  const reference =
+    ref && "entity" in ref && isShortcodeEntity(ref.entity) ? ref.entity : null;
+  const descriptor: FieldPlan = {
+    key: field,
+    apply: "offer",
+    fillOnly: false,
+    undecided: null,
+    reference,
+    basis: [],
+    parents: [],
+  };
+  return {
+    entity: fieldsPlanOf(entity) ?? {
+      entity,
+      table,
+      tableName: getTableName(table),
+      fields: [descriptor],
+      reads: [field],
+      writes: [],
+      label: null,
+      hasDeletedAt: "deletedAt" in table,
+      hasUpdatedAt: "updatedAt" in table,
+    },
+    field: descriptor,
+  };
+}

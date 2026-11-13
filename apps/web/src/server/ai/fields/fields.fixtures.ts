@@ -32,3 +32,15 @@ export async function insertFieldsFixture<T extends ShortcodeType>(
     };
   });
 }
+
+/** Seed an assignment on an existing synthetic row through the owning writer boundary. */
+export async function setFieldsFixture(
+  db: Database,
+  entity: string,
+  id: string,
+  values: Readonly<Record<string, string | null>>,
+) {
+  await withTransactionDatabase(db, async (tx) => {
+    await holdFieldsValues(entity, values).settle(tx, systemActor(), id);
+  });
+}

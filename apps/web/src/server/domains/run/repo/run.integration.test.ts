@@ -1,4 +1,4 @@
-import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { type RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
@@ -7,17 +7,10 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import {
-  aiEvaluation,
-  aiEvaluationRequest,
-  image as imageTable,
-  imageProcessingJob,
   ledgerParty,
   runControlEvent,
   run as runTable,
 } from "~/server/db/schema";
-import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
-import { IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
-import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -357,7 +350,7 @@ describe("Run attention entity view", () => {
         { runPublicId: history.shortcode, action: "retry" },
         "ai_refresh",
       ),
-    ).rejects.toThrow("no durable evaluation roster");
+    ).rejects.toThrow("no current fields scope");
     await visible(true);
     expect(await readJob(ctx.db, { runId })).toBeNull();
 
@@ -399,7 +392,7 @@ describe("Run attention entity view", () => {
           { runPublicId: pausedEmpty.shortcode, action },
           "ai_refresh",
         ),
-      ).rejects.toThrow("no durable evaluation roster");
+      ).rejects.toThrow("no current fields scope");
       expect(await readJob(ctx.db, { id: pausedExecution.id })).toEqual(
         pausedJob,
       );
@@ -435,7 +428,7 @@ describe("Run attention entity view", () => {
     await advanceRunPass(ctx.db);
     expect(await readRunPass(ctx.db, emptyJobOwner)).toMatchObject({
       state: "waiting",
-      lastError: expect.stringContaining("no durable evaluation roster"),
+      lastError: expect.stringContaining("no current fields scope"),
     });
     expect(
       (
@@ -445,351 +438,6 @@ describe("Run attention entity view", () => {
           .where(eq(runTable.id, emptyJobOwner))
       )[0]?.status,
     ).not.toBe("completed");
-    const [item] = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        runId,
-        executionKind: "ai_refresh",
-        feature: "synthetic-attention",
-        workKey: crypto.randomUUID(),
-        target: {
-          kind: "field",
-          entity: "email",
-          recordId: crypto.randomUUID(),
-          field: "subject",
-          suggestionIds: [],
-        },
-        provenance: {
-          dependencies: [],
-          inputFingerprint: "synthetic",
-          optionFingerprint: "synthetic",
-          model: null,
-        },
-        snapshot: {},
-        state: "failed",
-        result: { syntheticPaidAnswer: true },
-      })
-      .returning();
-    if (!item) throw new Error("Missing synthetic evaluation");
-    await visible(true);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "result_ready" })
-      .where(eq(aiEvaluation.id, item.id));
-    await visible(true);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "blocked" })
-      .where(eq(aiEvaluation.id, item.id));
-    await visible(false);
-    for (const receipt of [
-      { retryEvaluationId: "malformed" },
-      { retryEvaluationId: crypto.randomUUID() },
-      { retryEvaluationId: item.id },
-    ]) {
-      await getDb(ctx.db)
-        .update(aiEvaluation)
-        .set({ receipt })
-        .where(eq(aiEvaluation.id, item.id));
-      await visible(true);
-    }
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ receipt: null, state: "obsolete" })
-      .where(eq(aiEvaluation.id, item.id));
-    const [replacement] = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        ...item,
-        id: crypto.randomUUID(),
-        workKey: crypto.randomUUID(),
-        state: "completed",
-        receipt: null,
-      })
-      .returning();
-    if (!replacement) throw new Error("Missing synthetic replacement");
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ receipt: { retryEvaluationId: replacement.id }, state: "failed" })
-      .where(eq(aiEvaluation.id, item.id));
-    await visible(false);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "result_ready" })
-      .where(eq(aiEvaluation.id, replacement.id));
-    await visible(true);
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "obsolete", receipt: { retryEvaluationId: item.id } })
-      .where(eq(aiEvaluation.id, replacement.id));
-    await visible(true); // A terminal cycle is not settlement evidence.
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({
-        receipt: { retryEvaluationId: crypto.randomUUID(), outcome: "applied" },
-      })
-      .where(eq(aiEvaluation.id, replacement.id));
-    await visible(true); // A supported outcome cannot hide a dangling replacement.
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ receipt: null })
-      .where(eq(aiEvaluation.id, replacement.id));
-    await visible(false);
-    const replacementOwner = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_refresh",
-      trigger: "scheduled",
-      execution: false,
-    });
-    const [last] = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        ...item,
-        id: crypto.randomUUID(),
-        runId: replacementOwner,
-        workKey: crypto.randomUUID(),
-        state: "completed",
-        receipt: null,
-      })
-      .returning();
-    if (!last) throw new Error("Missing synthetic final replacement");
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ receipt: { retryEvaluationId: last.id } })
-      .where(eq(aiEvaluation.id, replacement.id));
-    await visible(false); // A handoff can transfer responsibility to another owner.
-
-    const [shared] = await getDb(ctx.db)
-      .insert(aiEvaluation)
-      .values({
-        ...item,
-        id: crypto.randomUUID(),
-        runId: null,
-        workKey: crypto.randomUUID(),
-        state: "failed",
-        receipt: null,
-      })
-      .returning();
-    if (!shared) throw new Error("Missing synthetic shared evaluation");
-    await getDb(ctx.db)
-      .insert(aiEvaluationRequest)
-      .values({
-        runId,
-        evaluationId: shared.id,
-        receipt: { outcome: "applied" },
-      });
-    await visible(true); // A supported outcome does not settle failed work.
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "completed", receipt: { retryEvaluationId: "malformed" } })
-      .where(eq(aiEvaluation.id, shared.id));
-    await visible(false); // The request's receipt takes precedence over shared evidence.
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({
-        cancelledAt: new Date(),
-        receipt: { retryEvaluationId: crypto.randomUUID() },
-      })
-      .where(eq(aiEvaluationRequest.runId, runId));
-    await visible(true); // Cancellation with an explicit handoff still validates its target.
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({ receipt: { retryEvaluationId: last.id } })
-      .where(eq(aiEvaluationRequest.runId, runId));
-    await visible(false); // The explicit handoff does not require an old-owner request.
-    await getDb(ctx.db)
-      .insert(aiEvaluationRequest)
-      .values({ runId, evaluationId: last.id });
-    await visible(false);
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({ receipt: null })
-      .where(eq(aiEvaluationRequest.runId, runId));
-    const image = await createUploadedImageRecord(ctx.db, {
-      key: "tests/synthetic-attention.jpg",
-      filename: "synthetic.jpg",
-      contentType: "image/jpeg",
-      size: 512,
-    });
-    await getDb(ctx.db)
-      .update(imageTable)
-      .set({ sha256: "c".repeat(64) })
-      .where(eq(imageTable.id, image.id));
-    const imageJobId = await createImageProcessingJob(ctx.db, {
-      imageId: parseEntityId("image", image.id),
-      kind: "describe_image",
-      sourceContentHash: "c".repeat(64),
-      processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-      runId,
-    });
-    if (!imageJobId) throw new Error("Missing synthetic image job");
-    await visible(true);
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ state: "ready" })
-      .where(eq(imageProcessingJob.id, imageJobId));
-    await visible(false);
-    await enqueueJob(ctx.db, {
-      key: "synthetic:historical-live",
-      kind: "synthetic.demand",
-      runId,
-      input: {},
-    });
-    await visible(true);
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({ result: aiEvaluation.result })
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, item.id))
-      )[0]?.result,
-    ).toEqual(item.result);
-
-    await expect(
-      controlWorkflowRun(
-        ctx.db,
-        ctx.actor,
-        { runPublicId: history.shortcode, action: "retry" },
-        "ai_refresh",
-      ),
-    ).resolves.toBeUndefined();
-    expect(
-      (
-        await getDb(ctx.db)
-          .select()
-          .from(runTable)
-          .where(eq(runTable.id, runId))
-      )[0]?.status,
-    ).toBe("running");
-
-    const retainedExecution = await readRunPass(ctx.db, runId);
-    if (!retainedExecution) throw new Error("Missing synthetic retained Pass");
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "paused" })
-      .where(eq(runTable.id, runId));
-    await (
-      await import("~/server/kernel/api")
-    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: runId });
-    await expect(
-      controlWorkflowRun(
-        ctx.db,
-        ctx.actor,
-        { runPublicId: history.shortcode, action: "resume" },
-        "ai_refresh",
-      ),
-    ).resolves.toBeUndefined();
-    expect(await readRunPass(ctx.db, runId)).toMatchObject({
-      runId,
-      state: "due",
-    });
-    expect(
-      (
-        await getDb(ctx.db)
-          .select({ result: aiEvaluation.result })
-          .from(aiEvaluation)
-          .where(eq(aiEvaluation.id, item.id))
-      )[0]?.result,
-    ).toEqual(item.result);
-
-    const historicalId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "derived_refresh",
-      trigger: "scheduled",
-      execution: false,
-    });
-    const [historical] = await getDb(ctx.db)
-      .update(runTable)
-      .set({
-        status: "failed",
-        failureCode: "retired_execution",
-        endedAt: new Date(),
-      })
-      .where(eq(runTable.id, historicalId))
-      .returning();
-    if (!historical) throw new Error("Missing synthetic historical Run");
-    const historicalVisible = async (wanted: boolean) => {
-      const before = (
-        await getDb(ctx.db)
-          .select()
-          .from(runTable)
-          .where(eq(runTable.id, historicalId))
-      )[0];
-      if (!before) throw new Error("Missing synthetic historical Run");
-      // Explicit purpose scope includes history omitted by the default population.
-      const page = await runScaffold.read(ctx.db, {
-        filters: { purpose: [before.purpose], needsAttention: true },
-        sorts: [],
-        pagination: { pageIndex: 0, pageSize: 10 },
-      });
-      expect(page.data.some((row) => row.id === historical.shortcode)).toBe(
-        wanted,
-      );
-      const work = await readRecordWorkQueue(ctx.db, {
-        id: historical.shortcode,
-        memberPartyId: null,
-        memberOnly: false,
-      });
-      expect(work.items.some((row) => row.family === "account")).toBe(wanted);
-      expect(
-        (
-          await getDb(ctx.db)
-            .select()
-            .from(runTable)
-            .where(eq(runTable.id, historicalId))
-        )[0],
-      ).toEqual(before);
-    };
-    await historicalVisible(false);
-    for (const state of [
-      { trigger: "manual" as const },
-      { trigger: "scheduled" as const, failureCode: "execution_limit" },
-      { failureCode: "retired_execution", endedAt: null },
-      { status: "paused" as const },
-      { purpose: "maintenance" as const },
-    ]) {
-      await getDb(ctx.db)
-        .update(runTable)
-        .set({ ...historical, ...state })
-        .where(eq(runTable.id, historicalId));
-      await historicalVisible(true);
-    }
-    await getDb(ctx.db)
-      .update(runTable)
-      .set(historical)
-      .where(eq(runTable.id, historicalId));
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ runId: historicalId })
-      .where(eq(aiEvaluation.id, item.id));
-    await historicalVisible(true); // Even terminal paid evidence fails closed.
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ runId })
-      .where(eq(aiEvaluation.id, item.id));
-    await historicalVisible(false);
-    await getDb(ctx.db)
-      .insert(aiEvaluationRequest)
-      .values({ runId: historicalId, evaluationId: item.id });
-    await historicalVisible(true);
-    await getDb(ctx.db)
-      .delete(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.runId, historicalId));
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ runId: historicalId, state: "failed" })
-      .where(eq(imageProcessingJob.id, imageJobId));
-    await historicalVisible(true);
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ state: "ready" })
-      .where(eq(imageProcessingJob.id, imageJobId));
-    await historicalVisible(false);
-    await enqueueJob(ctx.db, {
-      key: "synthetic:historical-routine-live",
-      kind: "synthetic.demand",
-      runId: historicalId,
-      input: {},
-    });
-    await historicalVisible(true);
   });
 
   it("filters and sorts stalled Runs ahead of newer stopped Runs", async () => {

@@ -59,7 +59,6 @@ import {
   retainedMailJoin,
 } from "~/server/domains/mail/repo/retained-mail";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";
@@ -1393,8 +1392,13 @@ describe("public mail tool", () => {
         .from(run)
         .where(eq(run.purpose, "mail_reclassify"));
       expect(classifiers).toHaveLength(2);
-      const classifierJobs = await readJobs(ctx.db, { kind: "run.execute" });
-      expect(classifierJobs.map((item) => item.runId).sort()).toEqual(
+      const classifierPasses = await (
+        await import("~/server/domains/run/repo/run-execution")
+      ).readRunPasses(
+        ctx.db,
+        classifiers.map((item) => item.id),
+      );
+      expect([...classifierPasses.keys()].sort()).toEqual(
         classifiers.map((item) => item.id).sort(),
       );
       await searchMail(ctx.db, f.input, ctx.actor);

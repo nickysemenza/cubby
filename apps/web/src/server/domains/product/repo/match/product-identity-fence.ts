@@ -7,7 +7,6 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { requestedRows } from "~/server/db/helpers/requested";
-import { AI_REFRESH_ACTIVATION_SETTINGS_ID } from "~/server/db/retained-tables";
 
 export type ProductIdentityFenceTarget = {
   key: string;
@@ -59,7 +58,6 @@ export async function productIdentityEvidenceFences(
     ), global_versions AS MATERIALIZED (
       SELECT 'identity-vendor' AS kind, id::text, xmin::text AS version FROM "Vendor"
       UNION ALL SELECT 'issuer', slug, xmin::text FROM "ExternalSource"
-      UNION ALL SELECT 'activation', id::text, xmin::text FROM "AppSettings" WHERE id = ${AI_REFRESH_ACTIVATION_SETTINGS_ID}
     ), global_digest AS (
       SELECT md5(coalesce(jsonb_agg(jsonb_build_array(kind, id, version) ORDER BY kind, id)::text, '[]')) AS digest FROM global_versions
     ), versions AS (

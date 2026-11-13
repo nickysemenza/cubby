@@ -1,6 +1,7 @@
 /** Model calls owe Answers to the kernel; transports own no application cache. */
 import { runEntityId } from "@cubby/schemas/identifiers";
 import {
+  openAiEffortSchema,
   supportedChatModelSchema,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
@@ -10,7 +11,10 @@ import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { produceModel } from "~/server/ai/model-call-context";
 import { decisionImageSchema } from "~/server/ai/policy/decision-choice";
 import { AI_FEATURES, RUN_SUMMARY_FEATURE } from "~/server/ai/policy/features";
-import type { AiFeature } from "~/server/ai/policy/features";
+import type {
+  AiFeature,
+  AiStructuredFeature,
+} from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import { defineAsk } from "~/server/kernel/api";
 
@@ -56,7 +60,15 @@ export const modelInput = z.discriminatedUnion("kind", [
     kind: z.literal("structured"),
     request: modelRequest,
     model: supportedChatModelSchema,
+    tier: z.enum(["fast", "standard", "quality"]).optional(),
     revision: z.json().optional(),
+    parameters: z
+      .object({
+        maxTokens: z.number(),
+        effort: openAiEffortSchema.optional(),
+        schema: z.record(z.string(), z.json()),
+      })
+      .optional(),
   }),
   z.object({
     kind: z.literal("choice"),
@@ -74,6 +86,28 @@ export const modelOutput = z.object({
 });
 export type ModelInput = z.infer<typeof modelInput>;
 export type ModelOutput = z.infer<typeof modelOutput>;
+
+/** Capture every structured transport parameter before the Ask is queued. */
+export function structuredModelInput<T>(
+  feature: AiStructuredFeature<T>,
+  request: z.infer<typeof modelRequest>,
+  revision?: z.infer<ReturnType<typeof z.json>>,
+) {
+  return {
+    kind: "structured" as const,
+    request,
+    model: feature.model,
+    tier: feature.tier,
+    revision,
+    parameters: {
+      maxTokens: feature.maxTokens,
+      effort: feature.effort,
+      schema: z
+        .record(z.string(), z.json())
+        .parse(z.toJSONSchema(feature.schema)),
+    },
+  };
+}
 
 /** Credit, plan and paid admission is checked before a model Ask becomes sent. */
 export async function admitModel(
@@ -160,13 +194,28 @@ export const modelAsks = declarations.map((feature) =>
         if (!("schema" in feature))
           throw new Error("A choice feature cannot answer a structured Ask");
         let model: string | null = null;
+        let details: { raw: string; tier: string } | undefined;
         const value = await (
           await import("./run-feature")
         ).runStructuredFeature<unknown>(
-          { ...feature, model: input.model },
+          {
+            ...feature,
+            model: input.model,
+            tier: input.tier ?? feature.tier,
+            ...(input.parameters
+              ? {
+                  maxTokens: input.parameters.maxTokens,
+                  effort: input.parameters.effort,
+                  schema: z.fromJSONSchema(input.parameters.schema),
+                }
+              : {}),
+          },
           input.request,
           {
             ...usage,
+            onProduced: (response) => {
+              details = response;
+            },
             onAnswered: (answered) => {
               model = answered;
             },
@@ -175,18 +224,38 @@ export const modelAsks = declarations.map((feature) =>
         return {
           output: { value: z.json().parse(value), model },
           model,
-          tier: feature.tier,
+          tier: input.tier ?? feature.tier,
+          ...details,
         };
       }),
   }),
 );
 
-export function modelAskFor(feature: AiFeature) {
+export function modelAskFor(
+  feature: AiFeature &
+    Partial<
+      Pick<AiStructuredFeature<unknown>, "schema" | "maxTokens" | "effort">
+    >,
+) {
   const found = modelAsks.find((ask) => ask.feature === featureName(feature));
   if (!found) throw new Error(`No model Ask declared for ${feature.feature}`);
   return {
     ...found,
     promptVersion: feature.promptVersion,
-    policy: { ...found.policy, tier: feature.tier },
+    admit: (
+      db: Database,
+      context: { runId: string | null; askId: string; background: boolean },
+    ) => admitModel(db, feature.tier, context),
+    policy: {
+      ...found.policy,
+      tier: feature.tier,
+      ...(feature.schema
+        ? {
+            outputRevision: JSON.stringify(z.toJSONSchema(feature.schema)),
+            maxTokens: feature.maxTokens,
+            effort: feature.effort,
+          }
+        : {}),
+    },
   };
 }

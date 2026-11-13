@@ -35,7 +35,7 @@ import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestExternalIdKind } from "~/server/ai/external-id-kind";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { aiCallOwner, type AiCallOwner } from "~/server/ai/policy/call-owner";
-import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
+import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import {
   listAiUsageFilterOptions,
   listRecentAiUsage,
@@ -205,7 +205,7 @@ export const inferFieldSuggestions = async (
   input: FieldSuggestionsInput,
   ports?: Parameters<typeof suggestFields>[3],
   prepared?: {
-    manifest: Awaited<ReturnType<typeof producingAiManifest>>;
+    manifest: Awaited<ReturnType<typeof compiledRefreshManifest>>;
     recordId?: Awaited<ReturnType<typeof resolveOrThrow>>;
   },
 ) => {

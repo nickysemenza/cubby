@@ -16,6 +16,7 @@ import {
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -683,9 +684,9 @@ describe("composed Work queue engine", () => {
     await seedFieldSuggestion(ctx.db, {
       entity: "product",
       recordId: lamp.entityId,
-      field: "model",
+      field: "categoryId",
       currentValue: null,
-      suggestedValue: "Synthetic model",
+      suggestedValue: taxonomyShortcode("food"),
       confidence: 0.9,
       model: "typesafe/jev",
       kind: "addition",
@@ -787,9 +788,9 @@ describe("composed Work queue engine", () => {
     await seedFieldSuggestion(ctx.db, {
       entity: "product",
       recordId: lamp.entityId,
-      field: "model",
+      field: "categoryId",
       currentValue: null,
-      suggestedValue: "Synthetic model",
+      suggestedValue: taxonomyShortcode("food"),
       confidence: 0.9,
       model: "typesafe/jev",
       kind: "addition",

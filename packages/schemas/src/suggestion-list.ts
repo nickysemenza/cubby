@@ -64,7 +64,6 @@ export const suggestionSummaryPart = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("amount"), amount: z.number() }),
   z.object({ kind: z.literal("date"), date: z.string() }),
 ]);
-export type SuggestionSummaryPart = z.infer<typeof suggestionSummaryPart>;
 
 /**
  * What accepting restores: a data-quality check it closes, another state it
@@ -212,7 +211,7 @@ const suggestionScope = z.object({
   status: suggestionStatus.default("pending"),
   runId: runShortcode.optional(),
 });
-export const suggestionListFilters = suggestionDeclaredFilters.extend(
+const suggestionListFilters = suggestionDeclaredFilters.extend(
   suggestionScope.shape,
 );
 export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
@@ -264,7 +263,7 @@ export const suggestionListOut = z.object({
 });
 export type SuggestionListOut = z.infer<typeof suggestionListOut>;
 
-export const suggestionFieldCount = z.object({
+const suggestionFieldCount = z.object({
   entity: shortcodeEntity,
   field: z.string(),
   pending: z.number().int().nonnegative(),

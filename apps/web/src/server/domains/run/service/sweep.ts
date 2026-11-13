@@ -544,7 +544,7 @@ const fieldRoster: StepDriversFor<"sweep">["field_roster"] = {
     return {
       kind: "progress",
       delta: { done: 1 },
-      tallies: { evaluations: queued },
+      tallies: { asks: queued },
       cursor: index + 1,
       done: index + 1 >= targets.length,
     };
@@ -565,6 +565,14 @@ const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
     const failed = asks.filter((ask) => ask.stage === "stuck").length;
     const skipped = asks.filter((ask) => ask.state === "abandoned").length;
     const pending = asks.length - completed - failed - skipped;
+    if (pending === 0)
+      await (
+        await import("../repo/ai-work-state")
+      ).settleFieldSweepEffects(
+        db,
+        run.id,
+        buildActorContext(run.actorUserId, run.channel, { runId: run.id }),
+      );
     return {
       kind: "progress",
       absolute: true,

@@ -81,7 +81,7 @@ export const suggestionContract = defineContract(
       exposure: "view",
       note: "Agents review one or many Suggestions through suggestions.review items",
       description:
-        "Review Suggestions independently; each item returns its own outcome.",
+        "Review gaps and Suggestions independently; each item returns its own outcome.",
       command: { label: "Review suggestions", confirmation: null },
       input: suggestionReviewBatchInput,
       output: suggestionReviewBatchOut,

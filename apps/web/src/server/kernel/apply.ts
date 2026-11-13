@@ -63,7 +63,13 @@ import {
   type WriteMode,
 } from "./gate";
 import { mergeRecords, markRejected, removeRecords } from "./identity";
-import { bindingEventKey, bindingFactKey, recordSubject, rowKey } from "./keys";
+import {
+  bindingEventKey,
+  bindingFactKey,
+  recordSubject,
+  rowKey,
+  tableKey,
+} from "./keys";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 
@@ -284,6 +290,7 @@ async function applyScope(
   const touch = (target: ColumnRef, row: ColumnValues) => {
     changed.push(
       rowKey(target.name, String(row.id)),
+      tableKey(target.name),
       ...(target.keys?.(row) ?? []),
     );
     discovered.push(...(target.discovers?.(row) ?? []));
@@ -534,7 +541,7 @@ const outcome = (
   scope,
   status,
   gaps,
-  ...(error !== undefined && { error: rawError(error) }),
+  ...(error !== undefined && { error: rawError(error), cause: error }),
 });
 
 /** One scope inside an open apply transaction, isolated by a savepoint. */
@@ -680,7 +687,7 @@ export async function runClaimedScopes(
     registry,
     reconciler,
     loose.map((scope) => ({ kind: scope.kind, key: scope.key })),
-    { locked: false, hideBaseline: options.hideBaseline ?? false },
+    { db, locked: false, hideBaseline: options.hideBaseline ?? false },
   );
   return [
     ...outcomes,
@@ -779,6 +786,7 @@ async function runLocked(
         mode: options.mode,
       });
       const [computed] = await computeBatch(q, registry, reconciler, [scope], {
+        db: tx,
         locked: true,
         hideBaseline: options.hideBaseline ?? false,
       });

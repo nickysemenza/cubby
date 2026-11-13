@@ -1,8 +1,5 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import {
-  seedFieldSuggestion,
-  stampCurrentFieldProvenance,
-} from "tooling/shared-suggestion-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { buildCrudServices } from "~/server/http/request-context";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
@@ -498,7 +495,6 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
       status: "pending",
     });
   const automatic = await seed(setId, 0.97, null);
-  await stampCurrentFieldProvenance(db, automatic, "product", "brandId");
   const applied = await applyAutomaticRules(db, [automatic.id], {
     context: buildCrudServices,
   });
