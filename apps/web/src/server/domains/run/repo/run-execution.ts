@@ -234,3 +234,20 @@ export async function readDuePassPositions(
     ]),
   );
 }
+
+/** Scoped statement Sweeps yield while another page works on the same import source. */
+export async function sweepPassSourceHeld(db: RepositoryQueryInput, runId: string): Promise<boolean> {
+  const result = await repositoryQueries(db).execute<{held: boolean}>(sql`
+    WITH sweep_sources AS (
+      SELECT r.id, ti.source FROM "Run" r
+      JOIN "TransactionImport" ti ON ti.id = (jsonb_path_query_first(r.input,
+        '$.families[*] ? (@.family == "statement_transaction").scope.importId') #>> '{}')::uuid
+      WHERE r.purpose = 'sweep' AND r."deletedAt" IS NULL
+    ) SELECT EXISTS (
+      SELECT 1 FROM sweep_sources own JOIN sweep_sources other ON other.source = own.source AND other.id <> own.id
+      JOIN "Pass" p ON p.name = ${RUN_EXECUTE_PASS} AND p.key = other.id::text
+      WHERE own.id = ${runId}::uuid AND p."claimToken" IS NOT NULL AND p."claimDeadline" > now()
+        AND p."cancelledAt" IS NULL AND p."doneAt" IS NULL
+    ) AS held`);
+  return result.rows[0]?.held ?? false;
+}

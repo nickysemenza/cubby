@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -159,9 +160,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
         throw new Error(execution.lastError ?? execution.state);
       if (execution.availableAt.getTime() > now)
         await wait(execution.availableAt.getTime() - now);
-      await (
-        await import("~/server/kernel/api")
-      ).runProductionKernel(ctx.db, { budgetMs: 1 });
+      await advanceRunPass(ctx.db);
     }
     const [saved] = await getDb(ctx.db)
       .select()

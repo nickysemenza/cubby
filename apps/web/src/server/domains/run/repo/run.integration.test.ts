@@ -2,6 +2,7 @@ import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -304,7 +305,7 @@ describe("Run lineage and waiting-on reads", () => {
       position: 3,
       total: 4,
       perMinute: 0.2,
-      label: "Queued for model capacity · 3rd of 4 · about 15 min",
+      label: "Waiting for model capacity · 3rd of 4 · about 15 min",
     });
   });
 });
@@ -431,9 +432,7 @@ describe("Run attention entity view", () => {
       generation: 1,
       restart: false,
     });
-    await (
-      await import("~/server/kernel/api")
-    ).runProductionKernel(ctx.db, { budgetMs: 1 });
+    await advanceRunPass(ctx.db);
     expect(await readRunPass(ctx.db, emptyJobOwner)).toMatchObject({
       state: "waiting",
       lastError: expect.stringContaining("no durable evaluation roster"),

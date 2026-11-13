@@ -60,3 +60,12 @@ export async function withRunPassFixture<T>(
     await claim.release();
   }
 }
+
+/** Drive exactly one production Run Pass page without unrelated kernel work. */
+export async function advanceRunPass(db: Database) {
+  const {createKernel, defineModule} = await import("~/server/kernel/api");
+  const {runOnePass} = await import("~/server/kernel/pass");
+  const {runExecutePass} = await import("./run-pass");
+  const kernel = createKernel([defineModule({name: "synthetic.run", passes: [runExecutePass]})]);
+  return runOnePass(db, kernel.registry);
+}

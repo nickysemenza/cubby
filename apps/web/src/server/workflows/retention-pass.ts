@@ -12,7 +12,7 @@ export const retentionPass = definePass({
   async run(_db, cursor, claim) {
     const removed = await claim.fenced(async (tx) => {
       const jobs = await pruneFinishedJobs(tx, { limit: LIMIT });
-      const passes = await repositoryQueries(tx).execute(sql`
+      const passes = await repositoryQueries(tx).execute<{name: string}>(sql`
         WITH doomed AS (
           SELECT name, key FROM "Pass"
           WHERE ("doneAt" IS NOT NULL AND "updatedAt" < now() - interval '8 days')

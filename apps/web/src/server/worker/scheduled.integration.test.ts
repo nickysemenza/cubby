@@ -72,7 +72,7 @@ it("recovers committed work whose wake was dropped within one hourly tick", asyn
   );
   await expect(
     getDb(ctx.db).execute(sql`SELECT "doneAt" FROM "Pass" WHERE name = 'purchase.discovery'`, "objects"),
-  ).resolves.toMatchObject([{ doneAt: expect.any(Date) }]);
+  ).resolves.toMatchObject([{ doneAt: expect.any(String) }]);
   await expect(readJobs(ctx.db, { key: "jobs.maintenance" })).resolves.toEqual(
     [],
   );

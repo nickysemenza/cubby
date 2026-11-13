@@ -24,6 +24,7 @@ import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { pendingFundingResumeAt } from "~/server/domains/run/repo/execution-context";
 import {
   readRunPass,
+  sweepPassSourceHeld,
   RUN_EXECUTE_PASS,
   runPassCursor,
   type PassRunPurpose,
@@ -141,6 +142,8 @@ async function advance(
   }
   // SAFETY: the cursor was written by `startRunPass` for a Pass-executed kind.
   const purpose = cursor.purpose as PassRunPurpose;
+  if (purpose === "sweep" && await sweepPassSourceHeld(db, runId))
+    throw new JobDeferredError("Waiting for another Sweep on this statement source", new Date(Date.now() + 1_000 + Math.random() * 2_000), "provider_capacity");
   if (RUN_KINDS[purpose].execution === "steps") {
     const next = await (
       await import("~/server/domains/run/service/step-run")

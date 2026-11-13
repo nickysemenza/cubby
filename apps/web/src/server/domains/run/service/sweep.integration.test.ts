@@ -37,7 +37,7 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { buildCrudServices } from "~/server/http/request-context";
-import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
 import { ensureRun } from "../repo/ensure-run";
 import { readRunSteps, recordRunStepPage } from "../repo/run-step";
@@ -461,14 +461,7 @@ describe("Sweeps", () => {
       .object({ attempt: z.number() })
       .parse(owner?.progress).attempt;
     for (let page = 0; page < 50; page++) {
-      const advance = await withJobFixtureExecution(
-        ctx.db,
-        {
-          key: `run:${runId}`,
-          kind: "run.execute",
-          input: { runId, purpose: "sweep" },
-          runId,
-        },
+      const advance = await withRunPassFixture(ctx.db, runId,
         () => advanceStepRun(ctx.db, { runId, attempt }),
       );
       if (advance.kind !== "continue") return advance.kind;
