@@ -64,7 +64,9 @@ it("keeps a server-approved reset action available before its exact preview is l
       />,
       { wrapper: harness.wrapper },
     );
-    expect(screen.getByRole("button", { name: "Use inherited" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Let Cubby decide" }),
+    ).toBeVisible();
   } finally {
     harness.dispose();
   }

@@ -1473,7 +1473,7 @@ Rules:
           control: { kind: "checkbox" },
           display: { columnGroup: "Stock", listHidden: true },
           // "intentional": a Product's own decision that matches its category
-          // is still a decision, so bulk "Use inherited values" never clears it.
+          // is still a decision, so bulk "Let Cubby decide" never clears it.
           resolution: {
             reset: { stockTracked: null },
             redundancy: "intentional",

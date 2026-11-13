@@ -438,7 +438,7 @@ describe("BulkEditDialogBody", () => {
   );
 
   it.each([
-    ["Use inherited", "inherit"],
+    ["Let Cubby decide", "inherit"],
     ["Set to none", "explicit"],
   ])(
     "bulk project %s writes the companion mode without rendering metadata",

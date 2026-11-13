@@ -24,7 +24,7 @@ export function inheritanceContract() {
       `Inheritance ${Date.now()}`,
     );
     const useInherited = page
-      .getByRole("button", { name: "Use inherited", exact: true })
+      .getByRole("button", { name: "Let Cubby decide", exact: true })
       .first();
     const open = () =>
       gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);

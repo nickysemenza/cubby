@@ -422,7 +422,7 @@ describe("useAutoFieldSuggestion", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Why this value" }));
     fireEvent.click(
-      await screen.findByRole("button", { name: "Use inherited" }),
+      await screen.findByRole("button", { name: "Let Cubby decide" }),
     );
     expect(form.getValues("projectMode")).toBe("inherit");
     expect(form.getValues("projectId")).toBeNull();
