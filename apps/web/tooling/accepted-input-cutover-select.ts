@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 export function acceptedInputCutoverSql(): string {
   return readFileSync(
     new URL(
-      "../drizzle/20261114000000_accepted_input_cutover/migration.sql",
+      "../drizzle/20261113185531_accepted_input_cutover/migration.sql",
       import.meta.url,
     ),
     "utf8",
