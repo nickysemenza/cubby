@@ -3480,6 +3480,17 @@ older pending Suggestions ineligible on reads; a later sweep supersedes prior pe
 same record and field. Historical hashes, model versions, provenance and actor intent are never
 reconstructed.
 
+A statement transaction Suggestion stores each paid model answer under `data.answers` (kind,
+counterparty, per-candidate labels, escrow, merchant) as `{value, input, versions, models}`; the
+shared schema is `packages/schemas/src/statement-answers.ts`. An answer is reusable when its exact
+input and versions equal the current question's, read across the charge's slot rows and prior
+publications, newest first; it never enters a fingerprint. The rule evidence hash keeps a frozen
+hash-scheme tag, the labelled output hash excludes the spending judgment, and a revision-scoped
+dismissal holds while both hashes are equal, so a policy-only change restamps the row in place and
+keeps the dismissal. A "Never suggest" suppression holds independently. The
+[statement Sweep contract](import-evidence-convergence.md#statement-sweeps) owns reuse, scope and
+settlement.
+
 `suggestion.review` and `suggestion.reviewBatch` (MCP `suggestions.review` with `items`) record
 immutable review; each batch item has its own outcome. Draft and
 history verdicts settle on their own; an applying review commits with its application, so a stale
@@ -3551,8 +3562,9 @@ confirmation, and identity conflicts cannot merge.
 
 Automatic application policy is fixed code ([ADR 0028](adr/0028-cubby-acts-first.md)): confident
 answers for open or Cubby-held `apply: "auto"` fields and clean supported import spending always apply
-through their domain validation; attaching an existing transaction requires review. There are no
-member switches or Rules tab. A Wrong decision prevents unchanged work from applying again. A member
+through their domain validation; attaching an existing transaction requires review. Statement rows
+settle on every Sweep, scoped or not, under their current stamp and the domain's commit guards. There
+are no member switches or Rules tab. A Wrong decision prevents unchanged work from applying again. A member
 correction of a Cubby-set value rechecks up to 25 similar Cubby-held values through the decision
 model; nothing is copied. Corrected null stays distinct from no correction, and an apply intent
 alone, a draft or a history-only grade changes nothing.

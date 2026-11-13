@@ -327,15 +327,16 @@ page applies money under one set of locks; unscoped generation selects at most 3
 (`statementGenerationPerPage`); explicit label limits remain available.
 Retained generation failures use the same limits. Both paths preserve the
 ordered population cursor and all remaining work; only a completed page
-publishes its checkpoint.
+advances its cursor.
 
 Cooperative label pages stop starting model work and application after
 `cooperativePageBudgetMs` (a quarter of the Job lease); the rest of the lease
 covers work already started. A page settles at least one charge, then leaves
 the untouched suffix's receipts and inclusive cursor for the next page.
 
-Generation and label pages settle through one module
-(`statement-settlement.ts`). It walks the page's published receipts in page
+Generation, label pages and retries publish and settle through one module
+(`statement-settlement.ts`), in every Sweep scope, so each Sweep books every
+eligible row. It walks the page's published receipts in page
 order. Independent as-is `create` rules commit together in one SERIALIZABLE
 transaction of at most 32 creates, one dependency layer per transaction: a
 create whose footprint (nearby candidate, copy or hold, Purchase, Vendor
@@ -374,7 +375,7 @@ Page caches and streamed fingerprints keep existing fingerprint bytes and never
 cross a money write; commit re-reads its evidence. None of these bounds is a
 Worker memory bound, and none relaxes a source, candidate, admission or money
 policy. The [statement Sweep contract](import-evidence-convergence.md#statement-sweeps)
-owns label reuse and scope.
+owns stored answers, settlement and scope.
 
 `Statement generation phase` and `Statement label application phase` logs
 enter each phase before awaiting it, so an invocation that exits early still
