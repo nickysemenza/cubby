@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account as googleAccount } from "~/server/db/auth.schema";
+import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import {
   databaseForTransaction,
   getDb,
@@ -47,6 +48,7 @@ import {
   run as runTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -62,6 +64,7 @@ import {
   mergePurchases,
 } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
@@ -78,9 +81,7 @@ import {
 describe("Email Purchase links", () => {
   const ctx = withTestDb();
 
-  const list = async (filters: EmailFilters) => {
-    // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
-    await drainStoredDerived(ctx.db);
+  const readList = async (filters: EmailFilters) => {
     return (
       await emailScaffold.read(ctx.db, {
         filters,
@@ -92,6 +93,12 @@ describe("Email Purchase links", () => {
         purchaseLinks: emailPurchaseLink.array().parse(row.purchaseLinks),
       }),
     );
+  };
+
+  const list = async (filters: EmailFilters) => {
+    // Stable fixture reads settle publications; dedicated cases below exercise missing and stale results.
+    await drainStoredDerived(ctx.db);
+    return readList(filters);
   };
 
   async function emailCode(orderMailId: string) {
@@ -244,19 +251,20 @@ describe("Email Purchase links", () => {
         linkedRetainedEmails: 0,
         linkedPurchases: 1,
       });
+      await drainStoredDerived(ctx.db);
       const coverageFilters = {
         coverageVendorId: parseShortcodeFor("vendor", vendor.shortcode),
         mailboxId: original.mailboxId,
         ledgerPartyId: parseShortcodeFor("ledgerParty", party.shortcode),
       };
       expect(
-        await list({ ...coverageFilters, coverageStage: "known" }),
+        await readList({ ...coverageFilters, coverageStage: "known" }),
       ).toHaveLength(1);
       expect(
-        await list({ ...coverageFilters, coverageStage: "linked" }),
+        await readList({ ...coverageFilters, coverageStage: "linked" }),
       ).toHaveLength(1);
       expect(
-        await list({ ...coverageFilters, coverageStage: "retained" }),
+        await readList({ ...coverageFilters, coverageStage: "retained" }),
       ).toEqual([]);
       // Another member's copy of the same message, accepted onto this
       // member's account Purchase, never relates.
@@ -291,6 +299,7 @@ describe("Email Purchase links", () => {
           checksum: "c".repeat(64),
           outputFingerprint: "synthetic-foreign-review-fingerprint",
         });
+      await drainStoredDerived(ctx.db);
       const before = await reviewSourceState();
       const expected = [
         expect.objectContaining({
@@ -315,14 +324,14 @@ describe("Email Purchase links", () => {
         }),
       ];
       const code = parseShortcodeFor("vendor", vendor.shortcode);
-      expect(await list({ vendorId: code })).toEqual(expected);
+      expect(await readList({ vendorId: code })).toEqual(expected);
       expect(
-        await list({
+        await readList({
           purchaseId: parseShortcodeFor("purchase", purchase.shortcode),
         }),
       ).toEqual(expected);
       expect(
-        await list({
+        await readList({
           vendorAccountId: parseShortcodeFor(
             "vendorAccount",
             account.shortcode,
@@ -330,7 +339,7 @@ describe("Email Purchase links", () => {
         }),
       ).toEqual(expected);
       expect(
-        await list({
+        await readList({
           vendorId: code,
           ledgerPartyId: [
             parseShortcodeFor("ledgerParty", foreignParty.shortcode),
@@ -396,7 +405,21 @@ describe("Email Purchase links", () => {
         .where(eq(emailTable.orderMailId, original.id));
       if (!accepted || !originalEmail)
         throw new Error("Synthetic source-order identities missing");
-      const drainEmail = () => drainStoredDerived(ctx.db);
+      // These source variants share the same Email snapshot; the full Pass is exercised above.
+      const declaration = entityStoredDerivedDeclarations().find(
+        (entry) => entry.target === "email.relationshipFacts",
+      );
+      if (!declaration)
+        throw new Error("Email relationship snapshot is undeclared");
+      const drainEmail = async () => {
+        const ids = [originalEmail.id];
+        await publishRebuiltValues(
+          ctx.db,
+          declaration,
+          ids,
+          await emailDerivedComputes["email.relationshipFacts"](ctx.db, ids),
+        );
+      };
       const facts = async () => {
         const [row] = await getDb(ctx.db)
           .select({ value: emailReadSnapshot.relationshipFacts })
