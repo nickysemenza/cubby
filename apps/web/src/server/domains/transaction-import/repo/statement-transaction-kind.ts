@@ -9,6 +9,8 @@ import type {
   StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-effective-movement";
+
 type KindRule = {
   kind: FinancialTransactionKind;
   /** The category only implies this kind for money moving in this direction. */
@@ -120,8 +122,16 @@ export function isLoanPayment(
   account: { kind: string },
   descriptor: StatementDescriptor,
 ): boolean {
-  const text = descriptor.rawDescription ?? descriptor.merchant;
-  return account.kind === "loan" && text?.trim().toUpperCase() === "PAYMENT";
+  return (
+    account.kind === "loan" &&
+    statementEffectiveMovement({
+      providerAmount: 1,
+      description: descriptor.rawDescription,
+      merchant: descriptor.merchant,
+      sourceCategory: null,
+      loan: { providerVendorNames: [] },
+    }).movementClass === "loan_payment"
+  );
 }
 
 /** Rails a person can pay or be paid through: payment apps and checks. */

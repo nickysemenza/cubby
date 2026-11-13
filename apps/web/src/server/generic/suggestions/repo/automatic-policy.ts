@@ -48,7 +48,7 @@ type Declaration<F extends AutomaticRuleFamily> = {
   description: string;
   /** Read at call time: the statement revision lives in a module that imports this one. */
   revision: () => string;
-  execution: "import_clean" | "field_policy";
+  execution: "statement_settlement" | "field_policy";
   match: (facts: FactsOf[F]) => boolean;
   application: (facts: FactsOf[F]) => RuleApplication;
 };
@@ -75,7 +75,7 @@ export const AUTOMATIC_RULES = {
   },
   "statement_transaction.book_spending": {
     family: "statement_transaction",
-    execution: "import_clean",
+    execution: "statement_settlement",
     description:
       "Book clean supported spending and non-spending statement transactions, and attach supported evidence to an existing Transaction.",
     revision: () => STATEMENT_SUGGESTION_REVISION,

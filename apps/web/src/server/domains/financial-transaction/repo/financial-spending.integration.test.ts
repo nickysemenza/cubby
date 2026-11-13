@@ -177,6 +177,7 @@ describe("shared spending booking", () => {
     const plan = await previewFinancialSpending(ctx.db, {
       transactionId: transaction.output.id,
       advice: { ...advice, escrowDisbursement: true },
+      spendingCategoryId: category.id,
     });
     expect(plan).toMatchObject({
       status: "ready",

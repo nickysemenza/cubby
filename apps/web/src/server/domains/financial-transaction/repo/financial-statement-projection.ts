@@ -20,6 +20,7 @@ import {
 import type {
   FinancialPreviewLoaded,
   FinancialStatementPreviewOptions,
+  FinancialStatementPreviewPreparation,
 } from "./financial-statement-preview";
 import { withinPostingDateWindow } from "./settlement-window";
 
@@ -134,8 +135,13 @@ const newAccountFor = (
  */
 export function financialRowAccounts(
   options: FinancialStatementPreviewOptions,
-  parsedAccounts: FinancialPreviewLoaded["preparation"]["accounts"],
-  observations: FinancialPreviewLoaded["observations"],
+  parsedAccounts: FinancialStatementPreviewPreparation["accounts"],
+  observations: {
+    source: string;
+    providerTransactionId: string | null;
+    providerAccountId: string | null;
+    externalId: string;
+  }[],
 ) {
   const observationsByProvider = new Map<string, typeof observations>();
   for (const observation of observations) {
@@ -226,8 +232,9 @@ export function projectFinancialCandidates(
   const {
     sourceRefIds,
     legacyIds,
-    observations,
-    preparation,
+    accountsByRow,
+    movements,
+    providerObservations,
     transactions,
     refsByTransaction,
   } = loaded;
@@ -267,11 +274,6 @@ export function projectFinancialCandidates(
         transaction,
       ]);
     }
-  const { accountFor, providerObservations } = financialRowAccounts(
-    options,
-    preparation.accounts,
-    observations,
-  );
   const providerInputKey = (row: FinancialTransactionImportRow) =>
     JSON.stringify([
       row.source,
@@ -310,8 +312,8 @@ export function projectFinancialCandidates(
 
   const candidateRows = input.rows.map((row, index) => {
     const sourceRef = { source: row.source, externalId: sourceRefIds[index]! };
-    const normalizedAmount = -row.amount;
-    const account = accountFor(row);
+    const normalizedAmount = movements.get(row.key)!.effectiveAmount;
+    const account = accountsByRow.get(row.key);
     const exactOccurrence = (
       transactionsByRef.get(pairKey(sourceRef.source, sourceRef.externalId)) ??
       []
@@ -412,13 +414,13 @@ export function projectFinancialRows(
   candidates: Candidates,
   filePositions: Map<string, Map<string, ReadonlySet<number | null>>>,
 ) {
-  const { sourceRefIds } = loaded;
+  const { sourceRefIds, movements } = loaded;
   const { candidateRows, statusFor } = candidates;
   const suggestionPolicy = options.candidatePolicy === "suggestion";
   const rows = input.rows.map((row, index) => {
     const externalId = sourceRefIds[index]!;
     const sourceRef = { source: row.source, externalId };
-    const normalizedAmount = -row.amount;
+    const normalizedAmount = movements.get(row.key)!.effectiveAmount;
     const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
     const proposed: FinancialTransactionImportPreviewOut["rows"][number]["proposed"] =
       {

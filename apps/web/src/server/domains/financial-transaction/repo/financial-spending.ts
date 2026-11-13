@@ -86,6 +86,7 @@ import {
   retainedSettlementDiscoveryCouldMatch,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-effective-movement";
 import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
@@ -150,9 +151,13 @@ function spendingBlocker(input: {
     liveHouseholdLoan(facts.account) &&
     facts.source.kind === "purchase" &&
     facts.source.amount > 0 &&
-    !/^(payment|loan payment|mortgage payment)$/i.test(
-      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
-    ) &&
+    statementEffectiveMovement({
+      providerAmount: facts.source.amount,
+      description: facts.source.rawDescription,
+      merchant: facts.source.merchant,
+      sourceCategory: null,
+      loan: { providerVendorNames: [] },
+    }).movementClass !== "loan_payment" &&
     advice?.escrowDisbursement === true;
   const escrowRefund =
     liveHouseholdLoan(facts.account) &&
@@ -1183,10 +1188,16 @@ export async function financialSpendingCategoryHistory(
 }
 
 function reviewedSpendingAdvice(request: Request) {
-  if (!request.reviewedVendorName && !request.spendingCategoryId)
-    return request.advice;
+  if (
+    !request.advice &&
+    !request.reviewedVendorName &&
+    !request.spendingCategoryId
+  )
+    return null;
   return financialSpendingAdvice.parse({
     ...request.advice,
+    spendingCategoryId: null,
+    categoryConfidence: "low",
     ...(request.reviewedVendorName && {
       vendorName: request.reviewedVendorName,
       vendorConfidence: "high",

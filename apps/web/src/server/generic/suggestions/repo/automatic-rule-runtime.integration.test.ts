@@ -304,7 +304,7 @@ describe("clean import booking controls", () => {
       (
         await applyAutomaticRules(ctx.db, [suggestion.id], {
           context: buildCrudServices,
-          importClean: true,
+          settlement: true,
         })
       ).applied,
     ).toEqual([]);
