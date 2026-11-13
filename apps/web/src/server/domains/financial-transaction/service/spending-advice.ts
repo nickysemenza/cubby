@@ -53,6 +53,58 @@ export function needsSpendingAdvice(judgment: StatementTransactionJudgment) {
   );
 }
 
+/**
+ * The `spendingAdvice` port's advice as stored answers, so a supplied identity
+ * flows through the same reuse and derivation as a model answer.
+ */
+function portAnswers(
+  create: NonNullable<StatementTransactionJudgment["create"]>,
+  advice: FinancialSpendingAdvice,
+): StatementSpendingAnswers {
+  const models = ["spending-advice-port"];
+  const answers: StatementSpendingAnswers = {};
+  const escrowInput = statementEscrowInput(create, true);
+  if (advice.escrowDisbursement !== undefined && escrowInput)
+    answers.escrow = {
+      value: advice.escrowDisbursement,
+      input: escrowInput,
+      versions: {
+        [LOAN_ESCROW_DISBURSEMENT_FEATURE.feature]:
+          STATEMENT_ANSWER_VERSIONS.escrow,
+      },
+      models,
+    };
+  const identityInput = statementMerchantIdentityInput(create);
+  if (!identityInput || !advice.vendorName) return answers;
+  const identity = {
+    name: advice.vendorName,
+    counterparty: advice.counterparty,
+    confidence: advice.vendorConfidence,
+  };
+  const supportInput = statementMerchantSupportInput(identityInput, identity);
+  answers.merchant = {
+    identity: {
+      value: identity,
+      input: identityInput,
+      versions: {
+        [MERCHANT_IDENTITY_FEATURE.feature]:
+          STATEMENT_ANSWER_VERSIONS.merchantIdentity,
+      },
+      models,
+    },
+    support: supportInput && {
+      value: advice.vendorConfidence === "high",
+      input: supportInput,
+      versions: {
+        [MERCHANT_IDENTITY_SUPPORT_FEATURE.feature]:
+          STATEMENT_ANSWER_VERSIONS.merchantSupport,
+      },
+      models,
+    },
+  };
+  return answers;
+}
+
 /** A completed closed-set answer: the first choice at high confidence. */
 async function askChoice(args: DecisionChoiceArgs) {
   const decision = await runDecisionChoice(args);
@@ -90,11 +142,12 @@ export async function adviseSpending(
 } | null> {
   const create = input.judgment.create;
   if (!create || !needsSpendingAdvice(input.judgment)) return null;
-  if (input.spendingAdvice)
-    return {
-      advice: financialSpendingAdvice.parse(await input.spendingAdvice(input)),
-      answers: input.answers ?? {},
-    };
+  if (input.spendingAdvice) {
+    const advice = financialSpendingAdvice.parse(
+      await input.spendingAdvice(input),
+    );
+    return { advice, answers: portAnswers(create, advice) };
+  }
   const account =
     input.preparation?.accounts.get(input.judgment.accountId) ??
     (await financialSpendingAccountIdentity(db, input.judgment.accountId));
