@@ -7,6 +7,7 @@ import {
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
+import { pollUntil } from "@cubby/shared/retry";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -99,6 +100,7 @@ import {
 } from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
 import { setSenderAttribution } from "./sender-attribution";
+import { readSenderAttributions } from "./sender-attribution-read";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
@@ -1002,6 +1004,85 @@ describe("mail research admission", () => {
     expect(
       (await getRunWorkProgress(ctx.db, owner!.shortcode))!.current,
     ).toMatchObject({ total: 1, processed: 0 });
+  });
+
+  it("refuses automatic admission when the sender is excluded while the member lock is held", async () => {
+    const { party, mail } = await source();
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic lock-window seller",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    expect(
+      (await readSenderAttributions(ctx.db, ["receipts@shop.example"]))[0]
+        ?.state,
+    ).toBe("verified");
+    let held!: () => void;
+    const holding = new Promise<void>((done) => {
+      held = done;
+    });
+    let release!: () => void;
+    const released = new Promise<void>((done) => {
+      release = done;
+    });
+    const holder = withTransaction(ctx.db, async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM "LedgerParty" WHERE id = ${party.id}::uuid FOR NO KEY UPDATE`,
+      );
+      held();
+      await released;
+    });
+    await holding;
+    const admission = admitMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+      automatic: true,
+      senderRecheck: {
+        sender: "receipts@shop.example",
+        vendorId: seller.output.id,
+      },
+    });
+    await pollUntil(
+      async () => {
+        const waiting = await getDb(ctx.db).execute(
+          sql`SELECT pid FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid() LIMIT 1`,
+        );
+        const rows = Array.isArray(waiting) ? waiting : waiting.rows;
+        return rows.length > 0 ? true : undefined;
+      },
+      {
+        label: "admission waiting on the member lock",
+        timeoutMs: 4_000,
+        intervalMs: 20,
+      },
+    );
+    await setSenderAttribution(
+      ctx.db,
+      {
+        sender: "receipts@shop.example",
+        vendorId: null,
+        expectedVendorIds: [seller.output.id],
+      },
+      ctx.actor,
+    );
+    release();
+    await holder;
+    await expect(admission).resolves.toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select({ id: run.id })
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toEqual([]);
   });
 
   // Previously classified Email must progress without a member import click;

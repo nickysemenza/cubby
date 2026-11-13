@@ -649,10 +649,27 @@ export async function admitMailImport(
     !input.automatic &&
     !input.parentRunId &&
     input.messageIds.every((id) => selectedSources.has(id));
-  // Independent of the member lock: read it before FOR NO KEY UPDATE.
-  const senderIdentity = input.senderRecheck
-    ? (await readSenderAttributions(db, [input.senderRecheck.sender]))[0]
-    : undefined;
+  // After the member lock. A plain read would keep the snapshot from before
+  // that wait. Sharing the Vendor row makes an exclusion that committed
+  // during the wait abort this attempt; the retry reads the new proof.
+  const senderIdentityFor = async (tx: DrizzleTransaction) => {
+    if (!input.senderRecheck) return undefined;
+    const sender = input.senderRecheck.sender;
+    await tx
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(
+        and(
+          notDeleted(vendor),
+          or(
+            sql`EXISTS (SELECT 1 FROM unnest(${vendor.orderEmailSenders}) AS known(address) WHERE lower(trim(known.address)) = ${sender})`,
+            sql`${vendor.orderEmailSenderPolicies} ? ${sender}`,
+          ),
+        ),
+      )
+      .for("share");
+    return (await readSenderAttributions(tx, [sender]))[0];
+  };
   const admit = (writeDb: Database) =>
     withTransaction(writeDb, async (tx) => {
       await tx.execute(sql`SELECT set_config('lock_timeout', '2000', true)`);
@@ -752,6 +769,9 @@ export async function admitMailImport(
                 )
               : undefined;
       let newEvidenceAt: Date | undefined = input.waitRecheck?.settledAt;
+      // After the member lock, so an exclusion that committed while this
+      // attempt waited is the proof this attempt uses.
+      const senderIdentity = await senderIdentityFor(tx);
       if (input.senderRecheck) {
         if (
           senderIdentity?.state !== "verified" ||
