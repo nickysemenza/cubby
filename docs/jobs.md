@@ -70,15 +70,13 @@ table stays named `Job` because `Task` is the household entity's table.
 
 A Job is a unit of execution, not a unit of household work. Work that fans out
 over many records is a **drain** over **items** held on the rows that owe them:
-`AiEvaluation` owns evaluation scheduling. A drain unit's only `Job` row is
-its `background.drain` record (rotation and latest execution); it never holds
-or schedules items. AI evaluation supplies a `DrainStore`
-(`generic/jobs/drain-store.ts`). An item's
+Kernel scopes, Asks and Passes own durable work. A legacy drain unit keeps
+only its rotation record; an item's
 ticket says which intent a page may settle, so a re-mark during a page takes a
 new ticket, and the page clears only what it claimed.
 
 `rowDrain` (`generic/background/drains.ts`) is the single claim → prepare →
-publish helper for AI evaluation. It claims a bounded page,
+publish helper for bounded legacy work. It claims a page,
 prepares outside transactions and publishes chunks of at most 25 weighted
 items. Domain locks precede item locks. An isolated publication error splits
 the chunk until only the failing item backs off or exhausts; committed siblings
@@ -270,7 +268,7 @@ only the key of the unit's rotation and execution record, so it must be unique
 across drains but never has to match its drain's name:
 
 1. Jobs whose `runId` is a running, member-visible Run, and
-   drain units with member demand (an AI evaluation at priority 0, a Run-owned
+   units with member demand (a Run-owned
    cloud image) lead. Routine Runs do not.
 2. Within each class, units take turns: every unit's first candidate, then
    every Job kind's second, least recently served first (a Job kind's latest
@@ -457,7 +455,7 @@ failing `JOB_FAILING_LIMIT_MS` (24 hours) after its streak began fails visibly.
 Funding and provider waits stay `JobDeferredError` / `waiting_on` and never
 start a streak.
 
-AI evaluation drain items settle failed at their declared bound. Kernel Asks
+Kernel Asks
 and Passes use the kernel's claim, attempt, backoff and wait-cause policy.
 Embedding calls allow 100 known failures; an unknown call is never retried
 without settlement. Vector upload, visibility and deletion are Pass work and
@@ -466,7 +464,7 @@ spend no attempt. Image execution retains known failures and explicit retries
 as separate Answer receipts while source and request identity remain stable.
 An embedding request refused for OpenAI credit waits until the funding window
 ends. A funding change (`ai_funding.reset_funding_refusal` or a budget change)
-makes those items, and AI evaluations waiting on `ai_funding_window`, due at
+makes those items, and model Asks waiting on `funding`, due at
 once; a source still without capacity defers them again before spending.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
@@ -551,7 +549,7 @@ The funding wake (`resumeFundingPausedRuns` with every window) also ends the
 other funding waits: it makes queued kernel Asks with wait cause `funding` due
 in one statement, preserving unknown outcomes, cancellations and provider waits. It
 releases funding-paused discovery, then makes due the
-AI evaluations, embeddings and image jobs waiting on `ai_funding_window`, then
+model Asks waiting on `funding`, and embeddings and image jobs waiting on `ai_funding_window`, then
 brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
 report them as `waiting`: the import and discovery Runs eligible for release,
 the Ask, evaluation, embedding and image waits, all queued Jobs the wake brings
@@ -806,35 +804,12 @@ queued Job's identity, so changing one orphans queued rows.
 A drain producer must not enqueue faster than its drain can serve. Revision
 Asks coalesce unchanged inputs under the owning producer policy.
 
-Each AI evaluation slot identifies feature, entity, record and field. A
-generated text key uses UTF-8 length prefixes; input and option fingerprints
-remain execution evidence, outside the slot key. A partial unique index permits
-one `queued` row per slot and execution kind; retry and lease state live on the
-evaluation's work item, never in `AiEvaluation.state`. The pending share-key
-lookup is nonunique: a `result_ready` row keeps its paid result while a queued
-successor waits in the same slot. A retry carrying a retained answer never
-joins that queued successor: it keeps a separate `result_ready` row and leaves
-the successor's demand and any in-flight attempt unchanged.
-
-Changed input updates the queued row's snapshot, target, provenance and work
-key in place, clears any result, receipt or error captured for its older input,
-and re-marks its item so an attempt in flight cannot publish. Completed current
-input is not queued again for `ai_refresh`. Member-initiated sweep,
-reclassification and retry requests get a fresh evaluation; pending slots are
-shared only within the same execution kind. Discovery audit receipts never
-reuse reclassification work, even when both describe the same Email and
-feature. A completed discovery with a request pointing to another execution
-kind or a missing receipt reports incomplete audit coverage; current Email
-state cannot reconstruct the lost handling receipt. Reverting after another
-input was evaluated creates a new row and reuses the AI response cache.
-
-Declined input (`blocked`, `obsolete`, or cancelled as superseded) receives at
-most three automatic attempts; member-cancelled Runs veto automatic
-readmission. Attempt suffixes keep work keys unique without receipt chains.
-Explicit member retries retain their `retryEvaluationId` receipt. Admission
-includes automatic evaluations without a Run: unchanged queued or completed
-input is skipped before taking the scheduling lock, and changed input updates
-the queued slot in place. Run failure codes still fence member-cancelled work.
+A model producer is a declared Ask with `produce` and `admit`. Its canonical
+envelope covers the full request, requested model and policy, prompt version,
+output schema and source revision. Producer calls inside the Ask disable their
+application cache. The kernel owns the response claim and commits Answer before
+returning or applying the result. AskScope links each requesting Run, including
+requests served by a retained Answer.
 
 ### Embedding execution
 
@@ -866,125 +841,43 @@ Related records rail remain authoritative. Missing, unavailable and stale
 indexes stay distinct from an empty result. An explicit indexing request
 starts the revision Pass and follows its bounded readiness read.
 
-## AI evaluation drains
+## Model Asks
 
-Run summaries are not evaluations; they are [Jobs](#run-summaries) writing
-`AiAnalysis`, like the Location description.
+All model evaluation features declare kernel Asks. The kernel claims queued
+Asks that have live demand. Admission runs before `sent`; funding refusal keeps
+the Ask queued with wait cause `funding` and does not spend an attempt. Automatic
+AI Stop is checked at admission. A sent call's Answer is retained even when its
+requesting Run stops while the call is in flight.
 
-`ai/evaluation` owns the drain, its items and evaluation pages. Run authority
-(live Run checks, pausing, funding resumption, the workflow fence around one
-evaluation) comes in through the `AiEvaluationExecution` port that
-`domains/run/service/ai-evaluation-execution.ts` provides; the drain itself
-knows no Run tables. Saved-record questions and Sweeps are the only producers
-of field evaluations; the drain evaluates field and statement work only, and no
-discovery drain walks the household.
+A producer call moves queued → sent → answered. A sent call whose claim lapses
+without an Answer becomes unknown and is never automatically resent. A member
+settles its outcome explicitly. Exhausted unsent attempts stay visible; an
+explicit retry revives them. Requester cancellation does not discard shared
+Answers or another Run's demand.
 
-Automatic refresh work has no Run: its `runId` is null and its activation is
-the authority. A member stops it from the Work page or `ai.stopAutomaticWork`:
-discovery admits nothing, owed rows are parked, and `leaseStale` fails any
-attempt in flight. It holds until a member resumes. Sweeps keep their Run.
+Mail reclassification runs through its Run Pass and captured Email roster. One
+Email result advances its checkpoint per page; source publication rechecks the
+member, mailbox, checksum and execution fences. Reused discovery verdicts create
+immutable handling receipts, with their source checksum and observed outcome,
+without inventing a model prediction. Model requester receipts belong to
+AskScope. A changed or removed source does not authorize a new paid call.
 
-Nothing queues an evaluation: `AiEvaluation.runAt` is set while the drain owes
-it (`priority` 0 when the owner or an uncancelled requester is a running,
-member-visible Run nobody scheduled; otherwise 1) and null once it settled or
-parked. A parked evaluation is owed again when a member launches its Run, and
-whenever a running Sweep's evaluate step still waits on it. Each feature is its
-own permit unit with at most one live page: a claim, ordered by a per-feature
-advisory lock, takes nothing while another page of the feature holds a live
-lease, and permit selection skips that feature until the live page's permit
-sends its successor. Features page in parallel up to the queue's concurrency,
-which is also the bound on paid concurrency. A page
-claims rows under one lease token (`attemptToken` on `DrainContext`), a
-16-minute lease nothing renews because no consumer outlives 15 minutes. A mark
-never takes a held lease, because that page may be paying the provider: no
-sibling claims the row until the page releases it or the lease lapses. New
-demand for the same input leaves the attempt to settle it. Changed input sets
-`leaseStale`, which makes the attempt obsolete and fails its writes, and the
-next page evaluates the new input once the row is released. Prepare rechecks
-live Run authority, activation, pending or `result_ready` state and generation;
-queued obsolete generations retire in sets before inference, and a stopped
-requester parks its item. A paid answer is written as `result_ready` through
-`ctx.fenced` before publication, so a later publication failure reuses it
-instead of buying it again.
+### Location analysis
 
-Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
-selection after the page's checkpoint. Items run two at a time, each in its own
-guarded transactions under the drain lease, but a page publishes one item's
-SERIALIZABLE transaction at a time (`publishAiEvaluation`), so those
-publications have one writer per feature (Gmail evidence publication instead
-locks its Run): concurrent publications read each other's rows (a Purchase's lines,
-shared index pages) and abort each other, and an item whose retries all abort
-waits out transient backoff. A page that dies holds its feature until its lease
-lapses, and the drain's next-due time is that lapse, so the feature wakes then. An item's workflow fence reads its
-own row by primary key and fails once that row's lease is stale, lapsed or
-released; the page-wide lease read filters on the unindexed `leaseToken`, so it
-runs only outside SERIALIZABLE transactions, before paid requests. Heartbeat and
-completion logs
-annotate `drain.claim`, `drain.prepare` and `drain.publish` phase timing
-without logging prompts or household evidence; the Job `page` log carries
-`pageResult`, limited to the numeric `processed`, `published`, `failed` and
-`covered` counts. Publication commits one SERIALIZABLE transaction per item
-chunk; a failed chunk splits only after its transaction rolls back, and
-committed siblings never replay.
-
-Expected evidence invalidation is a typed obsolete outcome, including
-acquisition eligibility that changed while inference ran and a Sweep basis
-changed after queuing, before inference or paid-result reuse. Ordinary provider
-text never decides obsoletion. Failures map at the drain seam:
-
-- Invalidated evidence settles the evaluation `obsolete` as a publication
-  outcome.
-- AI budget, provider capacity and AI Gateway admission throw
-  `JobDeferredError`, which stops the page without spending attempts. Funding
-  or configuration refusal defers the affected feature, preserves the
-  configured provider route and probes again after a bounded wait. The paid
-  rung treats the Gateway's "Insufficient balance; add money to your gateway or
-  use BYOK" refusal as a funding stop even when it arrives as HTTP 403 /
-  `invalid_prompt`; that wrapper does not prove the prompt is malformed or that
-  the household Run budget was spent. Gateway admission carries its actual
-  retry time. Prepared paid siblings publish before a provider stop defers the
-  remaining work.
-- A governed target field whose current result is unavailable is that target's
-  failure (`JobTargetError`), not an empty value or obsolete evidence. At
-  publication its chunk rolls back and splits, so siblings commit without new
-  inference; the target stays owed and spends item attempts.
-- Anything else is the item's failure, and its third consecutive failure
-  settles the evaluation `failed` with the raw error and settles its
-  requesters. A Run cancel withdraws its requests and stops owing evaluations
-  no other requester still wants.
-
-Publication checks exact chunk leases under the ordered target locks, including
-expiry; preparation still checks the whole claimed page. Atomic evidence,
-activation, member-stop and receipt fences remain in the publication
-transaction. Single-evaluation publication owns the same bounded snapshot
-recovery as paged publication: a serialization conflict replays the DB-only
-callback, lease and authority checks, settlement receipt and activation fence
-in a fresh transaction, while inference and retained paid-result storage stay
-outside that boundary. A caller-owned transaction owns its recovery and is not
-replayed locally. Automatic application propagates serialization failures to
-that owner, including preflight failures before review's savepoint; an aborted
-serialization attempt is never converted to an ordinary policy refusal. Field
-publication re-reads the declaration's read path, including mutation aliases
-such as `ingredientId` exposed as `ingredient.id`. A loaded nullable relation is
-empty; an absent root or missing governed result remains unavailable and cannot
-authorize a proposal.
+Location image changes dirty the location's `fields` scope. Its composed request
+covers the location name and ordered photo snapshot. The description displayed
+by entity reads comes from the Answer used by that scope. Inventory detection
+appends immutable PhotoInventoryEvidence with its source snapshot and Run; member
+approval owns creating inventory.
 
 ### Run summaries
 
-The `run-summary` drain (`domains/run/service/run-summary.ts`) publishes one
-`run-ai.summary.write` Job per owed Run end, up to 20 a page. A Run end is owed
-when the Run sits in the default Runs list, ended `completed`, `failed`,
-`dispatch_failed` or `needs_review` at or after `RUN_SUMMARY_CUTOFF`, has no
-live summary of that `endedAt`, and has no Job under that key; an exhausted Job
-keeps its end from being owed again. The handler skips a Run that restarted,
-re-ended or was removed, sends the Run's own composed title, Why, Outcome,
-state, wall time, failure and step counts (never Email bodies or transcripts)
-to `RUN_SUMMARY_FEATURE`, and writes the text with its `generation` (the
-`endedAt`) through `upsertAiAnalysis` after re-reading the Run under a share
-lock. The call is automatic AI work (`AUTOMATIC_AI_CALL`): a funding stop
-throws into the Job's retry instead of pausing the summarized Run. The Run's
-`aiSummary` field reads the newest live analysis whose generation matches its
-current `endedAt`, so a restarted Run reads none until its new end is written.
+Ending or changing a Run dirties its `fields` scope. An ended Run asks
+`run-summary` with its purpose, state, failure, time bounds and step counts.
+Email bodies and coordinator transcripts are not summary inputs. The summary
+read joins the scope's current inputs to its Answer and the Run's end generation.
+A restarted Run displays no summary for the earlier end. Summarization does not
+pause the summarized Run when automatic funding refuses.
 
 ## Diagnostics and repair
 
@@ -1012,10 +905,6 @@ failure count alone does not establish uninterrupted execution.
   non-stream drain unit reads its oldest due item from its drain's `due` rows.
   A unit that never ran has no record row and appears through its stream or
   those `due` rows, for as long as it is owed.
-- `job.activity` (`evaluations`): `AiEvaluation` rows by feature and state:
-  `queued` and `result_ready` whenever present, `blocked` when blocked in the
-  last 7 days. Each carries its count, its oldest row's creation time and the
-  most common stored error's first cause name.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
   that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
   only on hello), device attempt starts per minute (reclaims included), and an
@@ -1239,14 +1128,6 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   successful page in those 30 minutes. `since` is when the work fell owed:
   for Email purchase discovery, its cursor's next hour or last page. A
   pass that has never run has no cursor and reports the read time.
-- An AI feature has `result_ready` evaluations that are owed, that no page
-  holds, and that have gone unpublished for 30 minutes: due since then, or
-  waiting out a failed publication's backoff on a failing streak that old.
-  Paid answers are not being published. An evaluation that is parked,
-  postponed, or held to a later `runAt` by a funding or provider wait
-  (`waitCause`) is waiting on purpose and is not counted. The row counts the
-  unpublished answers and names the most common error; it is omitted while the
-  feature already shows failed work.
 - A kind keeps failing: failed in the last 7 days with no later completion, or
   live with `JOB_NEEDS_ATTENTION_ATTEMPTS` failures. A drain item in that state
   counts, but Retry is withheld because retrying its Job does not move the
@@ -1256,11 +1137,6 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   7 days with no successor and no later completion. A scheduled or discovered
   Run retries on its own, so it needs three failures in a row. Paused Runs are a
   member's choice and are never stuck.
-
-For AI evaluations, settling obsolete evidence also advances the last-finished
-signal: a queue retiring stale inputs is moving. It does not count as a
-completed value or increase the published-value pace. Blocked admission and
-member cancellation do not advance that signal.
 
 Due for 15 minutes while still completing reads as catching up. Copy lives on
 the kind (`stuck` in `JOB_KIND_POLICY`); an undeclared kind falls back to its
@@ -1332,9 +1208,7 @@ Postgres once and finds nothing due. A process dying between commit and its
 post-commit signal recovers on app-open or the next hourly tick.
 
 The hourly cron (`server/worker/scheduled.ts`) is the timer for work due later
-and the backstop for a lost permit or broken delivery. It activates the
-deployed Worker version's AI refresh policy on its first tick after a deploy,
-rings due device work, starts the reconciliation and retention Passes, runs the kernel and `maintainJobs`, runs legacy units itself for
+and the backstop for a lost permit or broken delivery. It rings due device work, starts the reconciliation and retention Passes, runs the kernel and `maintainJobs`, runs legacy units itself for
 up to five minutes, then sends up to `maxConcurrency` permits for what is still
 due (one delayed permit when the next work is later). A failure in one step
 still lets the others and the daily pass run, then rejects the event.
@@ -1352,8 +1226,8 @@ recovery. App-open coalesces recovery and mail discovery. Gmail provider push
 is not implemented.
 
 `job.activity` and the status page report what runs, waits and last finished.
-The Work page shows the `job.activity` queue and evaluation backlog behind its
-closed Queue details disclosure.
+The Work page shows queue telemetry behind its closed Queue details disclosure. Kernel machinery
+reads expose each scope's gaps, Asks, Answers and Decisions.
 
 ### What references a Run
 
@@ -1363,8 +1237,8 @@ of the rows marked "session", and rows marked "no Run" can have none.
 
 | Reference                                                                                                                             | Disposition                                                                   |
 | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `AiUsage`, `AiEvaluation`                                                                                                             | Session, or no Run for automatic work; `feature` and the actor attribute cost |
-| `AiEvaluationRequest`                                                                                                                 | Session: a Run's request for an evaluation                                    |
+| `AiUsage`                                                                                                                             | Session, or no Run for automatic work; `feature` and the actor attribute cost |
+| `AskScope`                                                                                                                            | A Run's request, ordering, cancellation and receipt for an Ask                |
 | `Suggestion`, `RunFinding`, `AuditLog`, `McpToolCall`, `Job`                                                                          | Nullable provenance; cleared if a Run goes                                    |
 | `RunOperation`                                                                                                                        | Exact-replay receipts, kept                                                   |
 | `RunControlEvent`                                                                                                                     | Member history, kept                                                          |
@@ -1373,7 +1247,7 @@ of the rows marked "session", and rows marked "no Run" can have none.
 | `ImportPreparedOrder`, `ImportSourceClaim` (`firstRunId`, `lastRunId`)                                                                | Import session evidence, kept                                                 |
 | `PhotoGroupProposal`, `PhotoRunImage`, `ImageProcessingJob`                                                                           | Photo session and device work, kept                                           |
 | `Run` (`parentRunId`, `predecessorRunId`)                                                                                             | Lineage, kept                                                                 |
-| `AiAnalysis` (`entityKind` `run`)                                                                                                     | The Run's AI summary, kept; no foreign key                                    |
+| `Answer`, `AskScope`                                                                                                                  | Retained summary and its requesting Run link                                  |
 
 ### Routine Run history
 
