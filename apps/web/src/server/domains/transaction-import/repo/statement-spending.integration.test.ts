@@ -1,5 +1,5 @@
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementDecisionInput } from "@cubby/schemas/statement-decision";
 import { eq, sql } from "drizzle-orm";
@@ -33,7 +33,6 @@ import {
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
-import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
@@ -257,20 +256,36 @@ describe("statement spending review and re-import", () => {
     expect(live).toHaveLength(1);
     expect(live[0]?.shortcode).toBe(target.output.id);
     const [first] = await getDb(ctx.db).select().from(sourceOccurrence);
-    const second = parseEntityId("sourceOccurrence", crypto.randomUUID());
-    await ensureExternalSources(ctx.db, ["mint"]);
-    await insertManyWithShortcode(ctx.db, "sourceOccurrence", [
-      {
-        ...first!,
-        id: second,
+    const secondInput = {
+      ...setup.input,
+      import: {
+        ...setup.input.import,
         source: "mint",
-        identityScope: "provider:mint",
-        currentObservationId: null,
-        acceptedTransactionId: live[0]!.id,
+        fingerprint: "synthetic-cross-source",
       },
-    ]);
+    };
+    await recordSourceTransactionRecords(ctx.db, secondInput, ctx.actor);
+    const [other] = await getDb(ctx.db)
+      .select()
+      .from(sourceOccurrence)
+      .where(eq(sourceOccurrence.source, "mint"));
+    const second = other!.id;
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({
+        acceptedTransactionId: live[0]!.id,
+        accountId: live[0]!.accountId,
+        reviewState: "ready",
+      })
+      .where(eq(sourceOccurrence.id, second));
+    await emitWrites(ctx.db, {
+      table: sourceOccurrence,
+      ids: [second],
+      columns: ["acceptedTransactionId", "accountId", "reviewState"],
+    });
     await reconcileNow(ctx.db, [{ kind: "bankEvent", key: second }]);
     await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
+    await recordSourceTransactionRecords(ctx.db, secondInput, ctx.actor);
     await reconcileNow(ctx.db, [
       { kind: "bankEvent", key: first!.id },
       { kind: "bankEvent", key: second },
