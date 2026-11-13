@@ -1,10 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { MACHINERY_RAW_ERROR_BYTES } from "@cubby/schemas/kernel/machinery";
 import {
   workDiagnostics,
   type workRetryTarget,
 } from "@cubby/schemas/work-status";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { sql } from "drizzle-orm";
 import type { z } from "zod";
 
@@ -12,6 +10,7 @@ import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { MAX_SCOPE_ATTEMPTS } from "~/server/kernel/claim";
+import { machineryErrorText } from "~/server/kernel/error-presentation";
 import { productionKernel } from "~/server/kernel/kernel";
 import { isoText } from "~/server/kernel/sql-time";
 import { ASK } from "~/server/kernel/vocab";
@@ -59,6 +58,7 @@ export async function readKernelDiagnostics(
   const safeFailures = await Promise.all(
     failures.rows.map(async (row) => {
       let error = row.error;
+      let publicRecord: { entity: string; id: string } | null = null;
       let label =
         row.target.type === "scope"
           ? "Record reconciliation"
@@ -69,11 +69,13 @@ export async function readKernelDiagnostics(
           id: string;
           inputHash: string;
           feature: string;
+          shortcode: string | null;
         }>(sql`
-        SELECT k.entity, k."entityId" AS id, a."inputHash", a.feature FROM "Ask" a
+        SELECT k.entity, k."entityId" AS id, e.shortcode, a."inputHash", a.feature FROM "Ask" a
         LEFT JOIN "AskScope" s ON s."askId"=a.id
         LEFT JOIN "RecordKey" k ON k."scopeKind"=s."scopeKind" AND k."scopeKey"=s."scopeKey"
           AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+        LEFT JOIN "Entity" e ON e.id=k."entityId" AND e.kind=k.entity
         WHERE a.id=${row.target.id}::uuid`);
         label =
           kernel.registry.asks.get(linked.rows[0]?.feature ?? "")?.label ??
@@ -95,6 +97,8 @@ export async function readKernelDiagnostics(
             break;
           }
           error = ask.lastError;
+          if (record.shortcode)
+            publicRecord = { entity: record.entity, id: record.shortcode };
         }
       }
       const recordRows =
@@ -106,13 +110,9 @@ export async function readKernelDiagnostics(
           : null;
       return {
         ...row,
-        record: recordRows?.rows[0] ?? null,
+        record: recordRows?.rows[0] ?? publicRecord,
         label,
-        error: new TextDecoder().decode(
-          new TextEncoder()
-            .encode(scrubErrorMessage(error))
-            .slice(0, MACHINERY_RAW_ERROR_BYTES),
-        ),
+        error: machineryErrorText(error) ?? "",
       };
     }),
   );

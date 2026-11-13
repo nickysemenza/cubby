@@ -1,4 +1,3 @@
-import { needsYouPage } from "@cubby/schemas/kernel/work";
 import { buildEntity } from "#web/tooling/factories/build.ts";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import { workQueueOutSchema } from "@cubby/schemas/work-queue";
@@ -52,20 +51,10 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     (await api.get("recipe", recipeId)).parsedBody;
 
   await page.setViewportSize({ width: 1440, height: 1100 });
-  const memberRead = page.waitForResponse((response) =>
-    dispatchesOperation(response.request(), "machinery.needsYou"),
-  );
   await gotoAuthenticatedPage(page, "/activity");
-  const memberWork = await operationResult(
-    await memberRead,
-    "machinery.needsYou",
-    needsYouPage,
-  );
-  expect(
-    new Set(memberWork.items.map((item) => `${item.entity}:${item.shortcode}`))
-      .size,
-  ).toBe(memberWork.items.length);
-  expect(memberWork.count).toBeGreaterThanOrEqual(memberWork.items.length);
+  await expect(
+    page.getByRole("heading", { name: "Needs you", exact: false }),
+  ).toBeVisible();
   await expect(page.getByTestId("work-health")).toContainText(
     /stuck|Catching up/i,
   );

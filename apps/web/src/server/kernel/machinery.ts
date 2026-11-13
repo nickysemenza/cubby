@@ -17,7 +17,6 @@ import {
 import {
   kernelJson,
   MACHINERY_COLLECTION_CAP,
-  MACHINERY_RAW_ERROR_BYTES,
   MACHINERY_RESPONSE_BYTES,
   type Machinery,
   type MachineryGap,
@@ -31,7 +30,6 @@ import {
   type DecisionKind,
   type KernelGap,
 } from "@cubby/schemas/kernel/stage";
-import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 import { getTableColumns, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
@@ -47,6 +45,7 @@ import { askGapState, askIsStuck, askMemberGap } from "./ask-gap";
 import { MAX_SCOPE_ATTEMPTS } from "./claim";
 import { computeBatch } from "./compute";
 import type { ColumnValues, Json, ScopeRef } from "./define";
+import { machineryErrorText as rawText } from "./error-presentation";
 import { resolveForRead } from "./identity";
 import { recordSubject } from "./keys";
 import { idColumn, KernelContractError } from "./reads";
@@ -68,15 +67,6 @@ const capped = <T>(items: readonly T[]) => ({
   shown: Math.min(items.length, MACHINERY_COLLECTION_CAP),
   total: items.length,
 });
-
-const rawText = (raw: string | null | undefined) => {
-  if (!raw) return null;
-  const scrubbed = scrubErrorMessage(raw);
-  const bytes = new TextEncoder().encode(scrubbed);
-  return bytes.byteLength <= MACHINERY_RAW_ERROR_BYTES
-    ? scrubbed
-    : new TextDecoder().decode(bytes.slice(0, MACHINERY_RAW_ERROR_BYTES));
-};
 
 const etaFrom = (position: number, medianMs: number | null) =>
   medianMs === null

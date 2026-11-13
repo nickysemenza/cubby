@@ -20,6 +20,7 @@ import {
 
 import { askOutcomes } from "./ask-gap";
 import { passOrder } from "./claim";
+import { machineryErrorText } from "./error-presentation";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 import { ASK, STAGE } from "./vocab";
@@ -50,7 +51,13 @@ export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
       ${isoText(sql`"availableAt"`)} AS "availableAt", "waitCause", attempts, "maxAttempts", "lastError",
       ${isoText(sql`"doneAt"`)} AS "doneAt", ${isoText(sql`"cancelledAt"`)} AS "cancelledAt"
     FROM "Pass" WHERE "runId" = ${runId}::uuid ORDER BY ${passOrder()}`);
-  return result.rows.map((row) => passWork.parse({ ...row, costMicros: 0 }));
+  return result.rows.map((row) =>
+    passWork.parse({
+      ...row,
+      lastError: machineryErrorText(row.lastError),
+      costMicros: 0,
+    }),
+  );
 }
 
 /** One row per public record with a member-supplied gap, oldest first; no per-record reads. */
@@ -200,10 +207,12 @@ export async function readRunWork(
       return runWork.parse({
         scopes: scopes.rows.map((scope) => ({
           ...scope,
+          lastError: machineryErrorText(scope.lastError),
           label: scope.firstGap ?? "Record reconciliation",
         })),
         asks: asks.rows.map((ask) => ({
           ...ask,
+          lastError: machineryErrorText(ask.lastError),
           label: registry.asks.get(ask.feature)?.label ?? "Answer",
         })),
         passes,
