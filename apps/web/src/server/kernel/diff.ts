@@ -4,7 +4,7 @@
  * the version sweep turns it into a Drift proposal.
  */
 import type { Computed } from "./compute";
-import type { ColumnRef, ColumnValues, FactRef, Json } from "./define";
+import type { Desired, ColumnRef, ColumnValues, FactRef, Json } from "./define";
 import { canonicalJson } from "./keys";
 import { KernelContractError } from "./reads";
 
@@ -47,6 +47,29 @@ export type Difference = {
 };
 
 const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
+
+function mergedPatches(input: Desired["patches"]) {
+  const patches = new Map<string, Desired["patches"][number]>();
+  for (const patch of input) {
+    const slot = `${patch.target.name}:${patch.id}`;
+    const previous = patches.get(slot);
+    for (const [field, value] of Object.entries(patch.values))
+      if (
+        previous &&
+        Object.hasOwn(previous.values, field) &&
+        !same(previous.values[field], value)
+      )
+        throw new KernelContractError(
+          `Conflicting declarations for ${patch.target.name}.${field}`,
+        );
+    patches.set(slot, {
+      ...patch,
+      values: { ...previous?.values, ...patch.values },
+      provenance: { ...previous?.provenance, ...patch.provenance },
+    });
+  }
+  return patches;
+}
 
 export function difference(
   computed: Computed,
@@ -121,8 +144,18 @@ export function difference(
         row: { ...stored, ...set },
       });
   }
-  for (const patch of desired.patches) {
+  const patches = mergedPatches(desired.patches);
+  for (const patch of patches.values()) {
     const stored = computed.patched.get(patch.target.name)?.get(patch.id);
+    if (!stored && patch.target.projection) {
+      result.inserts.push({
+        target: patch.target,
+        naturalKey: "",
+        id: patch.id,
+        values: { ...patch.values },
+      });
+      continue;
+    }
     // A record removed since the load is left alone; its owner disposes of it.
     if (
       !stored ||

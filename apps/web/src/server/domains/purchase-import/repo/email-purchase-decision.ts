@@ -14,10 +14,8 @@ import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { storedDerived } from "~/server/db/derived-declarations";
 import {
   databaseForTransaction,
-  getDb,
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
@@ -29,7 +27,6 @@ import {
   purchase,
   vendorAccount,
 } from "~/server/db/schema";
-import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
 import {
   foldPurchaseLinks,
@@ -37,10 +34,10 @@ import {
   readExactOrderLinkCandidates,
   type ExactOrderLinkCandidate,
 } from "~/server/domains/email/repo/email-purchase-links";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "./gmail/mail-account";
@@ -292,16 +289,17 @@ async function decideOnce(
         },
         actor,
       );
-      await getDb(databaseForTransaction(tx))
-        .update(emailTable)
-        .set({
+      await updateEmailStateWhere(
+        databaseForTransaction(tx),
+        {
           classification: "related",
           classificationStage: "resolution",
           classificationReason: reason,
           classificationVersion: MAILBOX_RESEARCH_VERSION,
           updatedAt: new Date(),
-        })
-        .where(eq(emailTable.id, email.id));
+        },
+        eq(emailTable.id, email.id),
+      );
     }
 
     await republishEmailRelationship(databaseForTransaction(tx), email.id);
@@ -326,15 +324,8 @@ export async function republishEmailRelationship(
   db: Database,
   emailId: string,
 ) {
-  const declaration = storedDerived("email", "relationshipFacts");
-  if (!declaration)
-    throw new Error("Email relationship declaration is missing");
-  await publishRebuiltValues(
-    db,
-    declaration,
-    [emailId],
-    await emailDerivedComputes["email.relationshipFacts"](db, [emailId]),
-  );
+  const { reconcileNow } = await import("~/server/kernel/api");
+  await reconcileNow(db, [{ kind: "emailState", key: emailId }]);
 }
 
 /** The rule revision recorded on every automatic exact order-number link. */

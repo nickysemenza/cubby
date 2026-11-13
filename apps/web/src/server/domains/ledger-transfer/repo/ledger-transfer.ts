@@ -4,16 +4,10 @@ import {
   type LedgerTransferUpdateData,
 } from "@cubby/schemas/entities/ledgerTransfer";
 import { ledgerTransferRawOut as rawLedgerTransferOut } from "@cubby/schemas/entity-contracts/ledgerTransfer";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type {
-  FinancialTransactionId,
-  LedgerPartyId,
-  LedgerTransferId,
-  LedgerTransferShortcode,
-} from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { LedgerTransferShortcode } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { LedgerSourceClaimOut } from "@cubby/schemas/ledger-transfer";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -24,7 +18,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
-  buildPartialUpdateValues,
+  databaseForTransaction,
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
@@ -50,14 +44,11 @@ import {
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
-import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- source, reconciliation and note are JSON property names, not vocabulary values.
 const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
@@ -173,51 +164,13 @@ const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer, {
   },
 });
 
-/** Per-update work resolved before the audited column update: see `relations`. */
-type LedgerTransferChange = {
-  columns: Partial<typeof ledgerTransfer.$inferInsert>;
-  parties: { fromPartyId: LedgerPartyId; toPartyId: LedgerPartyId };
-  amount: number;
-  evidence: readonly FinancialTransactionId[] | undefined;
-  sourceClaims: LedgerTransferUpdateData["sourceClaims"];
-};
-
 const crud = createEntityCrud({
   table: ledgerTransfer,
   entity: "ledgerTransfer",
   scaffold: ledgerTransferScaffold,
   output: rawLedgerTransferOut,
-  toUpdate: (change: LedgerTransferChange) =>
-    buildPartialUpdateValues({ ...change.columns, ...change.parties }),
-  auditUpdateFields: [...entityFieldModels.ledgerTransfer.audit],
-  // Source claims and evidence links live in child tables but are audited as
-  // fields: the diff reads them before and after they are rewritten.
-  relations: {
-    read: async (tx, id) => {
-      const [row] = await tx
-        .select({
-          sourceClaims: transferSourceClaimsSql,
-          evidenceTransactionIds: transferEvidenceIdsSql,
-        })
-        .from(ledgerTransfer)
-        .where(eq(ledgerTransfer.id, id));
-      return row ?? {};
-    },
-    write: async (tx, id, change) => {
-      if (change.evidence !== undefined)
-        await replaceEvidence(
-          tx,
-          { id, ...change.parties, amount: change.amount },
-          change.evidence,
-        );
-      if (change.sourceClaims !== undefined)
-        await replaceLedgerSourceClaims(
-          tx,
-          { ledgerTransferId: id, targetAmount: change.amount },
-          change.sourceClaims ?? [],
-        );
-    },
-  },
+  toUpdate: (data: Partial<typeof ledgerTransfer.$inferInsert>) => data,
+  auditUpdateFields: [],
 });
 /** One live Ledger Transfer by public code, or null. */
 export const readLedgerTransfer = crud.getByShortcode;
@@ -277,123 +230,6 @@ export const transferEvidenceLegProblem = (
           ? `has ${leg.bookingLineCount} live booked Expense(s); review the booked spending conversion before using it as transfer evidence`
           : null;
 
-async function assertEvidenceSet(
-  tx: DrizzleTransaction,
-  transfer: {
-    id: LedgerTransferId;
-    fromPartyId: LedgerPartyId;
-    toPartyId: LedgerPartyId;
-    amount: number;
-  },
-  transactionIds: readonly FinancialTransactionId[],
-) {
-  if (transactionIds.length === 0) return;
-  const rows = await tx
-    .select({
-      id: financialTransaction.id,
-      accountId: financialTransaction.accountId,
-      ledgerTransferId: financialTransaction.ledgerTransferId,
-      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
-        Number,
-      ),
-      ledgerPartyId: financialAccount.ledgerPartyId,
-      ...transferEvidenceLegFields,
-    })
-    .from(financialTransaction)
-    .innerJoin(
-      financialAccount,
-      eq(financialTransaction.accountId, financialAccount.id),
-    )
-    .where(
-      and(
-        inArray(financialTransaction.id, [...transactionIds]),
-        notDeleted(financialTransaction),
-        notDeleted(financialAccount),
-      ),
-    )
-    .for("update");
-  if (rows.length !== transactionIds.length)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Transfer evidence must name live financial transactions.",
-    );
-  if (
-    rows.some(
-      (row) =>
-        transferEvidenceLegProblem(row) !== null ||
-        financialEvidenceAmountMinor(Math.abs(row.amount)) !==
-          financialEvidenceAmountMinor(transfer.amount),
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Transfer evidence must have observed, pending, or posted status, be unallocated, have no live booked Expenses, and match the transfer amount. Review a booked spending conversion before attaching transfer evidence.",
-    );
-  if (
-    rows.some(
-      (row) => row.ledgerTransferId && row.ledgerTransferId !== transfer.id,
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A financial transaction can evidence only one ledger transfer.",
-    );
-  if (
-    rows.some(
-      (row) => row.amount > 0 && row.ledgerPartyId !== transfer.fromPartyId,
-    ) ||
-    rows.some(
-      (row) => row.amount < 0 && row.ledgerPartyId !== transfer.toPartyId,
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Each evidence transaction account must map to its transfer endpoint party.",
-    );
-  if (rows.length === 2 && rows[0]!.amount > 0 === rows[1]!.amount > 0)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Two-sided transfer evidence requires one positive and one negative transaction.",
-    );
-  if (rows.length === 2 && rows[0]!.accountId === rows[1]!.accountId)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Two-sided transfer evidence must use distinct financial accounts.",
-    );
-}
-
-async function replaceEvidence(
-  tx: DrizzleTransaction,
-  transfer: {
-    id: LedgerTransferId;
-    fromPartyId: LedgerPartyId;
-    toPartyId: LedgerPartyId;
-    amount: number;
-  },
-  ids: readonly FinancialTransactionId[],
-) {
-  await assertEvidenceSet(tx, transfer, ids);
-  await tx
-    .update(financialTransaction)
-    .set({ ledgerTransferId: null })
-    .where(
-      and(
-        eq(financialTransaction.ledgerTransferId, transfer.id),
-        notDeleted(financialTransaction),
-      ),
-    );
-  if (ids.length)
-    await tx
-      .update(financialTransaction)
-      .set({ ledgerTransferId: transfer.id })
-      .where(
-        and(
-          inArray(financialTransaction.id, [...ids]),
-          notDeleted(financialTransaction),
-        ),
-      );
-}
-
 export const createLedgerTransfer = defineMutationWriter({
   entity: "ledgerTransfer",
   read: async (
@@ -411,37 +247,34 @@ export const createLedgerTransfer = defineMutationWriter({
     data: LedgerTransferCreateInput,
     actor: ActorContext,
   ) => {
+    const { createTransferEvent } = await import("./transfer-mutations");
     const id = await withTransaction(db, async (tx) => {
       const parties = await resolvePartyIds(tx, data);
-      const { sourceClaims, evidenceTransactionIds, ...columns } = data;
-      const created = await insertWithShortcode(tx, "ledgerTransfer", {
-        ...columns,
-        amount: financialEvidenceAmountMinor(columns.amount),
-        ...parties,
-      });
-      const evidence = evidenceTransactionIds
-        ? await resolveAllOrThrow(
-            tx,
-            "financialTransaction",
-            evidenceTransactionIds,
-          )
-        : [];
+      const evidence = await resolveAllOrThrow(
+        tx,
+        "financialTransaction",
+        data.evidenceTransactionIds ?? [],
+      );
+      const id = await createTransferEvent(
+        databaseForTransaction(tx),
+        {
+          ...parties,
+          amount: financialEvidenceAmountMinor(data.amount),
+          date: data.date,
+          notes: data.notes,
+        },
+        evidence,
+        actor,
+      );
       await replaceLedgerSourceClaims(
         tx,
-        { ledgerTransferId: created.id, targetAmount: data.amount },
-        sourceClaims ?? [],
+        {
+          ledgerTransferId: parseEntityId("ledgerTransfer", id),
+          targetAmount: data.amount,
+        },
+        data.sourceClaims ?? [],
       );
-      await replaceEvidence(
-        tx,
-        { id: created.id, ...parties, amount: data.amount },
-        evidence,
-      );
-      await logAuditEntry(tx, actor, {
-        entityKind: "ledgerTransfer",
-        entityId: created.id,
-        action: "create",
-      });
-      return created.id;
+      return parseEntityId("ledgerTransfer", id);
     });
     return readOutput({ entityId: id });
   },
@@ -467,28 +300,9 @@ export const updateLedgerTransfer = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "ledgerTransfer", shortcode);
+    const { updateTransferEvent } = await import("./transfer-mutations");
     await withTransaction(db, async (tx) => {
-      const [locked] = await tx
-        .select({
-          id: ledgerTransfer.id,
-          fromPartyId: ledgerTransfer.fromPartyId,
-          toPartyId: ledgerTransfer.toPartyId,
-        })
-        .from(ledgerTransfer)
-        .where(and(eq(ledgerTransfer.id, id), notDeleted(ledgerTransfer)))
-        .for("update")
-        .limit(1);
-      if (!locked)
-        throw createAppError(
-          "LEDGER_TRANSFER_NOT_FOUND",
-          `Ledger transfer not found: ${shortcode}`,
-        );
-      const before = await crud.getByIDOrNull(tx, id);
-      if (!before)
-        throw createAppError(
-          "LEDGER_TRANSFER_NOT_FOUND",
-          `Ledger transfer not found: ${shortcode}`,
-        );
+      const before = await crud.getByID(tx, id);
       await assertExplicitSourceClaimsForAmountChange(
         tx,
         { ledgerTransferId: id },
@@ -496,63 +310,48 @@ export const updateLedgerTransfer = defineMutationWriter({
         data.amount ?? before.amount,
         data.sourceClaims,
       );
-      const parties =
-        data.fromPartyId === undefined && data.toPartyId === undefined
-          ? { fromPartyId: locked.fromPartyId, toPartyId: locked.toPartyId }
-          : await resolvePartyIds(tx, {
-              fromPartyId: data.fromPartyId ?? before.fromPartyId,
-              toPartyId: data.toPartyId ?? before.toPartyId,
-            });
-      const amount = data.amount ?? before.amount;
-      // Party shortcodes are resolved into `parties` above; the columns carry ids.
       const {
         sourceClaims,
         evidenceTransactionIds,
-        fromPartyId: _fromParty,
-        toPartyId: _toParty,
-        amount: _amount,
-        ...columnData
+        fromPartyId,
+        toPartyId,
+        amount,
+        ...columns
       } = data;
+      const parties =
+        fromPartyId === undefined && toPartyId === undefined
+          ? {}
+          : await resolvePartyIds(tx, {
+              fromPartyId: fromPartyId ?? before.fromPartyId,
+              toPartyId: toPartyId ?? before.toPartyId,
+            });
       const evidence =
-        evidenceTransactionIds === undefined &&
-        data.amount === undefined &&
-        data.fromPartyId === undefined &&
-        data.toPartyId === undefined
+        evidenceTransactionIds === undefined
           ? undefined
-          : evidenceTransactionIds === undefined
-            ? await tx
-                .select({ id: financialTransaction.id })
-                .from(financialTransaction)
-                .where(
-                  and(
-                    eq(financialTransaction.ledgerTransferId, id),
-                    notDeleted(financialTransaction),
-                  ),
-                )
-                .then((rows) => rows.map((row) => row.id))
-            : await resolveAllOrThrow(
-                tx,
-                "financialTransaction",
-                evidenceTransactionIds ?? [],
-              );
-      await crud.update(
-        tx,
+          : await resolveAllOrThrow(
+              tx,
+              "financialTransaction",
+              evidenceTransactionIds ?? [],
+            );
+      await updateTransferEvent(
+        databaseForTransaction(tx),
         id,
         {
-          columns: {
-            ...columnData,
-            ...(data.amount === undefined
-              ? {}
-              : { amount: financialEvidenceAmountMinor(data.amount) }),
-          },
-          parties,
-          amount,
-          evidence,
-          sourceClaims,
+          ...columns,
+          ...parties,
+          ...(amount === undefined
+            ? {}
+            : { amount: financialEvidenceAmountMinor(amount) }),
         },
+        evidence,
         actor,
-        async () => undefined,
       );
+      if (sourceClaims !== undefined)
+        await replaceLedgerSourceClaims(
+          tx,
+          { ledgerTransferId: id, targetAmount: amount ?? before.amount },
+          sourceClaims ?? [],
+        );
     });
     return readOutput({ entityId: id });
   },

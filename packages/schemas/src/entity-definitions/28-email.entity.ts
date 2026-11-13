@@ -1146,6 +1146,7 @@ export const { definition, readSchemas } = defineEntityModel({
     stored: {
       relationshipFacts: {
         compute: "email.relationshipFacts",
+        reconciler: "emailState",
         snapshotSource: {
           table: "EmailReadSnapshot",
           value: "relationshipFacts",

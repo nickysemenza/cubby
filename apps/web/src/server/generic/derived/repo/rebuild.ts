@@ -28,7 +28,7 @@ const phases = ["facts", "quality", "search", "diagnostics"] as const;
 /** Manifest dependencies order each phase. Self-dependencies describe domain graphs, not scheduler work. */
 export function rebuildDeclarations(): readonly EntityStoredDerivedDeclaration[] {
   const declarations = entityStoredDerivedDeclarations().filter(
-    (entry) => !entry.snapshotSource?.view,
+    (entry) => !entry.snapshotSource?.view && !entry.reconciler,
   );
   const byTarget = new Map(declarations.map((entry) => [entry.target, entry]));
   const ordered: EntityStoredDerivedDeclaration[] = [];

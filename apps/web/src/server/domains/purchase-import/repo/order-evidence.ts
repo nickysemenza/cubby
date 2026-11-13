@@ -76,12 +76,36 @@ export async function appendEmailIdentity(
   const q = repositoryQueries(db);
   const [existing] = await q.select().from(email).where(options.where).limit(1);
   if (existing) return { row: existing, created: false };
-  const id = parseEntityId("email", crypto.randomUUID());
+  const values = options.values();
+  const id = values.id ?? parseEntityId("email", crypto.randomUUID());
+  const {
+    classification,
+    classificationStage,
+    classificationReason,
+    classificationVersion,
+    ...identity
+  } = values;
   const facts = await append(db, [
-    evidenceRow(emailEvidence, { ...options.values(), id }),
+    evidenceRow(emailEvidence, { ...identity, id }),
   ]);
   const [row] = await q.select().from(email).where(options.where).limit(1);
   if (!row) throw new Error("Appended Email identity is missing");
+  if (facts.some((fact) => fact.id === id) && classification !== undefined) {
+    const { updateEmailStateWhere } =
+      await import("~/server/domains/email/repo/email-state-mutations");
+    const { eq } = await import("drizzle-orm");
+    const [projected] = await updateEmailStateWhere(
+      db,
+      {
+        classification,
+        classificationStage,
+        classificationReason,
+        classificationVersion,
+      },
+      eq(email.id, id),
+    );
+    return { row: projected ?? row, created: true };
+  }
   return { row, created: facts.some((fact) => fact.id === id) };
 }
 

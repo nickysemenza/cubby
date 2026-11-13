@@ -1,3 +1,55 @@
+/** Recorded integer weights become exact party margins before itemization. */
+export function recordedAttributionMargins(input: {
+  expenses: readonly { id: string; cost: bigint | null }[];
+  attributions: readonly {
+    expenseId: string;
+    role: "beneficiary" | "funder";
+    ledgerPartyId: string | null;
+    weight: number;
+    deletedAt: Date | null;
+  }[];
+  parties: readonly { id: string; shortcode: string }[];
+}) {
+  return input.expenses.flatMap((expense) =>
+    (["beneficiary", "funder"] as const).flatMap((role) => {
+      const rows = input.attributions.filter(
+        (row) =>
+          !row.deletedAt && row.expenseId === expense.id && row.role === role,
+      );
+      const total = rows.reduce((sum, row) => sum + BigInt(row.weight), 0n);
+      if (expense.cost === null || !total) return [];
+      const abs = expense.cost < 0n ? -expense.cost : expense.cost;
+      const shares = rows
+        .map((row) => ({
+          ...row,
+          allocationKey:
+            input.parties.find((party) => party.id === row.ledgerPartyId)
+              ?.shortcode ?? "~unattributed",
+          base: (abs * BigInt(row.weight)) / total,
+          remainder: (abs * BigInt(row.weight)) % total,
+        }))
+        .sort((a, b) =>
+          a.remainder === b.remainder
+            ? a.allocationKey.localeCompare(b.allocationKey)
+            : a.remainder > b.remainder
+              ? -1
+              : 1,
+        );
+      const rest = abs - shares.reduce((sum, row) => sum + row.base, 0n);
+      return shares.map((row, index) => ({
+        expenseId: expense.id,
+        role,
+        ledgerPartyId: row.ledgerPartyId,
+        allocationKey: row.allocationKey,
+        basis: "recorded" as const,
+        cents:
+          (expense.cost! < 0n ? -1n : 1n) *
+          (row.base + (BigInt(index) < rest ? 1n : 0n)),
+      }));
+    }),
+  );
+}
+
 /** Expense allocation cents by role and party, and accepted receipt line cents. */
 export function replacementAttributions(input: {
   allocations: readonly {

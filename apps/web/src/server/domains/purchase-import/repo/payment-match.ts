@@ -145,7 +145,6 @@ function choices(input: Input, order: Order, c: Pure): ChargeMatchRead[] {
       account.deletedAt ||
       transaction.deletedAt ||
       !date ||
-      transaction.ledgerTransferId ||
       !["observed", "pending", "posted"].includes(transaction.status) ||
       !["purchase", "fee", "refund"].includes(transaction.kind) ||
       (transaction.kind === "refund"
@@ -303,7 +302,6 @@ export const paymentMatch = defineReconciler<Input>({
       "transactionDate",
       "postedDate",
       "merchant",
-      "ledgerTransferId",
       "deletedAt",
     ]),
     source.table(financialAccount, [
@@ -403,7 +401,7 @@ export const paymentMatch = defineReconciler<Input>({
       const event = orderEventKey(order);
       const plan = planOrder(input, order, c);
       if (plan.kind === "conflicting") {
-        c.gap.evidence("agreeing retained payment evidence", "an agent");
+        c.gap.evidence("agreeing retained payment evidence", "agent");
         continue;
       }
       const ambiguous =

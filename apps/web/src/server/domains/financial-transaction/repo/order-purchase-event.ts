@@ -39,6 +39,8 @@ const ownKeyFor = (c: Pure, target: typeof purchaseRecords, id: string) =>
 // oxlint-disable-next-line complexity -- source identity, recorded decisions and exact conservation are one atomic money plan.
 export function reconcileOrderPurchase(input: Input, c: Pure) {
   const heads = acceptedOrderHeads(input.orders.map((row) => row.observation));
+  for (const row of heads)
+    if (row.emailId) c.emit({ kind: "emailState", key: row.emailId });
   const sourceHeads = input.orders.filter((row) =>
     heads.some((head) => head.id === row.observation.id),
   );
@@ -135,7 +137,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
         if (scope && scope !== input.key)
           c.emit({ kind: "purchaseEvent", key: scope });
       }
-      c.gap.evidence("a resolved payment identity for the order", "an agent");
+      c.gap.evidence("a resolved payment identity for the order", "agent");
     }
     return keep(c);
   }
@@ -155,7 +157,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
   ) {
     c.gap.evidence(
       `order details: ${accepted.policy.semanticPlan.writeBlockReason ?? "missing accepted order"}`,
-      "an agent",
+      "agent",
     );
     return keep(c);
   }
@@ -172,7 +174,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
   ) {
     c.gap.evidence(
       "priced order lines that conserve the accepted total",
-      "an agent",
+      "agent",
     );
     return keep(c);
   }
@@ -496,7 +498,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
     });
     if (violation) {
       c.disagree(violation);
-      return c.done();
+      return keep(c);
     }
     const saved = input.allocations.find(
       (row) =>

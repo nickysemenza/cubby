@@ -70,6 +70,7 @@ export async function seedBankTransaction(
     notes: _notes,
     spendingCategoryId: _category,
     itemizationExpectation: _itemization,
+    ledgerTransferId: _transfer,
     ...metadata
   } = values;
   if (Object.keys(metadata).length)
@@ -77,6 +78,23 @@ export async function seedBankTransaction(
       .update(financialTransaction)
       .set(metadata)
       .where(eq(financialTransaction.id, row.id));
+  if (values.ledgerTransferId) {
+    const { updateTransferEvent } =
+      await import("~/server/domains/ledger-transfer/repo/transfer-mutations");
+    const existing = await repositoryQueries(db)
+      .select({ id: financialTransaction.id })
+      .from(financialTransaction)
+      .where(
+        eq(financialTransaction.ledgerTransferId, values.ledgerTransferId),
+      );
+    await updateTransferEvent(
+      db,
+      values.ledgerTransferId,
+      {},
+      [...existing.map((row) => row.id), row.id],
+      TEST_ACTOR,
+    );
+  }
   const [saved] = await repositoryQueries(db)
     .select()
     .from(financialTransaction)

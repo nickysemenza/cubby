@@ -11,6 +11,7 @@ const storedEntry = z.object({
   publishes: z.enum(["derivedValue", "ownTable"]),
   stored: z.object({
     compute: z.string(),
+    reconciler: z.string().optional(),
     rebuildPhase: z
       .enum(["facts", "quality", "search", "diagnostics"])
       .optional(),
@@ -55,6 +56,7 @@ export type EntityStoredDerivedDeclaration = Pick<
   readonly target: string;
   readonly table: string;
   readonly compute: string;
+  readonly reconciler?: string;
   readonly rebuildPhase: NonNullable<StoredEntry["stored"]["rebuildPhase"]>;
   readonly snapshotSource: StoredEntry["stored"]["snapshotSource"];
   readonly recordSource: NonNullable<
@@ -77,6 +79,7 @@ const manifestDeclarations = (): EntityStoredDerivedDeclaration[] =>
               target: `${entry.entity}.${entry.key}`,
               table: entry.table,
               compute: entry.stored.compute,
+              reconciler: entry.stored.reconciler,
               rebuildPhase: entry.stored.rebuildPhase ?? "facts",
               publishes: entry.publishes,
               recordSource: entry.stored.recordSource ?? null,

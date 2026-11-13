@@ -55,13 +55,10 @@ import {
   restorePurchaseValues,
 } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import {
-  loadExpenseAllocations,
-  type ExpenseAllocationRow,
-} from "~/server/domains/household-contribution/repo/allocation";
-import {
   orderBookingInput,
   type OrderBookingInput,
 } from "~/server/domains/purchase-import/policy/order-booking";
+import { recordedAttributionMargins } from "~/server/domains/purchase-import/policy/replacement-attributions";
 import {
   orderEvidence,
   retainedPaymentEvidence,
@@ -85,7 +82,7 @@ export type Input = {
   bindings: Binding[];
   orderBindings: Binding[];
   orders: OrderBookingInput[];
-  lumpAttributions: ExpenseAllocationRow[];
+  lumpAttributions: ReturnType<typeof recordedAttributionMargins>;
   transactions: (typeof financialTransaction.$inferSelect)[];
   accounts: (typeof financialAccount.$inferSelect)[];
   parties: (typeof ledgerParty.$inferSelect)[];
@@ -118,7 +115,6 @@ const tableReads = [
     "rawDescription",
     "spendingCategoryId",
     "itemizationExpectation",
-    "ledgerTransferId",
     "deletedAt",
   ]),
   source.table(financialAccount, [
@@ -210,7 +206,7 @@ function graph(input: Input, purchaseId: string): CapacityRead {
             deleted: !!transaction.deletedAt,
             accountDeleted: !account || !!account.deletedAt,
             status: transaction.status,
-            ledgerTransferId: transaction.ledgerTransferId,
+            ledgerTransferId: null,
             kind: transaction.kind,
           },
         ];
@@ -288,28 +284,11 @@ export const purchaseEvent = defineReconciler<Input>({
       ],
     });
     const orders = observations.map(orderBookingInput);
-    const lumpAttributions = orders.length
-      ? await reads.prepare(
-          [
-            expense,
-            expenseAttribution,
-            purchase,
-            ledgerParty,
-            financialAccount,
-            financialTransaction,
-            financialTransactionAllocation,
-          ],
-          (db) =>
-            loadExpenseAllocations(db, {
-              expenseIds: expenses
-                .filter(
-                  (row) => !row.deletedAt && row.lineBasis === "allocation",
-                )
-                .map((row) => row.id),
-              includeFuture: true,
-            }),
-        )
-      : [];
+    const lumpAttributions = recordedAttributionMargins({
+      expenses: expenses.filter((row) => row.lineBasis === "allocation"),
+      attributions,
+      parties,
+    });
     const bindings = await reads.bindings({
       events: [
         ...transactions,
@@ -501,8 +480,7 @@ export const purchaseEvent = defineReconciler<Input>({
     if (
       !transaction ||
       !["purchase", "fee", "refund"].includes(transaction.kind) ||
-      ["void", "expected"].includes(transaction.status) ||
-      transaction.ledgerTransferId
+      ["void", "expected"].includes(transaction.status)
     ) {
       retained(c);
       return c.done();

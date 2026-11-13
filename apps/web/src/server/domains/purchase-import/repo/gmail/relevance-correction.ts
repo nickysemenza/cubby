@@ -22,6 +22,7 @@ import {
   isTransaction,
 } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   lockMailAttachmentUpload,
   discardMailAttachmentUpload,
@@ -452,9 +453,9 @@ export async function publishPreparedEmailRelevanceCorrection(
     actor,
     { originalCapture },
   );
-  await tx
-    .update(emailTable)
-    .set({
+  await updateEmailStateWhere(
+    tx,
+    {
       checksum,
       classification: input.classification,
       classificationStage: "resolution",
@@ -462,8 +463,9 @@ export async function publishPreparedEmailRelevanceCorrection(
       classificationVersion: MAILBOX_RESEARCH_VERSION,
       contentClearedAt: null,
       updatedAt: new Date(),
-    })
-    .where(eq(emailTable.id, current.id));
+    },
+    eq(emailTable.id, current.id),
+  );
   return correctEmailRelevanceOut.parse({
     id: input.id,
     checksum,

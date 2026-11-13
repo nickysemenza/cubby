@@ -200,7 +200,7 @@ a foreign key. Apply preserves it, orders inserts by foreign-key dependency,
 and commits the reserved entity shortcode inside its transaction. `c.identity`
 returns the same id and public shortcode before a record is declared; shortcode
 collisions re-run the scope with an unreserved code while retaining its id. A conflicted or failed
-apply leaves no identity, shortcode or `RecordKey` reservation. A cycle between
+apply leaves no identity, shortcode or `RecordKey` reservation. Tentative identities are visible only in their scope; declared Catalog coalescence explicitly shares an identity between scopes. A cycle between
 new rows in different tables is refused before any record is inserted.
 
 ### 4. Kernel tables
@@ -372,6 +372,8 @@ the provider offers an idempotency key or a result lookup that settles it. A
 receipt that arrives late may settle the original attempt but never authorizes
 an apply against inputs that have since changed.
 
+Disposable read-snapshot targets declare `projection: true`. Their entity foreign key is the primary identity. `c.patch` creates or updates that cache row inside the fenced apply, without a second Entity or RecordKey. Projection targets cannot create entities or call `c.record`; accepted financial rows remain protected by baseline bindings. A patch carries field decision provenance with the same precedence as a record declaration.
+
 ### 9. Identity, merge and delete
 
 A reconciled record's id and shortcode come from `RecordKey` and never from
@@ -401,7 +403,7 @@ record is not created again when its evidence returns. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
 Reconcilers resolve retained decision and manual-entry references through
-`c.reference(entity, idOrShortcode)`. Every batch loads the identity roster, including binding-only consumers. It follows redirects from the identity
+`c.reference(entity, idOrShortcode, { format })` resolves an id by default or a public shortcode when requested. Every batch loads the identity roster, including binding-only consumers. It follows redirects from the identity
 snapshot loaded for the batch, returns the live survivor only for the requested
 entity kind, and does not alter the retained input.
 

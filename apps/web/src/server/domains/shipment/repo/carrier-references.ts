@@ -11,6 +11,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { shipment, vendor } from "~/server/db/schema";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 
@@ -127,10 +128,12 @@ export async function repointShipmentCarrierReferences(
           : row.carrierId,
       extraTrackingNumbers: references,
     });
-    await tx
-      .update(shipment)
-      .set({ extraTrackingNumbers: updated })
-      .where(eq(shipment.id, row.id));
+    await updateShipmentWhere(
+      tx,
+      { extraTrackingNumbers: updated },
+      eq(shipment.id, row.id),
+      actor,
+    );
     await logAuditEntries(tx, actor, [
       {
         entityKind: "shipment",

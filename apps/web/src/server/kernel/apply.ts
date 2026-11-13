@@ -80,7 +80,12 @@ import {
   rowKey,
   tableKey,
 } from "./keys";
-import { KernelContractError } from "./reads";
+import {
+  KernelContractError,
+  idColumn,
+  identityProperty,
+  rowIdentity,
+} from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 
@@ -203,7 +208,7 @@ async function updateRecords(q: Q, updates: Difference["updates"]) {
       FROM jsonb_array_elements(${canonicalJson(rows)}::jsonb) AS incoming(value)
       CROSS JOIN LATERAL jsonb_populate_record(NULL::${target.table}, incoming.value->'nextValues') AS desired
       CROSS JOIN LATERAL jsonb_populate_record(NULL::${target.table}, incoming.value->'seen') AS seen
-      WHERE t.id = (incoming.value->>'id')::uuid AND ${sql.join(conditions, sql` AND `)} RETURNING t.id`);
+      WHERE t.${sql.identifier(idColumn(target.table).name)} = (incoming.value->>'id')::uuid AND ${sql.join(conditions, sql` AND `)} RETURNING t.${sql.identifier(idColumn(target.table).name)} AS id`);
     if (result.rows.length !== group.length)
       throw new KernelConflict(
         `${target.name}: a record changed since the load`,
@@ -225,6 +230,7 @@ function holdsBaseline(
     (!options.releaseBaseline &&
       computed.storedBindings.some((binding) => binding.basis === "baseline") &&
       (proposed.inserts.some((insert) => {
+        if (insert.target.projection) return false;
         const record = desired.records.find(
           (record) =>
             record.target.name === insert.target.name &&
@@ -248,7 +254,20 @@ function holdsBaseline(
                 record.target.name === update.target.name &&
                 record.naturalKey === update.naturalKey,
             );
-            return !decisionIds.has(desiredRecord?.provenance[field] ?? "");
+            const patch = desired.patches.find(
+              (patch) =>
+                patch.target.name === update.target.name &&
+                patch.id === update.id &&
+                Object.hasOwn(patch.values, field),
+            );
+            return (
+              !update.target.projection &&
+              !decisionIds.has(
+                desiredRecord?.provenance[field] ??
+                  patch?.provenance[field] ??
+                  "",
+              )
+            );
           }),
         ) ||
         proposed.bindingsAdd.some(
@@ -461,18 +480,20 @@ async function applyBatch(
     combined.merges.push(...plan.diff.merges);
   }
   const recordKeys = plans.flatMap((plan) =>
-    plan.diff.inserts.map((entry) => ({
-      scopeKind: plan.computed.scope.kind,
-      scopeKey: plan.computed.scope.key,
-      entity: recordEntity(entry.target),
-      naturalKey: entry.naturalKey,
-      entityId: entry.id,
-      minted: !plan.computed.desired!.records.find(
-        (record) =>
-          record.target.name === entry.target.name &&
-          record.naturalKey === entry.naturalKey,
-      )?.authored,
-    })),
+    plan.diff.inserts
+      .filter((entry) => !entry.target.projection)
+      .map((entry) => ({
+        scopeKind: plan.computed.scope.kind,
+        scopeKey: plan.computed.scope.key,
+        entity: recordEntity(entry.target),
+        naturalKey: entry.naturalKey,
+        entityId: entry.id,
+        minted: !plan.computed.desired!.records.find(
+          (record) =>
+            record.target.name === entry.target.name &&
+            record.naturalKey === entry.naturalKey,
+        )?.authored,
+      })),
   );
   const uniqueInserts = new Map<string, Difference["inserts"][number]>();
   for (const entry of combined.inserts) {
@@ -514,7 +535,7 @@ async function applyBatch(
   const entities = new Set<string>();
   const touch = (target: ColumnRef, row: ColumnValues) => {
     changed.add(tableKey(target.name));
-    changed.add(rowKey(target.name, String(row.id)));
+    changed.add(rowKey(target.name, rowIdentity(target.table, row)));
     for (const key of target.keys?.(row) ?? []) changed.add(key);
     discovered.push(...(target.discovers?.(row) ?? []));
     if (target.entity) entities.add(target.entity);
@@ -541,7 +562,7 @@ async function applyBatch(
         for (const group of orderedInserts(combined.inserts)) {
           const rows = group.map((entry) => ({
             ...entry.values,
-            id: entry.id,
+            [identityProperty(entry.target.table)]: entry.id,
             ...(entry.target.entity ? { createdAt: now, deletedAt: null } : {}),
           }));
           await insertRows(q, group[0]!.target.table, rows);

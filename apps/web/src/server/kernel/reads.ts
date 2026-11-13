@@ -44,12 +44,33 @@ export class KernelContractError extends Error {
 
 /** A reconciled or evidence table's `id` column. */
 export function idColumn(table: PgTable): PgColumn {
-  const column = getTableColumns(table).id;
+  const columns = getTableColumns(table);
+  const primary = Object.values(columns).filter((column) => column.primary);
+  const column = columns.id ?? (primary.length === 1 ? primary[0] : undefined);
   if (!column)
     throw new KernelContractError(
-      `Kernel table ${getTableName(table)} has no id column`,
+      `Kernel table ${getTableName(table)} needs one identity column`,
     );
   return column;
+}
+
+export const identityProperty = (table: PgTable) =>
+  Object.entries(getTableColumns(table)).find(
+    ([, value]) => value === idColumn(table),
+  )![0];
+
+/** Snapshot tables use their entity foreign key as their primary identity. */
+export function rowIdentity(table: PgTable, row: ColumnValues): string {
+  const column = idColumn(table);
+  const property = Object.entries(getTableColumns(table)).find(
+    ([, value]) => value === column,
+  )?.[0];
+  const value = property && row[property];
+  if (typeof value !== "string")
+    throw new KernelContractError(
+      `Kernel table ${getTableName(table)} has no row identity`,
+    );
+  return value;
 }
 
 /** Keys read per scope, with the revision each first saw, and the facts it read. */

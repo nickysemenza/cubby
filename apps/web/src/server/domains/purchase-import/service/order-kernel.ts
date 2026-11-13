@@ -1,4 +1,8 @@
 import {
+  emailState,
+  emailPredictionEvidence,
+} from "~/server/domains/email/repo/email-state";
+import {
   emailEvidence,
   mailOriginalEvidence,
   orderEvidence,
@@ -10,9 +14,10 @@ import { defineModule } from "~/server/kernel/api";
 export const orderKernelModule = defineModule({
   name: "orders",
   entities: ["email"],
-  reconcilers: [paymentMatch],
+  reconcilers: [paymentMatch, emailState],
   evidence: [
     emailEvidence,
+    emailPredictionEvidence,
     mailOriginalEvidence,
     orderEvidence,
     retainedPaymentEvidence,

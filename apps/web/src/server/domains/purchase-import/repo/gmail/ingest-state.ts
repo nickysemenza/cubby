@@ -9,6 +9,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { email as emailTable, orderMail } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
@@ -48,15 +49,16 @@ export async function confirmEmailClassification(
   decision: Pick<MailboxClassificationDecision, "stage" | "reason">,
 ) {
   await withTransaction(db, async (tx) => {
-    await tx
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      tx,
+      {
         classificationStage: decision.stage,
         classificationReason: decision.reason,
         classificationVersion: MAILBOX_RESEARCH_VERSION,
         updatedAt: new Date(),
-      })
-      .where(eq(emailTable.id, emailId));
+      },
+      eq(emailTable.id, emailId),
+    );
     await recordChange(tx, { kind: "source", categories: ["email"] });
   });
 }

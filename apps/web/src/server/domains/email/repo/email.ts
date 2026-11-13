@@ -50,7 +50,6 @@ import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email
 import {
   emailInScopeSql,
   emailPurchaseEvidenceSql,
-  cachedEmailAcceptedSql,
   cachedEmailLinkedSql,
   emailLinkRankSql,
   emailLinkStateSql,
@@ -533,7 +532,7 @@ export const emailScaffold = listScaffold("email", emailTable, {
     scopeLinkState: emailScope.value(({ scope }) => emailLinkStateSql(scope)),
     linked: cachedEmailLinkedSql(),
     reviewConflict: emailReviewConflictSql(),
-    importOutcome: emailImportOutcomeSql(cachedEmailAcceptedSql()),
+    importOutcome: emailImportOutcomeSql(),
     purchaseId: inScope,
     vendorId: inScope,
     vendorAccountId: inScope,

@@ -48,6 +48,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
+import { updateEmailStateWhere } from "~/server/domains/email/repo/email-state-mutations";
 import {
   reserveMailAttachmentUpload,
   lockMailAttachmentUpload,
@@ -370,27 +371,26 @@ export async function saveEmail(
       (row.status === "unsettled" || row.status === "completed");
     const status = keepsSettlement ? row.status : fields.status;
     // Routine routing and provider removal cannot resolve historical ownership.
-    await tx
-      .update(emailTable)
-      .set({
+    await updateEmailStateWhere(
+      tx,
+      {
         ...fields,
         status,
         ...(unchanged && status === row.status
           ? {}
           : { updatedAt: new Date() }),
-      })
-      .where(
-        and(
-          eq(emailTable.id, row.id),
-          or(
-            isNull(emailTable.classificationVersion),
-            ne(
-              emailTable.classificationVersion,
-              HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
-            ),
+      },
+      and(
+        eq(emailTable.id, row.id),
+        or(
+          isNull(emailTable.classificationVersion),
+          ne(
+            emailTable.classificationVersion,
+            HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
           ),
         ),
-      );
+      ),
+    );
   });
 }
 
@@ -476,10 +476,11 @@ export async function saveMailboxMetadata(
       fields.receivedAt?.getTime() !== row.receivedAt?.getTime() ||
       fields.searchExpiresAt?.getTime() !== row.searchExpiresAt?.getTime();
     if (changed)
-      await tx
-        .update(emailTable)
-        .set({ ...fields, updatedAt: new Date() })
-        .where(eq(emailTable.id, row.id));
+      await updateEmailStateWhere(
+        tx,
+        { ...fields, updatedAt: new Date() },
+        eq(emailTable.id, row.id),
+      );
     // A metadata replay saves no source. Legacy supersession still changes a
     // source row even when this mailbox's metadata is already current.
     if (created || changed || superseded)

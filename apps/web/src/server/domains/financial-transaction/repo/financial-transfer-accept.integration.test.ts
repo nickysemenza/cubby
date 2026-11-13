@@ -87,7 +87,7 @@ describe("acceptFinancialTransferPair", () => {
     const existing = await insertWithShortcode(ctx.db, "ledgerTransfer", {
       fromPartyId: memberA.id,
       toPartyId: memberB.id,
-      amount: 500n,
+      amount: 4000n,
       date: "2026-01-01",
     });
     const out = await transaction(accountA.id, 40, "2026-03-02");

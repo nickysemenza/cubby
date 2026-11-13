@@ -2274,6 +2274,8 @@ declared relationship arrays to public shortcodes, including tombstones.
 
 ## Background derived data
 
+A stored result declaring `reconciler` is published by that kernel scope; the hourly derived pass excludes it. Its declared snapshot source remains the shared read contract.
+
 ADR 0025 replaces per-value admission with SQL views for read-computable values and one hourly
 deterministic pass for stored results. A declaration names its compute adapter, typed result storage
 and upstream `dependsOn` values; dependencies order phases and self-dependencies describe domain

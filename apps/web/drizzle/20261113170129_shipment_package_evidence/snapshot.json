@@ -1,0 +1,234 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "9654f710-198d-4aaa-80bb-430503f369a7",
+  "prevIds": [
+    "e92ee114-9f19-45ae-8cf1-b204709d3eef"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ShipmentPackageObservation"
+      ],
+      "writes": [
+        "s|tbl|public.ShipmentPackageObservation",
+        "n|tbl|public.ShipmentPackageObservation",
+        "e|tbl|public.ShipmentPackageObservation",
+        "n|rel|public.ShipmentPackageObservation",
+        "n|type|public.ShipmentPackageObservation",
+        "n|rel|public.ShipmentPackageObservation_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ShipmentPackageObservation",
+        "ShipmentPackageObservation_scope_idx"
+      ],
+      "writes": [
+        "s|idx|public.ShipmentPackageObservation_scope_idx",
+        "n|idx|public.ShipmentPackageObservation_scope_idx",
+        "e|idx|public.ShipmentPackageObservation_scope_idx",
+        "n|rel|public.ShipmentPackageObservation_scope_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ShipmentPackageObservation",
+        "n|sch|public",
+        "n|col|public.ShipmentPackageObservation.scopeKey",
+        "n|col|public.ShipmentPackageObservation.createdAt"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ShipmentPackageObservation",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "scopeKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "sourceKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "packageKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "actorUserId",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "values",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "manual",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "ShipmentPackageObservation_scope_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "createdAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ShipmentPackageObservation",
+        "name": "ShipmentPackageObservation_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

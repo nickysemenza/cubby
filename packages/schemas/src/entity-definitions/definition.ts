@@ -1206,6 +1206,7 @@ const buildMetadataSchemas = () => {
     );
   const derivedStoreSchema = z.strictObject({
     compute: nonEmptyString(),
+    reconciler: nonEmptyString().optional(),
     snapshotSource: z
       .object({
         table: nonEmptyString(),

@@ -245,9 +245,8 @@ export async function retainedPackageShipment(
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
 export async function lockShipmentWrites(db: Database) {
-  await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended('shipment-evidence-intake', 0))`,
-  );
+  const { householdWrite } = await import("~/server/kernel/api");
+  await householdWrite(db, async () => undefined);
 }
 
 export async function canonicalShipment(

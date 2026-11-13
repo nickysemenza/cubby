@@ -8,7 +8,7 @@ import {
   shipmentRepositoryReadSchema,
   shipmentSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.shipment.gen";
-import type { Database, DrizzleTransaction } from "~/server/db";
+import type { Database } from "~/server/db";
 import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
@@ -58,15 +58,6 @@ const reader = createEntityCrud({
   auditUpdateFields: [...entityFieldModels.shipment.audit],
 });
 
-const update = reader.updateWriter(
-  async (
-    db: DrizzleTransaction,
-    code: ShortcodeFor<"shipment">,
-    data: Pick<ShipmentUpdateData, "purpose">,
-  ) => ({ id: await resolveOrThrow(db, "shipment", code), data }),
-  (output, entityId) => ({ output, entityId }),
-);
-
 const updateShipment = defineMutationWriter({
   entity: "shipment",
   read: async (
@@ -95,7 +86,12 @@ const updateShipment = defineMutationWriter({
           { shipmentId: code, carrierId, extraTrackingNumbers },
           actor,
         );
-      return update.withOutput(readOutput, tx, code, otherFields, actor);
+      const { updateShipmentWhere } =
+        await import("~/server/domains/shipment/repo/shipment-mutations");
+      const { eq } = await import("drizzle-orm");
+      const id = await resolveOrThrow(tx, "shipment", code);
+      await updateShipmentWhere(tx, otherFields, eq(shipment.id, id), actor);
+      return readOutput({ entityId: id });
     }),
 });
 
@@ -118,5 +114,7 @@ export const shipmentRepository = defineRepository("shipment", {
     );
   },
   update: asActor(updateShipment),
-  updatePolicy: { recordFields: ["carrierId"] },
+  updatePolicy: {
+    recordFields: ["carrierId", "extraTrackingNumbers", "purpose"],
+  },
 });

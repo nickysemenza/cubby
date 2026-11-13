@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
+  email,
   emailClassificationObservation,
   importSourceClaim,
   importSourceOrder,
@@ -21,6 +22,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
+import { reconcileNow } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 // Persisted-read failures: contentless messages disappear; absent historical
@@ -155,6 +157,16 @@ describe("Email generic persisted reads", () => {
       status: "excluded",
     });
     await drainStoredDerived(ctx.db);
+    const outcomes = await reconcileNow(
+      ctx.db,
+      (await getDb(ctx.db).select().from(email)).map((row) => ({
+        kind: "emailState",
+        key: row.id,
+      })),
+    );
+    expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+      [],
+    );
     const context = buildKernelContext(ctx.db);
     const list = await executeEntity(context, {
       action: "list",
@@ -347,6 +359,16 @@ describe("Email generic persisted reads", () => {
       sql`UPDATE "OrderMail" SET "content" = '{"snippet":null,"bodyText":null,"bodyHtml":null}'::jsonb`,
     );
     await drainStoredDerived(ctx.db);
+    const outcomes = await reconcileNow(
+      ctx.db,
+      (await getDb(ctx.db).select().from(email)).map((row) => ({
+        kind: "emailState",
+        key: row.id,
+      })),
+    );
+    expect(outcomes.filter((outcome) => outcome.status === "failed")).toEqual(
+      [],
+    );
     const context = buildKernelContext(ctx.db);
     const linked = await executeEntity(context, {
       action: "list",

@@ -44,6 +44,7 @@ import {
   carrierCaptureEvidence,
   deliveryFieldCodes,
 } from "~/server/domains/shipment/repo/carrier-evidence";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import { constraintViolation, createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -201,17 +202,15 @@ async function recordShipmentOrderId(
     orderId = keys.length === 1 ? keys[0]! : null;
   }
   if (!orderId) return;
-  const recorded = await database
-    .update(shipment)
-    .set({ orderId })
-    .where(
-      and(
-        inArray(shipment.shortcode, [...input.shipmentIds]),
-        isNull(shipment.orderId),
-        notDeleted(shipment),
-      ),
-    )
-    .returning({ id: shipment.id });
+  const recorded = await updateShipmentWhere(
+    db,
+    { orderId },
+    and(
+      inArray(shipment.shortcode, [...input.shipmentIds]),
+      isNull(shipment.orderId),
+      notDeleted(shipment),
+    ),
+  ).then((rows) => rows.map((row) => ({ id: row.id })));
   if (!recorded.length) return;
   await logAuditEntries(
     db,
@@ -297,17 +296,15 @@ export async function linkShipmentsByOrderId(
     .having(sql`count(DISTINCT ${purchase.id}) = 1`);
   let linked = 0;
   for (const candidate of candidates) {
-    const [row] = await database
-      .update(shipment)
-      .set({ purchaseId: candidate.purchaseId })
-      .where(
-        and(
-          eq(shipment.id, candidate.shipmentId),
-          isNull(shipment.purchaseId),
-          eq(shipment.purchaseAssociationReviewed, false),
-        ),
-      )
-      .returning({ id: shipment.id });
+    const [row] = await updateShipmentWhere(
+      db,
+      { purchaseId: candidate.purchaseId },
+      and(
+        eq(shipment.id, candidate.shipmentId),
+        isNull(shipment.purchaseId),
+        eq(shipment.purchaseAssociationReviewed, false),
+      ),
+    ).then((rows) => rows.map((row) => ({ id: row.id })));
     if (!row) continue;
     linked += 1;
     await logAuditEntries(db, actor, [
@@ -487,10 +484,12 @@ export async function associateShipment(
     const row = await canonicalShipment(tdb, input.shipmentId);
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
     await assertShipmentAssociation(tdb, row.id, purchaseId);
-    await getDb(tdb)
-      .update(shipment)
-      .set({ purchaseId, purchaseAssociationReviewed: true })
-      .where(eq(shipment.id, row.id));
+    await updateShipmentWhere(
+      tdb,
+      { purchaseId, purchaseAssociationReviewed: true },
+      eq(shipment.id, row.id),
+      actor,
+    );
     await logAuditEntries(tdb, actor, [
       {
         entityKind: "shipment",
@@ -584,9 +583,9 @@ export async function mergeShipment(
       (!target.trackingNumber || target.trackingNumber === source.trackingNumber
         ? source.carrierId
         : null);
-    await getDb(tdb)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      tdb,
+      {
         purchaseId,
         notes: mergeNotes(target.notes, source.notes),
         carrierId: mergedCarrierId,
@@ -600,8 +599,10 @@ export async function mergeShipment(
           carrierId: mergedCarrierId,
           extraTrackingNumbers: refs,
         }),
-      })
-      .where(eq(shipment.id, target.id));
+      },
+      eq(shipment.id, target.id),
+      actor,
+    );
     if (mergedCarrierId !== target.carrierId)
       await logAuditEntries(tdb, actor, [
         {
@@ -781,10 +782,12 @@ export async function editShipmentReferences(
     };
     const shipmentId = parseShortcodeFor("shipment", row.shortcode);
     if (!Object.keys(changes).length) return { shipmentId };
-    await getDb(tdb)
-      .update(shipment)
-      .set({ carrierId, extraTrackingNumbers })
-      .where(eq(shipment.id, row.id));
+    await updateShipmentWhere(
+      tdb,
+      { carrierId, extraTrackingNumbers },
+      eq(shipment.id, row.id),
+      actor,
+    );
     await logAuditEntries(tdb, actor, [
       {
         entityKind: "shipment",

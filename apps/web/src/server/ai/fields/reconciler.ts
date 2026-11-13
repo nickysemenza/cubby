@@ -83,6 +83,9 @@ const moneyHistoryTables = new Set<PgTable>([
   SHORTCODE_TABLE.purchase,
   SHORTCODE_TABLE.expense,
   SHORTCODE_TABLE.financialTransaction,
+  SHORTCODE_TABLE.ledgerTransfer,
+  SHORTCODE_TABLE.email,
+  SHORTCODE_TABLE.shipment,
 ]);
 function fieldSources(plan: EntityFieldsPlan, field: FieldPlan) {
   const tables = new Set<import("drizzle-orm/pg-core").PgTable>();

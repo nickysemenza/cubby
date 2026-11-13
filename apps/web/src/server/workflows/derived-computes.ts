@@ -10,8 +10,6 @@ import {
 } from "@cubby/schemas/search";
 
 import { USDAClient } from "~/server/clients/usda";
-import type { Database } from "~/server/db";
-import { emailDerivedComputes } from "~/server/domains/email/repo/derived";
 import { expenseDerivedComputes } from "~/server/domains/expense/repo/derived";
 import { inventoryDerivedComputes } from "~/server/domains/inventory/repo/derived";
 import { locationDerivedComputes } from "~/server/domains/location/repo/derived";
@@ -21,7 +19,6 @@ import {
   productFoodCompute,
 } from "~/server/domains/product/repo/read-facts";
 import { projectDerivedComputes } from "~/server/domains/project/repo/derived";
-import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { commitRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import { shipmentDerivedComputes } from "~/server/domains/shipment/repo/event-summary";
@@ -30,7 +27,6 @@ import { computeWorkDiagnosticFacts } from "~/server/domains/work/service/work-d
 import { qualityDerivedComputes } from "~/server/generic/data-quality/repo/derived";
 import {
   type DerivedAdapter,
-  type DerivedCompute,
   type DerivedComputes,
   derivedSink,
 } from "~/server/generic/derived/repo/compute";
@@ -126,22 +122,6 @@ const conversionCoverageSink = derivedSink({
   },
 });
 
-const emailRelationshipFacts = emailDerivedComputes["email.relationshipFacts"];
-
-/**
- * The hourly pass is the exact order-number link catch-up: before a page of
- * Emails publishes its relationship facts, it links their undecided exact
- * order events. That covers rows from before the rule and Purchase writers
- * that do not trigger it inline (Purchase removal, merge, reconciliation).
- */
-const emailRelationshipWithExactLinks: DerivedCompute = Object.assign(
-  async (db: Database, ids: readonly string[]) => {
-    await linkExactOrderEmails(db, { emailIds: ids });
-    return emailRelationshipFacts(db, ids);
-  },
-  { preparationBatchSize: emailRelationshipFacts.preparationBatchSize },
-);
-
 const searchComputes: Record<string, DerivedAdapter> = Object.fromEntries(
   searchableEntities.map((entity) => [`search.${entity}`, searchSink(entity)]),
 );
@@ -160,7 +140,6 @@ export const derivedComputes: DerivedComputes = {
   ),
   ...inventoryDerivedComputes,
   ...expenseDerivedComputes,
-  "email.relationshipFacts": emailRelationshipWithExactLinks,
   ...locationDerivedComputes,
   ...projectDerivedComputes,
   "project.workDiagnosticFacts": computeWorkDiagnosticFacts,

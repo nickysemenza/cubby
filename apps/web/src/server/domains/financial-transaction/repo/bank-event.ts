@@ -69,6 +69,7 @@ export const bankTransactionWrites = writes(
             },
           ]),
       { kind: "purchaseEvent", key: row.id },
+      { kind: "transferPair", key: row.id },
     ],
   },
 );

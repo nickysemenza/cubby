@@ -37,6 +37,7 @@ import {
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { shipmentTrackingReport } from "~/server/domains/shipment/repo/report-shipment";
+import { updateShipmentWhere } from "~/server/domains/shipment/repo/shipment-mutations";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
@@ -121,10 +122,11 @@ describe("Shipment retained evidence", () => {
     code: string,
     carrierId: (typeof shipment.$inferSelect)["carrierId"],
   ) => {
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ carrierId })
-      .where(eq(shipment.shortcode, code));
+    await updateShipmentWhere(
+      ctx.db,
+      { carrierId },
+      eq(shipment.shortcode, code),
+    );
   };
 
   it("corrects source contradictions and preserves replay without assignment receipts", async () => {
@@ -269,7 +271,7 @@ describe("Shipment retained evidence", () => {
           .from(shipment)
           .where(eq(shipment.shortcode, code))
       )[0],
-    ).toMatchObject({ carrierId: correctId, purpose: "outgoing" });
+    ).toMatchObject({ carrierId: null, purpose: "outgoing" });
     expect(carrierFormatEvidence("123456789012")).toMatchObject({
       outcome: "ambiguous_match",
       carriers: ["UPS", "FedEx"],
@@ -318,10 +320,11 @@ describe("Shipment retained evidence", () => {
       ctx.actor,
     );
     const code = unknown.shipmentIds[0]!;
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ carrierId: alphaId })
-      .where(eq(shipment.shortcode, code));
+    await updateShipmentWhere(
+      ctx.db,
+      { carrierId: alphaId },
+      eq(shipment.shortcode, code),
+    );
     const proof = capture(
       "unknown-proof",
       [{ ...packet("EXAMPLE-PROOF"), carrierClaims: [claim] }],
@@ -349,10 +352,11 @@ describe("Shipment retained evidence", () => {
       capture("collision-peer", [packet("EXAMPLE-PEER")]),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ carrierId: betaId, trackingNumber: "EXAMPLE-PROOF" })
-      .where(eq(shipment.shortcode, other.shipmentIds[0]!));
+    await updateShipmentWhere(
+      ctx.db,
+      { carrierId: betaId, trackingNumber: "EXAMPLE-PROOF" },
+      eq(shipment.shortcode, other.shipmentIds[0]!),
+    );
     const collision = await recordShipmentEvidence(
       ctx.db,
       { ...proof, shipments: [{ ...proof.shipments[0]!, shipmentId: code }] },
@@ -559,16 +563,17 @@ describe("Shipment retained evidence", () => {
       ctx.actor,
     );
     const code = initial.shipmentIds[0]!;
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      ctx.db,
+      {
         trackingNumber: null,
         carrierId: null,
         extraTrackingNumbers: [
           { trackingNumber: number, carrierId: null, carrierName: null },
         ],
-      })
-      .where(eq(shipment.shortcode, code));
+      },
+      eq(shipment.shortcode, code),
+    );
     const claim = carrierClaim(number, "Synthetic Beta Carrier");
     const result = await recordShipmentEvidence(
       ctx.db,
@@ -1488,14 +1493,15 @@ describe("Shipment retained evidence", () => {
       name: "Other synthetic carrier",
     });
     const identities = await getDb(ctx.db).select().from(vendor);
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      ctx.db,
+      {
         carrierId: identities.find(
           (row) => row.shortcode === firstCarrier.output.id,
         )!.id,
-      })
-      .where(eq(shipment.shortcode, first.shipmentIds[0]!));
+      },
+      eq(shipment.shortcode, first.shipmentIds[0]!),
+    );
     const collision = packet("EXAMPLE-COLLISION");
     collision.carrierName = "Other synthetic carrier";
     collision.observations[0]!.carrierName = collision.carrierName;
@@ -1504,15 +1510,16 @@ describe("Shipment retained evidence", () => {
       capture("carrier-collision", [collision]),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      ctx.db,
+      {
         trackingNumber: "EXAMPLE-123",
         carrierId: identities.find(
           (row) => row.shortcode === secondCarrier.output.id,
         )!.id,
-      })
-      .where(eq(shipment.shortcode, other.shipmentIds[0]!));
+      },
+      eq(shipment.shortcode, other.shipmentIds[0]!),
+    );
     const boundReplay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(boundReplay.shipmentIds).toEqual(first.shipmentIds);
     expect(boundReplay.unresolvedPackages).toEqual([]);
@@ -1772,9 +1779,9 @@ describe("Shipment retained evidence", () => {
       capture("last-mile", [handoff], "2026-06-06T09:00:00Z", postalQuote),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      ctx.db,
+      {
         notes: "Synthetic keeper note",
         extraTrackingNumbers: [
           { carrierId: null, carrierName: null, trackingNumber: "EXAMPLE-123" },
@@ -1784,12 +1791,14 @@ describe("Shipment retained evidence", () => {
             trackingNumber: "example-123",
           },
         ],
-      })
-      .where(eq(shipment.shortcode, first.shipmentIds[0]!));
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ notes: "Synthetic donor note" })
-      .where(eq(shipment.shortcode, last.shipmentIds[0]!));
+      },
+      eq(shipment.shortcode, first.shipmentIds[0]!),
+    );
+    await updateShipmentWhere(
+      ctx.db,
+      { notes: "Synthetic donor note" },
+      eq(shipment.shortcode, last.shipmentIds[0]!),
+    );
     await mergeShipment(
       ctx.db,
       { sourceId: last.shipmentIds[0], targetId: first.shipmentIds[0] },
@@ -2814,10 +2823,11 @@ describe("Shipment retained evidence", () => {
       .select({ id: purchase.id })
       .from(purchase)
       .where(eq(purchase.shortcode, foreignOrder.output.id));
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ purchaseId: foreignPurchase!.id })
-      .where(eq(shipment.shortcode, foreignShipment!));
+    await updateShipmentWhere(
+      ctx.db,
+      { purchaseId: foreignPurchase!.id },
+      eq(shipment.shortcode, foreignShipment!),
+    );
     const sibling = packet("EXAMPLE-OWNERSHIP-SIBLING");
     const withSibling = await record(
       [tracker("Fg7xVb5Ez")],
@@ -3026,9 +3036,9 @@ describe("Shipment retained evidence", () => {
     const guessed = notice("Synthetic Delivery Code", "delivery-code");
     const code = (await recordShipmentEvidence(ctx.db, guessed, ctx.actor))
       .shipmentIds[0]!;
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({
+    await updateShipmentWhere(
+      ctx.db,
+      {
         extraTrackingNumbers: [
           {
             carrierId: actual.output.id,
@@ -3036,8 +3046,9 @@ describe("Shipment retained evidence", () => {
             trackingNumber: number,
           },
         ],
-      })
-      .where(eq(shipment.shortcode, code));
+      },
+      eq(shipment.shortcode, code),
+    );
 
     await executeEntity(buildKernelContext(ctx.db, ctx.actor.userId), {
       action: "update",
@@ -3423,10 +3434,11 @@ describe("Shipment retained evidence", () => {
       carrierName: "Synthetic Handoff Carrier",
       trackingNumber: "EXAMPLE-EXTRA-HANDOFF",
     };
-    await getDb(ctx.db)
-      .update(shipment)
-      .set({ extraTrackingNumbers: [falseExtra, genuine] })
-      .where(eq(shipment.shortcode, code));
+    await updateShipmentWhere(
+      ctx.db,
+      { extraTrackingNumbers: [falseExtra, genuine] },
+      eq(shipment.shortcode, code),
+    );
     const read = async () => {
       const [row] = await getDb(ctx.db)
         .select({

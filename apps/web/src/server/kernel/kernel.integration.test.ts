@@ -54,6 +54,7 @@ import {
   definePass,
   evidenceRow,
   recordSubject,
+  recordIdentity,
   type Kernel,
 } from "./api";
 import { applyComputed } from "./apply";
@@ -80,6 +81,7 @@ import {
   fixtureExpense,
   fixtureAllocation,
   fixtureReceipt,
+  fixtureReadSnapshot,
   PURCHASE_SCOPE,
   PURCHASE_TABLE,
   receiptEvidence,
@@ -355,6 +357,7 @@ describe("evidence-facts kernel", () => {
     let disagreement: string | null = null;
     const { kernel } = kernelWith({
       linkedDecision: true,
+      patchMerchant: true,
       disagreement: () => disagreement,
     });
     const [fact] = await kernel.append(ctx.db, [charge("ORD-BASELINE", 1250)]);
@@ -658,6 +661,9 @@ describe("evidence-facts kernel", () => {
       },
       reconcile(_input, c) {
         expect(c.reference("vendor", seller.shortcode)).toBe(seller.id);
+        expect(c.reference("vendor", seller.id, { format: "shortcode" })).toBe(
+          seller.shortcode,
+        );
         c.gap.decision("a reviewed identity");
         return c.done();
       },
@@ -833,6 +839,96 @@ describe("evidence-facts kernel", () => {
           entry.provenance.scope.key === scope.key,
       ),
     ).toBe(true);
+  });
+
+  it("keeps an unwritten identity reservation local to its scope", async () => {
+    const target = writes(vendor, [], {
+      entity: "vendor",
+      createOnly: ["name"],
+    });
+    const scope = "fixture.localReservation";
+    const reservation = defineReconciler({
+      scope,
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        const id = recordIdentity(
+          { kind: scope, key: "0-reserve" },
+          "Vendor",
+          "unwritten",
+        );
+        if (key === "0-reserve") c.identity(target, "unwritten");
+        expect(c.reference("vendor", id)).toBe(key === "0-reserve" ? id : null);
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "reservations", reconcilers: [reservation] }),
+    ]);
+    const before = await repositoryQueries(ctx.db)
+      .select()
+      .from(entityIdentity);
+    const outcomes = await kernel.reconcileNow(
+      ctx.db,
+      ["0-reserve", "1-read"].map((key) => ({ kind: scope, key })),
+    );
+    expect(outcomes.map((outcome) => outcome.status)).toEqual([
+      "applied",
+      "applied",
+    ]);
+    expect(
+      await repositoryQueries(ctx.db).select().from(entityIdentity),
+    ).toEqual(before);
+  });
+
+  it("fences and applies snapshot patches through their entity primary key", async () => {
+    const id = crypto.randomUUID();
+    expect(() =>
+      writes(fixtureReadSnapshot, ["summary"], {
+        projection: true,
+        entity: "purchase",
+      }),
+    ).toThrow("Projection targets cannot own entity creation");
+    const target = writes(fixtureReadSnapshot, ["summary", "detail"], {
+      projection: true,
+    });
+    const projection = defineReconciler({
+      scope: "fixture.snapshot",
+      lane: "catalog",
+      version: 1,
+      reads: [],
+      writes: [target],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        c.patch(target, key, { summary: "Synthetic snapshot" });
+        c.patch(target, key, { detail: "Synthetic detail" });
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "snapshot", reconcilers: [projection] }),
+    ]);
+    const scopes = [{ kind: projection.scope, key: id }];
+    expect((await kernel.reconcileNow(ctx.db, scopes))[0]?.status).toBe(
+      "applied",
+    );
+    expect(
+      (await repositoryQueries(ctx.db).select().from(fixtureReadSnapshot))[0],
+    ).toEqual({
+      entityId: id,
+      summary: "Synthetic snapshot",
+      detail: "Synthetic detail",
+    });
+    expect((await kernel.reconcileNow(ctx.db, scopes))[0]?.status).toBe(
+      "applied",
+    );
   });
 
   it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {

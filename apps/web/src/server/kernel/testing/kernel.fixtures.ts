@@ -78,6 +78,12 @@ export const fixtureAllocation = fixture.table("FixtureAllocation", {
   amountMinor: integer("amountMinor").notNull(),
 });
 
+export const fixtureReadSnapshot = fixture.table("FixtureReadSnapshot", {
+  entityId: uuid("entityId").primaryKey(),
+  summary: text("summary"),
+  detail: text("detail"),
+});
+
 /** Create the fixture schema once per database and empty it for each test. */
 export async function resetFixtureTables(db: Database): Promise<void> {
   // One statement per call: the query tracer reads one result per statement.
@@ -110,6 +116,8 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
     `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureExpense" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "amountMinor" integer NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureAllocation" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "expenseId" uuid NOT NULL REFERENCES kernel_fixture."FixtureExpense"(id), "amountMinor" integer NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureReadSnapshot" ("entityId" uuid PRIMARY KEY, summary text, detail text)`,
+    `DELETE FROM kernel_fixture."FixtureReadSnapshot"`,
     `DELETE FROM kernel_fixture."FixtureAllocation"`,
     `DELETE FROM kernel_fixture."FixtureExpense"`,
     `DELETE FROM kernel_fixture."FixturePurchase"`,
@@ -145,6 +153,7 @@ export type FixtureHooks = {
   predicateReceipts?: boolean;
   linked?: boolean;
   authored?: boolean;
+  patchMerchant?: boolean;
   linkedDecision?: boolean;
   onRemove?: () => Promise<void>;
   disagreement?: () => string | null;
@@ -324,7 +333,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         {
           orderRef: input.orderRef,
           amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-          merchant,
+          ...(hooks.patchMerchant && id ? {} : { merchant }),
           receiptId: receipt?.id ?? null,
         },
         {
@@ -332,6 +341,13 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           authored: hooks.authored,
         },
       );
+      if (hooks.patchMerchant && id)
+        c.patch(
+          purchaseWrites,
+          id,
+          { merchant },
+          { provenance: assigned ? { merchant: assigned.id } : {} },
+        );
       const linked = id
         ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
         : null;

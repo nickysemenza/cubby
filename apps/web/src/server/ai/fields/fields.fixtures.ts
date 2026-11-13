@@ -1,5 +1,6 @@
 /** Synthetic seeds pass field assignments through the same boundary as writers. */
 import { systemActor } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor, type ShortcodeType } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 
@@ -20,6 +21,62 @@ export async function insertFieldsFixture<T extends ShortcodeType>(
   values: ShortcodeInsertValues<T>,
   generator?: ShortcodeGeneratorPort,
 ): Promise<ShortcodeRowFor<T>> {
+  if (entity === "email") {
+    const { appendEmailIdentity } =
+      await import("~/server/domains/purchase-import/repo/order-evidence");
+    const { email } = await import("~/server/db/schema");
+    // SAFETY: this entity literal selects the Email insert model and result.
+    const data = values as ShortcodeInsertValues<"email">;
+    const id = data.id ?? parseEntityId("email", crypto.randomUUID());
+    const result = await appendEmailIdentity(db, {
+      where: eq(email.id, id),
+      values: () => ({ ...data, id }),
+    });
+    const { reconcileNow } = await import("~/server/kernel/api");
+    await reconcileNow(db, [{ kind: "emailState", key: result.row.id }]);
+    // SAFETY: the entity literal selects the same output model as the generic caller.
+    return {
+      ...result.row,
+      shortcode: parseShortcodeFor(entity, result.row.shortcode),
+    } as ShortcodeRowFor<T>;
+  }
+  if (entity === "shipment") {
+    const { appendShipmentHeader } =
+      await import("~/server/domains/shipment/repo/shipment-mutations");
+    // SAFETY: this entity literal selects the Shipment insert model and result.
+    const data = values as ShortcodeInsertValues<"shipment">;
+    const row = await appendShipmentHeader(db, {
+      values: data,
+      sourceKey: "manual",
+      packageKey: crypto.randomUUID(),
+      manual: true,
+    });
+    // SAFETY: the entity literal selects the same output model as the generic caller.
+    return {
+      ...row,
+      shortcode: parseShortcodeFor(entity, row.shortcode),
+    } as ShortcodeRowFor<T>;
+  }
+  if (entity === "ledgerTransfer") {
+    const { createTransferEvent } =
+      await import("~/server/domains/ledger-transfer/repo/transfer-mutations");
+    const { ledgerTransfer } = await import("~/server/db/schema");
+    const { repositoryQueries } =
+      await import("~/server/db/repository-access.boundary");
+    // SAFETY: this entity literal selects the LedgerTransfer insert model.
+    const data = values as ShortcodeInsertValues<"ledgerTransfer">;
+    const id = await createTransferEvent(db, data, [], systemActor());
+    const [row] = await repositoryQueries(db)
+      .select()
+      .from(ledgerTransfer)
+      .where(eq(ledgerTransfer.id, parseEntityId("ledgerTransfer", id)));
+    if (!row) throw new Error("Synthetic transfer is missing");
+    // SAFETY: the entity literal selects the same output model as the generic caller.
+    return {
+      ...row,
+      shortcode: parseShortcodeFor(entity, row.shortcode),
+    } as ShortcodeRowFor<T>;
+  }
   if (
     entity === "purchase" ||
     entity === "expense" ||
