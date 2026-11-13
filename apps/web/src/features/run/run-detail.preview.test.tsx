@@ -233,6 +233,7 @@ const answers = new Map<string, OperationWireValue>([
         {
           entity: "product",
           feature: "entity-connections",
+          featureLabel: "Connections",
           waiting: 22,
           completed: 60,
           failed: 2,
