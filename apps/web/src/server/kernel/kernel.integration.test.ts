@@ -10,11 +10,19 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db/database";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
-import { createKernel, evidenceRow, recordSubject, type Kernel } from "./api";
+import {
+  createKernel,
+  defineModule,
+  definePass,
+  evidenceRow,
+  recordSubject,
+  type Kernel,
+} from "./api";
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
-import { claimScopes } from "./claim";
+import { claimPass, ClaimLapsedError, claimScopes, fenceClaim } from "./claim";
 import { computeBatch } from "./compute";
+import { runOnePass } from "./pass";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -207,6 +215,44 @@ describe("evidence-facts kernel", () => {
     expect(outcomes.map((outcome) => outcome.status)).toEqual(["failed"]);
     expect(await purchases(ctx.db)).toEqual([]);
     expect(await dirtyCount(ctx.db)).toBe(1);
+  });
+
+  it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
+    const pass = definePass({
+      name: "fixture.restart",
+      async run(db, _cursor, claim) {
+        await repositoryQueries(db)
+          .execute(sql`UPDATE "Pass" SET "cancelledAt" = now()
+          WHERE name = ${pass.name}`);
+        await kernel.startPass(db, pass, { cursor: { page: 0 } });
+        await expect(claim.fence(db)).rejects.toBeInstanceOf(ClaimLapsedError);
+        return { cursor: { page: 99 }, done: true };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass);
+    await runOnePass(ctx.db, kernel.registry);
+    const result = await repositoryQueries(ctx.db).execute<{
+      cursor: unknown;
+      doneAt: string | null;
+      claimToken: string | null;
+    }>(
+      sql`SELECT cursor, "doneAt", "claimToken" FROM "Pass" WHERE name = ${pass.name}`,
+    );
+    expect(result.rows).toEqual([
+      { cursor: { page: 0 }, doneAt: null, claimToken: null },
+    ]);
+    const next = await claimPass(repositoryQueries(ctx.db), [pass.name]);
+    expect(next).not.toBeNull();
+    await expect(
+      fenceClaim(
+        repositoryQueries(ctx.db),
+        { table: "Pass", name: pass.name, key: "default" },
+        next!.token,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("never sends an unknown ask again", async () => {

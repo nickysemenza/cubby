@@ -9,3 +9,10 @@ export async function wakeAfterCommit(db: Database): Promise<void> {
     await wakeJobs({ source: "kernel.dirty" });
   });
 }
+
+/** A stale holder's recovery does not depend on its Worker reaching the end of a page. */
+export async function wakeClaimRecovery(deadline: Date): Promise<void> {
+  const { wakeAt } =
+    await import("~/server/workflows/background-tasks/publish");
+  await wakeAt(deadline, { source: "kernel.claim-recovery" });
+}

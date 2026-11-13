@@ -12,7 +12,6 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 import {
-  CLAIM_LEASE_MS,
   claimPass,
   fenceClaim,
   renewClaim,
@@ -21,6 +20,7 @@ import {
 } from "./claim";
 import type { Claim, Json, Pass } from "./define";
 import type { KernelRegistry } from "./registry";
+import { wakeAfterCommit } from "./wake";
 
 /** Start (or restart a finished) pass instance; a pending one keeps its cursor. */
 export async function startPass(
@@ -46,9 +46,19 @@ export async function startPass(
         THEN excluded.cursor ELSE "Pass".cursor END,
       attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
         THEN 0 ELSE "Pass".attempts END,
+      "claimToken" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN NULL ELSE "Pass"."claimToken" END,
+      "claimDeadline" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN NULL ELSE "Pass"."claimDeadline" END,
+      "waitCause" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN NULL ELSE "Pass"."waitCause" END,
+      "lastError" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
+        THEN NULL ELSE "Pass"."lastError" END,
+      "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
       "availableAt" = least("Pass"."availableAt", excluded."availableAt"),
       "updatedAt" = now()`);
+  await wakeAfterCommit(db);
 }
 
 function passClaim(db: Database, claimed: ClaimedPass): Claim {
@@ -60,7 +70,7 @@ function passClaim(db: Database, claimed: ClaimedPass): Claim {
   const controller = new AbortController();
   return {
     token: claimed.token,
-    deadline: new Date(Date.now() + CLAIM_LEASE_MS),
+    deadline: claimed.deadline,
     signal: controller.signal,
     async renew() {
       const held = await renewClaim(
@@ -71,6 +81,7 @@ function passClaim(db: Database, claimed: ClaimedPass): Claim {
       if (!held) controller.abort();
       return held;
     },
+    fence: (tx) => fenceClaim(repositoryQueries(tx), target, claimed.token),
     fenced: (work) =>
       repositoryTransactionDatabase(db, async (tx) => {
         await fenceClaim(repositoryQueries(tx), target, claimed.token);
@@ -104,7 +115,7 @@ export async function runOnePass(
           "doneAt" = ${result.done ? sql`now()` : sql`NULL`},
           "availableAt" = ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`},
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,
-          "waitCause" = NULL, "lastError" = NULL, "updatedAt" = now()
+          "waitCause" = ${result.done ? null : (result.waitCause ?? null)}, "lastError" = NULL, "updatedAt" = now()
         WHERE name = ${claimed.name} AND key = ${claimed.key}`);
     });
   } catch (error) {
