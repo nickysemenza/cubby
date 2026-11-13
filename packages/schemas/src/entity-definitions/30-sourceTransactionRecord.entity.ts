@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { sourceIdentityResolution } from "../source-occurrence-fields";
 import { readOnly, timestampField } from "./field-policy";
 import { capitalize } from "@cubby/shared/text-case";
@@ -15,6 +16,426 @@ import {
 } from "../source-transaction-record-fields";
 export const { definition, readSchemas } = defineEntityModel({
   key: "sourceTransactionRecord",
+  edges: [
+    defineEdge({
+      key: "SourceOccurrence.currentObservationId",
+      from: "sourceOccurrence",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.SourceOccurrence.currentObservationId",
+        from: "sourceTransactionRecord",
+        to: "sourceOccurrence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOccurrence.currentObservationId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceOccurrence",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "occurrence frontier",
+        description:
+          "Retain the selected frontier after observation deletion; never promote an older version.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A tombstoned frontier reserves source identity without authorizing automatic money.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-occurrence-head",
+              effect: "preserve",
+              description:
+                "Occurrence head evidence remains reserved through an observation tombstone.",
+            },
+            handler: null,
+            before: {
+              module:
+                "~/server/domains/transaction-import/repo/source-transaction-record-lifecycle",
+              export: "assertSourceTransactionRecordDeletionAllowed",
+            },
+            beforeLock: {
+              module:
+                "~/server/domains/transaction-import/repo/source-transaction-record-lifecycle",
+              export: "lockSourceObservationRemoval",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOccurrence.replacementObservationId",
+      from: "sourceOccurrence",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.SourceOccurrence.replacementObservationId",
+        from: "sourceTransactionRecord",
+        to: "sourceOccurrence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOccurrence.replacementObservationId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceOccurrence",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "replacement proof",
+        description:
+          "The exact reviewed replacement observation remains explainable.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "The deletion hook protects live replacement decisions while history remains retained.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-replacement-proof",
+              effect: "block",
+              description:
+                "A live explicit replacement decision requires its exact observation evidence.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceObservationAnnotation.supersededByObservationId",
+      from: "row:SourceObservationAnnotation",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.SourceObservationAnnotation.supersededByObservationId",
+        from: "sourceTransactionRecord",
+        to: "row:SourceObservationAnnotation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceObservationAnnotation.supersededByObservationId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "SourceObservationAnnotation.observationId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "original replacements",
+        description:
+          "Each original observation preserves its reviewed successor.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "The live replacement guard owns deletion eligibility; retained decisions remain historical evidence.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-replacement-history",
+              effect: "block",
+              description:
+                "A live predecessor retains its exact reviewed replacement observation.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceObservationAnnotation.observationId",
+      from: "row:SourceObservationAnnotation",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.SourceObservationAnnotation.observationId",
+        from: "sourceTransactionRecord",
+        to: "row:SourceObservationAnnotation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceObservationAnnotation.observationId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "SourceObservationAnnotation.observationId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "observation annotations",
+        description:
+          "Original notes and unresolved judgments survive observation retirement.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason: "Annotations preserve source history through its tombstone.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-observation-judgments",
+              effect: "preserve",
+              description:
+                "Observation annotations and unresolved decisions remain retained.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "FinancialEvidenceAlias.observationId",
+      from: "row:FinancialEvidenceAlias",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.FinancialEvidenceAlias.observationId",
+        from: "sourceTransactionRecord",
+        to: "row:FinancialEvidenceAlias",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialEvidenceAlias.observationId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Retained financial provenance, never current ownership.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "retained evidence aliases",
+        description:
+          "Original aliases remain explainable through observation tombstones.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Alias evidence is retained, never a live accepted-owner lookup.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-source-aliases",
+              effect: "preserve",
+              description:
+                "Original aliases remain explainable through observation tombstones.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "TransactionImportRecord.statementRowId",
+      from: "row:TransactionImportRecord",
+      to: "sourceTransactionRecord",
+      cardinality: "one",
+      inverse: {
+        key: "sourceTransactionRecord.incoming.TransactionImportRecord.statementRowId",
+        from: "sourceTransactionRecord",
+        to: "row:TransactionImportRecord",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "TransactionImportRecord.statementRowId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "TransactionImportRecord.importId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "import memberships",
+        description:
+          "The imports that received this immutable source observation.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Intake history retains the original record identity through deletion.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "retain-import-membership",
+              effect: "preserve",
+              description:
+                "Imports retain original and subsequent memberships.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: {
     singular: "Source transaction record",
     plural: "Source transaction records",
@@ -1111,40 +1532,71 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("occurrenceId").named("occurrence", "Source occurrence"),
-    r.query("sourceObservationAccount", "one").named("account", "Account"),
-    r.field("batchId").named("firstImport", "First import"),
-    r
-      .query("sourceObservationWithdrawal", "one")
-      .named("withdrawalProof", "Withdrawal proof"),
-    r
-      .query("sourceObservationSuccessor", "one")
-      .named("supersededByRecord", "Superseded by"),
-    r
-      .query("sourceObservationSuccessor", "many", true)
-      .named("predecessors", "Superseded records"),
-    r
-      .path("transactionImport", "many", [
-        {
-          edge: "TransactionImportRecord.statementRowId",
-          direction: "incoming",
-        },
-        { edge: "TransactionImportRecord.importId", direction: "outgoing" },
-      ])
-      .named("imports", "Imports"),
-    r
-      .derived("financialTransaction", "many", "sourceTransactionRecordId", [
-        "SourceTransactionRecord.occurrenceId",
-        "SourceOccurrence.acceptedTransactionId",
-      ])
-      .named("transactions", "Transactions", {
-        sources: [
-          r
-            .query("transactionSourceRecords", "many", true)
-            .source("accepted", "Accepted settlement"),
-        ],
-      }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("occurrenceId").named("occurrence", "Source occurrence"),
+        "sourceOccurrence.source-transaction-records",
+      ),
+      r.declare(
+        r.query("sourceObservationAccount", "one").named("account", "Account"),
+        "financialAccount.sourceTransactionRecord.account",
+      ),
+      r.declare(
+        r.field("batchId").named("firstImport", "First import"),
+        "transactionImport.firstRecords",
+      ),
+      r.declare(
+        r
+          .query("sourceObservationWithdrawal", "one")
+          .named("withdrawalProof", "Withdrawal proof"),
+        "transactionImport.sourceTransactionRecord.withdrawalProof",
+      ),
+      r.declare(
+        r
+          .query("sourceObservationSuccessor", "one")
+          .named("supersededByRecord", "Superseded by"),
+        "sourceTransactionRecord.sourceTransactionRecord.supersededByRecord",
+      ),
+      r.declare(
+        r
+          .query("sourceObservationSuccessor", "many", true)
+          .named("predecessors", "Superseded records"),
+        "sourceTransactionRecord.sourceTransactionRecord.predecessors",
+      ),
+      r.declare(
+        r
+          .path("transactionImport", "many", [
+            {
+              edge: "TransactionImportRecord.statementRowId",
+              direction: "incoming",
+            },
+            { edge: "TransactionImportRecord.importId", direction: "outgoing" },
+          ])
+          .named("imports", "Imports"),
+        "transactionImport.records",
+      ),
+      r.declare(
+        r
+          .derived(
+            "financialTransaction",
+            "many",
+            "sourceTransactionRecordId",
+            [
+              "SourceTransactionRecord.occurrenceId",
+              "SourceOccurrence.acceptedTransactionId",
+            ],
+          )
+          .named("transactions", "Transactions", {
+            sources: [
+              r
+                .query("transactionSourceRecords", "many", true)
+                .source("accepted", "Accepted settlement"),
+            ],
+          }),
+        "financialTransaction.sourceRecords",
+      ),
+    ],
+  }),
   readSchemas,
 );

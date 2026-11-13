@@ -211,7 +211,11 @@ export const validateEdgeStorageCoverage = (
         const ref = key.reference();
         return (
           getTableName(ref.foreignTable) === target &&
-          ref.columns.some((candidate) => candidate.name === column)
+          ref.columns.some(
+            (candidate, index) =>
+              candidate.name === column &&
+              ref.foreignColumns[index]?.name === "id",
+          )
         );
       })
     )
@@ -225,7 +229,8 @@ export const validateEdgeStorageCoverage = (
       const ref = key.reference(),
         target = byTable.get(getTableName(ref.foreignTable));
       if (!target || !declaredEntities.has(target)) continue;
-      for (const column of ref.columns) {
+      for (const [index, column] of ref.columns.entries()) {
+        if (ref.foreignColumns[index]?.name !== "id") continue;
         const name = `${config.name}.${column.name}`;
         if (
           !physical.some(

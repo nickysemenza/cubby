@@ -74,9 +74,6 @@ export const ENTITY_EDGE_OWNERS = {
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
 
-  FinancialEvidenceAlias: {
-    excluded: "Retained financial provenance, never current ownership.",
-  },
   // A run's target list is how a run relates to what it imported.
 
   // An Image job's attempts, events and submission memberships belong to the job.

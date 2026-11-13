@@ -33,10 +33,8 @@ import {
   ledgerSourceClaim,
   purchasePaymentEvidence,
   sourceTransactionRecord,
-  sourceObservationAnnotation,
   sourceOccurrence,
   financialEvidenceAlias,
-  transactionImportRecord,
 } from "./schema";
 
 /** `${pgTable name}.${column name}` — e.g. `"EntityAttachment.imageId"`. */
@@ -210,80 +208,6 @@ export const ENTITY_EDGE_OVERRIDES = {
   // The generated vocabulary owns empty groups; explicit semantics retain literal edge keys.
   ...mapRecord(ENTITY_KEYS, () => ({})),
 
-  sourceTransactionRecord: edges({
-    "SourceObservationAnnotation.supersededByObservationId": {
-      column: sourceObservationAnnotation.supersededByObservationId,
-      role: "history",
-      label: "original replacements",
-      description:
-        "Each original observation preserves its reviewed successor.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "The live replacement guard owns deletion eligibility; retained decisions remain historical evidence.",
-      },
-    },
-    "SourceOccurrence.currentObservationId": {
-      column: sourceOccurrence.currentObservationId,
-      role: "history",
-      label: "occurrence frontier",
-      description:
-        "Retain the selected frontier after observation deletion; never promote an older version.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A tombstoned frontier reserves source identity without authorizing automatic money.",
-      },
-    },
-    "SourceOccurrence.replacementObservationId": {
-      column: sourceOccurrence.replacementObservationId,
-      role: "history",
-      label: "replacement proof",
-      description:
-        "The exact reviewed replacement observation remains explainable.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "The deletion hook protects live replacement decisions while history remains retained.",
-      },
-    },
-    "SourceObservationAnnotation.observationId": {
-      column: sourceObservationAnnotation.observationId,
-      role: "history",
-      label: "observation annotations",
-      description:
-        "Original notes and unresolved judgments survive observation retirement.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason: "Annotations preserve source history through its tombstone.",
-      },
-    },
-    "FinancialEvidenceAlias.observationId": {
-      column: financialEvidenceAlias.observationId,
-      role: "history",
-      label: "retained evidence aliases",
-      description:
-        "Original aliases remain explainable through observation tombstones.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Alias evidence is retained, never a live accepted-owner lookup.",
-      },
-    },
-
-    "TransactionImportRecord.statementRowId": {
-      column: transactionImportRecord.statementRowId,
-      role: "history",
-      label: "import memberships",
-      description:
-        "The imports that received this immutable source observation.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Intake history retains the original record identity through deletion.",
-      },
-    },
-  }),
   sourceOccurrence: edges({
     "SourceTransactionRecord.occurrenceId": {
       column: sourceTransactionRecord.occurrenceId,
