@@ -578,14 +578,6 @@ it("inspects only aggregate projections under PostgreSQL read-only enforcement",
     ).toBe(0);
     expect(result.stdout).not.toContain(cutoverId(13));
     expect(result.stdout).not.toContain("cutover@example.invalid");
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(
-      new URL(
-        "../../../artifacts/cutover-synthetic-aggregates.json",
-        import.meta.url,
-      ),
-      result.stdout,
-    );
     expect(
       (await client.query(`SELECT count(*)::int n FROM "Ask"`)).rows[0].n,
     ).toBe(0);
