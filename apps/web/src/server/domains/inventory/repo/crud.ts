@@ -2,7 +2,6 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   InventoryId,
@@ -26,7 +25,7 @@ import {
   placementCondition,
   stockOnly,
 } from "~/server/db/computed/inventory-placement";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   amountFromColumns,
   parseInventoryAmount,
@@ -94,12 +93,6 @@ import {
   loadStoredInventoryOwnershipTraces,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-
-// InventoryEntry has no incoming foreign keys. Keep the empty policy explicit
-// so a newly introduced reference must be classified before kernel deletion
-// can remain registered.
-export const INVENTORY_DELETE_EDGE_POLICY =
-  {} as const satisfies IncomingEdgePolicy<"inventory", OperationDisposition>;
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -741,7 +734,7 @@ export const deleteInventoryEntries = (
 ) =>
   deleteByPolicy(db, {
     entity: "inventory",
-    policy: INVENTORY_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.inventory,
     ids,
     actor,
   });

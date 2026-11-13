@@ -1157,16 +1157,32 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("productId").named("product", "Product"),
-    r.field("locationId").named("location", "Location"),
-    r.field("ownerLedgerPartyId").named("owner", "Owner"),
-    r
-      .path("ingredient", "one", [
-        { edge: "InventoryEntry.productId", direction: "outgoing" },
-        { edge: "Product.ingredientId", direction: "outgoing" },
-      ])
-      .named("ingredient", "Ingredient", { view: { columnGroup: "Catalog" } }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("productId").named("product", "Product"),
+        "product.inventory",
+      ),
+      r.declare(
+        r.field("locationId").named("location", "Location"),
+        "location.inventory",
+      ),
+      r.declare(
+        r.field("ownerLedgerPartyId").named("owner", "Owner"),
+        "ledgerParty.inventory",
+      ),
+      r.declare(
+        r
+          .path("ingredient", "one", [
+            { edge: "InventoryEntry.productId", direction: "outgoing" },
+            { edge: "Product.ingredientId", direction: "outgoing" },
+          ])
+          .named("ingredient", "Ingredient", {
+            view: { columnGroup: "Catalog" },
+          }),
+        "ingredient.inventory",
+      ),
+    ],
+  }),
   readSchemas,
 );

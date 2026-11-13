@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import type { EdgeDefinition } from "@cubby/schemas/entity-definitions/edges";
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
@@ -38,6 +39,20 @@ export const renderDeclaredEdges = (
   const deletes = new Map<string, string[]>();
   const merges = new Map<string, string[]>();
   const hooks = new Map<string, string[]>();
+  const navigationOwners = new Set<string>(
+    edges.flatMap((edge) =>
+      "navigation" in edge && edge.navigation ? [edge.from] : [],
+    ),
+  );
+  for (const entity of entities) {
+    if (!navigationOwners.has(entity.key)) continue;
+    const lifecycle = z
+      .object({ delete: z.object({}).nullable(), merge: z.boolean() })
+      .parse(entity.descriptor.lifecycle);
+    groups.set(entity.key, []);
+    if (lifecycle.delete !== null) deletes.set(entity.key, []);
+    if (lifecycle.merge) merges.set(entity.key, []);
+  }
   const add = (map: Map<string, string[]>, key: string, value: string) =>
     map.set(key, [...(map.get(key) ?? []), value]);
   for (const edge of edges) {

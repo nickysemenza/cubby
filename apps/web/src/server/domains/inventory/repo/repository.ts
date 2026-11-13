@@ -2,6 +2,7 @@ import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 
 import { inventorySchemaBindings } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import type { Database } from "~/server/db";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import type {
   EntityKernelContext,
   EntityRepository,
@@ -15,7 +16,6 @@ import {
   checkUniqueProductDuplicate,
   createInventoryEntry,
   deleteInventoryEntries,
-  INVENTORY_DELETE_EDGE_POLICY,
   inventoryScaffold,
   updateInventoryEntry,
 } from "./crud";
@@ -72,7 +72,7 @@ const resolveUpdate = async (ctx: EntityKernelContext, data: UpdateInput) => {
 
 export const inventoryRepository = defineRepository("inventory", {
   schemas: inventorySchemaBindings,
-  lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.inventory },
   scaffold: inventoryScaffold,
   create: async (ctx, data) =>
     createInventoryEntry(
