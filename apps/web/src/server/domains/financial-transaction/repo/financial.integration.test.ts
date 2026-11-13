@@ -872,7 +872,7 @@ describe("financial repositories — critical invariants", () => {
 
   /**
    * `SourceTransactionRecord.accountId` is declared `block` in
-   * FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY, and it is the one edge in the
+   * DECLARED_EDGE_DELETE_POLICIES.financialAccount, and it is the one edge in the
    * lifecycle registry that fails OPEN. The FK is nullable, so a missing guard
    * does not throw — the account simply vanishes while live triaged rows keep
    * pointing at it, silently discarding the triage judgment that put them

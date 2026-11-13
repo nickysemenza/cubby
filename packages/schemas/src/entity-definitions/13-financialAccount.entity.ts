@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
   attachedImageInputs,
@@ -24,6 +25,278 @@ import { z } from "zod";
 /** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "financialAccount",
+  edges: [
+    defineEdge({
+      key: "FinancialTransaction.accountId",
+      from: "financialTransaction",
+      to: "financialAccount",
+      cardinality: "one",
+      inverse: {
+        key: "financialAccount.incoming.FinancialTransaction.accountId",
+        from: "financialAccount",
+        to: "financialTransaction",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "FinancialTransaction.accountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "financialTransaction",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "transaction",
+        label: "financial transactions",
+        description:
+          "A settlement-side event recorded by this financial account.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-financial-transactions",
+              effect: "block",
+              description:
+                "An account cannot be deleted while live financial transactions still retain settlement evidence against it.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceOccurrence.accountId",
+      from: "sourceOccurrence",
+      to: "financialAccount",
+      cardinality: "one",
+      inverse: {
+        key: "financialAccount.incoming.SourceOccurrence.accountId",
+        from: "financialAccount",
+        to: "sourceOccurrence",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOccurrence.accountId",
+        constrained: true,
+        ordinary: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "sourceOccurrence",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "reference",
+        label: "Source occurrences",
+        description:
+          "Source occurrence accountId references Financial Account.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-source-transaction-records",
+              effect: "block",
+              description:
+                "An account cannot be deleted while live statement rows are assigned to it. The column is nullable, so detaching would succeed silently — and it would discard the triage judgment that put the row on this account while leaving the row looking untriaged.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "EmailFinancialAssociation.reviewedAccountId",
+      from: "row:EmailFinancialAssociation",
+      to: "financialAccount",
+      cardinality: "one",
+      inverse: {
+        key: "financialAccount.incoming.EmailFinancialAssociation.reviewedAccountId",
+        from: "financialAccount",
+        to: "row:EmailFinancialAssociation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EmailFinancialAssociation.reviewedAccountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "EmailFinancialAssociation.emailId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "reviewed Email associations",
+        description:
+          "The account a member confirmed when linking an Email to a settlement transaction; the review keeps naming it after the account is deleted.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-reviewed-email-association",
+              effect: "preserve",
+              description:
+                "A reviewed Email association keeps naming the deleted account's tombstone; the review is history and is never rewritten.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "SourceObservationAnnotation.accountId",
+      from: "row:SourceObservationAnnotation",
+      to: "financialAccount",
+      cardinality: "one",
+      inverse: {
+        key: "financialAccount.incoming.SourceObservationAnnotation.accountId",
+        from: "financialAccount",
+        to: "row:SourceObservationAnnotation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceObservationAnnotation.accountId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "SourceObservationAnnotation.observationId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "original source account judgments",
+        description:
+          "Each retained observation keeps its original account judgment; unresolved active assignments are guarded by account deletion.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Promoted observations retain their original account history after current occurrence judgments change.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-account-history",
+              effect: "preserve",
+              description:
+                "Original observation judgments retain their account tombstone; current assignments are guarded by the occurrence edge.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Financial Account", plural: "Accounts" },
   route: {
     listColumns: {
@@ -891,52 +1164,72 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .field("primaryCardholderId")
-      .named("primary-cardholder", "Primary cardholder"),
-    r.field("providerVendorId").named("provider-vendor", "Provider"),
-    r.field("ledgerPartyId").named("ledger-party", "Ledger party"),
-    r
-      .path("financialTransaction", "many", [
-        { edge: "FinancialTransaction.accountId", direction: "incoming" },
-      ])
-      .named("transactions", "Transactions", {
-        view: {
-          columnGroup: "Activity",
-          order: "newest",
-          defaultVisible: true,
-        },
-      }),
-    r
-      .path("purchase", "many", [
-        { edge: "FinancialTransaction.accountId", direction: "incoming" },
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-      ])
-      .named("purchases", "Purchases", {
-        view: { columnGroup: "Activity", order: "newest" },
-      }),
-    r
-      .path("vendor", "many", [
-        { edge: "FinancialTransaction.accountId", direction: "incoming" },
-        {
-          edge: "FinancialTransactionAllocation.transactionId",
-          direction: "incoming",
-        },
-        {
-          edge: "FinancialTransactionAllocation.purchaseId",
-          direction: "outgoing",
-        },
-        { edge: "Purchase.vendorId", direction: "outgoing" },
-      ])
-      .named("vendors", "Vendors", { view: { columnGroup: "Activity" } }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .field("primaryCardholderId")
+          .named("primary-cardholder", "Primary cardholder"),
+        "ledgerParty.accounts",
+      ),
+      r.declare(
+        r.field("providerVendorId").named("provider-vendor", "Provider"),
+        "vendor.accounts",
+      ),
+      r.declare(
+        r.field("ledgerPartyId").named("ledger-party", "Ledger party"),
+        "ledgerParty.financial-accounts",
+      ),
+      r.declare(
+        r
+          .path("financialTransaction", "many", [
+            { edge: "FinancialTransaction.accountId", direction: "incoming" },
+          ])
+          .named("transactions", "Transactions", {
+            view: {
+              columnGroup: "Activity",
+              order: "newest",
+              defaultVisible: true,
+            },
+          }),
+        "financialTransaction.account",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "FinancialTransaction.accountId", direction: "incoming" },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+          ])
+          .named("purchases", "Purchases", {
+            view: { columnGroup: "Activity", order: "newest" },
+          }),
+        "purchase.financialAccount.purchases",
+      ),
+      r.declare(
+        r
+          .path("vendor", "many", [
+            { edge: "FinancialTransaction.accountId", direction: "incoming" },
+            {
+              edge: "FinancialTransactionAllocation.transactionId",
+              direction: "incoming",
+            },
+            {
+              edge: "FinancialTransactionAllocation.purchaseId",
+              direction: "outgoing",
+            },
+            { edge: "Purchase.vendorId", direction: "outgoing" },
+          ])
+          .named("vendors", "Vendors", { view: { columnGroup: "Activity" } }),
+        "vendor.financialAccount.vendors",
+      ),
+    ],
+  }),
   readSchemas,
 );

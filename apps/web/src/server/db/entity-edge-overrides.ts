@@ -547,43 +547,7 @@ export const ENTITY_EDGE_OVERRIDES = {
     }),
     ...linkEdgesFor("purchase"),
   },
-  financialAccount: {
-    ...edges({
-      "FinancialTransaction.accountId": {
-        column: financialTransaction.accountId,
-        role: "transaction",
-        label: "financial transactions",
-        description:
-          "A settlement-side event recorded by this financial account.",
-        liveness: { kind: "must-target-live" },
-      },
-      "EmailFinancialAssociation.reviewedAccountId": {
-        column: emailFinancialAssociation.reviewedAccountId,
-        role: "history",
-        label: "reviewed Email associations",
-        description:
-          "The account a member confirmed when linking an Email to a settlement transaction; the review keeps naming it after the account is deleted.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
-        },
-      },
-      "SourceObservationAnnotation.accountId": {
-        column: sourceObservationAnnotation.accountId,
-        role: "history",
-        label: "original source account judgments",
-        description:
-          "Each retained observation keeps its original account judgment; unresolved active assignments are guarded by account deletion.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Promoted observations retain their original account history after current occurrence judgments change.",
-        },
-      },
-    }),
-    ...linkEdgesFor("financialAccount"),
-  },
+
   financialTransaction: {
     ...edges({
       "SourceOccurrence.acceptedTransactionId": {

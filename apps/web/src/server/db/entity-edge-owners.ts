@@ -22,11 +22,9 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { DECLARED_EDGE_OWNERS } from "./generated/declared-edges.gen";
 import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
-  emailFinancialAssociation,
   financialTransactionAllocation,
   purchasePaymentEvidence,
   transactionImportRecord,
-  sourceObservationAnnotation,
 } from "./schema";
 
 // `edges()` holds each key to its column's literal `Table.column` name, so the
@@ -81,9 +79,7 @@ export const ENTITY_EDGE_OWNERS = {
   ShipmentSourceCapture: { excluded: WORKFLOW },
 
   TransactionImportRecord: { owner: transactionImportRecord.importId },
-  SourceObservationAnnotation: {
-    owner: sourceObservationAnnotation.observationId,
-  },
+
   FinancialEvidenceAlias: {
     excluded: "Retained financial provenance, never current ownership.",
   },
@@ -92,7 +88,6 @@ export const ENTITY_EDGE_OWNERS = {
   // An Image job's attempts, events and submission memberships belong to the job.
 
   // A reviewed association names the Email whose evidence it settles.
-  EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
 
   ImportSourceOrder: { excluded: WORKFLOW },
 
