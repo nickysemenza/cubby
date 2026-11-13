@@ -693,6 +693,10 @@ describe("statement spending review and re-import", () => {
             0,
           ),
         ).toBe(metrics.queryCount);
+        expect(
+          metrics.queryCount,
+          "complete statement settlement journey",
+        ).toBeLessThanOrEqual(150);
         expect(metrics.queryCountByPhase.load).toBeLessThanOrEqual(48);
         expect(metrics.queryCountByPhase.audit).toBeLessThanOrEqual(2);
         return {
