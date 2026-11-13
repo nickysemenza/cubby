@@ -79,7 +79,7 @@ const cancellable = (target: ClaimTarget) => target.table !== "ScopeDirty";
 const leaseInterval = (ms: number) => sql`make_interval(secs => ${ms / 1000})`;
 
 /** Attempt `n`'s backoff: 30 s doubling to an hour. */
-export const backoffMs = (attempts: number) =>
+const backoffMs = (attempts: number) =>
   Math.min(60 * 60_000, 30_000 * 2 ** Math.max(0, attempts - 1));
 
 const WAIT_CAUSE = {
