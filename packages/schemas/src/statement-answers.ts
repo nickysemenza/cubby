@@ -128,3 +128,65 @@ export function statementAdviceFromAnswers(answers: StatementSpendingAnswers) {
     counterparty: identity?.counterparty ?? "unknown",
   };
 }
+
+/** Keep only independently compatible spending answers from one retained row. */
+export function reusableStatementSpendingAnswers(
+  create: SpendingSubject,
+  isLoan: boolean,
+  answers: StatementSpendingAnswers,
+): StatementSpendingAnswers {
+  const result: StatementSpendingAnswers = {};
+  const escrow = statementEscrowInput(create, isLoan);
+  if (
+    escrow &&
+    statementAnswerMatches(answers.escrow, escrow, {
+      "loan-escrow-disbursement": STATEMENT_ANSWER_VERSIONS.escrow,
+    })
+  )
+    result.escrow = answers.escrow;
+  const identityInput = statementMerchantIdentityInput(create);
+  const merchant = answers.merchant;
+  if (
+    identityInput &&
+    merchant &&
+    statementAnswerMatches(merchant.identity, identityInput, {
+      "merchant-identity": STATEMENT_ANSWER_VERSIONS.merchantIdentity,
+    })
+  ) {
+    const supportInput = merchant.identity.value
+      ? statementMerchantSupportInput(identityInput, merchant.identity.value)
+      : null;
+    result.merchant = {
+      identity: merchant.identity,
+      support:
+        supportInput &&
+        statementAnswerMatches(merchant.support, supportInput, {
+          "merchant-identity-support":
+            STATEMENT_ANSWER_VERSIONS.merchantSupport,
+        })
+          ? merchant.support
+          : null,
+    };
+  }
+  return result;
+}
+
+/** Absence means unanswered; completed negative and null answers are complete. */
+export function statementSpendingAnswersComplete(
+  create: SpendingSubject,
+  isLoan: boolean,
+  answers: StatementSpendingAnswers,
+): boolean {
+  if (!["purchase", "refund", "fee"].includes(create.kind)) return true;
+  const reusable = reusableStatementSpendingAnswers(create, isLoan, answers);
+  if (statementEscrowInput(create, isLoan) && !reusable.escrow) return false;
+  const identityInput = statementMerchantIdentityInput(create);
+  if (!identityInput) return true;
+  const merchant = reusable.merchant;
+  if (!merchant) return false;
+  return (
+    !merchant.identity.value ||
+    !statementMerchantSupportInput(identityInput, merchant.identity.value) ||
+    merchant.support !== null
+  );
+}
