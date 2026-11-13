@@ -1,4 +1,3 @@
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 /**
  * Run execution as a kernel Pass (ADR 0029 section 7): one `run.execute`
  * Pass per step-ledger or AI-work Run, keyed by the Run's id. The cursor
@@ -9,7 +8,8 @@ import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
  * waits with their cause; an AI-work Run waits for the evaluations or asks
  * that carry its id, which wake it as they settle.
  */
-import type { JobWaitReason } from "@cubby/schemas/job";
+import type { ExecutionWaitReason } from "@cubby/schemas/execution";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import {
   MAIL_DISCOVERY_ADMISSION_WAIT,
   mailboxDiscoveryProgress,
@@ -35,8 +35,6 @@ import {
   type RunPassCursor,
 } from "~/server/domains/run/repo/run-execution";
 import { listRunSteps } from "~/server/domains/run/repo/run-step";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import {
   cancelWork,
   definePass,
@@ -44,6 +42,8 @@ import {
   type Claim,
   type PassResult,
 } from "~/server/kernel/api";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { withWorkflowExecution } from "./execution";
 import {
@@ -73,14 +73,14 @@ const passTarget = (runId: string) => ({
 const passFence = (claim: Claim) => ({
   fence: (tx: Database) => claim.fence(tx),
   async check() {
-    if (!(await claim.renew())) throw new JobSupersededError();
+    if (!(await claim.renew())) throw new WorkSupersededError();
   },
 });
 
 const waitResult = (
   cursor: RunPassCursor,
   until: Date,
-  reason: JobWaitReason,
+  reason: ExecutionWaitReason,
 ): PassResult => ({
   cursor,
   done: false,
@@ -219,7 +219,7 @@ async function reconcileIfLastAttempt(
   runId: RunId,
   error: unknown,
 ) {
-  const failure = classifyJobFailure(error);
+  const failure = classifyWorkFailure(error);
   if (failure.kind !== "failed" && failure.kind !== "isolated") return;
   const pass = await readRunPass(db, runId);
   if (pass && pass.attempts + 1 >= pass.maxAttempts) {
@@ -274,7 +274,7 @@ export const runExecutePass = definePass({
           attempt: cursor.generation,
           database: db,
           recovered: true,
-          job: passFence(claim),
+          claim: passFence(claim),
           live: passLive(runId, claim.token),
         },
         () => advance(db, claim, cursor),
@@ -298,7 +298,7 @@ export const runExecutePass = definePass({
     } catch (error) {
       const wait = await asWait(claim, runId, error, cursor);
       if (wait) return wait;
-      const failure = classifyJobFailure(
+      const failure = classifyWorkFailure(
         mailDiscoveryBackpressure(error) ?? error,
       );
       if (failure.kind === "paused") return { cursor, done: true };

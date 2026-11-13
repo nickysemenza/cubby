@@ -8,7 +8,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
+import { WorkRetryableError } from "~/server/kernel/work-errors";
 
 import { controlWorkflowRun } from "./control";
 import {
@@ -64,7 +64,7 @@ describe("Run Pass admission", () => {
     const params = { runId: id, attempt: claim.generation };
     await expect(
       owned(() => resumeClaimedWorkflowRun(ctx.db, params)),
-    ).rejects.toBeInstanceOf(JobRetryableError);
+    ).rejects.toBeInstanceOf(WorkRetryableError);
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]?.status,
     ).toBe("failed");

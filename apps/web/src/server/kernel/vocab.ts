@@ -34,9 +34,6 @@ export const RECORD_WAITER = "record";
 /** The `AskScope` kind of a pass that waits on an ask, keyed `name:key`. */
 export const PASS_WAITER = "pass";
 
-/** The background drain unit that runs kernel work. */
-export const KERNEL_UNIT = "kernel";
-
 export const MEMBER_PASS = {
   cause: sqlEnumConstant(runCause, "member_request"),
   manual: sqlEnumConstant(runTrigger, "manual"),

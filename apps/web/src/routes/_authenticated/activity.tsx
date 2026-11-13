@@ -2,7 +2,6 @@ import { auditEntitySchema } from "@cubby/schemas/audit";
 import { auditChannelSchema } from "@cubby/schemas/context";
 import { fieldRefreshLocator } from "@cubby/schemas/field-explanation";
 import { runShortcode } from "@cubby/schemas/identifiers";
-import { jobLane, jobState, jobWaitingOnReason } from "@cubby/schemas/job";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -21,9 +20,6 @@ const retiredSearch = z.object({
     .catch(undefined),
   entityKind: auditEntitySchema.optional().catch(undefined),
   channel: auditChannelSchema.optional().catch(undefined),
-  lane: jobLane.optional().catch(undefined),
-  reason: jobWaitingOnReason.optional().catch(undefined),
-  state: jobState.optional().catch(undefined),
   kind: z.string().trim().min(1).max(100).optional().catch(undefined),
   runId: runShortcode.optional().catch(undefined),
   attention: z.boolean().optional().catch(undefined),

@@ -34,11 +34,11 @@ import {
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
+import { classifyWorkFailure, stopsPage } from "~/server/kernel/failure";
 import {
-  JobDeferredError,
-  JobRetryableError,
-} from "~/server/generic/jobs/errors";
-import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
+  WorkDeferredError,
+  WorkRetryableError,
+} from "~/server/kernel/work-errors";
 import {
   assertWorkflowEffect,
   currentRunExecution,
@@ -97,7 +97,7 @@ export function mailDiscoveryBackpressure(
   error: UnparsedError,
 ): Error | undefined {
   // A wrapped database cause cannot turn cancellation or lease loss into demand.
-  if (stopsPage(classifyJobFailure(error))) return undefined;
+  if (stopsPage(classifyWorkFailure(error))) return undefined;
   const pg = findPgError(error);
   if (
     !pg ||
@@ -112,7 +112,7 @@ export function mailDiscoveryBackpressure(
     "Mail discovery is waiting for shared database or search capacity";
   if (!currentRunExecution())
     return createAppError("RUN_CONTROL_REFUSED", message, error);
-  const deferred = new JobDeferredError(
+  const deferred = new WorkDeferredError(
     message,
     new Date(Date.now() + 15_000),
     "provider_capacity",
@@ -420,7 +420,7 @@ export async function yieldClaimedMailDiscovery(
     throw mailDiscoveryBackpressure(error) ?? error;
   });
   if (yielded)
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Mail discovery yielded shared search capacity",
       new Date(Date.now() + 15_000),
       "provider_capacity",
@@ -560,7 +560,7 @@ export async function resumeClaimedWorkflowRun(
       return false;
     });
     if (waiting)
-      throw new JobDeferredError(
+      throw new WorkDeferredError(
         "Mail discovery is queued for shared search capacity",
         new Date(Date.now() + 15_000),
         "provider_capacity",
@@ -570,7 +570,7 @@ export async function resumeClaimedWorkflowRun(
     if (deferred) throw deferred;
     const pg = findPgError(error);
     if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
-      throw new JobRetryableError(
+      throw new WorkRetryableError(
         "Run recovery is waiting for another active Run",
         { cause: error },
       );

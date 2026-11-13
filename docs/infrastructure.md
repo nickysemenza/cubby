@@ -67,19 +67,13 @@ or updated by `cf deploy` from the checked-in configuration's Build Output.
 
 ### Background work
 
-Postgres `Job` and the drains' own rows own background execution;
-[Durable Jobs](jobs.md) owns the runtime contract and
-[ADR 0015](adr/0015-unified-durable-work-coordination.md) the coordination
-decision. The infrastructure it depends on:
+Postgres kernel claims own background execution;
+[kernel work](jobs.md) owns the runtime contract and
+[ADR 0029](adr/0029-evidence-facts-and-reconcilers.md) the coordination decision. The infrastructure it depends on:
 
-- `cubby-background` carries only the permit envelope. Every delivery,
-  including an unreadable envelope, is one permit to run one unit and is
-  acknowledged whatever the unit's outcome; failures before or around selection
-  retry delivery up to three times
-  ([selection and admission](jobs.md#selection-and-admission)).
+- `cubby-background` carries wake permits. One delivery batch invokes the kernel runner within a bounded time budget, then schedules the next durable deadline. A database or transport failure retries the delivery.
 - Telemetry has its separate `cubby-telemetry` queue.
-- One hourly cron trigger is the timer and backstop for every permit
-  ([deadline scheduling](jobs.md#deadline-scheduling-and-idle-recovery)).
+- The hourly cron starts scheduled Passes, invokes the kernel runner and sends a backstop permit. Claim deadlines arrange their own recovery wakes.
 
 ### Worker startup
 
@@ -134,7 +128,7 @@ calls and rechecks the live grant and Run ownership on every request.
 Pi-durable conversations live in the coordinator's Durable Object, so moving
 the class between Workers or replacing it does not carry them over: terminate
 the Runs whose coordinator is active (`running` and `paused_*`) before such a
-deploy. Job dispatch intent remains in Postgres; coordinator SQLite receipts and
+deploy. Pass dispatch intent remains in Postgres; coordinator SQLite receipts and
 conversations must be preserved across that change.
 
 Each member authorizes once from Settings. Verify the client/grant without
@@ -230,15 +224,14 @@ transaction, then releases the lock before network work.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
-Those failures are transient (no attempts spent; see [Jobs](jobs.md#retries)),
+Those failures are transient (no attempts spent; see [kernel work](jobs.md#waits-and-limits)),
 so exceeding the budget slows work rather than losing it.
 
 Watch for the margin running out:
 
-- `58000` pool-slot timeouts in Sentry, grouped by the `cubby.background.unit`
-  tag, and coordinator admission faults on purchase Runs.
-- `Job.lastExecution.errorClass = 'transient'` on Job and `background.drain`
-  record rows (`drain:<unit>`), and a rising `queryMs` relative to `wallMs`.
+- `58000` pool-slot timeouts in Sentry, grouped by queue and kernel traces, and coordinator admission faults on purchase Runs.
+- `waitCause` and `lastError` on kernel claims
+  and growing waits in the machinery panel.
 - Long `db.acquire` spans on queue, cron and Durable Object traces.
 - The background configuration's origin connection count in the Hyperdrive
   dashboard approaching 40.
@@ -303,17 +296,17 @@ cf workers secrets update NAME --worker cubby
 cf workers secrets list --worker cubby
 ```
 
-| Name                   | Storage                        | Purpose                                                                                                                                                                                            |
-| ---------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                                                     |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                                                               |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                                                              |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                                                      |
-| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                                                     |
-| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                                                              |
-| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; with account-scoped Workers Observability Edit it also reads inline Job logs |
+| Name                   | Storage                        | Purpose                                                                                                               |
+| ---------------------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                        |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                 |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                 |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                  |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                 |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                         |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                        |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                 |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -651,7 +644,7 @@ the shared decision runner (`server/ai/decision-model.ts`).
 
 - Independent all-or-fail decisions use `runDecisionChoices`; callers keeping
   partial answers settle choices with outcomes that carry their original typed
-  work item, and the cooperative option owns the Job's yield scope. Both wait
+  work item, and the cooperative option owns the claim's yield scope. Both wait
   for every started request before returning, including when a sibling fails.
   Callers do not maintain parallel question-index arrays.
 - Finite collections that must prepare evidence or perform dependent choices
@@ -764,38 +757,8 @@ diagnostic.
 
 ## Observability
 
-### Inline Job logs and limits
-
-Job claim/page/publish/defer/fail logs emit one JSON object with `runId`,
-`jobId`, `kind`, `jobKey`, `stepKey`, `generation`, `attempt` and `waitReason`.
-Workers Logs indexes
-[structured JSON objects](https://developers.cloudflare.com/workers/observability/logs/workers-logs/#logging-structured-json-objects);
-raw errors keep their credential-scrubbed diagnostic detail.
-
-A Run's Diagnostics section and an Image's or Location's Jobs slot read one
-Job's raw Worker lines through `job.logs`
-(`server/generic/jobs/service/job-logs.ts`). It calls the Workers Observability
-telemetry query API,
-`POST /accounts/{account}/workers/observability/telemetry/query`.
-
-- **Filter.** `jobId` OR `runId` (the top-level fields `@cubby/worker-tracing`
-  logs), view `events`, at most 500 lines.
-- **Window.** The Job's active window, with a minute of margin either side.
-- **Credentials.** The query authenticates with the `AI_GATEWAY_API_KEY`
-  Worker secret. That Cloudflare API token must also carry the account-scoped
-  Workers Observability Edit permission: the telemetry query endpoint requires
-  Write even for reads.
-- **Missing token.** Without `AI_GATEWAY_API_KEY` the panel reads "not
-  configured". A token without the permission returns 401/403, which the panel
-  shows as the scrubbed raw error. A local run with the key queries the
-  account's logs, which hold no local Job lines.
-- **Retention.** A window older than Workers Logs' 7-day retention reads "raw
-  logs expired".
-- **Failures.** A failed query shows its raw response, redacted only by
-  `scrubErrorMessage`, with Retry and the dashboard link.
-
-Run plan, ETA and page-sample contracts are in
-[Durable Jobs](jobs.md#run-progress-and-diagnostics).
+Run diagnostics read kernel scopes, Asks, Passes and raw stored errors through the machinery panel.
+Run plan, ETA and page samples follow [kernel work](jobs.md#Wakes-and-progress).
 
 ### Error tracking and traces
 

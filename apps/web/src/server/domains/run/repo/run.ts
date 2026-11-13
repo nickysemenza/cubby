@@ -33,13 +33,13 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, run as runTable } from "~/server/db/schema";
 import { aiUsage } from "~/server/db/schema";
-import { defineRepository } from "~/server/entity-kernel/repo/repository";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import {
   readRunRollups,
   runStalledSql,
   runNeedsAttentionSql,
-} from "~/server/generic/jobs/repo/job-queue";
+} from "~/server/domains/run/repo/run-rollup";
+import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { runCostLabel } from "~/server/generic/list/repo/list-display-labels";
@@ -182,7 +182,7 @@ const runRead = {
           : Promise.resolve([]),
         readRunRollups(
           isTransaction(db) ? databaseForTransaction(db) : db,
-          rows,
+          rows.map((row) => row.id),
         ),
       ]);
       const successorOf = new Map<string, string>();

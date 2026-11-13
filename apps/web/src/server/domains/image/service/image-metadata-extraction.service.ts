@@ -16,8 +16,8 @@ import {
   extractImageMetadata,
   type ImageEmbeddedMetadata,
 } from "~/server/domains/image/service/image-metadata";
-import { outsideJob } from "~/server/generic/jobs/outside-job";
-import type { Fenced } from "~/server/generic/jobs/types";
+import { publishTransaction } from "~/server/kernel/publication";
+import type { Publication } from "~/server/kernel/publication";
 
 /** A container's leading bytes hold every tag this parser reads; never worth
  * fetching more than a few MiB even for a multi-hundred-megabyte original. */
@@ -77,7 +77,7 @@ export async function extractAndStoreImageMetadata(
   imageId: ImageId,
   ports: ExtractImageMetadataPorts = productionExtractImageMetadataPorts,
   /** The executing Job's fence; member and maintenance callers own no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<"succeeded" | "skipped" | { missing: string }> {
   const row = await ports.getRow(db, imageId);
   if (!row) return "skipped";

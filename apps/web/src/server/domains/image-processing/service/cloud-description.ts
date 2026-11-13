@@ -68,8 +68,8 @@ export async function completeCloudImageDescription(
   if (!completion.adopted) return false;
   // A prepared rendition unblocks the image's identification.
   await bringImageProcessingForward(db, input.imageId);
-  const { wakeJobs } =
+  const { wakeKernel } =
     await import("~/server/workflows/background-tasks/publish");
-  await wakeJobs({ source: "image-processing" });
+  await wakeKernel({ source: "image-processing" });
   return true;
 }

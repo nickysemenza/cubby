@@ -9,7 +9,7 @@ import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { getVectorIndex } from "~/server/cf-env";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
+import { WorkRetryableError } from "~/server/kernel/work-errors";
 
 interface VectorizeMutation {
   mutationId: string;
@@ -94,7 +94,7 @@ async function vectorizeRequest<T>(request: () => Promise<T>): Promise<T> {
       error instanceof Error &&
       /\b429\b|Too Many Requests/i.test(error.message)
     )
-      throw new JobRetryableError(error.message, { cause: error });
+      throw new WorkRetryableError(error.message, { cause: error });
     throw error;
   }
 }

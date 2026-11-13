@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import {
   ledgerParty,
   runControlEvent,
@@ -14,10 +15,8 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { seedPass, readPasses } from "~/server/kernel/pass.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
@@ -188,117 +187,23 @@ describe("Run lineage and waiting-on reads", () => {
     });
   });
 
-  it("reads a funding stop as waiting for funding and rolls up live Jobs", async () => {
+  it("reads a funding stop from the Run Pass", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
       trigger: "manual",
     });
     await getDb(ctx.db)
       .update(runTable)
-      .set({ status: "needs_review", failureCode: "execution_limit" })
+      .set({ status: "paused_auth", failureCode: "execution_limit" })
       .where(eq(runTable.id, runId));
-    for (let index = 0; index < 2; index++)
-      await enqueueJob(ctx.db, {
-        key: `synthetic.rollup.${index}`,
-        kind: "synthetic.rollup",
-        input: {},
-        runId,
-      });
-
-    const read = await readRun(ctx.db, await codeOf(runId));
-
-    expect(read).toMatchObject({
+    await getDb(ctx.db)
+      .update(kernelPass)
+      .set({ waitCause: "funding", availableAt: new Date(Date.now() + 60_000) })
+      .where(eq(kernelPass.key, runId));
+    expect(await readRun(ctx.db, await codeOf(runId))).toMatchObject({
       displayStatus: "waiting_for_funding",
-      waitingOn: {
-        reason: "funding",
-        label: "Waiting for AI funding",
-        jobs: "2 due",
-      },
+      waitingOn: { reason: "funding", label: "Waiting for AI funding" },
       stalled: false,
-    });
-  });
-
-  // Review finding: summaries formatted only `counts`, so a Run whose only
-  // Job's executor lease lapsed read as having no live Jobs.
-  it("summarizes expired leases awaiting reclaim", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const abandoned = await enqueueJob(ctx.db, {
-      key: "synthetic.rollup.abandoned",
-      kind: "synthetic.rollup",
-      input: {},
-      runId,
-    });
-    await updateJobs(
-      ctx.db,
-      { id: abandoned.id },
-      {
-        state: "running",
-        leaseToken: crypto.randomUUID(),
-        leaseExpiresAt: new Date(Date.now() - 60_000),
-        lastClaimedAt: new Date(Date.now() - 5 * 60_000),
-      },
-    );
-
-    const read = await readRun(ctx.db, await codeOf(runId));
-
-    expect(read?.waitingOn).toMatchObject({
-      reason: "reclaim",
-      jobs: "1 expired lease awaiting reclaim",
-    });
-  });
-
-  it("places a Run's queued Jobs in their kind's claim order", async () => {
-    const ahead = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const queue = async (key: string, owner: RunId, minutesAgo: number) => {
-      const job = await enqueueJob(ctx.db, {
-        key,
-        kind: "synthetic.capacity",
-        input: {},
-        runId: owner,
-      });
-      await updateJobs(
-        ctx.db,
-        { id: job.id },
-        {
-          waitReason: "provider_capacity",
-          availableAt: new Date(Date.now() - minutesAgo * 60_000),
-        },
-      );
-      return job;
-    };
-    await queue("synthetic.capacity.0", ahead, 30);
-    await queue("synthetic.capacity.1", ahead, 20);
-    await queue("synthetic.capacity.2", runId, 10);
-    await queue("synthetic.capacity.3", runId, 5);
-    const done = await queue("synthetic.capacity.done", ahead, 40);
-    await updateJobs(ctx.db, { id: done.id }, { state: "completed" });
-    // Not yet due: its priority head start must not place it ahead of due work.
-    const later = await queue("synthetic.capacity.later", ahead, -30);
-    await updateJobs(ctx.db, { id: later.id }, { priority: 60 });
-
-    const read = await readRun(ctx.db, await codeOf(runId));
-
-    // One completion in 5 minutes is 0.2 per minute; 3rd in line is 15 minutes.
-    expect(read?.waitingOn).toMatchObject({
-      reason: "model_capacity",
-      kind: "synthetic.capacity",
-      position: 3,
-      total: 4,
-      perMinute: 0.2,
-      label: "Waiting for model capacity · 3rd of 4 · about 15 min",
     });
   });
 });
@@ -352,7 +257,7 @@ describe("Run attention entity view", () => {
       ),
     ).rejects.toThrow("no current fields scope");
     await visible(true);
-    expect(await readJob(ctx.db, { runId })).toBeNull();
+    expect(await readPasses(ctx.db, { runId })).toEqual([]);
 
     const member = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic recovery member",
@@ -377,14 +282,13 @@ describe("Run attention entity view", () => {
         .where(eq(runTable.id, pausedEmptyId))
         .returning();
       if (!pausedEmpty) throw new Error("Missing synthetic paused Run");
-      const pausedExecution = await enqueueJob(ctx.db, {
-        key: `run:${pausedEmptyId}`,
-        kind: "run.execute",
+      await seedPass(ctx.db, {
+        name: "run.execute",
+        key: pausedEmptyId,
         runId: pausedEmptyId,
-        input: { runId: pausedEmptyId, purpose: "ai_refresh" },
+        cancelledAt: new Date(),
       });
-      await updateJobs(ctx.db, { id: pausedExecution.id }, { state: "paused" });
-      const pausedJob = await readJob(ctx.db, { id: pausedExecution.id });
+      const pausedPasses = await readPasses(ctx.db, { runId: pausedEmptyId });
       await expect(
         controlWorkflowRun(
           ctx.db,
@@ -393,8 +297,8 @@ describe("Run attention entity view", () => {
           "ai_refresh",
         ),
       ).rejects.toThrow("no current fields scope");
-      expect(await readJob(ctx.db, { id: pausedExecution.id })).toEqual(
-        pausedJob,
+      expect(await readPasses(ctx.db, { runId: pausedEmptyId })).toEqual(
+        pausedPasses,
       );
       expect(
         (
@@ -481,11 +385,11 @@ describe("Run attention entity view", () => {
       .update(runTable)
       .set({ status: "failed" })
       .where(eq(runTable.id, stopped));
-    await enqueueJob(ctx.db, {
-      key: "synthetic:attention-stall",
-      kind: "synthetic.demand",
+    await seedPass(ctx.db, {
+      name: "run.execute",
+      key: stalled,
       runId: stalled,
-      input: {},
+      availableAt: old,
     });
     const page = await runScaffold.read(ctx.db, {
       filters: { purpose: ["ai_suggest"], needsAttention: true },

@@ -91,7 +91,7 @@ import {
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
 
@@ -466,7 +466,7 @@ async function resolveImageContent(
       // AVIF normalization already belongs to the device image pipeline. Do
       // not pay for an unsupported request or repeatedly ask the refusing edge.
       if (!retained && inspected.detectedContentType === "image/avif")
-        throw new JobDeferredError(
+        throw new WorkDeferredError(
           "AI image is waiting for device JPEG normalization",
           new Date(Date.now() + 15 * 60_000),
           "device",
@@ -1382,11 +1382,11 @@ export async function runEmbeddingFeature(
   );
   if (failures.length) {
     const deferred = failures.find(
-      (error): error is JobDeferredError => error instanceof JobDeferredError,
+      (error): error is WorkDeferredError => error instanceof WorkDeferredError,
     );
     if (deferred && deferred.cause == null)
       deferred.cause = failures.find(
-        (error) => !(error instanceof JobDeferredError),
+        (error) => !(error instanceof WorkDeferredError),
       );
     throw deferred ?? failures[0];
   }

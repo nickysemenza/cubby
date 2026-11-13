@@ -65,7 +65,6 @@ export { productMatchContract } from "./product-match.contract";
 export { relatedDataContract } from "./related-data.contract";
 export { runContract } from "./run.contract";
 export { runDetailContract } from "./run-detail.contract";
-export { jobContract } from "./job.contract";
 export { searchContract, searchStreamsContract } from "./search.contract";
 export { suggestionsContract } from "./suggestions.contract";
 export { sourceTransactionRecordContract } from "./source-transaction-record.contract";
@@ -79,3 +78,5 @@ export { fieldExplanationContract } from "./field-explanation.contract";
 export { machineryContract } from "./machinery.contract";
 
 export { relatednessContract } from "./relatedness.contract";
+
+export { imageBacklogContract } from "./image-backlog.contract";

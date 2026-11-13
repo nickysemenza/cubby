@@ -50,8 +50,8 @@ import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   callMcpTool,
@@ -108,7 +108,7 @@ import { readSenderAttributions } from "./sender-attribution-read";
 // replay cannot create a second Run, and stale/foreign sources cannot enter it.
 describe("mail research admission", () => {
   const ctx = withTestDb();
-  const dispatches = () => readJobs(ctx.db, { kind: "purchase.dispatch" });
+  const dispatches = () => readPasses(ctx.db, { name: "purchase.dispatch" });
   // The Run's admitted Emails, frozen at their admitted checksums.
   const frozenSources = async (runId: string) => {
     const [saved] = await getDb(ctx.db)
@@ -813,7 +813,7 @@ describe("mail research admission", () => {
       .select()
       .from(runOperation)
       .where(eq(runOperation.runId, queuedId));
-    const oldJobs = await readJobs(ctx.db, { runId: queuedId });
+    const oldJobs = await readPasses(ctx.db, { runId: queuedId });
     const request = await startControlledMailImport(ctx.db, ctx.actor, {
       mailboxId: mail.mailboxId,
       vendorId: vendorShortcode.parse(seller.shortcode),
@@ -910,7 +910,7 @@ describe("mail research admission", () => {
         .from(runOperation)
         .where(eq(runOperation.runId, queuedId)),
     ).toEqual(expect.arrayContaining(oldEvidence));
-    expect(await readJobs(ctx.db, { runId: queuedId })).toEqual(oldJobs);
+    expect(await readPasses(ctx.db, { runId: queuedId })).toEqual(oldJobs);
     const [foreignEmail] = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -946,9 +946,9 @@ describe("mail research admission", () => {
         .map((item) => item.runId)
         .sort(),
     ).toEqual(admitted.map((item) => item.runId).sort());
-    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
-      4,
-    );
+    expect(
+      await readPasses(ctx.db, { name: "purchase.dispatch" }),
+    ).toHaveLength(4);
     const owned = await getDb(ctx.db)
       .select()
       .from(emailTable)
@@ -2486,8 +2486,8 @@ describe("mail research admission", () => {
       withTransaction(ctx.db, async (tx) => {
         await startMailImport(databaseForTransaction(tx), input);
         expect(
-          await readJobs(databaseForTransaction(tx), {
-            kind: "purchase.dispatch",
+          await readPasses(databaseForTransaction(tx), {
+            name: "purchase.dispatch",
           }),
         ).toHaveLength(1);
         throw new Error("Synthetic admission rollback");
@@ -2498,8 +2498,8 @@ describe("mail research admission", () => {
     await withTransaction(ctx.db, async (tx) => {
       await startMailImport(databaseForTransaction(tx), input);
       expect(
-        await readJobs(databaseForTransaction(tx), {
-          kind: "purchase.dispatch",
+        await readPasses(databaseForTransaction(tx), {
+          name: "purchase.dispatch",
         }),
       ).toHaveLength(1);
     });

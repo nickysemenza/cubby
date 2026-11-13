@@ -1,4 +1,7 @@
-import { workActivity, type WorkActivity } from "@cubby/schemas/job";
+import {
+  snapshotProgress,
+  type SnapshotProgress,
+} from "@cubby/schemas/derived-snapshot";
 import type { KernelJson } from "@cubby/schemas/kernel/machinery";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -28,7 +31,7 @@ const empty = {
   cursorAttempts: 0,
   passFailures: 0,
 };
-const cursorSchema = workActivity.shape.rebuild.omit({ running: true }).extend({
+const cursorSchema = snapshotProgress.omit({ running: true }).extend({
   afterId: z.uuid().nullable(),
   cursorAttempts: z.int().nonnegative(),
   passFailures: z.int().nonnegative(),
@@ -47,7 +50,7 @@ export function snapshotCursor(
 /** Published observation and resumable position have one owner: the singleton Pass. */
 export async function readSnapshotState(
   db: RepositoryQueryInput,
-): Promise<WorkActivity["rebuild"]> {
+): Promise<SnapshotProgress> {
   const result = await repositoryQueries(db).execute<{
     cursor: KernelJson;
     running: boolean;
@@ -57,7 +60,7 @@ export async function readSnapshotState(
     WHERE name = ${DERIVED_SNAPSHOT_PASS} AND key = ${DERIVED_SNAPSHOT_KEY}`);
   const row = result.rows[0];
   const cursor = snapshotCursor(row?.cursor);
-  return workActivity.shape.rebuild.parse({
+  return snapshotProgress.parse({
     ...cursor,
     running: row?.running ?? false,
     error: cursor.error ?? row?.error ?? null,

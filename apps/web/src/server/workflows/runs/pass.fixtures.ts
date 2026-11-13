@@ -59,7 +59,7 @@ export async function runPassFixture(db: Database, runId: string) {
           attempt: cursor.generation,
           database: db,
           recovered: true,
-          job: context,
+          claim: context,
           live: sql<boolean>`EXISTS (SELECT 1 FROM "Pass" WHERE name = ${RUN_EXECUTE_PASS} AND key = ${runId}
         AND "claimToken" = ${token}::uuid AND "claimDeadline" > now() AND "cancelledAt" IS NULL)`,
         },

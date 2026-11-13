@@ -14,9 +14,9 @@ import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { fieldJson, valueKey } from "~/server/ai/policy/field-rules";
 import type { Database } from "~/server/db";
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { Produced } from "~/server/kernel/api";
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import type { FieldAnswer, FieldAskInput } from "./ask";
 import { readStoredColumns, storedReferenceId } from "./repo/stored-field";
@@ -36,7 +36,7 @@ export async function produceFieldAnswer(
   >
 > {
   if (!prepareOnly && !input.questions)
-    throw new JobEvidenceObsoleteError(
+    throw new WorkEvidenceObsoleteError(
       "The field question has no prepared model inputs",
     );
   const plan = fieldPlan(input.entity, input.field);
@@ -54,7 +54,7 @@ export async function produceFieldAnswer(
       ([key, value]) => valueKey(fieldJson(stored[key])) !== valueKey(value),
     )
   )
-    throw new JobEvidenceObsoleteError(
+    throw new WorkEvidenceObsoleteError(
       "The record changed after Cubby read it; the new values file their own question",
     );
   const prepared = await prepareSavedField(
@@ -64,7 +64,7 @@ export async function produceFieldAnswer(
     input.field,
   );
   if (!prepared)
-    throw new JobEvidenceObsoleteError(
+    throw new WorkEvidenceObsoleteError(
       "The record or its field result is unavailable",
     );
   const references = plan.field.reference;

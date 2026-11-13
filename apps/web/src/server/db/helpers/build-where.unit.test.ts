@@ -310,10 +310,10 @@ describe("locationScaffold.where", () => {
       contains: '"type"',
     },
     {
-      // Computed from the latest live location-description AiAnalysis.
+      // Computed from the field scope’s retained model Answer.
       name: "AI description presence",
       filters: { aiDescriptionPresenceFilter: "has" } as const,
-      contains: '"AiAnalysis"',
+      contains: '"Answer"',
     },
   ])("still narrows by $name", async ({ filters, contains }) => {
     expect(await where(filters)).toContain(contains);

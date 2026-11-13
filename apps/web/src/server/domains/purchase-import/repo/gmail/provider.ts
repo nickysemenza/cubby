@@ -7,8 +7,8 @@ import {
   GmailApiError,
   type GmailProvider,
 } from "~/server/domains/purchase-import/repo/gmail/types";
-import { inJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { inWorkContext } from "~/server/kernel/context";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 import {
@@ -65,8 +65,12 @@ export async function gmailProviderForUser(
         message: "Gmail provider is waiting for shared capacity",
         retryAt: until.getTime(),
       });
-      if (!inJobExecution()) throw error;
-      const deferred = new JobDeferredError(error.message, until, "rate_limit");
+      if (!inWorkContext()) throw error;
+      const deferred = new WorkDeferredError(
+        error.message,
+        until,
+        "rate_limit",
+      );
       deferred.cause = error;
       throw deferred;
     }
@@ -77,8 +81,8 @@ export async function gmailProviderForUser(
         throw error;
       const next = new Date(error.retryAt);
       await recordGmailProviderRetryAt(db, { ...identity, until: next });
-      if (!inJobExecution()) throw error;
-      const deferred = new JobDeferredError(error.message, next, "rate_limit");
+      if (!inWorkContext()) throw error;
+      const deferred = new WorkDeferredError(error.message, next, "rate_limit");
       deferred.cause = error;
       throw deferred;
     }

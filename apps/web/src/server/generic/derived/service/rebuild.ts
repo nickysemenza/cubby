@@ -20,8 +20,8 @@ import {
   snapshotCursor,
   type SnapshotCursor,
 } from "~/server/generic/derived/repo/snapshot-state";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import type { Claim, PassResult } from "~/server/kernel/api";
+import { classifyWorkFailure } from "~/server/kernel/failure";
 
 const diagnostic = (error: unknown) =>
   scrubErrorMessage(JSON.stringify(describeErrorCauses(error)));
@@ -137,7 +137,7 @@ export async function rebuildSnapshotPage(
       publish = (tx) => publishRebuiltValues(tx, declaration, ids, values);
     }
   } catch (error) {
-    if (classifyJobFailure(error).kind === "transient") {
+    if (classifyWorkFailure(error).kind === "transient") {
       await recordSnapshotCursor(claim.fenced, {
         ...attempted,
         error: diagnostic(error),
@@ -156,7 +156,7 @@ export async function rebuildSnapshotPage(
         // A failed sink rolls back its page and effects; later populations still progress.
         await publishSnapshotPage(tx, publish);
       } catch (error) {
-        if (classifyJobFailure(error).kind === "transient") throw error;
+        if (classifyWorkFailure(error).kind === "transient") throw error;
         Object.assign(output, advanced(diagnostic(error)));
       }
     },

@@ -130,7 +130,82 @@ it("carries interrupted discovery, dispatch, funding and snapshot work without c
         (row) => row.progress,
       ),
     ).toEqual(ids.map(() => checkpoint));
-    expect((await client.query(`SELECT * FROM "Job"`)).rows).toEqual([]);
+    const location = crypto.randomUUID();
+    await client.query(
+      `INSERT INTO "Job" (key,kind,input,cursor,generation,attempts,"maxAttempts",state,"availableAt","leaseExpiresAt","waitReason") VALUES ('synthetic:inventory','location-ai.inventory.refresh',$1,$2,3,2,5,'running','2098-01-01','2099-01-01','ai_funding_window')`,
+      [
+        JSON.stringify({ locationId: location, runId: ids[0] }),
+        JSON.stringify({ page: 2 }),
+      ],
+    );
+    await client.query(
+      `INSERT INTO "AppSettings" (id,metadata) VALUES ('6c1b7a52-0f1e-4e8a-9f3d-2a4b8d7e5c91',$1) ON CONFLICT (id) DO UPDATE SET metadata=excluded.metadata`,
+      [JSON.stringify({ after: location, nextAt: until })],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,input,"runId",state,"waitReason","availableAt") VALUES ('synthetic:description','location-ai.description.refresh',$1,$2,'paused',NULL,'2099-01-01'),('synthetic:summary','run-ai.summary.write',$3,$2,'retry_wait','ai_funding_window','2099-01-01')`,
+      [
+        JSON.stringify({ locationId: location }),
+        ids[0],
+        JSON.stringify({ runId: ids[0] }),
+      ],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT cursor,attempts,"maxAttempts","waitCause",to_char("availableAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS deadline FROM "Pass" WHERE name='location.inventory'`,
+        )
+      ).rows,
+    ).toMatchObject([
+      {
+        cursor: {
+          locationId: location,
+          runId: ids[0],
+          generation: 3,
+          page: { page: 2 },
+        },
+        attempts: 2,
+        maxAttempts: 5,
+        waitCause: "funding",
+        deadline: until,
+      },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT cursor FROM "Pass" WHERE name='email.purchase-discovery'`,
+        )
+      ).rows,
+    ).toEqual([{ cursor: { after: location } }]);
+    expect(
+      (await client.query(`SELECT progress FROM "Run"`)).rows.map(
+        (row) => row.progress,
+      ),
+    ).toEqual(ids.map(() => checkpoint));
+    expect(
+      (
+        await client.query(
+          `SELECT key,cursor,"waitCause","cancelledAt" IS NOT NULL AS cancelled FROM "Pass" WHERE name='fields.reconcile' ORDER BY key`,
+        )
+      ).rows,
+    ).toMatchObject([
+      {
+        key: "synthetic:description",
+        cursor: { key: `location:${location}`, runId: ids[0] },
+        cancelled: true,
+      },
+      {
+        key: "synthetic:summary",
+        cursor: { key: `run:${ids[0]}`, runId: ids[0] },
+        waitCause: "funding",
+        cancelled: false,
+      },
+    ]);
+    expect(
+      (await client.query(`SELECT to_regclass('"Job"') AS present`)).rows[0]
+        ?.present,
+    ).toBeNull();
     expect(
       (await client.query(`SELECT to_regclass('"DerivedRebuild"') AS table`))
         .rows[0]?.table,

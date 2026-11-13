@@ -274,10 +274,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "records the Run an agent tool call belonged to",
   },
-  "Job.runId": {
-    classification: "metadata",
-    reason: "records the Run a background Job executes for",
-  },
   "RunPushRegistration.runId": {
     classification: "ownership",
     reason: "a push registration owned by its Run",

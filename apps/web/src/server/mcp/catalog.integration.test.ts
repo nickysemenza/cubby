@@ -226,7 +226,7 @@ describe("MCP catalog", () => {
     const snapshot = async () =>
       await getDb(ctx.db).execute(
         sql`
-      SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
+      SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Pass") AS passes,
         (SELECT count(*) FROM "Suggestion") AS suggestions,
         (SELECT coalesce(sum("costMinor"),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
     `,

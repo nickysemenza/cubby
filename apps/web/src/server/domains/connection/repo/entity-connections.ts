@@ -14,12 +14,12 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { connectionCandidateEvidence } from "~/server/db/retained-tables";
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import {
   lookupEntityLabels,
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 import {
   canonicalJson,
   sha256CanonicalJson,
@@ -115,7 +115,7 @@ export async function publishPreparedEntityConnections(
     for (const entry of prepared) {
       const basis = await captureConnectionBasis(tx, entry.candidate, true);
       if (canonicalJson(basis) !== canonicalJson(entry.basis))
-        throw new JobEvidenceObsoleteError(
+        throw new WorkEvidenceObsoleteError(
           "Connection evidence changed after retrieval",
         );
       const candidate = entry.candidate;
@@ -248,7 +248,7 @@ export async function decideConnection(
       canonicalJson(connectionApplicationParts(candidate, basis)) !==
         canonicalJson(connectionApplicationParts(candidate, row.basis))
     )
-      throw new JobEvidenceObsoleteError(
+      throw new WorkEvidenceObsoleteError(
         "Connection evidence changed since review",
       );
     if (input.accept) {

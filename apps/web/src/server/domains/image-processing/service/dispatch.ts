@@ -1,3 +1,4 @@
+import { executionWaitReason } from "@cubby/schemas/execution";
 import type { ImageJobId } from "@cubby/schemas/identifiers";
 import { IMAGE_IDENTIFICATION_MODEL } from "@cubby/schemas/image-identification";
 import {
@@ -6,7 +7,6 @@ import {
   imageProcessingCommand,
 } from "@cubby/schemas/image-processing";
 import type { ImageProcessingCommand } from "@cubby/schemas/image-processing";
-import { jobWaitReason } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
@@ -30,8 +30,8 @@ import {
 import { IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { withJobFence } from "~/server/workflows/runs/execution";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
+import { withExecutionFence } from "~/server/workflows/runs/execution";
 
 import { completeCloudImageDescription } from "./cloud-description";
 import { completeCloudImageIdentification } from "./cloud-identification";
@@ -96,7 +96,7 @@ export async function dispatchImageProcessingWakeup(
     check: () => assertImageLeaseHeld(db, claimed),
     fence: (client: Database) => assertImageLeaseHeld(client, claimed),
   };
-  return withJobFence(fence, async () => {
+  return withExecutionFence(fence, async () => {
     try {
       if (claimed.kind === "identify_image") {
         if (
@@ -108,7 +108,7 @@ export async function dispatchImageProcessingWakeup(
             attemptId: claimed.attemptId,
             until: new Date(Date.now() + RENDITION_WAIT_MS),
             reason: "Waiting for an Apple device to prepare a JPEG rendition",
-            waitReason: jobWaitReason.enum.device,
+            waitReason: executionWaitReason.enum.device,
           });
           return "deferred";
         }
@@ -174,7 +174,7 @@ export async function dispatchImageProcessingWakeup(
 }
 
 /**
- * A typed wait (`JobDeferredError`: a provider or funding wait) is a wait,
+ * A typed wait (`WorkDeferredError`: a provider or funding wait) is a wait,
  * never an attempt: the claim is released until the wait ends. Returns
  * whether `error` was such a wait. Every cloud provider call shares this,
  * including the description of a device-normalized AVIF.
@@ -186,7 +186,7 @@ export async function deferCloudAttemptForTypedWait(
 ): Promise<boolean> {
   const deferred = findErrorCause(
     error,
-    (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+    (cause): cause is WorkDeferredError => cause instanceof WorkDeferredError,
   );
   if (deferred) {
     await deferImageProcessingJob(db, {

@@ -30,10 +30,10 @@ import {
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import * as backgroundTasks from "~/server/workflows/background-tasks/publish";
 
 import {
@@ -75,7 +75,6 @@ import {
 import { computeBatch } from "./compute";
 import { runOnePass } from "./pass";
 import { ownedColumns } from "./registry";
-import { kernelDueSql } from "./runner";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -1236,7 +1235,7 @@ describe("evidence-facts kernel", () => {
       input: z.string(),
       output: z.string(),
       produce: async () => {
-        throw new JobDeferredError(
+        throw new WorkDeferredError(
           "Synthetic wait",
           new Date(Date.now() + 60_000),
           "provider_capacity",
@@ -1258,7 +1257,7 @@ describe("evidence-facts kernel", () => {
           runId,
           pass: { name: pass.name, key: "default" },
         }),
-      ).rejects.toBeInstanceOf(JobDeferredError);
+      ).rejects.toBeInstanceOf(WorkDeferredError);
     await cancelRunWork(ctx.db, runId);
     let sends = 0;
     const racing = defineAsk({
@@ -1339,7 +1338,7 @@ describe("evidence-facts kernel", () => {
       const until = new Date(Date.now() + 3_600_000);
       const refuse = async () => {
         await releaseFundingWaits(ctx.db);
-        throw new JobDeferredError(
+        throw new WorkDeferredError(
           "Synthetic refusal",
           until,
           "ai_funding_window",
@@ -1362,7 +1361,7 @@ describe("evidence-facts kernel", () => {
       ]);
       await expect(
         kernel.withAsk(ctx.db, ask, "synthetic"),
-      ).rejects.toBeInstanceOf(JobDeferredError);
+      ).rejects.toBeInstanceOf(WorkDeferredError);
       const [row] = (
         await repositoryQueries(ctx.db).execute<{
           state: string;
@@ -1411,7 +1410,7 @@ describe("evidence-facts kernel", () => {
         {
           ...ask,
           produce: async () => {
-            throw new JobDeferredError(
+            throw new WorkDeferredError(
               "Synthetic funding",
               until,
               "ai_funding_window",
@@ -1421,11 +1420,8 @@ describe("evidence-facts kernel", () => {
         "synthetic",
         options,
       ),
-    ).rejects.toBeInstanceOf(JobDeferredError);
+    ).rejects.toBeInstanceOf(WorkDeferredError);
     await q.execute(sql`UPDATE "Ask" SET "availableAt" = now()`);
-    expect((await q.execute<{ unit: string }>(kernelDueSql())).rows).toEqual(
-      [],
-    );
     const [wake] = (
       await q.execute<{ later: boolean }>(
         sql`SELECT ${nextWakeSql()} > now() + interval '50 minutes' AS later`,
@@ -1620,7 +1616,7 @@ describe("evidence-facts kernel", () => {
           ...fixture.categorize,
           promptVersion: "synthetic-original",
           admit: async () => {
-            throw new JobDeferredError(
+            throw new WorkDeferredError(
               "Synthetic funding",
               new Date(Date.now() + 60_000),
               "ai_funding_window",
@@ -1661,7 +1657,7 @@ describe("evidence-facts kernel", () => {
         {
           ...fixture.categorize,
           admit: async () => {
-            throw new JobDeferredError(
+            throw new WorkDeferredError(
               "Synthetic funding stop",
               new Date(Date.now() + 60_000),
               "ai_funding_window",

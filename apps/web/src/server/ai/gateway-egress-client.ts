@@ -1,4 +1,4 @@
-import { jobWaitReason } from "@cubby/schemas/job";
+import { executionWaitReason } from "@cubby/schemas/execution";
 import {
   classifyFundingRefusal,
   paidFundingRefusal,
@@ -12,7 +12,7 @@ import { sleep } from "@cubby/shared/retry";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { fundingResumeAt } from "./budget-window";
 import { deferCooperativeAiWork } from "./cooperative-work";
@@ -39,7 +39,7 @@ export const isGatewayAdmissionWait = (error: UnparsedError) =>
  * egress Durable Object holds the refusal an earlier probe is refused locally
  * anyway. A configuration stop probes again in 15 minutes.
  */
-export class GatewayProviderStopError extends JobDeferredError {
+export class GatewayProviderStopError extends WorkDeferredError {
   constructor(
     readonly kind: "funding" | "configuration",
     readonly status: number,
@@ -51,8 +51,8 @@ export class GatewayProviderStopError extends JobDeferredError {
         ? fundingResumeAt()
         : new Date(Date.now() + 15 * 60_000),
       kind === "funding"
-        ? jobWaitReason.enum.ai_funding_window
-        : jobWaitReason.enum.provider_capacity,
+        ? executionWaitReason.enum.ai_funding_window
+        : executionWaitReason.enum.provider_capacity,
     );
   }
 }

@@ -341,9 +341,9 @@ export const aiHandlers = implementOperationDomain(aiContract, {
     stopAutomaticAi(context.db, context.actorContext),
   resumeAutomaticWork: async (context) => {
     const resumed = await resumeAutomaticAi(context.db);
-    const { wakeJobs } =
+    const { wakeKernel } =
       await import("~/server/workflows/background-tasks/publish");
-    await wakeJobs({ source: "automatic-ai-resume" });
+    await wakeKernel({ source: "automatic-ai-resume" });
     return resumed;
   },
   // Both presentations share the page run grouping and authoritative inference.

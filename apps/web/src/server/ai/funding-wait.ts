@@ -67,7 +67,7 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "images" | "jobs" | "kernel";
+  name: "runs" | "images" | "kernel";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };
@@ -128,19 +128,6 @@ export const fundingWaiters: readonly FundingWait[] = [
         await import("~/server/domains/image-processing/repo/image-processing-history")
       ).wakeFundingWaitingImageJobs(db),
   },
-  {
-    name: "jobs",
-    count: async (db, now) =>
-      (
-        await import("~/server/generic/jobs/repo/operator")
-      ).countQueuedJobsToBringForward(db, now),
-    wake: async (db, now) =>
-      (
-        await (
-          await import("~/server/generic/jobs/repo/operator")
-        ).bringQueuedJobsForward(db, now)
-      ).length,
-  },
 ];
 
 export async function readFundingWaits(db: Database, now = new Date()) {
@@ -172,6 +159,6 @@ export async function resumeFundingPausedRuns(
       woken += await entry.wake(db, now, anyWindow);
   await (
     await import("~/server/workflows/background-tasks/publish")
-  ).wakeJobs({ source: "funding-window" });
+  ).wakeKernel({ source: "funding-window" });
   return woken;
 }

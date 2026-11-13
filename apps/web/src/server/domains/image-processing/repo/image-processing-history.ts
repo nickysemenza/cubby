@@ -1,6 +1,9 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
+import {
+  executionWaitReason,
+  type ExecutionWaitReason,
+} from "@cubby/schemas/execution";
 import type { ImageId, ImageJobId, DeviceId } from "@cubby/schemas/identifiers";
-import { jobWaitReason, type JobWaitReason } from "@cubby/schemas/job";
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -286,7 +289,7 @@ export async function deferImageProcessingJob(
     attemptId: string;
     until: Date;
     reason: string;
-    waitReason: JobWaitReason;
+    waitReason: ExecutionWaitReason;
   },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
@@ -361,7 +364,10 @@ export async function deferImageProcessingJob(
 const fundingWaitingImageJobs = () =>
   and(
     eq(imageProcessingJob.state, "pending"),
-    eq(imageProcessingJob.waitReason, jobWaitReason.enum.ai_funding_window),
+    eq(
+      imageProcessingJob.waitReason,
+      executionWaitReason.enum.ai_funding_window,
+    ),
     sql`${imageProcessingJob.runAt} > now()`,
   );
 

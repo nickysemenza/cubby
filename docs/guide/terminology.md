@@ -532,10 +532,8 @@ leave before the pager reaches them end as `removed`. An `estimate` step reads
 percentage or ETA. A step that has not started reads "Not started".
 _Avoid_: phase (a progress sample), child Run
 
-**Job**:
-One unit of background work with its own attempts and status, shown under
-Background work. A Run's work executes as a Job. A Job is not one household
-record.
+**Pass**:
+Resumable non-model work with a kernel claim and durable cursor. A Run's execution is a Pass keyed by that Run. Model, embedding and image calls are Asks with retained Answers.
 _Avoid_: task, workflow instance
 
 **Image processing job**:

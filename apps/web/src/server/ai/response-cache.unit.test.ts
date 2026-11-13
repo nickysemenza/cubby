@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import * as cfEnv from "~/server/cf-env";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { withWorkContext } from "~/server/kernel/context";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
   AiResponseCacheBatch,
@@ -128,7 +128,7 @@ describe("AI response cache", () => {
     try {
       await expect(run()).rejects.toSatisfy(
         (error: unknown) =>
-          error instanceof JobDeferredError && error.cause === outage,
+          error instanceof WorkDeferredError && error.cause === outage,
       );
       expect(compute).not.toHaveBeenCalled();
     } finally {
@@ -197,11 +197,11 @@ describe("AI response cache", () => {
           });
         await expect(
           scope === "batch"
-            ? withJobExecution(fromPartial({}), fromPartial({}), prepare)
-            : withJobExecution(fromPartial({}), fromPartial({}), prepare),
+            ? withWorkContext(prepare)
+            : withWorkContext(prepare),
         ).rejects.toSatisfy(
           (error: unknown) =>
-            error instanceof JobDeferredError &&
+            error instanceof WorkDeferredError &&
             error.until.getTime() - Date.now() >= 14_000,
         );
         expect(read).toHaveBeenCalledOnce();
@@ -221,22 +221,19 @@ describe("AI response cache", () => {
       await release.promise;
       return { choice: "one" };
     });
-    const results = await withJobExecution(
-      fromPartial({}),
-      fromPartial({}),
-      () =>
-        Promise.all(
-          [0, 1].map((index) =>
-            withAiResponseCache({
-              enabled: true,
-              batch: { batch, index },
-              keyInput,
-              validate,
-              compute,
-              onWait: () => release.resolve(),
-            }),
-          ),
+    const results = await withWorkContext(() =>
+      Promise.all(
+        [0, 1].map((index) =>
+          withAiResponseCache({
+            enabled: true,
+            batch: { batch, index },
+            keyInput,
+            validate,
+            compute,
+            onWait: () => release.resolve(),
+          }),
         ),
+      ),
     );
     expect(results).toEqual([{ choice: "one" }, { choice: "one" }]);
     expect(compute).toHaveBeenCalledOnce();

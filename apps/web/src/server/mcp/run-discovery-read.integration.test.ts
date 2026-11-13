@@ -16,8 +16,8 @@ import { startMailDiscovery } from "~/server/domains/purchase-import/operations/
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { requireActor } from "~/server/http/request-context";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -183,7 +183,7 @@ describe("member discovery readiness through MCP", () => {
         },
       ]);
     const beforeRuns = await getDb(ctx.db).select().from(run);
-    const beforeJobs = await readJobs(ctx.db, {});
+    const beforeJobs = await readPasses(ctx.db, {});
     const beforePass = await readRunPass(ctx.db, id);
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
@@ -273,7 +273,7 @@ describe("member discovery readiness through MCP", () => {
     expect(
       (await read("transcript", discovery.shortcode, foreignContext)).isError,
     ).toBe(true);
-    expect(await readJobs(ctx.db, {})).toEqual(beforeJobs);
+    expect(await readPasses(ctx.db, {})).toEqual(beforeJobs);
     expect(await readRunPass(ctx.db, id)).toEqual(beforePass);
     expect(await getDb(ctx.db).select().from(run)).toEqual(beforeRuns);
     expect(await getDb(ctx.db).select().from(runOperation)).toEqual(

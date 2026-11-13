@@ -6,6 +6,7 @@ import type {
   ReportCommand,
   ReportBlock,
 } from "@cubby/schemas/entity-report";
+import type { RunWork } from "@cubby/schemas/kernel/work";
 import {
   countRunTargets,
   runTargetState,
@@ -25,7 +26,6 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import { operationCommandRequest } from "~/contracts/define";
-import type { JobListOut } from "~/contracts/job.contract";
 import { problemsContract } from "~/contracts/problems.contract";
 import { runContract } from "~/contracts/run.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
@@ -1219,49 +1219,28 @@ export function suggestionBlocks(counts: SuggestionCountsOut): ReportBlock[] {
   ];
 }
 
-/** The Job executing a Run: its raw facts and fan-out by kind. */
-export function runDiagnosticsBlocks(jobs: JobListOut): ReportBlock[] {
-  const { primary } = jobs;
-  if (!primary)
-    return [{ kind: "note", text: "No Job is recorded for this Run." }];
-  const at = (iso: string) => formatInstant(iso, "dateShortTime");
-  const facts: [string, string | null][] = [
-    ["Kind", primary.kind],
-    ["State", primary.state],
-    [
-      "Attempt",
-      `${formatCount(primary.attempts)} of ${formatCount(primary.maxAttempts)}`,
-    ],
-    ["Wait", primary.waitReason],
-    ["Wait until", primary.waitUntil && at(primary.waitUntil)],
-    ["Available", at(primary.availableAt)],
-    ["Lease expires", primary.leaseExpiresAt && at(primary.leaseExpiresAt)],
-    ["Error", primary.error],
-  ];
+/** A Run's kernel scopes, producer requests and resumable Passes. */
+export function runDiagnosticsBlocks(work: RunWork): ReportBlock[] {
   return [
     {
       kind: "table",
-      title: "Job",
-      columns: ["Fact", "Value"],
-      rows: facts.flatMap(([label, value]) =>
-        value === null ? [] : [{ id: label, cells: [label, value] }],
-      ),
-    },
-    {
-      kind: "table",
-      title: "Jobs by kind",
-      columns: ["Kind", "Jobs", "States"],
-      rows: jobs.groups.map((group) => ({
-        id: group.kind,
-        cells: [
-          group.kind,
-          formatCount(group.count),
-          Object.entries(group.states)
-            .map(([state, count]) => `${formatCount(count)} ${state}`)
-            .join(" · "),
-        ],
-      })),
-      empty: "No fan-out Jobs.",
+      title: "Kernel work",
+      columns: ["Work", "Stage", "Detail"],
+      rows: [
+        ...work.scopes.map((row) => ({
+          id: `scope:${row.kind}:${row.key}`,
+          cells: [row.kind, row.stage, row.firstGap ?? ""],
+        })),
+        ...work.asks.map((row) => ({
+          id: row.inputHash,
+          cells: [row.feature, row.stage, row.waitCause ?? row.state],
+        })),
+        ...work.passes.map((row) => ({
+          id: `${row.name}:${row.key}`,
+          cells: [row.name, row.stage, row.lastError ?? row.waitCause ?? ""],
+        })),
+      ],
+      empty: "No kernel work is recorded for this Run.",
     },
   ];
 }

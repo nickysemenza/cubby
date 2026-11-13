@@ -1715,7 +1715,7 @@ A retention-managed read-only entity may omit `deletedAt`; readers apply livenes
 table declares it. `listScaffold.population` receives the same request filters for rows, facets and
 selection. Explicit Run ids bypass the default automatic-purpose suppression, keeping historical Runs
 readable; internal-id readers resolve public codes first. `populationFilters` names request options
-consumed by that predicate (Job's internal-kinds toggle).
+consumed by that predicate.
 
 Repository `read.title` owns computed SQL labels; otherwise the scaffold resolves the stored title
 field. Shortcode lookups, pickers and record graphs share that title. Generated kernel bindings
@@ -2998,8 +2998,7 @@ to 50 rows. Query relationships render in Connected records rather than another 
 public local reference fields must have a connected target group, and physical FK coverage requires a
 graph path or a justified internal classification.
 
-Shared AI Jobs expose every requesting Run; their optional owning Run is separate. Job subjects
-exclude non-entity origins. Image processing links use the exact execution key. Lease-device links
+Shared Asks expose every requesting Run through AskScope; Passes retain their Run provenance. Image processing links use the exact execution key. Lease-device links
 keep an expired holder until release or reclamation. Photo membership and library sightings never
 imply inventory ownership. Reviewed Email financial evidence keeps the account at review. Historical
 leaves may name tombstones, labelled `(deleted)`; ordinary references require live targets.

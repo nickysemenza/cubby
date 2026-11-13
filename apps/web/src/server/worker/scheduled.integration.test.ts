@@ -4,7 +4,6 @@ import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
@@ -85,7 +84,4 @@ it("recovers committed work whose wake was dropped within one hourly tick", asyn
       "objects",
     ),
   ).resolves.toMatchObject([{ doneAt: expect.any(String) }]);
-  await expect(readJobs(ctx.db, { key: "jobs.maintenance" })).resolves.toEqual(
-    [],
-  );
 });

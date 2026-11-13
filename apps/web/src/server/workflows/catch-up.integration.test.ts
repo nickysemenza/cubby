@@ -4,8 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { seedPass, claimPassFixture } from "~/server/kernel/pass.fixtures";
 import { requestCatchUp } from "~/server/workflows/catch-up";
 
 // App-open coalesces queue wakes; a lost wake cannot erase committed work.
@@ -40,10 +39,10 @@ describe("app-open catch-up queue handoff", () => {
   });
 
   it("keeps committed work claimable when the app-open queue wake is lost", async () => {
-    const pending = await enqueueJob(ctx.db, {
+    const pending = await seedPass(ctx.db, {
       key: "synthetic.lost-wake",
-      kind: "synthetic.work",
-      input: {},
+      name: "synthetic.work",
+      cursor: {},
     });
     let calls = 0;
     setCfEnv(
@@ -61,6 +60,6 @@ describe("app-open catch-up queue handoff", () => {
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "recent" });
     // Every bounded attempt failed, and the second request sends nothing.
     expect(calls).toBe(4);
-    expect((await claimJob(ctx.db, pending.id))?.id).toBe(pending.id);
+    expect((await claimPassFixture(ctx.db, pending)).key).toBe(pending.key);
   });
 });

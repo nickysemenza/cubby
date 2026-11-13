@@ -66,12 +66,12 @@ import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-br
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
-import { outsideJob } from "~/server/generic/jobs/outside-job";
-import type { Fenced } from "~/server/generic/jobs/types";
 import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { publishTransaction } from "~/server/kernel/publication";
+import type { Publication } from "~/server/kernel/publication";
 const log = createLogger("ai.analysis");
 
 const MAX_ANALYSIS_IMAGES = 5;
@@ -238,7 +238,7 @@ export interface LocationDescriptionResult extends LocationDescription {
 
 /** Provider work finishes before this transaction; only current inputs may publish. */
 async function publishLocationAnalysis(
-  fenced: Fenced,
+  fenced: Publication,
   locationId: LocationId,
   imageCodes: readonly string[],
   currentFingerprint: (tx: Database) => Promise<string>,
@@ -299,7 +299,7 @@ export async function describeLocation(
   owner: AiCallOwner,
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<LocationDescriptionResult> {
   const location = await readLocationById(db, locationId);
 
@@ -536,7 +536,7 @@ export async function detectInventoryItems(
   imageIds?: readonly string[],
   ai: LocationVisionAiPort = productionLocationVisionAiPort,
   /** The executing Job's fence; a member request owns no Job. */
-  fenced: Fenced = outsideJob(db),
+  fenced: Publication = publishTransaction(db),
 ): Promise<DetectedInventoryResult> {
   const location = await readLocationById(db, locationId);
 

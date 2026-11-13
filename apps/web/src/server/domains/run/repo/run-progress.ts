@@ -20,7 +20,6 @@ import {
   RUN_EXECUTE_PASS,
 } from "~/server/domains/run/repo/run-execution";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import {
   assertWorkflowEffect,
   currentRunExecution,
@@ -42,15 +41,7 @@ async function readRunWorkflow(
         }
       : null;
   }
-  const execution = await readJob(db, { key: `run:${owner.id}` });
-  return execution
-    ? {
-        purpose: owner.purpose,
-        attempt: execution.generation,
-        instanceId: execution.id,
-        instance: { state: execution.state, error: execution.error },
-      }
-    : null;
+  return null;
 }
 
 /** The small, durable progress read shared by every Run detail page. */

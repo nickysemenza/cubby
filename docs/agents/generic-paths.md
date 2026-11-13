@@ -148,13 +148,11 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Semantic artifact validation belongs to `findSimilarEntitiesPage` in
   `generic/embedding/repo/entity-embedding-search.ts`; similarity and identity
   consumers share its bounded seed/hit hydration and current-artifact checks.
-- Background execution: `server/generic/jobs/` owns one-off Job claims and retries;
-  `server/generic/background/drains.ts` owns row-drain paging. The hourly derived
-  pass owns one resumable cursor, with publication and progress committed together.
-  `server/workflows/jobs.ts` composes the round and coalesces continuation wakes.
-  Runs retain member/agent sessions and history. Provider work precedes the
-  transaction that checks current inputs and publishes. The read-only
-  `generic/jobs/repo/observation.ts` reports those owners without scheduling work.
+- Background execution: `server/kernel/claim.ts` owns claims and retries across dirty scopes,
+  Asks and Passes. `server/kernel/pass.ts` owns resumable pages; the hourly derived snapshot
+  keeps publication and progress together. Queue delivery and cron invoke the runner directly.
+  Runs retain member/agent sessions and history. Provider work precedes the transaction that
+  checks current inputs and publishes. `machinery`, `runWork` and `needsYou` read those owners.
   [Background derived data](../entities.md#background-derived-data) owns freshness.
 - Evidence, answers and decisions ([ADR 0029](../adr/0029-evidence-facts-and-reconcilers.md)):
   the kernel's one entry `server/kernel/api.ts`. A domain declares `defineEvidence`,
@@ -163,8 +161,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `withAsk`; the shared entity writers emit kernel keys themselves and a bespoke writer of a
   column a reconciler reads calls `emitWrites`; money-lane writers use `householdWrite`;
   merges outside a reconcile use `merge`; records resolve through
-  `resolveForRead`/`resolveForWrite`; list pages bind `loadMachineryRows`. The kernel drain
-  in `workflows/jobs.ts` runs dirty scopes, asks and passes.
+  `resolveForRead`/`resolveForWrite`; list pages bind `loadMachineryRows`. The kernel runner
+  runs dirty scopes, Asks and Passes.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);

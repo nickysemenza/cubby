@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { measurePage } from "~/server/generic/jobs/page-work";
+import { measurePage } from "~/server/kernel/page-work";
 
 import {
   beginDatabaseAcquire,

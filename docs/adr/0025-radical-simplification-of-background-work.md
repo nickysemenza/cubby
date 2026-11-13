@@ -36,12 +36,11 @@ evidence and photo-group decisions.
    Cloudflare Queue and by an hourly cron, which is the timer and the backstop.
    Durable Objects that own their own feature, such as calendar and the mail
    agent, keep their alarms.
-3. **Background work has three forms.** A drain is a registered function over the
-   rows a domain already owes, and it has no Job row. A Job is one row of one-off
-   or resumable work (amended 2026-11-06: the existing `Job` table is this form;
-   no separate Task table, and `Task` remains the household to-do entity). Run
-   execution is one Job kind. Completed Jobs are pruned by retention rather than
-   deleted on success. A Run is only a member- or agent-started session worth
+3. **Background work has three forms.** Dirty scopes reconcile records, Asks own producer calls
+   and retained Answers, and Passes own resumable work. One kernel claim module owns their
+   deadlines, attempts, waits and cancellation. Run execution is a Pass keyed by the Run.
+   Completed and cancelled Passes are pruned by retention.
+   A Run is only a member- or agent-started session worth
    reviewing. Automatic AI evaluation and field refresh create no Run; automatic
    mailbox work keeps one: a `mail_discovery` Run started without a member, with
    each admitted import nested under it as a child Run (`parentRunId`).
@@ -92,9 +91,7 @@ evidence and photo-group decisions.
     cutover. Authoritative tables replaced by a reshape, and the Assessment and
     Feedback ledgers, are retained under an archive name until the owner decides
     otherwise. Amended 2026-11-09: archived Feedback rows are deleted once
-    decision-grading no longer reads them (the subset it reads is kept), and failed
-    Job rows older than fourteen days are pruned when their Run is terminal,
-    scheduled and neither mail nor financial import work. Runs stay as cost evidence.
+    decision-grading no longer reads them (the subset it reads is kept), and completed Passes older than eight days and cancelled Passes older than fourteen days are pruned. Unfinished work and Runs stay as cost evidence.
 11. **Entity features are composable capabilities declared in the manifest.** Each
     capability has one owner and brings its own fields, list columns, detail slot,
     filters, MCP output and native presentation, so adopting it means declaring it
@@ -144,7 +141,7 @@ is unused.
 - **Embeddings and Vectorize**: semantic search and the related-records rail use
   them.
 - **The AI response cache**: replays avoid paying again for an identical call,
-  including across Job retries.
+  including across Pass retries.
 - **Funding objects** (`AiGatewayEgress`, `ChatGptPlan`): they admit calls and
   hold provider refusals for the funding ladder in
   [ADR 0027](0027-tier-routed-models-on-a-funding-first-ladder.md).

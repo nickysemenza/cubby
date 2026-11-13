@@ -1,4 +1,5 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { WORK_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/execution";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
@@ -8,7 +9,6 @@ import {
   IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
   imageProcessingJobState,
 } from "@cubby/schemas/image-processing";
-import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import { providerFor } from "@cubby/shared/ai/models";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -58,7 +58,6 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { imageJobChecks } from "~/server/generic/data-quality/repo/checks/image-job";
-import { readBackgroundWorkStatus } from "~/server/generic/jobs/repo/observation";
 import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
@@ -994,15 +993,6 @@ describe("durable image representations", () => {
       ).toBe(attention ? "failed" : null);
       expect(
         (
-          await readBackgroundWorkStatus(
-            ctx.db,
-            new Date(),
-            (await import("~/server/workflows/jobs")).productionDrainDues(),
-          )
-        ).stuck.some((item) => item.key === "image.device:failing"),
-      ).toBe(attention);
-      expect(
-        (
           await getImageProcessingReadProjection(ctx.db, refusedImageId)
         ).analyses.some((entry) => entry.preferred),
       ).toBe(preferred);
@@ -1141,7 +1131,7 @@ describe("durable image representations", () => {
       .update(imageProcessingJob)
       .set({
         state: "pending",
-        failures: JOB_NEEDS_ATTENTION_ATTEMPTS,
+        failures: WORK_NEEDS_ATTENTION_ATTEMPTS,
         lastError: "guardrail_violation: Synthetic transient history",
       })
       .where(eq(imageProcessingJob.id, refusedJobId));
@@ -1519,7 +1509,7 @@ describe("durable image representations", () => {
         ).data,
       ).toMatchObject([{ id: failed.shortcode }]);
       await updateImageExecution(ctx.db, failed.jobId, {
-        failures: JOB_NEEDS_ATTENTION_ATTEMPTS,
+        failures: WORK_NEEDS_ATTENTION_ATTEMPTS,
       });
       const problems = await imageScaffold.read(ctx.db, {
         filters: { processingIssue: "failed" },

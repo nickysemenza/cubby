@@ -6,11 +6,11 @@ import {
   type ImageJobRawOut as RawImageJobOut,
   imageJobRawOut as rawImageJobOut,
 } from "@cubby/schemas/entity-contracts/imageJob";
+import { describeWorkWaitingOn } from "@cubby/schemas/execution";
 import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
-import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import {
@@ -218,7 +218,7 @@ const imageJobRead = {
           return [
             row.id,
             {
-              waitingOn: describeJobWaitingOn(
+              waitingOn: describeWorkWaitingOn(
                 imageJobWaitingOn(row, now, {
                   name: holder?.name ?? null,
                   deviceId: holder?.device ?? null,

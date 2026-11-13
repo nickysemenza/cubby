@@ -53,8 +53,8 @@ import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purcha
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
-import { JobPausedError } from "~/server/generic/jobs/errors";
 import type { Json } from "~/server/kernel/define";
+import { WorkPausedError } from "~/server/kernel/work-errors";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { currentRunExecution } from "~/server/workflows/runs/execution";
 import {
@@ -1022,7 +1022,7 @@ async function stopDiscoveryPage(
 ): Promise<{ done: boolean; cursor?: Json }> {
   const owner = await readRun(db, runEntityId.parse(params.runId));
   if (owner?.status === "paused_auth")
-    throw new JobPausedError(
+    throw new WorkPausedError(
       owner.dispatchError ?? "Mailbox requires authorization",
     );
   return { done: true };

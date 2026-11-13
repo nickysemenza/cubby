@@ -34,7 +34,7 @@ import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/v
 import { readMailImportSettings } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { runPassWorking } from "~/server/domains/run/repo/run-execution";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 type ControlledMailScope = z.infer<typeof mailboxDiscoveryInput> & {
   vendorId: VendorId;
@@ -283,7 +283,7 @@ export async function waitForActiveMailboxImports(
     )
     .limit(1);
   if (active)
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Waiting for this mailbox's active Mail import to finish",
       new Date(Date.now() + 15_000),
       "provider_capacity",
@@ -335,7 +335,7 @@ export async function waitForMailImportPermission(
       )
     )
       continue;
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "Automatic Mail import is paused for this mailbox",
       new Date(Date.now() + 60_000),
       "provider_capacity",

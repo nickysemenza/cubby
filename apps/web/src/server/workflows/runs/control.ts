@@ -16,7 +16,6 @@ import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { runControlRefusal } from "~/server/domains/run/run-control-rules";
 import { createAppError } from "~/server/errors/app-error";
-import { cancelRunJobs } from "~/server/generic/jobs/repo/operator";
 
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 import { cancelRunPass } from "./run-pass";
@@ -165,7 +164,6 @@ export async function controlWorkflowRun(
       ids: [row.id],
       columns: ["status", "endedAt", "failureCode"],
     });
-    await cancelRunJobs(tx, row.id);
     await cancelRunPass(tx, row.id);
     // Cancellation ends execution, without inventing item failures or losing its retry cursor.
     await database

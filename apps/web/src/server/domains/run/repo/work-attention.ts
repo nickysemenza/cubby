@@ -18,13 +18,11 @@ import {
   runPassOwed,
   runHasLivePass,
 } from "~/server/domains/run/repo/run-execution";
-import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
 
 const RUN = runStatus.enum;
 
 /** A retained execution obligation: an owned live Job or the Run's owed Pass. */
-const runHasLiveWork = (runId: SQL): SQL<boolean> =>
-  sql<boolean>`(${runHasLiveJobs(runId)} OR ${runPassOwed(runId)})`;
+const runHasLiveWork = (runId: SQL): SQL<boolean> => runPassOwed(runId);
 
 /** A queued discovery is automatic demand only while its canonical generation remains live. */
 export function queuedMailDiscoveryPredicate(input: {

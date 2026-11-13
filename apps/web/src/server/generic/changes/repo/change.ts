@@ -59,9 +59,9 @@ export async function recordChange(
     db,
     async (tx) => {
       await repositoryAfterCommit(tx, async () => {
-        const { wakeJobs } =
+        const { wakeKernel } =
           await import("~/server/workflows/background-tasks/publish");
-        await wakeJobs({ source: "repository.change" });
+        await wakeKernel({ source: "repository.change" });
       });
     },
     { key: "derived:wake" },

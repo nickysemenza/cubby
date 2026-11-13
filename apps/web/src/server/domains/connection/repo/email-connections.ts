@@ -16,9 +16,9 @@ import {
   readEmailPurchaseEvidence,
 } from "~/server/domains/email/repo/email-purchase-links";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 const retainedChoice = z.object({
   originalId: z.uuid(),
@@ -160,7 +160,7 @@ export async function captureEmailConnectionBasis(
       .limit(1);
   const [before] = await emailQuery();
   if (!target || !before)
-    throw new JobEvidenceObsoleteError(
+    throw new WorkEvidenceObsoleteError(
       "Connection Email or Purchase no longer exists",
     );
   if (!before.originalId) return { source: before, target, dependencies: null };
@@ -179,7 +179,7 @@ export async function captureEmailConnectionBasis(
     : await originalQuery;
   const [source] = lock ? await emailQuery().for("update") : await emailQuery();
   if (!source)
-    throw new JobEvidenceObsoleteError("Connection Email no longer exists");
+    throw new WorkEvidenceObsoleteError("Connection Email no longer exists");
   if (
     !original ||
     source.originalId !== original.id ||

@@ -3,7 +3,7 @@ import {
   type EntityPhase,
   optionPhase,
 } from "@cubby/schemas/entity-definitions/definition";
-import { runWaitingOn } from "@cubby/schemas/job";
+import { runWaitingOn } from "@cubby/schemas/execution";
 import { kernelStage, type KernelStage } from "@cubby/schemas/kernel/stage";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";

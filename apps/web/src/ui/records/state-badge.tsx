@@ -1,10 +1,6 @@
 import type { EntityPhase } from "@cubby/schemas/entity-definitions/definition";
+import { describeRunWait, type RunWaitingOn } from "@cubby/schemas/execution";
 import { kernelStageLabel } from "@cubby/schemas/field-envelope-presentation";
-import {
-  describeRunWait,
-  jobKindDeclaration,
-  type RunWaitingOn,
-} from "@cubby/schemas/job";
 import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import { PauseIcon } from "@phosphor-icons/react/dist/csr/Pause";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
@@ -64,8 +60,7 @@ function useWaitText(wait: RunWaitingOn | undefined): string | null {
 /** What the estimate rests on, for the header's detail line. */
 function paceText(wait: RunWaitingOn): string | null {
   if (wait.position === null || wait.kind === null) return null;
-  const declared = jobKindDeclaration(wait.kind);
-  const kind = declared?.activityLabel ?? declared?.label ?? wait.kind;
+  const kind = wait.kind;
   return wait.perMinute === null
     ? `No ${kind} work finished in the last ${wait.paceMinutes} minutes, so the pace is unknown.`
     : `${kind} finished ${formatCount(wait.perMinute, 1)} a minute over the last ${wait.paceMinutes} minutes.`;

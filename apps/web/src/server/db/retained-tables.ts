@@ -1,5 +1,4 @@
 export { qualitySnapshot } from "./quality-snapshot-schema";
-export { job } from "./job-schema";
 export { workItem, workPublication } from "./work-item-schema";
 export {
   answer,

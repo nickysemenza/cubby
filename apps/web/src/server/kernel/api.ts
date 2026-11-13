@@ -249,7 +249,7 @@ export async function cancelWork(
   await cancelClaimable(repositoryQueries(db), target);
 }
 
-/** Run due kernel work within a time budget; the background drain's page. */
+/** Run due kernel work within the queue or cron time budget. */
 export async function runProductionKernel(
   db: Database,
   options: { budgetMs: number },

@@ -1,7 +1,6 @@
 import { sql } from "drizzle-orm";
 
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { pruneFinishedJobs } from "~/server/generic/jobs/repo/job-retention";
 import { definePass } from "~/server/kernel/api";
 
 const LIMIT = 2_000;
@@ -11,7 +10,9 @@ export const retentionPass = definePass({
   name: "retention",
   async run(_db, cursor, claim) {
     const removed = await claim.fenced(async (tx) => {
-      const jobs = await pruneFinishedJobs(tx, { limit: LIMIT });
+      const { repairImageProcessingExecution } =
+        await import("~/server/domains/image-processing/repo/image-processing");
+      await repairImageProcessingExecution(tx, 500);
       const passes = await repositoryQueries(tx).execute<{ name: string }>(sql`
         WITH doomed AS (
           SELECT name, key FROM "Pass"
@@ -20,7 +21,7 @@ export const retentionPass = definePass({
           LIMIT ${LIMIT} FOR UPDATE SKIP LOCKED
         ) DELETE FROM "Pass" p USING doomed d WHERE p.name = d.name AND p.key = d.key
         RETURNING p.name`);
-      return jobs === LIMIT || passes.rows.length === LIMIT;
+      return passes.rows.length === LIMIT;
     });
     return {
       cursor,

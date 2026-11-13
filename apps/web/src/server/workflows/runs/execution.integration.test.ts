@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { cancelWork } from "~/server/kernel/api";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { assertWorkflowEffect, isWorkflowInterrupted } from "./execution";
 import { runPassFixture } from "./pass.fixtures";
@@ -15,7 +15,7 @@ describe("Workflow effect admission", () => {
   const ctx = withTestDb();
 
   it("recognizes obsolete claim ownership through wrapped causes", () => {
-    const error = new JobSupersededError();
+    const error = new WorkSupersededError();
     expect(isWorkflowInterrupted(error)).toBe(true);
     expect(
       isWorkflowInterrupted(new Error("Publication failed", { cause: error })),

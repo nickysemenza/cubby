@@ -565,68 +565,6 @@ export const { definition, readSchemas } = defineEntityModel({
       },
     }),
     defineEdge({
-      key: "Job.runId",
-      from: "row:Job",
-      to: "run",
-      cardinality: "one",
-      inverse: {
-        key: "run.incoming.Job.runId",
-        from: "run",
-        to: "row:Job",
-        cardinality: "many",
-      },
-      storage: {
-        kind: "foreign-key",
-        column: "Job.runId",
-        constrained: true,
-      },
-      ownership: {
-        kind: "excluded",
-        reason:
-          "Workflow evidence about entities, not a relationship between them.",
-      },
-      fromEnd: {
-        role: "reference",
-        label: "target",
-        description: "The referenced record.",
-        liveness: {
-          kind: "must-target-live",
-        },
-      },
-      toEnd: {
-        role: "history",
-        label: "Execution jobs",
-        description: "Execution diagnostics attributed to this Run.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Job diagnostics retain their Run attribution through archival and deletion.",
-        },
-      },
-      policies: {
-        from: {
-          delete: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-          merge: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-        },
-        to: {
-          delete: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-          merge: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-        },
-      },
-    }),
-    defineEdge({
       key: "SourceOrderObservation.runId",
       from: "row:SourceOrderObservation",
       to: "run",
@@ -2396,7 +2334,7 @@ export const { definition, readSchemas } = defineEntityModel({
         provenance: {
           kind: "derived",
           sources: [
-            { label: "The Run's live Jobs" },
+            { label: "The Run's kernel claims" },
             { label: "Queue claim order" },
             { label: "Recent completions of the same kind" },
             { label: "AI funding window" },
@@ -2405,7 +2343,7 @@ export const { definition, readSchemas } = defineEntityModel({
         explanation: {
           ruleId: "run.waiting-on",
           description:
-            "The main reason the Run waits (waiting for AI funding, queued for model capacity, a rate limit, retrying after an error, waiting for an Apple device, queued, in progress, paused), its place among every due Job of that kind in claim order, and an estimate: its place divided by that kind's completions over the last 5 minutes, the funding resume time, or when a Job not yet due (a retry or a deferral) falls due.",
+            "The Run’s main kernel wait, its position among due Passes, and an estimate from recent Pass page durations or the wait deadline.",
         },
         // Drawn inside the State badge; the column stays available.
         display: {
@@ -2422,12 +2360,12 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "boolean",
         provenance: {
           kind: "derived",
-          sources: [{ label: "Latest Job claim or completion" }],
+          sources: [{ label: "Latest kernel claim or completion" }],
         },
         explanation: {
           ruleId: "run.stalled",
           description:
-            "Live Jobs remain but none was claimed or finished for 15 minutes.",
+            "Unfinished Passes exceed their progress window, or a requested Ask requires attention.",
         },
         display: { columnGroup: "Execution", width: "sm", listHidden: true },
         validation: readOnly(z.boolean().default(false)),

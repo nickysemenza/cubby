@@ -10,8 +10,8 @@ import { z } from "zod";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
-import { inJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { inWorkContext } from "~/server/kernel/context";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
@@ -360,7 +360,7 @@ export async function withAiResponseCache<T>(args: {
         continue;
       }
       // A job page republishes its cursor instead of polling another invocation.
-      if (inJobExecution())
+      if (inWorkContext())
         throw deferred(
           "Another request is computing this AI answer; no duplicate model call was placed.",
         );
@@ -438,8 +438,8 @@ export async function withAiResponseCache<T>(args: {
  * A job republishes its page after `until`; an interactive caller surfaces
  * the error. Either way the raw cause stays on its chain.
  */
-function deferred(message: string, cause?: UnparsedError): JobDeferredError {
-  const error = new JobDeferredError(
+function deferred(message: string, cause?: UnparsedError): WorkDeferredError {
+  const error = new WorkDeferredError(
     message,
     new Date(Date.now() + DEFER_MS),
     "provider_capacity",

@@ -23,9 +23,9 @@ import type { GatewayCallOptions } from "~/server/ai/gateway";
 import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import * as cfEnv from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
-import { withJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { withWorkContext } from "~/server/kernel/context";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -265,7 +265,7 @@ it("stores a sibling's paid embedding before deferring on a busy key", async () 
     .mockReturnValue(fromPartial({ getByName: () => fromPartial(store) }));
   try {
     await expect(
-      withJobExecution(fromPartial({}), fromPartial({}), () =>
+      withWorkContext(() =>
         runEmbeddingFeature(
           { feature: "embedding", model: DEFAULT_EMBEDDING_MODEL },
           {
@@ -285,7 +285,7 @@ it("stores a sibling's paid embedding before deferring on a busy key", async () 
           { operation: "embed" },
         ),
       ),
-    ).rejects.toBeInstanceOf(JobDeferredError);
+    ).rejects.toBeInstanceOf(WorkDeferredError);
     expect(published).toEqual([missKey]);
   } finally {
     namespace.mockRestore();
@@ -610,7 +610,7 @@ describe("runStructuredFeature", () => {
           ports,
         ),
       ).rejects.toSatisfy((error: unknown) => {
-        const failure = classifyJobFailure(error);
+        const failure = classifyWorkFailure(error);
         return failure.kind === "deferred" && failure.reason === "device";
       });
       expect(calls).toEqual([]);
@@ -984,8 +984,8 @@ describe("queued model request", () => {
       outputRevision: z.toJSONSchema(LOCATION_DESCRIPTION_FEATURE.schema),
     });
     expect(first).not.toEqual(changed);
-    const { JobEvidenceObsoleteError } =
-      await import("~/server/generic/jobs/errors");
+    const { WorkEvidenceObsoleteError } =
+      await import("~/server/kernel/work-errors");
     await expect(
       withAiInputs(
         false,
@@ -997,7 +997,7 @@ describe("queued model request", () => {
           ),
         { expected: [first] },
       ),
-    ).rejects.toBeInstanceOf(JobEvidenceObsoleteError);
+    ).rejects.toBeInstanceOf(WorkEvidenceObsoleteError);
   });
 
   it("replays the captured schema, token cap and tier", async () => {

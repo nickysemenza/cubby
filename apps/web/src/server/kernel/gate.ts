@@ -14,7 +14,7 @@ import {
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 import { findPgError } from "~/server/errors/db-errors";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
+import { WorkRetryableError } from "~/server/kernel/work-errors";
 
 type Q = Pick<RepositoryQueryClient, "execute">;
 
@@ -30,7 +30,7 @@ const TIMEOUTS = {
 >;
 
 /** A member's write found the gate held past its lock timeout; retry shortly. */
-export class HouseholdWriteBusyError extends JobRetryableError {
+export class HouseholdWriteBusyError extends WorkRetryableError {
   override name = "HouseholdWriteBusyError";
   constructor(cause?: unknown) {
     super("Cubby is applying other changes; try again in a moment.", {

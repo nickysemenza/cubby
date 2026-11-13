@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/entity-definitions/definition";
 import { displayItem } from "@cubby/schemas/entity-definitions/label-field";
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { runWaitingOn, type RunWaitingOn } from "@cubby/schemas/job";
+import { runWaitingOn, type RunWaitingOn } from "@cubby/schemas/execution";
 import { kernelStage, type KernelStage } from "@cubby/schemas/kernel/stage";
 import type { QueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";

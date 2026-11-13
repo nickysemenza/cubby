@@ -88,7 +88,7 @@ test("Cloudflare config keeps the runtime Job limits and identity loadable", asy
     }
   }
   for (const file of [
-    "job-page-limits.ts",
+    "run-page-limits.ts",
     "background-queue.ts",
     "background-queue-consumer.json",
   ]) {

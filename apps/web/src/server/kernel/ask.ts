@@ -28,8 +28,8 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import type { AskOutcome } from "./ask-gap";
 import {
@@ -71,7 +71,7 @@ const IN_FLIGHT_WAIT_MS = 15_000;
 const RENEW_EVERY_MS = 20_000;
 
 const inFlight = (message: string) =>
-  new JobDeferredError(
+  new WorkDeferredError(
     message,
     new Date(Date.now() + IN_FLIGHT_WAIT_MS),
     "provider_capacity",
@@ -305,7 +305,7 @@ async function settleSent(
   error: UnparsedError,
   aborted: boolean,
 ): Promise<void> {
-  const failure = classifyJobFailure(error);
+  const failure = classifyWorkFailure(error);
   const raw = rawError(error);
   await repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
@@ -530,7 +530,7 @@ async function executeClaimed(
 /**
  * The execution wrapper for a producer call made in line: returns the
  * committed Answer's output, or places the call once under the kernel's
- * claims. Throws a wait (`JobDeferredError`) while another worker holds the
+ * claims. Throws a wait (`WorkDeferredError`) while another worker holds the
  * call or funding refuses it, and {@link AskUnknownError} for an ask whose
  * outcome is unknown.
  */
@@ -572,7 +572,7 @@ export async function withAsk<I, O>(
       `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
     );
   if (row.waitCause === "funding" && new Date(row.availableAt) > new Date())
-    throw new JobDeferredError(
+    throw new WorkDeferredError(
       "The model Ask waits for funding",
       new Date(row.availableAt),
       "ai_funding_window",

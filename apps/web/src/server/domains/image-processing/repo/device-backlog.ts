@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { DeviceBacklog } from "~/contracts/job.contract";
+import type { DeviceBacklog } from "~/contracts/image-backlog.contract";
 import type { Database } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";

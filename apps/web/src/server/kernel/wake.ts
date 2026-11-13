@@ -4,9 +4,9 @@ import { repositoryAfterCommit } from "~/server/db/repository-access.boundary";
 /** Wake the background runner once the dirtying transaction commits. */
 export async function wakeAfterCommit(db: Database): Promise<void> {
   await repositoryAfterCommit(db, async () => {
-    const { wakeJobs } =
+    const { wakeKernel } =
       await import("~/server/workflows/background-tasks/publish");
-    await wakeJobs({ source: "kernel.dirty" });
+    await wakeKernel({ source: "kernel.dirty" });
   });
 }
 

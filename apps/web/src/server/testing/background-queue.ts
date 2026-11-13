@@ -24,9 +24,6 @@ import {
 } from "~/server/generic/derived/repo/compute";
 import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
 import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import type { JobHandlers } from "~/server/generic/jobs/types";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
 import { derivedComputes } from "~/server/workflows/derived-computes";
 
@@ -225,7 +222,7 @@ export async function reconcileDerivedRefreshInputs(
   await drainDerivedRefreshFrontier(db);
 }
 
-/** A lost wake does not hide intent: drain committed Jobs, not captured messages. */
+/** Permits wake the kernel; persisted Ask and Pass rows own work. */
 export function captureBackgroundQueue() {
   const messages: BackgroundTaskMessage[] = [];
   setCfEnv(
@@ -242,33 +239,14 @@ export function captureBackgroundQueue() {
     messages,
     async drain(
       db: Database,
-      options: { maxTasks?: number; handlers?: JobHandlers } = {},
+      options: { maxTasks?: number } = {},
     ): Promise<number> {
-      const handlers =
-        options.handlers ??
-        (await import("~/server/workflows/jobs")).productionJobHandlers;
-      const maxPages = options.maxTasks ?? 10_000;
-      for (let page = 0; page < maxPages; page++) {
-        const [pending] = await readJobs(
-          db,
-          { kinds: Object.keys(handlers), states: ["queued", "retry_wait"] },
-          { order: ["availableAt", "id"], limit: 1 },
-        );
-        if (!pending) {
-          messages.length = 0;
-          return page;
-        }
-        if (pending.state !== "completed" && pending.availableAt > new Date())
-          throw new Error(
-            `Synthetic drain reached deferred Job ${pending.kind}`,
-          );
-        const outcome = await advanceJob(db, pending.id, handlers);
-        if (outcome === "failed")
-          throw new Error(
-            `Synthetic Job ${pending.kind} failed; inspect retained Job.error`,
-          );
-      }
-      throw new Error(`Background Job drain exceeded ${maxPages} pages`);
+      const { runProductionKernel } = await import("~/server/kernel/api");
+      const result = await runProductionKernel(db, {
+        budgetMs: options.maxTasks ?? 20_000,
+      });
+      messages.length = 0;
+      return result;
     },
     restore: () => setCfEnv(undefined),
   };

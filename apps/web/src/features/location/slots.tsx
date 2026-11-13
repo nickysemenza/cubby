@@ -4,7 +4,6 @@ import type { FunctionComponent } from "react";
 import type { CollectionActionProps } from "~/entity/entity-detail/collection-actions";
 import type { DetailSlotComponent } from "~/entity/entity-detail/detail-slots";
 import { EntityReportSlot } from "~/entity/entity-detail/report-slot";
-import { SubjectJobsDisclosure } from "~/features/job/job-diagnostics";
 import { AiDescriptionSection } from "~/features/location/ai-description-section";
 import { Stack } from "~/ui/layout";
 
@@ -27,7 +26,6 @@ export const LocationAiDescription: DetailSlotComponent<"location"> = ({
       id={location.id}
       record={location}
     />
-    <SubjectJobsDisclosure subject={{ kind: "location", id: location.id }} />
   </Stack>
 );
 

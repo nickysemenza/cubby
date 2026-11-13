@@ -4,7 +4,7 @@ import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
+import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import type { AiFeature } from "./policy/features";
 
@@ -74,7 +74,7 @@ export async function captureAiInput(
       (expected) => JSON.stringify(expected) === JSON.stringify(question),
     )
   )
-    throw new JobEvidenceObsoleteError(
+    throw new WorkEvidenceObsoleteError(
       "The prepared field question changed before send",
     );
   current.questions.push(question);

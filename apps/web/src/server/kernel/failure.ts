@@ -1,4 +1,4 @@
-import type { JobWaitReason } from "@cubby/schemas/job";
+import type { ExecutionWaitReason } from "@cubby/schemas/execution";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import {
@@ -8,21 +8,21 @@ import {
 } from "~/server/errors/db-errors";
 
 import {
-  JobDeferredError,
-  JobPausedError,
-  JobRetryableError,
-  JobSupersededError,
-  JobTargetError,
-} from "./errors";
+  WorkDeferredError,
+  WorkPausedError,
+  WorkRetryableError,
+  WorkSupersededError,
+  WorkTargetError,
+} from "./work-errors";
 
 /**
- * The one failure classification for Jobs and drain items. Control errors
+ * The one failure classification for claimed work and page items. Control errors
  * win anywhere in the cause chain, so wrapping never turns a lease loss into
- * a retried item (ADR 0015).
+ * a retried item.
  */
-export type JobFailure =
-  | { kind: "paused"; error: JobPausedError }
-  | { kind: "deferred"; until: Date; reason: JobWaitReason }
+export type WorkFailure =
+  | { kind: "paused"; error: WorkPausedError }
+  | { kind: "deferred"; until: Date; reason: ExecutionWaitReason }
   /** Ownership is gone: stop the invocation; never retry an item for it. */
   | { kind: "interrupted" }
   /** The item's own data: roll back, split the chunk, settle the item alone. */
@@ -46,21 +46,21 @@ const causes = (error: UnparsedError) => {
 const isTargetDataError = (error: UnparsedError) =>
   /^(22|23|54)/.test(findPgError(error)?.code ?? "");
 
-export function classifyJobFailure(
+export function classifyWorkFailure(
   error: UnparsedError,
   { publication = false }: { publication?: boolean } = {},
-): JobFailure {
+): WorkFailure {
   const chain = causes(error);
-  const paused = chain.find((cause) => cause instanceof JobPausedError);
-  if (paused instanceof JobPausedError)
+  const paused = chain.find((cause) => cause instanceof WorkPausedError);
+  if (paused instanceof WorkPausedError)
     return { kind: "paused", error: paused };
-  const deferred = chain.find((cause) => cause instanceof JobDeferredError);
-  if (deferred instanceof JobDeferredError)
+  const deferred = chain.find((cause) => cause instanceof WorkDeferredError);
+  if (deferred instanceof WorkDeferredError)
     return { kind: "deferred", until: deferred.until, reason: deferred.reason };
-  if (chain.some((cause) => cause instanceof JobSupersededError))
+  if (chain.some((cause) => cause instanceof WorkSupersededError))
     return { kind: "interrupted" };
   if (
-    chain.some((cause) => cause instanceof JobTargetError) ||
+    chain.some((cause) => cause instanceof WorkTargetError) ||
     (publication && isTargetDataError(error))
   )
     return { kind: "isolated" };
@@ -70,7 +70,7 @@ export function classifyJobFailure(
   // connection (with or without a SQLSTATE) is capacity, not the work's fault:
   // it backs off without spending attempts. Mail discovery also defers 55P03.
   if (
-    chain.some((cause) => cause instanceof JobRetryableError) ||
+    chain.some((cause) => cause instanceof WorkRetryableError) ||
     chain.some((cause) => cause instanceof SnapshotWriteConflictError) ||
     chain.some((cause) => findPgError(cause)?.code === "55P03") ||
     isTransientConnectionError(error)
@@ -80,7 +80,7 @@ export function classifyJobFailure(
 }
 
 /** Pause, defer and lease loss stop the whole page; item isolation never absorbs them. */
-export const stopsPage = (failure: JobFailure) =>
+export const stopsPage = (failure: WorkFailure) =>
   failure.kind === "paused" ||
   failure.kind === "deferred" ||
   failure.kind === "interrupted";

@@ -34,7 +34,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import {
   deferClassificationRefresh,
@@ -414,7 +414,10 @@ async function fetchObservedMessage(
       missing: null,
     };
   } catch (error) {
-    if (isGmailAuthorizationFailure(error) || error instanceof JobDeferredError)
+    if (
+      isGmailAuthorizationFailure(error) ||
+      error instanceof WorkDeferredError
+    )
       throw error;
     // A first 404 must mint its diagnostic owner inside fenced publication.
     // Creating it before the optimistic check would invalidate our own snapshot.

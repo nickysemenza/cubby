@@ -23,9 +23,9 @@ import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { aiUsage, runOperation, run as runTable } from "~/server/db/schema";
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
-import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import {
@@ -310,9 +310,12 @@ describe("isolated Mail coordinator replay", () => {
             userId: ctx.actor.userId,
             messageIds: [mail.id],
           });
-          const dispatch = await readJob(ctx.db, { runId: started!.runId });
+          const [dispatch] = await getDb(ctx.db)
+            .select()
+            .from(kernelPass)
+            .where(eq(kernelPass.runId, started!.runId));
           const event = dispatch
-            ? purchaseAgentEvent.parse(dispatch.input)
+            ? purchaseAgentEvent.parse(dispatch.cursor)
             : null;
           if (!started || !event)
             throw new Error(

@@ -36,8 +36,8 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";
 
-import { StatusPill } from "../job/job-status";
 import type { DecisionPresenter } from "./decision-presenters";
+import { StatusPill } from "./work-status";
 
 const helper = createCubbyColumnHelper<RunDecision>();
 const decisionId = (row: RunDecision) => row.id;

@@ -22,7 +22,7 @@ import {
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
-import { wakeJobs } from "~/server/workflows/background-tasks/publish";
+import { wakeKernel } from "~/server/workflows/background-tasks/publish";
 
 import { imageJobDisplayStateSql } from "./image-job-state";
 
@@ -138,6 +138,6 @@ export async function publishImageProcessingWakeups(
 ): Promise<void> {
   if (jobIds.length === 0) return;
   await runAfterCommit(db, () =>
-    wakeJobs({ source: IMAGE_PROCESSING_WAKEUP_SOURCE }),
+    wakeKernel({ source: IMAGE_PROCESSING_WAKEUP_SOURCE }),
   );
 }

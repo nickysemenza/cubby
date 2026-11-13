@@ -28,7 +28,7 @@ const TRANSIENT_HARNESS_REASONS = new Set([
 ]);
 /**
  * Provider, gateway and database faults a later attempt can outlive: retryable
- * HTTP statuses (as `classifyJobFailure` treats provider capacity), deadlines,
+ * HTTP statuses (as `classifyWorkFailure` treats provider capacity), deadlines,
  * egress and overload, and connection or serialization faults. Anything else,
  * such as a tool-validation loop or a refused tool call, recurs on retry.
  */

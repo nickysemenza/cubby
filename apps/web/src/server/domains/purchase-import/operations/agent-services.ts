@@ -30,11 +30,11 @@ import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
-import {
-  JobDeferredError,
-  JobSupersededError,
-} from "~/server/generic/jobs/errors";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import {
+  WorkDeferredError,
+  WorkSupersededError,
+} from "~/server/kernel/work-errors";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 /** The MCP endpoint the delegation bearer's audience names. */
@@ -101,7 +101,7 @@ export async function admissionRead<T>(
   } catch (error: unknown) {
     // A lost coordinator turn is a transport fault pi retries, never a
     // final admission refusal.
-    if (error instanceof JobSupersededError)
+    if (error instanceof WorkSupersededError)
       throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}`, {
         cause: error,
       });
@@ -180,7 +180,7 @@ export function agentModelTurn(
     const scope = await service.loadRunScope(db, runEntityId.parse(rawRunId));
     const { generation, request } = input;
     if (scope.public.dispatchEventId !== generation)
-      throw new JobSupersededError();
+      throw new WorkSupersededError();
     const kind = {
       ...agentTurnAsk,
       produce: async () => {
@@ -198,7 +198,7 @@ export function agentModelTurn(
               ? await pendingFundingResumeAt(db, rawRunId)
               : null;
           if (until)
-            throw new JobDeferredError(
+            throw new WorkDeferredError(
               "Model turn waits for funding",
               until,
               "ai_funding_window",
@@ -231,7 +231,7 @@ export function agentModelTurn(
         headers: answer.headers,
       });
     } catch (error) {
-      if (error instanceof JobDeferredError)
+      if (error instanceof WorkDeferredError)
         return Response.json(
           {
             error: { type: "cubby_admission_refused", message: error.message },

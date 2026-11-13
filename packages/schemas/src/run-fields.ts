@@ -23,7 +23,6 @@ export {
   RUN_KINDS,
   runStepDeclaration,
   STEP_RUN_PURPOSES,
-  ATTENTION_RUN_PURPOSES,
   VISIBLE_RUN_PURPOSES,
   type ExecutedRunPurpose,
   type RunKindDeclaration,

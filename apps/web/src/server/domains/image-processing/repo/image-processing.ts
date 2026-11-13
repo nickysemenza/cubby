@@ -96,8 +96,8 @@ import {
 import { readConfirmedDescription } from "~/server/domains/image/repo/image-description-read";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import { queueImageAsk } from "./image-asks";
 import {
@@ -601,7 +601,7 @@ const imageRunOwned = () =>
       )})
       AND ${notDeleted("r")}))`;
 
-/** Throws `JobSupersededError` once this attempt no longer holds a live lease on its row. */
+/** Throws `WorkSupersededError` once this attempt no longer holds a live lease on its row. */
 export async function assertImageLeaseHeld(
   db: Database,
   claim: { id: ImageJobId; attemptId: string },
@@ -620,7 +620,7 @@ export async function assertImageLeaseHeld(
         sql`${imageProcessingJob.leaseUntil} > clock_timestamp()`,
       ),
     );
-  if (!held) throw new JobSupersededError();
+  if (!held) throw new WorkSupersededError();
   const { fenceClaim } = await import("~/server/kernel/claim");
   const { repositoryQueries } =
     await import("~/server/db/repository-access.boundary");
@@ -900,7 +900,7 @@ export async function finalizeCompanionImageLeases(
         input.leaseMs,
       ))
     )
-      throw new JobSupersededError();
+      throw new WorkSupersededError();
   }
   const claims = requestedRows(
     input.claims,
@@ -2391,7 +2391,7 @@ export async function completeImageProcessingJob(
             jobId: parseEntityId("imageJob", row.receiptId),
           },
         });
-        if (!applied.adopted) throw new JobSupersededError();
+        if (!applied.adopted) throw new WorkSupersededError();
         return [
           evidenceRow(imageObservationEvidence, {
             entityKind: "image",

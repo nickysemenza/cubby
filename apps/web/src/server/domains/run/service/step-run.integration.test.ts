@@ -10,7 +10,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { getDb } from "~/server/db/helpers";
 import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { readPasses } from "~/server/kernel/pass.fixtures";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
@@ -679,7 +679,7 @@ describe("step-ledger Runs", () => {
     const before = {
       owner: await readRun(id),
       steps: await readRunSteps(ctx.db, id),
-      jobs: await readJobs(ctx.db, { runId: id }),
+      jobs: await readPasses(ctx.db, { runId: id }),
     };
     // Historical keys must not reopen work that the current plan cannot execute.
     await expect(retryRunStep(ctx.db, id, "broken")).rejects.toThrow(
@@ -688,7 +688,7 @@ describe("step-ledger Runs", () => {
     expect({
       owner: await readRun(id),
       steps: await readRunSteps(ctx.db, id),
-      jobs: await readJobs(ctx.db, { runId: id }),
+      jobs: await readPasses(ctx.db, { runId: id }),
     }).toEqual(before);
   });
 

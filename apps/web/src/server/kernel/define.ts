@@ -570,6 +570,7 @@ export type DecisionRef = { id: string; subject: string };
 
 export type Outcome = {
   scope: ScopeRef;
+  /** A wait with gaps is a persisted scope outcome; an empty wait means its claim was unavailable. */
   status: "applied" | "conflict" | "failed" | "waiting" | "clean";
   gaps: readonly KernelGap[];
   error?: string;

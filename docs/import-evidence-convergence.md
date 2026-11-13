@@ -1095,12 +1095,12 @@ including zeros. A page or visible-only query cannot establish absence. The
 skill must identify unsupported accounts, including Monarch connections
 excluded by its MCP, rather than reporting them current.
 
-Evidence, memberships, revisions and the statement Sweep's Job intent commit in
+Evidence, memberships, revisions and the statement Sweep's Pass intent commit in
 one transaction; waking happens after commit. Corrections recheck the automatic
 spending switch under its transaction lock; pausing it blocks money changes and
 retirement as well as new booking. Scheduling failure rolls admission back. The
 outer DB-only snapshot write uses bounded retries for serialization conflicts,
-including late derived-refresh Job contention, rebuilding evidence and Sweep
+including late derived-refresh claim contention, rebuilding evidence and Sweep
 admission together on each attempt. Dry runs and unchanged replays create no
 Runs, Jobs, Suggestions or money; Jobs own interrupted execution recovery. A
 new collection can advance observation time without changing the original
@@ -1267,7 +1267,7 @@ cursor. Each charge is regenerated under the Run's retained account/date/import
 scope before its current label work is selected. Model waits and funding pauses
 keep that charge; disabled automatic AI work pauses the retry rather than
 discarding it. Healthy charges and later arrivals are not added to the retry
-population. An obsolete Job generation or lease interrupts the invocation;
+population. An obsolete Pass generation or claim interrupts the invocation;
 per-charge error isolation must not turn that ownership signal into an item
 failure or retry.
 
@@ -1292,7 +1292,7 @@ excluded receipts keep `applicationPending` and their original
 
 `run.sweep` and its estimate accept a statement family's optional `importId` as
 a TransactionImport shortcode (`TIM-…`). Both resolve the live retained
-collection before estimation or Run/Job creation; invalid, missing and deleted
+collection before estimation or Run/Pass creation; invalid, missing and deleted
 references refuse. Account and date filters intersect its retained charge
 membership. Selected charges still use current observations from other
 collections sharing their identity; unrelated charge identities stay excluded.

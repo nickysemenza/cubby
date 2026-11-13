@@ -1,4 +1,7 @@
-import type { JobWaitingOnReason, RunWaitGroup } from "@cubby/schemas/job";
+import type {
+  WorkWaitingOnReason,
+  RunWaitGroup,
+} from "@cubby/schemas/execution";
 /**
  * A Run's execution as the kernel's `run.execute` Pass (ADR 0029 section 7):
  * one Pass row per step-ledger or AI-work Run, keyed by the Run's id. These
@@ -193,7 +196,7 @@ export function runPassRollup(
   pass: RunPassState | undefined,
   position: { position: number; total: number } | undefined,
 ): {
-  reason: JobWaitingOnReason;
+  reason: WorkWaitingOnReason;
   group: RunWaitGroup | null;
   perMinute: number | null;
 } | null {
@@ -206,7 +209,7 @@ export function runPassRollup(
     pass.waitCause && pass.waitCause in PASS_GROUP_REASON
       ? PASS_GROUP_REASON[pass.waitCause as keyof typeof PASS_GROUP_REASON]
       : null;
-  const reason: JobWaitingOnReason =
+  const reason: WorkWaitingOnReason =
     pass.state === "due"
       ? "due"
       : cause === "ai_funding_window"

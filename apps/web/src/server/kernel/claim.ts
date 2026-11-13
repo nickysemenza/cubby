@@ -6,7 +6,7 @@
  * classifier. A claim past its deadline cannot publish: every publishing
  * write checks the token and a live deadline under a row lock.
  */
-import type { JobWaitReason } from "@cubby/schemas/job";
+import type { ExecutionWaitReason } from "@cubby/schemas/execution";
 import type { KernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   kernelWaitCause,
@@ -23,11 +23,8 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
-import { JobSupersededError } from "~/server/generic/jobs/errors";
-import {
-  classifyJobFailure,
-  type JobFailure,
-} from "~/server/generic/jobs/failure";
+import { classifyWorkFailure, type WorkFailure } from "~/server/kernel/failure";
+import { WorkSupersededError } from "~/server/kernel/work-errors";
 
 import type { AskKind, ClaimLimit, Pass } from "./define";
 import type { KernelRegistry } from "./registry";
@@ -44,7 +41,7 @@ export const MAX_SCOPE_ATTEMPTS = 5;
 export const LOCKED_RUN_AFTER_CONFLICTS = 3;
 
 /** A claim lapsed or was cancelled; its holder must not publish. */
-export class ClaimLapsedError extends JobSupersededError {
+export class ClaimLapsedError extends WorkSupersededError {
   override name = "ClaimLapsedError";
 }
 
@@ -76,7 +73,7 @@ const WAIT_CAUSE = {
   ai_funding_window: "funding",
   device: "device",
   rate_limit: "rate_limit",
-} satisfies Record<JobWaitReason, KernelWaitCause>;
+} satisfies Record<ExecutionWaitReason, KernelWaitCause>;
 
 /** A raw error's stored form: scrubbed causes, capped at 16 KB. */
 export function rawError(error: UnparsedError): string {
@@ -152,8 +149,8 @@ export async function settleFailure(
   attempts: number,
   error: UnparsedError,
   wakeVersion?: number,
-): Promise<JobFailure> {
-  const failure = classifyJobFailure(error);
+): Promise<WorkFailure> {
+  const failure = classifyWorkFailure(error);
   const raw = rawError(error);
   const owned = sql`${identity(target)} AND "claimToken" = ${token}::uuid`;
   switch (failure.kind) {

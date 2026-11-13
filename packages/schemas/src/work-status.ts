@@ -8,12 +8,6 @@ const workStuckItem = z.object({
   since: z.iso.datetime(),
   action: z.discriminatedUnion("type", [
     z.object({
-      type: z.literal("retry"),
-      kinds: z.array(z.string()).min(1),
-      /** Narrows Retry to failed work, leaving healthy waits in the kind alone. */
-      needsAttention: z.boolean().optional(),
-    }),
-    z.object({
       type: z.literal("link"),
       label: z.string(),
       href: z.string(),

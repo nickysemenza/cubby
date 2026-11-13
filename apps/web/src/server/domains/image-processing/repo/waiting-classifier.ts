@@ -1,4 +1,7 @@
-import { jobWaitReason, type JobWaitingOnReason } from "@cubby/schemas/job";
+import {
+  executionWaitReason,
+  type WorkWaitingOnReason,
+} from "@cubby/schemas/execution";
 import { sql, type SQL } from "drizzle-orm";
 
 type Facts = {
@@ -10,7 +13,7 @@ type Facts = {
 type Columns = { [K in keyof Facts]: SQL };
 
 type Condition = "leased" | "funding" | "deviceWait" | "later" | "deviceLane";
-type Rule = { reason: JobWaitingOnReason; all: readonly Condition[] };
+type Rule = { reason: WorkWaitingOnReason; all: readonly Condition[] };
 
 // Ordered conditions describe both the in-memory and SQL classifiers.
 const rules: readonly Rule[] = [
@@ -24,25 +27,25 @@ const rules: readonly Rule[] = [
 
 const factsOf = (f: Facts) => ({
   leased: f.leased,
-  funding: f.waitReason === jobWaitReason.enum.ai_funding_window,
-  deviceWait: f.waitReason === jobWaitReason.enum.device,
+  funding: f.waitReason === executionWaitReason.enum.ai_funding_window,
+  deviceWait: f.waitReason === executionWaitReason.enum.device,
   later: f.later,
   deviceLane: f.deviceLane,
 });
 const columnsOf = (c: Columns) => ({
   leased: c.leased,
-  funding: sql`${c.waitReason} = ${jobWaitReason.enum.ai_funding_window}`,
-  deviceWait: sql`${c.waitReason} = ${jobWaitReason.enum.device}`,
+  funding: sql`${c.waitReason} = ${executionWaitReason.enum.ai_funding_window}`,
+  deviceWait: sql`${c.waitReason} = ${executionWaitReason.enum.device}`,
   later: c.later,
   deviceLane: c.deviceLane,
 });
 
-export const classifyWaiting = (facts: Facts): JobWaitingOnReason =>
+export const classifyWaiting = (facts: Facts): WorkWaitingOnReason =>
   rules.find((rule) => rule.all.every((condition) => factsOf(facts)[condition]))
     ?.reason ?? "due";
 
 export const classifyWaitingSql = (columns: Columns) =>
-  sql<JobWaitingOnReason>`(CASE ${sql.join(
+  sql<WorkWaitingOnReason>`(CASE ${sql.join(
     rules.map(
       (rule) =>
         sql`WHEN ${sql.join(

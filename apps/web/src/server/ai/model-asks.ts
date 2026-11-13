@@ -126,7 +126,7 @@ export async function admitModel(
       await import("~/server/domains/run/repo/automatic-ai-stop")
     ).readAutomaticAiStop(db))
   )
-    throw new (await import("~/server/generic/jobs/errors")).JobDeferredError(
+    throw new (await import("~/server/kernel/work-errors")).WorkDeferredError(
       "Automatic AI work is stopped",
       new Date(Date.now() + 60_000),
       "provider_capacity",

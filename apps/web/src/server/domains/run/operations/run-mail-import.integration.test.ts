@@ -10,11 +10,11 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { appSettings, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
-import { deleteJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createOperationDispatch } from "~/server/operation-runtime/operation-dispatch.server";
@@ -205,7 +205,9 @@ describe("automatic Mail import switch", () => {
     expect(
       mailboxDiscoveryInput.parse(classification?.input).executionPolicy,
     ).toBe("classification_only");
-    await deleteJobs(ctx.db, { kind: "run.execute" });
+    await getDb(ctx.db)
+      .delete(kernelPass)
+      .where(eq(kernelPass.name, "run.execute"));
     await getDb(ctx.db).delete(run);
 
     await invoke("setMailImport", { mailboxId, enabled: true });

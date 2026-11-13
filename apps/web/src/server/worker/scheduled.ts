@@ -22,10 +22,10 @@ async function runHourlyBackstop(
       env.HYPERDRIVE_BACKGROUND.connectionString,
       async () => {
         const [
-          { wakeJobs },
+          { wakeKernel },
           { purchaseDiscoveryPass },
           { ringDueDeviceWork },
-          { maintainJobs },
+          { retentionPass },
           { scheduleRunsReconcile },
           { runProductionKernel, startPass },
           { requestDerivedRebuild },
@@ -33,7 +33,7 @@ async function runHourlyBackstop(
           import("~/server/workflows/background-tasks/publish"),
           import("~/server/workflows/purchase-discovery-pass"),
           import("~/server/domains/image-processing/repo/image-processing-ring"),
-          import("~/server/workflows/job-maintenance"),
+          import("~/server/workflows/retention-pass"),
           import("~/server/workflows/runs/reconcile-pass"),
           import("~/server/kernel/api"),
           import("~/server/generic/derived/repo/rebuild"),
@@ -45,17 +45,19 @@ async function runHourlyBackstop(
             const errors: unknown[] = [];
             for (const step of [
               scheduleRunsReconcile,
-              maintainJobs,
+              (db: Parameters<typeof startPass>[0]) =>
+                startPass(db, retentionPass),
               (db: Parameters<typeof startPass>[0]) =>
                 startPass(db, purchaseDiscoveryPass),
               (db: Parameters<typeof requestDerivedRebuild>[0]) =>
                 requestDerivedRebuild(db, { force: false }),
             ])
               await step(db).catch((error: unknown) => errors.push(error));
+            await startPass(db, "email.purchase-discovery");
             await runProductionKernel(db, { budgetMs: 20_000 }).catch(
               (error: unknown) => errors.push(error),
             );
-            await wakeJobs({ source: "cron.backstop" }).catch(
+            await wakeKernel({ source: "cron.backstop" }).catch(
               (error: unknown) => errors.push(error),
             );
             if (errors.length)

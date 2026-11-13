@@ -110,8 +110,8 @@ import { hasLiveRunPassClaim } from "~/server/domains/run/repo/run-execution";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import { mailReadContent } from "./gmail/read-content";
 import {
@@ -614,7 +614,7 @@ async function partitionOwnership(
         // A dispatch accepted before the mailbox pause may not have written
         // coordinatorStartedAt yet. Its live Job must finish before transfer.
         if (await hasLiveRunPassClaim(tx, owner.id))
-          throw new JobDeferredError(
+          throw new WorkDeferredError(
             "Waiting for the queued Mail import's dispatch to finish before transferring its selected sources",
             new Date(Date.now() + 15_000),
             "provider_capacity",

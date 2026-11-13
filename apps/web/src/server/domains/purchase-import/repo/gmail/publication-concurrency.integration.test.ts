@@ -22,9 +22,9 @@ import {
 import { startMailImport } from "~/server/domains/purchase-import/repo/mail-import-run";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { classifyWorkFailure } from "~/server/kernel/failure";
+import { readPasses } from "~/server/kernel/pass.fixtures";
+import { WorkDeferredError } from "~/server/kernel/work-errors";
 import { mailDiscoveryBackpressure } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
@@ -233,7 +233,7 @@ describe("Gmail final publication concurrency", () => {
         expect(f.storage.delete).not.toHaveBeenCalled();
         expect(f.provider.getAttachment).not.toHaveBeenCalled();
         expect(
-          await readJobs(ctx.db, { kind: "purchase.dispatch" }).then((rows) =>
+          await readPasses(ctx.db, { name: "purchase.dispatch" }).then((rows) =>
             rows.map(({ runId }) => ({ runId })),
           ),
         ).toEqual([{ runId: admitted[0]?.runId }]);
@@ -517,9 +517,9 @@ describe("Gmail final publication concurrency", () => {
       await holder;
     }
     expect(findPgError(caught)?.code).toBe("55P03");
-    expect(classifyJobFailure(caught as Error).kind).toBe("transient");
-    expect(deferred).toBeInstanceOf(JobDeferredError);
-    if (!(deferred instanceof JobDeferredError))
+    expect(classifyWorkFailure(caught as Error).kind).toBe("transient");
+    expect(deferred).toBeInstanceOf(WorkDeferredError);
+    if (!(deferred instanceof WorkDeferredError))
       throw new Error("Expected a deferred lock wait");
     expect(deferred.reason).toBe("provider_capacity");
     expect(deferred.until.getTime()).toBeGreaterThan(Date.now() + 10_000);

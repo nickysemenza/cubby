@@ -18,7 +18,14 @@ import { project } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { createKernel, defineAsk, defineModule } from "~/server/kernel/api";
+import {
+  createKernel,
+  defineAsk,
+  defineModule,
+  startPass,
+} from "~/server/kernel/api";
+import { readPasses } from "~/server/kernel/pass.fixtures";
+import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
 import { fieldAnswer, fieldAskInput, type FieldAnswer } from "./ask";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
@@ -48,6 +55,7 @@ describe("fields scope", () => {
       defineModule({
         name: "fields",
         asks: [ask],
+        passes: [fieldsReconcilePass],
         reconcilers: [fieldsReconciler(ask)],
         machinery: fieldsCapabilities(),
       }),
@@ -88,7 +96,14 @@ describe("fields scope", () => {
         outcome: "pick",
       },
     });
+    await startPass(ctx.db, fieldsReconcilePass, {
+      key: "synthetic.field-request",
+      cursor: { key: `project:${id}`, runId: null },
+    });
     await kernel.run(ctx.db, RUN);
+    expect(
+      (await readPasses(ctx.db, { name: "fields.reconcile" }))[0],
+    ).toMatchObject({ doneAt: expect.any(Date), lastError: null });
     // The creator set the kind: a person holds it, so Cubby's confident
     // answer never replaces it.
     expect(await stored(id)).toEqual({ kind: "household", emoji: "🛠️" });

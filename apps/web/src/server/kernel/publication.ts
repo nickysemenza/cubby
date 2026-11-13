@@ -3,12 +3,13 @@ import {
   repositorySnapshotWriteDatabase,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
-
-import type { Fenced } from "./types";
-
-/** Member-initiated work owns no Job: its writes are an ordinary transaction. */
-export const outsideJob =
-  (db: Database): Fenced =>
+export type Publication = <T>(
+  work: (tx: Database) => Promise<T>,
+  options?: { isolationLevel?: "serializable" },
+) => Promise<T>;
+/** A domain command's publication; background callers supply their live claim instead. */
+export const publishTransaction =
+  (db: Database): Publication =>
   (work, options) =>
     (options?.isolationLevel === "serializable"
       ? repositorySnapshotWriteDatabase

@@ -3,22 +3,16 @@ import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
-import {
-  BACKGROUND_TASK_MESSAGE_VERSION,
-  type PermitRecovery,
-} from "@cubby/schemas/queue-messages";
+import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
-import { z } from "zod";
 
 import { afterResponse, getBackgroundQueue } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
-import { backgroundTaskJobKey } from "./kinds";
 
 const logger = createLogger("jobs");
 export interface PublishOptions {
@@ -55,7 +49,7 @@ async function sendWake(
 }
 
 /** Best-effort permit for intent already committed in Postgres. */
-export async function wakeJobs(
+export async function wakeKernel(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
   const queue = options.queue ?? getBackgroundQueue();
@@ -90,7 +84,7 @@ const MAX_WAKE_DELAY_SECONDS = 12 * 3_600;
  */
 export async function wakeAt(
   at: Date,
-  options: PublishOptions & { ring?: boolean; recover?: PermitRecovery },
+  options: PublishOptions & { ring?: boolean },
 ) {
   const delayFromNow = () =>
     Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
@@ -105,7 +99,6 @@ export async function wakeAt(
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
           ...(options.ring ? { ring: true as const } : {}),
-          ...(options.recover ? { recover: options.recover } : {}),
         },
         // A retry still lands when the work is due.
         delaySeconds: delayFromNow(),
@@ -168,12 +161,14 @@ export async function publishBackgroundTasks(
         });
         continue;
       }
-      await enqueueJob(tx, {
-        key: backgroundTaskJobKey(task),
-        kind: task.kind,
-        input: z.json().parse(JSON.parse(JSON.stringify(task))),
+      const { startPass } = await import("~/server/kernel/api");
+      await startPass(tx, "location.inventory", {
+        key: task.locationId,
         runId: task.runId,
-        invalidate: true,
+        cursor: {
+          locationId: task.locationId,
+          ...(task.runId ? { runId: task.runId } : {}),
+        },
       });
     }
     if (
@@ -183,7 +178,7 @@ export async function publishBackgroundTasks(
           task.kind !== "calendar-feed.mark-dirty",
       )
     )
-      await runAfterCommit(tx, () => wakeJobs(options));
+      await runAfterCommit(tx, () => wakeKernel(options));
   });
   return { count: tasks.length };
 }

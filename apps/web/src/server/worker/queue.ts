@@ -75,7 +75,7 @@ export async function runPlacedQueue(
   );
 }
 
-// Each background delivery is one permit to run one unit; the unit's rows own
+// A background batch wakes the bounded kernel runner; the kernel rows own
 // its retries, including when a permit envelope is unreadable.
 export async function handleQueueInvocation(
   batch: QueueDelivery,
@@ -128,14 +128,11 @@ async function runQueueInvocation(
               db,
               { ...batch, queue: QUEUE_NAMES.background },
               {
-                captureException: (error, unit) => {
-                  Sentry.withScope((scope) => {
-                    if (unit) scope.setTag("cubby.background.unit", unit);
-                    Sentry.captureException(error);
-                  });
+                captureException: (error) => {
+                  Sentry.captureException(error);
                 },
                 afterSuccess: async () => {
-                  await recordDatabaseWrite("background-job");
+                  await recordDatabaseWrite("kernel");
                 },
               },
             );

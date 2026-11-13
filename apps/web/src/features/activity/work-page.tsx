@@ -1,20 +1,12 @@
-import {
-  aboutSpanText,
-  type WorkQueueUnit,
-  type WorkQueueWait,
-} from "@cubby/schemas/job";
 import { AGENT_BACKLOG_INPUT } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
-import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { NeedsYou } from "~/entity/machinery/needs-you";
-import { RetryJobsButton } from "~/features/job/retry-jobs";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
-import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatRelative } from "~/lib/date-format";
@@ -42,9 +34,9 @@ function healthSentence(status: WorkStatus, now: number) {
       : `${formatCount(stuck)} background processes are stuck.`;
   if (status.behind)
     return "Catching up. Some totals and search results may lag behind for a while. Nothing to do.";
-  if (!status.lastFinishedAt) return "Background work is healthy.";
+  if (!status.lastFinishedAt) return "No records report stuck kernel work.";
   const finished = formatRelative(status.lastFinishedAt, now);
-  return `Background work is healthy. Last finished ${finished === "now" ? "just now" : finished}.`;
+  return `No records report stuck kernel work. Last finished ${finished === "now" ? "just now" : finished}.`;
 }
 
 function TechnicalDetails({ text }: { text: string }) {
@@ -72,21 +64,10 @@ function TechnicalDetails({ text }: { text: string }) {
 
 function StuckAction({
   action,
-  onRetried,
 }: {
   action: WorkStuckItem["action"];
   onRetried: () => void;
 }) {
-  if (action.type === "retry")
-    return (
-      <RetryJobsButton
-        filter={{
-          kinds: action.kinds,
-          ...(action.needsAttention ? { needsAttention: true } : {}),
-        }}
-        onRetried={onRetried}
-      />
-    );
   if (action.type === "link") {
     const url = new URL(action.href, "https://cubby.invalid");
     return (
@@ -146,7 +127,7 @@ function BackgroundWork({
   return (
     <Section
       headingAs="h2"
-      title="Background work"
+      title="Kernel work"
       count={items.length ? formatCount(items.length) : undefined}
       ruled
     >
@@ -177,158 +158,6 @@ function BackgroundWork({
         </Button>
       ) : null}
     </Section>
-  );
-}
-
-const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
-
-/**
- * When a unit's due work drains at its recent pace: the pace is the whole
- * kind's, so it divides every group's count together. A funding wait ends
- * when the window reopens, whatever the pace, so it is left out.
- */
-function drainText(
-  waits: readonly WorkQueueWait[],
-  perMinute: number,
-  paceMinutes: number,
-): string | null {
-  const due = waits
-    .filter((wait) => wait.reason !== "ai_funding_window")
-    .reduce((sum, wait) => sum + wait.count, 0);
-  if (!due) return null;
-  return perMinute > 0
-    ? `Drains in ${aboutSpanText((due / perMinute) * 60_000)} at the last ${paceMinutes} minutes' pace.`
-    : `Pace unknown: none finished in the last ${paceMinutes} minutes.`;
-}
-
-/** One permit unit: its name, what the last hour did with it, and why its work waits. */
-function QueueUnitRow({
-  unit,
-  now,
-  perMinute,
-  paceMinutes,
-}: {
-  unit: WorkQueueUnit;
-  now: number;
-  /** The unit's stream pace; 0 when none finished or it has no stream. */
-  perMinute: number;
-  paceMinutes: number;
-}) {
-  const page = unit.lastExecution;
-  const drain = drainText(unit.waits, perMinute, paceMinutes);
-  return (
-    <li className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
-      <div className="min-w-0">
-        <p className="font-medium text-foreground-strong">{unit.label}</p>
-        {unit.label === unit.unit ? null : (
-          <p className={`${factClass} break-all`}>{unit.unit}</p>
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className={factClass}>
-          {formatCount(unit.claimed)} claimed · {formatCount(unit.succeeded)}{" "}
-          finished · {formatCount(unit.deferred)} deferred ·{" "}
-          {formatCount(unit.failed)} failed
-        </p>
-        <p className="text-muted-foreground">
-          {unit.oldestDueAt
-            ? `Oldest waiting work came due ${formatRelative(unit.oldestDueAt, now)}.`
-            : "Nothing is due."}{" "}
-          {unit.leased || unit.expiredLeases
-            ? `${countLabel(unit.leased, "lease")} held${
-                unit.expiredLeases
-                  ? `, ${formatCount(unit.expiredLeases)} more expired`
-                  : ""
-              }.`
-            : "No leases held."}
-        </p>
-        {page ? (
-          <p className="text-muted-foreground">
-            Last pass {page.outcome}
-            {page.errorClass ? ` (${page.errorClass})` : ""}{" "}
-            {formatRelative(page.finishedAt, now)}
-            {page.items
-              ? `: ${formatCount(page.items.claimed)} claimed, ${formatCount(page.items.published)} saved, ${formatCount(page.items.failed)} failed.`
-              : "."}
-          </p>
-        ) : null}
-        {unit.waits.map((wait) => (
-          <p key={`${wait.reason}:${wait.runPurpose}`}>
-            {wait.summary}
-            {wait.runIds.map((id) => {
-              const href: string = `/runs/${id}`;
-              return (
-                <Link
-                  key={id}
-                  to={href}
-                  className="ml-2 font-mono text-xs text-link hover:underline"
-                >
-                  {id}
-                </Link>
-              );
-            })}
-          </p>
-        ))}
-        {drain ? <p className="text-muted-foreground">{drain}</p> : null}
-      </div>
-    </li>
-  );
-}
-
-function QueueDetailsBody({ now }: { now: number }) {
-  const activity = useQuery(job.activity.queryOptions(STATUS_INPUT));
-  if (activity.isError && !activity.data)
-    return (
-      <div className="grid gap-1">
-        <p className="text-muted-foreground">Couldn&apos;t read the queue.</p>
-        <TechnicalDetails
-          text={
-            activity.error instanceof Error
-              ? activity.error.message
-              : String(activity.error)
-          }
-        />
-        <div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => void activity.refetch()}
-          >
-            Try again
-          </Button>
-        </div>
-      </div>
-    );
-  const data = activity.data;
-  if (!data) return <p className="text-muted-foreground">Reading the queue…</p>;
-  return (
-    <Stack gap="md">
-      <div>
-        <p className="max-w-prose text-muted-foreground">
-          Each kind of background work over the last{" "}
-          {formatCount(data.windows.outcomeMinutes)} minutes. Counts are Jobs by
-          how they last ended, so a Job that deferred many times counts once.
-        </p>
-        {data.queue.length ? (
-          <ul data-testid="queue-units">
-            {data.queue.map((unit) => (
-              <QueueUnitRow
-                key={unit.unit}
-                unit={unit}
-                now={now}
-                perMinute={
-                  data.streams.find((stream) => stream.kind === unit.unit)
-                    ?.completedPerMinute ?? 0
-                }
-                paceMinutes={data.windows.paceMinutes}
-              />
-            ))}
-          </ul>
-        ) : (
-          <p className="py-2">Nothing ran or waited.</p>
-        )}
-      </div>
-    </Stack>
   );
 }
 
@@ -457,14 +286,9 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
         items={data?.stuck ?? []}
         onRetried={onRetried}
       />
-      {/* Closed by default: the verdict needs no telemetry, and the read runs only once opened. */}
-      <Disclosure summary="Queue details">
-        <QueueDetailsBody now={now} />
-      </Disclosure>
       {fromRetiredJobs ? (
         <p className="max-w-prose text-muted-foreground">
-          The Jobs page is gone. Stuck and failed background work shows under
-          Background work, and a Run's Jobs show on that Run.
+          Open a record's machinery to inspect its scopes, Asks and Passes.
         </p>
       ) : null}
       {status.isError && !data ? (

@@ -2,11 +2,6 @@ import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
 import { locationId, parseEntityRef } from "./identifiers";
 
-export const locationAiJobKey = (
-  kind: "location-ai.inventory.refresh",
-  locationId: string,
-) => `${kind}:${locationId}`;
-
 const taskEnvelopeFields = {
   /** Timestamp retained with the durable admission input. */
   requestedAt: z.iso.datetime(),
@@ -32,7 +27,7 @@ const entityEmbeddingRefreshTaskSchema = z
     return { ...task, entityKind: ref.entity, entityId: ref.id, ref };
   });
 
-export const locationAiInventoryRefreshTaskSchema = z.object({
+const locationAiInventoryRefreshTaskSchema = z.object({
   kind: z.literal("location-ai.inventory.refresh"),
   ...taskEnvelopeFields,
   locationId,
@@ -42,7 +37,7 @@ const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
   /**
-   * Keyset cursor for the sender scan. A full page republishes the same Job
+   * Keyset cursor for the sender scan. A full page resumes the same Pass
    * with the last admitted Email id so the next pass does not reread it.
    */
   senderAfter: z
@@ -65,7 +60,7 @@ const calendarFeedMarkDirtyTaskSchema = z.object({
   reason: z.string().min(1),
 });
 
-/** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
+/** Domain admission inputs. Publishers persist kernel intent; transport carries only a wake. */
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
@@ -74,7 +69,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
 ]);
 
 /** The parsed (branded) task a handler receives. */
-export type BackgroundTask = z.infer<typeof backgroundTaskSchema>;
 /** The task a publisher constructs, before ingress parsing. */
 export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
 
