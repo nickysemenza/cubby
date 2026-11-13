@@ -24,7 +24,6 @@ import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   financialTransactionAllocation,
   purchasePaymentEvidence,
-  transactionImportRecord,
 } from "./schema";
 
 // `edges()` holds each key to its column's literal `Table.column` name, so the
@@ -74,8 +73,6 @@ export const ENTITY_EDGE_OWNERS = {
   },
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
-
-  TransactionImportRecord: { owner: transactionImportRecord.importId },
 
   FinancialEvidenceAlias: {
     excluded: "Retained financial provenance, never current ownership.",

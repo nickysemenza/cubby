@@ -321,63 +321,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       },
     },
   }),
-  transactionImport: edges({
-    "SourceOccurrence.physicalImportId": {
-      column: sourceOccurrence.physicalImportId,
-      role: "history",
-      label: "physical source identities",
-      description:
-        "The original physical collection reserves each positioned occurrence.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Collection retirement never releases its original position identities.",
-      },
-    },
-    "SourceOccurrence.withdrawalImportId": {
-      column: sourceOccurrence.withdrawalImportId,
-      role: "history",
-      label: "withdrawal proofs",
-      description:
-        "The completed provider collection that confirmed source withdrawal.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A retained withdrawal remains evidence after collection retirement.",
-      },
-    },
-    "SourceObservationAnnotation.withdrawalImportId": {
-      column: sourceObservationAnnotation.withdrawalImportId,
-      role: "history",
-      label: "original withdrawal proofs",
-      description:
-        "Original observation withdrawal history preserves its collection identity.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason: "Historical provenance survives collection retirement.",
-      },
-    },
-    "SourceTransactionRecord.batchId": {
-      column: sourceTransactionRecord.batchId,
-      role: "history",
-      label: "first-ingest provenance",
-      description: "The import that first retained a source observation.",
-      liveness: { kind: "must-target-live" },
-    },
-
-    "TransactionImportRecord.importId": {
-      column: transactionImportRecord.importId,
-      role: "history",
-      label: "received record memberships",
-      description:
-        "The retained membership of one resumable transaction import.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Retained import membership survives retirement of its collection.",
-      },
-    },
-  }),
 
   purchase: {
     ...edges({
