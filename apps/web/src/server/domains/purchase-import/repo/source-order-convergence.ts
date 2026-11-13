@@ -33,6 +33,7 @@ import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { normalizeOrderKey } from "./order-identity";
 
@@ -115,6 +116,7 @@ export async function convergeDuplicateSourceOrder(
   actor: ActorContext,
 ) {
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const survivorId = await resolveOrThrow(
       tx,
       "purchase",

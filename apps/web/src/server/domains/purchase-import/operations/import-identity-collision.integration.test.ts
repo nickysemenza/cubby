@@ -7,7 +7,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
-import { advisoryLockKey } from "~/server/db/advisory-lock";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -213,7 +212,7 @@ describe("purchase import identifier collisions", () => {
 
   // Concurrent imports must neither duplicate spend nor deadlock: a canonical
   // identifier written while an import waits must survive it, and two sources
-  // naming the same Products in opposite order must both commit.
+  // naming the same Products in opposite order must serialize and converge after re-preparation.
   async function reuseScope() {
     const { party, vendor: seller } = await memberImportWorld(
       ctx.db,
@@ -416,12 +415,12 @@ describe("purchase import identifier collisions", () => {
           PromiseSettledResult<Awaited<ReturnType<typeof first.commit>>>[]
         >
       | undefined;
-    let statuses: string[] = [];
+    let results: Awaited<NonNullable<typeof commits>> = [];
     try {
       await withTransaction(ctx.db, async (tx) => {
         await lockPartySettlement(tx, f.party.id);
         commits = Promise.allSettled([first.commit(), second.commit()]);
-        const key = sql`hashtextextended(${advisoryLockKey("purchase-settlement", f.party.id)}, 0)`;
+        const key = sql`hashtextextended('cubby:household-write', 0)`;
         await expect
           .poll(
             () =>
@@ -434,9 +433,28 @@ describe("purchase import identifier collisions", () => {
           .toBe(2);
       });
     } finally {
-      if (commits) statuses = (await commits).map(({ status }) => status);
+      if (commits) results = await commits;
     }
-    expect(statuses).toEqual(["fulfilled", "fulfilled"]);
+    expect(results.map((result) => result.status).sort()).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    expect(
+      results.find((result) => result.status === "rejected"),
+    ).toMatchObject({
+      reason: { message: "Prepared target or evidence changed before commit" },
+    });
+    // The winner created the reviewed target: the other source must prepare
+    // against that accepted Purchase before it can add its evidence.
+    const sourceKey = results[0]?.status === "rejected" ? "first" : "second";
+    await memberImport(ctx.db, ctx.actor, {
+      key: "reprepare-concurrent-source",
+      orders: [
+        await f.order(sourceKey, "SYNTHETIC-REUSE-A", f.copper),
+        await f.order(sourceKey, "SYNTHETIC-REUSE-B", f.blue),
+      ],
+      defaultTrade: "other",
+    });
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
     expect(
       await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),

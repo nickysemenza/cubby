@@ -47,6 +47,7 @@ import {
   preparePurchaseImport,
 } from "../operations/import-orders";
 import { startImportRunFixture } from "../service/import-run.fixtures";
+import { lockPartySettlement } from "./retained-settlement";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
@@ -336,6 +337,7 @@ describe("settlement from retained order evidence", () => {
     });
     await charge(card.id, { amount: 20, postedDate: "2026-09-02" });
     const planned = await withTransaction(ctx.db, async (tx) => {
+      await lockPartySettlement(tx, party.id);
       const input = {
         purchaseId,
         ledgerPartyId: party.id,

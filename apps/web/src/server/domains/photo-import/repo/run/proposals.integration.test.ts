@@ -32,6 +32,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntityAs } from "~/server/entity-kernel";
 import { buildCrudServices } from "~/server/http/request-context";
+import { householdWrite } from "~/server/kernel/gate";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createImageFixture,
@@ -304,7 +305,7 @@ describe("photo group proposals", () => {
       }
       let saveOutcome: Promise<unknown> | undefined;
       try {
-        await withTransactionDatabase(ctx.db, async (holder) => {
+        await householdWrite(ctx.db, async (holder) => {
           await getDb(holder)
             .select({ id: vendor.id })
             .from(vendor)
