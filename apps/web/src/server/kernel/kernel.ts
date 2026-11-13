@@ -50,6 +50,7 @@ import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
 import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
+import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
 import { reconcileNow, runKernel } from "./runner";
 import { wakeAfterCommit } from "./wake";
 
@@ -136,6 +137,10 @@ export type Kernel = {
       availableAt?: Date;
     },
   ): Promise<void>;
+  repointOwnedReference(
+    tx: Database,
+    request: OwnedReferenceRepoint,
+  ): Promise<number>;
   /** The batched list binding: stage, actor, first gap and ETA for a page. */
   listRows(
     db: Database,
@@ -241,6 +246,8 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
     approveDriftClass: (db, actor, kind) =>
       approveDriftClass(db, bound, actor, kind),
     startPass,
+    repointOwnedReference: (tx, request) =>
+      repointOwnedReference(tx, bound, request),
     listRows: (db, capability, ids) =>
       loadMachineryRows(db, bound, capability, ids),
     run: (db, options) => runKernel(db, bound, options),

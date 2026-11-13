@@ -57,6 +57,13 @@ export function askMemberGap(
     until: null,
     actions,
     inputHash: ask.inputHash,
+    askState: ask.cancelled
+      ? "abandoned"
+      : ask.state === "unknown"
+        ? "unknown"
+        : ask.state === "sent"
+          ? "sent"
+          : "queued",
   });
   if (ask.cancelled)
     return gap(`${label}, which was given up`, [

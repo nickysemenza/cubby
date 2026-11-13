@@ -30,6 +30,7 @@ import type { ApprovalOutcome } from "./drift";
 import type { MergeVerdict } from "./identity";
 import { productionKernel } from "./kernel";
 import type { MachineryListRow } from "./projection";
+import type { OwnedReferenceRepoint } from "./repoint";
 
 export {
   defineAsk,
@@ -247,3 +248,12 @@ export async function runProductionKernel(
 ): Promise<number> {
   return (await productionKernel()).run(db, options);
 }
+
+/** Repoint a reconciler-owned foreign key inside a merge/removal policy transaction. */
+export async function repointOwnedReference(
+  tx: Database,
+  request: OwnedReferenceRepoint,
+): Promise<number> {
+  return (await productionKernel()).repointOwnedReference(tx, request);
+}
+export type { OwnedReferenceRepoint } from "./repoint";

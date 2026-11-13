@@ -424,6 +424,11 @@ async function applyScope(
       : undefined;
     const member = ask ? askMemberGap(ask, gap.input, gap.since) : null;
     if (member) gaps[index] = member;
+    else if (ask)
+      gaps[index] = {
+        ...gap,
+        askState: ask.state === "sent" ? "sent" : "queued",
+      };
   }
 
   // Downstream readers of the output run again; this scope never does.

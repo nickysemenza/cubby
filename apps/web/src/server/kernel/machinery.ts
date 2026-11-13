@@ -525,6 +525,15 @@ export async function machinery(
         const state = stateOf(scope);
         return {
           ...gap,
+          askState: ask
+            ? ask.cancelled
+              ? "abandoned"
+              : ask.state === "unknown"
+                ? "unknown"
+                : ask.state === "sent"
+                  ? "sent"
+                  : "queued"
+            : null,
           queue,
           attempts: ask
             ? {

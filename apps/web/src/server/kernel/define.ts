@@ -265,7 +265,12 @@ export type GapOptions = {
 
 /** The reconciler's pure context: no database, clock or network. */
 export interface Pure {
-  answer<I, O>(kind: AskKind<I, O>, input: I): AnsweredValue<O> | Missing;
+  /** `request: false` reads an existing answer without owing a producer call. */
+  answer<I, O>(
+    kind: AskKind<I, O>,
+    input: I,
+    options?: { request?: boolean },
+  ): AnsweredValue<O> | Missing;
   /**
    * The decision in force: by field (assignment, veto), by the other subject
    * (identity), or for the subject alone (rejection).
