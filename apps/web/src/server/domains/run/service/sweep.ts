@@ -21,7 +21,7 @@ import type { StepDriversFor } from "./run-step-registry";
 
 /**
  * Starts a Sweep: the declared steps of each family in scope, run by the
- * universal Job. A scheduled Sweep that found nothing ends routine.
+ * universal task. A scheduled Sweep that found nothing ends routine.
  */
 export async function startSweep(
   db: Database,

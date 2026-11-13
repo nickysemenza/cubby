@@ -1,19 +1,9 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import {
-  type transferPairLeg,
-  transferPairJudgment,
-} from "@cubby/schemas/transfer-pair-suggestion";
 import { onlineManager } from "@tanstack/react-query";
 import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
-import type { z } from "zod";
 
-import type { JobListOut, JobLogsOut } from "~/contracts/job.contract";
-import type {
-  RunDecisionsOut,
-  RunDetailStepsOut,
-} from "~/contracts/run-detail.contract";
 import { runDetailContract } from "~/contracts/run-detail.contract";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
@@ -32,191 +22,6 @@ const run = entityReadFixture(entityFieldEnvelopeSchemas.run.detail, {
   status: "running",
   purpose: "sweep",
 });
-
-const step = (
-  key: string,
-  position: number,
-  patch: Partial<RunDetailStepsOut["steps"][number]>,
-): RunDetailStepsOut["steps"][number] => ({
-  key,
-  label: key,
-  position,
-  state: "queued",
-  found: 0,
-  done: 0,
-  failed: 0,
-  skipped: 0,
-  left: 0,
-  pages: 0,
-  pausedReason: null,
-  pausedUntil: null,
-  startedAt: null,
-  endedAt: null,
-  errors: [],
-  meta: null,
-  ...patch,
-});
-
-const steps: RunDetailStepsOut = {
-  input: {
-    kind: "sweep",
-    families: [{ family: "statement_transaction", scope: {} }],
-  },
-  purpose: "sweep",
-  status: "running",
-  steps: [
-    step("orphans", 1, {
-      label: "Orphan cleanup",
-      state: "done",
-      found: 40,
-      done: 40,
-      pages: 1,
-      startedAt: ago(30),
-      endedAt: ago(28),
-    }),
-    step("statement_holds", 2, {
-      label: "Statements: vanished holds",
-      state: "running",
-      found: 1_200,
-      done: 300,
-      skipped: 60,
-      // 1,200 − 300 done − 60 skipped − 12 removed.
-      left: 828,
-      pages: 3,
-      startedAt: ago(20),
-      meta: {
-        input: {
-          mode: "count",
-          total: 1_200,
-          boundary: "posted before Mar 2",
-          countedAt: ago(20),
-        },
-        tallies: { published: 2, removed: 12 },
-        reasons: { no_candidate: 240, not_transfer_like: 108 },
-        timing: { lastPageMs: 10_000, totalMs: 30_000 },
-        page: {
-          timings: { selection: 1_000, preparation: 6_100, publication: 2_900 },
-          queries: 106,
-          concurrency: { publication: 1 },
-        },
-      },
-    }),
-    step("statement_generate", 3, { label: "Statements: generate" }),
-  ],
-};
-
-type LegInput = z.input<typeof transferPairLeg>;
-const leg = (side: "out" | "in", patch: Partial<LegInput>): LegInput => ({
-  key: `ftx:FTX-4K7${side === "out" ? "M" : "N"}`,
-  origin: "transaction",
-  accountId: side === "out" ? "FAC-4K7M" : "FAC-2222",
-  accountName: side === "out" ? "Checking ••01" : "Savings ••07",
-  accountKind: "bank_account",
-  owner: { id: "LPY-4K7M", name: "Member A" },
-  transactionId: side === "out" ? "FTX-4K7M" : "FTX-ABCD",
-  charge: null,
-  amount: side === "out" ? 250 : -250,
-  date: "2026-02-03",
-  merchant: null,
-  description: "Synthetic transfer",
-  kind: "account_transfer",
-  signals: { kind: "account_transfer", providerCategory: null },
-  movementLabel: null,
-  movement: "explicit",
-  refs: [],
-  overlaps: [],
-  ...patch,
-});
-const judgment = (patch: Partial<z.input<typeof transferPairJudgment>>) =>
-  transferPairJudgment.parse({
-    key: "ftx:FTX-4K7M~ftx:FTX-ABCD",
-    outflow: leg("out", {}),
-    inflow: leg("in", {}),
-    amount: 250,
-    date: "2026-02-03",
-    dateGapDays: 0,
-    move: "internal",
-    competitors: [],
-    blockers: [],
-    reasons: [],
-    clean: true,
-    apply: { available: true, reason: null },
-    ...patch,
-  });
-const decisions: RunDecisionsOut = {
-  total: 2,
-  rows: [
-    {
-      id: "00000000-0000-4000-8000-0000000000a1",
-      family: "transfer_pair",
-      status: "applied",
-      active: true,
-      judgment: judgment({}),
-      producer: { kind: "sweep", model: null, revision: "r1" },
-      createdAt: ago(10),
-      updatedAt: ago(9),
-    },
-    {
-      id: "00000000-0000-4000-8000-0000000000b2",
-      family: "transfer_pair",
-      status: "pending",
-      active: true,
-      judgment: judgment({
-        inflow: leg("in", {
-          accountName: "Brokerage ••15",
-          owner: { id: "LPY-4K7N", name: "Member B" },
-        }),
-        move: "between_owners",
-        blockers: ["owners_differ"],
-        reasons: ["The accounts belong to different people."],
-        clean: false,
-      }),
-      producer: { kind: "sweep", model: null, revision: "r1" },
-      createdAt: ago(8),
-      updatedAt: ago(8),
-    },
-  ],
-};
-
-const jobs: JobListOut = {
-  primary: {
-    id: "00000000-0000-4000-8000-0000000000c3",
-    key: "run:RUN-4K7M",
-    kind: "run.execute",
-    state: "running",
-    generation: 4,
-    attempts: 1,
-    maxAttempts: 3,
-    priority: 0,
-    lastExecution: null,
-    waitReason: null,
-    waitUntil: null,
-    availableAt: ago(20),
-    leaseExpiresAt: ago(-4),
-    error: null,
-    cursor: null,
-    createdAt: ago(20),
-    updatedAt: ago(0),
-    lane: "server",
-    waitingOn: {
-      reason: "leased",
-      lane: "server",
-      executor: "Cubby server",
-      executorDeviceId: null,
-      leasedAt: ago(1),
-      leaseExpiresAt: ago(-4),
-      expired: false,
-    },
-    runId: null,
-  },
-  groups: [],
-  rollup: null,
-};
-
-const logs: JobLogsOut = {
-  status: "not_configured",
-  dashboardUrl: "https://dash.cloudflare.com/",
-};
 
 const answers = new Map<string, OperationWireValue>([
   [
@@ -244,10 +49,6 @@ const answers = new Map<string, OperationWireValue>([
       recent: [],
     },
   ],
-  ["runDetail.steps", steps],
-  ["runDetail.decisions", decisions],
-  ["job.list", jobs],
-  ["job.logs", logs],
 ]);
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -262,8 +63,6 @@ beforeEach(async () => {
     return { ok: true, data };
   });
 });
-
-/** The three Run slots, as the detail page renders them. */
 
 afterEach(() => {
   restore?.();

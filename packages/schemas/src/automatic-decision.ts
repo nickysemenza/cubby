@@ -11,10 +11,8 @@ import {
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
 
-const automaticDecisionFamily = suggestionFamily;
-
 const automaticDecisionFilters = z.object({
-  family: automaticDecisionFamily.optional(),
+  family: suggestionFamily.optional(),
   recordIds: z
     .array(z.string().min(1))
     .max(SUGGESTION_RECORD_IDS_MAX)
@@ -29,7 +27,7 @@ export const automaticDecisionListInput = automaticDecisionFilters.extend({
 });
 export const automaticDecisionRow = z.object({
   id: suggestionChildHandle,
-  family: automaticDecisionFamily,
+  family: suggestionFamily,
   records: z.array(suggestionRecordRef),
   decision: z.json(),
   summary: z.string(),

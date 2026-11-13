@@ -84,7 +84,7 @@ export const transferPairOverlap = z.object({
 
 const transferPairOwner = ledgerPartyRefOut;
 
-export const transferPairLeg = z.object({
+const transferPairLeg = z.object({
   /** Stable identity: `ftx:<FTX code>`, `stmt:<source>:<chargeKey>` or `cash:<FAC code>:<outflow key>`. */
   key: z.string().min(1),
   origin: transferPairLegOrigin,

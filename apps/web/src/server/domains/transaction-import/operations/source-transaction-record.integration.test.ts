@@ -37,7 +37,7 @@ describe("finance.record evidence admission", () => {
   const ctx = withTestDb();
   it("rolls back captured intent with rejected operation admission without an external writer", async () => {
     const before = await getDb(ctx.db).execute(
-      sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
+      sql`SELECT name, key, xmin::text AS xmin FROM "Pass" ORDER BY name, key`,
       "objects",
     );
     const invalidate = changes.recordChange;
@@ -68,7 +68,7 @@ describe("finance.record evidence admission", () => {
       });
       expect(
         await getDb(ctx.db).execute(
-          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
+          sql`SELECT name, key, xmin::text AS xmin FROM "Pass" ORDER BY name, key`,
           "objects",
         ),
       ).toEqual(before);

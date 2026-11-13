@@ -26,7 +26,6 @@
     "./sha256": "./src/sha256.ts",
     "./text-case": "./src/text-case.ts",
     "./upc": "./src/upc.ts",
-    "./run-page-limits": "./src/run-page-limits.ts",
     "./ai/models": "./src/ai/models.ts",
     "./ai/pricing": "./src/ai/pricing.ts",
     "./ai/funding-refusal": "./src/ai/funding-refusal.ts",
