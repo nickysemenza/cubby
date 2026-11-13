@@ -699,11 +699,16 @@ export type ExternalAskClaim<I> = {
   input: I;
 };
 
-/** Claim one eligible ask for a named executor before handing its command out. */
+/** Claim external work. Replay-safe executors may replace a lapsed token; paid calls keep unknown outcomes. */
 export async function claimExternalAsk<I, O>(
   db: Database,
   kind: AskKind<I, O>,
-  options: { id: string; executor: string; leaseMs: number },
+  options: {
+    id: string;
+    executor: string;
+    leaseMs: number;
+    reclaimExpired?: boolean;
+  },
 ): Promise<ExternalAskClaim<I> | null> {
   if (kind.produce)
     throw new KernelContractError(

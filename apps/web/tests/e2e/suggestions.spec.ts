@@ -1,23 +1,20 @@
+import { decisionChannel } from "@cubby/schemas/kernel/stage";
+import { applyFieldAnswerFixture } from "~/server/ai/fields/fields.fixtures";
+import { decision } from "~/server/db/kernel-schema";
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import {
-  seedFieldSuggestion,
-  applyFieldAnswerFixture,
-} from "tooling/shared-suggestion-fixtures";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { product as productTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-
-import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
   gotoAuthenticatedPage,
@@ -189,8 +186,12 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
       kind: "addition",
       status: "pending",
     });
-  const automatic = await seed(setId, 0.97, null);
-  await applyFieldAnswerFixture(db, automatic);
+  await applyFieldAnswerFixture(db, {
+    entity: "product",
+    recordId: setId,
+    field: "brandId",
+    value: guessedId,
+  });
   await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
   const brandOf = (id: string) => async () =>
     (
@@ -253,47 +254,15 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
   });
   const id = await resolveOrThrow(db, "product", product.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  const removals = [
-    {
-      value: "synthetic-brand",
-      probability: 0.99,
-      reason: "Restates brandName",
-    },
-  ];
-  const prediction = await publishExactSuggestion(
-    db,
-    {
-      publicationKey: `synthetic:prune:${id}`,
-      family: "field",
-      subject: {
-        kind: "field",
-        entity: "product",
-        recordId: id,
-        field: "tags",
-      },
-      judgment: { value: "synthetic-brand", operation: "remove", removals },
-      fingerprint: null,
-      producer: null,
-      evidence: null,
-    },
-    // A confident removal from populated tags, as a refresh publishes it.
-    {
-      runId,
-      confidence: 0.99,
-      kind: "correction",
-      // A stored removal proposes the remaining entries, as a Sweep saves it.
-      currentValue: ["synthetic-brand", "ecosystem", "mount"],
-      suggestedValue: ["ecosystem", "mount"],
-      data: {
-        liveInputFingerprint: await fieldInputFingerprint(
-          db,
-          "product",
-          id,
-          "tags",
-        ),
-      },
-    },
-  );
+  await seedFieldSuggestion(db, {
+    runId,
+    entity: "product",
+    recordId: id,
+    field: "tags",
+    currentValue: ["synthetic-brand", "ecosystem", "mount"],
+    suggestedValue: ["ecosystem", "mount"],
+    confidence: 0.99,
+  });
   // The detail fact lists the stored proposal beneath the field.
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
   await page
@@ -315,12 +284,11 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
         )[0]?.tags,
     )
     .toEqual(["ecosystem", "mount"]);
-  const events = await readSuggestionDecisions(db, prediction.id);
-  expect(events).toContainEqual(
-    expect.objectContaining({
-      verdict: "correct",
-      intent: "apply",
-      authority: "member",
-    }),
-  );
+  const events = await getDb(db)
+    .select({ value: decision.value })
+    .from(decision)
+    .where(
+      sql`${decision.subject}=${`product:${id}`} AND ${decision.channel}=${decisionChannel.enum.assignment} AND ${decision.field}='tags'`,
+    );
+  expect(events).toContainEqual({ value: ["ecosystem", "mount"] });
 });

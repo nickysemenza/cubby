@@ -377,7 +377,12 @@ export async function claimAsk(
 export async function claimExternalAskRow(
   db: Database,
   kind: AskKind,
-  options: { id: string; executor: string; leaseMs: number },
+  options: {
+    id: string;
+    executor: string;
+    leaseMs: number;
+    reclaimExpired?: boolean;
+  },
 ): Promise<{
   id: string;
   token: string;
@@ -401,9 +406,13 @@ export async function claimExternalAskRow(
       }>(sql`
         UPDATE "Ask" SET state=${ASK.sent}, "sentAt"=now(), "claimToken"=${token}::uuid,
           "claimPartition"=${kind.claimLimit?.partition ?? null},
+          attempts=attempts+CASE WHEN state<>${ASK.queued} THEN 1 ELSE 0 END,
           "claimDeadline"=clock_timestamp()+${leaseInterval(options.leaseMs)}, executor=${options.executor}, "waitCause"=NULL
-        WHERE id=${options.id}::uuid AND feature=${kind.feature} AND state=${ASK.queued} AND "cancelledAt" IS NULL
-          AND "availableAt"<=clock_timestamp() AND attempts<"maxAttempts" AND "claimToken" IS NULL
+        WHERE id=${options.id}::uuid AND feature=${kind.feature} AND "cancelledAt" IS NULL
+          AND "availableAt"<=clock_timestamp() AND attempts<"maxAttempts"
+          AND ((state=${ASK.queued} AND "claimToken" IS NULL) OR
+            (${options.reclaimExpired === true} AND "claimToken" IS NOT NULL AND
+              ((state=${ASK.sent} AND "claimDeadline"<=clock_timestamp()) OR state=${ASK.unknown})))
         RETURNING id, input, ${isoText(sql`"claimDeadline"`)} AS deadline`);
       return result.rows[0] ?? null;
     },

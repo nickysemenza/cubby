@@ -15,14 +15,18 @@ const AUTOMATIC_BAR = 0.85;
 /** A revision of Cubby's own value must beat the runner-up by this much. */
 const REPLACEMENT_MARGIN = 0.2;
 
-export type FieldValue = string | number | boolean | null;
+export type FieldValue = string | number | boolean | string[] | null;
 
 /** Cubby's answer for one field: the proposal, or null when it proposed nothing. */
 type FieldProposal = {
-  value: string;
+  value: string | string[];
   label: string | null;
   confidence: number;
-  runnerUp: { value: string; label: string | null; confidence: number } | null;
+  runnerUp: {
+    value: string | string[];
+    label: string | null;
+    confidence: number;
+  } | null;
 };
 
 export type FieldInputs = {

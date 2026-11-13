@@ -19,7 +19,7 @@ export type FieldAskInput = z.infer<typeof fieldAskInput>;
 
 const proposalValue = z.object({
   /** The value as the column stores it (a reference's id). */
-  value: z.string(),
+  value: z.union([z.string(), z.array(z.string())]),
   label: z.string().nullable(),
   confidence: z.number().min(0).max(1),
 });

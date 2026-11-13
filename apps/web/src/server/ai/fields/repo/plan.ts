@@ -2,13 +2,13 @@
  * Which columns the `fields` scope reads and writes, from the manifest's
  * `control.suggest` declarations (ADR 0029 section 2, ADR 0028 item 1).
  *
- * A field takes part when it is a `fill` target with a physical column on its
+ * A field takes part when it is a declared target with a physical column on its
  * entity's table. Only `apply: "auto"` columns are written; `review` and
  * `offer` columns are read, so the scope can show their answers. The money
  * lane's entities (Purchase, Expense, FinancialTransaction) and every declared
  * spending review stay with the money lane: their columns are written by the
  * booking, import and spending-review writers, which only the money lane may
- * move. A prune target is a removal proposal and never applies. A field with an inheritance mode column (Task project) stays
+ * move. A prune target proposes the remaining array and always requires a member decision. A field with an inheritance mode column (Task project) stays
  * authored: the assignment channel has no `inherit` kind to record a
  * person's choice to inherit. A NOT NULL column without a default (Location
  * type, Purchase vendor, Expense cost type) stays authored: its creator
@@ -40,6 +40,7 @@ export type FieldsChanges = Readonly<Record<string, AuditFieldChange>>;
 
 export type FieldPlan = {
   readonly key: string;
+  readonly mode: "fill" | "prune";
   readonly apply: SuggestApplyPolicy;
   /** Other records inherit it: Cubby fills it once and never revises it. */
   readonly fillOnly: boolean;
@@ -95,7 +96,7 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
   };
   const fields: FieldPlan[] = models.flatMap((field) => {
     const suggest = field.control?.suggest;
-    if (!suggest || suggest.mode !== "fill" || !has(field.key)) return [];
+    if (!suggest || !has(field.key)) return [];
     const column = Object.entries(columns).find(
       ([key]) => key === field.key,
     )?.[1];
@@ -105,12 +106,18 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
       "resolution" in field ? field.resolution : null;
     if (resolution && "inheritMode" in resolution && resolution.inheritMode)
       return [];
-    const basis = suggest.basis.filter(has);
+    const basis = [
+      ...new Set([
+        ...suggest.basis,
+        ...(suggest.mode === "prune" ? [field.key] : []),
+      ]),
+    ].filter(has);
     const apply = suggestApplyPolicy(entity, field.key);
     return [
       {
         key: field.key,
-        apply,
+        mode: suggest.mode,
+        apply: suggest.mode === "prune" ? "review" : apply,
         fillOnly: "fillOnly" in suggest && suggest.fillOnly === true,
         undecided:
           "undecided" in suggest && typeof suggest.undecided === "string"
@@ -207,6 +214,7 @@ export function fieldReviewPlan(
     ref && "entity" in ref && isShortcodeEntity(ref.entity) ? ref.entity : null;
   const descriptor: FieldPlan = {
     key: field,
+    mode: model.control?.suggest?.mode ?? "fill",
     apply: "offer",
     fillOnly: false,
     undecided: null,

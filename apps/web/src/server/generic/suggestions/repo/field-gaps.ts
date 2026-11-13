@@ -22,7 +22,7 @@ const row = z.object({
   model: z.string().nullable(),
   createdAt: z.coerce.date(),
   proposal: z.object({
-    value: z.string(),
+    value: z.union([z.string(), z.array(z.string())]),
     confidence: z.number(),
     runnerUp: z
       .object({ value: z.string(), confidence: z.number() })

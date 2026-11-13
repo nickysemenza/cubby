@@ -106,3 +106,49 @@ export async function setFieldsFixture(
     await holdFieldsValues(entity, values).settle(tx, systemActor(), id);
   });
 }
+
+/** A local field producer runs the real reconciler and apply gate, without inference. */
+export async function applyFieldAnswerFixture(
+  db: Database,
+  input: {
+    entity: string;
+    recordId: string;
+    field: string;
+    value: string;
+    confidence?: number;
+  },
+) {
+  const { fieldAsk } = await import("./ask");
+  const { fieldsReconciler, fieldsCapabilities } = await import("./reconciler");
+  const { createKernel, defineModule } = await import("~/server/kernel/api");
+  const ask = {
+    ...fieldAsk,
+    admit: async () => {},
+    produce: async (request: import("./ask").FieldAskInput) => ({
+      output: {
+        proposal:
+          request.recordId === input.recordId && request.field === input.field
+            ? {
+                value: input.value,
+                label: null,
+                confidence: input.confidence ?? 0.99,
+                runnerUp: null,
+              }
+            : null,
+        outcome: "synthetic",
+      },
+    }),
+  };
+  const kernel = createKernel([
+    defineModule({
+      name: "fields",
+      asks: [ask],
+      reconcilers: [fieldsReconciler(ask)],
+      machinery: fieldsCapabilities(),
+    }),
+  ]);
+  await kernel.reconcileNow(db, [
+    { kind: "fields", key: `${input.entity}:${input.recordId}` },
+  ]);
+  await kernel.run(db, { budgetMs: 5000 });
+}

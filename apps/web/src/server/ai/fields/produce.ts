@@ -128,21 +128,39 @@ export async function produceFieldAnswer(
       : (outcome?.reason ?? "none");
   const storedValue = async (value: string) =>
     references ? await storedReferenceId(db, references, value) : value;
+  const currentEntries = input.row[input.field];
+  const removed = new Set(
+    suggestion?.removals.map((entry) => entry.value) ?? [],
+  );
   const proposal =
-    suggestion?.value && suggestion.operation === "set"
+    suggestion?.operation === "remove" &&
+    removed.size &&
+    Array.isArray(currentEntries)
       ? {
-          value: await storedValue(suggestion.value),
-          label: suggestion.label,
-          confidence: suggestion.probability ?? 0,
-          runnerUp: suggestion.alternatives[0]
-            ? {
-                value: await storedValue(suggestion.alternatives[0].value),
-                label: suggestion.alternatives[0].label,
-                confidence: suggestion.alternatives[0].probability,
-              }
-            : null,
+          value: currentEntries.filter(
+            (entry): entry is string =>
+              typeof entry === "string" && !removed.has(entry),
+          ),
+          label: null,
+          confidence: Math.min(
+            ...suggestion.removals.map((entry) => entry.probability),
+          ),
+          runnerUp: null,
         }
-      : null;
+      : suggestion?.value && suggestion.operation === "set"
+        ? {
+            value: await storedValue(suggestion.value),
+            label: suggestion.label,
+            confidence: suggestion.probability ?? 0,
+            runnerUp: suggestion.alternatives[0]
+              ? {
+                  value: await storedValue(suggestion.alternatives[0].value),
+                  label: suggestion.alternatives[0].label,
+                  confidence: suggestion.alternatives[0].probability,
+                }
+              : null,
+          }
+        : null;
   return {
     output: { proposal, outcome: outcomeName },
     model,

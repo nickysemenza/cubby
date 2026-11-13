@@ -1,3 +1,4 @@
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { expense } from "~/server/db/schema";
@@ -73,7 +74,7 @@ test.describe("split and attach, with the server's rules", () => {
     await expect(page).toHaveURL(new RegExp(`/purchases/${target.shortcode}`));
 
     const live = await getDb(db)
-      .select({ cost: expense.cost })
+      .select({ cost: minorToDollarsSql(expense.cost, "float8") })
       .from(expense)
       .where(and(eq(expense.purchaseId, target.id), isNull(expense.deletedAt)));
     expect(live.map((row) => row.cost).sort()).toEqual([10, 20]);

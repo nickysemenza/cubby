@@ -1180,8 +1180,10 @@ submissions and displayed outcome. `ImageProcessingEvent` retains append-only
 execution receipts and diagnostics read by member reports, devices and rendition
 cleanup. The Ask owns the claim: the device wire's `jobId` names the Ask and
 `attemptId` names its token. Renewal, release, cancellation and replay share the
-kernel lifecycle. An unknown sent Ask waits for its existing executor or a
-member; it cannot be automatically dispatched again.
+kernel lifecycle. A paid cloud Ask with an unknown outcome waits for its existing
+executor or a member. A device image pull may explicitly replace an expired
+claim: each token owns a distinct output key, and only the current token can
+adopt a result. Reclaiming spends an attempt and invalidates the prior token.
 
 `capabilities.images` is `false`, `"gallery"` (ordered `EntityAttachment` rows, bound by
 `galleryBinding(entity)` in `server/db/helpers/crud.ts`), `"cover"` (one `coverImageId`, Cookbook) or

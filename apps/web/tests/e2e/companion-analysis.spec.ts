@@ -1,3 +1,4 @@
+import { ask } from "~/server/db/kernel-schema";
 import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -301,11 +302,16 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     jobId: expired.command.jobId,
     attemptId: expired.command.attemptId,
   };
-  const expire = () =>
-    database
+  const expire = async () => {
+    await database
+      .update(ask)
+      .set({ claimDeadline: sql`now() - interval '1 second'` })
+      .where(eq(ask.id, expired.command.jobId));
+    await database
       .update(imageProcessingJob)
       .set({ leaseUntil: sql`now() - interval '1 second'` })
-      .where(eq(imageProcessingJob.id, expired.command.jobId));
+      .where(eq(imageProcessingJob.askId, expired.command.jobId));
+  };
   expect(
     renewCompanionImageProcessingOutput.parse(await post("renew", renewal)),
   ).toMatchObject({ ok: true });
@@ -319,7 +325,7 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     await tx
       .select({ id: imageProcessingJob.id })
       .from(imageProcessingJob)
-      .where(eq(imageProcessingJob.id, expired.command.jobId))
+      .where(eq(imageProcessingJob.askId, expired.command.jobId))
       .for("update");
     expect(
       pullCompanionImageProcessingOutput.parse(await post("pull", { hello })),

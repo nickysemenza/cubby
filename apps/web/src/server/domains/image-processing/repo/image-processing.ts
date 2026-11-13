@@ -796,6 +796,8 @@ export async function claimImageProcessingJob(
         id,
         executor: input.deviceId ?? "cloud",
         leaseMs: input.leaseMs,
+        // Device image work has token-fenced, replaceable outputs; reclaiming it cannot repeat a paid call.
+        reclaimExpired: devicePull,
       });
       if (!claim) return null;
       const attemptId = claim.token;

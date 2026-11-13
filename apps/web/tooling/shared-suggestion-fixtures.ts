@@ -124,7 +124,9 @@ export async function seedFieldSuggestion(
     projection.suggestedValue == null
       ? null
       : {
-          value: await stored(String(projection.suggestedValue)),
+          value: Array.isArray(projection.suggestedValue)
+            ? projection.suggestedValue
+            : await stored(String(projection.suggestedValue)),
           label: null,
           confidence: projection.confidence ?? 0.8,
           runnerUp: projection.runnerUpValue
@@ -174,7 +176,10 @@ export async function seedFieldSuggestion(
           {
             kind: "decision",
             input: "Review field",
-            actor: { kind: "member" },
+            actor: "you",
+            since: null,
+            until: null,
+            inputHash: row.inputHash,
             actions: [
               {
                 channel: "assignment",
@@ -182,6 +187,7 @@ export async function seedFieldSuggestion(
                 subject,
                 field: projection.field,
                 value: proposal.value,
+                label: "Use this value",
               },
             ],
           },

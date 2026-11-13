@@ -346,7 +346,7 @@ async function load(
               plan.fields
                 .filter(
                   (field) =>
-                    field.apply !== "review" &&
+                    (field.apply !== "review" || field.mode === "prune") &&
                     (!assignments.has(`${entity}:${item.id}:${field.key}`) ||
                       assignments.get(`${entity}:${item.id}:${field.key}`) ===
                         "release") &&
@@ -379,7 +379,10 @@ async function load(
 }
 
 const blank = (value: unknown) =>
-  value === null || value === undefined || value === "";
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (Array.isArray(value) && value.length === 0);
 
 /**
  * The `fields` reconciler and its column declarations, built from the
@@ -431,7 +434,8 @@ export function fieldsReconciler(
       const subject = recordSubject(input.entity, input.id);
       const target = writeRefs.get(input.entity);
       for (const field of plan.fields) {
-        if (field.apply === "review") continue;
+        if (field.mode === "prune" && blank(row[field.key])) continue;
+        if (field.apply === "review" && field.mode !== "prune") continue;
         const assignment = c.decision("assignment", subject, field.key);
         const vetoed = (
           c.decision("veto", subject, field.key)?.values ?? []

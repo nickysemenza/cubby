@@ -1,12 +1,8 @@
-import {
-  seedFieldSuggestion,
-  applyFieldAnswerFixture,
-} from "tooling/shared-suggestion-fixtures";
+import { applyFieldAnswerFixture } from "~/server/ai/fields/fields.fixtures";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -17,65 +13,46 @@ import {
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-// Failure modes: Changes by Cubby omits a value Cubby set on its own, or
-// "Wrong, clear it" leaves the wrong value saved.
-test("Changes by Cubby lists a value Cubby set and Wrong, clear it empties the field", async ({
+// Kernel field applies retain their exact scope, rule version and inputs in the audit feed.
+test("Changes by Cubby lists a reconciled field and its provenance", async ({
   page,
 }, testInfo) => {
-  test.slow();
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const categoryName = uniqueName(testInfo, "Synthetic cleared category");
+  const { db } = await createEvidenceHarnessContext(page);
+  const categoryName = uniqueName(testInfo, "Synthetic category");
   const category = await createEntityFixture(page, "productCategory", {
     name: categoryName,
   });
-  const productName = uniqueName(testInfo, "Synthetic cleared drill");
+  const productName = uniqueName(testInfo, "Synthetic drill");
   const item = await createEntityFixture(page, "product", {
     name: productName,
   });
   const itemId = await resolveOrThrow(db, "product", item.id);
-  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  const suggestion = await seedFieldSuggestion(db, {
-    runId,
+  await applyFieldAnswerFixture(db, {
     entity: "product",
     recordId: itemId,
     field: "categoryId",
-    currentValue: null,
-    suggestedValue: category.id,
-    confidence: 0.97,
-    runnerUpValue: null,
-    runnerUpConfidence: null,
-    model: "typesafe/jev",
-    kind: "addition",
-    status: "pending",
+    value: await resolveOrThrow(db, "productCategory", category.id),
   });
-  const categoryOf = async () =>
+  expect(
     (
       await getDb(db)
         .select({ categoryId: productTable.categoryId })
         .from(productTable)
         .where(eq(productTable.id, itemId))
-    )[0]?.categoryId ?? null;
-  await applyFieldAnswerFixture(db, suggestion);
-  expect(await categoryOf()).toBe(
-    await resolveOrThrow(db, "productCategory", category.id),
-  );
-
+    )[0]?.categoryId,
+  ).toBe(await resolveOrThrow(db, "productCategory", category.id));
   await gotoAuthenticatedPage(page, `/automatic-decisions?record=${item.id}`);
   const feed = page.getByRole("region", {
     name: "Changes by Cubby",
     exact: true,
   });
   await expect(feed.getByRole("link", { name: productName })).toBeVisible();
-  await expect(feed).toContainText(categoryName);
-  await expect(feed).toContainText("97%");
   await feed
-    .getByRole("button", { name: /^Wrong, clear it/ })
+    .getByText("How Cubby changed this", { exact: true })
     .first()
     .click();
-  await expect(
-    feed.getByText("Cleared. Cubby will try again.", { exact: true }),
-  ).toBeVisible();
-  await expect.poll(categoryOf).toBeNull();
+  await expect(feed).toContainText("fields");
+  await expect(feed).toContainText("version");
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.

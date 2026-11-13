@@ -54,7 +54,7 @@ test("connected household supports wardrobe screenshots and garden exploration",
     path: screenshot,
     contentType: "image/png",
   });
-  await gotoAuthenticatedPage(page, `/locations/${garden.shortcode}#work`);
+  await gotoAuthenticatedPage(page, `/locations/${garden.shortcode}#plantings`);
   await expect(page.locator("#plantings")).toBeVisible();
   await expect(page.locator("#garden-entries")).toBeVisible();
   await expect(
