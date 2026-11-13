@@ -146,8 +146,15 @@ async function computeBatchInPhase(
   const started = performance.now();
   const ledger = new KeyLedger();
   const scopeKeys = scopes.map((scope) => scope.key);
-  const revisions = (keys: readonly Key[]) =>
-    mode.locked ? lockKeyRevs(q, keys) : readKeyRevs(q, keys);
+  const loadedRevisions = new Map<Key, number>();
+  const revisions = async (keys: readonly Key[]) => {
+    const revs = await (mode.locked
+      ? lockKeyRevs(q, keys)
+      : readKeyRevs(q, keys));
+    for (const [key, rev] of revs)
+      if (!loadedRevisions.has(key)) loadedRevisions.set(key, rev);
+    return revs;
+  };
   const reads = createReads(q, reconciler, scopeKeys, ledger, mode);
   const released = new Set(
     (mode.released ?? []).map(
@@ -293,6 +300,13 @@ async function computeBatchInPhase(
     scopes.map(async (scope): Promise<Computed> => {
       const result = results.get(scope.key)!;
       const tracked = usedBy.get(scope.key)!;
+      ledger.record(scope.key, loadedRevisions, [
+        ...[...tracked.subjects].map(decisionKey),
+        ...[...tracked.answers.keys()].flatMap((text) => {
+          const known = answers.get(text);
+          return known ? [answerKey(known.inputHash)] : [];
+        }),
+      ]);
       const keys = ledger.of(scope.key);
       const missing: MissingAnswer[] = [];
       const used: UsedAnswer[] = [];

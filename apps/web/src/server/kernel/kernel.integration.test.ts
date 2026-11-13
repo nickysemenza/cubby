@@ -1763,6 +1763,52 @@ describe("evidence-facts kernel", () => {
     expect(calls).toBe(1);
   });
 
+  it("fences a shared decision first requested by another scope in an earlier round", async () => {
+    const shared = "synthetic:shared";
+    const trigger = "synthetic:trigger";
+    const reconciler = defineReconciler({
+      scope: "fixture.sharedDecision",
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        if (key === "a" || c.decision("assignment", trigger, "ready"))
+          c.decision("assignment", shared, "value");
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "sharedDecision", reconcilers: [reconciler] }),
+    ]);
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        subject: trigger,
+        field: "ready",
+        kind: "set",
+        value: true,
+      },
+    ]);
+    const computed = await computeBatch(
+      repositoryQueries(ctx.db),
+      kernel.registry,
+      reconciler,
+      [
+        { kind: reconciler.scope, key: "a" },
+        { kind: reconciler.scope, key: "b" },
+      ],
+      { locked: false, hideBaseline: false },
+    );
+    expect(computed.map((item) => [...item.keys.keys()])).toEqual([
+      expect.arrayContaining([`decision:${shared}`]),
+      expect.arrayContaining([`decision:${shared}`]),
+    ]);
+  });
+
   it("reports the final outcome once when a synchronous batch invalidates a sibling scope", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [
