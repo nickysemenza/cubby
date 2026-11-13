@@ -7,6 +7,8 @@ import {
 import { z } from "zod";
 
 import { vendorSchemaBindings } from "~/entity/generated/entity-schema-bindings.vendor.gen";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   asActor,
   defineRepository,
@@ -18,16 +20,14 @@ import {
   deleteVendors,
   mergeVendors,
   updateVendor,
-  VENDOR_DELETE_EDGE_POLICY,
-  VENDOR_MERGE_EDGE_POLICY,
   vendorScaffold,
 } from "./vendor";
 
 export const vendorRepository = defineRepository("vendor", {
   schemas: vendorSchemaBindings,
   lifecycle: {
-    delete: VENDOR_DELETE_EDGE_POLICY,
-    merge: VENDOR_MERGE_EDGE_POLICY,
+    delete: DECLARED_EDGE_DELETE_POLICIES.vendor,
+    merge: DECLARED_EDGE_MERGE_POLICIES.vendor,
   },
   scaffold: vendorScaffold,
   create: asActor(createVendor),

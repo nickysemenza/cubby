@@ -91,10 +91,6 @@ export const ENTITY_EDGE_OWNERS = {
 
   // An Image job's attempts, events and submission memberships belong to the job.
 
-  ExternalSource: {
-    excluded: "Registry metadata naming the vendor a source slug is.",
-  },
-
   // A reviewed association names the Email whose evidence it settles.
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
 

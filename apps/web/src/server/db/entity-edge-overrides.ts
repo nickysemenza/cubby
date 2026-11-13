@@ -25,10 +25,8 @@ import {
   entityAttachment,
   entityExternalId,
   entityLink,
-  externalSource,
   expense,
   expenseAttribution,
-  financialAccount,
   financialTransaction,
   financialTransactionAllocation,
   importPreparedOrder,
@@ -37,21 +35,15 @@ import {
   emailClassificationObservation,
   emailFinancialAssociation,
   emailRetrievalFailure,
-  run as runTable,
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
-  orderMail,
-  photoGroupProposal,
-  product,
-  purchase,
   purchasePaymentEvidence,
   sourceTransactionRecord,
   sourceObservationAnnotation,
   sourceOccurrence,
   financialEvidenceAlias,
   transactionImportRecord,
-  vendorAccount,
 } from "./schema";
 
 /** `${pgTable name}.${column name}` — e.g. `"EntityAttachment.imageId"`. */
@@ -479,110 +471,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  vendor: edges({
-    "Shipment.carrierId": {
-      column: shipment.carrierId,
-      role: "reference",
-      label: "carried shipments",
-      description: "The carrier's existing Vendor identity.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupProposal.productCreateBrandId": {
-      column: photoGroupProposal.productCreateBrandId,
-      role: "metadata",
-      label: "photo Brand proposals",
-      description:
-        "The Brand selected for a proposed Product creation or Brand update.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Product.brandId": {
-      column: product.brandId,
-      role: "reference",
-      label: "branded products",
-      description:
-        "The marketed brand identity, independently of purchased-from sellers and commodity status.",
-      liveness: { kind: "must-target-live" },
-    },
-    "SourceOrderObservation.vendorId": {
-      column: sourceOrderObservation.vendorId,
-      role: "history",
-      label: "observed Vendors",
-      description:
-        "The original Vendor named by an immutable source extraction.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "vendor logos",
-      description:
-        "An optional brand mark for this vendor; absence falls back to the vendor monogram.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialAccount.providerVendorId": {
-      column: financialAccount.providerVendorId,
-      role: "reference",
-      label: "stored-value accounts",
-      description:
-        "A gift card or store-credit balance this vendor owes a member or the household.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Run.vendorId": {
-      column: runTable.vendorId,
-      role: "history",
-      label: "import runs",
-      description:
-        "A durable import run tied directly to its vendor when no vendor account supplies that scope.",
-      liveness: { kind: "must-target-live" },
-    },
-    "VendorAccount.vendorId": {
-      column: vendorAccount.vendorId,
-      role: "reference",
-      label: "vendor accounts",
-      description: "A member-owned login for this vendor.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ExternalSource.vendorId": {
-      column: externalSource.vendorId,
-      role: "metadata",
-      label: "identifier sources",
-      description:
-        "A registered identifier source (a catalog, an export) that is this vendor; it names the vendor, it does not depend on it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportPreparedOrder.vendorId": {
-      column: importPreparedOrder.vendorId,
-      role: "history",
-      label: "prepared import orders",
-      description:
-        "The Vendor a purchase import named while preparing an order.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Preparation is an immutable capture; commit refuses a deleted or merged Vendor and the order must be prepared again.",
-      },
-    },
-    "OrderMail.vendorId": {
-      column: orderMail.vendorId,
-      role: "history",
-      label: "order mail",
-      description: "Normalized mailbox evidence classified to this vendor.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Purchase.vendorId": {
-      column: purchase.vendorId,
-      role: "transaction",
-      label: "purchases",
-      description:
-        "A vendor order/receipt event recorded against this vendor (identified by orderId when one is issued), not the spend ledger or a card charge — the Vendor ──< Purchase ──< Expense chain.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   purchase: {
     ...edges({
       "Shipment.purchaseId": {
