@@ -1,10 +1,6 @@
+import { renderLinkCatalog } from "./entities/render/link-catalog.ts";
 import { renderDeclaredEdges } from "./entities/render/declared-edges.ts";
-import {
-  collectEdgeDeclarations,
-  validateEdgeDeclarations,
-} from "./entities/edges.ts";
 import { rawSource } from "./artifacts.ts";
-import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -105,6 +101,13 @@ const main = async () => {
   // Raw schema constructors consume shortcode schemas. Bootstrap their registry
   // before loading any compiler or renderer that can reach those constructors.
   await settle(await renderShortcodeRegistryArtifacts());
+  const { declaredLinkEdges } =
+    await import("@cubby/schemas/entity-definitions/link-edges");
+  await settle([renderLinkCatalog(declaredLinkEdges)]);
+  const { modulesChildren } =
+    await import("@cubby/schemas/compiler/child-tables/modules");
+  const { collectEdgeDeclarations, validateEdgeDeclarations } =
+    await import("./entities/edges.ts");
   const { validateEntityDeclarationImportBoundary } =
     await import("./entities/import-boundary.ts");
   const { validateRetainedTableBoundary } =
@@ -138,7 +141,10 @@ const main = async () => {
   );
   const { entities, declarations } = await loadEntityDeclarationBundle();
   validateConnectedViews(entities);
-  const edges = collectEdgeDeclarations(declarations);
+  const edges = [
+    ...collectEdgeDeclarations(declarations),
+    ...declaredLinkEdges,
+  ];
   const legacyPaths = new Set(
     entities.flatMap((entity) =>
       entity.relations.flatMap((relation) =>
@@ -155,7 +161,16 @@ const main = async () => {
   ]);
   await settle([
     ...renderEntityArtifacts(entities, modulesChildren),
-    ...renderDeclaredEdges(edges, entities, modulesChildren),
+    ...renderDeclaredEdges(
+      edges,
+      entities,
+      modulesChildren,
+      new Set(
+        declarations
+          .filter((declaration) => declaration.edgeSource === "declaration")
+          .map((declaration) => String(declaration.key)),
+      ),
+    ),
     renderOverrideComparisonArtifact(declarations, entities),
     ...renderRelationArtifacts(entities),
     ...renderKernelBindingsArtifacts(entities, edges),

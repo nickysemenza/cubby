@@ -2900,8 +2900,12 @@ accepts them in `edges`, and a domain module can register the same `EdgeDefiniti
 physical declaration names its endpoints, forward and inverse cardinality, foreign-key column or
 link kind, row ownership, per-end meaning and liveness, and per-end delete and merge policies.
 A custom disposition names an exported policy function through `handler`; null uses the ordinary
-disposition executor. Unsupported operations carry an explicit reason. A composition names paths
-through physical declarations and inherits their ownership and policies without claiming storage.
+disposition executor. Unsupported operations carry an explicit reason. A composition names typed provenance sources, including local paths, queries, derived filters and
+external references, and inherits their ownership and policies without claiming storage.
+Polymorphic foreign keys name their entity-kind partition; a storage claim includes that partition.
+Link declarations own both endpoint meanings and collision policies; their catalog is a generated
+bootstrap leaf. Custom merge callbacks are named factory members whose typed context carries the
+transaction, plan, actor and result state.
 A relationship callback can return `{ edges }`; `r.declare(handle.named(...), inverseKey)` builds
 a composition from the typed handle and emits its navigation metadata from that declaration.
 Inverse endpoints are checked by TypeScript and generation. Generation rejects repeated physical

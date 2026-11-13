@@ -32,7 +32,6 @@ import {
   job,
   aiEvaluationRequest,
   auditLog,
-  cookbook,
   device,
   entityAttachment,
   entityExternalId,
@@ -80,8 +79,6 @@ import {
   product,
   productCategory,
   spendingCategory,
-  productConversionCoverage,
-  productUnitMappings,
   project,
   purchase,
   purchasePaymentEvidence,
@@ -952,119 +949,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  product: {
-    ...edges({
-      "ImportSourceProduct.productId": {
-        column: importSourceProduct.productId,
-        role: "history",
-        label: "original order lines",
-        description:
-          "The exact original ordered line identifies this Product without implying an inventory movement or financial amount.",
-        liveness: { kind: "must-target-live" },
-      },
-      "MealFoodEntry.productId": {
-        column: mealFoodEntry.productId,
-        role: "reference",
-        label: "meal food entries",
-        description:
-          "A recorded product amount whose nutrition is recalculated from the current product source while its entered quantity remains fixed.",
-        liveness: { kind: "must-target-live" },
-      },
-      "ProductUnitMapping.productId": {
-        column: productUnitMappings.productId,
-        role: "metadata",
-        label: "unit mappings",
-        description:
-          "A hand-entered conversion (volume ↔ weight ↔ price) for this product; authored data, not evidence of purchase.",
-        liveness: { kind: "must-target-live" },
-      },
-      "InventoryEntry.productId": {
-        column: inventoryEntry.productId,
-        role: "acquisition",
-        label: "inventory entries",
-        description:
-          "A shelf or bin count of this product currently on hand — proof it was actually acquired, not just cataloged.",
-        liveness: { kind: "must-target-live" },
-      },
-      "EntityAttachment.entityId": {
-        column: entityAttachment.entityId,
-        role: "media",
-        label: "product photos",
-        description:
-          "A photo or manual attachment for this product; says nothing about ownership.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Expense.productId": {
-        column: expense.productId,
-        role: "acquisition",
-        label: "expenses",
-        description:
-          "A spend-ledger line recording money spent acquiring this product — the source of its net cost and owned/sold window; an orphaned product would silently corrupt that derivation with no restore path.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Task.subjectProductId": {
-        column: task.subjectProductId,
-        role: "history",
-        label: "tasks referencing them",
-        description:
-          "Durable work history performed on this product (e.g. a repair or maintenance task); deleting the subject would leave that history nameless.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Location.productId": {
-        column: location.productId,
-        role: "reference",
-        label: "locations",
-        description:
-          "A Location that IS an instance of this Product — the bin, tote or rack itself, not stock held in it. Deleting the Product would leave a `furniture` location (whose type only means an instance of a Product) with no identity at all.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Cookbook.productId": {
-        column: cookbook.productId,
-        role: "reference",
-        label: "cookbooks",
-        description:
-          "A Cookbook whose physical copy this Product is — the book on the shelf behind the imported EPUB. Deleting the Product leaves the cookbook and its recipes intact; only the shelf link goes.",
-        liveness: { kind: "must-target-live" },
-      },
-      "ProductConversionCoverage.productId": {
-        column: productConversionCoverage.productId,
-        role: "metadata",
-        label: "conversion coverage projections",
-        description:
-          "A rebuildable conversion-graph projection owned by this product.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Planting.sourceProductId": {
-        column: planting.sourceProductId,
-        role: "history",
-        label: "source products",
-        description:
-          "A planting can retain the seed packet, seedling, or plant it came from.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Planting provenance retains its recorded source Product through a merge tombstone.",
-        },
-      },
-      "Device.productId": {
-        column: device.productId,
-        role: "reference",
-        label: "devices",
-        description: "A device whose physical hardware is this Product.",
-        liveness: { kind: "must-target-live" },
-      },
-      "PhotoGroupProposal.productId": {
-        column: photoGroupProposal.productId,
-        role: "reference",
-        label: "photo group proposals",
-        description:
-          "A reviewed photo group that chose, or committed to, this Product.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...linkEdgesFor("product"),
-    ...externalIdEdgesFor("product"),
-  },
+
   spendingCategory: edges({
     "ProductCategory.spendingCategoryId": {
       column: productCategory.spendingCategoryId,

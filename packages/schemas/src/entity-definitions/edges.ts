@@ -5,7 +5,10 @@ import {
   operationDispositionSchema,
 } from "../entity-integrity";
 
-import { entityRelationMetadataSchema } from "./relationship-shape";
+import {
+  entityRelationMetadataSchema,
+  entityRelationSourceMetadataSchema,
+} from "./relationship-shape";
 
 const text = z.string().min(1);
 const column = z
@@ -31,6 +34,8 @@ const semantics = z.strictObject({
 });
 const policyReference = z.strictObject({
   module: text,
+  member: text.optional(),
+  argument: text.optional(),
   export: text.regex(
     /^[A-Za-z_$][A-Za-z0-9_$]*$/,
     "Expected an exported function name",
@@ -41,7 +46,10 @@ export type EdgePolicyReference = z.infer<typeof policyReference>;
 const operationPolicy = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("disposition"),
-    disposition: operationDispositionSchema,
+    disposition: operationDispositionSchema.extend({
+      reason: text.optional(),
+      label: text.optional(),
+    }),
     /** Null means the ordinary disposition executor; custom policy names a function. */
     handler: policyReference.nullable(),
   }),
@@ -74,6 +82,8 @@ const physicalStorage = z.discriminatedUnion("kind", [
     kind: z.literal("foreign-key"),
     column,
     constrained: z.boolean(),
+    partition: z.strictObject({ column, value: text }).optional(),
+    ordinary: z.literal(true).optional(),
   }),
   z.strictObject({
     kind: z.literal("link"),
@@ -101,13 +111,10 @@ const physical = z.strictObject({
   ...identity,
   storage: physicalStorage,
   ownership,
+  note: text.optional(),
   fromEnd: semantics,
   toEnd: semantics,
   policies: z.strictObject({ from: endpointPolicies, to: endpointPolicies }),
-});
-const pathStep = z.strictObject({
-  edge: text,
-  direction: z.enum(["outgoing", "incoming"]),
 });
 const composition = z.strictObject({
   ...identity,
@@ -123,15 +130,7 @@ const composition = z.strictObject({
     .optional(),
   storage: z.strictObject({
     kind: z.literal("composition"),
-    sources: z
-      .array(
-        z.strictObject({
-          key: text,
-          label: text,
-          path: z.array(pathStep).nonempty(),
-        }),
-      )
-      .nonempty(),
+    sources: z.array(entityRelationSourceMetadataSchema).nonempty(),
   }),
   /** Compositions read their physical sources and introduce no second lifecycle policy. */
   ownership: z.strictObject({ kind: z.literal("sources") }),
@@ -174,8 +173,6 @@ export const defineRelationshipEdge = (
     sources,
     ...navigation
   } = relation;
-  if (provenance.kind !== "local-path")
-    throw new Error(`${from}.${key} requires a local path.`);
   return defineEdge({
     key: `${from}.${key}`,
     from,
@@ -194,19 +191,10 @@ export const defineRelationshipEdge = (
         {
           key: relation.sourceKey ?? "direct",
           label: relation.label,
-          path: provenance.steps,
+          provenance,
+          ...(_inverse ? { inverse: _inverse } : {}),
         },
-        ...(sources ?? []).map((source) => {
-          if (source.provenance.kind !== "local-path")
-            throw new Error(
-              `${from}.${key}.${source.key} requires a local path.`,
-            );
-          return {
-            key: source.key,
-            label: source.label,
-            path: source.provenance.steps,
-          };
-        }),
+        ...(sources ?? []),
       ],
     },
     ownership: { kind: "sources" },
@@ -226,34 +214,15 @@ export const edgeRelationship = (
     return [];
   const [primary, ...sources] = edge.storage.sources;
   if (!primary) throw new Error(`${edge.key} requires a primary source.`);
-  const reverse = (path: typeof primary.path) =>
-    [...path]
-      .reverse()
-      .map((step) => ({
-        edge: step.edge,
-        direction:
-          step.direction === "outgoing"
-            ? ("incoming" as const)
-            : ("outgoing" as const),
-      }));
   return [
     {
       ...edge.navigation,
       key: edge.key.slice(edge.from.length + 1),
       target: edge.to,
       cardinality: edge.cardinality,
-      provenance: { kind: "local-path", steps: primary.path },
-      inverse: { steps: reverse(primary.path) },
-      ...(sources.length
-        ? {
-            sources: sources.map((source) => ({
-              key: source.key,
-              label: source.label,
-              provenance: { kind: "local-path" as const, steps: source.path },
-              inverse: { steps: reverse(source.path) },
-            })),
-          }
-        : {}),
+      provenance: primary.provenance,
+      ...(primary.inverse ? { inverse: primary.inverse } : {}),
+      ...(sources.length ? { sources } : {}),
     },
   ];
 };

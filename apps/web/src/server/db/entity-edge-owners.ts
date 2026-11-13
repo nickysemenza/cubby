@@ -23,23 +23,16 @@ import { DECLARED_EDGE_OWNERS } from "./generated/declared-edges.gen";
 import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   emailFinancialAssociation,
-  entityAttachment,
-  entityLink,
   expenseAttribution,
   financialTransactionAllocation,
   imageDerivative,
   imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmissionJob,
-  mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
-  photoGroupProposal,
   photoRunImage,
   runStep,
-  productConversionCoverage,
-  entityExternalId,
-  productUnitMappings,
   purchasePaymentEvidence,
   recipeSection,
   recipeSectionIngredient,
@@ -88,18 +81,15 @@ const WORKFLOW =
 
 export const ENTITY_EDGE_OWNERS = {
   ...DECLARED_EDGE_OWNERS,
-  EntityAttachment: { ownerIdentity: entityAttachment.entityId },
-  EntityLink: { linkFrom: entityLink.fromEntityId },
+
   ExpenseAttribution: { owner: expenseAttribution.expenseId },
   FinancialTransactionAllocation: {
     owner: financialTransactionAllocation.transactionId,
   },
-  MealFoodEntry: { owner: mealFoodEntry.mealId },
+
   MealRecipe: { owner: mealRecipe.mealId },
   MealRecipePortion: { owner: mealRecipePortion.mealId },
-  ProductConversionCoverage: { owner: productConversionCoverage.productId },
-  EntityExternalId: { ownerIdentity: entityExternalId.entityId },
-  ProductUnitMapping: { owner: productUnitMappings.productId },
+
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
   ShipmentObservation: { excluded: WORKFLOW },
   ShipmentSourcePackage: { excluded: WORKFLOW },
@@ -122,7 +112,7 @@ export const ENTITY_EDGE_OWNERS = {
   // A run's target list is how a run relates to what it imported.
   PhotoRunImage: { owner: photoRunImage.runId },
   RunStep: { owner: runStep.runId },
-  PhotoGroupProposal: { owner: photoGroupProposal.runId },
+
   ImageDerivative: { owner: imageDerivative.imageId },
   // An Image job's attempts, events and submission memberships belong to the job.
   ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
@@ -153,7 +143,7 @@ export const ENTITY_EDGE_OWNERS = {
   ImportSourceClaim: { excluded: WORKFLOW },
   Job: { excluded: WORKFLOW },
   ImportSourceOrder: { excluded: WORKFLOW },
-  ImportSourceProduct: { excluded: WORKFLOW },
+
   LedgerSourceClaim: { excluded: WORKFLOW },
   MailboxCursor: { excluded: WORKFLOW },
   OrderMail: { excluded: WORKFLOW },

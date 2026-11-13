@@ -87,6 +87,10 @@ import {
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import {
+  DECLARED_EDGE_DELETE_POLICIES,
+  DECLARED_EDGE_DELETE_HOOKS,
+} from "~/server/db/generated/declared-edges.gen";
+import {
   assertNoDependents,
   associatePendingImages,
   databaseForTransaction,
@@ -193,11 +197,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { liveAliasSqlText } from "~/server/lib/live-row";
 
 import { assertProductCategoryChange } from "./classification";
-import {
-  PRODUCT_DELETE_EDGE_POLICY,
-  isRetainingEdgeKey,
-  type ProductRetainingEdgeKey,
-} from "./edge-roles";
+import { type ProductRetainingEdgeKey } from "./edge-roles";
 import {
   splitProductImages,
   mapProductExternalIds,
@@ -2593,29 +2593,30 @@ const PRODUCT_RETAINING_DEPENDENTS = {
  * column alone is not the rule. The decision still keys off the delete
  * policy's own `block` effect.
  */
-const PRODUCT_BLOCK_GUARDS = Object.fromEntries(
-  Object.entries(PRODUCT_RETAINING_DEPENDENTS).flatMap(([key, fetch]) => {
-    if (!isRetainingEdgeKey(key)) return [];
-    const disposition = PRODUCT_DELETE_EDGE_POLICY[key];
-    if (disposition.effect !== "block") return [];
-    const guard = async (tx: DrizzleTransaction, ids: ProductId[]) =>
-      assertNoDependents({
-        offendingParentIds: (await fetch(tx, ids)).map((d) => d.productId),
-        fetchNames: (failedIds) =>
-          tx.query.product.findMany({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, inArray(product.id, failedIds)),
-            },
-            columns: { name: true },
-          }),
-        reason: disposition.reason,
-        message: (count, names) =>
-          `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
-      });
-    return [[key, guard]];
-  }),
-);
+export const refuseProductDeletion = async (
+  tx: DrizzleTransaction,
+  ids: ProductId[],
+  edge: keyof typeof PRODUCT_RETAINING_DEPENDENTS,
+): Promise<void> => {
+  const disposition = DECLARED_EDGE_DELETE_POLICIES.product[edge];
+  if (disposition.effect !== "block")
+    throw new Error(`Not a blocking Product edge: ${edge}`);
+  const fetch = PRODUCT_RETAINING_DEPENDENTS[edge];
+  await assertNoDependents({
+    offendingParentIds: (await fetch(tx, ids)).map((row) => row.productId),
+    fetchNames: (failedIds) =>
+      tx.query.product.findMany({
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, inArray(product.id, failedIds)),
+        },
+        columns: { name: true },
+      }),
+    reason: disposition.reason,
+    message: (count, names) =>
+      `Cannot delete ${count} product(s): ${names} have ${disposition.label}. Remove them first.`,
+  });
+};
 
 /**
  * Product deletes take uuids. Returns the R2 keys of images the cascade
@@ -2641,10 +2642,10 @@ export const deleteProducts = (
     );
     const removal = await deleteByPolicy(tx, {
       entity: "product",
-      policy: PRODUCT_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.product,
       ids,
       actor,
-      overrides: PRODUCT_BLOCK_GUARDS,
+      overrides: DECLARED_EDGE_DELETE_HOOKS.product.overrides,
       beforeDelete: (tx, ids) =>
         lockExternalIdentifierParents(
           tx,

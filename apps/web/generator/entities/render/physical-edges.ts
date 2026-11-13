@@ -38,6 +38,7 @@ export const renderEntityEdgesArtifact = (
     ...{
 ${defaults.join("\n")}
     },
+    ...DECLARED_EDGE_ORDINARY[${JSON.stringify(target.key)}],
     ...ENTITY_EDGE_OVERRIDES[${JSON.stringify(target.key)}],
   },`;
   });
@@ -45,6 +46,7 @@ ${defaults.join("\n")}
     relativePath: "apps/web/src/server/db/generated/entity-edges.gen.ts",
     source: rawSource(
       generatedHeader +
+        'import { DECLARED_EDGE_ORDINARY } from "./declared-edges.gen";\n' +
         'import type { Entity } from "@cubby/schemas/entity";\n' +
         'import { ENTITY_EDGE_OVERRIDES, type EntityEdge } from "../entity-edge-overrides";\n' +
         (imports.size

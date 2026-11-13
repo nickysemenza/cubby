@@ -35,9 +35,19 @@ export const validateEdgeDeclarations = (
       );
     const storage = edge.storage;
     if (storage.kind === "composition") continue;
+    if (
+      storage.kind === "foreign-key" &&
+      storage.partition &&
+      (storage.partition.column !==
+        `${storage.column.split(".")[0]}.entityKind` ||
+        storage.partition.value !== edge.to)
+    )
+      throw new EntityDeclarationError(
+        `${edge.key}: partition must identify its declared endpoint kind.`,
+      );
     const key =
       storage.kind === "foreign-key"
-        ? storage.column
+        ? `${storage.column}${storage.partition ? `[${storage.partition.column}=${storage.partition.value}]` : ""}`
         : `EntityLink[${storage.linkKind}]`;
     const owner = storageOwners.get(key);
     if (owner !== undefined)
@@ -46,7 +56,23 @@ export const validateEdgeDeclarations = (
       );
     storageOwners.set(key, edge.key);
   }
-  const byKey = new Map(edges.map((edge) => [edge.key, edge]));
+  const paths = edges.flatMap((edge) => {
+    if (edge.storage.kind === "composition") return [];
+    if (edge.storage.kind === "link")
+      return [
+        {
+          key: `EntityLink[${edge.storage.linkKind}].from`,
+          from: `row:EntityLink[${edge.storage.linkKind}]`,
+          to: edge.from,
+        },
+        {
+          key: `EntityLink[${edge.storage.linkKind}].to`,
+          from: `row:EntityLink[${edge.storage.linkKind}]`,
+          to: edge.to,
+        },
+      ];
+    return [{ key: edge.storage.column, from: edge.from, to: edge.to }];
+  });
   for (const edge of edges) {
     if (edge.storage.kind !== "composition") continue;
     const sourceKeys = new Set<string>();
@@ -56,31 +82,31 @@ export const validateEdgeDeclarations = (
           `${edge.key}: duplicate source ${source.key}.`,
         );
       sourceKeys.add(source.key);
-      let endpoint = edge.from;
-      let hasLegacyStep = false;
-      for (const step of source.path) {
-        const referenced = byKey.get(step.edge);
-        if (!referenced && legacyPaths.has(step.edge)) {
-          hasLegacyStep = true;
+      if (source.provenance.kind !== "local-path") continue;
+      let reachable = new Set<string>([edge.from]);
+      let legacy = false;
+      for (const step of source.provenance.steps) {
+        const candidates = paths.filter((path) => path.key === step.edge);
+        if (!candidates.length && legacyPaths.has(step.edge)) {
+          legacy = true;
           continue;
         }
-        if (!referenced || referenced.storage.kind === "composition")
+        const next = new Set(
+          candidates.flatMap((path) => {
+            const from = step.direction === "outgoing" ? path.from : path.to;
+            const to = step.direction === "outgoing" ? path.to : path.from;
+            return legacy || reachable.has(from) ? [to] : [];
+          }),
+        );
+        if (!next.size)
           throw new EntityDeclarationError(
-            `${edge.key}.${source.key}: ${step.edge} must name a physical edge.`,
+            `${edge.key}.${source.key}: ${step.edge} does not continue the declared path.`,
           );
-        const from =
-          step.direction === "outgoing" ? referenced.from : referenced.to;
-        const to =
-          step.direction === "outgoing" ? referenced.to : referenced.from;
-        if (!hasLegacyStep && from !== endpoint)
-          throw new EntityDeclarationError(
-            `${edge.key}.${source.key}: ${step.edge} starts at ${from}, expected ${endpoint}.`,
-          );
-        endpoint = to;
+        reachable = next;
       }
-      if (!hasLegacyStep && endpoint !== edge.to)
+      if (!legacy && !reachable.has(edge.to))
         throw new EntityDeclarationError(
-          `${edge.key}.${source.key} ends at ${endpoint}, expected ${edge.to}.`,
+          `${edge.key}.${source.key} does not reach ${edge.to}.`,
         );
     }
   }
@@ -103,7 +129,7 @@ export const renderEdgePolicyChecks = (
     ...new Map(
       edges
         .flatMap(policyReferences)
-        .map((ref) => [`${ref.module}#${ref.export}`, ref]),
+        .map((ref) => [`${ref.module}#${ref.export}#${ref.member ?? ""}`, ref]),
     ).values(),
   ].sort((a, b) =>
     `${a.module}#${a.export}`.localeCompare(`${b.module}#${b.export}`),
@@ -118,6 +144,6 @@ export const renderEdgePolicyChecks = (
     (refs.length
       ? "\ntype CallableEdgePolicy<T extends (...args: never[]) => unknown> = T;\n"
       : "\n") +
-    `export type EntityEdgePolicyChecks = [${refs.map((_, index) => `CallableEdgePolicy<typeof edgePolicy${index}>`).join(", ")}];\n`
+    `export type EntityEdgePolicyChecks = [${refs.map((ref, index) => `CallableEdgePolicy<${ref.member ? `ReturnType<typeof edgePolicy${index}>[${JSON.stringify(ref.member)}]` : `typeof edgePolicy${index}`}>`).join(", ")}];\n`
   );
 };
