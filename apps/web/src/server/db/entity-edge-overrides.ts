@@ -19,7 +19,6 @@ import type { AnyColumn } from "drizzle-orm";
 import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import {
   shipment,
-  shipmentSourceCapture,
   entityAttachment,
   entityExternalId,
   entityLink,
@@ -28,10 +27,7 @@ import {
   financialTransactionAllocation,
   importPreparedOrder,
   sourceOrderObservation,
-  emailCandidateObservation,
-  emailClassificationObservation,
   emailFinancialAssociation,
-  emailRetrievalFailure,
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
@@ -379,68 +375,6 @@ export const ENTITY_EDGE_OVERRIDES = {
         kind: "allow-target-deleted",
         reason:
           "Retained import membership survives retirement of its collection.",
-      },
-    },
-  }),
-
-  email: edges({
-    "ShipmentSourceCapture.emailId": {
-      column: shipmentSourceCapture.emailId,
-      role: "history",
-      label: "shipment source captures",
-      description: "Retained reference to the original shipping Email.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Shipment provenance retains the Email identity after its removal.",
-      },
-    },
-    "EmailCandidateObservation.emailId": {
-      column: emailCandidateObservation.emailId,
-      role: "history",
-      label: "candidate observations",
-      description:
-        "Immutable evidence about the original Email, retained through its tombstone.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-    "EmailClassificationObservation.emailId": {
-      column: emailClassificationObservation.emailId,
-      role: "history",
-      label: "classification observations",
-      description:
-        "Immutable evidence about the original Email, retained through its tombstone.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-    "EmailFinancialAssociation.emailId": {
-      column: emailFinancialAssociation.emailId,
-      role: "history",
-      label: "financial associations",
-      description:
-        "A member-reviewed link from this Email's evidence to a settlement transaction, retained through its tombstone.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
-      },
-    },
-    "EmailRetrievalFailure.emailId": {
-      column: emailRetrievalFailure.emailId,
-      role: "history",
-      label: "retrieval failures",
-      description:
-        "Immutable evidence about the original Email, retained through its tombstone.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
       },
     },
   }),

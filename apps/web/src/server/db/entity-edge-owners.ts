@@ -75,8 +75,6 @@ export const ENTITY_EDGE_OWNERS = {
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
 
-  ShipmentSourceCapture: { excluded: WORKFLOW },
-
   TransactionImportRecord: { owner: transactionImportRecord.importId },
 
   FinancialEvidenceAlias: {
