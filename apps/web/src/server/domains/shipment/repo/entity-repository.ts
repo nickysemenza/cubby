@@ -2,7 +2,6 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { type ShipmentUpdateData } from "@cubby/schemas/entities/shipment";
 import { shipmentRawOut as rawShipmentOut } from "@cubby/schemas/entity-contracts/shipment";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 
 import {
@@ -10,7 +9,7 @@ import {
   shipmentSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.shipment.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   withTransactionDatabase,
@@ -100,24 +99,9 @@ const updateShipment = defineMutationWriter({
     }),
 });
 
-const SHIPMENT_DELETE_EDGE_POLICY = {
-  "ShipmentObservation.shipmentId": {
-    code: "preserve-tracking-observations",
-    effect: "preserve",
-    description:
-      "A retired package keeps its retained observations and capture memberships.",
-  },
-  "ShipmentSourcePackage.shipmentId": {
-    code: "preserve-source-package-binding",
-    effect: "preserve",
-    description:
-      "A retired package keeps its source binding, so replay cannot recreate it.",
-  },
-} as const satisfies IncomingEdgePolicy<"shipment", OperationDisposition>;
-
 export const shipmentRepository = defineRepository("shipment", {
   schemas: shipmentSchemaBindings,
-  lifecycle: { delete: SHIPMENT_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.shipment },
   scaffold: shipmentScaffold,
   delete: async (ctx, ids) => {
     if (ctx.actorContext.runId || ctx.actorContext.channel === "system")
@@ -127,7 +111,7 @@ export const shipmentRepository = defineRepository("shipment", {
       );
     const { policyDelete } =
       await import("~/server/generic/removal/repo/dispositions");
-    return policyDelete("shipment", SHIPMENT_DELETE_EDGE_POLICY)(
+    return policyDelete("shipment", DECLARED_EDGE_DELETE_POLICIES.shipment)(
       ctx.db,
       ids,
       ctx.actorContext,

@@ -19,9 +19,7 @@ import type { AnyColumn } from "drizzle-orm";
 import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import {
   shipment,
-  shipmentObservation,
   shipmentSourceCapture,
-  shipmentSourcePackage,
   entityAttachment,
   entityExternalId,
   entityLink,
@@ -215,30 +213,7 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 export const ENTITY_EDGE_OVERRIDES = {
   // The generated vocabulary owns empty groups; explicit semantics retain literal edge keys.
   ...mapRecord(ENTITY_KEYS, () => ({})),
-  shipment: edges({
-    "ShipmentObservation.shipmentId": {
-      column: shipmentObservation.shipmentId,
-      role: "history",
-      label: "tracking observations",
-      description: "Retained tracking evidence for this package.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A retired package keeps its source observations; package merging is unsupported.",
-      },
-    },
-    "ShipmentSourcePackage.shipmentId": {
-      column: shipmentSourcePackage.shipmentId,
-      role: "history",
-      label: "source package identities",
-      description: "Stable source package associations for replay.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "A retired package's binding stops replay recreating it; package merging is unsupported.",
-      },
-    },
-  }),
+
   sourceTransactionRecord: edges({
     "SourceObservationAnnotation.supersededByObservationId": {
       column: sourceObservationAnnotation.supersededByObservationId,
