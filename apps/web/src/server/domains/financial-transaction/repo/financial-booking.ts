@@ -71,6 +71,7 @@ import {
   digestValue,
   freshBookingLineages,
 } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import { statementBookingRows } from "~/server/domains/financial-transaction/policy/booking-rows";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -1069,6 +1070,53 @@ type FinancialBookingResult = {
  * previewed them in this transaction after the same source locks, and then
  * write their Purchases, Expenses, allocations and fingerprints as one set.
  */
+function bookingRowIntents(review: FinancialBookingPreview) {
+  return statementBookingRows({
+    charge: {
+      transactionId: review.transactionId,
+      amountMinor: moneyToMinor(review.amount),
+      date: review.date,
+      name: review.name,
+    },
+    purchaseId: review.purchaseId,
+    purchaserId: review.purchaserId,
+    vendorId: review.vendorId,
+    categoryOverride: review.categoryOverride,
+    economicRole: review.economicRole,
+    costType: review.costType,
+    trade: review.trade,
+    beneficiaries: review.beneficiaries,
+    confirmsMerchant: review.confirmsMerchant,
+    remainingBookedMinor: moneyToMinor(review.remainingBookedAmount),
+  });
+}
+
+function bookingExpenseWire(
+  intent: NonNullable<ReturnType<typeof statementBookingRows>["expense"]>,
+  purchaseId: string | null | undefined,
+) {
+  const {
+    costMinor,
+    attributions,
+    beneficiariesSpecified,
+    bookingTransactionCode: _bookingTransactionCode,
+    ...fields
+  } = intent;
+  return expenseCreateInput.parse({
+    ...fields,
+    cost: minorToMoney(costMinor),
+    purchaseId,
+    ...(beneficiariesSpecified
+      ? {
+          beneficiaries: attributions.map(({ partyId, weight }) => ({
+            partyId,
+            weight,
+          })),
+        }
+      : {}),
+  });
+}
+
 async function commitFinancialBookings(
   tx: DrizzleTransaction,
   reviews: readonly FinancialBookingPreview[],
@@ -1129,47 +1177,30 @@ async function commitFinancialBookings(
       return constraintViolation(
         "Spending changed after this review. Preview the booking again.",
       );
-  const bare = pending.flatMap((review, index) =>
-    review.purchaseId ? [] : [index],
+  const intents = fresh.map(bookingRowIntents);
+  const bare = intents.flatMap((intent, index) =>
+    intent.purchaseReference.kind === "existing" ? [] : [index],
   );
   const purchases = await createPurchases(
     tx,
-    bare.map((index) => {
-      const review = pending[index]!;
-      return purchaseCreateInput.parse({
-        vendorId: review.vendorId,
-        defaultTrade: review.trade,
-        date: fresh[index]!.date,
-        displayLabel: fresh[index]!.name,
-        purchaserOverrideId: review.purchaserId,
-      });
-    }),
+    bare.map((index) => purchaseCreateInput.parse(intents[index]!.purchase)),
     actor,
   );
-  const targets = pending.map((review) => review.purchaseId);
+  const targets = intents.map((intent) =>
+    intent.purchaseReference.kind === "existing"
+      ? intent.purchaseReference.purchaseId
+      : null,
+  );
   for (const [position, index] of bare.entries())
     targets[index] = purchases[position]!.shortcode;
   const aggregates = pending.flatMap((_, index) =>
-    fresh[index]!.action === "create_aggregate" ? [index] : [],
+    intents[index]!.expense ? [index] : [],
   );
   const { created: expenses } = await createExpenses(
     txDb,
-    aggregates.map((index) => {
-      const review = pending[index]!;
-      return expenseCreateInput.parse({
-        name: fresh[index]!.name,
-        cost: fresh[index]!.amount,
-        date: fresh[index]!.date,
-        purchaseId: targets[index],
-        spendingCategoryId: review.categoryOverride,
-        economicRole: review.economicRole,
-        costType: review.costType,
-        trade: review.trade,
-        lineKind: "principal",
-        lineBasis: "allocation",
-        beneficiaries: review.beneficiaries,
-      });
-    }),
+    aggregates.map((index) =>
+      bookingExpenseWire(intents[index]!.expense!, targets[index]),
+    ),
     actor,
   );
   if (expenses.length)
@@ -1199,8 +1230,8 @@ async function commitFinancialBookings(
       row: pendingRows[index]!,
       allocation: {
         purchaseId: targets[index]!,
-        amount: fresh[index]!.amount,
-        confirmsMerchant: fresh[index]!.confirmsMerchant,
+        amount: minorToMoney(intents[index]!.allocation.amountMinor),
+        confirmsMerchant: intents[index]!.allocation.confirmsMerchant,
       },
     })),
     actor,
@@ -1298,16 +1329,11 @@ export async function bookFreshFinancialTransactions(
   const partyIds = new Map(
     referenced.map((code, index) => [code, locked[index]!.id]),
   );
+  const intents = previews.map(bookingRowIntents);
   const purchases = stagePurchases(
     layer,
-    previews.map((review) => {
-      const data = purchaseCreateInput.parse({
-        vendorId: review.vendorId,
-        defaultTrade: review.trade,
-        date: review.date,
-        displayLabel: review.name,
-        purchaserOverrideId: review.purchaserId,
-      });
+    previews.map((review, index) => {
+      const data = purchaseCreateInput.parse(intents[index]!.purchase);
       return {
         data,
         references: {
@@ -1323,20 +1349,8 @@ export async function bookFreshFinancialTransactions(
     }),
     actor,
   );
-  const expenseInputs = previews.map((review, index) =>
-    expenseCreateInput.parse({
-      name: review.name,
-      cost: review.amount,
-      date: review.date,
-      purchaseId: purchases[index]!.shortcode,
-      spendingCategoryId: review.categoryOverride,
-      economicRole: review.economicRole,
-      costType: review.costType,
-      trade: review.trade,
-      lineKind: "principal",
-      lineBasis: "allocation",
-      beneficiaries: review.beneficiaries,
-    }),
+  const expenseInputs = intents.map((intent, index) =>
+    bookingExpenseWire(intent.expense!, purchases[index]!.shortcode),
   );
   const expenses = stageExpenses(
     layer,
@@ -1359,11 +1373,11 @@ export async function bookFreshFinancialTransactions(
   );
   await allocateFreshFinancialBookings(
     layer,
-    previews.map((review, index) => ({
+    previews.map((_, index) => ({
       row: rows[index]!,
       purchase: purchaseRows[index]!,
-      amount: review.amount,
-      confirmsMerchant: review.confirmsMerchant,
+      amount: minorToMoney(intents[index]!.allocation.amountMinor),
+      confirmsMerchant: intents[index]!.allocation.confirmsMerchant,
     })),
     actor,
   );

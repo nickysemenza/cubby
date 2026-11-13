@@ -8,18 +8,31 @@ import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db/database";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
-import { createKernel, evidenceRow, recordSubject, type Kernel } from "./api";
+import {
+  createKernel,
+  defineModule,
+  definePass,
+  evidenceRow,
+  recordSubject,
+  type Kernel,
+} from "./api";
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
-import { claimScopes } from "./claim";
+import { claimPass, ClaimLapsedError, claimScopes, fenceClaim } from "./claim";
 import { computeBatch } from "./compute";
+import { runOnePass } from "./pass";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
   fixtureModule,
   fixturePurchase,
+  fixtureReceipt,
   PURCHASE_SCOPE,
   PURCHASE_TABLE,
   receiptEvidence,
@@ -209,6 +222,66 @@ describe("evidence-facts kernel", () => {
     expect(await dirtyCount(ctx.db)).toBe(1);
   });
 
+  it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
+    const pass = definePass({
+      name: "fixture.restart",
+      async run(db, _cursor, claim) {
+        await repositoryQueries(db)
+          .execute(sql`UPDATE "Pass" SET "cancelledAt" = now()
+          WHERE name = ${pass.name}`);
+        await kernel.startPass(db, pass, { cursor: { page: 0 } });
+        await expect(claim.fence(db)).rejects.toBeInstanceOf(ClaimLapsedError);
+        return { cursor: { page: 99 }, done: true };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({
+        name: "passes",
+        passes: [pass],
+        machinery: [
+          { entity: "run", owning: null, fields: false, quality: false },
+        ],
+      }),
+    ]);
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+    });
+    await kernel.startPass(ctx.db, pass, {
+      key: "background",
+      availableAt: new Date(Date.now() - 60_000),
+    });
+    await kernel.startPass(ctx.db, pass, { runId });
+    await runOnePass(ctx.db, kernel.registry);
+    const result = await repositoryQueries(ctx.db).execute<{
+      cursor: unknown;
+      doneAt: string | null;
+      claimToken: string | null;
+    }>(
+      sql`SELECT cursor, "doneAt", "claimToken" FROM "Pass" WHERE name = ${pass.name} AND key = ${"default"}`,
+    );
+    expect(result.rows).toEqual([
+      { cursor: { page: 0 }, doneAt: null, claimToken: null },
+    ]);
+    const work = await kernel.runWork(ctx.db, runId);
+    expect(work.passes).toMatchObject([
+      { name: pass.name, key: "default", stage: "waiting", lastError: null },
+    ]);
+    expect(
+      (await kernel.machinery(ctx.db, ctx.actor, { entity: "run", id: runId }))
+        .passes,
+    ).toEqual(work.passes);
+    const next = await claimPass(repositoryQueries(ctx.db), [pass.name]);
+    expect(next).not.toBeNull();
+    await expect(
+      fenceClaim(
+        repositoryQueries(ctx.db),
+        { table: "Pass", name: pass.name, key: "default" },
+        next!.token,
+      ),
+    ).resolves.toBeUndefined();
+  });
+
   it("never sends an unknown ask again", async () => {
     let calls = 0;
     const { kernel, fixture } = kernelWith({
@@ -288,13 +361,20 @@ describe("evidence-facts kernel", () => {
   });
 
   it("keeps a member's decision through recomputation", async () => {
-    const { kernel } = kernelWith();
+    let calls = 0;
+    const { kernel } = kernelWith({
+      categorize: async () => {
+        calls++;
+        return "Groceries";
+      },
+    });
     await kernel.append(ctx.db, [
       charge("ORD-G", 1250),
       receipt("ORD-G", "Synthetic Grocer"),
     ]);
     await settle(kernel);
     const [booked] = await purchases(ctx.db);
+    const callsBeforeDecision = calls;
 
     await kernel.decide(ctx.db, ctx.actor, [
       {
@@ -303,6 +383,13 @@ describe("evidence-facts kernel", () => {
         subject: recordSubject(PURCHASE_TABLE, booked!.id),
         field: "merchant",
         value: "Corner Market",
+      },
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject(PURCHASE_TABLE, booked!.id),
+        field: "category",
+        value: "Household",
       },
     ]);
     await settle(kernel);
@@ -326,6 +413,39 @@ describe("evidence-facts kernel", () => {
       .from(fixturePurchase)
       .where(eq(fixturePurchase.id, booked!.id));
     expect(stored?.merchant).toBe("Corner Market");
+    expect(stored?.category).toBe("Household");
+    // A decision discovered after the first computation round must suppress its paid ask.
+    expect(calls).toBe(callsBeforeDecision);
+    const owed = await repositoryQueries(ctx.db).execute<{ id: string }>(
+      sql`SELECT id FROM "Ask" WHERE input->${"input"}->>${"merchant"} = ${"Corner Market"}`,
+    );
+    expect(owed.rows).toEqual([]);
+
+    const [originalReceipt] = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureReceipt)
+      .where(eq(fixtureReceipt.sourceRef, "mail-ORD-G-Synthetic Grocer"));
+    const changed = await repositoryTransactionDatabase(ctx.db, (tx) =>
+      kernel.repointOwnedReference(tx, {
+        table: fixturePurchase,
+        column: "receiptId",
+        fromIds: [stored!.receiptId!],
+        toId: originalReceipt!.id,
+      }),
+    );
+    expect(changed).toBe(1);
+    const [repointed] = await purchases(ctx.db);
+    expect(repointed?.receiptId).toBe(originalReceipt!.id);
+    await expect(
+      repositoryTransactionDatabase(ctx.db, (tx) =>
+        kernel.repointOwnedReference(tx, {
+          table: fixturePurchase,
+          column: "merchant",
+          fromIds: ["Corner Market"],
+          toId: null,
+        }),
+      ),
+    ).rejects.toThrow("not a reconciler-owned foreign key");
   });
 
   it("hands a merged record to the survivor's scope and ends the absorbed scope", async () => {

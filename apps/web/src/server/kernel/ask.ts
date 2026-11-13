@@ -43,8 +43,9 @@ import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
 import { answerKey } from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
+import { isoText } from "./sql-time";
 import { ASK, PASS_WAITER, RECORD_WAITER, RUN_WAITER } from "./vocab";
-import { wakeAfterCommit } from "./wake";
+import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -508,16 +509,17 @@ export async function withAsk<I, O>(
       `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
     );
   const token = crypto.randomUUID();
-  const claimed = await q.execute<{ attempts: number }>(sql`
+  const claimed = await q.execute<{ attempts: number; deadline: string }>(sql`
     UPDATE "Ask" SET "claimToken" = ${token}::uuid,
       "claimDeadline" = now() + make_interval(secs => 90)
     WHERE id = ${row.id}::uuid AND state = ${ASK.queued} AND "cancelledAt" IS NULL
       AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-    RETURNING attempts`);
+    RETURNING attempts, ${isoText(sql`"claimDeadline"`)} AS deadline`);
   if (!claimed.rows[0])
     throw inFlight(
       "Another worker holds this ask's claim; no duplicate call was placed.",
     );
+  await wakeClaimRecovery(new Date(claimed.rows[0].deadline));
   const [result] = await executeClaimed(
     db,
     registry,
@@ -531,6 +533,7 @@ export async function withAsk<I, O>(
           feature: kind.feature,
           input: envelope,
           attempts: claimed.rows[0].attempts,
+          deadline: new Date(claimed.rows[0].deadline),
           token,
           maxAttempts: row.maxAttempts,
         },

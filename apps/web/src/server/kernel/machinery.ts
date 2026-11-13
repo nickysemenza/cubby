@@ -43,7 +43,7 @@ import {
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 
-import { askIsStuck, askMemberGap } from "./ask-gap";
+import { askGapState, askIsStuck, askMemberGap } from "./ask-gap";
 import { MAX_SCOPE_ATTEMPTS } from "./claim";
 import { computeBatch } from "./compute";
 import type { ColumnValues, Json, ScopeRef } from "./define";
@@ -53,6 +53,7 @@ import { idColumn, KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
 import { ASK, RECORD_WAITER } from "./vocab";
+import { loadRunPasses } from "./work";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "select">;
 
@@ -248,13 +249,15 @@ export async function machinery(
           FROM "AskScope" s JOIN ${waiting} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
           JOIN "Ask" a ON a.id = s."askId" LEFT JOIN queue ON queue.id = a.id`),
         q.execute<{
+          kind: string;
+          key: string;
           proposalHash: string;
           inputsHash: string;
           difference: unknown;
           askCount: number;
           estimatedCostMicros: string | number;
         }>(sql`
-          SELECT p."proposalHash", p."inputsHash", p.difference, p."askCount", p."estimatedCostMicros"
+          SELECT p."scopeKind" AS kind, p."scopeKey" AS key, p."proposalHash", p."inputsHash", p.difference, p."askCount", p."estimatedCostMicros"
           FROM "Drift" p JOIN ${wanted} w ON w.kind = p."scopeKind" AND w.key = p."scopeKey" LIMIT 1`),
         claimRanks(q, registry, scopes),
       ]);
@@ -525,6 +528,7 @@ export async function machinery(
         const state = stateOf(scope);
         return {
           ...gap,
+          askState: ask ? askGapState(ask) : null,
           queue,
           attempts: ask
             ? {
@@ -558,13 +562,24 @@ export async function machinery(
         rejected ||
         (isShortcodeEntity(ref.entity) &&
           (!identity || identity.absorbed !== null));
+      const passes =
+        ref.entity === "run" && !options.field
+          ? await loadRunPasses(q, ref.id)
+          : [];
       const stuck =
         dirty.rows.some((row) => row.attempts >= MAX_SCOPE_ATTEMPTS) ||
         states.rows.some((row) => row.stage === "stuck") ||
-        asks.rows.some(askIsStuck);
+        asks.rows.some(askIsStuck) ||
+        passes.some((row) => row.stage === "stuck");
       const working =
-        dirty.rows.some((row) => row.live) || asks.rows.some((row) => row.live);
-      const stage = resolveStage({ ended, stuck, working, gaps });
+        dirty.rows.some((row) => row.live) ||
+        asks.rows.some((row) => row.live) ||
+        passes.some((row) => row.stage === "working");
+      const resolved = resolveStage({ ended, stuck, working, gaps });
+      const stage =
+        resolved === "done" && passes.some((row) => row.stage === "waiting")
+          ? "waiting"
+          : resolved;
       const times = (values: readonly (string | null | undefined)[]) =>
         values
           .filter((value): value is string => !!value)
@@ -598,6 +613,7 @@ export async function machinery(
         inputs: capped(inputs),
         drift: proposal
           ? {
+              scope: { kind: proposal.kind, key: proposal.key },
               proposalHash: proposal.proposalHash,
               inputsHash: proposal.inputsHash,
               // SAFETY: the column stores the JSON the sweep wrote.
@@ -606,6 +622,7 @@ export async function machinery(
               estimatedCostMicros: Number(proposal.estimatedCostMicros),
             }
           : null,
+        passes,
         totalCostMicros: answers.rows.reduce(
           (sum, row) =>
             sum + (row.costMicros == null ? 0 : Number(row.costMicros)),

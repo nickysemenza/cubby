@@ -11,6 +11,7 @@ import {
   type MachineryCapability,
 } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
+import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -50,11 +51,19 @@ import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
 import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
+import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
 import { reconcileNow, runKernel } from "./runner";
 import { wakeAfterCommit } from "./wake";
+import { readNeedsYou, readRunWork } from "./work";
 
 export type Kernel = {
   readonly registry: KernelRegistry;
+  machineryCapability(entity: string): MachineryCapability | null;
+  needsYou(
+    db: Database,
+    options?: { limit?: number; offset?: number },
+  ): Promise<NeedsYouPage>;
+  runWork(db: Database, runId: string): Promise<RunWork>;
   append(
     db: Database,
     rows: readonly EvidenceRow[],
@@ -136,6 +145,10 @@ export type Kernel = {
       availableAt?: Date;
     },
   ): Promise<void>;
+  repointOwnedReference(
+    tx: Database,
+    request: OwnedReferenceRepoint,
+  ): Promise<number>;
   /** The batched list binding: stage, actor, first gap and ETA for a page. */
   listRows(
     db: Database,
@@ -157,6 +170,9 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   registerOwnedColumns(ownedColumns(bound));
   return {
     registry: bound,
+    machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
+    needsYou: readNeedsYou,
+    runWork: (db, runId) => readRunWork(db, bound, runId),
     async append(db, rows, options) {
       const facts = await append(db, bound, rows, options);
       if (facts.length) await wakeAfterCommit(db);
@@ -241,6 +257,8 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
     approveDriftClass: (db, actor, kind) =>
       approveDriftClass(db, bound, actor, kind),
     startPass,
+    repointOwnedReference: (tx, request) =>
+      repointOwnedReference(tx, bound, request),
     listRows: (db, capability, ids) =>
       loadMachineryRows(db, bound, capability, ids),
     run: (db, options) => runKernel(db, bound, options),

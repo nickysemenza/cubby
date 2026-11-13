@@ -5,7 +5,7 @@ import type {
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
 
-import { withinPostingInstantWindow } from "~/server/domains/financial-transaction/policy/settlement-window";
+import { completePaymentMatches } from "~/server/domains/purchase-import/policy/payment-match";
 
 /** Cosmetic evidence changes cannot replace accepted ledger or payment rows. */
 export const sourceFinancialFacts = (candidate: ExtractedOrderCandidate) => {
@@ -196,18 +196,6 @@ export type PaymentAllocation = {
   amount: number;
 };
 
-// A missing last four is not a wildcard across tenders: a gift-card line paid
-// nothing on any card, so it settles only against a stored-value account.
-const tenderAdmits = (
-  tender: ExtractedPaymentEvidence["tender"],
-  storedValue: boolean,
-): boolean =>
-  tender === "stored_value"
-    ? storedValue
-    : tender === "card"
-      ? !storedValue
-      : true;
-
 /**
  * Returns only complete allocation sets. A transaction is never partly
  * allocated: callers either persist this whole result in one transaction or
@@ -217,32 +205,22 @@ export const matchCompletePaymentSet = (
   payments: ExtractedPaymentEvidence[],
   candidates: SettlementCandidate[],
 ): PaymentAllocation[] | null => {
-  const unused = new Map(
-    candidates.map((candidate) => [candidate.id, candidate]),
+  const matched = completePaymentMatches(
+    payments.map((payment) => ({
+      amountMinor: BigInt(cents(payment.amount)),
+      chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
+      cardLastFour: payment.cardLastFour ?? null,
+      tender: payment.tender ?? "unknown",
+    })),
+    candidates.map((charge) => ({
+      ...charge,
+      amountMinor: BigInt(cents(charge.amount)),
+    })),
   );
-  const allocations: PaymentAllocation[] = [];
-
-  for (const [paymentIndex, payment] of payments.entries()) {
-    const chargedAt = payment.chargedAt ? new Date(payment.chargedAt) : null;
-    const matches = [...unused.values()].filter(
-      (candidate) =>
-        cents(candidate.amount) === cents(payment.amount) &&
-        tenderAdmits(payment.tender, candidate.storedValue) &&
-        (payment.cardLastFour === undefined ||
-          candidate.cardLastFours.includes(payment.cardLastFour)) &&
-        (chargedAt === null ||
-          withinPostingInstantWindow(candidate.occurredAt, chargedAt)),
-    );
-    if (matches.length !== 1) return null;
-    const match = matches[0];
-    if (match === undefined) return null;
-    unused.delete(match.id);
-    allocations.push({
-      transactionId: match.id,
-      paymentIndex,
-      amount: payment.amount,
-    });
-  }
-
-  return allocations;
+  return (
+    matched?.map(({ amountMinor: _amountMinor, ...row }) => ({
+      ...row,
+      amount: payments[row.paymentIndex]!.amount,
+    })) ?? null
+  );
 };

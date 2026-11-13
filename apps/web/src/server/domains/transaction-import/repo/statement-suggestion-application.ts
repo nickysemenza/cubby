@@ -14,7 +14,6 @@ import { getDb, unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { financialTransaction, suggestionTable } from "~/server/db/schema";
-import { decideStatementKind } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
@@ -27,6 +26,7 @@ import {
   statementCandidateSubject,
   statementLabelSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
+import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-policy-wire";
 import {
   changedStatementBooking,
   prepareStatementSpending,

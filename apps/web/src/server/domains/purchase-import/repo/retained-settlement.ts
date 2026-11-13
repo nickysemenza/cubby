@@ -16,15 +16,13 @@ import {
   type PurchaseId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { paymentTender } from "@cubby/schemas/purchase-import";
-import { cents } from "@cubby/shared";
-import { and, asc, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { cents, minorToMoney } from "@cubby/shared";
+import { and, asc, between, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers";
-import { columnArrayParam } from "~/server/db/helpers/query";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -51,8 +49,10 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
-import { withinPostingInstantWindowSql } from "~/server/domains/financial-transaction/repo/settlement-window";
+import { combinedChargeAllocations } from "~/server/domains/purchase-import/policy/combined-charge";
+import { competingPaymentClaimants } from "~/server/domains/purchase-import/policy/competing-payments";
 import { matchCompletePaymentSet } from "~/server/domains/purchase-import/policy/import-lines";
+import { groupMemberNamesCharge } from "~/server/domains/purchase-import/policy/payment-match";
 import {
   RetainedPayment,
   RetainedPaymentRow,
@@ -338,9 +338,16 @@ async function competingClaimants(
   charge: Charge,
   excludePurchaseId: PurchaseId,
 ): Promise<PurchaseId[]> {
-  const cards = charge.cardLastFours;
+  const amountMinor = financialEvidenceAmountMinor(charge.amount);
   const rows = await tx
-    .selectDistinct({ purchaseId: purchasePaymentEvidence.purchaseId })
+    .select({
+      purchaseId: purchasePaymentEvidence.purchaseId,
+      chargedAt: purchasePaymentEvidence.chargedAt,
+      tender: purchasePaymentEvidence.tender,
+      cardLastFour: purchasePaymentEvidence.cardLastFour,
+      paidMinor: sql<string>`coalesce((SELECT sum(fta."amountMinor") FROM "FinancialTransactionAllocation" fta WHERE fta."purchaseId"=${purchasePaymentEvidence.purchaseId} AND ${notDeleted("fta")} AND sign(fta."amountMinor")=sign(${amountMinor}::numeric)),0)::text`,
+      evidenceMinor: sql<string>`(SELECT sum(ppe."amountMinor") FROM "PurchasePaymentEvidence" ppe WHERE ppe."purchaseId"=${purchasePaymentEvidence.purchaseId} AND sign(ppe."amountMinor")=sign(${amountMinor}::numeric))::text`,
+    })
     .from(purchasePaymentEvidence)
     .innerJoin(
       purchase,
@@ -352,36 +359,17 @@ async function competingClaimants(
     .where(
       and(
         sql`${purchasePaymentEvidence.purchaseId} <> ${excludePurchaseId}::uuid`,
-        eq(
-          purchasePaymentEvidence.amountMinor,
-          financialEvidenceAmountMinor(charge.amount),
-        ),
-        // An undated line's charge date is unknown, so it competes for any
-        // charge of its amount; the order-date anchor never narrows it.
-        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
-          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
-        charge.storedValue
-          ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
-          : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
-        cards.length > 0
-          ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
-              OR ${purchasePaymentEvidence.cardLastFour} = ANY(${columnArrayParam(cards)}))`
-          : undefined,
-        // A Purchase whose allocations already cover its payment lines makes
-        // no further claim; a partly settled one still does.
-        sql`abs(coalesce((
-          SELECT sum((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) FROM "FinancialTransactionAllocation" fta
-          WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND ${notDeleted("fta")}
-            AND sign((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) = sign(${charge.amount}::numeric)
-        ), 0)) < abs((
-          SELECT ${minorToDollarsSql(sql`sum(ppe."amountMinor")`, "numeric")} FROM "PurchasePaymentEvidence" ppe
-          WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND sign(ppe."amountMinor") = sign(${charge.amount}::numeric)
-        ))`,
+        eq(purchasePaymentEvidence.amountMinor, amountMinor),
       ),
     );
-  return rows.map((row) => row.purchaseId);
+  return competingPaymentClaimants(
+    { ...charge, amountMinor },
+    rows.map((row) => ({
+      ...row,
+      paidMinor: BigInt(row.paidMinor),
+      evidenceMinor: BigInt(row.evidenceMinor),
+    })),
+  );
 }
 
 type PlannedAllocation = {
@@ -419,7 +407,6 @@ async function evidencedChargeGroup(
     .where(and(inArray(purchase.id, members), notDeleted(purchase)))
     .orderBy(asc(purchase.id));
   const rows = await query;
-  if (rows.length !== members.length) return null;
   const [allocated] = await tx
     .select({ id: financialTransactionAllocation.id })
     .from(financialTransactionAllocation)
@@ -430,16 +417,28 @@ async function evidencedChargeGroup(
       ),
     )
     .limit(1);
-  if (allocated) return null;
-  for (const row of rows) {
-    if (!(await namesOnlyThisCharge(tx, { ...input, row }))) return null;
-  }
-  const total = rows.reduce((sum, row) => sum + cents(row.statedTotal ?? 0), 0);
-  if (total !== cents(input.charge.amount)) return null;
-  return rows.map((row) => ({
-    purchaseId: row.id,
-    amount: row.statedTotal ?? 0,
-  }));
+  const membersRead = [];
+  for (const row of rows)
+    membersRead.push({
+      id: row.id,
+      statedTotalMinor:
+        row.statedTotal === null
+          ? null
+          : financialEvidenceAmountMinor(row.statedTotal),
+      namesThisCharge: await namesOnlyThisCharge(tx, { ...input, row }),
+    });
+  const plan = combinedChargeAllocations({
+    amountMinor: financialEvidenceAmountMinor(input.charge.amount),
+    memberIds: members,
+    hasAllocation: Boolean(allocated),
+    purchases: membersRead,
+  });
+  return (
+    plan?.map((row) => ({
+      purchaseId: row.purchaseId,
+      amount: minorToMoney(row.amountMinor),
+    })) ?? null
+  );
 }
 
 /** One group member: a single payment line naming this charge and no other. */
@@ -458,12 +457,6 @@ async function namesOnlyThisCharge(
   },
 ): Promise<boolean> {
   const { row } = input;
-  if (
-    row.vendorId !== input.vendorId ||
-    row.statedTotal === null ||
-    cents(row.statedTotal) <= 0
-  )
-    return false;
   const [claim] = await tx
     .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
     .from(importSourceClaim)
@@ -473,26 +466,38 @@ async function namesOnlyThisCharge(
     )
     .where(eq(importSourceOrder.purchaseId, row.id))
     .limit(1);
-  if (claim?.ledgerPartyId !== input.ledgerPartyId) return false;
   const retained = await loadPaymentSet(tx, row.id);
-  if (retained === "conflicting_sources" || retained.length !== 1) return false;
-  const payments = anchorPayments(retained, row.date);
-  if (
-    (payments[0]?.amountMinor ?? 0n) !==
-    financialEvidenceAmountMinor(input.charge.amount)
-  )
-    return false;
-  const own = matchCompletePaymentSet(
-    toPolicyPayments(payments),
-    await settleableCharges(tx, {
-      purchaseId: row.id,
-      ledgerPartyId: input.ledgerPartyId,
-      vendorId: input.vendorId,
-      payments,
-      additionalCharges: [input.charge],
-    }),
-  );
-  return own?.[0]?.transactionId === input.charge.id;
+  const payments =
+    retained === "conflicting_sources"
+      ? retained
+      : anchorPayments(retained, row.date);
+  const charges =
+    payments === "conflicting_sources"
+      ? []
+      : await settleableCharges(tx, {
+          purchaseId: row.id,
+          ledgerPartyId: input.ledgerPartyId,
+          vendorId: input.vendorId,
+          payments,
+          additionalCharges: [input.charge],
+        });
+  return groupMemberNamesCharge({
+    purchaseVendorId: row.vendorId,
+    vendorId: input.vendorId,
+    statedTotalMinor:
+      row.statedTotal === null
+        ? null
+        : financialEvidenceAmountMinor(row.statedTotal),
+    ownerId: claim?.ledgerPartyId ?? null,
+    ledgerPartyId: input.ledgerPartyId,
+    chargeId: input.charge.id,
+    amountMinor: financialEvidenceAmountMinor(input.charge.amount),
+    payments,
+    charges: charges.map((charge) => ({
+      ...charge,
+      amountMinor: financialEvidenceAmountMinor(charge.amount),
+    })),
+  });
 }
 
 /** The sum of a Purchase's live, priced Expense lines, or null when none. */

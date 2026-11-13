@@ -192,18 +192,17 @@ const settlementStateSchema = z.object({
  * write so both refuse with the same words.
  */
 export const allocationSumViolation = (
-  allocationAmounts: readonly number[],
-  transactionAmount: number,
+  allocationAmounts: readonly bigint[],
+  transactionAmount: bigint,
 ): string | null => {
-  const total = allocationAmounts.reduce(
-    (sum, amount) => sum + moneyToMinor(amount),
-    0n,
-  );
-  const magnitude = total < 0n ? -total : total;
-  const rendered = `${total < 0n ? "-" : ""}${magnitude / 100n}.${String(magnitude % 100n).padStart(2, "0")}`;
-  return total === moneyToMinor(transactionAmount)
+  const total = allocationAmounts.reduce((sum, amount) => sum + amount, 0n);
+  const rendered = (value: bigint) => {
+    const magnitude = value < 0n ? -value : value;
+    return `${value < 0n ? "-" : ""}${magnitude / 100n}.${String(magnitude % 100n).padStart(2, "0")}`;
+  };
+  return total === transactionAmount
     ? null
-    : `Allocations must sum to the transaction amount: got ${rendered}, expected ${transactionAmount.toFixed(2)}.`;
+    : `Allocations must sum to the transaction amount: got ${rendered(total)}, expected ${rendered(transactionAmount)}.`;
 };
 
 const validSettlementState = <T extends z.ZodType>(schema: T) =>
@@ -230,8 +229,8 @@ const validSettlementState = <T extends z.ZodType>(schema: T) =>
 
     if (allocations.length > 0) {
       const sumViolation = allocationSumViolation(
-        allocations.map((row) => row.amount),
-        transaction.amount,
+        allocations.map((row) => moneyToMinor(row.amount)),
+        moneyToMinor(transaction.amount),
       );
       if (sumViolation)
         ctx.addIssue({

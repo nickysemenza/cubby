@@ -111,7 +111,10 @@ type DecisionRow = {
 };
 
 type Tracked = {
-  answers: Map<string, { kind: AskKind; envelope: AskEnvelope }>;
+  answers: Map<
+    string,
+    { kind: AskKind; envelope: AskEnvelope; request: boolean }
+  >;
   subjects: Set<string>;
 };
 
@@ -170,6 +173,8 @@ export async function computeBatch(
     const wantedSubjects = new Map<string, Set<string>>();
     for (const scope of scopes) {
       const tracked = usedBy.get(scope.key)!;
+      tracked.answers.clear();
+      tracked.subjects.clear();
       if (!inputs.has(scope.key)) {
         results.set(scope.key, {
           desired: null,
@@ -246,9 +251,10 @@ export async function computeBatch(
       for (const [text, request] of tracked.answers) {
         const known = answers.get(text);
         if (!known) continue;
-        if (known.output === null)
+        if (known.output === null && request.request)
           missing.push({ ...request, inputHash: known.inputHash });
-        else used.push({ kind: request.kind, inputHash: known.inputHash });
+        else if (known.output !== null)
+          used.push({ kind: request.kind, inputHash: known.inputHash });
       }
       const decided = [...tracked.subjects].flatMap((subject) =>
         (decisions.get(subject) ?? []).map((row) => ({ subject, id: row.id })),
@@ -604,7 +610,7 @@ function createPure(
   };
 
   return {
-    answer(kind, input) {
+    answer(kind, input, options) {
       if (!declaredAsks.has(kind.feature))
         throw new KernelContractError(
           `Reconciler ${reconciler.scope} reads undeclared ask ${kind.feature}`,
@@ -612,7 +618,12 @@ function createPure(
       const untyped: AskKind = kind;
       const envelope = askEnvelope(untyped, input);
       const text = envelopeText(envelope);
-      state.tracked.answers.set(text, { kind: untyped, envelope });
+      const request = options?.request !== false;
+      state.tracked.answers.set(text, {
+        kind: untyped,
+        envelope,
+        request: request || state.tracked.answers.get(text)?.request === true,
+      });
       const known = state.answers.get(text);
       if (known && known.output !== null)
         return {
@@ -620,11 +631,11 @@ function createPure(
           output: kind.output.parse(known.output),
           inputHash: known.inputHash,
         };
-      if (known)
+      if (known && request)
         gap("answer", untyped.label, askActor(untyped), {
           inputHash: known.inputHash,
         });
-      asks.push({ kind: untyped, input });
+      if (request) asks.push({ kind: untyped, input });
       return { status: "missing", inputHash: null };
     },
     decision(channel, subject, slot) {

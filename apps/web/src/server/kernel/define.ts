@@ -5,12 +5,14 @@
  * lists every module explicitly.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import type { EdgeDefinition } from "@cubby/schemas/entity-definitions/edges";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import type {
   AskProducer,
   BindingBasis,
   KernelJson,
   KernelLane,
+  KernelWaitCause,
 } from "@cubby/schemas/kernel/machinery";
 import type {
   DecisionChannel,
@@ -265,7 +267,12 @@ export type GapOptions = {
 
 /** The reconciler's pure context: no database, clock or network. */
 export interface Pure {
-  answer<I, O>(kind: AskKind<I, O>, input: I): AnsweredValue<O> | Missing;
+  /** `request: false` reads an existing answer without owing a producer call. */
+  answer<I, O>(
+    kind: AskKind<I, O>,
+    input: I,
+    options?: { request?: boolean },
+  ): AnsweredValue<O> | Missing;
   /**
    * The decision in force: by field (assignment, veto), by the other subject
    * (identity), or for the subject alone (rejection).
@@ -394,6 +401,8 @@ export type Claim = {
   readonly signal: AbortSignal;
   /** Extends the deadline; false once the claim lapsed or was cancelled. */
   renew(): Promise<boolean>;
+  /** Verify ownership inside the caller's publishing transaction. */
+  fence(tx: Database): Promise<void>;
   /** A transaction that commits only while this claim is live. */
   fenced<T>(work: (tx: Database) => Promise<T>): Promise<T>;
 };
@@ -402,6 +411,7 @@ export type PassResult = {
   cursor: Json | null;
   done: boolean;
   availableAt?: Date;
+  waitCause?: KernelWaitCause;
 };
 
 export type Pass = {
@@ -423,6 +433,7 @@ export type DomainModule = {
   readonly type: "module";
   readonly name: string;
   readonly entities: readonly string[];
+  readonly edges: readonly EdgeDefinition[];
   readonly evidence: readonly EvidenceKind[];
   readonly asks: readonly AskKind[];
   readonly reconcilers: readonly Reconciler[];
@@ -433,6 +444,7 @@ export type DomainModule = {
 export function defineModule(spec: {
   name: string;
   entities?: readonly string[];
+  edges?: readonly EdgeDefinition[];
   evidence?: readonly EvidenceKind[];
   asks?: readonly AskKind[];
   reconcilers?: readonly Reconciler[];
@@ -443,6 +455,7 @@ export function defineModule(spec: {
     type: "module",
     name: spec.name,
     entities: spec.entities ?? [],
+    edges: spec.edges ?? [],
     evidence: spec.evidence ?? [],
     asks: spec.asks ?? [],
     reconcilers: spec.reconcilers ?? [],

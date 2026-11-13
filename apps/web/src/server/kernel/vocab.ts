@@ -5,6 +5,7 @@
  */
 import { askState } from "@cubby/schemas/kernel/machinery";
 import { kernelStage } from "@cubby/schemas/kernel/stage";
+import { runCause, runTrigger } from "@cubby/schemas/run-fields";
 
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
@@ -35,3 +36,9 @@ export const PASS_WAITER = "pass";
 
 /** The background drain unit that runs kernel work. */
 export const KERNEL_UNIT = "kernel";
+
+export const MEMBER_PASS = {
+  cause: sqlEnumConstant(runCause, "member_request"),
+  manual: sqlEnumConstant(runTrigger, "manual"),
+  foreground: sqlEnumConstant(runTrigger, "foreground"),
+};

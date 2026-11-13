@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
 import {
   FINANCIAL_SPENDING_POLICY,
@@ -13,7 +12,6 @@ import {
 } from "@cubby/schemas/financial-booking";
 import { financialTransactionSettlementViolation } from "@cubby/schemas/financial-transaction";
 import {
-  financialTransactionKind,
   financialTransactionStatus,
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
@@ -74,9 +72,19 @@ import {
   digestCanonicalEvidenceStream,
 } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import {
-  spendingBlocker,
-  issuerCardFee,
-} from "~/server/domains/financial-transaction/policy/spending-prerequisites";
+  availableSpendingMinor,
+  recordedSpendingOutcome,
+} from "~/server/domains/financial-transaction/policy/recorded-spending";
+import {
+  decideSpendingCandidates,
+  type SpendingCandidateRead,
+} from "~/server/domains/financial-transaction/policy/spending-candidates";
+import {
+  spendingCategoryForDiscovery,
+  refundSpendingCategory,
+  bookingSpendingCategory,
+  reviewedCategoryRefusal,
+} from "~/server/domains/financial-transaction/policy/spending-category";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import {
   bookFreshFinancialTransactions,
@@ -94,6 +102,10 @@ import {
   withFinancialSourceRef,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import {
+  spendingBlocker,
+  issuerCardFee,
+} from "~/server/domains/financial-transaction/repo/spending-prerequisites-wire";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { retainedSettlementDiscoveryCouldMatch } from "~/server/domains/purchase-import/policy/retained-payments";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
@@ -102,6 +114,11 @@ import {
   prepareRetainedSettlementDiscovery,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
+import {
+  bookingVendorCreations,
+  bookingVendorSelection,
+  createdVendorConflict,
+} from "~/server/domains/vendor/policy/booking-vendor";
 import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
@@ -157,18 +174,6 @@ type SpendingCandidate = {
   // Additional older spending can stop creation, never authorize settlement.
   reviewOnly?: boolean;
 };
-type PaymentCandidate = SpendingCandidate & {
-  amountKey: string;
-  chargedDate: string;
-};
-type VendorCandidate = SpendingCandidate & {
-  partlyPaid: boolean;
-  undatedAmounts: string[];
-};
-const calendarGap = (left: string, right: string) =>
-  Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
-  86_400_000;
-
 /**
  * Read-only metadata for one synchronous proposal page, or for one commit's
  * rechecks under its locks before it writes; never reuse across model work
@@ -291,19 +296,6 @@ export async function prepareFinancialSpendingPage(
       ? { first: dates[0]!, last: dates.at(-1)! }
       : null;
   const amounts = [...new Set(sources.map((source) => cents(source.amount)))];
-  const paymentCandidates =
-    candidateBounds && amounts.length
-      ? (
-          await getDb(db).execute<PaymentCandidate>(sql`
-        SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          payment."amountMinor"::text AS "amountKey", ${paymentDate}::text AS "chargedDate"
-        FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND ${notDeleted("p")}
-        WHERE payment."amountMinor" = ANY(${columnArrayParam(amounts)})
-          AND ${paymentDate} BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
-        ORDER BY p.id
-      `)
-        ).rows
-      : [];
   // Only a fingerprinted booking's existing-spending check reads its lineage.
   const fingerprinted = transactions.flatMap((row) =>
     row.bookingExpenseFingerprint
@@ -321,9 +313,7 @@ export async function prepareFinancialSpendingPage(
     retainedSettlement: await prepareRetainedSettlementDiscovery(getDb(db), []),
     candidateBounds,
     candidateAmounts: new Set(amounts),
-    paymentCandidates: groupBy(paymentCandidates, (row) => row.amountKey),
-    vendorCandidates: new Map<string, Promise<VendorCandidate[]>>(),
-    explicitCandidates: new Map<string, Promise<SpendingCandidate[]>>(),
+    candidateReads: new Map<string, Promise<SpendingCandidateRead[]>>(),
     references,
     allocations: allocationsByTransaction,
     accounts: accountsById,
@@ -428,34 +418,6 @@ async function prepareVendorCandidates(
     vendorIds.filter((vendorId) => !page.categoryHistory.has(vendorId)),
   ))
     page.categoryHistory.set(vendorId, Promise.resolve(history));
-  const bounds = page.candidateBounds;
-  const pooled = vendorIds.filter(
-    (vendorId) => !page.vendorCandidates.has(vendorId),
-  );
-  if (!bounds || !pooled.length) return;
-  const rows = await getDb(db).execute<VendorCandidate & { vendorId: string }>(
-    sql`
-      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
-        ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
-      FROM "Purchase" p
-      WHERE ${notDeleted("p")} AND p."vendorId" = ANY(${uuidArrayParam(pooled)})
-        AND p.id IN (${vendorCandidateIds(pooled, bounds, [...page.candidateAmounts])})
-        AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-          OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
-      ORDER BY p.id
-    `,
-    "objects",
-  );
-  const byVendor = groupBy(rows, (row) => row.vendorId);
-  for (const vendorId of pooled)
-    page.vendorCandidates.set(
-      vendorId,
-      Promise.resolve(
-        (byVendor[vendorId] ?? []).map(
-          ({ vendorId: _vendorId, ...row }) => row,
-        ),
-      ),
-    );
 }
 
 async function spendingFacts(
@@ -895,41 +857,25 @@ function availableCents(
   amount: number,
   currentId?: string,
 ) {
-  if (!graph) return null;
-  const lines = graph.lines.filter(
-    (line) => !line.future && line.economicRole === "vendor",
+  const capacity = availableSpendingMinor(
+    graph && {
+      lines: graph.lines.map((line) => ({
+        ...line,
+        costMinor: line.cost === null ? null : moneyToMinor(line.cost),
+      })),
+      settlements: graph.settlements.map((row) => ({
+        ...row,
+        amountMinor: moneyToMinor(Number(row.amount)),
+        transactionAmountMinor: moneyToMinor(Number(row.transactionAmount)),
+        allocatedMinor: moneyToMinor(Number(row.allocatedAmount)),
+        deleted: Boolean(row.deletedAt),
+        accountDeleted: Boolean(row.accountDeletedAt),
+      })),
+    },
+    moneyToMinor(amount),
+    currentId,
   );
-  if (
-    !lines.length ||
-    lines.some((line) => line.cost === null || line.lineKind === "unclassified")
-  )
-    return null;
-  const matching = lines.filter((line) =>
-    amount < 0
-      ? line.cost !== null && line.cost < 0 && line.lineKind === "principal"
-      : line.cost !== null && (line.cost >= 0 || line.lineKind !== "principal"),
-  );
-  const other = otherSettlements(graph, amount, currentId);
-  if (
-    other.some(
-      (entry) =>
-        entry.deletedAt ||
-        entry.accountDeletedAt ||
-        entry.status === "void" ||
-        entry.status === "expected" ||
-        entry.ledgerTransferId ||
-        !["purchase", "fee", "refund"].includes(entry.kind) ||
-        cents(Number(entry.allocatedAmount)) !==
-          cents(Number(entry.transactionAmount)) ||
-        Math.sign(Number(entry.amount)) !==
-          Math.sign(Number(entry.transactionAmount)),
-    )
-  )
-    return null;
-  return (
-    matching.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) -
-    other.reduce((sum, entry) => sum + cents(Number(entry.amount)), 0)
-  );
+  return capacity === null ? null : Number(capacity);
 }
 
 /** `financialSpendingCategoryHistory` for several Vendors in one statement. */
@@ -1094,6 +1040,10 @@ async function prepareSpendingPayments(
   return new Map(await Promise.all(entries));
 }
 
+const calendarGap = (left: string, right: string) =>
+  Math.abs(Date.parse(left) - Date.parse(right)) / 86_400_000;
+const REFUND_WINDOW_DAYS = 14;
+
 type CandidateInput = {
   date: string;
   amount: number;
@@ -1102,76 +1052,6 @@ type CandidateInput = {
   purchaseId?: string | null;
 };
 
-// A header total is not spending. Unknown costs on actual vendor lines still
-// require graph review; neither amount equality nor an order date is required.
-const vendorLines = sql`FROM "Expense" e WHERE e."purchaseId" = p.id
-  AND ${notDeleted("e")} AND NOT e.future
-  AND e."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.vendor}`;
-const vendorSpendingExists = sql`EXISTS (SELECT 1 ${vendorLines})`;
-// Positive charges compare with charge-side lines and payments, as in
-// availableCents; returned principal and refund allocations are excluded there.
-const chargeSideLine = sql`(e."costMinor" >= 0 OR e."lineKind" <> ${expenseLineKindSchema.enum.principal})`;
-const chargePayments = sql`FROM "FinancialTransactionAllocation" paid
-  JOIN "FinancialTransaction" pf ON pf.id = paid."transactionId"
-  JOIN "FinancialAccount" pa ON pa.id = pf."accountId"
-  WHERE paid."purchaseId" = p.id AND ${notDeleted("paid")} AND paid."amountMinor" > 0`;
-// Settlement evidence the graph capacity check cannot treat as plain payment.
-const uncertainPayment = sql`(pf."deletedAt" IS NOT NULL OR pa."deletedAt" IS NOT NULL
-  OR pf.status IN (${financialTransactionStatus.enum.void}, ${financialTransactionStatus.enum.expected})
-  OR pf."ledgerTransferId" IS NOT NULL OR pf."amountMinor" <= 0
-  OR EXISTS (SELECT 1 FROM "Expense" r WHERE r."purchaseId" = p.id
-    AND ${notDeleted("r")} AND r."bookingTransactionCode" = pf.shortcode
-    AND r."economicRole" = ${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement})
-  OR pf.kind NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.fee}, ${financialTransactionKind.enum.refund})
-  OR pf."amountMinor" IS DISTINCT FROM (SELECT sum(coverage."amountMinor")
-    FROM "FinancialTransactionAllocation" coverage
-    WHERE coverage."transactionId" = pf.id AND ${notDeleted("coverage")}))`;
-// Outside the nearby window only partly paid spending blocks creation: an
-// installment plan or payment schedule has a linked payment and an open or
-// unknown balance. Never-paid older Purchases are left to settlement review;
-// loading every one of them per charge exhausts Worker memory. Payments beyond
-// the charge-side lines (a returned or recharged order) leave no balance for a
-// later charge. This prefilter keeps every unknown or uncertain case; the
-// graph capacity check still decides each Purchase it selects.
-const partlyPaidSpending = sql`(${vendorSpendingExists}
-  AND EXISTS (SELECT 1 ${chargePayments}) AND (
-  EXISTS (SELECT 1 ${vendorLines} AND (e."costMinor" IS NULL
-    OR e."lineKind" = ${expenseLineKindSchema.enum.unclassified}))
-  OR EXISTS (SELECT 1 ${chargePayments} AND ${uncertainPayment})
-  OR (SELECT sum(e."costMinor") ${vendorLines} AND ${chargeSideLine})
-    > (SELECT sum(paid."amountMinor") ${chargePayments})))`;
-// A wholly undated retained payment set is anchored at the order date, as in
-// the retained-settlement matcher. That anchor only proposes a match: an
-// undated exact amount anywhere still keeps the Purchase as a review-only
-// blocker, since its charge date is unknown.
-const datedSibling = (alias: string) =>
-  sql`EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" dated
-    WHERE dated."purchaseId" = ${sql.identifier(alias)}."purchaseId" AND dated."chargedAt" IS NOT NULL)`;
-const paymentDate = sql`coalesce(payment."chargedAt"::date,
-  CASE WHEN NOT ${datedSibling("payment")} THEN p.date END)`;
-const undatedPayment = (amounts: readonly number[]) =>
-  amounts.length
-    ? sql`(${vendorSpendingExists} AND EXISTS (
-  SELECT 1 FROM "PurchasePaymentEvidence" undated
-  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
-    AND undated."amountMinor" = ANY(${columnArrayParam(amounts)})))`
-    : sql`false`;
-const undatedPaymentAmounts = sql`CASE WHEN ${vendorSpendingExists} THEN ARRAY(
-  SELECT undated."amountMinor"::text FROM "PurchasePaymentEvidence" undated
-  WHERE undated."purchaseId" = p.id AND undated."chargedAt" IS NULL
-) ELSE ARRAY[]::text[] END`;
-// A refund's original is a same-Vendor order from the preceding window that
-// records a returned line. Selection is not identity: exactReceiptTarget still
-// requires one unique order whose open refund capacity equals the refund. An
-// explicit standalone refund (`purchaseId: null`) selects none.
-const REFUND_WINDOW_DAYS = 14;
-const refundOriginal = (input: CandidateInput) =>
-  input.refund && input.vendorId && input.purchaseId !== null
-    ? sql`(p."vendorId" = ${input.vendorId}::uuid
-      AND p.date BETWEEN ${input.date}::date - ${REFUND_WINDOW_DAYS}::int AND ${input.date}::date
-      AND EXISTS (SELECT 1 ${vendorLines} AND e."costMinor" < 0
-        AND e."lineKind" = ${expenseLineKindSchema.enum.principal}))`
-    : sql`false`;
 /** Purchases with an undated retained payment of one of these amounts. */
 const undatedPaymentIds = (amounts: readonly number[]) => sql`
   SELECT undated."purchaseId" FROM "PurchasePaymentEvidence" undated
@@ -1200,26 +1080,64 @@ const vendorCandidateIds = (
     AND ${notDeleted("paid")} AND paid."amountMinor" > 0
   ${amounts.length ? sql`UNION ${undatedPaymentIds(amounts)}` : sql``}`;
 
-/**
- * `vendorCandidateIds` for one charge, plus its explicit and payment matches:
- * a dated payment near the charge, or an undated one, which may stand at its
- * order date. A refund's same-Vendor originals fall in the nearby window.
- */
-const candidateIds = (input: CandidateInput) => sql`
-  SELECT named.id FROM "Purchase" named WHERE named.shortcode = ${input.purchaseId ?? null}
-  UNION
-  SELECT payment."purchaseId" FROM "PurchasePaymentEvidence" payment
-  WHERE payment."amountMinor" = ${input.amount}
-    AND payment."chargedAt"::date BETWEEN ${input.date}::date-3 AND ${input.date}::date+3
-  UNION ${
-    input.vendorId
-      ? vendorCandidateIds(
-          [input.vendorId],
-          { first: input.date, last: input.date },
-          [input.amount],
-        )
-      : undatedPaymentIds([input.amount])
-  }`;
+type CandidateRawRead = Omit<
+  SpendingCandidateRead,
+  "expenses" | "payments" | "settlements"
+> & {
+  expenses: { costMinor: string | null; lineKind: string }[];
+  payments: { amountMinor: string; chargedDate: string | null }[];
+  settlements: (Omit<
+    SpendingCandidateRead["settlements"][number],
+    "amountMinor" | "transactionAmountMinor" | "allocatedMinor"
+  > & {
+    amountMinor: string;
+    transactionAmountMinor: string;
+    allocatedMinor: string;
+  })[];
+};
+
+/** Load the indexed superset, including empty evidence sets, before any candidate decision. */
+async function spendingCandidateReads(
+  db: Database,
+  input: CandidateInput,
+  bounds: { first: string; last: string },
+  amounts: readonly number[],
+): Promise<SpendingCandidateRead[]> {
+  const rows = await getDb(db).execute<CandidateRawRead>(sql`
+    SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
+      ARRAY(SELECT jsonb_build_object('costMinor',e."costMinor"::text,${"lineKind"}::text,e."lineKind") FROM "Expense" e
+        WHERE e."purchaseId"=p.id AND ${notDeleted("e")} AND NOT e.future AND e."economicRole"=${financialBookingInput.shape.economicRole.unwrap().enum.vendor}) AS expenses,
+      ARRAY(SELECT jsonb_build_object('amountMinor',payment."amountMinor"::text,'chargedDate',payment."chargedAt"::date::text)
+        FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId"=p.id) AS payments,
+      ARRAY(SELECT jsonb_build_object('amountMinor',paid."amountMinor"::text,'transactionAmountMinor',pf."amountMinor"::text,
+        'allocatedMinor',(SELECT sum(coverage."amountMinor")::text FROM "FinancialTransactionAllocation" coverage WHERE coverage."transactionId"=pf.id AND ${notDeleted("coverage")}),
+        'transactionDeleted',pf."deletedAt" IS NOT NULL,'accountDeleted',pa."deletedAt" IS NOT NULL,'status',pf.status,
+        'ledgerTransferId',pf."ledgerTransferId",${"kind"}::text,pf.kind,${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement}::text,EXISTS(SELECT 1 FROM "Expense" e WHERE e."purchaseId"=p.id AND ${notDeleted("e")} AND e."bookingTransactionCode"=pf.shortcode AND e."economicRole"=${financialBookingInput.shape.economicRole.unwrap().enum.reimbursement}))
+        FROM "FinancialTransactionAllocation" paid JOIN "FinancialTransaction" pf ON pf.id=paid."transactionId" JOIN "FinancialAccount" pa ON pa.id=pf."accountId"
+        WHERE paid."purchaseId"=p.id AND ${notDeleted("paid")}) AS settlements
+    FROM "Purchase" p WHERE ${notDeleted("p")} AND p.id IN (
+      SELECT named.id FROM "Purchase" named WHERE named.shortcode=${input.purchaseId ?? null}
+      UNION SELECT payment."purchaseId" FROM "PurchasePaymentEvidence" payment WHERE payment."amountMinor"=ANY(${columnArrayParam(amounts)}) AND payment."chargedAt"::date BETWEEN ${bounds.first}::date-3 AND ${bounds.last}::date+3
+      UNION ${input.vendorId ? vendorCandidateIds([input.vendorId], bounds, amounts) : undatedPaymentIds(amounts)}
+    ) ORDER BY p.id`);
+  return rows.rows.map((row) => ({
+    ...row,
+    expenses: row.expenses.map((line) => ({
+      ...line,
+      costMinor: line.costMinor === null ? null : BigInt(line.costMinor),
+    })),
+    payments: row.payments.map((payment) => ({
+      ...payment,
+      amountMinor: BigInt(payment.amountMinor),
+    })),
+    settlements: row.settlements.map((payment) => ({
+      ...payment,
+      amountMinor: BigInt(payment.amountMinor),
+      transactionAmountMinor: BigInt(payment.transactionAmountMinor),
+      allocatedMinor: BigInt(payment.allocatedMinor),
+    })),
+  }));
+}
 
 async function spendingCandidates(
   db: Database,
@@ -1227,113 +1145,29 @@ async function spendingCandidates(
   page?: FinancialSpendingPage,
 ): Promise<SpendingCandidate[]> {
   const bounds = page?.candidateBounds;
-  // The page pool is a superset only for the source dates admitted at construction.
-  // Other callers keep the exact fresh selector.
-  if (
-    !page ||
-    !bounds ||
-    !page.candidateAmounts.has(input.amount) ||
-    input.date < bounds.first ||
-    input.date > bounds.last
-  ) {
-    const original = sql`(p.shortcode = ${input.purchaseId ?? null}
-      OR (p."vendorId" = ${input.vendorId ?? null}::uuid AND ${!input.refund}
-        AND abs(p.date - ${input.date}::date) <= 14)
-      OR ${refundOriginal(input)}
-      OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment
-        WHERE payment."purchaseId" = p.id
-          AND payment."amountMinor" = ${input.amount}
-          AND abs(${paymentDate} - ${input.date}::date) <= 3))`;
-    return (
-      await getDb(db)
-        .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date,
-          COALESCE((p.shortcode = ${input.purchaseId ?? null} OR EXISTS (SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id AND payment."amountMinor" = ${input.amount} AND abs(${paymentDate} - ${input.date}::date) <= 3)), false) AS "explicit",
-          NOT COALESCE(${original}, false) AS "reviewOnly" FROM "Purchase" p
-    WHERE ${notDeleted("p")}
-      AND p.id IN (${candidateIds(input)})
-      AND (${original} OR (p."vendorId" = ${input.vendorId ?? null}::uuid
-        AND ${!input.refund}
-        AND (${partlyPaidSpending} OR ${undatedPayment([input.amount])})))
-    ORDER BY p.id`)
-    ).rows;
+  const pooled =
+    page &&
+    bounds &&
+    page.candidateAmounts.has(input.amount) &&
+    input.date >= bounds.first &&
+    input.date <= bounds.last;
+  const scope = pooled ? bounds : { first: input.date, last: input.date };
+  const amounts = pooled ? [...page.candidateAmounts] : [input.amount];
+  const key = canonicalJson([
+    input.vendorId ?? null,
+    input.purchaseId ?? null,
+    scope,
+    amounts,
+  ]);
+  let rows = pooled ? page.candidateReads.get(key) : undefined;
+  if (!rows) {
+    rows = spendingCandidateReads(db, input, scope, amounts);
+    if (pooled) page.candidateReads.set(key, rows);
   }
-  const candidates = new Map<string, SpendingCandidate>();
-  for (const candidate of page.paymentCandidates[String(input.amount)] ?? []) {
-    if (calendarGap(candidate.chargedDate, input.date) <= 3)
-      candidates.set(candidate.id, {
-        id: candidate.id,
-        shortcode: candidate.shortcode,
-        displayLabel: candidate.displayLabel,
-        date: candidate.date,
-        explicit: true,
-        reviewOnly: false,
-      });
-  }
-  if (input.vendorId && !input.refund) {
-    let lookup = page.vendorCandidates.get(input.vendorId);
-    if (!lookup) {
-      lookup = getDb(db)
-        .execute<VendorCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date,
-          ${partlyPaidSpending} AS "partlyPaid", ${undatedPaymentAmounts} AS "undatedAmounts"
-        FROM "Purchase" p
-        WHERE ${notDeleted("p")} AND p."vendorId"=${input.vendorId}::uuid
-          AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
-            OR ${partlyPaidSpending} OR ${undatedPayment([...page.candidateAmounts])})
-        ORDER BY p.id`)
-        .then((result) => result.rows);
-      page.vendorCandidates.set(input.vendorId, lookup);
-    }
-    for (const { partlyPaid, undatedAmounts, ...candidate } of await lookup) {
-      const nearby = Boolean(
-        candidate.date && calendarGap(candidate.date, input.date) <= 14,
-      );
-      // The page pool also contains date-window headers for other source dates.
-      // Only partly paid spending or an undated exact-amount payment belongs
-      // to the additional review-only selector.
-      if (
-        !nearby &&
-        !partlyPaid &&
-        !undatedAmounts.includes(String(input.amount))
-      )
-        continue;
-      if (!candidates.has(candidate.id))
-        candidates.set(candidate.id, {
-          ...candidate,
-          explicit: false,
-          reviewOnly: !nearby,
-        });
-    }
-  }
-  if (input.vendorId && input.refund && input.purchaseId !== null) {
-    const originals = await getDb(db)
-      .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
-        WHERE ${notDeleted("p")} AND ${refundOriginal(input)} ORDER BY p.id`)
-      .then((result) => result.rows);
-    for (const candidate of originals)
-      if (!candidates.has(candidate.id))
-        candidates.set(candidate.id, {
-          ...candidate,
-          explicit: false,
-          reviewOnly: false,
-        });
-  }
-  if (input.purchaseId) {
-    let lookup = page.explicitCandidates.get(input.purchaseId);
-    if (!lookup) {
-      lookup = getDb(db)
-        .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
-        WHERE ${notDeleted("p")} AND p.shortcode=${input.purchaseId} ORDER BY p.id`)
-        .then((result) => result.rows);
-      page.explicitCandidates.set(input.purchaseId, lookup);
-    }
-    for (const candidate of await lookup)
-      candidates.set(candidate.id, {
-        ...candidate,
-        explicit: true,
-        reviewOnly: false,
-      });
-  }
-  return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
+  return decideSpendingCandidates(
+    { ...input, amountMinor: BigInt(input.amount) },
+    await rows,
+  );
 }
 
 function canReadBookingCandidates(
@@ -1367,7 +1201,7 @@ async function categoryHistoryForDiscovery(
   return lookup;
 }
 
-function spendingCategoryForDiscovery(
+function loadSpendingCategory(
   db: Database,
   reference:
     | { id: (typeof spendingCategory.$inferSelect)["id"] }
@@ -1382,7 +1216,7 @@ function spendingCategoryForDiscovery(
   if (cached) return cached;
   // Coalesce concurrent page reads, including misses.
   const lookup = getDb(db)
-    .query.spendingCategory.findFirst({
+    .query.spendingCategory.findMany({
       where: {
         RAW: (table: PgTable) =>
           relationalSql(
@@ -1396,7 +1230,7 @@ function spendingCategoryForDiscovery(
           ),
       },
     })
-    .then((row) => row);
+    .then((rows) => spendingCategoryForDiscovery(rows, reference));
   page?.categories.set(key, lookup);
   return lookup;
 }
@@ -1471,7 +1305,7 @@ async function discoverSpendingEvidence(
         ? [...vendors.values()][0]
         : undefined);
   let category = advice?.spendingCategoryId
-    ? await spendingCategoryForDiscovery(
+    ? await loadSpendingCategory(
         db,
         { shortcode: advice.spendingCategoryId },
         page,
@@ -1724,26 +1558,15 @@ async function discoverSpendingEvidence(
         ? candidateEvidence.find((candidate) => strong.has(candidate.shortcode))
         : undefined;
     if (original) {
-      const eligibleLines = original.graph.lines.filter(
-        (line) => !line.future && line.economicRole === "vendor",
+      const categoryId = refundSpendingCategory(
+        original.graph.lines.map((line) => ({
+          ...line,
+          costMinor: line.cost === null ? null : moneyToMinor(line.cost),
+        })),
+        original.graph.categories,
       );
-      const negative = eligibleLines.filter(
-        (line) =>
-          line.cost !== null && line.cost < 0 && line.lineKind === "principal",
-      );
-      const lines = negative.length
-        ? negative
-        : eligibleLines.filter((line) => line.cost !== null && line.cost > 0);
-      const categories = new Set(
-        lines.map(
-          (line) =>
-            original.graph.categories.find((entry) => entry.id === line.id)
-              ?.category ?? null,
-        ),
-      );
-      const [categoryId] = categories;
-      if (categories.size === 1 && categoryId) {
-        const inherited = await spendingCategoryForDiscovery(
+      if (categoryId) {
+        const inherited = await loadSpendingCategory(
           db,
           { id: parseEntityId("spendingCategory", categoryId) },
           page,
@@ -1856,60 +1679,45 @@ async function existingSpendingOutcome(
   page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan | null> {
   const { row, source, allocations, graphs } = facts;
-  const review = (reason: string): FinancialSpendingPlan => ({
-    ...basis,
-    status: "review_required",
-    reason,
+  const lineageMatches =
+    !allocations.length ||
+    basis.request.beneficiaries !== undefined ||
+    !row?.bookingExpenseFingerprint ||
+    row.bookingExpenseFingerprint ===
+      (await digestValue(
+        page?.lineages.get(row.shortcode) ??
+          (await loadFinancialBookingLineage(
+            db,
+            parseShortcodeFor("financialTransaction", row.shortcode),
+          )),
+      ));
+  const outcome = recordedSpendingOutcome({
+    amountMinor: moneyToMinor(source.amount),
+    beneficiariesSpecified: basis.request.beneficiaries !== undefined,
+    lineageMatches,
+    allocations: allocations.map((allocation) => ({
+      ...allocation,
+      amountMinor: moneyToMinor(allocation.amount),
+    })),
+    purchases: graphs.map((graph) => ({
+      id: graph.target?.id ?? "",
+      shortcode: graph.target?.shortcode ?? "",
+      availableMinor: (() => {
+        const value = availableCents(graph, source.amount, row?.id);
+        return value === null ? null : BigInt(value);
+      })(),
+    })),
   });
-  if (allocations.length) {
-    if (basis.request.beneficiaries !== undefined)
-      return review(
-        "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
-      );
-    const complete =
-      cents(
-        allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
-      ) === cents(source.amount);
-    const booked = graphs.every((graph) => {
-      const allocation = allocations.find(
-        (entry) => entry.purchaseId === graph.target?.id,
-      );
-      return (
-        allocation &&
-        Math.sign(allocation.amount) === Math.sign(source.amount) &&
-        availableCents(graph, source.amount, row?.id) ===
-          cents(allocation.amount)
-      );
-    });
-    if (
-      row?.bookingExpenseFingerprint &&
-      row.bookingExpenseFingerprint !==
-        (await digestValue(
-          page?.lineages.get(row.shortcode) ??
-            (await loadFinancialBookingLineage(
-              db,
-              parseShortcodeFor("financialTransaction", row.shortcode),
-            )),
-        ))
-    )
-      return review(
-        "The booking lineage changed; reconcile the existing Expenses.",
-      );
-    if (complete && booked)
-      return {
+  if (!outcome) return null;
+  return outcome.kind === "review"
+    ? { ...basis, status: "review_required", reason: outcome.reason }
+    : {
         ...basis,
         status: "already_booked",
-        purchaseIds: graphs.flatMap((graph) =>
-          graph.target
-            ? [parseShortcodeFor("purchase", graph.target.shortcode)]
-            : [],
-        ),
+        purchaseIds: outcome.purchaseIds
+          .filter(Boolean)
+          .map((id) => parseShortcodeFor("purchase", id)),
       };
-    return review(
-      "Existing allocations need reconciliation before booking more spending.",
-    );
-  }
-  return null;
 }
 
 // A receipt without payment evidence is this charge's Purchase only when the
@@ -2145,20 +1953,14 @@ async function prepareFinancialSpendingPreview(
     return review(violation?.message ?? "Spending must have a nonzero amount.");
   if (request.vendorId && vendor?.shortcode !== request.vendorId)
     return review("The reviewed Vendor is no longer live.");
-  if (request.spendingCategoryId) {
-    if (!category)
-      return review("The reviewed spending category is no longer live.");
-    if (
-      !request.categoryHistoryReviewed &&
-      (advice?.historyConflict ||
-        history.some(
-          (entry) => entry.category !== null && entry.category !== category.id,
-        ))
-    )
-      return review(
-        "Merchant spending history conflicts with the reviewed category.",
-      );
-  }
+  const categoryRefusal = reviewedCategoryRefusal({
+    explicit: Boolean(request.spendingCategoryId),
+    categoryId: category?.id ?? null,
+    historyReviewed: request.categoryHistoryReviewed,
+    historyConflict: advice?.historyConflict,
+    history,
+  });
+  if (categoryRefusal) return review(categoryRefusal);
   const blocker = spendingBlocker({
     facts: currentFacts,
     advice,
@@ -2273,17 +2075,14 @@ async function prepareReadySpending(
     liveHouseholdLoan(facts.account) && source.kind === "refund";
   // Category uncertainty must not invent a classification or prevent otherwise
   // supported spending. Missing effective categories enter the existing Work queue.
-  const bookingCategory =
-    category &&
-    advice?.categoryConfidence === "high" &&
-    (evidence.categoryFromPurchase ||
-      basis.request.categoryHistoryReviewed ||
-      (!advice.historyConflict &&
-        evidence.history.every(
-          (entry) => entry.category === null || entry.category === category.id,
-        )))
-      ? category
-      : undefined;
+  const bookingCategory = bookingSpendingCategory({
+    category,
+    confidence: advice?.categoryConfidence,
+    fromPurchase: evidence.categoryFromPurchase,
+    historyReviewed: basis.request.categoryHistoryReviewed,
+    historyConflict: advice?.historyConflict,
+    history: evidence.history,
+  });
   const review = (reason: string): FinancialSpendingPlan => ({
     ...basis,
     status: "review_required",
@@ -2861,20 +2660,6 @@ async function resolveBookingVendors(
         ),
       )
     : await lookup();
-  for (const [index, { fresh }] of bookings.entries())
-    if (
-      !fresh.request.vendorId &&
-      checked[index]!.some(
-        (result) =>
-          (result.row && result.row.shortcode !== fresh.vendorId) ||
-          result.candidates.some(
-            (candidate) => candidate.shortcode !== fresh.vendorId,
-          ),
-      )
-    )
-      return refuse(
-        "The raw or cleaned Vendor identity changed before booking.",
-      );
   const selectedCodes = uniq(
     bookings.flatMap(({ fresh }) =>
       fresh.request.vendorId ? [fresh.request.vendorId] : [],
@@ -2897,26 +2682,19 @@ async function resolveBookingVendors(
       : []
     ).map((row) => [row.shortcode, row]),
   );
-  const creating = bookings.flatMap(({ fresh }, index) =>
-    !fresh.request.vendorId && !fresh.vendorId ? [index] : [],
-  );
-  const folded = creating.map((index) =>
-    bookings[index]!.fresh.vendorName.trim().toLowerCase(),
-  );
-  if (new Set(folded).size !== folded.length)
-    return refuse(
-      "Spending plans in one batch create the same Vendor; apply them separately.",
-    );
-  const misses = creating.map((index) => {
-    const { fresh } = bookings[index]!;
-    const { merchant } = lookups[index]!;
-    return {
-      name: fresh.vendorName,
-      values: async () => ({
-        aliases: merchant && merchant !== fresh.vendorName ? [merchant] : [],
-      }),
-    };
-  });
+  const policyBookings = bookings.map(({ fresh }, index) => ({
+    vendorId: fresh.vendorId,
+    selectedCode: fresh.request.vendorId,
+    name: fresh.vendorName,
+    merchant: lookups[index]!.merchant,
+  }));
+  const plan = bookingVendorCreations(policyBookings, checked);
+  if (plan.kind === "refused") return refuse(plan.reason);
+  const { creating } = plan;
+  const misses = plan.misses.map(({ name, aliases }) => ({
+    name,
+    values: async () => ({ aliases }),
+  }));
   const created = layered
     ? (await mintNamesInLayer(layered.layer, "vendor", misses, actor)).map(
         (row) => ({ row, candidates: [] }),
@@ -2925,22 +2703,17 @@ async function resolveBookingVendors(
   const createdFor = new Map(
     creating.map((index, position) => [index, created[position]]),
   );
+  const selection = bookingVendorSelection(
+    policyBookings,
+    checked,
+    [...selected.values()],
+    createdFor,
+  );
+  if (selection.kind === "refused") return refuse(selection.reason);
   const ids = new Map<VendorShortcode, VendorId>();
-  const vendorIds = bookings.map(({ fresh }, index) => {
-    const selectedVendor = fresh.request.vendorId
-      ? selected.get(fresh.request.vendorId)
-      : undefined;
-    const resolved = selectedVendor
-      ? { row: selectedVendor, candidates: [] }
-      : fresh.vendorId
-        ? checked[index]!.find(
-            (result) => result.row?.shortcode === fresh.vendorId,
-          )
-        : createdFor.get(index);
-    if (!resolved?.row || resolved.candidates.length)
-      return refuse("The Vendor identity changed before booking.");
-    const code = parseShortcodeFor("vendor", resolved.row.shortcode);
-    ids.set(code, parseEntityId("vendor", resolved.row.id));
+  const vendorIds = selection.rows.map((row) => {
+    const code = parseShortcodeFor("vendor", row.shortcode);
+    ids.set(code, parseEntityId("vendor", row.id));
     return code;
   });
   const minted = new Set(
@@ -2950,20 +2723,10 @@ async function resolveBookingVendors(
   );
   if (minted.size) {
     const rechecked = await lookup();
-    for (const [index, results] of rechecked.entries())
-      if (
-        results.some((result) =>
-          [result.row, ...result.candidates].some(
-            (row) =>
-              row &&
-              minted.has(row.shortcode) &&
-              row.shortcode !== vendorIds[index],
-          ),
-        )
-      )
-        return refuse(
-          "The raw or cleaned Vendor identity changed before booking.",
-        );
+    if (createdVendorConflict(rechecked, minted, vendorIds))
+      return refuse(
+        "The raw or cleaned Vendor identity changed before booking.",
+      );
   }
   return { vendorIds, ids };
 }

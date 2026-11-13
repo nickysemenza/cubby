@@ -14,6 +14,24 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/lib/sha256-text.ts",
+  "src/server/domains/transaction-import/repo/statement-policy-wire.ts",
+  "src/server/domains/financial-transaction/repo/spending-prerequisites-wire.ts",
+  "src/server/domains/financial-transaction/policy/spending-category.ts",
+  "src/server/domains/purchase-import/policy/replacement-lines.ts",
+  "src/server/domains/purchase-import/policy/duplicate-source-order.ts",
+  "src/server/domains/financial-transaction/policy/financial-convergence.ts",
+  "src/server/domains/vendor/policy/booking-vendor.ts",
+  "src/server/domains/vendor/policy/purchase-folds.ts",
+  "src/server/lib/merge-notes.ts",
+  "src/server/domains/financial-transaction/policy/recorded-spending.ts",
+  "src/server/domains/financial-transaction/policy/allocation-set.ts",
+  "src/server/domains/purchase-import/policy/payment-match.ts",
+  "src/server/domains/purchase-import/policy/combined-charge.ts",
+
+  "src/server/domains/financial-transaction/policy/spending-candidates.ts",
+  "src/server/domains/purchase-import/policy/competing-payments.ts",
+  "src/server/domains/financial-transaction/policy/booking-rows.ts",
   "src/server/domains/financial-account/policy/purchaser.ts",
   "src/server/domains/financial-transaction/policy/booking-action.ts",
   "src/server/domains/financial-transaction/policy/booking-fingerprint.ts",
@@ -205,7 +223,6 @@ export const repositoryOwners = [
   "src/server/domains/financial-transaction/repo/financial-allocation-integrity.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-preview.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-projection.ts",
-  "src/server/domains/financial-transaction/repo/settlement-window.ts",
   "src/server/domains/image/repo/image-displayability.ts",
   "src/server/domains/image/repo/image-identification.ts",
   "src/server/domains/image/repo/image-integrity.ts",

@@ -128,6 +128,7 @@ const machineryInput = z.object({
 export type MachineryInput = z.infer<typeof machineryInput>;
 
 const machineryDrift = z.object({
+  scope: z.object({ kind: z.string(), key: z.string() }),
   proposalHash: z.string(),
   inputsHash: z.string(),
   difference: z.json(),
@@ -144,6 +145,22 @@ const machineryScope = z.object({
   error: machineryError.nullable(),
 });
 
+export const passWork = z.object({
+  /** Pass pages do no paid work; their Asks carry producer cost. */
+  costMicros: z.literal(0),
+  name: z.string(),
+  key: z.string(),
+  stage: kernelStage,
+  availableAt: z.iso.datetime(),
+  waitCause: kernelWaitCause.nullable(),
+  attempts: z.number().int().nonnegative(),
+  maxAttempts: z.number().int().positive(),
+  lastError: z.string().nullable(),
+  doneAt: z.iso.datetime().nullable(),
+  cancelledAt: z.iso.datetime().nullable(),
+});
+export type PassWork = z.infer<typeof passWork>;
+
 /**
  * @public The machinery panel's operation output (ADR 0029 section 10).
  *
@@ -159,6 +176,8 @@ export const machinery = z.object({
   gaps: capped(machineryGap),
   inputs: capped(machineryInput),
   drift: machineryDrift.nullable(),
+  /** Pass instances that carry this Run. */
+  passes: z.array(passWork).optional(),
   totalCostMicros: z.number().int().nonnegative(),
   /**
    * With `{ field }`: what "Let Cubby decide" would make the field, as a

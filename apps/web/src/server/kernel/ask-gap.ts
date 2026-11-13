@@ -37,6 +37,23 @@ const action = (
   label,
 });
 
+/** Answered calls leave no owed-call state, including before a scope reruns. */
+export function askGapState(
+  ask: Pick<AskCondition, "state" | "cancelled">,
+): KernelGap["askState"] {
+  if (ask.cancelled) return "abandoned";
+  switch (ask.state) {
+    case "queued":
+      return "queued";
+    case "sent":
+      return "sent";
+    case "unknown":
+      return "unknown";
+    default:
+      return null;
+  }
+}
+
 /** Whether the ask counts toward Stuck: unknown, or out of attempts, and not given up. */
 export const askIsStuck = (ask: AskCondition) =>
   !ask.cancelled &&
@@ -57,6 +74,7 @@ export function askMemberGap(
     until: null,
     actions,
     inputHash: ask.inputHash,
+    askState: askGapState(ask),
   });
   if (ask.cancelled)
     return gap(`${label}, which was given up`, [

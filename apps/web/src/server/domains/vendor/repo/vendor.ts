@@ -96,6 +96,7 @@ import {
 } from "~/server/domains/shipment/repo/carrier-references";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
+import { vendorPurchaseFolds } from "~/server/domains/vendor/policy/purchase-folds";
 import { vendorStatementLabels } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { vendorSearch } from "~/server/domains/vendor/repo/search-read-vendor";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -125,7 +126,6 @@ import { validateProductPolicy } from "~/server/generic/inheritance/repo/inherit
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
-import { planSlotCollisions } from "~/server/generic/merge/repo/collisions";
 import {
   finalizeMerge,
   mergeNotes,
@@ -1056,33 +1056,11 @@ const planVendorMerge = async (
       ),
     );
 
-  const vendorOrder = [keepId, ...losers];
-  allPurchases.sort(
-    (a, b) =>
-      vendorOrder.indexOf(a.vendorId) - vendorOrder.indexOf(b.vendorId) ||
-      a.id.localeCompare(b.id),
+  const { folded, repointed } = vendorPurchaseFolds(
+    keepId,
+    losers,
+    allPurchases,
   );
-  const slotted = planSlotCollisions({
-    keeperRows: allPurchases.filter((p) => p.vendorId === keepId),
-    loserRows: allPurchases.filter((p) => p.vendorId !== keepId),
-    slotKey: (p) => p.orderId,
-  });
-
-  const folded: VendorMergePlan["folded"] = slotted.absorb.flatMap(
-    ({ into, rows }) => {
-      const notes = mergeNotes(into.notes, ...rows.map((donor) => donor.notes));
-      return rows.map((row) => ({
-        deadId: row.id,
-        survivorId: into.id,
-        vendorId: row.vendorId,
-        notes,
-      }));
-    },
-  );
-  const repointed = slotted.repoint.map((p) => ({
-    id: p.id,
-    vendorId: p.vendorId,
-  }));
 
   return { deletedIds, repointed, folded, carried };
 };

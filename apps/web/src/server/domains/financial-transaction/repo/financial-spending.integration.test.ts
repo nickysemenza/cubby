@@ -1330,7 +1330,7 @@ describe("shared spending booking", () => {
         ctx.db,
         transaction.output.id,
       );
-      await expect(digestValue(lineage)).resolves.toMatch(/^[0-9a-f]{64}$/);
+      expect(digestValue(lineage)).toMatch(/^[0-9a-f]{64}$/);
       expect(lineage.sourceClaims[0]?.LedgerSourceClaim).toMatchObject({
         targetAmountAtClaim: 42.5,
       });

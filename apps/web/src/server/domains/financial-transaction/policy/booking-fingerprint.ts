@@ -5,11 +5,9 @@ import { type FinancialBookingPreview } from "@cubby/schemas/financial-booking";
 /** Preserve persisted JSON fingerprint bytes without a separate encoding buffer. */
 export const digestValue = <T extends object>(value: T) => {
   const serialized = JSON.stringify(value);
-  return Promise.resolve(
-    createHash("sha256")
-      .update(serialized ?? "")
-      .digest("hex"),
-  );
+  return createHash("sha256")
+    .update(serialized ?? "")
+    .digest("hex");
 };
 
 /** The caller emits validated canonical JSON without splitting surrogate pairs. */
@@ -28,7 +26,7 @@ export const digestCanonicalEvidenceStream = (
   });
   hash.update(buffered);
   hash.update('"}');
-  return Promise.resolve(hash.digest("hex"));
+  return hash.digest("hex");
 };
 
 /**

@@ -23,7 +23,8 @@ import {
 
 import type { KernelRegistry } from "./registry";
 import { fromIso, isoText } from "./sql-time";
-import { ASK } from "./vocab";
+import { ASK, MEMBER_PASS } from "./vocab";
+import { wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute">;
 
@@ -84,13 +85,15 @@ export async function renewClaim(
   token: string,
   leaseMs = CLAIM_LEASE_MS,
 ): Promise<boolean> {
-  const result = await q.execute<{ held: number }>(sql`
+  const result = await q.execute<{ deadline: string }>(sql`
     UPDATE ${tableOf(target)} SET "claimDeadline" = now() + ${leaseInterval(leaseMs)}
     WHERE ${identity(target)} AND "claimToken" = ${token}::uuid
       AND "claimDeadline" > now()
       ${cancellable(target) ? sql`AND "cancelledAt" IS NULL` : sql``}
-    RETURNING 1 AS held`);
-  return result.rows.length > 0;
+    RETURNING ${isoText(sql`"claimDeadline"`)} AS deadline`);
+  const row = result.rows[0];
+  if (row) await wakeClaimRecovery(new Date(row.deadline));
+  return !!row;
 }
 
 /**
@@ -191,6 +194,7 @@ export type ClaimedScope = {
   conflicts: number;
   dirtiedAt: Date;
   token: string;
+  deadline: Date;
 };
 
 /**
@@ -227,6 +231,7 @@ export async function claimScopes(
     attempts: number;
     conflicts: number;
     updatedAt: string;
+    deadline: string;
   }>(sql`
     WITH ranks (kind, rank, upstream) AS (VALUES ${ranks}),
     claimable AS (
@@ -252,7 +257,9 @@ export async function claimScopes(
       "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}, "claimedSeq" = d.seq
     FROM picked WHERE d."scopeKind" = picked."scopeKind" AND d."scopeKey" = picked."scopeKey"
     RETURNING d."scopeKind", d."scopeKey", d.seq, d.attempts, d.conflicts,
-      ${isoText(sql`d."updatedAt"`)} AS "updatedAt"`);
+      ${isoText(sql`d."updatedAt"`)} AS "updatedAt", ${isoText(sql`d."claimDeadline"`)} AS deadline`);
+  if (result.rows[0])
+    await wakeClaimRecovery(new Date(result.rows[0].deadline));
   return result.rows.map((row) => ({
     kind: row.scopeKind,
     key: row.scopeKey,
@@ -260,6 +267,7 @@ export async function claimScopes(
     attempts: row.attempts,
     conflicts: row.conflicts,
     dirtiedAt: fromIso(row.updatedAt) ?? new Date(),
+    deadline: new Date(row.deadline),
     token,
   }));
 }
@@ -280,6 +288,7 @@ export type ClaimedAsk = {
   input: unknown;
   attempts: number;
   token: string;
+  deadline: Date;
 };
 
 /** Claim queued asks whose producer this runtime can run. */
@@ -296,6 +305,7 @@ export async function claimAsks(
     feature: string;
     input: unknown;
     attempts: number;
+    deadline: string;
   }>(sql`
     WITH picked AS (
       SELECT id FROM "Ask"
@@ -310,8 +320,14 @@ export async function claimAsks(
     UPDATE "Ask" a SET "claimToken" = ${token}::uuid,
       "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
     FROM picked WHERE a.id = picked.id
-    RETURNING a.id, a."inputHash", a.feature, a.input, a.attempts`);
-  return result.rows.map((row) => ({ ...row, token }));
+    RETURNING a.id, a."inputHash", a.feature, a.input, a.attempts, ${isoText(sql`a."claimDeadline"`)} AS deadline`);
+  if (result.rows[0])
+    await wakeClaimRecovery(new Date(result.rows[0].deadline));
+  return result.rows.map((row) => ({
+    ...row,
+    token,
+    deadline: new Date(row.deadline),
+  }));
 }
 
 export type ClaimedPass = {
@@ -320,7 +336,14 @@ export type ClaimedPass = {
   cursor: unknown;
   attempts: number;
   token: string;
+  deadline: Date;
 };
+
+/** includes-deleted: priority follows the originating Run's member request. */
+export const passOrder = (): SQL => sql`EXISTS (
+  SELECT 1 FROM "Run" r WHERE r.id = "Pass"."runId"
+    AND (r.cause = ${MEMBER_PASS.cause} OR r.trigger IN (${MEMBER_PASS.manual}, ${MEMBER_PASS.foreground}))
+) DESC, "availableAt", "createdAt", name, key`;
 
 export async function claimPass(
   q: Q,
@@ -333,21 +356,23 @@ export async function claimPass(
     key: string;
     cursor: unknown;
     attempts: number;
+    deadline: string;
   }>(sql`
     WITH picked AS (
       SELECT name, key FROM "Pass"
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
         AND attempts < "maxAttempts" AND name = ANY(${textArrayParam(names)})
         AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-      ORDER BY "availableAt" LIMIT 1
+      ORDER BY ${passOrder()} LIMIT 1
       FOR UPDATE SKIP LOCKED
     )
     UPDATE "Pass" p SET "claimToken" = ${token}::uuid,
       "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
     FROM picked WHERE p.name = picked.name AND p.key = picked.key
-    RETURNING p.name, p.key, p.cursor, p.attempts`);
+    RETURNING p.name, p.key, p.cursor, p.attempts, ${isoText(sql`p."claimDeadline"`)} AS deadline`);
   const row = result.rows[0];
-  return row ? { ...row, token } : null;
+  if (row) await wakeClaimRecovery(new Date(row.deadline));
+  return row ? { ...row, token, deadline: new Date(row.deadline) } : null;
 }
 
 /**

@@ -94,6 +94,11 @@ export const kernelGap = z.object({
   actions: z.array(kernelGapAction),
   /** The ask an `answer` gap waits on. */
   inputHash: z.string().nullable(),
+  /** Live owed-call state; cancellation reads as abandoned. */
+  askState: z
+    .enum(["queued", "sent", "unknown", "abandoned"])
+    .nullable()
+    .optional(),
 });
 export type KernelGap = z.infer<typeof kernelGap>;
 

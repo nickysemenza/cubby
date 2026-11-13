@@ -29,7 +29,12 @@ import { findPgError } from "~/server/errors/db-errors";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { askIsStuck, askMemberGap, type AskCondition } from "./ask-gap";
+import {
+  askGapState,
+  askIsStuck,
+  askMemberGap,
+  type AskCondition,
+} from "./ask-gap";
 import { auditApply } from "./audit";
 import {
   ClaimLapsedError,
@@ -424,6 +429,11 @@ async function applyScope(
       : undefined;
     const member = ask ? askMemberGap(ask, gap.input, gap.since) : null;
     if (member) gaps[index] = member;
+    else if (ask)
+      gaps[index] = {
+        ...gap,
+        askState: askGapState(ask),
+      };
   }
 
   // Downstream readers of the output run again; this scope never does.

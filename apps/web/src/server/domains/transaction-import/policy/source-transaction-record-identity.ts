@@ -1,7 +1,8 @@
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
 import { cents } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
+
+import { sha256Text as sha256Hex } from "~/server/lib/sha256-text";
 
 /** A unique legacy alias can join observations within the same source. */
 /**
@@ -48,9 +49,9 @@ export type SourceTransactionRecordIdentityInput = {
  * that makes "absent from both exports" usable evidence. One transaction can
  * carry both refs; that is why settlement references have no primary slot.
  */
-export async function sourceTransactionRecordExternalId(
+export function sourceTransactionRecordExternalId(
   row: SourceTransactionRecordIdentityInput,
-): Promise<string> {
+): string {
   const payload = [
     `${row.source}:v1`,
     canonical(row.account),
@@ -58,18 +59,18 @@ export async function sourceTransactionRecordExternalId(
     String(cents(row.amount)),
     canonical(row.originalStatement),
   ].join(SEPARATOR);
-  return `v1:${await sha256Hex(payload)}`;
+  return `v1:${sha256Hex(payload)}`;
 }
 
 /** Immutable observation identity. Provider IDs and content are reconciliation
  * evidence; neither may collapse two positions in the same export. */
-export async function sourceTransactionRecordOccurrenceId(
+export function sourceTransactionRecordOccurrenceId(
   source: string,
   fingerprint: string,
   rowPosition: number,
-): Promise<string> {
+): string {
   const payload = JSON.stringify([source, "v2", fingerprint, rowPosition]);
-  return `v2:${await sha256Hex(payload)}`;
+  return `v2:${sha256Hex(payload)}`;
 }
 
 export const PROVIDER_IDENTITY_REVIEW =
