@@ -304,4 +304,28 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     `INSERT INTO "SourceObservationAnnotation" ("observationId","accountId",notes) VALUES ($1,$2,'Synthetic member note')`,
     [cutoverId(19), cutoverId(2)],
   );
+  for (const [n, target, verdict] of [
+    [67, 4, "correct"],
+    [68, 5, "wrong"],
+  ]) {
+    await client.query(
+      `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,evidence,decisions) SELECT $1,$2,'recommendation',jsonb_build_object('kind','recommendation','entity','email','recordId',$3::text,'scope','connection.email-purchase','candidateKey',$2::text),'{}','email',$3::uuid,'','null','rule',jsonb_build_object('candidate',jsonb_build_object('relation','email-purchase','source',jsonb_build_object('entityKind','email','entityId',src.shortcode),'target',jsonb_build_object('entityKind','purchase','entityId',dst.shortcode))),$5 FROM "Entity" src CROSS JOIN "Entity" dst WHERE src.id=$3::uuid AND dst.id=$4::uuid`,
+      [
+        cutoverId(Number(n)),
+        `synthetic:connection:${n}`,
+        cutoverId(16),
+        cutoverId(Number(target)),
+        JSON.stringify([
+          {
+            verdict,
+            correction: { present: false },
+            intent: "apply",
+            authority: "member",
+            actorUserId: "synthetic-cutover",
+            createdAt: "2026-01-06T00:00:00.000Z",
+          },
+        ]),
+      ],
+    );
+  }
 }

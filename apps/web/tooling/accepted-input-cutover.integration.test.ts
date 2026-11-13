@@ -110,6 +110,24 @@ it("carries held values, paid results, redirects and every accepted money row", 
     expect(
       (
         await client.query(
+          `SELECT subject,value,"actorKind" FROM "Decision" WHERE subject LIKE 'connection/%' ORDER BY subject`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        subject: `connection/email-purchase:${cutoverId(16)}:${cutoverId(4)}`,
+        value: true,
+        actorKind: "member",
+      },
+      {
+        subject: `connection/email-purchase:${cutoverId(16)}:${cutoverId(5)}`,
+        value: false,
+        actorKind: "member",
+      },
+    ]);
+    expect(
+      (
+        await client.query(
           `SELECT subject,other,kind FROM "Decision" WHERE channel='identity'`,
         )
       ).rows,
@@ -248,8 +266,8 @@ it("aborts atomically for every preservation verification", async () => {
       "accepted occurrence":
         'DELETE FROM "RecordKey" WHERE "scopeKey"=\'' + cutoverId(63) + "'",
       "audit count": 'DELETE FROM archive."AuditLog_authority_preimage"',
-      "evaluation count": 'DELETE FROM archive."AiEvaluation_preimage"',
-      "requester count": 'DELETE FROM archive."AiEvaluationRequest_preimage"',
+      "evaluation count": 'DELETE FROM "Ask"',
+      "requester count": 'DELETE FROM "AskScope"',
       "audit preimage": 'DELETE FROM archive."AuditLog_authority_preimage"',
       "evaluation preimage": 'DELETE FROM archive."AiEvaluation_preimage"',
       "requester preimage":

@@ -60,6 +60,9 @@ try {
       FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping)
       LEFT JOIN expected e ON e.mapping=k.mapping GROUP BY k.mapping
     UNION ALL SELECT 'verification',k.mapping,coalesce(f.n,0) FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping) LEFT JOIN failures f ON f.mapping=k.mapping
+    UNION ALL SELECT 'destination','archive/AuditLog_authority_preimage',count(*)::int FROM "AuditLog"
+    UNION ALL SELECT 'destination','archive/AiEvaluation_preimage',count(*)::int FROM "AiEvaluation"
+    UNION ALL SELECT 'destination','archive/AiEvaluationRequest_preimage',count(*)::int FROM "AiEvaluationRequest"
     UNION ALL SELECT 'verification','audit preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AuditLog"
     UNION ALL SELECT 'verification','evaluation preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluation"
     UNION ALL SELECT 'verification','requester preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"
