@@ -108,6 +108,13 @@ export async function patchEntityRows<T extends PatchTable>(
     // Widen only the builder's table metadata; the same table instance owns
     // both the patch and RETURNING projection.
     const updateTable: PgTable = table;
+    const kernel = await import("~/server/kernel/api");
+    if (writesColumns)
+      await kernel.lockWrites(databaseForTransaction(tx), {
+        table,
+        ids: changes.map(({ row }) => row.id),
+        columns: Object.keys(values),
+      });
     const updated = writesColumns
       ? await tx
           .update(updateTable)
@@ -140,9 +147,7 @@ export async function patchEntityRows<T extends PatchTable>(
         })),
     );
     if (writesColumns)
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(databaseForTransaction(tx), {
+      await kernel.emitWrites(databaseForTransaction(tx), {
         table,
         ids: [...written],
         columns: Object.keys(values),
@@ -228,6 +233,17 @@ export async function bulkPatchEntities<
     const { table } = spec;
     const values = buildPartialUpdateValues(await spec.values(tx, data));
     const ids = await resolveAllOrThrow(tx, spec.entity, shortcodes);
+    // `fields` columns are decisions the kernel applies per record.
+    const fieldsPlan = fieldsPlanOf(spec.entity);
+    const { authored, owned } = splitFieldsValues(fieldsPlan, values);
+    const kernel = await import("~/server/kernel/api");
+    const database = databaseForTransaction(tx);
+    // Revisions before the row locks below, the order a kernel apply takes.
+    await kernel.lockWrites(database, {
+      table,
+      ids,
+      columns: Object.keys(authored),
+    });
     const queryTable: PgTable = table;
     // SAFETY: the explicit projection of the same generic table, whose id and
     // shortcode columns PatchTable/T require.
@@ -243,9 +259,6 @@ export async function bulkPatchEntities<
       );
     }
     await spec.validate?.(tx, before, values);
-    // `fields` columns are decisions the kernel applies per record.
-    const fieldsPlan = fieldsPlanOf(spec.entity);
-    const { authored, owned } = splitFieldsValues(fieldsPlan, values);
     // SAFETY: `values` is a partial row of `table`, defined values only.
     const set = authored as PgUpdateSetSource<T>;
     if (Object.keys(authored).length)
@@ -257,11 +270,8 @@ export async function bulkPatchEntities<
       (key): key is Extract<keyof BulkRow<T>, string> =>
         Object.hasOwn(authored, key),
     );
-    const database = databaseForTransaction(tx);
     if (fields.length)
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(database, {
+      await kernel.emitWrites(database, {
         table,
         ids,
         columns: fields,

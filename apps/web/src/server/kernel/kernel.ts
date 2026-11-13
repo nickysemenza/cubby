@@ -39,7 +39,7 @@ import {
   type Pass,
   type ScopeRef,
 } from "./define";
-import { insertFactKeys, markDirty } from "./dirty";
+import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
 import {
   approveDrift,
   approveDriftClass,
@@ -48,7 +48,12 @@ import {
 } from "./drift";
 import { householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { membershipKeys, reindexRows, relatedMemberships } from "./index-keys";
+import {
+  indexedKeys,
+  membershipKeys,
+  reindexRows,
+  relatedMemberships,
+} from "./index-keys";
 import { rowKey, tableKey, columnKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
@@ -114,6 +119,19 @@ export type Kernel = {
     },
   ): Promise<number>;
   /**
+   * Lock, before an authored writer updates rows, the revisions its
+   * `emitWrites` will raise for them: a kernel apply takes revisions before
+   * the rows it updates, so writers take them in the same order.
+   */
+  lockWrites(
+    db: Database,
+    write: {
+      table: PgTable | string;
+      ids: readonly string[];
+      columns: readonly string[];
+    },
+  ): Promise<void>;
+  /**
    * Merge two records outside a reconcile (a member's `same`, or the money
    * lane's proven match) under the household write gate, settling ownership
    * and dirtying every affected scope.
@@ -171,6 +189,12 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   });
   registry = buildRegistry([kernelModule, ...modules]);
   const bound = registry;
+  const readsColumns = (name: string, columns: readonly string[]) =>
+    bound
+      .readers(name)
+      .some((reader) =>
+        reader.columns.some((column) => columns.includes(column)),
+      );
   return {
     registry: bound,
     machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
@@ -211,16 +235,31 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       machinery(db, bound, viewer, ref, options),
     withAsk: (db, kind, input, options) =>
       withAsk(db, bound, kind, input, options),
+    async lockWrites(db, write) {
+      const name =
+        typeof write.table === "string"
+          ? write.table
+          : getTableName(write.table);
+      if (!write.ids.length) return;
+      const keys = [
+        ...(readsColumns(name, write.columns)
+          ? [
+              tableKey(name),
+              ...write.columns.map((column) => columnKey(name, column)),
+              ...write.ids.map((id) => rowKey(name, id)),
+            ]
+          : []),
+        ...(await indexedKeys(repositoryQueries(db), bound, name, write.ids)),
+      ];
+      if (keys.length)
+        await lockKeyRevs(repositoryQueries(db), [...new Set(keys)].sort());
+    },
     async emitWrites(db, write) {
       const name =
         typeof write.table === "string"
           ? write.table
           : getTableName(write.table);
-      const read = bound
-        .readers(name)
-        .some((reader) =>
-          reader.columns.some((column) => write.columns.includes(column)),
-        );
+      const read = readsColumns(name, write.columns);
       const capability = write.entity
         ? bound.machinery.get(write.entity)
         : undefined;

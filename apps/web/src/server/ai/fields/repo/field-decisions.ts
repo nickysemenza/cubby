@@ -271,6 +271,8 @@ export type HeldFieldsValues<V> = {
   values: V;
   /** The `fields` columns held back from the write. */
   held: readonly string[];
+  /** Before an update, lock what `settle` will raise: revisions before rows. */
+  lock(db: Database | DrizzleTransaction, recordId: string): Promise<void>;
   settle(
     db: Database | DrizzleTransaction,
     actor: ActorContext,
@@ -287,9 +289,22 @@ export function holdFieldsValues<V extends object>(
 ): HeldFieldsValues<V> {
   const plan = fieldsPlanOf(entity);
   const { authored, owned } = splitFieldsValues(plan, written);
+  const columns = Object.entries(authored).flatMap(([key, value]) =>
+    value === undefined ? [] : [key],
+  );
   return {
     values: authored,
     held: Object.keys(owned),
+    async lock(db, recordId) {
+      if (!plan || !columns.length) return;
+      await (
+        await kernel()
+      ).lockWrites(db instanceof Database ? db : databaseForTransaction(db), {
+        table: plan.table,
+        ids: [recordId],
+        columns,
+      });
+    },
     async settle(db, actor, recordId, before, changes) {
       const database = db instanceof Database ? db : databaseForTransaction(db);
       if (plan)
@@ -298,9 +313,7 @@ export function holdFieldsValues<V extends object>(
         ).emitWrites(database, {
           table: plan.table,
           ids: [recordId],
-          columns: Object.entries(authored).flatMap(([key, value]) =>
-            value === undefined ? [] : [key],
-          ),
+          columns,
           entity,
           created: mode === "create",
         });

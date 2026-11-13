@@ -1256,6 +1256,54 @@ describe("evidence-facts kernel", () => {
     expect(performance.now() - started).toBeLessThan(1000);
   });
 
+  it("orders a gated member reconcile and an ungated append to one scope without a deadlock", async () => {
+    const { kernel } = kernelWith();
+    const scope = { kind: PURCHASE_SCOPE, key: "ORD-ORDER" };
+    await kernel.append(ctx.db, [charge(scope.key, 100)]);
+    await settle(kernel);
+    const [booked] = await purchases(ctx.db);
+    let decided!: () => void;
+    const onDecided = new Promise<void>((resolve) => (decided = resolve));
+    let resume!: () => void;
+    const onResume = new Promise<void>((resolve) => (resume = resolve));
+    // The member dirties the scope, then applies it; the append raises the
+    // scope's read key, then dirties it.
+    const member = householdWrite(ctx.db, async (tx) => {
+      await kernel.decide(tx, ctx.actor, [
+        {
+          channel: "assignment",
+          kind: "set",
+          subject: recordSubject(PURCHASE_TABLE, booked!.id),
+          field: "merchant",
+          value: "Member seller",
+        },
+      ]);
+      decided();
+      await onResume;
+      return kernel.reconcileNow(tx, [scope]);
+    });
+    await onDecided;
+    const appended = kernel.append(ctx.db, [charge(scope.key, 140)]);
+    await vi.waitUntil(
+      async () =>
+        (
+          await repositoryQueries(ctx.db).execute<{ n: number }>(
+            sql`SELECT count(*)::int AS n FROM pg_stat_activity
+              WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+          )
+        ).rows[0]!.n > 0,
+      { timeout: 5_000, interval: 20 },
+    );
+    resume();
+    const [outcomes] = await Promise.all([member, appended]);
+    expect(outcomes.map((item) => item.status)).not.toContain("failed");
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]).toMatchObject({
+      amountMinor: 140,
+      merchant: "Member seller",
+    });
+  });
+
   it("retains Run requester links for queued and already answered scope inputs", async () => {
     const { kernel } = kernelWith();
     const runId = await ensureRun(ctx.db, ctx.actor, {

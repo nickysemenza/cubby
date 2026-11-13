@@ -52,6 +52,26 @@ export function indexFacts(
   }));
 }
 
+/** The stored index keys of rows, before a writer changes them. */
+export async function indexedKeys(
+  q: Q,
+  registry: KernelRegistry,
+  table: string,
+  ids: readonly string[],
+): Promise<Key[]> {
+  if (!ids.length || !plainIndexes(registry, table).length) return [];
+  const rows = await q
+    .select({ key: factKey.key })
+    .from(factKey)
+    .where(
+      and(
+        eq(factKey.factKind, `index:${table}`),
+        inArray(factKey.factId, [...ids]),
+      ),
+    );
+  return rows.map((row) => row.key);
+}
+
 /**
  * Replace the index facts of rows just written and return their previous and
  * current keys: the previous facts stand for the rows before the write.
@@ -69,17 +89,11 @@ export async function reindexRows(
     eq(factKey.factKind, kind),
     inArray(factKey.factId, [...ids]),
   );
-  const previous = await q
-    .select({ key: factKey.key })
-    .from(factKey)
-    .where(where);
+  const previous = await indexedKeys(q, registry, table, ids);
   const indexed = indexFacts(registry, table, rows);
   await q.delete(factKey).where(where);
   await insertFactKeys(q, indexed);
-  return [
-    ...previous.map((row) => row.key),
-    ...indexed.flatMap((row) => row.keys),
-  ];
+  return [...previous, ...indexed.flatMap((row) => row.keys)];
 }
 
 /** Joined-predicate memberships of the changed rows, read from the committed graph. */

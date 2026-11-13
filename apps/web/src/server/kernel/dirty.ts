@@ -13,6 +13,7 @@ import { textArrayParam } from "~/server/db/helpers/array-param";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 
 import type { Key, ScopeRef } from "./define";
+import { holdsHouseholdGate } from "./gate";
 import type { KernelRegistry } from "./registry";
 
 type Q = Pick<RepositoryQueryClient, "execute">;
@@ -71,6 +72,10 @@ export type DirtyInput = {
  * them or that the mutation discovers. A new input clears attempts and backoff:
  * the scope runs again under the current rules. Unregistered scope kinds are
  * skipped. Returns how many scopes were dirtied.
+ *
+ * A gated transaction may apply the scopes it dirties, which locks their read
+ * revisions. It first locks the revisions those scopes last read, so it takes
+ * `KeyRev` before `ScopeDirty` as an ungated mutation does.
  */
 export async function markDirty(
   q: Q,
@@ -100,11 +105,19 @@ export async function markDirty(
       WHERE ${input.keys.length ? sql`dep.key = ANY(${textArrayParam(input.keys)})` : sql`false`}
       UNION
       SELECT found.kind, found.key FROM jsonb_to_recordset(${discovered}::jsonb) AS found(kind text, key text)
+    ), reads AS (
+      INSERT INTO "KeyRev" (key, rev)
+      SELECT DISTINCT dep.key, 0 FROM "ScopeDep" dep
+      JOIN targets ON dep."scopeKind" = targets.kind AND dep."scopeKey" = targets.key
+      WHERE ${holdsHouseholdGate}
+      ORDER BY dep.key
+      ON CONFLICT (key) DO UPDATE SET rev = "KeyRev".rev
+      RETURNING 1
     ), upserted AS (
       INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, seq, reason, "availableAt")
       SELECT targets.kind, targets.key, lanes.lane, 1, ${input.reason}, now()
       FROM targets JOIN lanes ON lanes.kind = targets.kind
-      WHERE NOT EXISTS (
+      WHERE (SELECT count(*) FROM reads) >= 0 AND NOT EXISTS (
         SELECT 1 FROM jsonb_to_recordset(${JSON.stringify([...(input.excludes ?? []), ...(input.exclude ? [input.exclude] : [])])}::jsonb) AS excluded(kind text, key text)
         WHERE excluded.kind = targets.kind AND excluded.key = targets.key
       )

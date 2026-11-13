@@ -646,6 +646,7 @@ export const updatePlanting = defineMutationWriter({
           data.season === undefined ? undefined : (data.season?.end ?? null),
       });
       const fields = holdFieldsValues("planting", values);
+      await fields.lock(tx, id);
       const updated = await updateLiveAndReturn(
         tx,
         planting,
@@ -774,6 +775,7 @@ export const updateGardenEntry = defineMutationWriter({
         updatedAt: plantingIdsChanged ? new Date() : undefined,
       });
       const fields = holdFieldsValues("gardenEntry", values);
+      await fields.lock(tx, id);
       const updated = await updateLiveAndReturn(
         tx,
         gardenEntry,

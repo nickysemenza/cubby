@@ -443,6 +443,14 @@ export function createEntityCrud<
       const written = Object.entries(values)
         .filter(([, value]) => value !== undefined)
         .map(([column]) => column);
+      if (written.length) {
+        const { lockWrites } = await import("~/server/kernel/api");
+        await lockWrites(databaseForTransaction(tx), {
+          table: config.table,
+          ids: [id],
+          columns: written,
+        });
+      }
       const updated = written.length
         ? await updateLiveAndReturn(tx, config.table, values, id)
         : before;

@@ -174,6 +174,18 @@ export async function emitWrites(
   return (await productionKernel()).emitWrites(db, write);
 }
 
+/** Lock what `emitWrites` will raise for these rows, before the writer updates them. */
+export async function lockWrites(
+  db: Database,
+  write: {
+    table: PgTable | string;
+    ids: readonly string[];
+    columns: readonly string[];
+  },
+): Promise<void> {
+  return (await productionKernel()).lockWrites(db, write);
+}
+
 /** Merge two records under the write gate, settling which scope owns the survivor. */
 export async function merge(
   db: Database,

@@ -45,6 +45,14 @@ export class HouseholdWriteBusyError extends WorkRetryableError {
   }
 }
 
+/** Whether this transaction holds the household write gate. */
+export const holdsHouseholdGate = sql`EXISTS (
+  SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
+    AND classid = ((hashtextextended('cubby:household-write', 0) >> 32) & 4294967295)::oid
+    AND objid = (hashtextextended('cubby:household-write', 0) & 4294967295)::oid
+    AND objsubid = 1 AND granted
+)`;
+
 /** Session limits for this transaction only, then the gate when the lane is money. */
 export async function enterWriteTransaction(
   q: Q,
@@ -54,12 +62,7 @@ export async function enterWriteTransaction(
   const state = await q.execute<{
     ordered: boolean;
   }>(sql`WITH gate AS MATERIALIZED (
-    SELECT EXISTS (
-      SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
-        AND classid = ((hashtextextended('cubby:household-write', 0) >> 32) & 4294967295)::oid
-        AND objid = (hashtextextended('cubby:household-write', 0) & 4294967295)::oid
-        AND objsubid = 1 AND granted
-    ) AS held
+    SELECT ${holdsHouseholdGate} AS held
   ) SELECT
     (${options.lane !== "money"} OR (
       pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
@@ -83,7 +86,7 @@ export async function enterWriteTransaction(
 
 /**
  * A member or service write to money-lane columns: read committed, the gate,
- * and a lock timeout reported as {@link HouseholdWriteBusyError}.
+ * and a lock timeout or deadlock reported as {@link HouseholdWriteBusyError}.
  */
 export async function householdWrite<T>(
   db: Database,
@@ -99,7 +102,11 @@ export async function householdWrite<T>(
       return work(tx);
     });
   } catch (error) {
-    if (options.mode === "member" && findPgError(error)?.code === "55P03")
+    // A deadlock is retried like a lock wait; lock order is what prevents it.
+    if (
+      options.mode === "member" &&
+      ["55P03", "40P01"].includes(findPgError(error)?.code ?? "")
+    )
       throw new HouseholdWriteBusyError(error);
     throw error;
   }

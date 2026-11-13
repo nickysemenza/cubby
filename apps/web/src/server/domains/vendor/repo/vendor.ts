@@ -954,6 +954,7 @@ export const mergeVendors = async (
       const carriedFields = holdFieldsValues("vendor", carried);
       const carriedColumns = carriedFields.values;
       if (Object.keys(carriedColumns).length > 0) {
+        await carriedFields.lock(tx, keepId);
         await tx
           .update(vendor)
           .set(carriedColumns)

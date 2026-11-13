@@ -494,6 +494,7 @@ export const updateLocation = defineMutationWriter({
         }),
       );
 
+      await fields.lock(tx, id);
       const updated = await updateLiveAndReturn(
         tx,
         location,

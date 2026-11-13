@@ -340,6 +340,7 @@ export const updateProject = defineMutationWriter({
         notes: data.notes,
       });
       const [beforeWithUrls] = await withProjectExternalUrls(tx, [before]);
+      await fields.lock(tx, id);
       const updatedRow = await updateLiveAndReturn(
         tx,
         project,
