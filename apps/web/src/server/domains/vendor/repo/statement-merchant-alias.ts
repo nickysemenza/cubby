@@ -5,11 +5,10 @@ import { eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
+import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { executeEntity } from "~/server/entity-kernel";
 import type { KernelServicesFor } from "~/server/entity-kernel/adapter";
 import { resolveNames } from "~/server/entity-kernel/resolve";
-
-import { merchantVendorInferenceFor } from "./merchant-vendor-inference";
 
 /**
  * Add a statement's raw merchant string as an alias of the one live Vendor

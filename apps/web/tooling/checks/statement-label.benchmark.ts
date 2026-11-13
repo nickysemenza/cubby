@@ -12,7 +12,6 @@ import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { buildActorContext } from "@cubby/schemas/context";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { STATEMENT_LABEL_REVISION } from "@cubby/schemas/statement-suggestion";
 import { testUserId } from "@cubby/schemas/testing";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -480,15 +479,15 @@ it.each(sizes)(
       const durable = await getDb(db).execute<{
         active: number;
         unfinished: number;
-        checkpoints: number;
+        answered: number;
       }>(sql`SELECT count(*)::int AS active,
         count(*) FILTER (WHERE data->>'needsLabel' = 'true' OR data->>'applicationPending' = 'true')::int AS unfinished,
-        count(*) FILTER (WHERE data->'labelCheckpoint'->>'revision' = ${STATEMENT_LABEL_REVISION})::int AS checkpoints
+        count(*) FILTER (WHERE data ? 'answers')::int AS answered
         FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active`);
       expect(durable.rows[0]).toEqual({
         active: size,
         unfinished: 0,
-        checkpoints: size,
+        answered: size,
       });
       const settledMoney = await getDb(db).execute<{
         expenses: number;

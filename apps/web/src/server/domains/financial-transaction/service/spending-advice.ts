@@ -31,6 +31,7 @@ import {
 } from "~/server/ai/policy/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import { statementP2PRail } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { aliasStatementMerchant } from "~/server/domains/vendor/repo/statement-merchant-alias";
 import { buildCrudServices } from "~/server/http/request-context";
 
@@ -232,7 +233,7 @@ async function aliasSupportedMerchant(
   if (
     preparingAiInputs() ||
     !["purchase", "refund"].includes(create.kind) ||
-    create.counterparty.storedValue ||
+    statementP2PRail(create, create.counterparty) ||
     create.counterparty.label === "person" ||
     create.counterparty.history === "person" ||
     !identity?.name ||
