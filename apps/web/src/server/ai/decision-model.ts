@@ -609,7 +609,9 @@ async function runDecisionChoiceInternal(
           };
         },
       },
-      {
+      await (
+        await import("./model-media")
+      ).retainModelMedia({
         kind: "choice",
         model: feature.model,
         subject: args.subject,
@@ -617,7 +619,7 @@ async function runDecisionChoiceInternal(
         choices: [...args.choices],
         allowNone: args.allowNone ?? true,
         images: args.images ? [...args.images] : undefined,
-      },
+      }),
       {
         runId: args.usage.runId,
         record: args.usage.entity

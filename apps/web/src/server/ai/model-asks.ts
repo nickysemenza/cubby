@@ -18,11 +18,14 @@ import type {
 import type { Database } from "~/server/db";
 import { defineAsk } from "~/server/kernel/api";
 
+import { storedDecisionImage, resolveDecisionMedia } from "./model-media";
+
 const source = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("url"),
     value: z.string(),
     mimeType: z.string().optional(),
+    contentHash: z.string().optional(),
   }),
   z.object({
     type: z.literal("inline"),
@@ -77,7 +80,9 @@ export const modelInput = z.discriminatedUnion("kind", [
     rules: z.string(),
     choices: z.array(z.string()),
     allowNone: z.boolean(),
-    images: z.array(decisionImageSchema).optional(),
+    images: z
+      .array(z.union([decisionImageSchema, storedDecisionImage]))
+      .optional(),
   }),
 ]);
 export const modelOutput = z.object({
@@ -185,6 +190,9 @@ export const modelAsks = declarations.map((feature) =>
               promptVersion: ask.promptVersion ?? feature.promptVersion,
             },
             ...input,
+            images: input.images
+              ? await resolveDecisionMedia(input.images)
+              : undefined,
             usage,
             decisionModel: input.model,
           });
