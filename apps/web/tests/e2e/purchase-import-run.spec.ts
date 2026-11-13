@@ -299,7 +299,9 @@ test("imports saved order mail from its Email page and follows the live Run to t
   await runLink.click();
   await expect(page).toHaveURL(new RegExp(`/runs/${runShortcode}$`, "u"));
   // Lower report sections load once in view, as a member scrolling here sees.
-  await page.getByRole("link", { name: "Work", exact: true }).last().click();
+  await page
+    .getByRole("region", { name: "Work", exact: true })
+    .scrollIntoViewIfNeeded();
   await expect(
     page.getByRole("region", { name: "Work", exact: true }),
   ).toContainText("passes");
