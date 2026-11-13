@@ -1,3 +1,5 @@
+import { kernelStage } from "@cubby/schemas/kernel/stage";
+import { kernelStageLabel } from "@cubby/schemas/field-envelope-presentation";
 import { resolveDefaultContracts } from "./contracts.ts";
 import {
   withEntityListMedia,
@@ -2395,8 +2397,31 @@ export const compileEntity = (
         : rawReadSchemas.detail,
   };
 
+  const machineryList =
+    declaration.table !== null &&
+    declaration.identifiers.shortcode !== null &&
+    declaration.model !== undefined;
   const declaredFieldModel = compileFieldModel(
-    declaration.model,
+    machineryList && declaration.model
+      ? {
+          ...declaration.model,
+          derived: {
+            ...declaration.model.derived,
+            machineryStage: { type: "enum", options: [...kernelStage.options] },
+            machineryActor: { type: "text" },
+          },
+          sort: declaration.model.sort
+            ? {
+                ...declaration.model.sort,
+                fields: [
+                  ...declaration.model.sort.fields,
+                  "machineryStage",
+                  "machineryActor",
+                ],
+              }
+            : declaration.model.sort,
+        }
+      : declaration.model,
     `${context}.model`,
     declaration.relations,
     key,
@@ -2469,6 +2494,30 @@ export const compileEntity = (
   const declaredDescriptors = [
     ...filters.descriptors,
     ...defaultReferenceFilters,
+    ...(machineryList
+      ? ([
+          {
+            columnId: "machineryStage",
+            kind: "multiselect",
+            label: "Stage",
+            placeholder: "Filter by stage",
+            deriveSchema: true,
+            derived: true,
+            options: kernelStage.options.map((value) => ({
+              value,
+              label: kernelStageLabel(value),
+            })),
+          },
+          {
+            columnId: "machineryActor",
+            kind: "text",
+            label: "Actor",
+            placeholder: "Filter by actor",
+            deriveSchema: true,
+            derived: true,
+          },
+        ] satisfies RawFilterDescriptor[])
+      : []),
   ].map((value, index) =>
     filterDescriptor(
       value,

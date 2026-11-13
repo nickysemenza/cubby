@@ -194,3 +194,13 @@ export const machinery = z.object({
   truncated: z.boolean(),
 });
 export type Machinery = z.infer<typeof machinery>;
+
+/** Batched list summary; absent capability is null in the list read. */
+export const machineryListFields = z.object({
+  attempts: z.number().int().nonnegative(),
+  costMicros: z.number().nonnegative(),
+  stage: kernelStage,
+  nextActor: kernelActor.nullable(),
+  firstGap: z.string().nullable(),
+  eta: z.iso.datetime().nullable(),
+});

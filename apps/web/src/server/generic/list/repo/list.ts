@@ -114,6 +114,7 @@ import {
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
 import type { SearchReadPort } from "~/server/generic/search/repo/search-read-port";
+import { machineryStageSql, machineryActorSql } from "~/server/kernel/api";
 import {
   traceListPageWithCount,
   withListReadTracing,
@@ -548,7 +549,30 @@ export function listScaffold<
   const rollups = declaredRollups(entity, table);
   const projections = declaredResultProjections(entity, table.id);
   const derivedSql: CompiledDerivedSql = { ...rollups };
-  const repositoryDerived: AnyDerivedSql = { ...options?.derived };
+  const machineryCapability = listPrepare(async () =>
+    (await import("~/server/kernel/api")).machineryCapability(entity),
+  );
+  const repositoryDerived: AnyDerivedSql = {
+    ...options?.derived,
+    ...(options.readSchema.schema.shape.machinery
+      ? {
+          machineryStage: machineryCapability.value(
+            (capability) =>
+              capability
+                ? machineryStageSql(capability, sql`${table.id}`)
+                : sql`NULL::text`,
+            { projection: "binding" },
+          ),
+          machineryActor: machineryCapability.value(
+            (capability) =>
+              capability
+                ? machineryActorSql(capability, sql`${table.id}`)
+                : sql`NULL::text`,
+            { projection: "binding" },
+          ),
+        }
+      : {}),
+  };
   for (const [key, value] of Object.entries(projections)) {
     if (key in derivedSql)
       throw new Error(`${entity}.${key}: conflicting rollup and stored SQL`);

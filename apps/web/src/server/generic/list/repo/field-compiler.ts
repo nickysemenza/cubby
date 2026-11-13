@@ -376,7 +376,12 @@ type PredicateValueOf<E extends Entity, K extends string> =
  * fails typecheck.
  */
 export type DerivedSqlArg<E extends Entity> = {
-  readonly [K in GeneratedDerivedValueKey<E>]: DerivedValueSql;
+  readonly [
+    K in Exclude<
+      GeneratedDerivedValueKey<E>,
+      "machineryStage" | "machineryActor"
+    >
+  ]: DerivedValueSql;
 } & {
   readonly [K in GeneratedDerivedPredicateKey<E>]: DerivedPredicateSql<
     PredicateValueOf<E, K>

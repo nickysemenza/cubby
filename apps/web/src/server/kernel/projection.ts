@@ -11,7 +11,8 @@ import {
   QUALITY_SCOPE,
   type MachineryCapability,
 } from "@cubby/schemas/kernel/capability";
-import { kernelActor, kernelStage } from "@cubby/schemas/kernel/stage";
+import { machineryListFields } from "@cubby/schemas/kernel/machinery";
+export { machineryListFields } from "@cubby/schemas/kernel/machinery";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -83,16 +84,12 @@ export function machineryActorSql(
 }
 
 /** The fields the list binding adds to each row. */
-export const machineryListFields = z.object({
-  stage: kernelStage,
-  nextActor: kernelActor.nullable(),
-  firstGap: z.string().nullable(),
-  eta: z.iso.datetime().nullable(),
-});
 export type MachineryListRow = z.infer<typeof machineryListFields>;
 
 /** A record with no kernel state: nothing owed. */
 export const MACHINERY_DONE: MachineryListRow = {
+  attempts: 0,
+  costMicros: 0,
   stage: "done",
   nextActor: null,
   firstGap: null,
@@ -136,6 +133,8 @@ export async function loadMachineryRows(
     );
   const result = await repositoryQueries(db).execute<{
     id: string;
+    attempts: number;
+    costMicros: number;
     stage: string;
     actor: string | null;
     firstGap: string | null;
@@ -158,13 +157,15 @@ export async function loadMachineryRows(
       GROUP BY "scopeKind"
     ), joined AS (
       SELECT scopes.*, s.stage, s."nextActor", s."firstGap", queue.position, queue.attempts,
+        coalesce((SELECT sum(a."costMicros") FROM "Answer" a WHERE a."inputHash" IN
+          (SELECT i->>'inputHash' FROM jsonb_array_elements(s.inputs) i)), 0) AS cost,
         coalesce(queue.live, false) AS live, medians.median, medians.n
       FROM scopes
       LEFT JOIN "ScopeState" s ON s."scopeKind" = scopes.kind AND s."scopeKey" = scopes.key
       LEFT JOIN queue ON queue.kind = scopes.kind AND queue.key = scopes.key
       LEFT JOIN medians ON medians.kind = scopes.kind
     )
-    SELECT id::text AS id,
+    SELECT id::text AS id, coalesce(max(attempts), 0)::int AS attempts, sum(cost)::float8 AS "costMicros",
       CASE
         WHEN bool_or(rejected) THEN ${STAGE.ended}
         WHEN bool_or(stage = ${STAGE.stuck} OR attempts >= ${MAX_SCOPE_ATTEMPTS}) THEN ${STAGE.stuck}
@@ -182,6 +183,8 @@ export async function loadMachineryRows(
     result.rows.map((row) => [
       row.id,
       machineryListFields.parse({
+        attempts: row.attempts,
+        costMicros: row.costMicros,
         stage: row.stage,
         nextActor: row.actor,
         firstGap: row.firstGap,

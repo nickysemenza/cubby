@@ -41,6 +41,7 @@ export const renderKernelBindingsArtifacts = (
   const unsupportedReads = (entity: CompiledEntity) => {
     const supported = new Set([
       "id",
+      "machinery",
       "dataQuality",
       "fieldResolutions",
       "storedProjectionVersions",
@@ -57,7 +58,9 @@ export const renderKernelBindingsArtifacts = (
     ...Object.entries(entity.listFields.derived).flatMap(([key, field]) =>
       field.shape === "predicate" ||
       (field.shape === "value" && !field.rollup && !field.fromResult)
-        ? [key]
+        ? key === "machineryStage" || key === "machineryActor"
+          ? []
+          : [key]
         : [],
     ),
     ...Object.entries(entity.listFields.rows).flatMap(([key, rows]) =>
