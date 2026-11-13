@@ -1,12 +1,50 @@
 # Durable Jobs and background work
 
-The `Job` table owns one-off or resumable execution: claims, leases,
-generations, retries and waits. Domain rows keep their outcomes and evidence.
-[ADR 0025](adr/0025-radical-simplification-of-background-work.md) records the
-decision; this page owns the runtime contract for Jobs, drains, queue permits,
-Runs' execution and the hourly cron. Derived-data families are in
-[entities](entities.md#background-derived-data); Worker and database capacity
-is in [infrastructure](infrastructure.md#postgresql-and-hyperdrive).
+The kernel owns dirty scopes, producer Asks and resumable Passes under one
+claim protocol ([ADR 0029](adr/0029-evidence-facts-and-reconcilers.md)). Domain
+rows keep outcomes, evidence and member decisions. Queue permits wake the
+kernel; the hourly cron is its backstop. Derived-data families are in
+[entities](entities.md#background-derived-data); capacity is in
+[infrastructure](infrastructure.md#postgresql-and-hyperdrive).
+
+## Scopes, Asks and Passes
+
+A dirty scope reconciles a record from its declared inputs. An Ask owns a
+producer request and its retained Answer. A Pass owns resumable work whose
+checkpoint does not belong to one record's reconciler. All three use a claim
+token and deadline, renewal, attempts, backoff, wait cause and cancellation.
+Publication requires the current live claim. A Pass claim lasts 90 seconds;
+Run execution renews every 30 seconds; the kernel arranges a recovery wake at
+each claim deadline. Expired claims admit another worker. A funding or provider wait
+keeps its deadline and cause without spending a failure attempt.
+
+`workflows/kernel-passes.ts` registers the platform passes:
+
+| Pass                  | Key       | Checkpoint and outcome owner                                                                                                           |
+| --------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.execute`         | Run id    | Step-ledger and AI-work Runs; the cursor names the execution generation, `RunStep` and Run progress keep the checkpoint                |
+| `runs.reconcile`      | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly |
+| `purchase.discovery`  | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor               |
+| `retention`           | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                     |
+| `calendar.invalidate` | origin    | Retries an idempotent dirty mark after the post-commit fast path failed                                                                |
+
+The Run module also registers `run.summary` for the summary's model Ask.
+`startPass` coalesces an existing pending instance without replacing its
+cursor. A member restart of stopped Run execution advances its generation;
+pause and cancellation revoke its Pass claim. Routine re-admission preserves
+an existing wait. `Run.status` fences every page, and completed steps keep
+their ledger, counts and receipts across a resume.
+
+Commits wake through `generic/changes` and the background queue. A successor
+wake uses the least due time across scopes, Asks and Passes, including claim
+expiry. A lost wake recovers on app-open or the hourly cron. The calendar fast
+path marks its Durable Object directly; only a failed mark persists a Pass.
+Purchase-discovery task publishers use their existing task shape, which
+`publishBackgroundTasks` persists as the singleton Pass.
+
+The `Job` runtime owns mailbox-discovery pages, purchase-agent dispatch,
+funding-resume timers and the producer kinds listed below. Its drains and
+execution contracts apply to those owners.
 
 ## Jobs are not entities
 
@@ -47,8 +85,8 @@ The production drain units (`workflows/jobs.ts`) are cloud images
 (`image.cloud`), embedding refresh, embedding cleanup, one unit per AI
 evaluation feature (`ai-evaluation:<feature>`), the resumable derived rebuild
 (`derived-rebuild`, one pass with its own row, not items), Email purchase
-discovery, the evidence-facts kernel (`kernel`) and reconciliation of stopped executions
-(`reconcile`).
+discovery and Run summary publication. The kernel drain runs scopes, Asks and
+Passes.
 
 Email purchase discovery holds one AppSettings cursor, publishes
 `connection.email-purchase` recommendation Suggestions for Emails whose
@@ -61,13 +99,12 @@ Run execution attempt number. Outcomes live on domain owners; Jobs retain no
 result JSON. `availableAt` is the only stored wait deadline. Completed Jobs
 remain until retention prunes them.
 
-| Job kind                                                     | Why a row                                      | Owner of the result           |
-| ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
-| `run.execute`                                                | Lease, pause and retry for a Run               | The Run                       |
-| `purchase.dispatch`                                          | Durable handoff to the agent, deduped by event | The Run and its agent session |
-| `run.funding-resume`                                         | Waits for a funding window to end              | The paused Runs               |
-| `image-metadata.extract`, `location-ai.*`                    | One per record, replaced on re-admission       | The Image or Location         |
-| `calendar-feed.mark-dirty`, `maintenance.purchase-discovery` | Keyed single passes                            | The feed, Vendor or queue     |
+| Job kind                                  | Why a row                                      | Owner of the result           |
+| ----------------------------------------- | ---------------------------------------------- | ----------------------------- |
+| `run.execute`                             | Mailbox-discovery pages                        | The Run                       |
+| `purchase.dispatch`                       | Durable handoff to the agent, deduped by event | The Run and its agent session |
+| `run.funding-resume`                      | Waits for a funding window to end              | The paused Runs               |
+| `image-metadata.extract`, `location-ai.*` | One per record, replaced on re-admission       | The Image or Location         |
 
 Everything else is a drain over its owner's rows and has no row here. There is
 no stored queue health or alert engine: [Work status](#member-facing-work-explanations)
@@ -167,7 +204,7 @@ Declared entity fields carry the same facts to web, Apple and MCP:
 ### Run wait
 
 A Run's `waitingOn` (`runWaitingOn`) is derived on read by `readRunRollups`,
-one statement per page of Runs. Its waiting Jobs group by kind and wait
+batched reads for a page of Runs. Its waiting Jobs group by kind and wait
 (`waitReason`, else `retry` for `retry_wait`, else `queued`), the same groups
 Queue details shows. The dominant reason is the Run's own funding pause, else a
 funding group, else the group holding most of its waiting Jobs, else live
@@ -191,6 +228,14 @@ leases, paused or other counts, else expired leases.
   "Retrying after an error (TimeoutError) · next try in about 4 min"); clock
   times are in the household zone. Web recomputes it on the display clock.
   `jobs` keeps the per-reason counts (`describeJobRollup`).
+
+Run Passes add their live claim, wait cause, attempt count, next time and raw
+error to the same rollup. Due Pass positions follow the kernel's `availableAt`
+order, with member-started work first. Run execution retains at most twelve successful page durations per Pass instance.
+Queue pace uses the median of samples from the same Pass name in the last seven
+days, requiring at least three samples; queue ETA is position times that median.
+Without enough samples pace and ETA are null. Explicit wait deadlines remain visible. Step throughput and ETA use the
+retained `RunStep` progress observations independently.
 
 The Run declares `waitingOn` as its `presentation.state.wait` and `stalled` as
 its `stalled`, so `StateBadge` draws the wait beside `displayStatus` in the list
@@ -226,17 +271,11 @@ across drains but never has to match its drain's name:
    absolutely, so Jobs that defer and fall due again cannot starve a lower
    priority. A flood of one kind therefore never starves another.
 
-One Sweep page runs per import source at a time. A `run.execute` Job whose
-Sweep's statement family is scoped to an `importId` is not due while another
-`run.execute` Job holds a live lease on a Sweep scoped to an import of the same
-`TransactionImport.source`: `dueUnits` leaves it out before ranking, so it
-takes no candidate slot, and `claimJob` refuses it by the same predicate. The
-source is read from each Sweep Run's input at selection (no stored key, table
-or lock); a lapsed lease holds nothing. The held Sweep stays queued and takes
-its turn when the lease ends. Sweeps without an `importId` (routine, account or
-date scoped) have no source and neither wait nor hold. Two claims in the same
-instant can still both pass; the statement apply locks and serialization retry
-then serialize them as before.
+A scoped Sweep Pass yields before starting a page while another Pass holds
+a live claim on a Sweep over the same `TransactionImport.source`. Unscoped
+Sweeps neither wait nor hold a source. A lapsed claim holds nothing. Two
+claims in the same instant can both pass the check; statement apply locks and
+serialization retry still serialize their writes.
 
 A permit tries up to eight candidates in that order and runs the first it can
 claim (`SKIP LOCKED`; a sibling's held row is skipped, not awaited). A unit
@@ -1021,18 +1060,19 @@ and failed pages; its unknown total stays indeterminate.
 
 ### Hourly maintenance and retention
 
-The hourly cron calls `maintainJobs` directly: one bounded image-repair page,
-one retention page and one Suggestion-expiry page per tick. It also reconciles
-stopped executions and dispatches each tick (`reconcileStoppedWork`). No
-maintenance Job is enrolled.
+The hourly cron starts `runs.reconcile` and `retention`, runs the kernel,
+and performs one bounded image-execution repair. Retention prunes one page of
+2,000 Jobs and one page of 2,000 terminal Passes per invocation.
 
-- Completed Jobs are kept eight days, cancelled fourteen and failed thirty,
-  under the pending-work and identity safeguards. A failed Job whose Run is
-  terminal, not manual, not a member request and not mail or financial import
-  work (`mail_import`, `mail_discovery`, `mail_search`, `mail_reclassify`,
-  `purchase_validation`, `account_sync`) is pruned after fourteen days. Only Job
-  rows are deleted; Runs stay as AiUsage cost evidence, and domain evidence
-  stays.
+- Completed Jobs are kept eight days, cancelled fourteen and failed thirty.
+  A failed Job whose Run is terminal, not manual, not a member request and not
+  mail or financial import work (`mail_import`, `mail_discovery`,
+  `mail_search`, `mail_reclassify`, `purchase_validation`, `account_sync`) is
+  pruned after fourteen days. Runs and domain evidence stay.
+- Completed Pass instances are kept eight days and cancelled instances
+  fourteen. Failed and unfinished Passes stay. Answers, Asks, decisions,
+  scope state, record ownership and drift proposals stay: they carry retained
+  results, provenance, deduplication or unresolved work.
 - Pending Suggestions never expire: a field guess stays the picker's guess
   until its inputs change, and statement and recommendation Suggestions wait
   for a member.
@@ -1166,8 +1206,8 @@ context's `work`.
   concurrent work and are not additive phase timings.
 - **Unmeasured drivers.** A page that records no phase stores no sample.
 
-A Run's Diagnostics section and an Image's or Location's Jobs slot read one
-Job's raw Worker lines through `job.logs`; credentials and limits are in
+`job.logs` reads raw Worker lines for Job-backed execution. Run Passes keep
+step progress and raw failures on their Run and Pass rows; credentials and limits are in
 [infrastructure](infrastructure.md#inline-job-logs-and-limits).
 
 ## Apple version gate
@@ -1218,8 +1258,7 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
 - A drain unit without a stream is owed and not progressing: its drain's `due`
   rows report work with a `since` 30 minutes old and its record row has no
   successful page in those 30 minutes. `since` is when the work fell owed:
-  for `reconcile`, when the earliest stranded execution or failed start
-  dispatch stopped; for Email purchase discovery, its cursor's next hour or last page. A
+  for Email purchase discovery, its cursor's next hour or last page. A
   pass that has never run has no cursor and reports the read time.
 - An AI feature has `result_ready` evaluations that are owed, that no page
   holds, and that have gone unpublished for 30 minutes: due since then, or
@@ -1316,7 +1355,7 @@ post-commit signal recovers on app-open or the next hourly tick.
 The hourly cron (`server/worker/scheduled.ts`) is the timer for work due later
 and the backstop for a lost permit or broken delivery. It activates the
 deployed Worker version's AI refresh policy on its first tick after a deploy,
-rings due device work, reconciles, runs `maintainJobs`, runs units itself for
+rings due device work, starts the reconciliation and retention Passes, runs the kernel and `maintainJobs`, runs legacy units itself for
 up to five minutes, then sends up to `maxConcurrency` permits for what is still
 due (one delayed permit when the next work is later). A failure in one step
 still lets the others and the daily pass run, then rejects the event.

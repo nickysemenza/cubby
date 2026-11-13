@@ -10,10 +10,6 @@ import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
-import {
-  failedCoordinatorDispatchesSince,
-  reconcileCoordinatorDispatches,
-} from "~/server/domains/run/repo/coordinator-dispatch";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { runSummaryDrain } from "~/server/domains/run/service/run-summary";
@@ -36,10 +32,6 @@ import { kernelDueSql, kernelNextSql } from "~/server/kernel/runner";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
-import {
-  reconcileWorkflowRuns,
-  workflowRunsToReconcileSince,
-} from "~/server/workflows/runs/lifecycle";
 
 import { derivedComputes } from "./derived-computes";
 
@@ -139,32 +131,6 @@ const derivedRebuildDrain: BackgroundDrain = {
   },
 };
 
-/**
- * Run and dispatch reconciliation as a unit: due only while a stopped
- * execution leaves its Run reading as running. The cron also runs it each tick.
- */
-const reconcileDrain: BackgroundDrain = {
-  name: "reconcile",
-  label: (unit) => (unit === "reconcile" ? "Stopped Run cleanup" : undefined),
-  due: () =>
-    sql`SELECT 'reconcile'::text AS unit, false AS demand, owed.since
-      FROM (SELECT least(${failedCoordinatorDispatchesSince()}, ${workflowRunsToReconcileSince()})::timestamp AS since) owed
-      WHERE owed.since IS NOT NULL`,
-  next: () => null,
-  page: async (db) => ({ claimed: await reconcileStoppedWork(db) }),
-};
-
-export async function reconcileStoppedWork(db: Database) {
-  let reconciled = await reconcileCoordinatorDispatches(db);
-  let after: string | null = null;
-  do {
-    const page = await reconcileWorkflowRuns(db, after);
-    reconciled += page.reconciled;
-    after = page.next;
-  } while (after);
-  return reconciled;
-}
-
 /** Each kernel page runs dirty scopes, asks and passes for at most this long. */
 const KERNEL_PAGE_BUDGET_MS = 20_000;
 
@@ -194,7 +160,6 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
   runSummaryDrain,
-  reconcileDrain,
 ];
 
 /** Every production drain's `due` rows, for reads that report owed drain units. */

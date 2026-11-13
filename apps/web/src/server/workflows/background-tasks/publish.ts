@@ -149,6 +149,25 @@ export async function publishBackgroundTasks(
     }
     for (const task of parsed) {
       if (task.kind === "entity-embedding.refresh") continue;
+      if (task.kind === "maintenance.purchase-discovery") {
+        const { purchaseDiscoveryPass } =
+          await import("../purchase-discovery-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, purchaseDiscoveryPass, {
+          cursor: { senderAfter: task.senderAfter ?? null },
+        });
+        continue;
+      }
+      if (task.kind === "calendar-feed.mark-dirty") {
+        const { calendarInvalidatePass } =
+          await import("../calendar-invalidate-pass");
+        const { startPass } = await import("~/server/kernel/api");
+        await startPass(tx, calendarInvalidatePass, {
+          key: task.origin,
+          cursor: { origin: task.origin, reason: task.reason },
+        });
+        continue;
+      }
       await enqueueJob(tx, {
         key: backgroundTaskJobKey(task),
         kind: task.kind,
@@ -157,7 +176,14 @@ export async function publishBackgroundTasks(
         invalidate: true,
       });
     }
-    await runAfterCommit(tx, () => wakeJobs(options));
+    if (
+      parsed.some(
+        (task) =>
+          task.kind !== "maintenance.purchase-discovery" &&
+          task.kind !== "calendar-feed.mark-dirty",
+      )
+    )
+      await runAfterCommit(tx, () => wakeJobs(options));
   });
   return { count: tasks.length };
 }

@@ -1,0 +1,1 @@
+ALTER TABLE "Pass" ADD COLUMN "durationHistory" jsonb DEFAULT '[]' NOT NULL;

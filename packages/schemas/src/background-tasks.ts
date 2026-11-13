@@ -75,7 +75,7 @@ export const runAiSummaryWriteTaskSchema = z.object({
 export const runAiSummaryJobKey = (runId: string, endedAt: string) =>
   `run-summary:${runId}:${Date.parse(endedAt)}`;
 
-export const maintenancePurchaseDiscoveryTaskSchema = z.object({
+const maintenancePurchaseDiscoveryTaskSchema = z.object({
   kind: z.literal("maintenance.purchase-discovery"),
   ...taskEnvelopeFields,
   /**
@@ -95,7 +95,7 @@ export const maintenancePurchaseDiscoveryTaskSchema = z.object({
  * only sets a flag on the origin's calendar Durable Object, so replay is
  * harmless; the handler throws on failure so the queue keeps retrying.
  */
-export const calendarFeedMarkDirtyTaskSchema = z.object({
+const calendarFeedMarkDirtyTaskSchema = z.object({
   kind: z.literal("calendar-feed.mark-dirty"),
   ...taskEnvelopeFields,
   origin: z.url(),

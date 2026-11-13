@@ -5,7 +5,7 @@ import { expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 
 import { handleScheduledInvocation } from "./scheduled";
@@ -59,14 +59,7 @@ it("rejects daily completion with both independent database failures", async () 
 // delivers one: only the hourly tick can reach this Job, and it must do so
 // without the daily pass, which runs at no other household hour.
 it("recovers committed work whose wake was dropped within one hourly tick", async () => {
-  await enqueueJob(ctx.db, {
-    key: "maintenance.purchase-discovery",
-    kind: "maintenance.purchase-discovery",
-    input: {
-      kind: "maintenance.purchase-discovery",
-      requestedAt: "2026-01-15T14:00:00.000Z",
-    },
-  });
+  await publishBackgroundTasks(ctx.db, [{kind: "maintenance.purchase-discovery", requestedAt: "2026-01-15T14:00:00.000Z"}], {source: "synthetic-test"});
   await handleScheduledInvocation(
     {
       scheduledTime: Date.parse("2026-01-15T14:00:00Z"),
@@ -78,8 +71,8 @@ it("recovers committed work whose wake was dropped within one hourly tick", asyn
     }),
   );
   await expect(
-    readJobs(ctx.db, { key: "maintenance.purchase-discovery" }),
-  ).resolves.toMatchObject([{ state: "completed", attempts: 0 }]);
+    getDb(ctx.db).execute(sql`SELECT "doneAt" FROM "Pass" WHERE name = 'purchase.discovery'`, "objects"),
+  ).resolves.toMatchObject([{ doneAt: expect.any(String) }]);
   await expect(readJobs(ctx.db, { key: "jobs.maintenance" })).resolves.toEqual(
     [],
   );

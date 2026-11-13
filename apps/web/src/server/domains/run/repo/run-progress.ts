@@ -15,9 +15,44 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { currentJobExecution } from "~/server/generic/jobs/context";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
-import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
+import {
+  assertWorkflowEffect,
+  currentRunExecution,
+} from "~/server/workflows/runs/execution";
+
+import {
+  isPassRunPurpose,
+  readRunPass,
+  RUN_EXECUTE_PASS,
+} from "./run-execution";
+
+/** The execution behind a Run's detail: its Pass, or the mail discovery Job. */
+async function readRunWorkflow(
+  db: Database,
+  owner: { id: string; purpose: string },
+) {
+  if (isPassRunPurpose(owner.purpose)) {
+    const pass = await readRunPass(db, owner.id);
+    return pass
+      ? {
+          purpose: owner.purpose,
+          attempt: pass.generation ?? 0,
+          instanceId: `${RUN_EXECUTE_PASS}:${owner.id}`,
+          instance: { state: pass.state, error: pass.lastError },
+        }
+      : null;
+  }
+  const execution = await readJob(db, { key: `run:${owner.id}` });
+  return execution
+    ? {
+        purpose: owner.purpose,
+        attempt: execution.generation,
+        instanceId: execution.id,
+        instance: { state: execution.state, error: execution.error },
+      }
+    : null;
+}
 
 /** The small, durable progress read shared by every Run detail page. */
 export async function getRunLiveProgress(db: Database, shortcode: string) {
@@ -44,15 +79,7 @@ export async function getRunLiveProgress(db: Database, shortcode: string) {
     record.run.purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
       : undefined;
-  const execution = await readJob(db, { key: `run:${record.run.id}` });
-  const workflow = execution
-    ? {
-        purpose: record.run.purpose,
-        attempt: execution.generation,
-        instanceId: execution.id,
-        instance: { state: execution.state, error: execution.error },
-      }
-    : null;
+  const workflow = await readRunWorkflow(db, record.run);
   const events = record.run.progressHistory ?? [];
   return {
     status: runStatus.parse(record.run.status),
@@ -93,7 +120,7 @@ export async function recordRunProgress(
 ): Promise<{ recorded: boolean }> {
   const id = runEntityId.parse(input.runId);
   return withTransactionDatabase(db, async (database) => {
-    const owner = currentJobExecution();
+    const owner = currentRunExecution();
     await assertWorkflowEffect(database);
     const tx = getDb(database);
     const [current] = await tx
@@ -104,14 +131,9 @@ export async function recordRunProgress(
     if (!current) throw new Error("Progress Run does not exist");
     const eventIds = current.progressEventIds ?? [];
     if (eventIds.includes(input.eventId)) return { recorded: false };
-    const execution = current.dispatchEventId
-      ? null
-      : await readJob(database, { key: `run:${id}` });
     const generation =
       current.dispatchEventId ??
-      (execution && owner?.claim.id === execution.id
-        ? `job:${execution.generation}`
-        : null);
+      (owner?.runId === id ? `job:${owner.generation}` : null);
     if (generation !== input.generation) return { recorded: false };
     if (
       current.liveProgress?.generation === input.generation &&

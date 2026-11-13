@@ -13,10 +13,9 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { runJobHandler } from "~/server/workflows/runs/job-execution";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRunSteps } from "../repo/run-step";
 import { startSweep } from "./sweep";
@@ -154,14 +153,17 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       families: [{ family: "statement_transaction", scope: {} }],
     });
     for (let page = 0; page < 100; page++) {
-      const [execution] = await readJobs(ctx.db, { key: `run:${runId}` });
+      const execution = await readRunPass(ctx.db, runId);
       if (!execution) throw new Error("Missing Sweep execution");
-      if (execution.state === "completed") break;
-      if (["failed", "paused", "cancelled"].includes(execution.state))
-        throw new Error(execution.error ?? execution.state);
+      if (execution.state === "done") break;
+      if (["stuck", "cancelled"].includes(execution.state))
+        throw new Error(execution.lastError ?? execution.state);
       if (execution.availableAt.getTime() > now)
         await wait(execution.availableAt.getTime() - now);
-      await advanceJob(ctx.db, execution.id, { "run.execute": runJobHandler });
+      await getDb(ctx.db).execute(
+        sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = 'run.execute' AND key = ${runId}`,
+      );
+      await advanceRunPass(ctx.db);
     }
     const [saved] = await getDb(ctx.db)
       .select()

@@ -1,11 +1,9 @@
 import {
-  calendarFeedMarkDirtyTaskSchema,
   imageMetadataExtractTaskSchema,
   imageMetadataJobKey,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   locationAiJobKey,
-  maintenancePurchaseDiscoveryTaskSchema,
   runAiSummaryJobKey,
   runAiSummaryWriteTaskSchema,
   type BackgroundTask,
@@ -24,7 +22,12 @@ type BackgroundTaskOutcome = "succeeded" | "skipped";
 /** Embedding refresh publishes search documents in the caller's transaction; it never becomes a Job. */
 export type JobBackgroundTask = Exclude<
   BackgroundTask,
-  { kind: "entity-embedding.refresh" }
+  {
+    kind:
+      | "entity-embedding.refresh"
+      | "calendar-feed.mark-dirty"
+      | "maintenance.purchase-discovery";
+  }
 >;
 type JobBackgroundTaskKind = JobBackgroundTask["kind"];
 
@@ -121,26 +124,6 @@ const BACKGROUND_TASK_KINDS = {
         fenced,
       );
       return outcome === "succeeded" ? "succeeded" : "skipped";
-    },
-  },
-  "maintenance.purchase-discovery": {
-    schema: maintenancePurchaseDiscoveryTaskSchema,
-    key: (task) => task.kind,
-    run: async (db, task) => {
-      const { discoverPurchases } = await import("~/server/workflows/catch-up");
-      await discoverPurchases(db, { senderAfter: task.senderAfter ?? null });
-      return "succeeded";
-    },
-  },
-  "calendar-feed.mark-dirty": {
-    schema: calendarFeedMarkDirtyTaskSchema,
-    key: (task) => `calendar:${task.origin}`,
-    // A failure propagates so the Job retries; `markDirty` only sets a flag.
-    run: async (_db, task) => {
-      const { calendarFeedStateFor } =
-        await import("~/server/domains/calendar/repo/client");
-      await (await calendarFeedStateFor(task.origin)).markDirty(task.reason);
-      return "succeeded";
     },
   },
 } satisfies {

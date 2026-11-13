@@ -23,7 +23,13 @@ import {
   runHasLiveExecution,
 } from "~/server/generic/jobs/repo/job-reads";
 
+import { runPassOwed } from "./run-execution";
+
 const RUN = runStatus.enum;
+
+/** A retained execution obligation: an owned live Job or the Run's owed Pass. */
+const runHasLiveWork = (runId: SQL): SQL<boolean> =>
+  sql<boolean>`(${runHasLiveJobs(runId)} OR ${runPassOwed(runId)})`;
 
 /** A queued discovery is automatic demand only while its canonical generation remains live. */
 export function queuedMailDiscoveryPredicate(input: {
@@ -84,7 +90,7 @@ export function historicalRoutineRunPredicate(input: {
     AND ${input.trigger} = ${runTrigger.enum.scheduled} AND ${input.endedAt} IS NOT NULL
     AND ${input.status} IN (${RUN.failed}, ${RUN.dispatch_failed}, ${RUN.needs_review})
     AND ${input.failureCode} IS DISTINCT FROM 'execution_limit'
-  THEN NOT ${runHasLiveJobs(input.id)}
+  THEN NOT ${runHasLiveWork(input.id)}
     AND NOT ${evaluationRosterExists({ runId: input.id, source: "owned" })}
     AND NOT ${evaluationRosterExists({ runId: input.id, source: "requested" })}
     AND NOT ${unresolvedImageWorkExists(input.id)}
@@ -108,6 +114,6 @@ export function settledAiRunPredicate(input: {
     AND ${evaluationRosterExists(owned)}
     AND NOT ${evaluationRecoveryExists(owned)}
     AND NOT ${evaluationRecoveryExists(requested)}
-    AND NOT ${runHasLiveJobs(input.id)}
+    AND NOT ${runHasLiveWork(input.id)}
     AND NOT ${unresolvedImageWorkExists(input.id)})`;
 }

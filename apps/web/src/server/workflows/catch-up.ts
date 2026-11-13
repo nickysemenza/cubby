@@ -20,7 +20,6 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
-    await recoverMissedWork(db, { daily: false, wake: false });
     // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
@@ -41,27 +40,10 @@ export async function requestCatchUp(
   return { status: "queued" };
 }
 
-/** Admit periodic families and drain due Jobs; stopped work needs explicit retry. */
-export async function recoverMissedWork(
-  db: Database,
-  { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
-) {
-  let failed = true;
-  try {
-    const { reconcileWorkflowRuns } =
-      await import("~/server/workflows/runs/lifecycle");
-    // Every bounded page is owed; don't stop after the first hundred Runs.
-    let after: string | null = null;
-    do {
-      after = (await reconcileWorkflowRuns(db, after)).next;
-    } while (after);
-    failed = false;
-  } finally {
-    if (wake || failed)
-      await (
-        await import("~/server/workflows/background-tasks/publish")
-      ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
-  }
+/** Bring stopped-execution reconciliation forward; Pass admission owns its wake. */
+export async function recoverMissedWork(db: Database) {
+  const { scheduleRunsReconcile } = await import("./runs/reconcile-pass");
+  await scheduleRunsReconcile(db);
 }
 
 /** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */
@@ -143,7 +125,7 @@ export async function discoverPurchases(
   ]);
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-    return { mail: null };
+    return { mail: null, senderAfter: null, more: false };
   }
   // Project terminal execution before checking the mailbox admission slot.
   await reconcileWorkflowRuns(db);
@@ -163,25 +145,6 @@ export async function discoverPurchases(
     senderAfter: options.senderAfter,
   });
   const mail = await startMailDiscovery(db, { knownAttributions });
-  // Last publish wins the Job input. Inner backlog republishes omit the cursor.
-  if (senders.more || pending.senderAfter)
-    await (
-      await import("~/server/workflows/background-tasks/publish")
-    ).publishBackgroundTasks(
-      db,
-      [
-        {
-          kind: "maintenance.purchase-discovery",
-          requestedAt: new Date().toISOString(),
-          ...(pending.senderAfter ? { senderAfter: pending.senderAfter } : {}),
-        },
-      ],
-      {
-        source: pending.senderAfter
-          ? "mail-sender-page"
-          : "sender-attribution-continuation",
-      },
-    );
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,
     mailPassesRunning: mail.running,
@@ -191,5 +154,9 @@ export async function discoverPurchases(
       pending.errors,
       "Retained Email admission failed; discovery continued.",
     );
-  return { mail };
+  return {
+    mail,
+    senderAfter: pending.senderAfter ?? null,
+    more: senders.more || Boolean(pending.senderAfter),
+  };
 }

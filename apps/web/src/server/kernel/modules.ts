@@ -7,6 +7,7 @@
 import { fieldsKernelModule } from "~/server/ai/fields/module";
 import { runKernelModule } from "~/server/domains/run/service/run-summary";
 import { shipmentKernelModule } from "~/server/domains/shipment/service";
+import { workflowKernelModule } from "~/server/workflows/kernel-passes";
 
 import type { DomainModule } from "./define";
 
@@ -14,4 +15,5 @@ export const KERNEL_MODULES: readonly DomainModule[] = [
   runKernelModule,
   shipmentKernelModule,
   fieldsKernelModule,
+  workflowKernelModule,
 ];

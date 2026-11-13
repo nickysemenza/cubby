@@ -633,7 +633,7 @@ const purposesWhere = <P extends RunPurpose>(
   // SAFETY: each caller's `P` names exactly the kinds its `test` admits.
   purposes.filter((purpose) => test(RUN_KINDS[purpose])) as P[];
 
-/** Kinds whose `run.execute` Job pages an ordered RunStep ledger. */
+/** Kinds whose `run.execute` Pass pages an ordered RunStep ledger. */
 export type StepRunPurpose = {
   [P in RunPurpose]: RunKinds[P] extends { steps: readonly unknown[] }
     ? P
@@ -653,7 +653,7 @@ export type RunStepKey<P extends StepRunPurpose> =
 export type RunStepDeclarationOf<P extends StepRunPurpose> =
   RunKinds[P]["steps"][number];
 
-/** Kinds the universal `run.execute` Job executes. */
+/** Kinds executed through the Run execution runtime. */
 export type ExecutedRunPurpose = {
   [P in RunPurpose]: RunKinds[P] extends { execution: string } ? P : never;
 }[RunPurpose];

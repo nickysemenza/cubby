@@ -1,6 +1,6 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
@@ -210,8 +210,11 @@ describe("automatic Mail import switch", () => {
 
     await invoke("setMailImport", { mailboxId, enabled: true });
     expect(
-      await readJobs(ctx.db, { kind: "maintenance.purchase-discovery" }),
-    ).toMatchObject([{ state: "queued" }]);
+      await getDb(ctx.db).execute(
+        sql`SELECT name FROM "Pass" WHERE name = 'purchase.discovery'`,
+        "objects",
+      ),
+    ).toMatchObject([{ name: "purchase.discovery" }]);
     expect(
       await invoke("discoverMail", { mailboxId: "synthetic-foreign-mailbox" }),
     ).toMatchObject({ ok: false });

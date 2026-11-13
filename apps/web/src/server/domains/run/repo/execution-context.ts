@@ -30,6 +30,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 const boundEvaluation = new AsyncLocalStorage<{
@@ -78,7 +79,7 @@ export async function pauseExecutionRun(
   generation?: string | null,
 ): Promise<boolean> {
   // Recovery resumes these purposes in a later window: AI work through
-  // Job execution, agent imports and Mail discovery through
+  // Pass execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns`.
   const recoverable = inArray(run.purpose, FUNDING_RECOVERABLE_PURPOSES);
   const paused = await unwrapDb(db)
@@ -117,6 +118,23 @@ export const fundingResumeInput = z.object({
   runId: z.uuid().optional(),
   until: z.iso.datetime(),
 });
+
+/** When the earliest pending funding window ends; null when none is pending. */
+export async function pendingFundingResumeAt(
+  db: Database,
+): Promise<Date | null> {
+  const jobs = await readJobs(
+    db,
+    { kind: "run.funding-resume", states: ["queued", "retry_wait", "running"] },
+    { order: ["availableAt"] },
+  );
+  return (
+    jobs
+      .map((job) => new Date(fundingResumeInput.parse(job.input).until))
+      .filter((until) => until > new Date())
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null
+  );
+}
 
 /** Explicit budget raises release discovery without reopening member stops. */
 const fundingPausedDiscovery = (db: Database, now: Date) => {

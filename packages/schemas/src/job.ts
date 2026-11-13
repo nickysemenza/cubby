@@ -337,12 +337,12 @@ export const JOB_KIND_POLICY = {
   "run.execute": {
     activityLabel: "Runs",
     ...SERVER,
-    label: "Execute a Run",
-    purpose: "Advances the workflow declared by the owning Run type.",
+    label: "Scan a mailbox",
+    purpose: "Advances the mailbox discovery owned by its Run.",
     trigger: "Run admission, continuation or supported retry.",
     targets: "The owning Run and its current execution checkpoint.",
     effects:
-      "Executes declared steps, AI work or mailbox discovery; writes outcomes to the Run.",
+      "Lists and saves mailbox discovery pages; writes outcomes to the Run.",
     dependencies: "The dependencies declared by the Run type.",
     cost: "Depends on the Run type; inspect its definition and recorded usage.",
     exclusions:
@@ -415,19 +415,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Missing originals and unsupported metadata retain their recorded outcome.",
   },
-  "maintenance.purchase-discovery": {
-    ...SERVER,
-    label: "Discover purchase work",
-    purpose: "Requests the purchase discovery maintenance operation.",
-    trigger: "Purchase discovery maintenance request.",
-    targets:
-      "Eligible purchase discovery backlog under the owning maintenance operation.",
-    effects:
-      "Admits eligible purchase work through the existing purchase workflow.",
-    dependencies: "Purchase discovery configuration and source evidence.",
-    cost: "Downstream work follows its model and funding policy.",
-    exclusions: "Eligibility remains owned by purchase discovery.",
-  },
   "background.drain": {
     ...SERVER,
     internal: true,
@@ -441,17 +428,6 @@ export const JOB_KIND_POLICY = {
     cost: "Follows the drain's own model and provider policy.",
     exclusions:
       "Never claimed or executed as a Job; item retries live on the drain's rows.",
-  },
-  "calendar-feed.mark-dirty": {
-    ...SERVER,
-    label: "Refresh calendar feed",
-    purpose: "Marks the calendar feed for regeneration.",
-    trigger: "A calendar-relevant change.",
-    targets: "The household calendar feed.",
-    effects: "Invalidates the feed so it can reflect current records.",
-    dependencies: "Calendar configuration and current source records.",
-    cost: "No AI call is required.",
-    exclusions: "Does not edit unrelated household records.",
   },
 } as const satisfies Record<string, JobKindDeclaration>;
 

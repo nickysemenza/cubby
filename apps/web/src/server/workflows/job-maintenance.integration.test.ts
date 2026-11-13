@@ -14,6 +14,24 @@ import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import { maintainJobs } from "./job-maintenance";
 
+const runRetention = async (db: Parameters<typeof maintainJobs>[0]) => {
+  const { createKernel, defineModule, startPass } =
+    await import("~/server/kernel/api");
+  const { retentionPass } = await import("./retention-pass");
+  await startPass(db, retentionPass);
+  const kernel = createKernel([
+    defineModule({
+      name: "synthetic.retention",
+      entities: [],
+      evidence: [],
+      asks: [],
+      reconcilers: [],
+      passes: [retentionPass],
+    }),
+  ]);
+  await kernel.run(db, { budgetMs: 100 });
+};
+
 describe("Job maintenance", () => {
   const ctx = withTestDb();
 
@@ -78,7 +96,7 @@ describe("Job maintenance", () => {
         updatedAt: new Date(Date.now() - 31 * 24 * 60 * 60_000),
       },
     );
-    await maintainJobs(ctx.db);
+    await runRetention(ctx.db);
     expect(await readJobs(ctx.db, { id: expired.id })).toEqual([]);
     expect(await readJobs(ctx.db, { id: retained[0]! })).toEqual([]);
     expect(
@@ -147,7 +165,7 @@ describe("Job maintenance", () => {
       { purpose: "sweep", trigger: "scheduled", status: "running" },
       45,
     );
-    await maintainJobs(ctx.db);
+    await runRetention(ctx.db);
     for (const kept of [oldManual, oldMail, oldUnfinished])
       expect(await readJobs(ctx.db, { id: kept.jobId })).toHaveLength(1);
     expect(await readJobs(ctx.db, { id: automatic.jobId })).toEqual([]);

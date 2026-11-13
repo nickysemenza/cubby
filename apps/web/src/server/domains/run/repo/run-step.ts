@@ -1,5 +1,4 @@
 import { type RunId } from "@cubby/schemas/identifiers";
-import { jobState } from "@cubby/schemas/job";
 import { isMemberStartedRun } from "@cubby/schemas/run-fields";
 import {
   RUN_STEP_ERROR_SAMPLE,
@@ -21,9 +20,9 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   assertWorkflowEffect,
+  currentRunExecution,
   hasWorkflowExecution,
 } from "~/server/workflows/runs/execution";
 
@@ -249,12 +248,9 @@ export const leftOf = (step: RunStepRow) =>
         0,
       );
 
-const attemptIs = (_attempt: number) => {
-  const execution = currentJobExecution();
-  return execution
-    ? sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.id=${execution.claim.id}::uuid AND j.state=${jobState.enum.running} AND j."generation"=${execution.claim.generation} AND j."leaseToken"=${execution.claim.leaseToken}::uuid AND j."leaseExpiresAt">now())`
-    : sql`false`;
-};
+/** Holds while the current execution still owns its Run. */
+const attemptIs = (_attempt: number) =>
+  currentRunExecution()?.live ?? sql`false`;
 
 /** Pauses this attempt's Run for a budget or authorization window. */
 export async function pauseStepRun(

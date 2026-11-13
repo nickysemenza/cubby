@@ -23,12 +23,12 @@ import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-re
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
-import { runJobHandler } from "~/server/workflows/runs/job-execution";
+import { advanceRunPass } from "~/server/workflows/runs/pass.fixtures";
 
 import { readRun, runScaffold } from "./run";
+import { readRunPass } from "./run-execution";
 
 const collisionGenerator = (
   first: string,
@@ -305,7 +305,7 @@ describe("Run lineage and waiting-on reads", () => {
       position: 3,
       total: 4,
       perMinute: 0.2,
-      label: "Queued for model capacity · 3rd of 4 · about 15 min",
+      label: "Waiting for model capacity · 3rd of 4 · about 15 min",
     });
   });
 });
@@ -424,16 +424,18 @@ describe("Run attention entity view", () => {
       trigger: "scheduled",
       execution: false,
     });
-    const execution = await enqueueJob(ctx.db, {
-      key: `run:${emptyJobOwner}`,
-      kind: "run.execute",
+    await (
+      await import("~/server/workflows/runs/run-pass")
+    ).startRunPass(ctx.db, {
       runId: emptyJobOwner,
-      input: { runId: emptyJobOwner, purpose: "ai_refresh" },
+      purpose: "ai_refresh",
+      generation: 1,
+      restart: false,
     });
-    await advanceJob(ctx.db, execution.id, { "run.execute": runJobHandler });
-    expect(await readJob(ctx.db, { id: execution.id })).toMatchObject({
-      state: "retry_wait",
-      error: expect.stringContaining("no durable evaluation roster"),
+    await advanceRunPass(ctx.db);
+    expect(await readRunPass(ctx.db, emptyJobOwner)).toMatchObject({
+      state: "waiting",
+      lastError: expect.stringContaining("no durable evaluation roster"),
     });
     expect(
       (
@@ -659,13 +661,15 @@ describe("Run attention entity view", () => {
       )[0]?.status,
     ).toBe("running");
 
-    const retainedExecution = await readJob(ctx.db, { key: `run:${runId}` });
-    if (!retainedExecution) throw new Error("Missing synthetic retained Job");
+    const retainedExecution = await readRunPass(ctx.db, runId);
+    if (!retainedExecution) throw new Error("Missing synthetic retained Pass");
     await getDb(ctx.db)
       .update(runTable)
       .set({ status: "paused" })
       .where(eq(runTable.id, runId));
-    await updateJobs(ctx.db, { id: retainedExecution.id }, { state: "paused" });
+    await (
+      await import("~/server/kernel/api")
+    ).cancelWork(ctx.db, { table: "Pass", name: "run.execute", key: runId });
     await expect(
       controlWorkflowRun(
         ctx.db,
@@ -674,9 +678,9 @@ describe("Run attention entity view", () => {
         "ai_refresh",
       ),
     ).resolves.toBeUndefined();
-    expect(await readJob(ctx.db, { key: `run:${runId}` })).toMatchObject({
-      id: retainedExecution.id,
-      state: "queued",
+    expect(await readRunPass(ctx.db, runId)).toMatchObject({
+      runId,
+      state: "due",
     });
     expect(
       (
