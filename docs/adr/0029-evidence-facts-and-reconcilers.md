@@ -49,8 +49,11 @@ shows all of its machinery.
    The traced repository boundary refuses updates, including conflict updates,
    to these observation columns, even inside a kernel apply:
 
-   - `ManualEntry`, `Answer`, `Decision`, `ConnectionCandidateEvidence`,
+   - `ManualEntry`, `Decision`, `ConnectionCandidateEvidence`,
      `PhotoInventoryEvidence` and `ImageEvidence`: every column.
+   - `Answer`: `inputHash`, `feature`, `producer`, `promptVersion`, `output`,
+     `model`, `tier`, `costMicros`, `raw`, `createdAt`. The Ask association,
+     claim token, executor and Run association are mutable acceptance state.
    - `SourceTransactionRecord`: `factFingerprint`, `batchId`, `source`,
      `rowPosition`, `providerTransactionId`, `providerAccountId`, `providerData`,
      `accountDescriptor`, `statementDate`, `amount`, `providerAmount`, `merchant`,

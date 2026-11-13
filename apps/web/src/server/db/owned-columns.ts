@@ -388,7 +388,18 @@ export async function guardOwnedWrites(
 const EVIDENCE_OBSERVATIONS = new Map<string, readonly string[] | "*">(
   Object.entries({
     ManualEntry: "*",
-    Answer: "*",
+    Answer: [
+      "inputHash",
+      "feature",
+      "producer",
+      "promptVersion",
+      "output",
+      "model",
+      "tier",
+      "costMicros",
+      "raw",
+      "createdAt",
+    ],
     Decision: "*",
     ConnectionCandidateEvidence: "*",
     PhotoInventoryEvidence: "*",
