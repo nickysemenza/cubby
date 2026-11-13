@@ -34,19 +34,6 @@ export function statementCandidateSubject(
   };
 }
 
-/** Candidate identity and model inputs, independent of rules and observation occurrences. */
-export function statementLabelInputs(judgment: StatementTransactionJudgment) {
-  return {
-    statement: statementLabelSubject(judgment),
-    candidates: judgment.candidates
-      .map((candidate) => ({
-        id: candidate.transactionId,
-        input: statementCandidateSubject(candidate),
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
-  };
-}
-
 /** Frozen feature versions, independent of the automatic publication policy. */
 export const statementAnswerVersions = {
   kind: { "statement-transaction-kind": "2026-11-12.1" },
