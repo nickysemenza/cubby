@@ -75,23 +75,26 @@ keywords.
 
 ## Locks
 
-Take every lock a migration needs at its start, in a fixed order, so contention
-fails in seconds instead of after a long copy. Dropping a foreign key also locks
-the referenced table. A wide copy can hold `ACCESS EXCLUSIVE` for many minutes;
-the Deploy job's 25-minute timeout bounds the whole run.
-
 The runner applies every pending migration in one transaction with a 2-second
-lock timeout, inserting each journal receipt inside it. Locks are held until
-that transaction commits, so a later migration in the same run that needs a
-stronger lock on a table an earlier one locked upgrades it mid-transaction. The
-runner retries the whole transaction on deadlock (`40P01`) or lock timeout
+lock timeout, inserting each journal receipt inside it. Before the first
+statement it takes `ACCESS EXCLUSIVE`, in sorted order, on every existing table
+the pending chain names in `LOCK TABLE`, `ALTER TABLE`, `DROP TABLE`,
+`TRUNCATE`, `CREATE INDEX`, `CREATE TRIGGER` or `REFERENCES`, on the table of
+each index it drops, on the referenced table of each constraint it drops, and on
+the foreign-key partners of each table it drops (`lockPendingTables` in
+`tooling/db-migrate.ts`). No lock is upgraded later in the transaction, and
+contention fails in seconds instead of after a long copy. A migration that only
+reads a table it needs stable names it in `LOCK TABLE`; the runner cannot see
+tables touched only through dynamic SQL. A wide copy holds these locks for many
+minutes; the Deploy job's 25-minute timeout bounds the whole run.
+
+The runner retries the whole transaction on deadlock (`40P01`) or lock timeout
 (`55P03`), up to six attempts 15 seconds apart; each attempt rolls back every
 pending migration and receipt. Any other error, or a sixth failure, stops the
 Deploy with nothing applied.
 
-A migration that takes `ACCESS EXCLUSIVE` on many tables can deadlock against
-the running Worker's queue traffic on every attempt. Stop background work first
-if locks contend.
+The up-front lock set is wide and can contend with the running Worker's queue
+traffic on every attempt. Stop background work first if locks contend.
 
 ## Migration runner markers
 

@@ -40,9 +40,7 @@ export async function produceFieldAnswer(
 > {
   if (!prepareOnly && !input.questions)
     throw refusedBeforeSending(
-      new WorkEvidenceObsoleteError(
-        "The field question has no prepared model inputs",
-      ),
+      new Error("The field question has no prepared model inputs"),
     );
   const plan = fieldPlan(input.entity, input.field);
   if (!plan)

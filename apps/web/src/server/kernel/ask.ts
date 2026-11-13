@@ -28,7 +28,11 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
-import { WorkDeferredError } from "~/server/kernel/work-errors";
+import {
+  WorkDeferredError,
+  WorkEvidenceObsoleteError,
+  WorkRetryableError,
+} from "~/server/kernel/work-errors";
 
 import type { AskOutcome } from "./ask-gap";
 import {
@@ -288,7 +292,9 @@ async function commitAnswer(
  * Settle a call that failed after it was marked `sent`. A failure the produce
  * ledger proves unsent (a declared refusal and no request on the wire) is
  * queued again and settled by the claim classifier with its refusal, so a
- * wait keeps its cause and spends no attempt. Anything else, including a
+ * wait keeps its cause and spends no attempt. An input found stale spends
+ * none either: its waiting scopes re-derive and drop it, or ask it again
+ * after a backoff when their inputs return to it. Anything else, including a
  * malformed response or a provider error after a request left, cannot prove
  * that the provider did no paid work and becomes `unknown`.
  */
@@ -306,15 +312,24 @@ async function settleSent(
         UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL
         WHERE id = ${ask.id}::uuid AND state = ${ASK.sent} AND "claimToken" = ${ask.token}::uuid
         RETURNING id`);
-      if (requeued.rows.length)
-        await settleFailure(
-          q,
-          { table: "Ask", id: ask.id },
-          ask.token,
-          ask.attempts,
-          unsent,
-          ask.wakeVersion,
-        );
+      if (!requeued.rows.length) return;
+      const stale = unsent instanceof WorkEvidenceObsoleteError;
+      await settleFailure(
+        q,
+        { table: "Ask", id: ask.id },
+        ask.token,
+        ask.attempts,
+        stale
+          ? new WorkRetryableError(unsent.message, { cause: unsent })
+          : unsent,
+        ask.wakeVersion,
+      );
+      if (stale)
+        await markDirty(q, registry, {
+          keys: [],
+          discovers: await waitingScopes(q, ask.id),
+          reason: "ask-stale-input",
+        });
       return;
     }
     const changed = await q.execute<{ id: string }>(sql`

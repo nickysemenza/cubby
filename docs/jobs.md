@@ -16,7 +16,9 @@ A sent Ask whose producer call failed is `unknown` unless the call proves it sen
 nothing: an admission hook refused it before the request, or the provider
 answered with a classified funding or configuration stop. That Ask returns to
 `queued` with its wait cause and no spent attempt, and a funding reset releases
-it. An Answer's `costMicros` is the charged cost of the usage rows its produce
+it. A producer that finds its input stale also returns the Ask to `queued`
+without spending an attempt and reruns its waiting scopes, which drop it when
+their inputs moved on. An Answer's `costMicros` is the charged cost of the usage rows its produce
 call wrote, or null when one is unknown.
 
 An Ask or Pass declaration may name a `claimLimit` partition and slot count.

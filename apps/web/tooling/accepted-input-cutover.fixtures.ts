@@ -362,6 +362,7 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
 export async function withCutoverMigration<T>(
   sql: string,
   work: (folder: string) => Promise<T>,
+  extra: Record<string, string> = {},
 ): Promise<T> {
   const { mkdtemp, readdir, mkdir, copyFile, writeFile, rm } =
     await import("node:fs/promises");
@@ -385,6 +386,10 @@ export async function withCutoverMigration<T>(
       join(folder, "20261113185531_accepted_input_cutover", "migration.sql"),
       sql,
     );
+    for (const [name, text] of Object.entries(extra)) {
+      await mkdir(join(folder, name));
+      await writeFile(join(folder, name, "migration.sql"), text);
+    }
     return await work(folder);
   } finally {
     await rm(folder, { recursive: true, force: true });

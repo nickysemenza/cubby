@@ -80,6 +80,24 @@ it("carries held values, paid results, redirects and every accepted money row", 
       `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId") VALUES ($1,$2,$3)`,
       [cutoverId(101), cutoverId(41), cutoverId(14)],
     );
+    const { FIELD_SUGGESTION_FEATURE } =
+      await import("../src/server/ai/policy/features");
+    const answeredInput = {
+      kind: "choice",
+      model: FIELD_SUGGESTION_FEATURE.model,
+      subject: "Synthetic answered subject",
+      rules: "Synthetic rules",
+      choices: ["A", "B"],
+      allowNone: true,
+    };
+    await client.query(
+      `INSERT INTO "AiEvaluation" (id,"workKey",feature,target,provenance,snapshot,state,result) VALUES ($1,'synthetic:answered-canonical','field_suggest','{}',$2,$3,'completed','{"value":"B"}')`,
+      [
+        cutoverId(105),
+        { promptVersion: FIELD_SUGGESTION_FEATURE.promptVersion },
+        { modelInput: answeredInput },
+      ],
+    );
     // A member's Keep after an automatic acceptance makes the value theirs.
     await client.query(
       `UPDATE "Product" SET tags=ARRAY['synthetic-kept'] WHERE id=$1`,
@@ -235,6 +253,15 @@ it("carries held values, paid results, redirects and every accepted money row", 
       state: "queued",
     });
     expect(ready.input).toEqual(askEnvelope(kind, ready.input.input));
+    // A retained result already shaped as the model Answer is reused at its envelope.
+    expect(
+      (
+        await client.query(
+          `SELECT feature,output->'value' value FROM "Answer" WHERE "inputHash"=$1`,
+          [await inputHashOf(askEnvelope(kind, answeredInput))],
+        )
+      ).rows,
+    ).toEqual([{ feature: kind.feature, value: "B" }]);
     expect(ready.inputHash).toBe(
       await inputHashOf(askEnvelope(kind, ready.input.input)),
     );
@@ -447,7 +474,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           `SELECT count(*)::int n FROM archive."AiEvaluation_preimage"`,
         )
       ).rows[0].n,
-    ).toBe(7);
+    ).toBe(8);
     expect(
       (
         await client.query(
@@ -1136,6 +1163,16 @@ it("rolls back the Expense rename, Job drop and every pending receipt when the l
         expect(findPgError(failure)?.message).toBe(
           "Synthetic final preservation failure",
         );
+      },
+      {
+        // Runs before the first pending migration: the runner already holds
+        // the final lock on tables the chain locks weakly, drops, or whose
+        // dropped table references them.
+        "20261113012224_synthetic_lock_probe": `DO $probe$ BEGIN
+          IF (SELECT count(*) FROM pg_locks WHERE pid=pg_backend_pid() AND granted AND mode='AccessExclusiveLock'
+            AND relation IN ('"Job"'::regclass,'"Run"'::regclass,'"Cookbook"'::regclass,'"AuditLog"'::regclass,'"ImageProcessingSubmission"'::regclass))<>5
+          THEN RAISE EXCEPTION 'Pending chain locks were not held before its first migration'; END IF;
+        END $probe$;`,
       },
     );
     expect(

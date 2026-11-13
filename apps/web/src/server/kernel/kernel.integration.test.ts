@@ -40,7 +40,10 @@ import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
-import { WorkDeferredError } from "~/server/kernel/work-errors";
+import {
+  WorkDeferredError,
+  WorkEvidenceObsoleteError,
+} from "~/server/kernel/work-errors";
 import * as backgroundTasks from "~/server/workflows/background-tasks/publish";
 
 import {
@@ -1826,6 +1829,45 @@ describe("evidence-facts kernel", () => {
     expect(new Set((await states()).map((row) => row.state))).toEqual(
       new Set(["answered"]),
     );
+  });
+
+  it("re-queues an ask whose input went stale without spending attempts and reruns its scope", async () => {
+    const { kernel, fixture } = kernelWith({
+      categorize: async () => {
+        throw refusedBeforeSending(
+          new WorkEvidenceObsoleteError("Synthetic record changed"),
+        );
+      },
+    });
+    const merchant = "Synthetic Churning Shop";
+    await queueAsk(
+      ctx.db,
+      fixture.categorize,
+      { merchant },
+      { scopes: [{ kind: CATEGORY_SCOPE, key: merchant }] },
+    );
+    const q = repositoryQueries(ctx.db);
+    for (let run = 0; run < 5; run++) {
+      await q.execute(sql`DELETE FROM "ScopeDirty"`);
+      await q.execute(
+        sql`UPDATE "Ask" SET "availableAt" = now() WHERE feature = ${fixture.categorize.feature}`,
+      );
+      expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
+      expect(
+        (
+          await q.execute<{ state: string; attempts: number }>(
+            sql`SELECT state, attempts FROM "Ask" WHERE feature = ${fixture.categorize.feature}`,
+          )
+        ).rows,
+      ).toEqual([{ state: "queued", attempts: 0 }]);
+      expect(
+        (
+          await q.execute<{ key: string }>(
+            sql`SELECT "scopeKey" AS key FROM "ScopeDirty" WHERE "scopeKind" = ${CATEGORY_SCOPE}`,
+          )
+        ).rows,
+      ).toEqual([{ key: merchant }]);
+    }
   });
 
   it("leaves hosted model Asks to their Pass and wakes it when the retained Answer arrives", async () => {
