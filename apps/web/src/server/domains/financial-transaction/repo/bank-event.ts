@@ -6,6 +6,7 @@ import {
 import { statementQuestionSubject } from "@cubby/schemas/statement-answers";
 import { minorToMoney, moneyToMinor } from "@cubby/shared";
 
+import { shiftPlainDate } from "~/lib/household-date";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { manualEntry } from "~/server/db/kernel-schema";
 import {
@@ -278,15 +279,12 @@ export const bankEvent = defineReconciler<BankInput>({
           const current = observationsForScope.find(
             (row) => row.id === occurrence?.currentObservationId,
           );
-          // oxlint-disable-next-line cubby/no-ad-hoc-calendar-day -- statement dates and the settlement window use UTC calendar days.
           const dates = current
             ? Array.from({ length: POSTING_WINDOW_DAYS * 2 + 1 }, (_, index) =>
-                new Date(
-                  Date.parse(current.statementDate) +
-                    (index - POSTING_WINDOW_DAYS) * 86_400_000,
-                )
-                  .toISOString()
-                  .slice(0, 10),
+                shiftPlainDate(
+                  current.statementDate,
+                  index - POSTING_WINDOW_DAYS,
+                ),
               )
             : [];
           const candidates = current
