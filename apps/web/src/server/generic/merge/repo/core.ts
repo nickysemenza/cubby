@@ -18,6 +18,7 @@ import type { IncomingEdge } from "~/server/db/entity-incoming-edges";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers";
+import { databaseForTransaction } from "~/server/db/helpers/core";
 import { repointEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
 import { repointRunFindingTargetsTx } from "~/server/domains/run/repo/run-finding";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
@@ -150,6 +151,22 @@ export const repointEdge = async <E extends Entity>(
   const conditions = [inArray(column, [...args.from])];
   if (args.liveOnly) conditions.push(notDeleted(table));
 
+  const { columnOwner, repointOwnedReference } =
+    await import("~/server/kernel/api");
+  if (await columnOwner(table, property)) {
+    const rows = await tx
+      .select({ id: table.id })
+      .from(table)
+      .where(and(...conditions));
+    await repointOwnedReference(databaseForTransaction(tx), {
+      table,
+      column: property,
+      fromIds: args.from,
+      toId: args.to,
+      liveOnly: args.liveOnly,
+    });
+    return rows.map((row) => String(row.id));
+  }
   const rows = await tx
     .update(table)
     .set({ [property]: args.to })

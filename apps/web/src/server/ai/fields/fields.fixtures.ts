@@ -1,6 +1,7 @@
 /** Synthetic seeds pass field assignments through the same boundary as writers. */
 import { systemActor } from "@cubby/schemas/context";
-import type { ShortcodeType } from "@cubby/shared";
+import { parseShortcodeFor, type ShortcodeType } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { withTransactionDatabase } from "~/server/db/helpers";
@@ -19,6 +20,67 @@ export async function insertFieldsFixture<T extends ShortcodeType>(
   values: ShortcodeInsertValues<T>,
   generator?: ShortcodeGeneratorPort,
 ): Promise<ShortcodeRowFor<T>> {
+  if (
+    entity === "purchase" ||
+    entity === "expense" ||
+    entity === "financialTransaction"
+  ) {
+    const { createPurchaseEventRecord } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    const { seedBankTransaction } =
+      await import("~/server/domains/financial-transaction/repo/bank.fixtures");
+    // SAFETY: the entity literal selects the same insert model as the generic caller.
+    const row =
+      entity === "financialTransaction"
+        ? await seedBankTransaction(
+            db,
+            values as ShortcodeInsertValues<"financialTransaction">,
+          )
+        : entity === "purchase"
+          ? await createPurchaseEventRecord(
+              db,
+              "purchase",
+              values as ShortcodeInsertValues<"purchase">,
+            )
+          : await createPurchaseEventRecord(
+              db,
+              "expense",
+              values as ShortcodeInsertValues<"expense">,
+            );
+    const { repositoryQueries } =
+      await import("~/server/db/repository-access.boundary");
+    const { SHORTCODE_TABLE } =
+      await import("~/server/generated/shortcode-tables.gen");
+    const table =
+      entity === "purchase"
+        ? SHORTCODE_TABLE.purchase
+        : entity === "expense"
+          ? SHORTCODE_TABLE.expense
+          : SHORTCODE_TABLE.financialTransaction;
+    const metadata = {
+      ...("deletedAt" in values &&
+      (values.deletedAt instanceof Date || values.deletedAt === null)
+        ? { deletedAt: values.deletedAt }
+        : {}),
+      ...("createdAt" in values && values.createdAt instanceof Date
+        ? { createdAt: values.createdAt }
+        : {}),
+      ...("updatedAt" in values && values.updatedAt instanceof Date
+        ? { updatedAt: values.updatedAt }
+        : {}),
+    };
+    if (Object.keys(metadata).length)
+      await repositoryQueries(db)
+        .update(table)
+        .set(metadata)
+        .where(eq(table.id, row.id));
+    // SAFETY: the same entity discriminant selected both writer and public shortcode.
+    return {
+      ...row,
+      ...metadata,
+      shortcode: parseShortcodeFor(entity, row.shortcode),
+    } as ShortcodeRowFor<T>;
+  }
   return withTransactionDatabase(db, async (tx) => {
     const held = holdFieldsValues(entity, values, "create");
     const row = await insertWithShortcode(tx, entity, held.values, generator);

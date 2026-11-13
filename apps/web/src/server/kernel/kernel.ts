@@ -12,11 +12,12 @@ import {
 } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
 import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
-import { getTableName } from "drizzle-orm";
+import { and, eq, getTableName, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
+import { factKey } from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
@@ -37,7 +38,7 @@ import {
   type Pass,
   type ScopeRef,
 } from "./define";
-import { markDirty } from "./dirty";
+import { insertFactKeys, markDirty } from "./dirty";
 import {
   approveDrift,
   approveDriftClass,
@@ -50,6 +51,7 @@ import { rowKey, tableKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
+import { idColumn } from "./reads";
 import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
 import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
 import { reconcileNow, runKernel } from "./runner";
@@ -167,11 +169,10 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   });
   registry = buildRegistry([kernelModule, ...modules]);
   const bound = registry;
-  registerOwnedColumns(ownedColumns(bound));
   return {
     registry: bound,
     machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
-    needsYou: readNeedsYou,
+    needsYou: (db, options) => readNeedsYou(db, bound, options),
     runWork: (db, runId) => readRunWork(db, bound, runId),
     async append(db, rows, options) {
       const facts = await append(db, bound, rows, options);
@@ -179,7 +180,26 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       return facts;
     },
     async decide(db, actor, decisions, writers) {
-      const refs = await decide(db, bound, actor, decisions, writers);
+      const moneyEntities = new Set(
+        [...bound.reconcilers.values()]
+          .filter((reconciler) => reconciler.lane === "money")
+          .flatMap((reconciler) =>
+            reconciler.writes.map((target) => target.entity ?? target.name),
+          ),
+      );
+      const removesMoney = decisions.some(
+        (decision) =>
+          decision.channel === "rejection" &&
+          decision.kind === "reject" &&
+          moneyEntities.has(
+            decision.subject.slice(0, decision.subject.indexOf(":")),
+          ),
+      );
+      const refs = removesMoney
+        ? await householdWrite(db, (tx) =>
+            decide(tx, bound, actor, decisions, writers),
+          )
+        : await decide(db, bound, actor, decisions, writers);
       if (refs.length) await wakeAfterCommit(db);
       return refs;
     },
@@ -224,11 +244,58 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
             ])
           : [];
       const discovers = [...(write.discovers ?? []), ...started];
-      if (!read && !discovers.length) return 0;
+      const evidenceKeys: string[] = [];
+      for (const evidence of bound.evidence.values()) {
+        if (getTableName(evidence.table) !== name || !write.ids.length)
+          continue;
+        const q = repositoryQueries(db);
+        const previous = await q
+          .select({ key: factKey.key })
+          .from(factKey)
+          .where(
+            and(
+              eq(factKey.factKind, evidence.kind),
+              inArray(factKey.factId, [...write.ids]),
+            ),
+          );
+        const rows = await q
+          .select()
+          .from(evidence.table)
+          .where(inArray(idColumn(evidence.table), [...write.ids]));
+        const indexed = rows.map((row) => {
+          // SAFETY: selected from this evidence kind's own table.
+          const typed = row as Parameters<typeof evidence.keys>[0];
+          discovers.push(...evidence.discovers(typed));
+          return {
+            kind: evidence.kind,
+            id: String(row.id),
+            keys: evidence.keys(typed),
+          };
+        });
+        await q
+          .delete(factKey)
+          .where(
+            and(
+              eq(factKey.factKind, evidence.kind),
+              inArray(factKey.factId, [...write.ids]),
+            ),
+          );
+        await insertFactKeys(q, indexed);
+        evidenceKeys.push(
+          ...previous.map((row) => row.key),
+          ...indexed.flatMap((row) => row.keys),
+        );
+      }
+      if (!read && !discovers.length && !evidenceKeys.length) return 0;
       const dirtied = await markDirty(repositoryQueries(db), bound, {
-        keys: read
-          ? [tableKey(name), ...write.ids.map((id) => rowKey(name, id))]
-          : [],
+        keys: [
+          ...new Set([
+            ...evidenceKeys,
+            ...(read
+              ? [tableKey(name), ...write.ids.map((id) => rowKey(name, id))]
+              : []),
+          ]),
+        ],
         discovers,
         reason: `write:${name}`,
       });
@@ -260,7 +327,19 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       approveDriftClass(db, bound, actor, kind),
     startPass,
     repointOwnedReference: (tx, request) =>
-      repointOwnedReference(tx, bound, request),
+      [...bound.reconcilers.values()].some(
+        (reconciler) =>
+          reconciler.lane === "money" &&
+          reconciler.writes.some(
+            (target) =>
+              target.table === request.table &&
+              target.columns.includes(request.column),
+          ),
+      )
+        ? householdWrite(tx, (gated) =>
+            repointOwnedReference(gated, bound, request),
+          )
+        : repointOwnedReference(tx, bound, request),
     listRows: (db, capability, ids) =>
       loadMachineryRows(db, bound, capability, ids),
     run: (db, options) => runKernel(db, bound, options),
@@ -271,8 +350,10 @@ let production: Promise<Kernel> | null = null;
 
 /** The production kernel over every module in `modules.ts`. */
 export function productionKernel(): Promise<Kernel> {
-  production ??= import("./modules").then(({ KERNEL_MODULES }) =>
-    createKernel(KERNEL_MODULES),
-  );
+  production ??= import("./modules").then(({ KERNEL_MODULES }) => {
+    const kernel = createKernel(KERNEL_MODULES);
+    registerOwnedColumns(ownedColumns(kernel.registry));
+    return kernel;
+  });
   return production;
 }

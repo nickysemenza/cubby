@@ -36,6 +36,7 @@ import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-ed
 import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   notDeleted,
   touchUpdatedAt,
@@ -53,6 +54,11 @@ import {
   emptySpendingCategorySummary,
   loadTransactionSpendingCategorySummaries,
 } from "~/server/domains/expense/repo/expense-category-summary";
+import { bankTransactionWrites } from "~/server/domains/financial-transaction/repo/bank-event";
+import {
+  createBankTransactions,
+  updateBankTransactions,
+} from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
@@ -90,7 +96,6 @@ import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { evidenceAuditEntries } from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
@@ -138,7 +143,6 @@ export const financialTransactionScaffold = listScaffold(
     readSchema: financialTransactionRepositoryReadSchema,
     rows: {
       settlementRefs: sql`SELECT owner,source,"externalId" FROM ${financialSourceReferenceRows} reference`,
-      runStepInputs: runStepInputListRows("financialTransaction"),
       acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
@@ -491,8 +495,7 @@ export async function createFinancialTransactionRows(
 }
 
 /**
- * Insert proven fresh transactions in the layer, accept their sources and
- * stage the create and evidence audits.
+ * Append validated bank inputs, accept their sources and stage provenance audits.
  */
 export async function insertFreshFinancialTransactions(
   layer: WriteLayer,
@@ -504,20 +507,10 @@ export async function insertFreshFinancialTransactions(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
-  const created = await layer.insert(
-    "financialTransaction",
-    layer.stage(
-      "financialTransaction",
-      inputs.map(({ data, accountId }) => {
-        const {
-          allocations: _allocations,
-          sourceRefs: _sourceRefs,
-          purchaseId: _purchaseId,
-          ...columns
-        } = data;
-        return { ...columns, accountId, amount: moneyToMinor(data.amount) };
-      }),
-    ),
+  const created = await createBankTransactions(
+    databaseForTransaction(layer.tx),
+    inputs,
+    actor,
   );
   const acceptedSourceChanges = await acceptFreshFinancialSources(
     layer.tx,
@@ -1142,8 +1135,7 @@ export async function updateFinancialTransactions(
           )
         : null,
     );
-    // Updates that write the same column values share one statement.
-    const groups = new Map<string, FinancialTransactionId[]>();
+    // Reconciled values become decisions; ordinary metadata keeps its writer.
     const columnValues = valuesFor.map((values) =>
       Object.fromEntries(
         Object.entries(values).filter(([key]) =>
@@ -1151,22 +1143,31 @@ export async function updateFinancialTransactions(
         ),
       ),
     );
+    await updateBankTransactions(
+      databaseForTransaction(tx),
+      updates.map((_update, index) => ({
+        id: ids[index]!,
+        values: columnValues[index]!,
+      })),
+      actor,
+    );
     for (const [index, values] of columnValues.entries()) {
-      const key = JSON.stringify(values, (_key, value: unknown) =>
-        typeof value === "bigint" ? `${value}n` : value,
+      const ordinary = Object.fromEntries(
+        Object.entries(values).filter(
+          ([field]) => !bankTransactionWrites.columns.includes(field),
+        ),
       );
-      groups.set(key, [...(groups.get(key) ?? []), ids[index]!]);
+      if (Object.keys(ordinary).length)
+        await tx
+          .update(financialTransaction)
+          .set(ordinary)
+          .where(
+            and(
+              inArray(financialTransaction.id, [ids[index]!]),
+              notDeleted(financialTransaction),
+            ),
+          );
     }
-    for (const group of groups.values())
-      await tx
-        .update(financialTransaction)
-        .set(columnValues[ids.indexOf(group[0]!)]!)
-        .where(
-          and(
-            inArray(financialTransaction.id, group),
-            notDeleted(financialTransaction),
-          ),
-        );
     const acceptedSourceChanges = await replaceFinancialSourceRefsFor(
       tx,
       updates.flatMap(({ data }, index) =>

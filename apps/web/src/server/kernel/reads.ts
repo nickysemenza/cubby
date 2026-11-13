@@ -12,7 +12,6 @@ import {
   eq,
   getTableColumns,
   getTableName,
-  inArray,
   sql,
   type InferSelectModel,
   type SQL,
@@ -20,7 +19,10 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
-import { textArrayParam } from "~/server/db/helpers/array-param";
+import {
+  textArrayParam,
+  columnArrayParam,
+} from "~/server/db/helpers/array-param";
 import { evidenceBinding, factKey } from "~/server/db/kernel-schema";
 import type { RepositoryQueryClient } from "~/server/db/repository-access.boundary";
 
@@ -218,7 +220,7 @@ export function createReads(
       .from(evidenceBinding)
       .where(
         and(
-          sql`(${events.length ? inArray(evidenceBinding.eventKey, events) : sql`false`}
+          sql`(${events.length ? sql`${evidenceBinding.eventKey} = ANY(${textArrayParam(events)})` : sql`false`}
             OR (${evidenceBinding.factKind} || ':' || ${evidenceBinding.factId}) = ANY(${textArrayParam(facts)}))`,
           mode.hideBaseline
             ? sql`${evidenceBinding.basis} <> ${"baseline" satisfies BindingBasis}`
@@ -263,7 +265,9 @@ export function createReads(
             ? await q
                 .select()
                 .from(table)
-                .where(inArray(idColumn(table), wanted))
+                .where(
+                  sql`${idColumn(table)} = ANY(${columnArrayParam(wanted)})`,
+                )
             : [];
           const byId = new Map(rows.map((row) => [String(row.id), row]));
           return (requested) =>
@@ -307,7 +311,7 @@ export function createReads(
                 .where(
                   and(
                     eq(factKey.factKind, evidence.kind),
-                    inArray(factKey.key, [...all]),
+                    sql`${factKey.key} = ANY(${textArrayParam(all)})`,
                   ),
                 )
             : [];
@@ -340,10 +344,11 @@ export function createReads(
       keys: readonly Key[],
       where: SQL,
     ) {
-      requireTable(table);
-      const revs = await revisions(keys);
+      const name = requireTable(table);
+      const predicateKeys = [...new Set([...keys, tableKey(name)])];
+      const revs = await revisions(predicateKeys);
       const rows = await q.select().from(table).where(where);
-      recordAll(scopes, revs, keys);
+      recordAll(scopes, revs, predicateKeys);
       // SAFETY: rows come from `select().from(table)` of this same table.
       return rows as InferSelectModel<T>[];
     },

@@ -2,7 +2,6 @@ import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   entityLink,
@@ -12,6 +11,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -48,7 +48,7 @@ describe("explicit purchase acquisition", () => {
       ctx.db,
       "Acquisition Test Vendor",
     );
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-02-01",
       displayLabel: "Acquisition test order",

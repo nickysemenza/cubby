@@ -6,8 +6,7 @@ import {
 import type {
   StatementCounterparty,
   StatementKindVotes,
-  StatementTransactionJudgment,
-} from "@cubby/schemas/statement-suggestion";
+} from "@cubby/schemas/statement-answers";
 
 import { statementEffectiveMovement } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 
@@ -106,16 +105,20 @@ export function statementTransactionKind(input: {
   };
 }
 
-type KindDecision = Pick<
-  NonNullable<StatementTransactionJudgment["create"]>,
-  "kind" | "kindSource" | "votes" | "counterparty"
->;
-
-/** The statement text a counterparty rule reads. */
-export type StatementDescriptor = Pick<
-  NonNullable<StatementTransactionJudgment["create"]>,
-  "rawDescription" | "merchant"
->;
+type KindDecision = {
+  kind: FinancialTransactionKind;
+  kindSource: "rule" | "model" | "sign";
+  votes: StatementKindVotes;
+  counterparty: StatementCounterparty;
+};
+export type StatementDescriptor = {
+  rawDescription: string | null;
+  merchant: string | null;
+};
+type OwnAccountMove = {
+  accountId: string | null;
+  ledgerTransfer: boolean;
+} | null;
 
 /** The loan statement's payment entry records a balance movement. */
 export function isLoanPayment(
@@ -145,7 +148,7 @@ const P2P_RAIL =
  * name is a seller, such as a Square or Shopify shop, or a bill naming the
  * member.
  */
-export function statementP2PRail(
+function statementP2PRail(
   descriptor: StatementDescriptor,
   counterparty: Pick<StatementCounterparty, "storedValue">,
 ) {
@@ -169,7 +172,7 @@ export function decideStatementKind(input: {
   amountMinor: bigint;
   votes: StatementKindVotes;
   counterparty: StatementCounterparty;
-  transfer: StatementTransactionJudgment["transfer"];
+  transfer: OwnAccountMove;
   descriptor: StatementDescriptor;
 }): KindDecision {
   const { votes, transfer } = input;
@@ -226,8 +229,7 @@ export const MONEY_MOVE_KINDS = [
 ] as const;
 const MONEY_MOVES = new Set<KindDecision["kind"]>(MONEY_MOVE_KINDS);
 
-export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
-  MONEY_MOVES.has(kind);
+const isMoneyMoveKind = (kind: KindDecision["kind"]) => MONEY_MOVES.has(kind);
 
 /**
  * Spending needs agreeing evidence and a supported business counterparty.
@@ -238,14 +240,8 @@ export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
 export function kindAgreed(
   create: KindDecision & Partial<StatementDescriptor>,
   /** The judgment's own-account move, stored or as listed. */
-  transfer: Pick<
-    NonNullable<StatementTransactionJudgment["transfer"]>,
-    "ledgerTransfer"
-  > | null,
-  pair: Pick<
-    NonNullable<StatementTransactionJudgment["transferPair"]>,
-    "clean"
-  > | null = null,
+  transfer: Pick<NonNullable<OwnAccountMove>, "ledgerTransfer"> | null,
+  pair: Pick<{ clean: boolean }, "clean"> | null = null,
 ): boolean {
   const { votes, counterparty } = create;
   if (isMoneyMoveKind(create.kind)) {
@@ -329,7 +325,7 @@ export function ownAccountNamed(
   descriptor: string,
   account: OwnAccount,
   accounts: readonly OwnAccount[],
-): StatementTransactionJudgment["transfer"] {
+): OwnAccountMove {
   if (!BALANCE_KINDS.has(account.kind)) return null;
   const text = words(descriptor);
   if (!MOVE_WORDS.test(text)) return null;

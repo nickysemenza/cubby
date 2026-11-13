@@ -20,6 +20,7 @@ import {
   run,
 } from "~/server/db/schema";
 import { emailReviewReport } from "~/server/domains/email/repo/report-email";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -322,10 +323,12 @@ describe("Email review report", () => {
           : [],
       ),
     ).toEqual([]);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchaseTable.id, purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchaseTable.id, purchase.id),
+    );
     const historical = await report(selected.email.shortcode);
     expect(rows(historical, "Purchase links")).toContainEqual(
       expect.objectContaining({

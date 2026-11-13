@@ -1,60 +1,41 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
-import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
-import { eq, isNull, sql } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { statementDecisionInput } from "@cubby/schemas/statement-decision";
+import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
-  financialAccount as financialAccountTable,
+  withDatabaseOperationMetrics,
+  withDatabaseOperationPhase,
+} from "~/server/db/db-observability";
+import { getDb } from "~/server/db/helpers";
+import { evidenceBinding, drift } from "~/server/db/kernel-schema";
+import {
+  expense,
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
+import {
   purchase as purchaseTable,
-  suggestionTable,
   sourceTransactionRecord,
   sourceOccurrence,
   vendor as vendorTable,
 } from "~/server/db/schema";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
-import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
-import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
-import { executeEntity } from "~/server/entity-kernel";
-import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { isSerializationFailure } from "~/server/errors/db-errors";
-import * as changes from "~/server/generic/changes/repo/change";
-import {
-  lockJobs,
-  replaceJobGeneration,
-} from "~/server/generic/jobs/jobs.fixtures";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
-import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
-import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
-import { buildCrudServices } from "~/server/http/request-context";
-import { drainStoredDerived } from "~/server/testing/background-queue";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { emitWrites, machinery } from "~/server/kernel/api";
+import { decide, reconcileNow } from "~/server/kernel/api";
+import { productionKernel } from "~/server/kernel/kernel";
 
-import {
-  sourceObservationColumns,
-  sourceObservationFrom,
-} from "./source-observation-state";
-import { updateSourceTransactionRecords } from "./source-transaction-record";
 import { recordSourceTransactionRecords } from "./source-transaction-record";
-import { listSourceTransactionRecords } from "./source-transaction-record.fixtures";
-import { answering } from "./statement-decision-port.fixtures";
-import * as statementSettlement from "./statement-settlement";
-import * as statementApplication from "./statement-suggestion-application";
-import { previewStatementSuggestion } from "./statement-suggestion-preview";
-import { readStatementSuggestions } from "./statement-suggestion-read";
-import { generateStatementSuggestionPage } from "./statement-suggestions";
 
 // Failure modes: a clean accept writes only settlement evidence; a matched
 // charge disappears before its spending is booked; unchanged re-import skips
@@ -137,1199 +118,438 @@ describe("statement spending review and re-import", () => {
     );
     return { input, recorded, account, advice };
   }
-  const total = async () =>
-    Number(
-      (
-        await getDb(ctx.db).execute<{ total: string }>(
-          sql`SELECT (coalesce(sum("costMinor"),0) / 100.0)::text AS total FROM "Expense" WHERE "deletedAt" IS NULL`,
-        )
-      ).rows[0]!.total,
-    );
-  const labelAndRefreshReads = async (
-    advice: ReturnType<typeof financialSpendingAdvice.parse>,
-    importId?: string,
-  ) => {
-    await generateStatementSuggestionPage(ctx.db, {
-      servicesFor: buildCrudServices,
-      after: null,
-      runId: null,
-      scope: { importId },
-    });
-    const result = await labelStatementSuggestions(ctx.db, {
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      spendingAdvice: async () => advice,
-      scope: { importId },
-    });
-    expect(result.failed).toEqual([]);
-    await drainStoredDerived(ctx.db);
-  };
-  const labelForReview = async (
-    advice: ReturnType<typeof financialSpendingAdvice.parse>,
-  ) => {
-    // Manual-review journeys stop after paid answers and publication, before settlement.
-    const deferred = vi
-      .spyOn(statementSettlement, "settleStatementPage")
-      .mockResolvedValue(new Map());
-    try {
-      await labelAndRefreshReads(advice);
-    } finally {
-      deferred.mockRestore();
-    }
-  };
-  const pendingPreview = async () => {
-    await generateStatementSuggestionPage(ctx.db, {
-      servicesFor: buildCrudServices,
-      after: null,
-      runId: null,
-    });
-    const states = await getDb(ctx.db).query.suggestionTable.findMany();
-    const [suggestion] = await readStatementSuggestions(
+  it("books a statement charge with stable linked records through the kernel", async () => {
+    const setup = await fixture("kernel-charge-one");
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const applied = await decideStatement(
       ctx.db,
-      states.map((state) => state.id),
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action: "book", kindOverride: "purchase" },
+      }),
     );
-    return suggestion!;
-  };
-  it.each(["once", "exhausted", "stale", "committed"] as const)(
-    "preserves shared-card application and replay after %s contention",
-    async (mode) => {
-      const { advice, account } = await fixture(null, "household");
-      await labelForReview(advice);
-      const page = await listSuggestionPage(ctx.db, {
-        family: "statement_transaction",
-        limit: 20,
-      });
-      const suggestion = page.items[0]!;
-      const command = {
-        suggestionId: suggestion.id,
-        operationId: "synthetic-shared-card-contention",
-        verdict: "correct" as const,
-        correction: { present: false as const },
-        intent: "apply" as const,
-        expectedFingerprint: suggestion.fingerprint!,
-        application: statementTransactionApplication.parse({
-          kind: "statement_transaction",
-          action: "create",
-        }),
-      };
-      await expect(
-        previewStatementSuggestion(ctx.db, {
-          suggestionId: command.suggestionId,
-          expectedFingerprint: command.expectedFingerprint,
-          application: command.application,
-        }),
-      ).resolves.toMatchObject({
-        spending: { status: "ready", purchaserId: null },
-      });
-      const read = async () =>
-        (
-          await getDb(ctx.db).execute<{
-            transactions: number;
-            allocations: number;
-            purchases: number;
-            expenses: number;
-            feedback: number;
-            totalFeedback: number;
-          }>(sql`SELECT
-      (SELECT count(*)::int FROM "FinancialTransaction") AS transactions,
-      (SELECT count(*)::int FROM "FinancialTransactionAllocation") AS allocations,
-      (SELECT count(*)::int FROM "Purchase") AS purchases,
-      (SELECT count(*)::int FROM "Expense") AS expenses,
-      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid) AS "totalFeedback",
-      (SELECT count(*)::int FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) decision WHERE s.id = ${suggestion.id}::uuid AND decision->>'operationId' IN (${command.operationId}, ${`command-application:${command.operationId}`})) AS feedback`)
-        ).rows[0]!;
-      const before = await read();
-      await enqueueJob(ctx.db, {
-        key: "synthetic:statement-contention",
-        kind: "synthetic.contention",
-        input: {},
-      });
-      const invalidate = changes.recordChange;
-      let calls = 0;
-      let external = false;
-      const current = statementApplication.currentStatementApplication;
-      let builds = 0;
-      const rebuilding = vi
-        .spyOn(statementApplication, "currentStatementApplication")
-        .mockImplementation(async (...args) => {
-          builds++;
-          const proposal = await current(...args);
-          if (mode === "stale" && builds === 1) {
-            external = true;
-            try {
-              await updateFinancialAccount(
-                ctx.db,
-                account.output.id,
-                { ledgerPartyId: null },
-                ctx.actor,
-              );
-            } finally {
-              external = false;
-            }
-          }
-          return proposal;
-        });
-      const racing = vi
-        .spyOn(changes, "recordChange")
-        .mockImplementation(async (db, changeEvent) => {
-          if (
-            changeEvent.kind === "source" &&
-            changeEvent.categories.includes("financialTransaction") &&
-            changeEvent.categories.includes("expense") &&
-            !external
-          ) {
-            calls++;
-            if (mode === "exhausted" || (mode !== "committed" && calls === 1)) {
-              // A synthetic stale-row fence keeps real PostgreSQL retry and
-              // money/receipt rollback coverage without a mutable capture counter.
-              await replaceJobGeneration(ctx.db, {
-                key: "synthetic:statement-contention",
-              });
-              await lockJobs(db, { key: "synthetic:statement-contention" });
-            }
-            if (mode === "committed" && calls === 1) {
-              await runAfterCommit(db, async () => {
-                throw new Error("Synthetic post-commit failure", {
-                  cause: { code: "40001" },
-                });
-              });
-            }
-          }
-          return invalidate(db, changeEvent);
-        });
-      try {
-        const scenarios = {
-          once: async () => {
-            const result = await reviewSuggestion(
-              ctx.db,
-              kernelCtx(ctx),
-              command,
-            );
-            expect(calls).toBe(2);
-            expect(builds).toBe(2);
-            return result;
-          },
-          exhausted: async () => {
-            await expect(
-              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toSatisfy(isSerializationFailure);
-            expect(calls).toBe(3);
-            expect(builds).toBe(3);
-            // A refused application records no review.
-            expect(await read()).toEqual(before);
-            expect(
-              await getDb(ctx.db).query.suggestionTable.findFirst({
-                where: {
-                  RAW: (table: PgTable) =>
-                    relationalSql(table, eq(suggestionTable.id, suggestion.id)),
-                },
-              }),
-            ).toMatchObject({ active: true, status: "pending" });
-            racing.mockRestore();
-            return reviewSuggestion(ctx.db, kernelCtx(ctx), command);
-          },
-          stale: async () => {
-            await expect(
-              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toThrow(/changed since review: spending\./i);
-            expect(builds).toBe(2);
-            // A refused application records no review.
-            expect(await read()).toEqual(before);
-            expect(
-              await getDb(ctx.db).query.suggestionTable.findFirst({
-                where: {
-                  RAW: (table: PgTable) =>
-                    relationalSql(table, eq(suggestionTable.id, suggestion.id)),
-                },
-              }),
-            ).toMatchObject({ active: true, status: "pending" });
-            return;
-          },
-          committed: async () => {
-            await expect(
-              reviewSuggestion(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toThrow(
-              /Transaction committed, but an after-commit effect failed/,
-            );
-            expect(calls).toBe(1);
-            expect(builds).toBe(1);
-            racing.mockRestore();
-            const result = await reviewSuggestion(
-              ctx.db,
-              kernelCtx(ctx),
-              command,
-            );
-            expect(builds).toBe(1);
-            return result;
-          },
-        };
-        const result = await scenarios[mode]();
-        if (!result) return;
-        expect(result).toMatchObject({ applied: true });
-        expect(await read()).toEqual({
-          transactions: before.transactions + 1,
-          allocations: before.allocations + 1,
-          purchases: before.purchases + 1,
-          expenses: before.expenses + 1,
-          feedback: before.feedback + 2,
-          totalFeedback: before.totalFeedback + 2,
-        });
-        expect(
-          await getDb(ctx.db).query.suggestionTable.findFirst({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, eq(suggestionTable.id, suggestion.id)),
-            },
-          }),
-        ).toMatchObject({ status: "applied" });
-        const stored = await read();
-        expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
-          result,
-        );
-        expect(await read()).toEqual(stored);
-      } finally {
-        racing.mockRestore();
-        rebuilding.mockRestore();
-      }
-    },
-  );
-  it("replays the exact committed booking receipt before a later occurrence hold", async () => {
-    const { advice } = await fixture();
-    await labelForReview(advice);
-    const [suggestion] = await readStatementSuggestions(
+    expect(applied.status).toBe("applied");
+    const transactions = await getDb(
       ctx.db,
-      (await getDb(ctx.db).query.suggestionTable.findMany()).map(
-        (state) => state.id,
-      ),
+    ).query.financialTransaction.findMany();
+    expect(transactions).toHaveLength(1);
+    const scope = { kind: "purchaseEvent", key: transactions[0]!.id };
+    const outcomes = await reconcileNow(ctx.db, [scope]);
+    expect(outcomes[0]?.error).toBeUndefined();
+    expect(outcomes[0]?.gaps).toEqual([]);
+    const before = await getDb(ctx.db).execute<{
+      id: string;
+      expense: string;
+      allocation: string;
+      costMinor: string;
+      amountMinor: string;
+    }>(
+      sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
     );
-    if (!suggestion) throw new Error("Synthetic source proposal missing");
-    const application = statementTransactionApplication.parse({
-      kind: "statement_transaction",
-      action: "create",
-      booking: { costType: "services" },
+    expect(before.rows).toHaveLength(1);
+    expect(before.rows[0]).toMatchObject({
+      costMinor: "4250",
+      amountMinor: "4250",
     });
-    const command = {
-      suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      operationId: "synthetic-source-replay",
-      verdict: "wrong" as const,
-      correction: { present: true as const, value: application },
-      intent: "apply" as const,
-      application,
-    };
-    const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
-    await getDb(ctx.db)
-      .update(sourceOccurrence)
-      .set({ reviewState: "identity_conflict" });
-    expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
-      receipt,
+    const ledgerBeforeReplay = await ledgerRows();
+    await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
+    await reconcileNow(ctx.db, [scope]);
+    expect(await ledgerRows()).toEqual(ledgerBeforeReplay);
+    const after = await getDb(ctx.db).execute<{
+      id: string;
+      expense: string;
+      allocation: string;
+      costMinor: string;
+      amountMinor: string;
+    }>(
+      sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
     );
-    expect(await total()).toBe(42.5);
-    expect(await getDb(ctx.db).query.expense.findMany()).toMatchObject([
-      { costType: "services", cost: 4250n },
+    expect(after.rows).toEqual(before.rows);
+  });
+  const applyKernelCharge = async (
+    setup: Awaited<ReturnType<typeof fixture>>,
+    action: "create" | "book" = "book",
+  ) => {
+    const [row] = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    return decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: row!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action, kindOverride: "purchase" },
+      }),
+    );
+  };
+  const ledgerRows = async () => ({
+    transactions: await getDb(ctx.db).select().from(financialTransaction),
+    purchases: await getDb(ctx.db).select().from(purchaseTable),
+    expenses: await getDb(ctx.db).select().from(expense),
+    allocations: await getDb(ctx.db)
+      .select()
+      .from(financialTransactionAllocation),
+  });
+  it("retains a statement rejection through a kernel replay", async () => {
+    const setup = await fixture("kernel-reject");
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const result = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        application: { action: "reject" },
+      }),
+    );
+    expect(result.status).toBe("rejected");
+    await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: observation!.occurrenceId },
     ]);
-    expect(
-      await getDb(ctx.db).query.financialTransaction.findMany(),
-    ).toHaveLength(1);
+    expect(await ledgerRows()).toEqual({
+      transactions: [],
+      purchases: [],
+      expenses: [],
+      allocations: [],
+    });
+    expect(setup.recorded).toBeDefined();
   });
-
-  // Preview must fence missing/stale suggestions and invalid drafts before
-  // planning, replan the selected draft, and never publish or mutate evidence.
-  it("fences missing fingerprints, replaced suggestions, and changed statement evidence in preview", async () => {
-    await fixture();
-    const suggestion = await pendingPreview();
-    const input = {
-      suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      application: { kind: "statement_transaction", action: "create" },
-    };
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        ...input,
-        expectedFingerprint: undefined,
-      }),
-    ).rejects.toThrow(/expectedFingerprint/i);
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        ...input,
-        suggestionId: crypto.randomUUID(),
-      }),
-    ).rejects.toThrow(/no longer available/i);
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        ...input,
-        expectedFingerprint: "synthetic-stale",
-      }),
-    ).rejects.toThrow(/changed since review/i);
-    await getDb(ctx.db).execute(
-      sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
-    );
-    await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
-      /changed since review: create.rawDescription/i,
-    );
-  });
-  it("replans draft kind and booking without writing transactions, vendors, aliases, or suggestion state", async () => {
-    const { advice } = await fixture();
-    const suggestion = await pendingPreview();
-    const snapshot = async () =>
-      (
-        await getDb(ctx.db).execute<{ state: unknown }>(sql`
-      SELECT jsonb_build_object(
-        'vendors', (SELECT jsonb_agg(to_jsonb(v)) FROM "Vendor" v),
-        'accounts', (SELECT jsonb_agg(to_jsonb(v)) FROM "VendorAccount" v),
-        'transactions', (SELECT jsonb_agg(to_jsonb(v)) FROM "FinancialTransaction" v),
-        'purchases', (SELECT jsonb_agg(to_jsonb(v)) FROM "Purchase" v),
-        'expenses', (SELECT jsonb_agg(to_jsonb(v)) FROM "Expense" v),
-        'refs', (SELECT jsonb_agg(to_jsonb(v)) FROM "EntityExternalId" v),
-        'rows', (SELECT jsonb_agg(to_jsonb(v)) FROM "SourceTransactionRecord" v),
-        'advice', (SELECT jsonb_agg(to_jsonb(v)) FROM "Suggestion" v)
-      ) AS state
-    `)
-      ).rows[0]!.state;
-    const before = await snapshot();
-    const input = {
-      suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      application: {
-        kind: "statement_transaction",
-        action: "create",
-        booking: {
-          spendingCategoryId: advice.spendingCategoryId,
-          reviewedVendorName: "Synthetic Orchard",
-          costType: "services",
-        },
-      },
-    };
-    const result = await previewStatementSuggestion(ctx.db, input);
-    expect(result).toMatchObject({
-      action: "create",
-      kind: "purchase",
-      spending: {
-        status: "ready",
-        effect: "create_aggregate",
-        request: { costType: "services" },
-      },
-    });
-    const transfer = await previewStatementSuggestion(ctx.db, {
-      ...input,
-      application: { ...input.application, kindOverride: "account_transfer" },
-    });
-    expect(transfer).toMatchObject({
-      kind: "account_transfer",
-      spending: { status: "deferred" },
-    });
-    expect(await snapshot()).toEqual(before);
-  });
-  it("refuses ambiguous attach drafts and preserves selected identity, allocations and projected fields", async () => {
-    const { account, advice } = await fixture();
-    const makeTransaction = () =>
-      createRepoIdentity(ctx, "financialTransaction", {
-        accountId: account.output.id,
-        kind: "purchase",
-        status: "pending",
-        amount: 42.5,
-        transactionDate: "2026-05-04",
-        merchant: "Synthetic Orchard",
-        sourceRefs: [],
-      });
-    const first = await makeTransaction();
-    const second = await makeTransaction();
-    const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, isNull(vendorTable.systemKey)),
-      },
-    });
-    const purchase = await createRepoIdentity(ctx, "purchase", {
-      vendorId: vendor!.shortcode,
-      date: "2026-05-04",
-      statedTotal: 42.5,
-    });
-    const suggestion = await pendingPreview();
-    const input = {
-      suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      application: { kind: "statement_transaction", action: "attach" },
-    };
-    await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
-      /Name the transaction/i,
-    );
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        ...input,
-        application: { ...input.application, transactionId: "FT4K7M" },
-      }),
-    ).rejects.toThrow(/Invalid|Expected|shortcode/i);
-    await expect(
-      previewStatementSuggestion(ctx.db, {
-        ...input,
-        application: {
-          ...input.application,
-          transactionId: first.output.id,
-          fields: ["amount"],
-        },
-      }),
-    ).rejects.toThrow(/already matches/i);
-    const application = {
-      ...input.application,
-      transactionId: second.output.id,
-      fields: ["status"],
-      booking: {
-        purchaseId: purchase.output.id,
-        spendingCategoryId: advice.spendingCategoryId,
-        reviewedVendorName: "Synthetic Orchard",
-      },
-    };
-    const result = await previewStatementSuggestion(ctx.db, {
-      ...input,
-      application,
-    });
-    expect(result.spending).toMatchObject({
-      status: "ready",
-      request: { transactionId: second.output.id },
-    });
-    expect(
-      (await getDb(ctx.db).query.financialTransaction.findMany()).every(
-        (row) => row.status === "pending",
-      ),
-    ).toBe(true);
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: suggestion.suggestionId,
-      operationId: "synthetic-preview-attach",
-      verdict: "wrong",
-      correction: {
-        present: true,
-        value: statementTransactionApplication.parse(application),
-      },
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      intent: "apply",
-      application: statementTransactionApplication.parse(application),
-    });
-    expect(await total()).toBe(42.5);
-  });
-  it("retains existing allocations when previewing attachment to an already booked transaction", async () => {
-    const { account, advice } = await fixture();
-    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
+  it("attaches statement evidence to the older reviewed bank event", async () => {
+    const setup = await fixture("kernel-attach");
+    const target = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: setup.account.output.id,
+      amount: 42.5,
       kind: "purchase",
       status: "posted",
-      amount: 42.5,
       postedDate: "2026-05-04",
+      transactionDate: "2026-05-04",
       merchant: "Synthetic Orchard",
-      sourceRefs: [
-        { source: "synthetic-bank", externalId: "synthetic-already-booked" },
-      ],
     });
-    const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, isNull(vendorTable.systemKey)),
-      },
-    });
-    await bookFinancialTransaction(
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const result = await decideStatement(
       ctx.db,
-      financialBookingInput.parse({
-        transactionId: transaction.output.id,
-        vendorId: vendor!.shortcode,
-        spendingCategoryId: advice.spendingCategoryId,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: {
+          action: "attach",
+          kindOverride: "purchase",
+          transactionId: target.output.id,
+          fields: ["amount", "status"],
+        },
       }),
+    );
+    expect(result.transactionId).toBe(target.output.id);
+    const live = (await ledgerRows()).transactions.filter(
+      (row) => row.deletedAt === null,
+    );
+    expect(live).toHaveLength(1);
+    expect(live[0]?.shortcode).toBe(target.output.id);
+    expect(
+      (await getDb(ctx.db).select().from(sourceOccurrence))[0]
+        ?.acceptedTransactionId,
+    ).toBe(live[0]?.id);
+  });
+  it("keeps an ambiguous kernel charge unbooked until a same decision", async () => {
+    const setup = await fixture("kernel-ambiguous");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const purchase = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller!.shortcode,
+      date: "2026-05-04",
+    });
+    await createRepoIdentity(ctx, "expense", {
+      name: "Synthetic accepted receipt",
+      purchaseId: purchase.output.id,
+      date: "2026-05-04",
+      cost: 42.5,
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+    });
+    const applied = await applyKernelCharge(setup);
+    expect(applied.status).toBe("waiting");
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    expect(
+      await getDb(ctx.db).select().from(financialTransactionAllocation),
+    ).toHaveLength(0);
+    const read = await machinery(ctx.db, ctx.actor, {
+      entity: "financialTransaction",
+      id: transaction!.id,
+    });
+    const action = read.gaps.items
+      .flatMap((gap) => gap.actions)
+      .find((action) => action.kind === "same");
+    expect(action).toBeDefined();
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: action!.subject,
+        field: action!.field,
+      },
+    ]);
+    const result = await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: transaction!.id },
+    ]);
+    expect(result[0]?.gaps).toEqual([]);
+    const rows = await ledgerRows();
+    expect(rows.purchases).toHaveLength(1);
+    expect(rows.expenses).toHaveLength(1);
+    expect(rows.allocations).toHaveLength(1);
+    expect(rows.allocations[0]?.amountMinor).toBe(4250n);
+  });
+  it("honours a recorded split when its kernel charge is rerun", async () => {
+    const setup = await fixture("kernel-split");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const purchases = [];
+    for (const [index, cost] of [25, 17.5].entries()) {
+      const purchase = await createRepoIdentity(ctx, "purchase", {
+        vendorId: seller!.shortcode,
+        date: "2026-05-04",
+      });
+      await createRepoIdentity(ctx, "expense", {
+        name: `Synthetic split ${index}`,
+        purchaseId: purchase.output.id,
+        date: "2026-05-04",
+        cost,
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+      });
+      purchases.push(purchase.output.id);
+    }
+    const applied = await applyKernelCharge(setup, "create");
+    await updateFinancialTransaction(
+      ctx.db,
+      applied.transactionId!,
+      {
+        allocations: [
+          { purchaseId: purchases[0]!, amount: 25 },
+          { purchaseId: purchases[1]!, amount: 17.5 },
+        ],
+      },
       ctx.actor,
     );
-    const suggestion = await pendingPreview();
-    const result = await previewStatementSuggestion(ctx.db, {
-      suggestionId: suggestion.suggestionId,
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.suggestionId,
-      application: {
-        kind: "statement_transaction",
-        action: "attach",
-        transactionId: transaction.output.id,
-      },
-    });
-    expect(result.spending).toMatchObject({
-      status: "already_booked",
-      request: { transactionId: transaction.output.id },
-    });
-    expect(await total()).toBe(42.5);
+    const before = await ledgerRows();
+    const outcome = await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
+    ]);
+    expect(outcome[0]?.gaps).toEqual([]);
+    expect(await ledgerRows()).toEqual(before);
+    expect(before.allocations.map((row) => row.amountMinor).sort()).toEqual([
+      1750n,
+      2500n,
+    ]);
   });
-  // Categories are provider observations, never a fuzzy same-merchant join.
-  it("retains conflicting category observations and scopes source evidence to charge membership", async () => {
-    const { input, account, recorded } = await fixture(
-      "synthetic-category-charge",
+  it("preserves a member Expense category decision through kernel recomputation", async () => {
+    const setup = await fixture("kernel-category");
+    await applyKernelCharge(setup);
+    const before = await ledgerRows();
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", before.expenses[0]!.shortcode),
+      { spendingCategoryId: setup.advice.spendingCategoryId },
+      ctx.actor,
     );
+    const saved = (await ledgerRows()).expenses[0]!;
+    expect(saved.spendingCategoryId).not.toBeNull();
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
+    ]);
+    expect((await ledgerRows()).expenses[0]).toEqual(saved);
+  });
+  it("writes no ledger rows when a kernel baseline disagrees with a revised statement", async () => {
+    const setup = await fixture("kernel-baseline");
+    await applyKernelCharge(setup);
+    const before = await ledgerRows();
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await getDb(ctx.db)
+      .insert(evidenceBinding)
+      .values([
+        {
+          factKind: "sourceOccurrence",
+          factId: occurrence!.id,
+          eventKey: before.transactions[0]!.id,
+          basis: "baseline",
+          scopeKind: "bankEvent",
+          scopeKey: occurrence!.id,
+        },
+        {
+          factKind: "statementObservation",
+          factId: occurrence!.currentObservationId!,
+          eventKey: before.purchases[0]!.id,
+          basis: "baseline",
+          scopeKind: "purchaseEvent",
+          scopeKey: before.transactions[0]!.id,
+        },
+      ]);
     await recordSourceTransactionRecords(
       ctx.db,
       recordSourceTransactionRecordsInput.parse({
-        ...input,
-        import: { ...input.import, fingerprint: "synthetic-category-reexport" },
-        rows: [{ ...input.rows[0], sourceCategory: "Food and drink" }],
+        ...setup.input,
+        import: {
+          ...setup.input.import,
+          fingerprint: "synthetic-kernel-baseline-revision",
+          observedAt: "2026-06-01T00:00:00Z",
+        },
+        rows: setup.input.rows.map((row) => ({ ...row, providerAmount: -50 })),
       }),
       ctx.actor,
     );
     const revisions = await getDb(ctx.db)
-      .select(sourceObservationColumns)
-      .from(sourceObservationFrom);
-    const previous = revisions.find(
-      (row) => row.sourceCategory === "Groceries",
-    );
-    const current = revisions.find(
-      (row) => row.sourceCategory === "Food and drink",
-    );
-    if (!previous || !current)
-      throw new Error("Synthetic source category revision missing");
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: {
-          source: previous.source,
-          externalIds: [previous.externalId],
-        },
-        data: { supersededByExternalId: current.externalId },
-      },
-      ctx.actor,
-    );
-    await recordSourceTransactionRecords(
-      ctx.db,
-      recordSourceTransactionRecordsInput.parse({
-        ...input,
-        import: { ...input.import, fingerprint: "synthetic-other-charge" },
-        rows: [
-          {
-            ...input.rows[0],
-            statementDate: "2026-05-05",
-            providerTransactionId: "synthetic-unrelated-charge",
-            providerData: {
-              id: "synthetic-unrelated-charge",
-              account_id: "synthetic-statement-account",
-            },
-            sourceCategory: "Unrelated category",
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    await generateStatementSuggestionPage(ctx.db, {
-      servicesFor: buildCrudServices,
-      after: null,
-      runId: null,
-      scope: { importId: recorded.batchId! },
+      .select()
+      .from(sourceTransactionRecord);
+    const revision = revisions.find((row) => row.providerAmount === -5000n)!;
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ currentObservationId: revision.id, reviewState: "ready" })
+      .where(eq(sourceOccurrence.id, occurrence!.id));
+    await emitWrites(ctx.db, {
+      table: sourceOccurrence,
+      ids: [occurrence!.id],
+      columns: ["currentObservationId", "reviewState"],
     });
-    const states = await getDb(ctx.db).query.suggestionTable.findMany();
-    const suggestions = await readStatementSuggestions(
-      ctx.db,
-      states.map((state) => state.id),
-    );
-    expect(suggestions).toHaveLength(1);
-    const suggestion = suggestions.find(
-      (item) => item.statementDate === "2026-05-04",
-    )!;
-    expect(suggestion.sourceCategories).toEqual([
-      { source: "monarch", sourceCategory: "Food and drink" },
-      { source: "monarch", sourceCategory: "Groceries" },
+    const result = await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: occurrence!.id },
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
     ]);
-    await recordSourceTransactionRecords(
-      ctx.db,
-      recordSourceTransactionRecordsInput.parse({
-        ...input,
-        import: {
-          ...input.import,
-          source: "copilot",
-          fingerprint: "synthetic-second-provider",
-        },
-        rows: [
-          {
-            ...input.rows[0],
-            providerTransactionId: null,
-            providerAccountId: null,
-            providerData: null,
-            sourceCategory: "Dining",
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    const observations = (await listSourceTransactionRecords(ctx.db, {})).data;
-    const primary = observations.find(
-      (row) =>
-        row.source === "monarch" &&
-        row.statementDate === "2026-05-04" &&
-        row.current,
-    )!;
-    const secondProvider = observations.find(
-      (row) => row.source === "copilot",
-    )!;
+    expect(result.some((outcome) => outcome.error)).toBe(false);
+    expect(await ledgerRows()).toEqual(before);
+    const proposals = await getDb(ctx.db).select().from(drift);
     expect(
-      (await readStatementSuggestions(ctx.db, [suggestion.suggestionId]))[0]!
-        .sourceCategories,
-    ).toEqual([
-      { source: "monarch", sourceCategory: "Food and drink" },
-      { source: "monarch", sourceCategory: "Groceries" },
-    ]);
-    for (const row of [primary, secondProvider]) {
-      await updateSourceTransactionRecords(
-        ctx.db,
-        {
-          selector: { source: row.source, externalIds: [row.externalId] },
-          data: { accountId: account.output.id },
-        },
-        ctx.actor,
-      );
-    }
-    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-04",
-      merchant: "Synthetic Orchard",
-      sourceRefs: [primary, secondProvider].map((row) => ({
-        source: row.source,
-        externalId: row.chargeKey,
-      })),
-    });
-
-    expect(
-      await readStatementSuggestions(ctx.db, [suggestion.suggestionId]),
-    ).toEqual([]);
-    // Shared settlement refs establish cross-provider membership; the stale
-    // create suggestion is replaced by pending booking work for that charge.
-    await generateStatementSuggestionPage(ctx.db, {
-      servicesFor: buildCrudServices,
-      after: null,
-      runId: null,
-    });
-    const refreshedStates = await getDb(
-      ctx.db,
-    ).query.suggestionTable.findMany();
-    const refreshed = await readStatementSuggestions(
-      ctx.db,
-      refreshedStates.map((state) => state.id),
-    );
-    const booking = refreshed.find(
-      (item) =>
-        item.source === "monarch" && item.statementDate === "2026-05-04",
-    );
-    expect(booking).toMatchObject({
-      recommended: "book",
-      matchedTransactionId: transaction.output.id,
-      sourceCategories: [
-        { source: "copilot", sourceCategory: "Dining" },
-        { source: "monarch", sourceCategory: "Food and drink" },
-        { source: "monarch", sourceCategory: "Groceries" },
-      ],
-    });
-  });
-  it("refuses a clean spending suggestion when older partly paid spending appears", async () => {
-    const { account, advice } = await fixture();
-    await labelForReview(advice);
-    const page = await listSuggestionPage(ctx.db, {
-      family: "statement_transaction",
-      limit: 20,
-    });
-    const suggestion = page.items.find(
-      (row) => row.family === "statement_transaction",
-    );
-    expect(suggestion?.clean).toBe(true);
-    const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, eq(vendorTable.name, "Synthetic Orchard")),
-      },
-    });
-    const receipt = await createRepoIdentity(ctx, "purchase", {
-      vendorId: vendor!.shortcode,
-      date: "2026-03-01",
-    });
-    await createRepoIdentity(ctx, "expense", {
-      purchaseId: receipt.output.id,
-      name: "Synthetic older receipt",
-      cost: 40,
-      trade: "other",
-    });
-    // An installment-style first payment leaves the older receipt open.
-    const installment = await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 10,
-      postedDate: "2026-03-01",
-      allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
-    });
-    await expect(
-      reviewSuggestion(ctx.db, kernelCtx(ctx), {
-        suggestionId: suggestion!.id,
-        operationId: "synthetic-spending-accept",
-        verdict: "correct",
-        intent: "apply",
-        application: {
-          kind: "statement_transaction",
-          action: "create",
-          rejectedCandidateIds: [],
-          fields: [],
-        },
-      }),
-    ).rejects.toThrow(/changed|review|stale/i);
-    expect(await total()).toBe(40);
-    expect(
-      (await getDb(ctx.db).query.financialTransaction.findMany()).map(
-        (row) => row.shortcode,
+      proposals.some(
+        (row) =>
+          row.scopeKind === "bankEvent" && row.scopeKey === occurrence!.id,
       ),
-    ).toEqual([installment.output.id]);
+    ).toBe(true);
   });
-  it.each(["before", "after"] as const)(
-    "admits only current terms for clean spending that drifted %s publication",
-    async (drift) => {
-      const { account, advice: merchantAdvice, input } = await fixture();
-      // The advice names a Vendor the merchant text alone does not resolve to,
-      // so adviceless rule evidence cannot see that Vendor's spending.
-      await createRepoIdentity(ctx, "vendor", {
-        name: "Synthetic Grove Holdings",
+  it.each([1, 8, 32])(
+    "settles %i new statement charges through the kernel within its statement budget",
+    async (count) => {
+      const owner = await createRepoIdentity(ctx, "ledgerParty", {
+        name: "Synthetic budget member",
+        kind: "member",
       });
-      const advice = financialSpendingAdvice.parse({
-        ...merchantAdvice,
-        vendorName: "Synthetic Grove Holdings",
+      const account = await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic budget card",
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: owner.output.id,
       });
-      const recorded = await recordSourceTransactionRecords(
+      const merchants = Array.from(
+        { length: count },
+        (_, index) => `Synthetic budget merchant ${index}`,
+      );
+      await insertManyWithShortcode(
+        ctx.db,
+        "vendor",
+        merchants.map((name) => ({ name })),
+      );
+      await recordSourceTransactionRecords(
         ctx.db,
         recordSourceTransactionRecordsInput.parse({
-          import: { ...input.import, fingerprint: "synthetic-spending-grove" },
-          rows: [
-            {
-              ...input.rows[0]!,
-              statementDate: "2026-05-11",
-              providerAmount: -17.25,
-              merchant: "SQ SYNTH GRV 042",
-              rawDescription: "SQ *SYNTH GRV 042",
-              rowPosition: 2,
-            },
-          ],
+          import: {
+            source: "monarch",
+            label: "Synthetic kernel budget",
+            fingerprint: `kernel-budget-${count}`,
+            observedAt: "2026-05-05T00:00:00Z",
+          },
+          rows: merchants.map((merchant, index) => ({
+            providerTransactionId: `synthetic-kernel-budget-${index}`,
+            providerAccountId: "synthetic-budget-account",
+            accountDescriptor: "Synthetic budget card",
+            statementDate: "2026-05-04",
+            providerAmount: -10,
+            providerStatus: "posted",
+            merchant,
+            rawDescription: merchant,
+            sourceCategory: "Groceries",
+            rowPosition: index + 1,
+          })),
         }),
         ctx.actor,
       );
-      await labelForReview(advice);
-      const published = async () => {
-        const [state] = await getDb(ctx.db)
-          .select({
-            id: suggestionTable.id,
-            producer: suggestionTable.producer,
-            judgment: suggestionTable.judgment,
-            data: suggestionTable.data,
-          })
-          .from(suggestionTable)
-          .where(
-            sql`${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}
-            AND ${suggestionTable.data}->>'statementDate' = '2026-05-11'`,
-          );
-        return state!;
-      };
-      const before = await published();
-      expect(before.judgment).toMatchObject({
-        spending: { status: "ready", effect: "create_aggregate" },
-      });
-      const pass = () =>
-        generateStatementSuggestionPage(ctx.db, {
-          servicesFor: buildCrudServices,
-          after: null,
-          runId: null,
-          scope: { importId: recorded.batchId },
-        });
-      const scenarios = {
-        // The member moves the card to another cardholder after the pass
-        // published: its page declines the charge and its own review refuses
-        // the published terms, so the pass admits the refreshed terms.
-        after: async () => {
-          const cardholder = await createRepoIdentity(ctx, "ledgerParty", {
-            name: "Synthetic second cardholder",
-            kind: "member",
-          });
-          const select = automaticRuleRuntime.selectAutomaticRules;
-          let moved = false;
-          const selecting = vi
-            .spyOn(automaticRuleRuntime, "selectAutomaticRules")
-            .mockImplementation(async (...args) => {
-              if (!moved) {
-                moved = true;
-                await updateFinancialAccount(
-                  ctx.db,
-                  account.output.id,
-                  { ledgerPartyId: cardholder.output.id },
-                  ctx.actor,
-                );
-              }
-              return select(...args);
-            });
-          try {
-            expect(await pass()).toMatchObject({
-              processed: 1,
-              failed: [],
-              unfinished: [],
-            });
-          } finally {
-            selecting.mockRestore();
-          }
-          expect(moved).toBe(true);
-          expect(await total()).toBe(17.25);
-          // The booking uses the refreshed purchaser on the same publication.
-          expect(
-            await getDb(ctx.db)
-              .select({ id: suggestionTable.id })
-              .from(suggestionTable)
-              .where(eq(suggestionTable.status, suggestionStatus.enum.applied)),
-          ).toEqual([{ id: before.id }]);
-          expect(await getDb(ctx.db).query.purchase.findMany()).toMatchObject([
-            {
-              purchaserOverrideId: await resolveOrThrow(
-                ctx.db,
-                "ledgerParty",
-                cardholder.output.id,
-              ),
-            },
-          ]);
-        },
-        before: async () => {
-          // Another writer leaves an open Purchase for the same Vendor afterwards.
-          const vendor = await getDb(ctx.db).query.vendor.findFirst({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(
-                  table,
-                  eq(vendorTable.name, "Synthetic Grove Holdings"),
-                ),
-            },
-          });
-          const receipt = await createRepoIdentity(ctx, "purchase", {
-            vendorId: vendor!.shortcode,
-            date: "2026-03-01",
-          });
-          await createRepoIdentity(ctx, "expense", {
-            purchaseId: receipt.output.id,
-            name: "Synthetic older receipt",
-            cost: 40,
-            trade: "other",
-          });
-          await createRepoIdentity(ctx, "financialTransaction", {
-            accountId: account.output.id,
-            kind: "purchase",
-            status: "posted",
-            amount: 10,
-            postedDate: "2026-03-01",
-            allocations: [{ purchaseId: receipt.output.id, amount: 10 }],
-          });
-          const refusals = vi.spyOn(
-            statementApplication,
-            "currentStatementApplication",
-          );
-          try {
-            expect(await pass()).toMatchObject({ published: 0, failed: [] });
-            // Converged: the next pass leaves the refreshed booking unchanged.
-            expect(await pass()).toMatchObject({ published: 0, failed: [] });
-            // Current spending terms refresh in place while retaining the paid answers
-            // and model provenance; the earlier ready booking is not applied.
-            const after = await published();
-            expect(after.id).toBe(before.id);
-            expect(after.producer).toMatchObject({ kind: "model" });
-            expect(after.judgment).not.toMatchObject({
-              spending: { status: "ready", effect: "create_aggregate" },
-            });
-            expect(after.judgment).toMatchObject({
-              spending: {
-                request: {
-                  advice: {
-                    vendorName: "Synthetic Grove Holdings",
-                    spendingCategoryId: null,
-                  },
-                },
-              },
-            });
-            expect(refusals).not.toHaveBeenCalled();
-            expect(await total()).toBe(40);
-          } finally {
-            refusals.mockRestore();
-          }
-        },
-      };
-      await scenarios[drift]();
-    },
-  );
-  it("books matched historical evidence once, retains its audit and skips later Expense edits", async () => {
-    const { input, account, advice, recorded } = await fixture();
-    const observed = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: {
-          source: observed.source,
-          externalIds: [observed.externalId],
-        },
-        data: { accountId: account.output.id },
-      },
-      ctx.actor,
-    );
-    await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-04",
-      merchant: "Synthetic Orchard",
-      rawDescription: "SYNTHETIC ORCHARD",
-      sourceRefs: [{ source: "monarch", externalId: observed.chargeKey }],
-    });
-    const repeated = await recordSourceTransactionRecords(
-      ctx.db,
-      input,
-      ctx.actor,
-    );
-    expect(repeated.inserted).toBe(0);
-    // The accepted transaction owns identity even when historical position metadata is absent.
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ rowPosition: null })
-      .where(eq(sourceTransactionRecord.shortcode, observed.id));
-    await labelAndRefreshReads(advice, recorded.batchId!);
-    expect(await total()).toBe(42.5);
-    await labelAndRefreshReads(advice, recorded.batchId!);
-    expect(await total()).toBe(42.5);
-    const audit = await listAutomaticDecisions(ctx.db, {
-      family: "statement_transaction",
-      limit: 20,
-    });
-    expect(
-      audit.items.some((row) =>
-        row.automaticRule?.startsWith("statement_transaction.book_spending@"),
-      ),
-    ).toBe(true);
-    const bookedExpense = await getDb(ctx.db).query.expense.findFirst();
-    expect(bookedExpense).toBeDefined();
-    const relatedAudit = await listAutomaticDecisions(ctx.db, {
-      family: "statement_transaction",
-      recordIds: [bookedExpense!.shortcode],
-      limit: 20,
-    });
-    expect(
-      relatedAudit.items.some((row) =>
-        row.automaticRule?.startsWith("statement_transaction.book_spending@"),
-      ),
-    ).toBe(false);
-    await executeEntity(
-      kernelCtx(ctx),
-      entityCommandSchema.parse({
-        action: "update",
-        entity: "expense",
-        id: bookedExpense!.shortcode,
-        data: { name: "Synthetic member-corrected expense title" },
-      }),
-    );
-    await labelAndRefreshReads(advice, recorded.batchId!);
-    expect(
-      (
-        await listSuggestionPage(ctx.db, {
-          family: "statement_transaction",
-          limit: 20,
-        })
-      ).items,
-    ).toEqual([]);
-    expect(await total()).toBe(42.5);
-  });
-  it("books an Uncategorized aggregate when a non-web correction only chooses a Vendor", async () => {
-    const { advice } = await fixture();
-    await labelForReview(advice);
-    const suggestion = (
-      await listSuggestionPage(ctx.db, {
-        family: "statement_transaction",
-        limit: 20,
-      })
-    ).items[0]!;
-    const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, isNull(vendorTable.systemKey)),
-      },
-    });
-    const application = statementTransactionApplication.parse({
-      kind: "statement_transaction",
-      action: "create",
-      booking: { vendorId: vendor!.shortcode },
-    });
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      suggestionId: suggestion.id,
-      operationId: "synthetic-vendor-only-review",
-      verdict: "wrong",
-      correction: { present: true, value: application },
-      intent: "apply",
-      expectedFingerprint: suggestion.fingerprint ?? suggestion.id,
-      application,
-    });
-    expect(await total()).toBe(42.5);
-    expect(await getDb(ctx.db).query.expense.findMany()).toMatchObject([
-      { spendingCategoryId: null },
-    ]);
-  });
-  it("retires a pending matched booking when another shared finance path books it", async () => {
-    const { advice, account } = await fixture();
-    const row = (await listSourceTransactionRecords(ctx.db, {})).data[0]!;
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: { source: row.source, externalIds: [row.externalId] },
-        data: { accountId: account.output.id },
-      },
-      ctx.actor,
-    );
-    const transaction = await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-04",
-      merchant: "Synthetic Orchard",
-      sourceRefs: [{ source: "monarch", externalId: row.chargeKey }],
-    });
-    await labelForReview(advice);
-    expect(
-      (
-        await listSuggestionPage(ctx.db, {
-          family: "statement_transaction",
-          limit: 20,
-        })
-      ).items,
-    ).toHaveLength(1);
-    const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, isNull(vendorTable.systemKey)),
-      },
-    });
-    await bookFinancialTransaction(
-      ctx.db,
-      financialBookingInput.parse({
-        transactionId: transaction.output.id,
-        vendorId: vendor!.shortcode,
-        spendingCategoryId: advice.spendingCategoryId,
-      }),
-      ctx.actor,
-    );
-    await generateStatementSuggestionPage(ctx.db, {
-      servicesFor: buildCrudServices,
-      after: null,
-      runId: null,
-    });
-    await drainStoredDerived(ctx.db);
-    expect(
-      (
-        await listSuggestionPage(ctx.db, {
-          family: "statement_transaction",
-          limit: 20,
-        })
-      ).items,
-    ).toEqual([]);
-    expect(await total()).toBe(42.5);
-  });
-  // Creating one Vendor must not invalidate other independent clean charges
-  // or strand paid advice outside the label queue across import pages.
-  it.each(["member", "household"] as const)(
-    "books independent new Vendors across import pages on a %s card and reuses unchanged advice",
-    async (owner) => {
-      const { input, advice, account } = await fixture(null, owner);
-      // A household card with no authorized user that day books its live
-      // member primary cardholder as the purchaser.
-      const cardholder = await createRepoIdentity(ctx, "ledgerParty", {
-        name: "Synthetic primary cardholder",
-        kind: "member",
-      });
-      if (owner === "household")
-        await updateFinancialAccount(
-          ctx.db,
-          account.output.id,
-          { primaryCardholderId: cardholder.output.id, authorizedUsers: [] },
-          ctx.actor,
-        );
-      const single = vi.spyOn(automaticRuleRuntime, "applyAutomaticRules");
-      const names = [
-        "Juniper Books",
-        "Cobalt Cycles",
-        "Amber Bakery",
-        "Willow Hardware",
-        "Lotus Cinema",
-      ];
-      const batch = recordSourceTransactionRecordsInput.parse({
-        ...input,
-        import: { ...input.import, fingerprint: "synthetic-five-vendors" },
-        rows: names.map((merchant, index) => ({
-          ...input.rows[0],
-          merchant,
-          rawDescription: merchant.toUpperCase(),
-          providerAmount: -(index + 1) * 11,
-          rowPosition: index + 1,
-        })),
-      });
-      const saved = await recordSourceTransactionRecords(
+      const occurrences = await getDb(ctx.db).select().from(sourceOccurrence);
+      await decide(
         ctx.db,
-        batch,
         ctx.actor,
+        occurrences.flatMap((row) => [
+          {
+            channel: "assignment",
+            kind: "set",
+            subject: `bank:${row.id}`,
+            field: "accountId",
+            value: account.output.id,
+            scopes: [{ kind: "bankEvent", key: row.id }],
+          },
+          {
+            channel: "assignment",
+            kind: "set",
+            subject: `bank:${row.id}`,
+            field: "kind",
+            value: "purchase",
+            scopes: [{ kind: "bankEvent", key: row.id }],
+          },
+        ]),
       );
-      const generateImport = async () => {
-        let after: Parameters<
-          typeof generateStatementSuggestionPage
-        >[1]["after"] = null;
-        do {
-          const page = await generateStatementSuggestionPage(ctx.db, {
-            servicesFor: buildCrudServices,
-            after,
-            runId: null,
-            scope: { importId: saved.batchId! },
-          });
-          after = page.next;
-        } while (after);
-      };
-      await generateImport();
-      let after: Awaited<ReturnType<typeof labelStatementSuggestions>>["next"] =
-        null;
-      try {
-        do {
-          const labelled = await labelStatementSuggestions(ctx.db, {
-            after,
-            port: answering({ kind: "purchase", counterparty: "business" }),
-            spendingAdvice: async ({ judgment }) => ({
-              ...advice,
-              vendorName: judgment.create!.merchant,
-            }),
-            scope: { importId: saved.batchId! },
-          });
-          expect(labelled.failed).toEqual([]);
-          after = labelled.next;
-        } while (after);
-        // Every create shares the page's guarded transaction.
-        expect(single).not.toHaveBeenCalled();
-      } finally {
-        single.mockRestore();
-      }
-      expect(await total()).toBe(165);
-      const [card] = await getDb(ctx.db)
-        .select({ ledgerPartyId: financialAccountTable.ledgerPartyId })
-        .from(financialAccountTable);
-      const purchaser =
-        owner === "household"
-          ? await resolveOrThrow(ctx.db, "ledgerParty", cardholder.output.id)
-          : card!.ledgerPartyId;
-      expect(
-        await getDb(ctx.db)
-          .select({ purchaser: purchaseTable.purchaserOverrideId })
-          .from(purchaseTable),
-      ).toEqual(Array.from({ length: 5 }, () => ({ purchaser })));
-      const audit = await listAutomaticDecisions(ctx.db, {
-        family: "statement_transaction",
-        limit: 20,
+      const kernel = await productionKernel();
+      const measured = await withDatabaseOperationMetrics(async (metrics) => {
+        await expectStatementBudget(
+          () =>
+            withDatabaseOperationPhase("fence", () =>
+              kernel.run(ctx.db, { budgetMs: 20_000 }),
+            ),
+          { statements: 150, parameters: 128 },
+        );
+        expect(
+          Object.values(metrics.queryCountByPhase).reduce(
+            (sum, value) => sum + value,
+            0,
+          ),
+        ).toBe(metrics.queryCount);
+        expect(metrics.queryCountByPhase.load).toBeLessThanOrEqual(48);
+        expect(metrics.queryCountByPhase.audit).toBeLessThanOrEqual(2);
+        return {
+          charges: count,
+          statements: metrics.queryCount,
+          parameters: metrics.queryMaxParameterCount,
+          phases: metrics.queryCountByPhase,
+        };
       });
-      expect(
-        audit.items.filter((row) =>
-          row.automaticRule?.startsWith("statement_transaction.book_spending@"),
-        ).length,
-      ).toBe(5);
-      expect(
-        (await recordSourceTransactionRecords(ctx.db, batch, ctx.actor))
-          .inserted,
-      ).toBe(0);
-      await generateImport();
-      expect(await total()).toBe(165);
+      console.log("statement-kernel-budget", JSON.stringify(measured));
+      const totals = await getDb(ctx.db).execute<{
+        purchases: number;
+        expenses: number;
+        allocations: number;
+        cost: string;
+        allocated: string;
+      }>(sql`SELECT
+      (SELECT count(*)::int FROM "Purchase" WHERE "deletedAt" IS NULL) purchases,
+      (SELECT count(*)::int FROM "Expense" WHERE "deletedAt" IS NULL) expenses,
+      (SELECT count(*)::int FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocations,
+      (SELECT sum("costMinor")::text FROM "Expense" WHERE "deletedAt" IS NULL) cost,
+      (SELECT sum("amountMinor")::text FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocated`);
+      expect(totals.rows[0]).toEqual({
+        purchases: count,
+        expenses: count,
+        allocations: count,
+        cost: String(count * 1000),
+        allocated: String(count * 1000),
+      });
     },
   );
 });

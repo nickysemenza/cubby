@@ -50,11 +50,10 @@ const same = (a: unknown, b: unknown) => canonicalJson(a) === canonicalJson(b);
 
 export function difference(
   computed: Computed,
-  options: { releaseBaseline: boolean; newId?: () => string },
+  options: { releaseBaseline: boolean },
 ): Difference {
   const desired = computed.desired;
   if (!desired) throw new KernelContractError("No desired output to apply");
-  const newId = options.newId ?? (() => crypto.randomUUID());
   const result: Difference = {
     inserts: [],
     updates: [],
@@ -85,8 +84,11 @@ export function difference(
       result.inserts.push({
         target: record.target,
         naturalKey: record.naturalKey,
-        id: newId(),
-        values: { ...record.values },
+        id: record.id,
+        values: {
+          ...record.values,
+          ...(record.shortcode ? { shortcode: record.shortcode } : {}),
+        },
       });
       continue;
     }
@@ -102,7 +104,10 @@ export function difference(
     const set: ColumnValues = {};
     const seen: ColumnValues = {};
     for (const [column, value] of Object.entries(record.values))
-      if (!same(value, stored[column])) {
+      if (
+        record.target.columns.includes(column) &&
+        !same(value, stored[column])
+      ) {
         set[column] = value;
         seen[column] = stored[column] ?? null;
       }
@@ -233,7 +238,11 @@ export function describeDifference(diff: Difference): Json {
       inserts: diff.inserts.map((entry) => ({
         table: entry.target.name,
         naturalKey: entry.naturalKey,
-        values: entry.values,
+        values: Object.fromEntries(
+          Object.entries(entry.values).filter(
+            ([column]) => column !== "id" && column !== "shortcode",
+          ),
+        ),
       })),
       updates: diff.updates.map((entry) => ({
         table: entry.target.name,

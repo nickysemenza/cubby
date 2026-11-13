@@ -32,13 +32,15 @@ function recordScopes(capability: MachineryCapability, id: SQL): SQL {
     sql`SELECT rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord FROM "RecordKey" rk
       WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id} AND rk."mergedAt" IS NULL`,
   ];
+  for (const [index, kind] of (capability.scopes ?? []).entries())
+    parts.push(sql`SELECT ${kind}::text, ${id}::text, ${index + 1}`);
   if (capability.fields)
     parts.push(
-      sql`SELECT ${FIELDS_SCOPE}::text, ${capability.entity}::text || ':' || ${id}::text, 1`,
+      sql`SELECT ${FIELDS_SCOPE}::text, ${capability.entity}::text || ':' || ${id}::text, ${(capability.scopes?.length ?? 0) + 1}`,
     );
   if (capability.quality)
     parts.push(
-      sql`SELECT ${QUALITY_SCOPE}::text, ${capability.entity}::text || ':' || ${id}::text, 2`,
+      sql`SELECT ${QUALITY_SCOPE}::text, ${capability.entity}::text || ':' || ${id}::text, ${(capability.scopes?.length ?? 0) + 2}`,
     );
   return sql.join(parts, sql` UNION ALL `);
 }
@@ -123,13 +125,17 @@ export async function loadMachineryRows(
       FROM page JOIN "RecordKey" rk ON rk.entity = ${capability.entity} AND rk."entityId" = page.id
         AND rk."mergedAt" IS NULL`,
   ];
+  for (const [index, kind] of (capability.scopes ?? []).entries())
+    parts.push(
+      sql`SELECT page.id, ${kind}::text, page.id::text, ${index + 1}, false FROM page`,
+    );
   if (capability.fields)
     parts.push(
-      sql`SELECT page.id, ${FIELDS_SCOPE}::text, ${capability.entity}::text || ':' || page.id::text, 1, false FROM page`,
+      sql`SELECT page.id, ${FIELDS_SCOPE}::text, ${capability.entity}::text || ':' || page.id::text, ${(capability.scopes?.length ?? 0) + 1}, false FROM page`,
     );
   if (capability.quality)
     parts.push(
-      sql`SELECT page.id, ${QUALITY_SCOPE}::text, ${capability.entity}::text || ':' || page.id::text, 2, false FROM page`,
+      sql`SELECT page.id, ${QUALITY_SCOPE}::text, ${capability.entity}::text || ':' || page.id::text, ${(capability.scopes?.length ?? 0) + 2}, false FROM page`,
     );
   const result = await repositoryQueries(db).execute<{
     id: string;

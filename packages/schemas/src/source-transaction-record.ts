@@ -4,7 +4,6 @@ import { externalIdSource } from "./external-id";
 import { money, settledMoney } from "./money";
 import {
   financialAccountShortcode,
-  financialTransactionShortcode,
   transactionImportShortcode,
 } from "./identifiers";
 import { numericRangeFields, plainDate } from "./base-entity";
@@ -64,7 +63,7 @@ export type SourceTransactionRecordLegacyFilters = z.infer<
 
 const STATEMENT_ROW_RECORD_MAX_ROWS = 500;
 
-export const transactionImportInput = z.strictObject({
+const transactionImportInput = z.strictObject({
   source: externalIdSource,
   label: z.string().min(1),
   fingerprint: z.string().min(1),
@@ -172,12 +171,6 @@ export const recordSourceTransactionRecordsOut = z.object({
   revised: z.number().int(),
   refreshed: z.number().int(),
   withdrawn: z.number().int(),
-  correctionReviews: z.array(
-    z.object({
-      transactionId: financialTransactionShortcode,
-      reason: z.string(),
-    }),
-  ),
   /**
    * Set when the batch looks un-normalized — the signature of a Copilot or
    * Apple Card export submitted verbatim.

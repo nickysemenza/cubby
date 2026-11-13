@@ -1,33 +1,24 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
-import { buildCrudServices } from "~/server/http/request-context";
+import {
+  seedFieldSuggestion,
+  applyFieldAnswerFixture,
+} from "tooling/shared-suggestion-fixtures";
+
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
-import {
-  recordSourceTransactionRecordsOut,
-  recordSourceTransactionRecordsInput,
-  type SourceTransactionRecordInput,
-} from "@cubby/schemas/source-transaction-record";
+
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
-import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
-import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
-import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
-import { z } from "zod";
+import { eq } from "drizzle-orm";
 
 import { product as productTable } from "~/server/db/schema";
-
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
+
 import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
-import { dispatchesOperation } from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
   openFoldedFacts,
@@ -35,64 +26,15 @@ import {
   waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { operationCall } from "./support/operation";
+
 import {
   createEntityFixture,
-  createFixtureGraph,
   createEvidenceHarnessContext,
-  ensureMemberParty,
 } from "./fixtures/core";
 
-type Db = Awaited<ReturnType<typeof createEvidenceHarnessContext>>["db"];
-
 /** Keep a scenario's generation independent of earlier imports in its worker database. */
-async function generateStatementSuggestions(db: Db, importId: string) {
-  let after: Parameters<typeof generateStatementSuggestionPage>[1]["after"] =
-    null;
-  for (;;) {
-    const page = await generateStatementSuggestionPage(db, {
-      servicesFor: buildCrudServices,
-      after,
-      runId: null,
-      scope: { importId },
-    });
-    if (!page.next) return;
-    after = page.next;
-  }
-}
 
 /** Synthetic Monarch rows on one account alias. */
-const recordRows =
-  (page: Page, alias: string, db: Db) =>
-  async (
-    fingerprint: string,
-    rows: Partial<SourceTransactionRecordInput>[],
-  ) => {
-    const response = await operationCall(
-      page.request,
-      "sourceTransactionRecord.record",
-      {
-        import: {
-          source: "monarch",
-          label: `${fingerprint}.csv`,
-          fingerprint,
-          dateKind: "posted",
-        },
-        rows: rows.map((row, index) => ({
-          accountDescriptor: alias,
-          merchant: null,
-          providerStatus: "posted",
-          sourceCategory: null,
-          rowPosition: index + 1,
-          ...row,
-        })),
-      },
-    );
-    expect(response.ok(), await response.text()).toBe(true);
-    const receipt = recordSourceTransactionRecordsOut.parse(response.body);
-    if (!receipt.batchId) throw new Error("Transaction import missing");
-    return resolveOrThrow(db, "transactionImport", receipt.batchId);
-  };
 
 const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
@@ -196,253 +138,6 @@ test("reviews a field suggestion for a named record", async ({
 // Failure modes: an attach applies to the first candidate instead of the one
 // named; a create counts as clean without decision labels; the clean bulk
 // accept skips its confirm or accepts a row it did not list as clean.
-test("statement Suggestions attach to a named candidate, bulk-accept a clean supersede and dismiss", async ({
-  page,
-}, testInfo) => {
-  test.slow();
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const alias = uniqueName(testInfo, "Statement card");
-  const owner = await ensureMemberParty(page, alias);
-  const { account, recorded } = await createFixtureGraph(
-    page,
-    async (create) => {
-      const account = await create("financialAccount", {
-        name: alias,
-        ledgerPartyId: owner.shortcode,
-
-        identity: { kind: "credit_card", network: "visa" },
-        sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
-      });
-      const recorded = await create("financialTransaction", {
-        accountId: account.id,
-        amount: 61.07,
-        merchant: `${alias} Hardware`,
-        kind: "purchase",
-        status: "pending",
-        transactionDate: "2026-05-11",
-      });
-      return { account, recorded };
-    },
-  );
-  const labelSpending = () =>
-    labelStatementSuggestions(db, {
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      spendingAdvice: async ({ judgment }) =>
-        financialSpendingAdvice.parse({
-          vendorName: judgment.create?.rawDescription,
-          vendorConfidence: "high",
-          counterparty: "business",
-        }),
-    });
-  const accountId = await resolveOrThrow(db, "financialAccount", account.id);
-  const spendingTotal = async () => {
-    const spent = await getDb(db).execute<{ total: number }>(sql`
-      SELECT (coalesce(sum(e."costMinor"),0) / 100.0)::float8 AS total FROM "Expense" e WHERE e."deletedAt" IS NULL
-        AND e."purchaseId" IN (SELECT a."purchaseId" FROM "FinancialTransactionAllocation" a
-          JOIN "FinancialTransaction" f ON f.id=a."transactionId" WHERE f."accountId"=${accountId} AND a."deletedAt" IS NULL)
-    `);
-    return spent.rows[0]?.total;
-  };
-  const hardware = `${alias} HARDWARE 0441`;
-  const hold = `${alias} HOLD`;
-  const cafe = `${alias} CAFE`;
-  const record = recordRows(page, alias, db);
-  const importId = await record(alias, [
-    {
-      statementDate: "2026-05-12",
-      providerAmount: -61.07,
-      rawDescription: hardware,
-      sourceCategory: "Shopping",
-    },
-    {
-      // Source category supports the purchase kind; booking uses Uncategorized.
-      statementDate: "2026-05-04",
-      providerAmount: -42.5,
-      rawDescription: hold,
-      sourceCategory: "Groceries",
-      providerStatus: "pending",
-    },
-    {
-      // No category: only the sign speaks to the kind, so it needs review.
-      statementDate: "2026-05-11",
-      providerAmount: -17.25,
-      rawDescription: cafe,
-    },
-  ]);
-  await generateStatementSuggestions(db, importId);
-
-  const view = `/suggestions?family=statement_transaction&record=financialAccount:${account.id}&group=account_month`;
-  const table = suggestionsTable(page);
-  const rowFor = (text: string) =>
-    table.getByRole("row").filter({ hasText: text });
-  await labelSpending();
-  await gotoAuthenticatedPage(page, view);
-  await rowFor(hardware)
-    .getByRole("button", { name: "More review choices" })
-    .click();
-  await expect(
-    page.getByRole("menuitem", { name: "Change kind…" }),
-  ).toHaveCount(0);
-  await page.getByRole("menuitem", { name: "Preview new transaction" }).click();
-  await expect(
-    page.getByRole("combobox", { name: "Transaction kind" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Use recommendation" }).click();
-  // The attach names its candidate in the review it sends.
-  await expect(
-    page.getByRole("list", { name: "Candidate transactions" }),
-  ).toContainText("61.07");
-  // Pending evidence already supports booking. Applying attested posted status
-  // remains a reviewed choice and must preserve the ready graph and draft.
-  const result = page.getByRole("region", {
-    name: "Proposed result",
-    exact: true,
-  });
-  await expect(result).toContainText("One Purchase and one lump Expense");
-  await expect(
-    page.getByText("Updating spending preview…", { exact: true }),
-  ).toHaveCount(0);
-  await page
-    .getByRole("checkbox", { name: "Apply status", exact: true })
-    .check();
-  // Preview the graph, including auto-created identity and no vendor account.
-  await expect(result).toContainText("One Purchase and one lump Expense");
-  await expect(result).toContainText("Create vendor");
-  await expect(result).toContainText("Unassigned");
-  await expect(result).toContainText("Recorded spending");
-  await expect(result).toContainText("Uncategorized");
-  await result
-    .getByRole("button", { name: "Correct booking", exact: true })
-    .click();
-  const reviewedVendor = `${alias} Reviewed Hardware`;
-  await result
-    .getByRole("textbox", { name: "Reviewed new Vendor business name" })
-    .fill(" ");
-  await expect(
-    result.getByRole("textbox", { name: "Reviewed new Vendor business name" }),
-  ).toBeVisible();
-  await result
-    .getByRole("textbox", { name: "Reviewed new Vendor business name" })
-    .fill(reviewedVendor);
-  await expect(result).toContainText(`Create vendor “${reviewedVendor}”`);
-  await expect(
-    result.getByRole("textbox", { name: "Reviewed new Vendor business name" }),
-  ).toBeFocused();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(result).toBeVisible();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await page.setViewportSize({ width: 1440, height: 900 });
-
-  const attach = page.waitForRequest((request) =>
-    dispatchesOperation(
-      request,
-      "suggestion.reviewBatch",
-      (item) =>
-        z
-          .object({
-            items: z.array(
-              z.object({
-                application: z.object({
-                  action: z.literal("attach"),
-                  transactionId: z.literal(recorded.id),
-                }),
-              }),
-            ),
-          })
-          .safeParse(item.input).success,
-    ),
-  );
-  await rowFor(hardware)
-    .getByRole("button", { name: "Accept", exact: true })
-    .click();
-  await attach;
-  await expect(rowFor(hardware)).toHaveCount(0);
-
-  // The clean pending purchase already booked during label settlement.
-  await expect(rowFor(hold)).toHaveCount(0);
-  expect(await spendingTotal()).toBe(103.57);
-
-  // The preceding acceptance commits search work before the row disappears.
-  // Settle that work before this serializable fixture import updates the same
-  // refresh Job; the offline pump can otherwise change it under our snapshot.
-  await drainDerivedRefreshFrontier(db);
-  const posted = await recordSourceTransactionRecords(
-    db,
-    recordSourceTransactionRecordsInput.parse({
-      import: {
-        source: "monarch",
-        label: "synthetic-posted.csv",
-        fingerprint: `${alias}-posted`,
-        dateKind: "posted",
-      },
-      rows: [
-        {
-          accountDescriptor: alias,
-          statementDate: "2026-05-06",
-          providerAmount: -42.5,
-          rawDescription: `${alias} GROCER`,
-          sourceCategory: "Groceries",
-          providerStatus: "posted",
-          rowPosition: 1,
-        },
-      ],
-    }),
-    actor,
-  );
-  // Already-booked spending stays available for reviewed supersession.
-  if (!posted.batchId)
-    throw new Error("Synthetic posted statement import was not saved");
-  await generateStatementSuggestions(db, posted.batchId);
-  await labelSpending();
-  await gotoAuthenticatedPage(page, view);
-  await page.getByRole("button", { name: "Accept 1 clean" }).click();
-  await page
-    .getByRole("alertdialog")
-    .getByRole("button", { name: "Accept 1" })
-    .click();
-  await expect(page.getByText(/Accepted 1 of 1/)).toBeVisible();
-  await expect(
-    page.getByRole("list", { name: "Failed suggestions" }),
-  ).toHaveCount(0);
-
-  expect(await spendingTotal()).toBe(103.57);
-
-  await rowFor(cafe)
-    .getByRole("button", { name: "Dismiss", exact: true })
-    .click();
-  await expect(rowFor(cafe)).toHaveCount(0);
-});
-
-// Failure mode: Find suggestions starts a Sweep without showing what it will
-// read, or the Sweep it starts has no visible Steps.
-test("Find suggestions estimates a Sweep before it starts, then follows its Steps", async ({
-  page,
-}, testInfo) => {
-  // Sweeps are member work: the login needs its member party.
-  await ensureMemberParty(page, uniqueName(testInfo, "Sweep member"));
-  await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("button", { name: "Find suggestions…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Find suggestions" });
-  for (const family of ["Fields"])
-    await dialog.getByRole("checkbox", { name: family }).click();
-  const estimate = dialog.getByRole("list", { name: "Sweep estimate" });
-  await expect(estimate).toContainText("Statements");
-  // The estimate counts what each family's first step reads.
-  await expect(estimate).toContainText(/\d+ charges?/);
-  await dialog.getByRole("button", { name: "Start Sweep" }).click();
-  const status = page.getByLabel("Sweep status");
-  await expect(status).toBeVisible();
-  await status.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/runs\/RUN-/);
-  await page.locator("section#steps").scrollIntoViewIfNeeded();
-  await expect(
-    page.getByRole("heading", { name: "What the run did", exact: true }),
-  ).toBeVisible();
-});
 
 // Failure modes: a value Cubby set wears a mark a member's value does not; an
 // edit of Cubby's value is lost on reload; the empty field's picker hides
@@ -495,10 +190,7 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
       status: "pending",
     });
   const automatic = await seed(setId, 0.97, null);
-  const applied = await applyAutomaticRules(db, [automatic.id], {
-    context: buildCrudServices,
-  });
-  expect(applied.applied).toHaveLength(1);
+  await applyFieldAnswerFixture(db, automatic);
   await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
   const brandOf = (id: string) => async () =>
     (

@@ -17,6 +17,7 @@ import {
   transactionImport,
   transactionImportRecord,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
@@ -455,10 +456,12 @@ describe("finance entity reports", () => {
 
   it("rejects missing and deleted purchase identities for every finance slot", async () => {
     const purchase = await makePurchase("deleted identity", null);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchaseTable.id, purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchaseTable.id, purchase.id),
+    );
     for (const slot of [
       "purchase.reconciliation",
       "purchase.project-allocation",

@@ -27,3 +27,7 @@ export const columnArrayParam = (values: readonly unknown[]): SQL =>
       value instanceof Date ? value.toISOString() : String(value),
     ),
   )}`;
+
+/** Parallel unnest columns must retain repeated values and their positions. */
+export const orderedTextArrayParam = (values: readonly string[]): SQL =>
+  sql`${`{${values.map(arrayElement).join(",")}}`}::text[]`;

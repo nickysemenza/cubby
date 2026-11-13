@@ -139,7 +139,6 @@ describe("Email review transaction and retained intent", () => {
             ...f.input,
             operationId: "synthetic-aborted-command",
           },
-          undefined,
           scope,
         );
         throw new Error("Synthetic abort after review");

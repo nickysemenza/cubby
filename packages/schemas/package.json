@@ -195,7 +195,6 @@
     "./vendor-account-fields": "./src/vendor-account-fields.ts",
     "./run-fields": "./src/run-fields.ts",
     "./run-step": "./src/run-step.ts",
-    "./run-step-input": "./src/run-step-input.ts",
     "./job": "./src/job.ts",
     "./run-work-progress": "./src/run-work-progress.ts",
     "./sweep": "./src/sweep.ts",
@@ -235,12 +234,10 @@
     "./source-occurrence-fields": "./src/source-occurrence-fields.ts",
     "./source-transaction-record": "./src/source-transaction-record.ts",
     "./statement-answers": "./src/statement-answers.ts",
-    "./statement-suggestion": "./src/statement-suggestion.ts",
     "./transfer-pair-suggestion": "./src/transfer-pair-suggestion.ts",
     "./suggestion-list": "./src/suggestion-list.ts",
     "./suggestion-list-declarations": "./src/suggestion-list-declarations.ts",
     "./suggestion-correction": "./src/suggestion-correction.ts",
-    "./automatic-rule": "./src/automatic-rule.ts",
     "./automatic-decision": "./src/automatic-decision.ts",
     "./suggestion-review-family": "./src/suggestion-review-family.ts",
     "./derived-value": "./src/derived-value.ts",
@@ -302,7 +299,8 @@
     "./entity-definitions/problems/view-problems": "./src/entity-definitions/problems/view-problems.ts",
     "./entity-definitions/list-filters": "./src/entity-definitions/list-filters.ts",
     "./entity-definitions/problems/filter-fields": "./src/entity-definitions/problems/filter-fields.ts",
-    "./entity-definitions/problems/problem-actions": "./src/entity-definitions/problems/problem-actions.ts"
+    "./entity-definitions/problems/problem-actions": "./src/entity-definitions/problems/problem-actions.ts",
+    "./statement-decision": "./src/statement-decision.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",

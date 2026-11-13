@@ -24,7 +24,7 @@ import { startPass, runOnePass } from "./pass";
 import type { KernelRegistry } from "./registry";
 import { ASK, KERNEL_UNIT } from "./vocab";
 
-const SCOPE_BATCH = 25;
+const SCOPE_BATCH = 64;
 const ASK_BATCH = 4;
 const SWEEP_CHECK_MS = 10 * 60_000;
 const lastSweepCheck = new WeakMap<KernelRegistry, number>();
@@ -106,7 +106,7 @@ export async function reconcileNow(
   const pending = new Map(
     scopes.map((scope) => [`${scope.kind}\u0000${scope.key}`, scope]),
   );
-  const outcomes: Outcome[] = [];
+  const outcomes = new Map<string, Outcome>();
   while (pending.size) {
     let claimed: ClaimedScope[] = [];
     for (const lane of kernelLane.options) {
@@ -114,7 +114,7 @@ export async function reconcileNow(
         repositoryQueries(db),
         registry,
         lane,
-        pending.size,
+        Math.min(pending.size, SCOPE_BATCH),
         [...pending.values()],
       );
       if (claimed.length) break;
@@ -131,7 +131,10 @@ export async function reconcileNow(
           mode: "member",
         },
       )) {
-        outcomes.push(outcome);
+        outcomes.set(
+          `${outcome.scope.kind}\u0000${outcome.scope.key}`,
+          outcome,
+        );
         if (outcome.status !== "conflict")
           pending.delete(`${outcome.scope.kind}\u0000${outcome.scope.key}`);
       }
@@ -141,7 +144,11 @@ export async function reconcileNow(
     await sleep(100);
   }
   for (const scope of pending.values())
-    outcomes.push({ scope, status: "waiting", gaps: [] });
+    outcomes.set(`${scope.kind}\u0000${scope.key}`, {
+      scope,
+      status: "waiting",
+      gaps: [],
+    });
   if (options.runId) {
     const q = repositoryQueries(db);
     await q.execute(sql`
@@ -159,7 +166,7 @@ export async function reconcileNow(
       )
       ON CONFLICT DO NOTHING`);
   }
-  return outcomes;
+  return [...outcomes.values()];
 }
 
 /** Drain rows `(unit, demand, since)`: one `kernel` unit while any work is due now. */

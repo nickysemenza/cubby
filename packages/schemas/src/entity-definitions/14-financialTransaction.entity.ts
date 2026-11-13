@@ -1425,10 +1425,6 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
 
       rows: {
-        runStepInputs: {
-          label: "Run step inputs",
-          repository: { token: "text" },
-        },
         acceptedSourceRecords: {
           label: "Accepted source records",
           repository: { record: { reference: "sourceTransactionRecord" } },
@@ -1439,7 +1435,6 @@ export const { definition, readSchemas } = defineEntityModel(
         },
       },
       derived: {
-        runStepInput: { via: "runStepInputs.token" },
         sourceTransactionRecordId: { via: "acceptedSourceRecords.record" },
         merchant: { type: "text" },
         // Allocated to a live Purchase (not the mirror column, which is NULL
@@ -1590,18 +1585,7 @@ export const { definition, readSchemas } = defineEntityModel(
           deriveSchema: true,
           placeholder: "Filter by itemization expectation...",
         },
-        {
-          columnId: "runStepInput",
-          kind: "text",
-          label: "Run step input",
-          placeholder: "RUN shortcode:step key",
-          deriveSchema: true,
-          schemaRef: {
-            module: "@cubby/schemas/run-step-input",
-            export: "runStepInputFilterToken",
-          },
-          derived: true,
-        },
+
         {
           columnId: "sourceTransactionRecordId",
           kind: "idMulti",
@@ -1893,7 +1877,7 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
     },
     capabilities: {
-      suggestions: ["statement_transaction", "transfer_pair"],
+      suggestions: ["transfer_pair"],
       images: {
         storage: false,
         displaySourceOverrides: [

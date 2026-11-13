@@ -228,7 +228,7 @@ export async function logAuditEntry(
       action: entry.action,
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
-      provenance: kernelApplyProvenance(),
+      provenance: kernelApplyProvenance(entry.entityKind, entry.entityId),
     })
     .returning({ id: auditLog.id });
   if (inserted) {
@@ -276,14 +276,13 @@ export async function logAuditEntries(
   if (entries.length === 0) return;
 
   // A kernel apply's rows carry its scope, version and inputs.
-  const provenance = kernelApplyProvenance();
   const auditRecords = entries.map((entry) => ({
     entityKind: entry.entityKind,
     entityId: entry.entityId,
     action: entry.action,
     changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
-    provenance,
+    provenance: kernelApplyProvenance(entry.entityKind, entry.entityId),
   }));
 
   // One jsonb parameter however many rows: a layer's audit stays within the

@@ -1,13 +1,11 @@
 import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
-import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
-import { entityListHref } from "~/entity/entity-list-href";
 import { useEntityMetadata } from "~/entity/metadata";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
@@ -155,7 +153,6 @@ function useRunDetail(record: RunOut) {
  * RunStep timeline. Decisions and Diagnostics are their own declared slots.
  */
 export function RunStepsDetail({ record }: { record: RunOut }) {
-  const queryClient = useQueryClient();
   useEntityMetadata("financialTransaction");
   useEntityMetadata("sourceTransactionRecord");
   const {
@@ -283,10 +280,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       <ReportBlocks
         blocks={runPlanBlocks({
           runId: record.id,
-          inputHref: (entity, token) =>
-            entityListHref(queryClient, entity, {
-              filters: [{ id: "runStepInput", value: token }],
-            }),
+
           purpose: record.purpose,
           input: steps.data?.input,
           steps: steps.data?.steps ?? [],

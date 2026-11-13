@@ -195,6 +195,8 @@ export type SourceRef =
       readonly table: PgTable;
       readonly name: string;
       readonly columns: readonly string[];
+      /** Committed money history informs Catalog inference without an ordering dependency. */
+      readonly history?: true;
     }
   | { readonly type: "evidence"; readonly evidence: EvidenceKind }
   | { readonly type: "bindings" };
@@ -208,6 +210,16 @@ export const source = {
     table,
     name: getTableName(table),
     columns,
+  }),
+  history: <T extends PgTable>(
+    table: T,
+    columns: readonly (keyof T["_"]["columns"] & string)[],
+  ): SourceRef => ({
+    type: "table",
+    table,
+    name: getTableName(table),
+    columns,
+    history: true,
   }),
   evidence: <T extends KeyedTable>(evidence: EvidenceKind<T>): SourceRef => ({
     type: "evidence",
@@ -241,6 +253,10 @@ export type ColumnRef = {
   readonly table: PgTable;
   readonly name: string;
   readonly columns: readonly string[];
+  /** Authored catalog values supplied on creation; never owned or re-derived. */
+  readonly createOnly?: readonly string[];
+  /** Equal Catalog natural keys may share one creation in a coherent batch. */
+  readonly coalesceCreation?: (values: readonly ColumnValues[]) => ColumnValues;
   /** The manifest entity, when the table is an entity's; drives change records and removal. */
   readonly entity: string | null;
   /** Fact keys of a written row, so downstream readers find it. */
@@ -260,6 +276,8 @@ export function writes<T extends KeyedTable>(
   table: T,
   columns: readonly (keyof T["_"]["columns"] & string)[],
   options: {
+    createOnly?: readonly (keyof T["_"]["columns"] & string)[];
+    coalesceCreation?: (values: readonly ColumnValues[]) => ColumnValues;
     entity?: string;
     keys?: (row: InferSelectModel<T>) => Key[];
     discovers?: (row: InferSelectModel<T>) => ScopeRef[];
@@ -267,11 +285,18 @@ export function writes<T extends KeyedTable>(
     remove?: RemovePort;
   } = {},
 ): ColumnRef {
+  if (
+    options.coalesceCreation &&
+    (columns.length > 0 || !options.createOnly?.length)
+  )
+    throw new Error("Only authored Catalog creations may coalesce");
   return {
     table,
     name: getTableName(table),
     columns,
     entity: options.entity ?? null,
+    createOnly: options.createOnly ?? [],
+    coalesceCreation: options.coalesceCreation,
     // SAFETY: the kernel passes rows read from or written to this table.
     keys: options.keys as ColumnRef["keys"],
     // SAFETY: as above.
@@ -311,6 +336,15 @@ export type GapOptions = {
 
 /** The reconciler's pure context: no database, clock or network. */
 export interface Pure {
+  /** Identity only; declaring it does not insert a record or reserve storage. */
+  identity(
+    target: ColumnRef,
+    naturalKey: string,
+  ): { id: string; shortcode: string | null };
+  /** Every assignment in force for a subject, keyed by field. */
+  assignments(subject: string): ReadonlyMap<string, DecisionInForce>;
+  /** Resolve a retained id or shortcode through identity redirects on reads. */
+  reference(entity: ShortcodeType, ref: string): string | null;
   /** `request: false` reads an existing answer without owing a producer call. */
   answer<I, O>(
     kind: AskKind<I, O>,
@@ -335,7 +369,7 @@ export interface Pure {
     naturalKey: string,
     values: ColumnValues,
     options?: { provenance?: Record<string, string> },
-  ): void;
+  ): string;
   /**
    * Set declared columns of an existing record another scope owns (a
    * `fields` scope's `apply: "auto"` columns). Never creates or removes it.
@@ -352,6 +386,8 @@ export interface Pure {
     basis: "proof" | "decision",
   ): void;
   emit(scope: ScopeRef): void;
+  /** Accepted inputs disagree without a safe automatic replacement. Applies no records. */
+  disagree(input: string): void;
   gap: {
     evidence(input: string, actor: KernelActor, options?: GapOptions): void;
     answer(input: string, actor: KernelActor, options?: GapOptions): void;
@@ -364,6 +400,7 @@ export interface Pure {
 
 /** What a reconcile returns: built only through {@link Pure}. */
 export type Desired = {
+  readonly disagreements: readonly string[];
   readonly records: readonly DesiredRecord[];
   readonly patches: readonly {
     target: ColumnRef;
@@ -392,6 +429,8 @@ export type Desired = {
 };
 
 export type DesiredRecord = {
+  readonly id: string;
+  readonly shortcode: string | null;
   readonly target: ColumnRef;
   readonly naturalKey: string;
   readonly values: Readonly<ColumnValues>;

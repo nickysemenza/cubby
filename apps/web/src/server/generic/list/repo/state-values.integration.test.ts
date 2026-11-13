@@ -17,18 +17,14 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
-import {
-  financialTransactionAllocation,
-  inventoryEntry,
-  product,
-  purchase,
-} from "~/server/db/schema";
+import { inventoryEntry, product, purchase } from "~/server/db/schema";
 import {
   postedRefundTotal,
   vendorExpenseCount,
   vendorExpenseTotal,
   vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import {
   expectedQuantitySql,
@@ -350,13 +346,15 @@ describe("state predicates re-declared as values", () => {
             postedDate: "2026-09-02",
           },
         );
-        await getDb(ctx.db)
-          .insert(financialTransactionAllocation)
-          .values({
+        await insertPurchaseEventRows(
+          ctx.db,
+          "FinancialTransactionAllocation",
+          {
             transactionId: transaction.id,
             purchaseId: row.id,
             amountMinor: moneyToMinor(refund),
-          });
+          },
+        );
       }
       return row;
     };

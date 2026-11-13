@@ -242,12 +242,10 @@ async function seedEdgeBaskets(
         kind: (typeof basketKinds)[number];
       },
   );
-  await insertRows(
-    db,
-    purchase,
-    "purchase",
-    baskets.map(({ kind: _kind, ...row }) => row),
-  );
+  const basketRows = baskets.map(({ kind: _kind, ...row }) => row);
+  await insertRows(db, purchase, "purchase", basketRows);
+  for (const [index, row] of basketRows.entries())
+    Object.assign(baskets[index]!, { id: row.id, shortcode: row.shortcode });
   baskets.forEach(({ id: purchaseId, kind }, index) => {
     const principal = (cost: number, line: Partial<Line> = {}) =>
       expense({ purchaseId, productId: pick(products).id, cost, ...line });
@@ -402,15 +400,13 @@ async function seedReviewGraph(db: Database) {
     firstPurchase: purchases.length + mergePaths.length,
     expense,
   });
-  await insertRows(
-    db,
-    expenseTable,
-    "expense",
-    expenses.map((row) => ({
-      ...row,
-      cost: nullableWholeCentToMinor(row.cost),
-    })),
-  );
+  const expenseRows = expenses.map((row) => ({
+    ...row,
+    cost: nullableWholeCentToMinor(row.cost),
+  }));
+  await insertRows(db, expenseTable, "expense", expenseRows);
+  for (const [index, row] of expenseRows.entries())
+    Object.assign(expenses[index]!, { id: row.id, shortcode: row.shortcode });
   return { ...taxonomy, products, vendors, expenses, mergeExpenses };
 }
 

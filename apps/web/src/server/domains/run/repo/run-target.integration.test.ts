@@ -11,6 +11,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
@@ -47,7 +48,7 @@ describe("purchase import run target resolution", () => {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
       displayLabel: "Imported target purchase",

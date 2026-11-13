@@ -322,10 +322,7 @@ export const NEEDS_YOU_FILTERS = {
   reasonExclude: ["suggestions:field", "suggestions:recommendation"],
 };
 /** Home's preview page; the sidebar count shares this one cached read. */
-export const NEEDS_YOU_INPUT = workQueueInput.parse({
-  ...NEEDS_YOU_FILTERS,
-  pageSize: 3,
-});
+
 /** The agent backlog's size for Work's quiet line; it never counts toward a badge. */
 export const AGENT_BACKLOG_INPUT = workQueueInput.parse({
   view: "agent",

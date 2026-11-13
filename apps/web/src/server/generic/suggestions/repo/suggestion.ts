@@ -6,7 +6,7 @@ import {
   suggestionDecision,
 } from "@cubby/schemas/suggestion";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
-import { eq, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -64,8 +64,6 @@ export const automaticApplicationRule = (suggestionId: SQL) => sql<
   LIMIT 1)`;
 
 /** The rule stamps a Suggestion's publication matched. */
-export const matchedRulesOf = (data: SQL) =>
-  sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
 /** Immutable evidence and the creation projection of one Suggestion. */
 export type SuggestionPublication = {
@@ -142,66 +140,6 @@ export async function recordFeedbackWithInsertion(
  * and one update, in input order per Suggestion. Every operation must be new:
  * a replay belongs to {@link recordFeedbackWithInsertion}.
  */
-export async function recordAutomaticFeedbacks(
-  db: Database,
-  raws: readonly z.input<typeof feedbackEvent>[],
-): Promise<StoredDecision[]> {
-  const events = raws.map((raw) => feedbackEvent.parse(raw));
-  if (!events.length) return [];
-  if (events.some((event) => event.authority !== "automatic"))
-    throw new Error("Batched Feedback records automatic authority only");
-  const ids = [...new Set(events.map((event) => event.suggestionId))];
-  const client = getDb(db);
-  const owners = await client
-    .select({ id: suggestionTable.id, decisions: suggestionTable.decisions })
-    .from(suggestionTable)
-    .where(inArray(suggestionTable.id, ids))
-    .orderBy(suggestionTable.id)
-    .for("update");
-  const existing = new Map(owners.map((row) => [row.id, row.decisions]));
-  const appended = new Map<string, Omit<StoredDecision, "suggestionId">[]>();
-  const rows = events.map((input) => {
-    const { suggestionId, ...event } = input;
-    const decisions = existing.get(suggestionId);
-    if (!decisions) throw new Error("Suggestion not found");
-    if (
-      decisionForOperation(suggestionId, decisions, input.operationId) ||
-      appended
-        .get(suggestionId)
-        ?.some((decision) => decision.operationId === input.operationId)
-    )
-      throw new Error(
-        `Operation ${input.operationId} already has Feedback on this Suggestion`,
-      );
-    const row: StoredDecision = suggestionDecision
-      .extend({ suggestionId: suggestionChildHandle })
-      .parse({
-        ...event,
-        suggestionId,
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-      });
-    const { suggestionId: _owner, ...decision } = row;
-    appended.set(suggestionId, [
-      ...(appended.get(suggestionId) ?? []),
-      decision,
-    ]);
-    return row;
-  });
-  await client
-    .update(suggestionTable)
-    .set({
-      decisions: sql`${suggestionTable.decisions} || CASE ${suggestionTable.id} ${sql.join(
-        [...appended].map(
-          ([id, decisions]) =>
-            sql`WHEN ${id}::uuid THEN ${JSON.stringify(decisions)}::jsonb`,
-        ),
-        sql` `,
-      )} END`,
-    })
-    .where(inArray(suggestionTable.id, [...appended.keys()]));
-  return rows;
-}
 
 export type FeedbackEvent = Awaited<
   ReturnType<typeof recordFeedbackWithInsertion>

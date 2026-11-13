@@ -201,3 +201,66 @@ export async function seedFieldSuggestion(
     family: "field" as const,
   };
 }
+
+/** Apply a synthetic model answer through the real fields reconciler. */
+export async function applyFieldAnswerFixture(
+  db: Database,
+  input: {
+    entity: string;
+    recordId: string;
+    field: string;
+    suggestedValue?: unknown;
+    confidence?: number;
+    model?: string;
+    runId?: string | null;
+  },
+) {
+  const { fieldAsk } = await import("~/server/ai/fields/ask");
+  const { fieldsReconciler } = await import("~/server/ai/fields/reconciler");
+  const { fieldReviewPlan } = await import("~/server/ai/fields/repo/plan");
+  const { resolveOrThrow } =
+    await import("~/server/generic/shortcode/repo/shortcode-resolver");
+  const { createKernel, defineModule } = await import("~/server/kernel/api");
+  const plan = fieldReviewPlan(input.entity, input.field);
+  const value = plan?.field.reference
+    ? await resolveOrThrow(
+        db,
+        plan.field.reference,
+        String(input.suggestedValue),
+      )
+    : String(input.suggestedValue);
+  const ask: typeof fieldAsk = {
+    ...fieldAsk,
+    admit: async () => {},
+    produce: async (question) => ({
+      output:
+        question.entity === input.entity &&
+        question.recordId === input.recordId &&
+        question.field === input.field
+          ? {
+              proposal: {
+                value,
+                label: null,
+                confidence: input.confidence ?? 0.97,
+                runnerUp: null,
+              },
+              outcome: "pick",
+            }
+          : { proposal: null, outcome: "none" },
+      model: input.model ?? "synthetic",
+    }),
+  };
+  const kernel = createKernel([
+    defineModule({
+      name: "synthetic-fields",
+      asks: [ask],
+      reconcilers: [fieldsReconciler(ask)],
+    }),
+  ]);
+  await kernel.reconcileNow(
+    db,
+    [{ kind: "fields", key: `${input.entity}:${input.recordId}` }],
+    { runId: input.runId ?? undefined },
+  );
+  await kernel.run(db, { budgetMs: 20_000 });
+}

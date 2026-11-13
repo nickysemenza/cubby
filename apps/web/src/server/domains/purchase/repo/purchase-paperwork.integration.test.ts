@@ -5,6 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadDataQualities as readDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
@@ -22,7 +23,7 @@ describe("vendor paperwork and household reimbursements", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Paperwork fixture restaurant",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       statedTotal: moneyToMinor(120),
@@ -31,7 +32,7 @@ describe("vendor paperwork and household reimbursements", () => {
       ["Vendor bill", 120, "vendor"],
       ["Friend share returned", -40, "reimbursement"],
     ] as const) {
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         purchaseId: purchase.id,
         name,
@@ -71,13 +72,13 @@ describe("vendor paperwork and household reimbursements", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Split reimbursement fixture",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       statedTotal: moneyToMinor(120),
       defaultTrade: "other",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Original bill",
       purchaseId: purchase.id,
@@ -90,7 +91,7 @@ describe("vendor paperwork and household reimbursements", () => {
       "financialTransaction",
       "split-reimbursement",
     );
-    const credit = await insertWithShortcode(ctx.db, "expense", {
+    const credit = await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Friend reimbursement",
       purchaseId: purchase.id,

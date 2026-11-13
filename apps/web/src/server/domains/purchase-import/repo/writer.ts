@@ -49,6 +49,8 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { validateExpenseInheritances } from "~/server/domains/expense/repo/expense-inheritance";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   externalIdKey,
@@ -1351,12 +1353,14 @@ export async function importVendorOrder(
       replacesNoticeDate,
     );
     if (header.kind === "create")
-      target = await insertWithShortcode(tx, "purchase", header.values);
+      target = await createPurchaseEventRecord(tx, "purchase", header.values);
     else {
-      await tx
-        .update(purchase)
-        .set(header.values)
-        .where(eq(purchase.id, header.target.id));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        header.values,
+        eq(purchase.id, header.target.id),
+      );
       target = header.target;
     }
     const purchaseId = parseEntityId("purchase", target.id);
@@ -1372,12 +1376,14 @@ export async function importVendorOrder(
       usedFallbackDate,
     );
     if (note) {
-      await tx
-        .update(purchase)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        {
           notes: sql`concat_ws(E'\n\n', nullif(${purchase.notes}, ''), ${note.research}::text)`,
-        })
-        .where(eq(purchase.id, note.purchaseId));
+        },
+        eq(purchase.id, note.purchaseId),
+      );
       await recordChange(tx, { kind: "source", categories: ["purchase"] });
     }
 
@@ -1446,11 +1452,12 @@ export async function importVendorOrder(
         const fallback = planFallbackExpenses(
           createdExpenses.map((mutation) => mutation.targetId),
         );
-        const filled = await tx
-          .update(expense)
-          .set({ trade: "other" })
-          .where(fallback.where)
-          .returning({ id: expense.id });
+        const filled = await updatePurchaseEventWhere(
+          tx,
+          "expense",
+          { trade: "other" },
+          fallback.where,
+        );
         for (const mutation of createdExpenses)
           if (filled.some((line) => line.id === mutation.targetId))
             mutation.fields.push("trade");

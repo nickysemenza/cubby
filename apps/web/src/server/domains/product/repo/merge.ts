@@ -68,6 +68,7 @@ import {
   productUnitMappings,
   task,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   getCategoryFeature,
   resolveProductCategory,
@@ -1402,6 +1403,7 @@ export const mergeProducts = async (
         "EntityLink[productComponent].to",
         "ProductUnitMapping.productId",
       ],
+
       overrides: (
         await DECLARED_EDGE_MERGE_HOOKS.product({
           tx,
@@ -2449,13 +2451,13 @@ export const productMergeEdgeHandlers = (context: ProductMergeEdgeContext) => {
       }
     },
     moveExpenses: async () => {
-      const movedExpenses = await tx
-        .update(expense)
-        .set({ productId: keepId })
-        .where(
-          and(inArray(expense.productId, plan.loserIds), notDeleted(expense)),
-        )
-        .returning({ id: expense.id });
+      const movedExpenses = await updatePurchaseEventWhere(
+        tx,
+        "expense",
+        { productId: keepId },
+        and(inArray(expense.productId, plan.loserIds), notDeleted(expense)),
+        actor,
+      );
       summary.expensesMoved = movedExpenses.length;
       await logAuditEntries(
         tx,

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   getProductMovementTimeline,
   toEntityTimeline,
@@ -45,10 +46,12 @@ describe("unknown expense dates", () => {
         updateExpense(ctx.db, undated.id, { cost }, ctx.actor),
       ).rejects.toThrow("A date is required");
       await expect(
-        getDb(ctx.db)
-          .update(expense)
-          .set({ cost: wholeCentToMinor(cost) })
-          .where(eq(expense.shortcode, undated.id)),
+        updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { cost: wholeCentToMinor(cost) },
+          eq(expense.shortcode, undated.id),
+        ),
       ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
       expect(await readExpense(ctx.db, undated.id)).toMatchObject({
         cost: 0,
@@ -77,10 +80,12 @@ describe("unknown expense dates", () => {
       updateExpense(ctx.db, unknown.id, { cost: 12 }, ctx.actor),
     ).rejects.toThrow("A date is required");
     await expect(
-      getDb(ctx.db)
-        .update(expense)
-        .set({ cost: 1200n })
-        .where(eq(expense.shortcode, unknown.id)),
+      updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { cost: 1200n },
+        eq(expense.shortcode, unknown.id),
+      ),
     ).rejects.toThrow(/Expense_date_cost_check|Failed query/);
     // Unknown cost is never $0 spend in the date-based reports.
     const analytics = await expenseAnalytics(ctx.db, {});

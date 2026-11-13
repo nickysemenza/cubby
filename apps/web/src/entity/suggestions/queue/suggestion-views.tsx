@@ -4,24 +4,19 @@ import {
   type SuggestionListFamily,
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
+import { suggestionValueLabel } from "@cubby/schemas/suggestion-list-declarations";
 import {
   suggestionFilterDeclaration,
   suggestionRelationLists,
 } from "@cubby/schemas/suggestion-list-declarations";
-import { suggestionValueLabel } from "@cubby/schemas/suggestion-list-declarations";
-import type { QueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EntityIcon } from "~/entity/entities";
 import {
   buildFiltersFromManifest,
   type FilterSpecCore,
 } from "~/entity/filters";
-import {
-  createImageColumn,
-  renderOptionCell,
-} from "~/entity/table/column-helpers";
+import { createImageColumn } from "~/entity/table/column-helpers";
 import type { TableStateReturn } from "~/entity/table/use-table-state";
 import { formatCurrency } from "~/lib/number-format";
 import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
@@ -42,12 +37,9 @@ import {
 } from "~/ui/data-table/table-meta";
 import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
-import { StackedValue } from "~/ui/values/stacked-value";
 
-import { kindAgreement } from "./statement-kind-votes";
 import { SuggestionActionsCell, ExpandCell } from "./suggestion-actions";
 import {
-  ActionBadge,
   CleanBadge,
   FAMILY_LABEL,
   FieldValue,
@@ -107,26 +99,7 @@ const declaredOptions = (
 
 const STRENGTH_OPTIONS = declaredOptions("all", "strength");
 const CLEAN_OPTIONS = declaredOptions("all", "clean");
-const ACTION_OPTIONS = declaredOptions("statement_transaction", "action");
-const kindOptions = (queryClient: QueryClient) => {
-  const presented = fieldEnumOptions(
-    queryClient,
-    "financialTransaction",
-    "kind",
-  );
-  return declaredOptions("statement_transaction", "kind").map(
-    (option) =>
-      presented.find((candidate) => candidate.value === option.value) ?? option,
-  );
-};
-const KIND_SOURCE_OPTIONS = declaredOptions(
-  "statement_transaction",
-  "kindSource",
-);
-const PROVIDER_STATUS_OPTIONS = declaredOptions(
-  "statement_transaction",
-  "providerStatus",
-);
+
 const FIELD_KIND_OPTIONS = declaredOptions("field", "kind");
 const DISPOSITION_OPTIONS = declaredOptions("field", "disposition");
 const RELATION_OPTIONS = declaredOptions("recommendation", "relation");
@@ -661,243 +634,6 @@ function rosterFilterConfig(
   };
 }
 
-function statementColumns(
-  queryClient: QueryClient,
-  rosters: RuntimeFilterOptions,
-  providerCategoryLabel: string,
-) {
-  const KIND_OPTIONS = kindOptions(queryClient);
-  const evidence = (row: Row) =>
-    row.family === "statement_transaction" ? row.evidence : null;
-  const rosterFilter = (
-    key: (typeof REFERENCE_ROSTERS)[number]["key"],
-    placeholder: string,
-  ) => rosterFilterConfig(rosters, key, placeholder);
-  return createCubbyColumnCollection<Row>((add) => {
-    leadingColumns(add);
-    add(
-      helper.accessor((row) => columnText(row, "date"), {
-        id: "date",
-        header: "Date",
-        size: 96,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 0, label: "Date" },
-          filterConfig: textFilter("From..to, e.g. 2026-05-01..2026-05-31"),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          return value ? <DateDisplay start={value.statementDate} /> : null;
-        },
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "account"), {
-        id: "account",
-        header: "Account",
-        size: 168,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 1, label: "Account" },
-          filterConfig: rosterFilter("account", "Filter account"),
-        }),
-        cell: ({ row }) => <RecordLink record={row.original.record} />,
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "owner"), {
-        id: "owner",
-        header: "Owner",
-        size: 140,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 5, label: "Owner" },
-          filterConfig: rosterFilter("owner", "Filter owner"),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          return value?.ownerId ? (
-            <RecordLink record={{ entity: "ledgerParty", id: value.ownerId }} />
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "merchant"), {
-        id: "merchant",
-        header: "Merchant",
-        size: 240,
-        meta: attachCubbyColumnMeta<Row>({
-          entityColumnRole: "identity",
-          mobile: { slot: "title" },
-          filterConfig: textFilter("Search merchant or description"),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          if (!value) return null;
-          return value.merchant ?? value.rawDescription;
-        },
-      }),
-    );
-    add(
-      helper.accessor((row) => column(row, "amount"), {
-        id: "amount",
-        header: "Amount",
-        size: 104,
-        meta: attachCubbyColumnMeta<Row>({
-          numeric: true,
-          mobile: { slot: "trailing", priority: 0, label: "Amount" },
-          filterConfig: textFilter("Min..max, e.g. 10..50"),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          return value ? (
-            <span className="tabular-nums">{formatCurrency(value.amount)}</span>
-          ) : null;
-        },
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "action"), {
-        id: "action",
-        header: "Action",
-        size: 104,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "subtitle", priority: 0, label: "Action" },
-          filterConfig: multiFilter("Filter action", ACTION_OPTIONS),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          return value ? <ActionBadge action={value.recommended} /> : null;
-        },
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "kind"), {
-        id: "kind",
-        header: "Kind",
-        size: 128,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 2, label: "Kind" },
-          filterConfig: multiFilter("Filter kind", KIND_OPTIONS),
-        }),
-        cell: ({ row }) => {
-          const value = evidence(row.original);
-          return value?.create ? (
-            renderOptionCell(value.create.kind, KIND_OPTIONS)
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-    );
-    add(
-      // Filters by the source that chose the kind; the cell reads the votes.
-      helper.accessor((row) => columnText(row, "kindSource"), {
-        id: "kindSource",
-        header: "Kind source",
-        size: 220,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 7, label: "Kind source" },
-          filterConfig: multiFilter("Filter kind source", KIND_SOURCE_OPTIONS),
-        }),
-        cell: ({ row }) => {
-          const create = evidence(row.original)?.create;
-          return create ? (
-            <span className="truncate text-muted-foreground">
-              {kindAgreement(queryClient, create).reason}
-            </span>
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-    );
-    add(cleanColumn);
-    add(
-      helper.accessor((row) => columnText(row, "providerCategory"), {
-        id: "providerCategory",
-        // Verbatim provider evidence; it sets no spending category.
-        header: providerCategoryLabel,
-        size: 148,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 6, label: providerCategoryLabel },
-          filterConfig: textFilter(
-            `Search ${providerCategoryLabel.toLowerCase()}`,
-          ),
-        }),
-        cell: ({ row }) =>
-          row.original.family === "statement_transaction" ? (
-            <StackedValue
-              primary={
-                columnText(row.original, "providerCategory") ?? "Unassigned"
-              }
-              secondary={suggestionValueLabel(
-                "source",
-                row.original.evidence.source,
-              )}
-            />
-          ) : (
-            <NoneValue />
-          ),
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "providerStatus"), {
-        id: "providerStatus",
-        header: "Status",
-        size: 96,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 8, label: "Status" },
-          filterConfig: multiFilter("Filter status", PROVIDER_STATUS_OPTIONS),
-        }),
-        cell: ({ row }) =>
-          suggestionValueLabel(
-            "providerStatus",
-            columnText(row.original, "providerStatus") ?? "",
-          ),
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "candidate"), {
-        id: "candidate",
-        header: "Candidate",
-        size: 168,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 3, label: "Candidate" },
-          filterConfig: rosterFilter("candidate", "Filter candidate"),
-        }),
-        cell: ({ row }) =>
-          row.original.other ? (
-            <RecordLink record={row.original.other} />
-          ) : (
-            <NoneValue />
-          ),
-      }),
-    );
-    add(
-      helper.accessor((row) => columnText(row, "modelLabel"), {
-        id: "modelLabel",
-        header: "Model label",
-        size: 128,
-        meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "meta", priority: 9, label: "Model label" },
-          filterConfig: textFilter("Search model label"),
-        }),
-        cell: ({ row }) => {
-          const label = evidence(row.original)?.candidates[0]?.label;
-          return label ? (
-            `${suggestionValueLabel("same", label.same)} · ${label.confidence}`
-          ) : (
-            <NoneValue />
-          );
-        },
-      }),
-    );
-    add(impactColumn);
-    actionsColumn(add);
-  });
-}
-
 function recommendationColumns() {
   const evidence = (row: Row) =>
     row.family === "recommendation" && !("kind" in row.evidence)
@@ -984,16 +720,13 @@ export const REFERENCE_ROSTERS = suggestionFilterDeclaration.filters.flatMap(
 );
 
 export function viewColumns(
-  queryClient: QueryClient,
   view: SuggestionView,
   rosters: RuntimeFilterOptions,
-  providerCategoryLabel: string,
 ): CubbyColumnCollection<Row> {
   switch (view) {
     case "field":
       return fieldColumns();
-    case "statement_transaction":
-      return statementColumns(queryClient, rosters, providerCategoryLabel);
+
     case "recommendation":
       return recommendationColumns();
     case "transfer_pair":
@@ -1008,12 +741,7 @@ export const VIEW_HIDDEN_COLUMNS = {
   // The Strength cell carries the Clean mark in the mixed view.
   all: { clean: false },
   field: { entity: false, strength: false, kind: false },
-  statement_transaction: {
-    kindSource: false,
-    providerStatus: false,
-    modelLabel: false,
-    impact: false,
-  },
+
   recommendation: { entityKind: false },
   transfer_pair: { account: false, merchant: false },
 } satisfies Partial<Record<SuggestionView, Record<string, false>>>;

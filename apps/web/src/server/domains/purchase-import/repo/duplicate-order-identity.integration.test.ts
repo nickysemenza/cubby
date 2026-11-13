@@ -4,9 +4,9 @@ import { eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { expense, importSourceOrder, purchase } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   findOrCreatePurchase,
   renameChargeOrderId,
@@ -294,7 +294,7 @@ describe("one order from two source documents", () => {
       for (const orderId of orderIds)
         (owners[variant] ??= []).push(
           (
-            await insertWithShortcode(ctx.db, "purchase", {
+            await createPurchaseEventRecord(ctx.db, "purchase", {
               vendorId: vendor.id,
               orderId,
             })
@@ -338,7 +338,7 @@ describe("one order from two source documents", () => {
         date: "2026-10-01",
       }),
     ).rejects.toThrow(/Several purchases for this vendor carry order id/);
-    const single = await insertWithShortcode(ctx.db, "purchase", {
+    const single = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "one-1",
     });
@@ -349,7 +349,7 @@ describe("one order from two source documents", () => {
         date: "2026-10-01",
       }),
     ).toBe(single.id);
-    const other = await insertWithShortcode(ctx.db, "purchase", {
+    const other = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "two-2",
     });

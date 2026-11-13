@@ -44,6 +44,7 @@ const actionCapability = {
   "image.confirm_description": "member_decision",
   "suggestions.review": "member_decision",
   "suggestions.field_authority": "member_decision",
+  "finance.apply": "member_decision",
   "finance.commit_booking": "member_decision",
   "finance.commit_booking_correction": "member_decision",
   "finance.record": "generic_mutation",

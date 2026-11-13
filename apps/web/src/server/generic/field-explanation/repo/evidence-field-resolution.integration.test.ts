@@ -11,6 +11,10 @@ import { expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
+  insertPurchaseEventRows,
+  updatePurchaseEventWhere,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
   inventoryOwnerResolution,
   loadInventoryOwnershipTraces,
 } from "~/server/domains/inventory/repo/ownership";
@@ -58,9 +62,11 @@ it("preserves a saved multi-purchase policy until draft link intent explicitly c
     transaction.output.id,
     "financialTransaction",
   );
-  await unwrapDb(ctx.db).execute(
-    sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId","amountMinor") VALUES (${id},${required.id},600),(${id},${optional.id},600)`,
-  );
+  if (!id) throw new Error("Synthetic transaction is missing");
+  await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", [
+    { transactionId: id, purchaseId: required.id, amountMinor: 600n },
+    { transactionId: id, purchaseId: optional.id, amountMinor: 600n },
+  ]);
   const resolve = async (purchaseId: string | null, fields: string[]) =>
     fieldResolutionsSchema.parse(
       await resolveDraftEvidenceFields(ctx.db, {
@@ -269,9 +275,12 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     date: "2026-09-01",
     cost: 1000n,
   });
-  await unwrapDb(ctx.db).execute(
-    sql`INSERT INTO "ExpenseAttribution" ("expenseId",role,"ledgerPartyId",weight) VALUES (${line.id},${contributionRole.enum.beneficiary},NULL,1)`,
-  );
+  await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
+    expenseId: line.id,
+    role: contributionRole.enum.beneficiary,
+    ledgerPartyId: null,
+    weight: 1,
+  });
   const namedLine = await insertWithShortcode(ctx.db, "expense", {
     lineKind: "principal",
     costType: "materials",
@@ -281,9 +290,12 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     date: "2026-09-01",
     cost: 500n,
   });
-  await unwrapDb(ctx.db).execute(
-    sql`INSERT INTO "ExpenseAttribution" ("expenseId",role,"ledgerPartyId",weight) VALUES (${namedLine.id},${contributionRole.enum.beneficiary},${person.id},1)`,
-  );
+  await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
+    expenseId: namedLine.id,
+    role: contributionRole.enum.beneficiary,
+    ledgerPartyId: person.id,
+    weight: 1,
+  });
   const result = await loadFieldResolutionEvidence(
     ctx.db,
     "product",
@@ -334,8 +346,11 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
       }),
     ]),
   );
-  await unwrapDb(ctx.db).execute(
-    sql`UPDATE "ExpenseAttribution" SET "ledgerPartyId" = NULL WHERE "expenseId" = ${namedLine.id}`,
+  await updatePurchaseEventWhere(
+    ctx.db,
+    "ExpenseAttribution",
+    { ledgerPartyId: null },
+    sql`"expenseId" = ${namedLine.id}`,
   );
   const unknown = await loadFieldResolutionEvidence(
     ctx.db,
@@ -598,9 +613,11 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
       status: "posted",
       postedDate: "2026-09-01",
     });
-    await unwrapDb(ctx.db).execute(
-      sql`INSERT INTO "FinancialTransactionAllocation" ("transactionId","purchaseId","amountMinor") VALUES (${transaction.entityId},${purchase.id},500)`,
-    );
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: transaction.entityId,
+      purchaseId: purchase.id,
+      amountMinor: 500n,
+    });
   }
   const evidence = async () =>
     (

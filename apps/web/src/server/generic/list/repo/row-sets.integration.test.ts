@@ -16,7 +16,6 @@ import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import {
   image as imageTable,
   expense as expenseTable,
-  expenseAttribution,
   ledgerParty as ledgerPartyTable,
   imageProcessingSubmission,
   photoRunImage,
@@ -27,6 +26,7 @@ import {
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { resolveExpenseProjectAllocationScope } from "~/server/domains/expense/repo/lookup";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
@@ -622,7 +622,7 @@ describe("row-set filters", () => {
       .select({ id: ledgerPartyTable.id })
       .from(ledgerPartyTable)
       .where(eq(ledgerPartyTable.shortcode, party.output.id));
-    await getDb(ctx.db).insert(expenseAttribution).values({
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
       expenseId: lineRow!.id,
       ledgerPartyId: partyRow!.id,
       role: "beneficiary",

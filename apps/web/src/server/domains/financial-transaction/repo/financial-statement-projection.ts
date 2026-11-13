@@ -40,7 +40,7 @@ const pairKey = (source: string, identity: string) =>
  * for it: the same direction within the posting window, and the same amount,
  * statement description or merchant. `amount` uses the Transaction sign.
  */
-export function nearbyStatementCandidate(
+function nearbyStatementCandidate(
   transaction: {
     amount: number | string;
     transactionDate: string | null;

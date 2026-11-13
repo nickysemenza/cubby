@@ -1,7 +1,3 @@
-import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
-import type { FinancialTransactionShortcode } from "@cubby/schemas/identifiers";
-import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
-import type { StatementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import {
   suggestionReviewBatchOut,
   type SuggestionReviewOut,
@@ -23,11 +19,7 @@ import { operationCommandRequest } from "~/contracts/define";
 import { suggestionContract } from "~/contracts/suggestion.contract";
 import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 
-import type {
-  ReviewItem,
-  StatementChoice,
-  StatementTransactionField,
-} from "./suggestion-review";
+import type { ReviewItem } from "./suggestion-review";
 
 /** `suggestion.reviewBatch` takes at most this many items per call. */
 const REVIEW_BATCH_MAX = 100;
@@ -38,15 +30,6 @@ type RowOutcome = { state: "pending" } | { state: "failed"; error: string };
 type ReviewFailure = { row: SuggestionListRow; error: string };
 
 /** A statement row's draft alternatives, shared by its actions menu and its evidence. */
-type StatementDraft = {
-  action?: StatementTransactionAction;
-  transactionId?: FinancialTransactionShortcode;
-  kind?: FinancialTransactionKind;
-  booking?: StatementTransactionApplication["booking"];
-  /** Ticked "apply" fields per candidate transaction. */
-  fields: Readonly<Record<string, readonly StatementTransactionField[]>>;
-};
-const EMPTY_DRAFT: StatementDraft = { fields: {} };
 
 type ReviewContext = {
   outcome: (id: string) => RowOutcome | undefined;
@@ -57,10 +40,9 @@ type ReviewContext = {
     rows: readonly SuggestionListRow[],
     build: (row: SuggestionListRow) => ReviewItem | null,
   ) => Promise<ReviewFailure[]>;
-  draft: (id: string) => StatementDraft;
-  setDraft: (id: string, patch: Partial<StatementDraft>) => void;
+
   /** The recommended choice with the row's draft folded in. */
-  statementChoice: (row: SuggestionListRow) => StatementChoice | undefined;
+
   isOpen: (id: string) => boolean;
   toggleOpen: (id: string, open?: boolean) => void;
   openIds: ReadonlySet<string>;
@@ -72,14 +54,14 @@ type ReviewState = {
   scope: string;
   outcomes: Map<string, RowOutcome>;
   failures: ReviewFailure[];
-  drafts: Map<string, StatementDraft>;
+
   open: Set<string>;
 };
 const freshState = (scope: string): ReviewState => ({
   scope,
   outcomes: new Map(),
   failures: [],
-  drafts: new Map(),
+
   open: new Set(),
 });
 
@@ -92,7 +74,7 @@ export function useSuggestionReview(): ReviewContext {
 
 /**
  * Review state for one Suggestions view: per-row outcomes, raw failures,
- * statement drafts and open evidence rows. `scope` is the view's query;
+ * open evidence rows. `scope` is the view's query;
  * changing it starts a fresh visit with nothing open and no old failures.
  */
 export function SuggestionReviewProvider({
@@ -182,40 +164,13 @@ export function SuggestionReviewProvider({
   );
 
   const value = useMemo<ReviewContext>(() => {
-    const draft = (id: string) => state.drafts.get(id) ?? EMPTY_DRAFT;
     return {
       outcome: (id) => state.outcomes.get(id),
       failures: state.failures,
       clearFailures: () =>
         setState((previous) => ({ ...previous, failures: [] })),
       review,
-      draft,
-      setDraft: (id, patch) =>
-        setState((previous) => {
-          const drafts = new Map(previous.drafts);
-          drafts.set(id, { ...(drafts.get(id) ?? EMPTY_DRAFT), ...patch });
-          return { ...previous, drafts };
-        }),
-      statementChoice: (row) => {
-        if (row.family !== "statement_transaction") return undefined;
-        const suggestion = row.evidence;
-        const current = draft(row.id);
-        const first =
-          current.transactionId ?? suggestion.candidates[0]?.transactionId;
-        const action = current.action ?? suggestion.recommended;
-        return action === "attach"
-          ? {
-              action: "attach",
-              transactionId: first,
-              fields: first ? [...(current.fields[first] ?? [])] : [],
-              booking: current.booking,
-            }
-          : {
-              action,
-              kindOverride: current.kind,
-              booking: current.booking,
-            };
-      },
+
       isOpen: (id) => state.open.has(id),
       toggleOpen: (id, open) =>
         setState((previous) => {

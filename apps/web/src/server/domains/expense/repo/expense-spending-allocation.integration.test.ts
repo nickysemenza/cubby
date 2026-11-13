@@ -14,6 +14,8 @@ import {
   loadExpenseFacetCounts,
 } from "~/server/domains/expense/repo/analyze";
 import { expenseDerivedValueSql } from "~/server/domains/expense/repo/expense-derived-read";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -38,7 +40,7 @@ const line = (
       Pick<typeof expense.$inferInsert, "trade" | "costType" | "productId">
     >,
 ) =>
-  insertWithShortcode(ctx.db, "expense", {
+  createPurchaseEventRecord(ctx.db, "expense", {
     name,
     cost: nullableWholeCentToMinor(cost),
     lineKind,
@@ -66,7 +68,7 @@ const fixture = async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic allocation vendor",
   });
-  const purchase = await insertWithShortcode(ctx.db, "purchase", {
+  const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
     defaultProjectId: projects[0]!.id,
@@ -180,13 +182,15 @@ describe("joint expense spending allocation", () => {
       ),
     ).toBe(true);
 
-    await unwrapDb(ctx.db)
-      .update(expense)
-      .set({
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      {
         projectId: projects[1]!.id,
         spendingCategoryId: categories[1]!.id,
-      })
-      .where(eq(expense.id, winner.id));
+      },
+      eq(expense.id, winner.id),
+    );
     const changed = await loadExpenseJointAllocations(ctx.db, [fee.id]);
     expect(
       changed
@@ -257,7 +261,7 @@ describe("joint expense spending allocation", () => {
       productCategoryRemainder: null,
       attributedCents: -1n,
     });
-    const refundPurchase = await insertWithShortcode(ctx.db, "purchase", {
+    const refundPurchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
@@ -420,7 +424,7 @@ describe("joint expense spending allocation", () => {
   it("gives adjustments on an order with no item line the order's own non-statement category", async () => {
     const { categories, vendor } = await fixture();
     const order = (spendingCategoryOrigin: "manual" | "source") =>
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-20",
         spendingCategoryId: categories[0]!.id,
@@ -589,7 +593,7 @@ describe("joint expense spending allocation", () => {
   // booking without a category or Project share.
   it("splits adjustments evenly across priced $0 principals", async () => {
     const { projects, categories, vendor } = await fixture();
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });
@@ -681,7 +685,7 @@ describe("joint expense spending allocation", () => {
   });
   it("counts Project presence only among matching category shares", async () => {
     const { projects, categories, vendor } = await fixture();
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
     });

@@ -49,6 +49,7 @@ import {
 } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   decideEmailPurchase,
   EXACT_ORDER_LINK_REVISION,
@@ -339,10 +340,12 @@ describe("Email Purchase links", () => {
       expect(await reviewSourceState()).toEqual(before);
       // Purchaser inheritance must retain accepted aliases/attachments even
       // without a Vendor Account identifying the member.
-      await getDb(ctx.db)
-        .update(purchaseTable)
-        .set({ vendorAccountId: null })
-        .where(eq(purchaseTable.id, purchase.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { vendorAccountId: null },
+        eq(purchaseTable.id, purchase.id),
+      );
       expect(
         (await readPurchaseById(ctx.db, purchaseId.parse(purchase.id)))
           .purchaserId,
@@ -556,10 +559,12 @@ describe("Email Purchase links", () => {
     await getDb(ctx.db).execute(
       sql`DELETE FROM "EmailReadSnapshot" WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`,
     );
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ statedTotal: moneyToMinor(99) })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { statedTotal: moneyToMinor(99) },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     const filters = {
       vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
     };
@@ -635,10 +640,12 @@ describe("Email Purchase links", () => {
       certain: true,
       possible: true,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ statedTotal: moneyToMinor(25) })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { statedTotal: moneyToMinor(25) },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await read()).toMatchObject({ linkState: "none" });
     await drainStoredDerived(ctx.db);
     expect(await read()).toMatchObject({
@@ -653,10 +660,12 @@ describe("Email Purchase links", () => {
       vendorId: f.vendor.id,
       ledgerPartyId: other.id,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: account.id })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: account.id },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await read()).toMatchObject({
       linkState: "none",
       purchaseLinks: [],

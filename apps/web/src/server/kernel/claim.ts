@@ -278,15 +278,6 @@ export async function claimScopes(
   }));
 }
 
-/** A conflict spends no attempt; it counts toward the locked-run fallback. */
-export async function recordConflict(q: Q, scope: ClaimedScope): Promise<void> {
-  await q.execute(sql`
-    UPDATE "ScopeDirty" SET "claimToken" = NULL, "claimDeadline" = NULL,
-      conflicts = conflicts + 1
-    WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}
-      AND "claimToken" = ${scope.token}::uuid`);
-}
-
 /** Serialize only slot admission; no network work holds this transaction. */
 async function withPartition<T>(
   db: Database,

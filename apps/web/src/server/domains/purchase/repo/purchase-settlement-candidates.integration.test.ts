@@ -14,6 +14,7 @@ import {
   inventoryEntry,
 } from "~/server/db/schema";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -54,13 +55,11 @@ describe("settlement candidate graph preservation", () => {
     });
     // A partially attached legacy graph is read evidence, never authority to
     // replace its already accepted allocation while completing the remainder.
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: transaction.entityId,
-        purchaseId: prior.entityId,
-        amountMinor: moneyToMinor(70),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: transaction.entityId,
+      purchaseId: prior.entityId,
+      amountMinor: moneyToMinor(70),
+    });
     const candidates = await listPurchaseSettlementCandidates(
       ctx.db,
       target.output.id,
@@ -183,13 +182,11 @@ describe("settlement candidate graph preservation", () => {
       postedDate: "2026-09-03",
       merchant: "Synthetic processor",
     });
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: partial.entityId,
-        purchaseId: prior.entityId,
-        amountMinor: moneyToMinor(70),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: partial.entityId,
+      purchaseId: prior.entityId,
+      amountMinor: moneyToMinor(70),
+    });
     const candidates = await listPurchaseSettlementCandidates(
       ctx.db,
       target.output.id,

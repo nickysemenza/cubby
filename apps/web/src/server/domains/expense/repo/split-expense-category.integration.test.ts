@@ -9,6 +9,7 @@ import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sq
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 
@@ -28,11 +29,11 @@ describe("atomic split classification intent", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic split vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const original = await insertWithShortcode(ctx.db, "expense", {
+    const original = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unitemized fixture charge",
       cost: 6000n,
       date: "2026-09-01",

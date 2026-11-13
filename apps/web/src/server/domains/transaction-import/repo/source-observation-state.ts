@@ -121,18 +121,6 @@ export const sourceOccurrenceStates = sql`(
   WHERE ${notDeleted("o")}
 )`;
 
-/**
- * The same states for occurrences admitted by `filter` on alias `o`. The
- * ownership fence is the point check, so a page never folds every occurrence's
- * history.
- */
-export const sourceOccurrenceStatesWhere = (filter: SQL) => sql`(
-  SELECT ${occurrenceStateColumns(sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`))}
-  FROM "SourceOccurrence" o
-  LEFT JOIN "FinancialTransaction" ft ON ft.id = o."acceptedTransactionId" AND ${notDeleted("ft")}
-  WHERE ${notDeleted("o")} AND (${filter})
-)`;
-
 const projected = <Value>(key: string) =>
   sql<Value>`${sql.identifier("SourceTransactionRecord")}.${sql.identifier(key)}`;
 const projectedDate = (key: string) =>
@@ -233,41 +221,3 @@ export const sourceObservationField = (
 
 /** Fact columns under the stored-table alias, without the global history fold. */
 export const sourceObservationFactsFrom = sql`${sourceObservationFacts} "SourceTransactionRecord"`;
-
-export const SOURCE_HELD_REASON =
-  "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged; money stays unchanged until reviewed.";
-
-/**
- * A charge with no current observation in a ready occurrence is held by
- * identity or ownership review and publishes no advice. A withdrawn or
- * superseded head in a ready occurrence is not held here: its booking review
- * stays in Suggestions.
- */
-export const statementChargeSourceHeld = (
-  source: SQL,
-  chargeKey: SQL,
-) => sql`-- includes-deleted: retained occurrences continue to fence source eligibility.
-NOT EXISTS (
-  SELECT 1 FROM ${sourceObservationFacts} reviewed
-  WHERE reviewed.source=${source} AND reviewed."chargeKey"=${chargeKey}
-    AND reviewed."occurrenceId" IS NOT NULL AND reviewed.current
-    -- includes-deleted: retained ownership remains binding.
-    AND EXISTS (SELECT 1 FROM "SourceOccurrence" point_owner
-      WHERE point_owner.id=reviewed."occurrenceId" AND point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)})
-)`;
-
-/** Held advice can be dismissed, but cannot suppress a later proven occurrence. */
-export const statementSuggestionSourceHeld = (
-  alias: string,
-) => sql`-- includes-deleted: retained occurrences continue to fence source eligibility.
-NOT EXISTS (
-  SELECT 1 FROM ${sourceObservationFacts} reviewed
-  WHERE reviewed.id=${sql.identifier(alias)}."recordId" AND reviewed."occurrenceId" IS NOT NULL
-    AND reviewed.current -- includes-deleted: retained ownership remains binding.
-    AND EXISTS (SELECT 1 FROM "SourceOccurrence" point_owner
-      WHERE point_owner.id=reviewed."occurrenceId" AND point_owner."reviewState"=${sourceOccurrenceReviewState.enum.ready}
-        AND NOT ${sourceOccurrenceHasUnresolvedHistory(sql`point_owner.id`, sql`point_owner."acceptedTransactionId"`)})
-    AND reviewed."withdrawnAt" IS NULL AND reviewed."supersededByRowId" IS NULL
-    AND reviewed."chargeKey"=${sql.identifier(alias)}.data->>'chargeKey'
-)`;

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityAttachment, image } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 
@@ -20,7 +21,7 @@ describe("order line thumbnails", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: `Thumbnail Seeds ${crypto.randomUUID()}`,
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "THUMB-1",
       date: "2026-09-21",
@@ -35,7 +36,7 @@ describe("order line thumbnails", () => {
       ["Example pepper packet", pictured],
       ["Example bean packet", failing],
     ] as const)
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         name,
         purchaseId: purchase.id,
         productId: row.id,
@@ -113,7 +114,7 @@ describe("order line thumbnails", () => {
 
   it("skips a title two order lines share rather than guess its Product", async () => {
     const { purchase } = await seed();
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Example tomato packet",
       purchaseId: purchase.id,
       productId: (

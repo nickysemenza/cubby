@@ -7,6 +7,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { purchase as purchaseTable } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import { readPurchaseById, updatePurchase } from "./purchase";
 
@@ -18,7 +19,7 @@ it("records an accepted source category through the ordinary Purchase writer", a
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic supported service seller",
   });
-  const purchase = await insertWithShortcode(ctx.db, "purchase", {
+  const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
     date: "2026-09-20",
     vendorId: vendor.id,
   });
@@ -39,7 +40,7 @@ it("keeps legacy fallback provenance pending review until an explicit category s
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic fallback vendor",
   });
-  const purchase = await insertWithShortcode(ctx.db, "purchase", {
+  const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
     date: "2026-09-20",
     vendorId: vendor.id,
     spendingCategoryId: category.id,

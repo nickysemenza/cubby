@@ -52,6 +52,7 @@ import {
   location,
   product,
   productCategory,
+  purchase,
   recipe,
   user,
   vendor,
@@ -94,6 +95,54 @@ export async function insertEntityFixtures<T extends PgTable>(
   kind: ShortcodeEntity,
   rows: readonly EntityPayloadValues<T>[],
 ) {
+  if (
+    kind === "purchase" ||
+    kind === "expense" ||
+    kind === "financialTransaction"
+  ) {
+    const { insertFieldsFixture } =
+      await import("~/server/ai/fields/fields.fixtures");
+    const { createPurchaseEventRecords } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-mutations");
+    // SAFETY: fixture callers provide the insert model for the same table and entity.
+    const inserted =
+      kind === "financialTransaction"
+        ? await Promise.all(
+            rows.map((row) =>
+              insertFieldsFixture(
+                db,
+                kind,
+                row as import("~/server/generic/shortcode/repo/shortcode-utils").ShortcodeInsertValues<
+                  "purchase" | "expense" | "financialTransaction"
+                >,
+              ),
+            ),
+          )
+        : kind === "purchase"
+          ? await createPurchaseEventRecords(
+              db,
+              "purchase",
+              rows as (typeof purchase.$inferInsert)[],
+            )
+          : await createPurchaseEventRecords(
+              db,
+              "expense",
+              rows as (typeof expense.$inferInsert)[],
+            );
+    for (const [index, saved] of inserted.entries())
+      Object.assign(rows[index]!, { id: saved.id, shortcode: saved.shortcode });
+    const columns = getTableColumns(table);
+    if (!("id" in columns)) throw new Error("Fixture table has no id");
+    return getDb(db)
+      .select()
+      .from(table)
+      .where(
+        inArray(
+          columns.id,
+          inserted.map((row) => row.id),
+        ),
+      );
+  }
   return getDb(db).transaction(async (tx) => {
     const prepared = rows.map((row) => {
       const id = row.id ?? crypto.randomUUID();

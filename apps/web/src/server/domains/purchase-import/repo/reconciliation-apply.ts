@@ -15,8 +15,10 @@ import {
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   planReconciliationLine,
@@ -53,10 +55,12 @@ export async function applyReconciliationLine(
   if (action.kind === "attach") {
     if (existing) lineExpenses.set(binding.lineIndex, existing.id);
     if (existing && action.fields) {
-      await tx
-        .update(expense)
-        .set({ ...action.fields, updatedAt: new Date() })
-        .where(eq(expense.id, existing.id));
+      await updatePurchaseEventWhere(
+        tx,
+        "expense",
+        { ...action.fields, updatedAt: new Date() },
+        eq(expense.id, existing.id),
+      );
       audit.push({
         entityKind: "expense",
         entityId: existing.id,
@@ -71,15 +75,16 @@ export async function applyReconciliationLine(
   }
   let row;
   if (existing && action.reuse) {
-    [row] = await tx
-      .update(expense)
-      .set({
+    [row] = await updatePurchaseEventWhere(
+      tx,
+      "expense",
+      {
         ...action.fields,
         cost: nullableWholeCentToMinor(action.fields.cost),
         updatedAt: new Date(),
-      })
-      .where(eq(expense.id, existing.id))
-      .returning();
+      },
+      eq(expense.id, existing.id),
+    );
     reused.add(existing.id);
     audit.push({
       entityKind: "expense",
@@ -101,7 +106,7 @@ export async function applyReconciliationLine(
         ),
       );
   } else {
-    row = await insertWithShortcode(tx, "expense", {
+    row = await createPurchaseEventRecord(tx, "expense", {
       ...action.fields,
       cost: nullableWholeCentToMinor(action.fields.cost),
     });
@@ -110,7 +115,9 @@ export async function applyReconciliationLine(
   if (!row) throw new Error("The reviewed Expense changed during commit.");
   lineExpenses.set(binding.lineIndex, row.id);
   if (action.allocations.length)
-    await tx.insert(expenseAttribution).values(
+    await insertPurchaseEventRows(
+      tx,
+      "ExpenseAttribution",
       action.allocations.map((allocation) => ({
         expenseId: row.id,
         ...allocation,
@@ -137,15 +144,19 @@ export async function applyReconciliationHeader(
 ) {
   const { purchaseId, statedTotal, orderId, imageIds } = plan.header;
   if (statedTotal)
-    await tx
-      .update(purchase)
-      .set({ statedTotal: statedTotal.value, updatedAt: new Date() })
-      .where(eq(purchase.id, purchaseId));
+    await updatePurchaseEventWhere(
+      tx,
+      "purchase",
+      { statedTotal: statedTotal.value, updatedAt: new Date() },
+      eq(purchase.id, purchaseId),
+    );
   if (orderId !== null) {
-    await tx
-      .update(purchase)
-      .set({ orderId, updatedAt: new Date() })
-      .where(eq(purchase.id, purchaseId));
+    await updatePurchaseEventWhere(
+      tx,
+      "purchase",
+      { orderId, updatedAt: new Date() },
+      eq(purchase.id, purchaseId),
+    );
     applied.audit.push({
       entityKind: "purchase",
       entityId: purchaseId,

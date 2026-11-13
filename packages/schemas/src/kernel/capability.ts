@@ -8,6 +8,8 @@ export type MachineryCapability = {
   readonly entity: string;
   /** The scope kind that owns the record through `RecordKey`; null for an authored entity. */
   readonly owning: string | null;
+  /** Additional consumers keyed by this record id, including scopes awaiting their first output. */
+  readonly scopes?: readonly string[];
   /** Whether the entity declares AI fill-in (`fields` scope). */
   readonly fields: boolean;
   /** Whether the entity declares checks (`quality` scope). */

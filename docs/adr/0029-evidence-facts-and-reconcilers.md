@@ -92,6 +92,13 @@ the read-write graph between scope kinds. Only the kernel's apply step writes a
 column a reconciler owns; the repository boundary rejects any other write.
 Repositories, commands, imports and MCP tools write evidence and decisions.
 
+Catalog inference may declare `source.history(table, columns)` for committed
+money history. It retains the ordinary read revisions, fences and invalidations,
+but introduces no derivation ordering dependency: an inferred Vendor default may
+inform a new purchase while committed purchases inform that default. The registry
+rejects history reads in a money lane or of Catalog-owned columns. Current-value
+sources retain the acyclic read-write rule.
+
 A reconciled record belongs to exactly one owning scope, recorded in
 `RecordKey`. Its desired output carries each record's provenance, its
 relationship effects, and an explicit disposition for a record that should no
@@ -100,6 +107,13 @@ longer exist (section 9).
 Adding a scope kind needs a measured reason. One reconciler per derived field
 is ADR 0021's engine again and is not allowed; derived values stay views,
 typed snapshots and the hourly pass (ADR 0025 item 4).
+
+A reconciler that must create an authored catalog record declares its initial
+values in `writes(..., { createOnly: [...] })`. Those values are supplied only
+on insertion, are excluded from column ownership and the read-write graph, and
+are never changed on recomputation. Existing catalog writers retain their
+authored responsibility. A booking can create a Vendor and its aliases without
+claiming the names and aliases of the household's whole Vendor catalog.
 
 Recipes, Meals, Tasks, Projects, Locations, garden records and Inventory counts
 are authored. They stay plain writes with no money or state reconciler; an
@@ -157,7 +171,12 @@ machinery(db: Db, viewer: Actor, ref: EntityRef, o?: { field?: string }): Promis
 ```
 
 `load` takes every key of a batch and issues a fixed number of statements for
-the batch. Each read through `Reads` records its key, including a read that
+the batch. Apply locks the union of input revisions and dirty claims once,
+then writes each table as a set. Identity reservations, RecordKeys, bindings,
+audits, dependencies and cached scope outcomes are batch writes. Audit rows
+retain their individual scope provenance. A batch is one coherent input
+snapshot: its output notifications exclude every completed scope in that
+batch and still notify other dependent scopes. Each read through `Reads` records its key, including a read that
 returns no rows, and `Reads` reaches only the sources the reconciler declared.
 `reconcile` has no database, clock or network access. Inside it,
 `c.answer(kind, input)` returns the Answer or `Missing`, and `Missing` files an
@@ -166,6 +185,23 @@ Ask; `c.decision(channel, subject, field)` returns the decision in force;
 `c.bind(fact, event)` binds evidence to an event; `c.emit(scopeRef)` starts a
 downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 `c.gap.time` declare what is missing and who supplies it.
+
+A Catalog target with no owned columns may declare `coalesceCreation(values)`
+to combine equal natural keys in the same batch. In canonical scope-key order,
+the first new declaration reserves the shared id; every participating scope
+keeps a RecordKey to it. Existing RecordKeys always retain their ids. The
+coalescer supplies creation values only; member edits remain authored.
+
+`c.record` returns the record's UUID. For an existing `RecordKey` it returns
+the retained id; for a new natural key it derives a UUID v8 from the scope
+kind, scope key, table and natural key using SHA-256. Contents never enter
+that identity. Other records declared in the same reconcile use that UUID as
+a foreign key. Apply preserves it, orders inserts by foreign-key dependency,
+and commits the reserved entity shortcode inside its transaction. `c.identity`
+returns the same id and public shortcode before a record is declared; shortcode
+collisions re-run the scope with an unreserved code while retaining its id. A conflicted or failed
+apply leaves no identity, shortcode or `RecordKey` reservation. A cycle between
+new rows in different tables is refused before any record is inserted.
 
 ### 4. Kernel tables
 
@@ -223,6 +259,12 @@ graph is `bankEvent → paymentMatch → purchaseEvent`, `bankEvent →
 transferPair`, and across lanes `purchaseEvent → emailState`; `shipment`,
 `fields` and `quality` have no upstream.
 
+Predicate reads also record a table-membership key. A matching authored or
+catalog mutation raises that key, including when the previous predicate read
+was empty. Reviewed evidence-association changes replace the affected
+`FactKey` entries and raise both the old and the new keys in their transaction.
+Raw source observations remain insert-only.
+
 ### 6. One write gate, one input fence
 
 Every transaction that writes a money-lane column first takes
@@ -255,9 +297,15 @@ Catalog scopes use the same fence without the gate. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the
 same record wins and the scope reruns.
 
-Background money applies yield the gate after 1.5 seconds. A member's write
+Background money applies commit after each bounded batch of at most 64 scopes,
+before the next batch can take the gate. A batch's set-based writes publish
+atomically; session timeouts bound in-flight statements. A member's write
 uses a 2 second `lock_timeout` and reports a timeout as a retryable wait.
-Evidence appends and decision inserts take no gate; unique constraints on
+
+A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions. This gives concurrent commands one lock order; an input-only transaction remains ungated.
+
+Evidence-only appends and decision-only inserts take no gate; a rejection that invokes
+a money entity's deletion policy takes the gate before that policy runs; unique constraints on
 source identity decide a race between two writers of the same evidence.
 
 ### 7. Three work forms, one claim
@@ -298,6 +346,9 @@ they held has this owner:
 | Retention and pruning                                            | A `retention` Pass.                                                                                                                                                       |
 | The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                       |
 | Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                        |
+
+Synchronous `reconcileNow` returns one final outcome per requested scope.
+Input-fence conflicts that are retried within the call are intermediate results.
 
 ### 8. Paid producer calls
 
@@ -349,14 +400,22 @@ delete policy and search cleanup, and marks the `RecordKey` rejected so the
 record is not created again when its evidence returns. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
+Reconcilers resolve retained decision and manual-entry references through
+`c.reference(entity, idOrShortcode)`. It follows redirects from the identity
+snapshot loaded for the batch, returns the live survivor only for the requested
+entity kind, and does not alter the retained input.
+
 ### 10. Stage and the machinery read
 
 Stage is not stored on any record. `ScopeState` caches the last computed
 stage and next actor so lists can filter and sort on them through declared SQL
 projections; the reconciler's gaps are the truth.
 
-A record's scopes are its owning scope, its `fields` scope and its `quality`
-scope, in that order. Its stage is the first that applies:
+A record's scopes are its owning scope, the consumer scopes declared by its
+`MachineryCapability.scopes`, its `fields` scope and its `quality` scope, in
+that order. Consumer scopes use the input record UUID as their key, so a
+source or bank event exposes its gaps before a consumer creates an output.
+Machinery deduplicates shared evidence, answers and decisions across scopes. Its stage is the first that applies:
 
 | Stage     | Applies when                                                                   |
 | --------- | ------------------------------------------------------------------------------ |
@@ -426,7 +485,9 @@ inputs changed.
 After a deploy that changes a reconciler `version` or a `promptVersion`, a
 `version.sweep` Pass visits each scope whose `ScopeState.version` is older. It
 computes the desired output from existing answers only and issues no asks.
-With no difference and no missing answer it advances the scope's version.
+With no record difference and no missing answer it advances the scope's
+version and refreshes its gaps, input provenance and dependencies under the
+input revision fence. This metadata refresh creates no dirty work or asks.
 Otherwise it writes a `Drift` proposal: the exact difference, the number of
 asks the change would issue and their estimated cost. Approval is a decision
 bound to the proposal hash, by item or by class; approval applies the
@@ -441,6 +502,23 @@ member decision and above automatic matching. The first sweep then proposes
 drift wherever the derivation without the baseline disagrees, and approving
 that drift releases the baseline for that scope. A scope with no stored
 records gets version 0 and an empty baseline.
+
+An input-triggered reconcile also protects accepted baselines. An automatic
+difference records a Drift proposal and applies no record changes or new asks.
+A field assignment with the current Decision as its provenance may update that
+field above the baseline; it does not authorize other automatic differences.
+A new record whose supplied values all cite current Decisions may be added to
+an accepted scope. Creation authority applies to those immutable decision
+values; it does not authorize later changes derived from new observations.
+Reference merge and removal policies use `columnOwner` and
+`repointOwnedReference` for owned foreign keys. The kernel takes the money
+gate for a money-owned reference. Callers take it before acquiring other
+record locks. Repointing raises table and row
+keys, including for scopes whose earlier predicate found no matching row.
+`c.disagree(input)` records unresolved drift when accepted inputs contradict
+one another and no automatic replacement is justified. It applies no records
+or asks, and approval cannot bypass the unresolved disagreement; evidence or
+a decision must first resolve it.
 
 ### 12. Cutover migration
 

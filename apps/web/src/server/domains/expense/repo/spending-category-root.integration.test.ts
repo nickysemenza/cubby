@@ -12,6 +12,7 @@ import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sq
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, product, productCategory } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -30,7 +31,7 @@ const line = (
     "purchaseId" | "spendingCategoryId"
   > = {},
 ) =>
-  insertWithShortcode(ctx.db, "expense", {
+  createPurchaseEventRecord(ctx.db, "expense", {
     name: `synthetic root ${name}`,
     cost: nullableWholeCentToMinor(cost),
     lineKind,
@@ -55,11 +56,11 @@ const fixture = async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic root vendor",
   });
-  const order = await insertWithShortcode(ctx.db, "purchase", {
+  const order = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
   });
-  const shippingOnly = await insertWithShortcode(ctx.db, "purchase", {
+  const shippingOnly = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
   });

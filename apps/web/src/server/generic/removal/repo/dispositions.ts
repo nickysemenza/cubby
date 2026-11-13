@@ -43,7 +43,6 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { upperFirst } from "es-toolkit";
 
-import { fieldsPlans } from "~/server/ai/fields/repo/plan";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import {
@@ -102,10 +101,10 @@ export interface DeleteHooks<E extends RemovableEntity> {
   removal?: "soft" | "hard";
 }
 
-const ownsReference = (edge: EdgePhysical) =>
-  [...fieldsPlans().values()].some(
-    (plan) => plan.table === edge.table && plan.writes.includes(edge.property),
-  );
+const ownsReference = async (edge: EdgePhysical) => {
+  const { columnOwner } = await import("~/server/kernel/api");
+  return (await columnOwner(edge.table, edge.property)) !== null;
+};
 
 type EdgePhysical = {
   key: string;
@@ -261,11 +260,10 @@ const detach = async (
           .from(edge.table)
           .where(where)
       : [];
-  if (ownsReference(edge)) {
+  if (await ownsReference(edge)) {
     const { repointOwnedReference } = await import("~/server/kernel/api");
     await repointOwnedReference(databaseForTransaction(tx), {
-      // SAFETY: fields plans register only keyed entity tables.
-      table: edge.table as PgTable & { id: PgColumn },
+      table: edge.table,
       column: edge.property,
       fromIds: ids,
       toId: null,
@@ -539,13 +537,12 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       inArray(edge.column, [...args.loserIds]),
       args.liveOnly ? liveWhere(edge) : undefined,
     );
-    if (ownsReference(edge)) {
+    if (await ownsReference(edge)) {
       const { repointOwnedReference } = await import("~/server/kernel/api");
-      // SAFETY: fields plans register only keyed entity tables.
       repointed[edge.key] = await repointOwnedReference(
         databaseForTransaction(tx),
         {
-          table: edge.table as PgTable & { id: PgColumn },
+          table: edge.table,
           column: edge.property,
           fromIds: args.loserIds,
           toId: args.keepId,

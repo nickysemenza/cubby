@@ -4,7 +4,6 @@ import {
   entityRoster,
   suggestionEntities,
 } from "@cubby/schemas/entity-roster";
-import { financialAccountShortcode } from "@cubby/schemas/identifiers";
 import {
   SWEEP_FAMILY_LABEL,
   type sweepFieldTargets,
@@ -19,16 +18,13 @@ import { z } from "zod";
 
 import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Picker } from "~/entity/picker/picker";
-import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { run } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { DropdownMenuItem } from "~/ui/primitives/dropdown-menu";
-import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 
 type Family = SweepStartInput["families"][number]["family"];
@@ -52,11 +48,6 @@ const DECISION_ENTITY_OPTIONS = suggestionEntities.map((entity) => ({
 
 const FAMILY_ROWS = [
   {
-    family: "statement_transaction",
-    label: SWEEP_FAMILY_LABEL.statement_transaction,
-    hint: "create, attach, settle and void holds",
-  },
-  {
     family: "field",
     label: SWEEP_FAMILY_LABEL.field,
     hint: "categories and other decision fields",
@@ -65,7 +56,6 @@ const FAMILY_ROWS = [
 
 /** The unit of each family's first counted step, which the estimate reports. */
 const FAMILY_NOUN = {
-  statement_transaction: "charge",
   field: "entity",
 } satisfies Record<Family, string>;
 
@@ -186,15 +176,12 @@ export function FindSuggestionsDialog({
   const [families, setFamilies] = useState<ReadonlySet<Family>>(
     () => new Set(preset?.families ?? FAMILY_ROWS.map((row) => row.family)),
   );
-  const [accounts, setAccounts] = useState<ComboboxItem[]>([]);
-  const [since, setSince] = useState("");
   const [fieldEntity, setFieldEntity] = useState<string | null>(
     preset?.field?.entity ?? null,
   );
   const [fields, setFields] = useState<string[]>([
     ...(preset?.field?.fields ?? []),
   ]);
-  const accountSource = useEntityListSource("financialAccount");
 
   const toggle = (family: Family, checked: boolean) =>
     setFamilies((previous) => {
@@ -227,20 +214,6 @@ export function FindSuggestionsDialog({
           families: FAMILY_ROWS.flatMap(
             ({ family }): SweepStartInput["families"] => {
               if (!families.has(family)) return [];
-              if (family === "statement_transaction")
-                return [
-                  {
-                    family,
-                    ...(accounts.length
-                      ? {
-                          accountIds: accounts.map((item) =>
-                            financialAccountShortcode.parse(item.id),
-                          ),
-                        }
-                      : {}),
-                    ...(since ? { since: `${since}-01` } : {}),
-                  },
-                ];
               return [
                 {
                   family,
@@ -271,7 +244,6 @@ export function FindSuggestionsDialog({
 
   return (
     <>
-      {accountSource.dialog}
       <Overlay
         open={open}
         onOpenChange={onOpenChange}
@@ -294,41 +266,6 @@ export function FindSuggestionsDialog({
         <div>
           <FamilyRow
             {...FAMILY_ROWS[0]}
-            checked={families.has("statement_transaction")}
-            onChecked={(checked) => toggle("statement_transaction", checked)}
-          >
-            <Picker
-              multiple
-              label="Accounts"
-              placeholder="All accounts"
-              className="w-64"
-              entity="financialAccount"
-              items={accountSource.items}
-              hasNextPage={accountSource.hasNextPage}
-              isFetchingNextPage={accountSource.isFetchingNextPage}
-              onLoadMore={accountSource.onLoadMore}
-              error={accountSource.error}
-              onRetry={accountSource.onRetry}
-              isLoading={accountSource.isLoading}
-              onSearchChange={accountSource.onSearchChange}
-              onOpenChange={accountSource.onOpenChange}
-              values={accounts}
-              setValues={setAccounts}
-            />
-            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the Input inside is the control */}
-            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              Since
-              <Input
-                type="month"
-                aria-label="Since month"
-                className="w-36"
-                value={since}
-                onChange={(event) => setSince(event.target.value)}
-              />
-            </label>
-          </FamilyRow>
-          <FamilyRow
-            {...FAMILY_ROWS[1]}
             checked={families.has("field")}
             onChecked={(checked) => toggle("field", checked)}
           >

@@ -42,11 +42,13 @@ import {
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   previewFinancialBooking,
   commitFinancialBooking,
   loadFinancialBookingLineage,
 } from "~/server/domains/financial-transaction/repo/financial-booking";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
@@ -1277,7 +1279,8 @@ describe("shared spending booking", () => {
         .from(expenseAttribution)
         .where(
           sql`${expenseAttribution.role} = ${contributionRole.enum.beneficiary} AND ${expenseAttribution.deletedAt} IS NULL`,
-        );
+        )
+        .orderBy(expenseAttribution.ledgerPartyId);
       expect(
         attribution.map((share) => ({
           ...share,
@@ -1388,10 +1391,12 @@ describe("shared spending booking", () => {
         const other = await createRepoIdentity(ctx, "vendor", {
           name: "Synthetic changed Vendor",
         });
-        await getDb(ctx.db)
-          .update(purchase)
-          .set({ vendorId: other.entityId })
-          .where(eq(purchase.shortcode, saved.purchaseIds[0]!));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "purchase",
+          { vendorId: other.entityId },
+          eq(purchase.shortcode, saved.purchaseIds[0]!),
+        );
       }
       await expect(
         commitFinancialSpending(ctx.db, plan, ctx.actor),
@@ -1444,14 +1449,18 @@ describe("shared spending booking", () => {
         .select({ name: purchase.displayLabel })
         .from(purchase),
     ).toHaveLength(1);
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: null })
-      .where(eq(purchase.shortcode, receipt.output.id));
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: null })
-      .where(eq(expense.shortcode, line.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: null },
+      eq(purchase.shortcode, receipt.output.id),
+    );
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: null },
+      eq(expense.shortcode, line.output.id),
+    );
     expect(
       await previewFinancialSpending(ctx.db, {
         transactionId: transaction.output.id,
@@ -1539,13 +1548,15 @@ describe("shared spending booking", () => {
           cost: amount,
           trade: "other",
         });
-        await getDb(ctx.db)
-          .update(expense)
-          .set({
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          {
             economicRole: "reimbursement",
             bookingTransactionCode: payment.output.id,
-          })
-          .where(eq(expense.shortcode, reimbursement.output.id));
+          },
+          eq(expense.shortcode, reimbursement.output.id),
+        );
       }
     expect(
       await previewFinancialSpending(ctx.db, {
@@ -1887,10 +1898,10 @@ describe("shared spending booking", () => {
     const request = { transactionId: transaction.output.id, advice };
     const plan = await previewFinancialSpending(ctx.db, request);
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
-    await getDb(ctx.db)
-      .update(transactionTable)
-      .set({ status: "pending", postedDate: null })
-      .where(eq(transactionTable.shortcode, transaction.output.id));
+    await updateSeedBankTransaction(ctx.db, transaction.output.id, {
+      status: "pending",
+      postedDate: null,
+    });
     const replay = await previewFinancialSpending(ctx.db, request);
     expect(replay.status).toBe("already_booked");
     await commitFinancialSpending(ctx.db, replay, ctx.actor);
@@ -2160,10 +2171,12 @@ describe("shared spending booking", () => {
         })
       ).status,
     ).toBe("review_required");
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 4250n, lineKind: "unclassified" })
-      .where(eq(expense.shortcode, line.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 4250n, lineKind: "unclassified" },
+      eq(expense.shortcode, line.output.id),
+    );
     expect(
       (
         await previewFinancialSpending(ctx.db, {
@@ -2392,10 +2405,12 @@ describe("shared spending booking", () => {
     expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
       "review_required",
     );
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-04-28" })
-      .where(eq(purchase.shortcode, original.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-04-28" },
+      eq(purchase.shortcode, original.output.id),
+    );
     // One recent same-Vendor original whose open returned line is exactly the
     // refund identifies it.
     expect(await previewFinancialSpending(ctx.db, request)).toMatchObject({

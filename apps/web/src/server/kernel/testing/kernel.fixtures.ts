@@ -6,7 +6,7 @@
  * tables live in their own schema so they never enter the public catalog.
  */
 import { sourceActor } from "@cubby/schemas/kernel/stage";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { integer, pgSchema, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -60,6 +60,24 @@ export const fixturePurchase = fixture.table("FixturePurchase", {
   updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 });
 
+export const fixtureExpense = fixture.table("FixtureExpense", {
+  id: uuid("id").primaryKey(),
+  purchaseId: uuid("purchaseId")
+    .notNull()
+    .references(() => fixturePurchase.id),
+  amountMinor: integer("amountMinor").notNull(),
+});
+export const fixtureAllocation = fixture.table("FixtureAllocation", {
+  id: uuid("id").primaryKey(),
+  purchaseId: uuid("purchaseId")
+    .notNull()
+    .references(() => fixturePurchase.id),
+  expenseId: uuid("expenseId")
+    .notNull()
+    .references(() => fixtureExpense.id),
+  amountMinor: integer("amountMinor").notNull(),
+});
+
 /** Create the fixture schema once per database and empty it for each test. */
 export async function resetFixtureTables(db: Database): Promise<void> {
   // One statement per call: the query tracer reads one result per statement.
@@ -90,6 +108,10 @@ export async function resetFixtureTables(db: Database): Promise<void> {
       "deletedAt" timestamp,
       "createdAt" timestamp NOT NULL DEFAULT now(),
       "updatedAt" timestamp NOT NULL DEFAULT now())`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureExpense" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "amountMinor" integer NOT NULL)`,
+    `CREATE TABLE IF NOT EXISTS kernel_fixture."FixtureAllocation" (id uuid PRIMARY KEY, "purchaseId" uuid NOT NULL REFERENCES kernel_fixture."FixturePurchase"(id), "expenseId" uuid NOT NULL REFERENCES kernel_fixture."FixtureExpense"(id), "amountMinor" integer NOT NULL)`,
+    `DELETE FROM kernel_fixture."FixtureAllocation"`,
+    `DELETE FROM kernel_fixture."FixtureExpense"`,
     `DELETE FROM kernel_fixture."FixturePurchase"`,
     `DELETE FROM kernel_fixture."FixtureCharge"`,
     `DELETE FROM kernel_fixture."FixtureReceipt"`,
@@ -120,6 +142,11 @@ export const receiptEvidence = defineEvidence({
 });
 
 export type FixtureHooks = {
+  predicateReceipts?: boolean;
+  linked?: boolean;
+  linkedDecision?: boolean;
+  onRemove?: () => Promise<void>;
+  disagreement?: () => string | null;
   /** Runs inside each `load`, before it reads; tests mutate inputs here. */
   onLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
   /** Runs inside each `load`, after its reads and before the apply. */
@@ -163,6 +190,17 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     ["orderRef", "amountMinor", "merchant", "receiptId"],
     {
       discovers: (row) => [{ kind: CATEGORY_SCOPE, key: row.id }],
+      ...(hooks.onRemove
+        ? {
+            remove: async (tx: Database, ids: readonly string[]) => {
+              await hooks.onRemove!();
+              await repositoryQueries(tx)
+                .update(fixturePurchase)
+                .set({ deletedAt: new Date() })
+                .where(inArray(fixturePurchase.id, [...ids]));
+            },
+          }
+        : {}),
       // The absorbed purchase is retired; the kernel settles who owns the survivor.
       merge: async (tx, { loserIds }) => {
         await repositoryQueries(tx)
@@ -173,6 +211,12 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     },
   );
   const categoryWrites = writes(fixturePurchase, ["category"]);
+  const expenseWrites = writes(fixtureExpense, ["purchaseId", "amountMinor"]);
+  const allocationWrites = writes(fixtureAllocation, [
+    "purchaseId",
+    "expenseId",
+    "amountMinor",
+  ]);
 
   const purchase = defineReconciler<{
     orderRef: string;
@@ -189,8 +233,23 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       source.evidence(receiptEvidence),
       source.bindings,
       source.table(fixtureCharge, ["orderRef", "amountMinor"]),
+      ...(hooks.predicateReceipts
+        ? [
+            source.table(fixtureReceipt, [
+              "orderRef",
+              "amountMinor",
+              "merchant",
+            ]),
+          ]
+        : []),
     ],
-    writes: [purchaseWrites, bindingWrites],
+    writes: [
+      purchaseWrites,
+      bindingWrites,
+      ...(hooks.linked || hooks.linkedDecision
+        ? [expenseWrites, allocationWrites]
+        : []),
+    ],
     async load(reads, keys) {
       await hooks.onLoad?.(PURCHASE_SCOPE, keys);
       const entries = await Promise.all(
@@ -198,7 +257,11 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           const scoped = reads.for(key);
           const [charges, receipts, bindings] = await Promise.all([
             scoped.facts(chargeEvidence, [`order:${key}`]),
-            scoped.facts(receiptEvidence, [`order:${key}`]),
+            hooks.predicateReceipts
+              ? scoped
+                  .select(fixtureReceipt, [], eq(fixtureReceipt.orderRef, key))
+                  .then((rows) => new Map([[`order:${key}`, rows]]))
+              : scoped.facts(receiptEvidence, [`order:${key}`]),
             scoped.bindings({ events: [key] }),
           ]);
           const own = charges.get(`order:${key}`) ?? [];
@@ -231,13 +294,12 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           c.retire(purchaseWrites, key, "remove");
         return c.done();
       }
+      const disagreement = hooks.disagreement?.();
+      if (disagreement) c.disagree(disagreement);
       const id = c.recordId(purchaseWrites, "event");
       const assigned = id
-        ? c.decision(
-            "assignment",
-            recordSubject(PURCHASE_TABLE, id),
-            "merchant",
-          )
+        ? (c.assignments(recordSubject(PURCHASE_TABLE, id)).get("merchant") ??
+          null)
         : null;
       const observed = receipt?.merchant ?? null;
       const merchant = assigned
@@ -247,15 +309,66 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         : version >= 2 && observed
           ? observed.toUpperCase()
           : observed;
-      c.record(purchaseWrites, "event", {
-        orderRef: input.orderRef,
-        amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-        merchant,
-        receiptId: receipt?.id ?? null,
-      });
+      const purchaseId = c.record(
+        purchaseWrites,
+        "event",
+        {
+          orderRef: input.orderRef,
+          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          merchant,
+          receiptId: receipt?.id ?? null,
+        },
+        { provenance: assigned ? { merchant: assigned.id } : {} },
+      );
+      const linked = id
+        ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
+        : null;
+      if (hooks.linked || (hooks.linkedDecision && linked?.value === true)) {
+        const provenance = (target: typeof expenseWrites, fields: string[]) =>
+          linked &&
+          !c.recordId(
+            target,
+            target === expenseWrites ? "expense" : "allocation",
+          )
+            ? Object.fromEntries(fields.map((field) => [field, linked.id]))
+            : {};
+        const expenseId = c.record(
+          expenseWrites,
+          "expense",
+          {
+            purchaseId,
+            amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          },
+          {
+            provenance: provenance(expenseWrites, [
+              "purchaseId",
+              "amountMinor",
+            ]),
+          },
+        );
+        c.record(
+          allocationWrites,
+          "allocation",
+          {
+            purchaseId,
+            expenseId,
+            amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          },
+          {
+            provenance: provenance(allocationWrites, [
+              "purchaseId",
+              "expenseId",
+              "amountMinor",
+            ]),
+          },
+        );
+      }
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));
-      return c.done();
+      const desired = c.done();
+      return hooks.linked
+        ? { ...desired, records: [...desired.records].reverse() }
+        : desired;
     },
   });
 
@@ -337,6 +450,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         {
           entity: PURCHASE_TABLE,
           owning: PURCHASE_SCOPE,
+          scopes: [CATEGORY_SCOPE],
           fields: false,
           quality: false,
         },

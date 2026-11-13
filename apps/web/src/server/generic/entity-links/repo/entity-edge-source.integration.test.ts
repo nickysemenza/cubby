@@ -11,6 +11,7 @@ import {
   purchase,
   sourceTransactionRecord,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createOrReuseAttachedImage } from "~/server/domains/image/repo/image";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
@@ -417,10 +418,12 @@ describe("entity edge source", () => {
     const removed = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: dropped.id,
     });
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ deletedAt: new Date() })
-      .where(eq(purchase.id, removed.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { deletedAt: new Date() },
+      eq(purchase.id, removed.id),
+    );
     const orphans = await findOrphanEntities(ctx.db, { limit: 200 });
     const codes = orphans.items.map((entry) => entry.id);
     expect(codes).not.toContain(kept.shortcode);

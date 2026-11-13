@@ -348,69 +348,19 @@ Model admission rechecks its requesting Run before send. Consumers recheck Run
 and source fences before publishing an Answer's effect. Vector publication locks
 the current search document and verifies its revision inside the Pass claim fence.
 
-### Statement pages
+### Statement reconciliation
 
-`JOB_PAGE_LIMITS` (`packages/shared/src/job-page-limits.ts`) owns application
-page sizes. Statement generation and labeling scoped to an import process at
-most 64 charges per page (`statementApplicationsPerPage`), because each
-page applies money under one set of locks; unscoped generation selects at most 32
-(`statementGenerationPerPage`); explicit label limits remain available.
-Retained generation failures use the same limits. Both paths preserve the
-ordered population cursor and all remaining work; only a completed page
-advances its cursor.
+Statement observations discover `bankEvent` scopes; their FinancialTransactions
+discover `purchaseEvent` scopes. The kernel batches up to 64 scopes, loads the
+whole batch together and applies linked records, dependencies and audit rows in
+one bounded transaction. Input revision and dirty-sequence fences govern replay.
+Supported charges book automatically; gaps and baseline drift stay visible in
+machinery. Member actions append decisions and reconcile their scopes.
 
-Cooperative label pages stop starting model work and application after
-`cooperativePageBudgetMs` (a quarter of the Job lease); the rest of the lease
-covers work already started. A page settles at least one charge, then leaves
-the untouched suffix's receipts and inclusive cursor for the next page.
-
-Generation, label pages and retries publish and settle through one module
-(`statement-settlement.ts`), in every Sweep scope, so each Sweep books every
-eligible row. It walks the page's published receipts in page
-order. Independent as-is `create` rules commit together in one SERIALIZABLE
-transaction of at most 32 creates, one dependency layer per transaction: a
-create whose footprint (nearby candidate, copy or hold, Purchase, Vendor
-nearby spending or category, or a Vendor name another charge creates) meets an
-earlier charge's waits for a later transaction with a fresh snapshot. The
-transaction fences the Job once, rechecks statement scope once, takes every
-review, transfer-leg, evidence-source and occurrence lock in the
-single-review namespace order (sorted within each namespace), rebuilds its
-charges' proposals and spending under those locks, and writes the creates,
-bookings and Feedback together; the Job lock stays at commit. Any other rule
-applies alone through its own review in page order; creates it cannot affect
-may commit before it. A charge the page declined before writing applies alone
-in its own transaction. A divergence after writes rolls the transaction back
-to a savepoint, keeps the diverged charge for its own review and admits the
-rest again. One money transaction is in flight at a time.
-
-After each commit, the page's charges the writes affect are never admitted
-on what they published: generation republishes and re-admits them, and a
-label page relabels them in its next round, fenced by the receipt each
-replaces. Untouched no-action receipts complete afterwards in their own
-SERIALIZABLE transaction. A serialization failure or deadlock replays a page
-transaction once as two halves; a boundary that still conflicts ends
-`unfinished`, keeps its receipts and an inclusive cursor, and the page waits
-before the next attempt. After three pages make no progress at one cursor,
-its charges become retained failures and the cursor advances. Operation ids
-are fixed per rule revision and Suggestion, so a replayed transaction is
-idempotent. Each write's advisory refresh of pending charges near it on the
-account skips charges the same import observes, and runs once at the end of
-the page or label round. Interrupted pages replay their existing publications
-and effects through the same guards. Automatic-rule refusals return and log
-scrubbed causal diagnostics (including nested database messages and SQLSTATE
-codes); a refusal whose evidence or booking moved republishes current terms,
-and any other leaves the suggestion pending.
-
-Page caches and streamed fingerprints keep existing fingerprint bytes and never
-cross a money write; commit re-reads its evidence. None of these bounds is a
-Worker memory bound, and none relaxes a source, candidate, admission or money
-policy. The [statement Sweep contract](import-evidence-convergence.md#statement-sweeps)
-owns stored answers, settlement and scope.
-
-`Statement generation phase` and `Statement label application phase` logs
-enter each phase before awaiting it, so an invocation that exits early still
-shows where it was. Payloads contain only phase names, charge indices and
-aggregate counts, never source identities or content.
+The statement-budget utility measures load, fence, apply, dependencies and audit
+for synthetic 1, 8 and 32 charge pages, with a fixed page budget. Stored answers
+keep this proof independent of providers. [Statement booking](import-evidence-convergence.md#statement-booking)
+owns money policy and source identity.
 
 ## Wakes
 
@@ -981,15 +931,9 @@ paused time after the step starts; completed steps use their retained end time.
 Inputs are counted at step start; unstarted steps never read as zero-input
 work. Stored steps outside the current declaration/selection show separately
 as execution history, not future planned work. Scope summaries describe
-selected accounts/imports without exposing source IDs. Financial input links
-use declared `runStepInput` list predicates backed by the same SQL selectors as
-execution; they re-evaluate current eligibility under the stored Run scope and
-recorded cutoff, not an archived membership snapshot. Source-record lists show
-all live observations for selected charge keys, so their row count can exceed
-the input count. Suggestion stages link to this Run's related decisions, not an
-exact input population, and can show Suggestions other Runs published.
+the selected field targets. Suggestion stages link to this Run's related decisions.
 
-A Sweep covers statements and fields; its stored purpose is `sweep`. Field
+A Sweep covers fields;A Sweep covers statements and fields; its stored purpose is `sweep`. Field
 sweeps use the `field_roster` / `field_evaluate` steps. Start them with
 `run.sweep` and a field family containing entity, fields and filters; inspect
 and pause/resume them with regular Run reads and controls. There are no

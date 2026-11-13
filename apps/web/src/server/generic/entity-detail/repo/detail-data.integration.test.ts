@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import {
   createImageFixture,
@@ -129,10 +130,12 @@ describe("declared detail data", () => {
       cost: 300,
       productId: product.id,
     });
-    await unwrapDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(eq(expense.id, removed.entityId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { deletedAt: new Date() },
+      eq(expense.id, removed.entityId),
+    );
     await createRepoEntity(ctx, "expense", {
       trade: "other",
       purchaseId: purchase.output.id,

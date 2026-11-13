@@ -237,7 +237,8 @@ const runRead = {
           (entry) => entry.family === "statement_transaction",
         );
         const importId =
-          statement?.family === "statement_transaction"
+          statement?.family === "statement_transaction" &&
+          typeof statement.scope.importId === "string"
             ? statement.scope.importId
             : undefined;
         return importId ? [importId] : [];
@@ -321,7 +322,9 @@ const runRead = {
       const importId = sweepRunInput
         .safeParse(row.input)
         .data?.families.flatMap((entry) =>
-          entry.family === "statement_transaction" && entry.scope.importId
+          entry.family === "statement_transaction" &&
+          typeof entry.scope.importId === "string" &&
+          entry.scope.importId
             ? [entry.scope.importId]
             : [],
         )[0];

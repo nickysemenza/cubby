@@ -323,7 +323,7 @@ export const financialTransactionOut = withFieldEnvelopes(
   financialTransactionPublicReadFields,
 );
 
-export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
+const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 
 /**
  * Provider slugs seen in the wild. Advisory only — `source` is an open slug, not
@@ -464,9 +464,7 @@ export const financialTransactionImportPreviewOut = z.object({
     indistinguishableDuplicate: z.number().int(),
   }),
 });
-export type FinancialTransactionImportPreviewOut = z.infer<
-  typeof financialTransactionImportPreviewOut
->;
+
 const rawFinancialTransactionImportPreviewRow =
   financialTransactionImportPreviewRow.extend({
     existingTransactions: z

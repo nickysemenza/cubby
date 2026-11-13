@@ -46,6 +46,7 @@ import {
   user,
   vendorAccount,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { admitSupportingMailSource } from "~/server/domains/purchase-import/repo/mail-run-membership";
 
@@ -339,7 +340,7 @@ describe("Mail import source admission", () => {
       status: "researching",
     });
 
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "SYN-3",
     });

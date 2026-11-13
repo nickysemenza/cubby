@@ -31,6 +31,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
+import { dirtySourceOccurrences } from "./source-event-dirty";
 
 export type SourceJudgmentPatch = {
   accountId?: FinancialAccountId | null;
@@ -383,5 +384,9 @@ export async function updateSourceObservationJudgments(
   );
   if (changed.length || changedOwners.length)
     await recordChange(tx, { kind: "source", categories: [] });
+  await dirtySourceOccurrences(
+    tx,
+    changedOwners.map((owner) => owner.id),
+  );
   return { affected: changed.length };
 }

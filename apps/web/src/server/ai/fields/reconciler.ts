@@ -19,6 +19,7 @@ import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { FIELDS_SCOPE } from "@cubby/schemas/kernel/capability";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import { getTableColumns, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ModelInput } from "~/server/ai/model-asks";
@@ -78,6 +79,11 @@ type FieldsInput = {
 
 // Catalog membership, reference labels and inherited contexts used by field preparation.
 const fieldSourceTables = [...new Set(Object.values(SHORTCODE_TABLE))];
+const moneyHistoryTables = new Set<PgTable>([
+  SHORTCODE_TABLE.purchase,
+  SHORTCODE_TABLE.expense,
+  SHORTCODE_TABLE.financialTransaction,
+]);
 function fieldSources(plan: EntityFieldsPlan, field: FieldPlan) {
   const tables = new Set<import("drizzle-orm/pg-core").PgTable>();
   if (field.reference) tables.add(SHORTCODE_TABLE[field.reference]);
@@ -405,7 +411,10 @@ export function fieldsReconciler(
     reads: [
       // SAFETY: as above.
       ...fieldSourceTables.map((table) =>
-        source.table(table, Object.keys(getTableColumns(table)) as never[]),
+        (moneyHistoryTables.has(table) ? source.history : source.table)(
+          table,
+          Object.keys(getTableColumns(table)) as never[],
+        ),
       ),
       source.table(auditLog, ["changes"]),
       source.table(decision, ["subject", "field", "channel", "kind", "at"]),

@@ -744,7 +744,6 @@ describe("MCP catalog schemas", () => {
       "suggestions_read.list.recordIds",
       "suggestions.review.items[].operationId",
       // Preview consumes the same opaque Suggestion review handle as acceptance.
-      "finance_read.preview_suggestion.suggestionId",
       "suggestions.review.items[].suggestionId",
       // A Changes by Cubby row names the same opaque Suggestion handle.
       "suggestions.field_authority.suggestionId",

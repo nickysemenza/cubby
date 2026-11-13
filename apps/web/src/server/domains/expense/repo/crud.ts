@@ -32,6 +32,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   notDeleted,
   unwrapDb,
   withTransaction,
@@ -45,6 +46,8 @@ import {
   requireLineRoleClassifier,
   type ExpenseLineRoleClassifier,
 } from "~/server/domains/expense/repo/line-role-classifier";
+import { createPurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   assertExplicitSourceClaimsForAmountChange,
   replaceLedgerSourceClaims,
@@ -70,7 +73,6 @@ import {
   defineMutationWriter,
   type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   computeChanges,
@@ -83,7 +85,6 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   expenseInheritanceReadExtras,
@@ -134,33 +135,33 @@ const resolveLivePurchaseId = (
   shortcode: PurchaseShortcode,
 ): Promise<PurchaseId> => resolveOrThrow(tx, "purchase", shortcode);
 
+const expenseUpdateValues = (data: ResolvedExpenseUpdate) =>
+  buildPartialUpdateValues({
+    spendingCategoryId: data.spendingCategoryId,
+    economicRole: data.economicRole,
+    name: data.name,
+    cost:
+      data.cost === undefined ? undefined : nullableWholeCentToMinor(data.cost),
+    date: data.date,
+    lineKind: data.lineKind,
+    lineBasis: data.lineBasis,
+    costType: data.costType,
+    trade: data.trade,
+    url: data.url,
+    notes: data.notes,
+    future: data.future,
+    projectId: data.projectId,
+    productId: data.productId,
+    productQuantity: data.productQuantity,
+    purchaseId: data.purchaseId,
+  });
+
 const expenseCrud = createEntityCrud({
   table: expense,
   entity: "expense",
   scaffold: expenseScaffold,
   output: rawExpenseOut,
-  toUpdate: (data: ResolvedExpenseUpdate) =>
-    buildPartialUpdateValues({
-      spendingCategoryId: data.spendingCategoryId,
-      economicRole: data.economicRole,
-      name: data.name,
-      cost:
-        data.cost === undefined
-          ? undefined
-          : nullableWholeCentToMinor(data.cost),
-      date: data.date,
-      lineKind: data.lineKind,
-      lineBasis: data.lineBasis,
-      costType: data.costType,
-      trade: data.trade,
-      url: data.url,
-      notes: data.notes,
-      future: data.future,
-      projectId: data.projectId,
-      productId: data.productId,
-      productQuantity: data.productQuantity,
-      purchaseId: data.purchaseId,
-    }),
+  toUpdate: expenseUpdateValues,
   auditUpdateFields: [...entityFieldModels.expense.audit],
 });
 
@@ -655,6 +656,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "beneficiary",
           beneficiaries ?? [],
+          actor,
         );
       }
       if (funders !== undefined) {
@@ -663,6 +665,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "funder",
           funders ?? [],
+          actor,
         );
       }
       if (sourceClaims !== undefined) {
@@ -773,13 +776,13 @@ export const updateExpense = defineMutationWriter({
             ? (state.qualityBefore?.purchaseId ?? null)
             : explicitPurchaseId,
         );
-        const receipt = await expenseCrud.update(
-          tx,
-          state.id,
-          update,
+        await updatePurchaseEventRecords(
+          databaseForTransaction(tx),
+          "expense",
+          [{ id: state.id, values: expenseUpdateValues(update) }],
           actor,
-          async (_db, receipt) => receipt,
         );
+        const receipt = { entityId: state.id };
         // A Product or category change can put a Product where its spending
         // category forbids one.
         await validateProductPolicy(tx, { expenseIds: [state.id] });
@@ -844,13 +847,13 @@ export const updateExpense = defineMutationWriter({
           ? (state.qualityBefore?.purchaseId ?? null)
           : resolved,
       );
-      const receipt = await expenseCrud.update(
-        tx,
-        state.id,
-        update,
+      await updatePurchaseEventRecords(
+        databaseForTransaction(tx),
+        "expense",
+        [{ id: state.id, values: expenseUpdateValues(update) }],
         actor,
-        async (_db, receipt) => receipt,
       );
+      const receipt = { entityId: state.id };
       // A Product or category change can put a Product where its spending
       // category forbids one; a folded superseded charge can reclassify the
       // target Purchase's other lines, so check it whole once this line lands.
@@ -1007,6 +1010,7 @@ async function writeNewExpenseLedgerRows(
   tx: DrizzleTransaction,
   inputs: readonly ExpenseCreateInput[],
   created: readonly { id: ExpenseId }[],
+  actor: ActorContext,
 ) {
   for (const [index, data] of inputs.entries()) {
     const expenseId = created[index]!.id;
@@ -1016,6 +1020,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "beneficiary",
         data.beneficiaries,
+        actor,
       );
     if (data.funders?.length)
       await replaceExpenseAttributionRole(
@@ -1023,6 +1028,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "funder",
         data.funders,
+        actor,
       );
     if (data.sourceClaims?.length)
       await replaceLedgerSourceClaims(
@@ -1031,70 +1037,6 @@ async function writeNewExpenseLedgerRows(
         data.sourceClaims,
       );
   }
-}
-
-/**
- * Principal Expenses without a Product, staged in a write layer on resolved
- * references: `createExpenses`' checks, values, attribution rows and create
- * audit. Booking lineage is stored with the row. Insert the layer's
- * Purchases first: inheritance validation reads them.
- */
-export function stageExpenses(
-  layer: WriteLayer,
-  items: readonly {
-    data: ExpenseCreateInput;
-    projectId: ProjectId | null;
-    purchaseId: PurchaseId;
-    spendingCategoryId: SpendingCategoryId | null;
-    bookingTransactionCode: string | null;
-  }[],
-) {
-  const tuples = items.map(({ data, projectId, purchaseId }) => {
-    if (data.productId || data.lineKind === undefined)
-      throw new Error("Staged Expenses are classified lines without a Product");
-    return expenseCreateTuple(data, {
-      lineKind: resolveExpenseLineKind({
-        lineKind: data.lineKind,
-        productId: null,
-      }),
-      projectId,
-      productId: null,
-      purchaseId,
-    });
-  });
-  const staged = layer.stage(
-    "expense",
-    items.map((item, index) => ({
-      ...expenseInsertValues(
-        item.data,
-        tuples[index]!,
-        item.spendingCategoryId,
-      ),
-      bookingTransactionCode: item.bookingTransactionCode,
-    })),
-  );
-  return { staged, tuples };
-}
-
-/** Validate and insert staged Expenses, then their attribution rows and audit. */
-export async function insertStagedExpenses(
-  layer: WriteLayer,
-  stagedExpenses: ReturnType<typeof stageExpenses>,
-  inputs: readonly ExpenseCreateInput[],
-  actor: ActorContext,
-) {
-  await validateExpenseInheritances(layer.tx, stagedExpenses.tuples);
-  const created = await layer.insert("expense", stagedExpenses.staged);
-  await writeNewExpenseLedgerRows(layer.tx, inputs, created);
-  layer.audit(
-    actor,
-    created.map((row) => ({
-      entityKind: "expense" as const,
-      entityId: row.id,
-      action: "create" as const,
-    })),
-  );
-  return created;
 }
 
 export async function createExpenses(
@@ -1173,14 +1115,15 @@ export async function createExpenses(
       "spendingCategory",
       inputs.map((data) => data.spendingCategoryId),
     );
-    const created = await insertManyWithShortcode(
+    const created = await createPurchaseEventRecords(
       tx,
       "expense",
       inputs.map((data, index) =>
         expenseInsertValues(data, tuples[index]!, categoryIds[index]!),
       ),
+      actor,
     );
-    await writeNewExpenseLedgerRows(tx, inputs, created);
+    await writeNewExpenseLedgerRows(tx, inputs, created, actor);
     await logAuditEntries(
       tx,
       actor,

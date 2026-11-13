@@ -38,6 +38,10 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
@@ -218,10 +222,12 @@ describe("reviewed accepted source Product association", () => {
     if (!association || !isLiveSourceOrder(association) || !item)
       throw new Error("Synthetic accepted item missing");
     if (linked)
-      await db
-        .update(expense)
-        .set({ productId: photographed.entityId, productQuantity: 2 })
-        .where(eq(expense.id, item.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { productId: photographed.entityId, productQuantity: 2 },
+        eq(expense.id, item.id),
+      );
     const retainedItem = multi
       ? await db.query.expense
           .findFirst({
@@ -760,7 +766,7 @@ describe("reviewed accepted source Product association", () => {
     audits: await w.db.select().from(auditLog),
   });
   const driftAcceptedExpense = async (
-    w: World,
+    _w: World,
     item: World["item"],
     change: "title" | "role" | "basis" | "ledger claim",
   ) => {
@@ -788,20 +794,20 @@ describe("reviewed accepted source Product association", () => {
       );
       return;
     }
-    await w.db
-      .update(expense)
-      .set(
-        change === "title"
-          ? { name: "Synthetic different item" }
-          : change === "role"
-            ? { economicRole: "reimbursement" }
-            : {
-                lineBasis: "allocation",
-                productId: null,
-                productQuantity: null,
-              },
-      )
-      .where(eq(expense.id, item.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      change === "title"
+        ? { name: "Synthetic different item" }
+        : change === "role"
+          ? { economicRole: "reimbursement" }
+          : {
+              lineBasis: "allocation",
+              productId: null,
+              productQuantity: null,
+            },
+      eq(expense.id, item.id),
+    );
   };
   /** Make the accepted source's claim a historical alias of a new canonical root. */
   const linkCanonicalRoot = async (
@@ -849,10 +855,12 @@ describe("reviewed accepted source Product association", () => {
         const unrelated = await insertWithShortcode(ctx.db, "vendor", {
           name: "Synthetic unrelated retailer",
         });
-        await w.db
-          .update(purchase)
-          .set({ vendorId: unrelated.id })
-          .where(eq(purchase.id, w.association.purchaseId));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "purchase",
+          { vendorId: unrelated.id },
+          eq(purchase.id, w.association.purchaseId),
+        );
       },
     },
     {
@@ -1102,7 +1110,7 @@ describe("reviewed accepted source Product association", () => {
       let survivingPurchase = w.association.purchaseId;
       for (let step = 0; step < 2; step++) {
         if (kind === "purchase") {
-          const keeper = await insertWithShortcode(ctx.db, "purchase", {
+          const keeper = await createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId: w.vendor.id,
             date: "2026-09-01",
             orderId: null,
@@ -1256,10 +1264,12 @@ describe("reviewed accepted source Product association", () => {
     const claim = await w.db.query.importSourceClaim.findFirst();
     if (!claim || !w.association.originalOrder)
       throw new Error("Synthetic accepted source missing");
-    await w.db
-      .update(purchase)
-      .set({ vendorAccountId: loserAccount.id })
-      .where(eq(purchase.id, w.association.purchaseId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: loserAccount.id },
+      eq(purchase.id, w.association.purchaseId),
+    );
     await w.db
       .update(importSourceClaim)
       .set({ vendorAccountId: loserAccount.id })
@@ -1567,17 +1577,19 @@ describe("reviewed accepted source Product association", () => {
       const w = await world(false, true);
       if (!w.retainedItem) throw new Error("Synthetic retained line missing");
       if (kind === "changed cost")
-        await w.db
-          .update(expense)
-          .set({ cost: 2100n })
-          .where(eq(expense.id, w.retainedItem.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { cost: 2100n },
+          eq(expense.id, w.retainedItem.id),
+        );
       else if (kind === "missing")
         await w.db
           .update(expense)
           .set({ deletedAt: new Date() })
           .where(eq(expense.id, w.retainedItem.id));
       else
-        await insertWithShortcode(ctx.db, "expense", {
+        await createPurchaseEventRecord(ctx.db, "expense", {
           name: "Synthetic retained item",
           cost: 2000n,
           date: w.retainedItem.date,
@@ -1623,10 +1635,12 @@ describe("reviewed accepted source Product association", () => {
     expect((await w.commit()).alreadyApplied).toBe(true);
     expect(await w.snapshot()).toEqual(after);
     // A replay revalidates the bound item itself, not a caller token.
-    await w.db
-      .update(expense)
-      .set({ cost: 4100n })
-      .where(eq(expense.id, w.item.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 4100n },
+      eq(expense.id, w.item.id),
+    );
     const changed = await w.snapshot();
     await expect(w.commit()).rejects.toThrow(/preserve|amount/i);
     expect(await w.snapshot()).toEqual(changed);
@@ -1704,10 +1718,12 @@ describe("reviewed accepted source Product association", () => {
       const w = await world(false, true);
       if (!w.retainedItem) throw new Error("Synthetic retained item missing");
       for (const item of [w.item, w.retainedItem])
-        await w.db
-          .update(expense)
-          .set({ name: `  ${item.name.replaceAll(" ", "  ")}  ` })
-          .where(eq(expense.id, item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { name: `  ${item.name.replaceAll(" ", "  ")}  ` },
+          eq(expense.id, item.id),
+        );
       const resolution =
         choice === "new" ? w.newProductResolution : w.resolution;
       const before = await refusalSnapshot(w);
@@ -1776,7 +1792,7 @@ describe("reviewed accepted source Product association", () => {
 
   it("creates a reviewed new Product from known accepted preparation and replays with conserved ledger evidence", async () => {
     const w = await world(false, true);
-    await w.db.insert(expenseAttribution).values([
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
         expenseId: w.item.id,
         role: "beneficiary",
@@ -1882,20 +1898,26 @@ describe("reviewed accepted source Product association", () => {
       const w = await world();
       await w.commit(w.newProductResolution);
       if (change === "quantity")
-        await w.db
-          .update(expense)
-          .set({ productQuantity: 3 })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { productQuantity: 3 },
+          eq(expense.id, w.item.id),
+        );
       if (change === "name")
-        await w.db
-          .update(expense)
-          .set({ name: "Synthetic different item" })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { name: "Synthetic different item" },
+          eq(expense.id, w.item.id),
+        );
       if (change === "economic role")
-        await w.db
-          .update(expense)
-          .set({ economicRole: "reimbursement" })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { economicRole: "reimbursement" },
+          eq(expense.id, w.item.id),
+        );
       if (change === "ledger claim")
         await updateExpense(
           ctx.db,
@@ -2128,10 +2150,12 @@ describe("reviewed accepted source Product association", () => {
         (row) => row.productId !== null,
       ),
     ).toEqual([]);
-    await w.db
-      .update(expense)
-      .set({ productId: null, productQuantity: null })
-      .where(eq(expense.id, w.item.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productId: null, productQuantity: null },
+      eq(expense.id, w.item.id),
+    );
     const snapshot = async () => ({
       ledger: await w.snapshot(),
       products: await w.db.select().from(product),
@@ -2156,19 +2180,15 @@ describe("reviewed accepted source Product association", () => {
       ledgerPartyId: w.party.id,
       identity: { kind: "credit_card", network: "visa" },
     });
-    const transaction = await insertWithShortcode(
-      ctx.db,
-      "financialTransaction",
-      {
-        accountId: account.id,
-        kind: "purchase",
-        status: "posted",
-        amount: moneyToMinor(40),
-        postedDate: "2026-09-02",
-        merchant: "Synthetic retailer",
-      },
-    );
-    await w.db.insert(financialTransactionAllocation).values({
+    const transaction = await seedBankTransaction(ctx.db, {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: moneyToMinor(40),
+      postedDate: "2026-09-02",
+      merchant: "Synthetic retailer",
+    });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
       transactionId: transaction.id,
       purchaseId: w.association.purchaseId,
       amountMinor: moneyToMinor(40),
@@ -2332,10 +2352,12 @@ describe("reviewed accepted source Product association", () => {
         lineKind: "principal" as const,
       };
       if (cause === "item mismatch")
-        await w.db
-          .update(expense)
-          .set({ name: "Synthetic changed item" })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { name: "Synthetic changed item" },
+          eq(expense.id, w.item.id),
+        );
       if (
         cause === "competing Product binding" ||
         cause === "unknown-history Product binding"
@@ -2484,25 +2506,31 @@ describe("reviewed accepted source Product association", () => {
       const w = await world(change === "quantity");
       await w.prepare();
       if (change === "cost")
-        await w.db
-          .update(expense)
-          .set({ cost: 4100n })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { cost: 4100n },
+          eq(expense.id, w.item.id),
+        );
       if (change === "quantity")
-        await w.db
-          .update(expense)
-          .set({ productQuantity: 3 })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { productQuantity: 3 },
+          eq(expense.id, w.item.id),
+        );
       if (change === "different Product") {
         const other = await createProductFixture(
           ctx.db,
           makeProductInput({ name: "Synthetic other bound item" }),
           ctx.actor,
         );
-        await w.db
-          .update(expense)
-          .set({ productId: other.entityId, productQuantity: 2 })
-          .where(eq(expense.id, w.item.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { productId: other.entityId, productQuantity: 2 },
+          eq(expense.id, w.item.id),
+        );
       }
       if (change === "ownership") {
         const other = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -2524,10 +2552,12 @@ describe("reviewed accepted source Product association", () => {
 
   it("refuses an existing quantity disagreement instead of stamping an association", async () => {
     const w = await world(true);
-    await w.db
-      .update(expense)
-      .set({ productQuantity: 3 })
-      .where(eq(expense.id, w.item.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productQuantity: 3 },
+      eq(expense.id, w.item.id),
+    );
     await expect(w.prepare()).rejects.toThrow(/quantity|preserve/i);
     expect((await w.snapshot()).expenses[0]?.productId).toBe(
       w.photographed.entityId,

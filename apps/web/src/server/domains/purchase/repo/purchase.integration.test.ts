@@ -29,6 +29,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { readExpense } from "~/server/domains/expense/repo/crud";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   linkExpensesToPurchaseWorkflow,
   splitExpenseWorkflow,
@@ -536,10 +537,12 @@ describe("purchase repository — mergePurchases", () => {
       );
       locked.resolve(z.object({ pid: z.number() }).parse(result[0]).pid);
       await release.promise;
-      await tx
-        .update(purchase)
-        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
-        .where(eq(purchase.id, keeper.entityId));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        { notes: sql`${purchase.notes} || E'\nConcurrent research'` },
+        eq(purchase.id, keeper.entityId),
+      );
     });
     const pid = await locked.promise;
     const folding = withTransaction(ctx.db, (tx) =>

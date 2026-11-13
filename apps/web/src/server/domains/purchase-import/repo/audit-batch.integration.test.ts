@@ -13,6 +13,8 @@ import {
   importSourceClaim,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -45,10 +47,12 @@ describe("purchase audit restart recovery", () => {
       auditLogged: true,
     });
     const successor = await successorFor(f);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ productId: null, productQuantity: null, costType: "services" })
-      .where(eq(expense.purchaseId, f.order.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productId: null, productQuantity: null, costType: "services" },
+      eq(expense.purchaseId, f.order.id),
+    );
     const [claim] = await getDb(ctx.db)
       .insert(importSourceClaim)
       .values({
@@ -87,7 +91,7 @@ describe("purchase audit restart recovery", () => {
     const successor = await successorFor(f);
     const ids = [f.order.id];
     for (let index = 0; index < 26; index++) {
-      const order = await insertWithShortcode(ctx.db, "purchase", {
+      const order = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: f.order.vendorId,
         orderId: `SYNTHETIC-RETRY-${index}`,
         date: "2026-09-01",
@@ -229,7 +233,7 @@ describe("purchase audit restart recovery", () => {
       .update(run)
       .set({ purpose: "file_import", agentSessionId: null })
       .where(inArray(run.id, [f.parent.id, successor.id]));
-    const writable = await insertWithShortcode(ctx.db, "purchase", {
+    const writable = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: f.order.vendorId,
       orderId: "SYNTHETIC-SUCCESSOR",
       date: "2026-09-01",

@@ -1,4 +1,7 @@
-import { moneyToMinor } from "@cubby/shared";
+import { buildEntity } from "tooling/factories/build";
+import { createBankTransactions } from "~/server/domains/financial-transaction/repo/bank-mutations";
+import { createPurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { moneyToMinor, minorToMoney } from "@cubby/shared";
 import { randomUUID, createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -698,13 +701,53 @@ export async function seedPerformanceCorpus(
       endedAt: new Date("2026-01-16T12:01:00Z"),
     });
   }
+  // Money identities come from the owning reconciler. Rewrite the synthetic
+  // graph after each creation phase so all retained references use those ids.
+  const remapMoney = (
+    before: readonly { id?: string; shortcode?: string }[],
+    after: readonly { id: string; shortcode: string }[],
+  ) => {
+    const replacements = new Map<string, string>();
+    for (const [index, row] of before.entries()) {
+      const saved = after[index];
+      if (!saved) throw new Error("Synthetic money batch lost a record");
+      if (row.id) replacements.set(row.id, saved.id);
+      if (row.shortcode) replacements.set(row.shortcode, saved.shortcode);
+    }
+    const rewrite = (value: unknown): void => {
+      if (!value || typeof value !== "object" || value instanceof Date) return;
+      for (const [key, item] of Object.entries(value)) {
+        if (typeof item === "string" && replacements.has(item))
+          Reflect.set(value, key, replacements.get(item));
+        else rewrite(item);
+      }
+    };
+    rewrite([
+      purchases,
+      expenses,
+      transactions,
+      allocations,
+      parcels,
+      packages,
+      observations,
+      captureMemberships,
+      mails,
+      emails,
+      sourceOrders,
+      claims,
+      receipts,
+      attachments,
+      refs,
+      audits,
+    ]);
+  };
   await withTransaction(db, async (tx) => {
     // A full corpus exceeds Postgres's bind limit with three binds per row.
     // One JSON input preserves the bulk write and its ordinary FK/unique checks.
     await tx.execute(sql`
       INSERT INTO "Entity" ("id", "kind", "shortcode")
       SELECT "id"::uuid, "kind", "shortcode"
-      FROM jsonb_to_recordset(${JSON.stringify(identities)}::jsonb)
+      FROM jsonb_to_recordset(${JSON.stringify(identities.filter((row) => !["purchase", "expense", "financialTransaction"].includes(row.kind)))}::jsonb)
         AS identities("id" text, "kind" text, "shortcode" text)
     `);
     await tx.insert(vendor).values(suppliers);
@@ -757,7 +800,15 @@ export async function seedPerformanceCorpus(
     await batches(inventory, (rows) => tx.insert(inventoryEntry).values(rows));
     // Run-routed Purchases reference their Run.
     await batches(runs, (rows) => tx.insert(run).values(rows));
-    await batches(purchases, (rows) => tx.insert(purchase).values(rows));
+    await batches(purchases, async (rows) => {
+      const saved = await createPurchaseEventRecords(
+        databaseForTransaction(tx),
+        "purchase",
+        rows,
+        context.actorContext,
+      );
+      remapMoney(rows, saved);
+    });
     await batches(parcels, (rows) => tx.insert(shipment).values(rows));
     await tx.insert(shipmentSourceCapture).values(trackingCapture);
     await batches(packages, (rows) =>
@@ -770,18 +821,57 @@ export async function seedPerformanceCorpus(
       tx.insert(shipmentObservationCapture).values(rows),
     );
 
-    await batches(expenses, (rows) => tx.insert(expense).values(rows));
+    await batches(expenses, async (rows) => {
+      const saved = await createPurchaseEventRecords(
+        databaseForTransaction(tx),
+        "expense",
+        rows,
+        context.actorContext,
+      );
+      remapMoney(rows, saved);
+    });
     await batches(images, (rows) => tx.insert(image).values(rows));
     await batches(attachments, (rows) =>
       tx.insert(entityAttachment).values(rows),
     );
     await batches(mails, (rows) => tx.insert(orderMail).values(rows));
     await batches(emails, (rows) => tx.insert(email).values(rows));
-    await batches(transactions, (rows) =>
-      tx.insert(financialTransaction).values(rows),
-    );
+    await batches(transactions, async (rows) => {
+      const inputs = rows.map((row) => {
+        const account = tenders.find((account) => account.id === row.accountId);
+        if (!account) throw new Error("Synthetic payment account is missing");
+        const { accountId: _accountCode, ...data } = buildEntity(
+          "financialTransaction",
+          {
+            accountId: account.shortcode,
+            kind: row.kind,
+            status: row.status,
+            amount: minorToMoney(row.amount),
+            transactionDate: row.transactionDate,
+            postedDate: row.postedDate,
+            merchant: row.merchant,
+            sourceRefs: [],
+            allocations: [],
+          },
+        );
+        return { data, accountId: row.accountId };
+      });
+      remapMoney(
+        rows,
+        await createBankTransactions(
+          databaseForTransaction(tx),
+          inputs,
+          context.actorContext,
+        ),
+      );
+    });
     await batches(allocations, (rows) =>
-      tx.insert(financialTransactionAllocation).values(rows),
+      createPurchaseEventRecords(
+        databaseForTransaction(tx),
+        "FinancialTransactionAllocation",
+        rows,
+        context.actorContext,
+      ),
     );
     await batches(claims, (rows) => tx.insert(importSourceClaim).values(rows));
     await batches(sourceOrders, (rows) =>

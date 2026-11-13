@@ -54,6 +54,9 @@ import {
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   readRetainedMail,
   retainedMailJoin,
@@ -107,7 +110,7 @@ describe("public mail tool", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Package Shop",
     });
-    const target = await insertWithShortcode(ctx.db, "purchase", {
+    const target = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "SYN-SPLIT-101",
     });
@@ -400,7 +403,7 @@ describe("public mail tool", () => {
     const seller = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic marketplace",
     });
-    const target = await insertWithShortcode(ctx.db, "purchase", {
+    const target = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: seller.id,
       orderId: "SYNTHETIC-SALE",
     });
@@ -559,7 +562,7 @@ describe("public mail tool", () => {
     });
     const purchases = await Promise.all(
       ["PARTIAL-1", "PARTIAL-2"].map((orderId) =>
-        insertWithShortcode(ctx.db, "purchase", {
+        createPurchaseEventRecord(ctx.db, "purchase", {
           vendorId: seller.id,
           orderId,
         }),
@@ -578,7 +581,7 @@ describe("public mail tool", () => {
         ledgerPartyId: party.id,
       },
     );
-    const refund = await insertWithShortcode(ctx.db, "financialTransaction", {
+    const refund = await seedBankTransaction(ctx.db, {
       accountId: refundAccount.id,
       amount: moneyToMinor(-4),
       kind: "refund",
@@ -586,13 +589,11 @@ describe("public mail tool", () => {
       transactionDate: "2026-10-08",
       postedDate: "2026-10-08",
     });
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: refund.id,
-        purchaseId: purchases[0]!.id,
-        amountMinor: moneyToMinor(-4),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: refund.id,
+      purchaseId: purchases[0]!.id,
+      amountMinor: moneyToMinor(-4),
+    });
     const settlement = {
       refundAmount: -4,
       associations: [
@@ -687,7 +688,7 @@ describe("public mail tool", () => {
     });
     const purchases = await Promise.all(
       ["FIRST", "SECOND"].map((orderId) =>
-        insertWithShortcode(ctx.db, "purchase", {
+        createPurchaseEventRecord(ctx.db, "purchase", {
           vendorId: seller.id,
           orderId,
         }),
@@ -776,7 +777,7 @@ describe("public mail tool", () => {
     });
     const refunds = await Promise.all(
       purchases.map((_row, i) =>
-        insertWithShortcode(ctx.db, "financialTransaction", {
+        seedBankTransaction(ctx.db, {
           accountId: account.id,
           amount: moneyToMinor(i === 0 ? -3 : -7),
           kind: "refund",
@@ -786,19 +787,19 @@ describe("public mail tool", () => {
         }),
       ),
     );
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values(
-        refunds.map((row, i) => {
-          const purchased = purchases[i];
-          if (!purchased) throw new Error("Synthetic refund Purchase missing");
-          return {
-            transactionId: row.id,
-            purchaseId: purchased.id,
-            amountMinor: row.amount,
-          };
-        }),
-      );
+    await insertPurchaseEventRows(
+      ctx.db,
+      "FinancialTransactionAllocation",
+      refunds.map((row, i) => {
+        const purchased = purchases[i];
+        if (!purchased) throw new Error("Synthetic refund Purchase missing");
+        return {
+          transactionId: row.id,
+          purchaseId: purchased.id,
+          amountMinor: row.amount,
+        };
+      }),
+    );
     const financialBefore = await getDb(ctx.db)
       .select()
       .from(financialTransaction);
@@ -1903,7 +1904,7 @@ describe("public mail tool", () => {
       const seller = await insertWithShortcode(ctx.db, "vendor", {
         name: "Synthetic protected seller",
       });
-      const positive = await insertWithShortcode(ctx.db, "purchase", {
+      const positive = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: seller.id,
         orderId: "PROTECTED-ORDER",
       });

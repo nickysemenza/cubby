@@ -33,7 +33,6 @@ const source: WorkSource = {
   reasons: Object.entries({
     field: "Pending field suggestions",
     recommendation: "Pending connection suggestions",
-    statement_transaction: "Pending statement transactions",
     transfer_pair: "Pending transfer pairs",
     product_pair: "Pending product pairs",
     [UNAPPLIED_CORRECTION_REASON]: "Unapplied member correction",

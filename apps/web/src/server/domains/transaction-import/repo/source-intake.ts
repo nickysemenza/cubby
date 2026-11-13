@@ -27,18 +27,6 @@ export async function recordSourceTransactionRecords(
     },
     { isolationLevel: "serializable" },
   );
-  const { occurrenceCodes, ...receipt } = result;
-  const { reconcileRecordedFinancialEvidence } =
-    await import("./statement-evidence-correction");
-  return {
-    ...receipt,
-    correctionReviews: input.dryRun
-      ? []
-      : await reconcileRecordedFinancialEvidence(
-          db,
-          input.import.source,
-          occurrenceCodes,
-          actor,
-        ),
-  };
+  const { occurrenceCodes: _occurrenceCodes, ...receipt } = result;
+  return receipt;
 }

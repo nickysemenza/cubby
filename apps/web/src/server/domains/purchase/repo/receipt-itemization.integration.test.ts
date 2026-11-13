@@ -2,6 +2,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   createImageFixture,
@@ -22,11 +23,11 @@ describe("receipt Purchase itemization", () => {
         name: `Receipt shop ${itemizationExpectation}`,
         itemizationExpectation,
       });
-      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-01",
       });
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Store visit",

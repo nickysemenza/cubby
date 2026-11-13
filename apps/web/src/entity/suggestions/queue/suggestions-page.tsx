@@ -1,5 +1,4 @@
 import {
-  type SuggestionGroup,
   type SuggestionListFamily,
   type SuggestionListFilters,
   type SuggestionListOut,
@@ -7,18 +6,11 @@ import {
   suggestionListInput,
   suggestionCountsInput,
 } from "@cubby/schemas/suggestion-list";
-import {
-  suggestionAccountMonthGroup,
-  suggestionFilterDeclaration,
-} from "@cubby/schemas/suggestion-list-declarations";
+import { suggestionFilterDeclaration } from "@cubby/schemas/suggestion-list-declarations";
 import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQueries,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   useCallback,
   useMemo,
@@ -31,7 +23,6 @@ import { z } from "zod";
 import { AuditLogList } from "~/entity/audit-log/audit-log-list";
 import { useDeferredEntityRosters } from "~/entity/hooks/use-deferred-reference-filter-options";
 import { useInfiniteTableListScope } from "~/entity/hooks/use-infinite-table-list";
-import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { Page, usePageCount } from "~/entity/page/page";
 import { FindSuggestionsDialog } from "~/entity/suggestions/find-suggestions-dialog";
 import { ListWorkbench } from "~/entity/table/list-workbench";
@@ -47,11 +38,10 @@ import {
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
-import { formatCount, formatCurrency } from "~/lib/number-format";
+import { formatCount } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import { countedGroupPage } from "~/ui/data-table/counted-group-page";
 import {
   selectedValues,
   sideValues,
@@ -59,7 +49,6 @@ import {
 } from "~/ui/data-table/filter-bar-core";
 import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
-import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { RemoveButton } from "~/ui/forms/remove-button";
 import { Panel } from "~/ui/layout";
@@ -90,7 +79,6 @@ import { parseRecordParam, type SuggestionsSearch } from "./suggestions-search";
 import { SweepStatusLine, useRunningSweep } from "./sweep-status";
 
 type Row = SuggestionListRow;
-const NO_GROUPS: SuggestionGroup[] = [];
 
 type ScopeFilters = z.input<typeof suggestionCountsInput>;
 
@@ -152,7 +140,6 @@ function StatusTabs({
 type QueryFilters = {
   scope: ScopeFilters;
   view: SuggestionView;
-  grouped: boolean;
   values: Partial<SuggestionListFilters>;
 };
 
@@ -163,7 +150,6 @@ const ORDER_OPTIONS: PickerOption[] = suggestionFilterDeclaration.sorts
 type SuggestionTablePage = Omit<SuggestionListOut, "meta"> & {
   meta: ListQueryResponse<Row>["meta"] &
     Pick<SuggestionListOut["meta"], "cleanCount">;
-  statementGroups?: SuggestionGroup[];
 };
 const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
   filters,
@@ -176,7 +162,6 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
     sort,
     offset: pagination.pageIndex * pagination.pageSize,
     limit: pagination.pageSize,
-    ...(filters.grouped ? { group: "account_month" } : {}),
   });
   const options = suggestions.list.queryOptions(input);
   return {
@@ -187,22 +172,11 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
         signal,
         consistency,
       });
-      const grouping = result.meta.groups
-        ? countedGroupPage({
-            groups: result.meta.groups,
-            ids: result.items.map((row) => row.id),
-            offset: result.meta.pageIndex * result.meta.pageSize,
-            totalCount: result.meta.totalCount,
-          })
-        : {};
       return {
         ...result,
-        statementGroups: result.meta.groups,
         meta: {
           ...result.meta,
           hasNextPage: result.next !== null,
-          groups: undefined,
-          ...grouping,
         },
       };
     },
@@ -210,17 +184,6 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
 };
 
 /** `2026-05` → `May 2026`, read in UTC so the month never shifts. */
-const monthLabel = (month: string) => {
-  const [year, index] = month.split("-").map(Number);
-  if (!year || !index) return month;
-  return new Date(Date.UTC(year, index - 1, 1)).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
-};
-
-const ACCOUNT_MONTH_CHOICE: GroupConfig["choice"] = suggestionAccountMonthGroup;
 
 /**
  * Focus that owns the arrow keys: text entry, a picker, a menu, a dialog,
@@ -273,9 +236,7 @@ export function SuggestionsPage({
         open={finding}
         onOpenChange={setFinding}
         preset={
-          search.family === "field" || search.family === "statement_transaction"
-            ? { families: [search.family] }
-            : undefined
+          search.family === "field" ? { families: [search.family] } : undefined
         }
         onStarted={(runId) => onSearch({ sweep: runId })}
       />
@@ -294,12 +255,12 @@ export function SuggestionsPage({
         ) : null}
         {
           <ScopeChips
+            onSearch={onSearch}
             search={
               search.status === "automatic"
                 ? { ...search, runId: undefined }
                 : search
             }
-            onSearch={onSearch}
           />
         }
       </div>
@@ -315,7 +276,6 @@ export function SuggestionsPage({
           // Each view owns its own columns, filter URL keys and selection.
           key={viewOf(search)}
           search={search}
-          onSearch={onSearch}
         />
       )}
     </Page>
@@ -428,7 +388,7 @@ function ScopeChips({
 const QUICK_FILTERS = {
   all: ["strength"],
   field: ["entity", "field", "kind"],
-  statement_transaction: ["clean", "action", "kind", "account", "owner"],
+
   recommendation: ["relation", "entityKind"],
   transfer_pair: ["clean", "strength", "owner"],
 } satisfies Partial<Record<SuggestionView, readonly string[]>>;
@@ -499,16 +459,8 @@ function QuickFilters({
   );
 }
 
-function SuggestionsTable({
-  search,
-  onSearch,
-}: {
-  search: SuggestionsSearch;
-  onSearch: (patch: Partial<SuggestionsSearch>, replace?: boolean) => void;
-}) {
+function SuggestionsTable({ search }: { search: SuggestionsSearch }) {
   const view = viewOf(search);
-  const grouped =
-    view === "statement_transaction" && search.group === "account_month";
   const tableState = useTableState({
     initialSort: "ready",
     initialSortDesc: true,
@@ -521,10 +473,9 @@ function SuggestionsTable({
     (state: TableStateReturn): QueryFilters => ({
       scope,
       view,
-      grouped,
       values: buildSuggestionFilters(view, state),
     }),
-    [scope, view, grouped],
+    [scope, view],
   );
   const reviewScope = useInfiniteTableListScope({
     queryOptions: queryPlan,
@@ -539,8 +490,6 @@ function SuggestionsTable({
     <SuggestionReviewProvider scope={reviewScope}>
       <SuggestionsTableBody
         view={view}
-        grouped={grouped}
-        onSearch={onSearch}
         filters={filters}
         tableState={tableState}
         cleanFilters={{
@@ -554,35 +503,18 @@ function SuggestionsTable({
 
 function SuggestionsTableBody({
   view,
-  grouped,
-  onSearch,
   filters,
   tableState,
   cleanFilters,
 }: {
   view: SuggestionView;
-  grouped: boolean;
-  onSearch: (patch: Partial<SuggestionsSearch>, replace?: boolean) => void;
   filters: QueryFilters;
   tableState: TableStateReturn;
   cleanFilters: NonNullable<CleanTarget["filters"]>;
 }) {
-  const queryClient = useQueryClient();
-  const metadataQueries = useMemo(
-    () =>
-      view === "statement_transaction"
-        ? [entityMetadataQueryOptions("financialTransaction")]
-        : [],
-    [view],
-  );
-  useSuspenseQueries({ queries: metadataQueries });
   const review = useSuggestionReview();
   const rosters = useDeferredEntityRosters(REFERENCE_ROSTERS);
-  const providerCategoryLabel = "Provider category";
-  const columns = useMemo(
-    () => viewColumns(queryClient, view, rosters, providerCategoryLabel),
-    [queryClient, view, rosters, providerCategoryLabel],
-  );
+  const columns = useMemo(() => viewColumns(view, rosters), [view, rosters]);
   const bulk: BulkActionsConfig<Row> = {
     actions: [
       {
@@ -644,82 +576,6 @@ function SuggestionsTableBody({
   const accept = useAcceptClean((id) => rowsById.get(id));
   const cleanCount = firstPage?.meta.cleanCount ?? 0;
 
-  const groups = firstPage?.statementGroups ?? NO_GROUPS;
-  const groupConfig = useMemo<GroupConfig | undefined>(
-    () =>
-      grouped
-        ? {
-            choice: ACCOUNT_MONTH_CHOICE,
-            memberships: list.memberships ?? [],
-            groups: (firstPage?.meta.groups ?? []).map((group) => ({
-              ...group,
-              label: monthLabel(
-                groups.find((source) => source.key === group.path[0])?.month ??
-                  group.label,
-              ),
-            })),
-            header: (summary) => {
-              const group = groups.find((item) => item.key === summary.path[0]);
-              if (!group) return {};
-              return {
-                aside: (
-                  <>
-                    <RecordLink
-                      record={{
-                        entity: "financialAccount",
-                        id: group.accountId,
-                      }}
-                    />
-                    {group.ownerId ? (
-                      <RecordLink
-                        record={{ entity: "ledgerParty", id: group.ownerId }}
-                      />
-                    ) : null}
-                    <span className="text-muted-foreground tabular-nums">
-                      {formatCurrency(group.amount)}
-                    </span>
-                  </>
-                ),
-                actions: (
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    disabled={
-                      group.clean === 0 ||
-                      accept.running ||
-                      list.infiniteScroll.isTransitioning
-                    }
-                    onClick={() =>
-                      accept.confirm({
-                        label: `${monthLabel(group.month)} account group`,
-                        count: group.clean,
-                        filters: {
-                          ...cleanFilters,
-                          family: "statement_transaction",
-                          account: [group.accountId],
-                          month: [group.month],
-                        },
-                      })
-                    }
-                  >
-                    Accept {formatCount(group.clean)} clean
-                  </Button>
-                ),
-              };
-            },
-          }
-        : undefined,
-    [
-      grouped,
-      groups,
-      firstPage?.meta.groups,
-      list.memberships,
-      accept,
-      cleanFilters,
-      list.infiniteScroll.isTransitioning,
-    ],
-  );
-
   // Keyboard review: ↑/↓ move, → open evidence, ← close, A accept, D dismiss.
   const [current, setCurrent] = useState<string | undefined>();
   const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -764,9 +620,7 @@ function SuggestionsTableBody({
         case "a":
         case "A":
           if (reviewable) {
-            void review.review([reviewable], (target) =>
-              acceptItem(target, review.statementChoice(target)),
-            );
+            void review.review([reviewable], (target) => acceptItem(target));
             advance();
             revealRow(event.currentTarget);
           }
@@ -820,28 +674,8 @@ function SuggestionsTableBody({
                 tableState.setSorting([{ id: value, desc: true }]);
             }}
           />
-          {view === "statement_transaction" ? (
-            <Picker
-              mode="segmented"
-              label="Group"
-              options={[
-                { value: "none", label: "No groups" },
-                { value: "account_month", label: "Account × month" },
-              ]}
-              value={grouped ? "account_month" : "none"}
-              onValueChange={(value) =>
-                onSearch(
-                  {
-                    group:
-                      value === "account_month" ? "account_month" : undefined,
-                  },
-                  true,
-                )
-              }
-            />
-          ) : null}
         </div>
-        {cleanCount > 0 && !grouped ? (
+        {cleanCount > 0 ? (
           <Panel
             tone="default"
             className="flex flex-wrap items-center gap-2 py-1.5 text-xs"
@@ -915,7 +749,7 @@ function SuggestionsTableBody({
         ) : null}
       </div>
       <ListWorkbench
-        model={{ ...list.model, groupConfig }}
+        model={list.model}
         ariaLabel="Suggestions"
         rowDetail={{ openIds: review.openIds, render: renderDetail }}
         currentRowId={current}

@@ -3432,7 +3432,7 @@ same transaction (ADR 0005 owns precedence).
 
 ## Suggestions
 
-Suggestion families are `field`, `recommendation`, `statement_transaction`, `transfer_pair` and
+Suggestion families are `field`, `recommendation`, `transfer_pair` and
 `product_pair` (`server/generic/suggestions/repo/suggestion-family-declarations.ts`). The generic
 owner is `generic/suggestions`; field-resolution evidence belongs to `generic/field-explanation`.
 Product pairs merge only through `suggestions.review` with a `product_merge` application.

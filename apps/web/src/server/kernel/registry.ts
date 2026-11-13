@@ -76,9 +76,10 @@ const column = (table: string, name: string) => `${table}.${name}`;
 function readColumns(reconciler: Reconciler): Set<string> {
   const read = new Set<string>();
   for (const ref of reconciler.reads) {
-    if (ref.type === "table")
-      for (const name of ref.columns) read.add(column(ref.name, name));
-    else if (ref.type === "evidence")
+    if (ref.type === "table") {
+      if (!ref.history)
+        for (const name of ref.columns) read.add(column(ref.name, name));
+    } else if (ref.type === "evidence")
       read.add(column(getTableName(ref.evidence.table), "*"));
     else read.add(column(BINDINGS, "eventKey"));
   }
@@ -104,6 +105,25 @@ export function validateKernelGraph(reconcilers: readonly Reconciler[]): void {
           );
         owners.set(key, reconciler.scope);
       }
+  for (const reader of reconcilers)
+    for (const ref of reader.reads) {
+      if (ref.type !== "table" || !ref.history) continue;
+      if (
+        reader.lane !== "catalog" ||
+        reconcilers.some(
+          (writer) =>
+            writer.lane !== "money" &&
+            writer.writes.some(
+              (target) =>
+                target.name === ref.name &&
+                target.columns.some((name) => ref.columns.includes(name)),
+            ),
+        )
+      )
+        throw new KernelGraphError(
+          "Committed history sources must be Catalog reads of money columns",
+        );
+    }
   const edges = new Map<string, Set<string>>();
   for (const reader of reconcilers) {
     const read = readColumns(reader);

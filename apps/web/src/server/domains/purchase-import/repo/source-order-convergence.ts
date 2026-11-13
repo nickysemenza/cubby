@@ -22,6 +22,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { deleteExpensesWithPurchaseEffects } from "~/server/domains/expense/repo/crud";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { duplicateSourceOrderReplay } from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import { duplicateSourceOrderRefusal } from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import {
@@ -274,9 +275,10 @@ export async function convergeDuplicateSourceOrder(
         );
     for (const { to, carry } of paired.pairs) {
       if (Object.keys(carry).length === 0) continue;
-      await tx
-        .update(expense)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "expense",
+        {
           ...(carry.bookingTransactionCode
             ? { bookingTransactionCode: carry.bookingTransactionCode }
             : {}),
@@ -293,8 +295,10 @@ export async function convergeDuplicateSourceOrder(
                 trade: carry.trade as typeof expense.$inferInsert.trade,
               }
             : {}),
-        })
-        .where(eq(expense.id, to.id));
+        },
+        eq(expense.id, to.id),
+        actor,
+      );
       await logAuditEntries(tx, actor, [
         {
           entityKind: "expense" as const,

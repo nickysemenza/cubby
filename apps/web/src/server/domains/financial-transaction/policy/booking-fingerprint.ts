@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 
-import { type FinancialBookingPreview } from "@cubby/schemas/financial-booking";
-
 /** Preserve persisted JSON fingerprint bytes without a separate encoding buffer. */
 export const digestValue = <T extends object>(value: T) => {
   const serialized = JSON.stringify(value);
@@ -28,28 +26,3 @@ export const digestCanonicalEvidenceStream = (
   hash.update('"}');
   return hash.digest("hex");
 };
-
-/**
- * The lineage `loadFinancialBookingLineages` reads for bookings whose only
- * rows are the inserted aggregates: no attributions or source claims, and
- * each row as the insert returned it (every column, in table order).
- */
-export function freshBookingLineages<
-  Row extends { id: string; bookingTransactionCode: string | null },
->(reviews: readonly FinancialBookingPreview[], rows: readonly Row[]) {
-  const ordered = [...rows].sort((left, right) =>
-    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
-  );
-  return new Map(
-    reviews.map((review) => [
-      review.transactionId,
-      {
-        lines: ordered.filter(
-          (row) => row.bookingTransactionCode === review.transactionId,
-        ),
-        attributions: [],
-        sourceClaims: [],
-      },
-    ]),
-  );
-}

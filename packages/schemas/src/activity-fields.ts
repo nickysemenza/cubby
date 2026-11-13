@@ -554,7 +554,7 @@ export const RUN_KINDS = {
       exclusions:
         "Unselected families and candidates rejected by their owning eligibility rules are excluded.",
       effects:
-        "Checks statement matches and fields, and publishes Suggestions under each family’s policy.",
+        "Checks fields and publishes Suggestions under their declared policy.",
       dependencies:
         "Current financial and record evidence, declared family rules and configured decision models.",
       cost: "AI labeling and evaluation steps use the configured funding policy.",
@@ -567,35 +567,6 @@ export const RUN_KINDS = {
     execution: "steps",
     progress: "steps",
     steps: [
-      {
-        key: "statement_generate",
-        label: "Statements: match",
-        purpose: "Matches unmatched statement charges to ledger evidence.",
-        action: "Matching charges",
-        unit: "charges",
-        input: counted,
-        family: "statement_transaction",
-        results: { family: "statement_transaction" },
-      },
-      {
-        key: "statement_holds",
-        label: "Statements: vanished holds",
-        purpose: "Rechecks pending holds that disappeared from statements.",
-        action: "Checking holds",
-        unit: "holds",
-        input: counted,
-        family: "statement_transaction",
-      },
-      {
-        key: "statement_label",
-        label: "Statements: label",
-        purpose: "Asks the decision model to label each statement Suggestion.",
-        action: "Labelling suggestions",
-        unit: "suggestions",
-        input: counted,
-        family: "statement_transaction",
-        results: { family: "statement_transaction" },
-      },
       {
         key: "field_roster",
         label: "Fields: roster",

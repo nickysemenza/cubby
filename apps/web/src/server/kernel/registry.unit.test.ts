@@ -91,5 +91,30 @@ describe("kernel graph", () => {
         "Read-write cycle between scope kinds: charges → receipts → charges",
       ),
     );
+    const historyReader = defineReconciler({
+      scope: "catalog-history",
+      lane: "catalog",
+      version: 1,
+      reads: [source.history(fixtureCharge, ["amountMinor"])],
+      writes: [writes(fixturePurchase, ["merchant"])],
+      load: async () => new Map(),
+      reconcile: (_input, c) => c.done(),
+    });
+    const money = defineReconciler({
+      scope: "money",
+      lane: "money",
+      version: 1,
+      reads: [source.table(fixturePurchase, ["merchant"])],
+      writes: [writes(fixtureCharge, ["amountMinor"])],
+      load: async () => new Map(),
+      reconcile: (_input, c) => c.done(),
+    });
+    expect(() => validateKernelGraph([historyReader, money])).not.toThrow();
+    expect(() =>
+      validateKernelGraph([{ ...historyReader, lane: "money" }, money]),
+    ).toThrow("Committed history sources");
+    expect(() =>
+      validateKernelGraph([historyReader, { ...money, lane: "catalog" }]),
+    ).toThrow("Committed history sources");
   });
 });

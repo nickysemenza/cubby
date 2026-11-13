@@ -2315,7 +2315,7 @@ export const { definition, readSchemas } = defineEntityModel({
     ],
   },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     dataQuality: {
       // Rows the stored evaluator reads beyond its own row (ADR 0021).
       inputs: [

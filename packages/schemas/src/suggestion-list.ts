@@ -16,17 +16,12 @@ import { dataCheck } from "./data-quality";
 import { connectionProposal } from "./entity-connections";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
-import {
-  financialAccountShortcode,
-  ledgerPartyShortcode,
-  runShortcode,
-} from "./identifiers";
-import { statementSuggestionOut } from "./statement-suggestion";
+import { runShortcode } from "./identifiers";
 
 /** Suggestion families the Suggestions page lists. */
 export const suggestionListFamily = z.enum([
   "field",
-  "statement_transaction",
+
   "recommendation",
   "transfer_pair",
   "product_pair",
@@ -164,11 +159,7 @@ export const fieldSuggestionRow = z.object({
   family: z.literal("field"),
   evidence: suggestionReviewRowSchema,
 });
-export const statementSuggestionRow = z.object({
-  ...rowBase,
-  family: z.literal("statement_transaction"),
-  evidence: statementSuggestionOut,
-});
+
 export const recommendationSuggestionRow = z.object({
   ...rowBase,
   family: z.literal("recommendation"),
@@ -190,7 +181,7 @@ export const productPairSuggestionRow = z.object({
  */
 export const suggestionListRow = z.discriminatedUnion("family", [
   fieldSuggestionRow,
-  statementSuggestionRow,
+
   recommendationSuggestionRow,
   transferPairSuggestionRow,
   productPairSuggestionRow,
@@ -223,31 +214,10 @@ const suggestionPaging = z.object({
   cursor: z.string().min(1).optional(),
   offset: z.number().int().min(0).default(0),
   limit: z.number().int().min(1).max(SUGGESTION_LIST_PAGE_MAX).default(50),
-  group: suggestionFilterDeclaration.groupInput,
 });
 export const suggestionListInput = suggestionDeclaredFilters.extend(
   suggestionPaging.shape,
 );
-
-/** One account × month section of the grouped statement list. */
-export const suggestionGroup = z.object({
-  key: z.string().min(1),
-  /** The month, `YYYY-MM`; the account is `accountId`. */
-  label: z.string().min(1),
-  count: z.number().int().positive(),
-  clean: z.number().int().nonnegative(),
-  /** Counts by recommended action, and the summed charge amount. */
-  create: z.number().int().nonnegative(),
-  attach: z.number().int().nonnegative(),
-  supersede: z.number().int().nonnegative(),
-  void: z.number().int().nonnegative(),
-  amount: z.number(),
-  accountId: financialAccountShortcode,
-  ownerId: ledgerPartyShortcode.nullable(),
-  month: z.string(),
-});
-
-export type SuggestionGroup = z.infer<typeof suggestionGroup>;
 
 export const suggestionListOut = z.object({
   items: z.array(suggestionListRow),
@@ -256,7 +226,6 @@ export const suggestionListOut = z.object({
     pageSize: z.number().int(),
     totalCount: z.number().int(),
     cleanCount: z.number().int().nonnegative(),
-    groups: z.array(suggestionGroup).optional(),
   }),
   /** Keyset cursor for the next page; null on the last. */
   next: z.string().nullable(),

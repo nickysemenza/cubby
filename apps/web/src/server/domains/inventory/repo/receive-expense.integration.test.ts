@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense, inventoryEntry } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { receiveExpenseInventoryWorkflow } from "~/server/domains/inventory/operations.server";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
@@ -101,10 +102,12 @@ describe("atomic reviewed Expense receiving", () => {
       makeProductInput({ name: "Receiving fixture replacement" }),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ productId: replacement.entityId })
-      .where(eq(expense.id, f.line.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productId: replacement.entityId },
+      eq(expense.id, f.line.id),
+    );
     await expect(
       receive({
         expenseId: f.line.shortcode,
@@ -339,10 +342,12 @@ describe("atomic reviewed Expense receiving", () => {
         action: { kind: "move", entryId: entry.id },
       }),
     ).rejects.toThrow(/Expense Product/);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(and(eq(expense.id, f.line.id), notDeleted(expense)));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { deletedAt: new Date() },
+      and(eq(expense.id, f.line.id), notDeleted(expense)),
+    );
     await expect(
       receive({
         expenseId: f.line.shortcode,

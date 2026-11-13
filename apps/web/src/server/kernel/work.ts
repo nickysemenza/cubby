@@ -56,8 +56,15 @@ export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
 /** One row per public record with a member-supplied gap, oldest first; no per-record reads. */
 export async function readNeedsYou(
   db: Database,
+  registry: KernelRegistry,
   options: { limit?: number; offset?: number } = {},
 ): Promise<NeedsYouPage> {
+  const consumers = [...registry.machinery.values()].flatMap((capability) =>
+    (capability.scopes ?? []).map((kind) => ({
+      entity: capability.entity,
+      kind,
+    })),
+  );
   const limit = Math.max(1, Math.min(100, Math.floor(options.limit ?? 50)));
   const offset = Math.max(0, Math.floor(options.offset ?? 0));
   const result = await repositoryQueries(db).execute<{
@@ -81,6 +88,11 @@ export async function readNeedsYou(
       FROM members m JOIN "Entity" e ON m."scopeKey" = e.kind || ':' || e.id::text
       WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+      UNION
+      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, m.gap->>${"input"}, m.gap->'actions', m.gap->>'since'
+      FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
+      JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
+      WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
     ), ranked AS (
       SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY ("firstGap" IS NULL), since NULLS LAST, "scopeKind", "scopeKey") AS rank,
         min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1

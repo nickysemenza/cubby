@@ -31,7 +31,6 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ilikeContains, notDeleted, unwrapDb } from "~/server/db/helpers";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { findPgError } from "~/server/errors/db-errors";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
 import {
@@ -67,7 +66,7 @@ export interface ResolveRequest<E extends ResolvableEntity> {
   values?: () => Promise<Partial<InferInsertModel<ShortcodeTableFor<E>>>>;
 }
 
-export interface ResolvedRow<E extends ResolvableEntity> {
+interface ResolvedRow<E extends ResolvableEntity> {
   id: EntityId<E>;
   shortcode: string;
   name: string;
@@ -376,86 +375,6 @@ const createMisses = async <E extends ResolvableEntity>(
  * after this; a unique-name race aborts the layer. A miss stored as another
  * miss's match value must take `resolveNames` instead.
  */
-export async function mintNamesInLayer<E extends ResolvableEntity>(
-  layer: WriteLayer,
-  entity: E,
-  misses: readonly ResolveRequest<E>[],
-  actor: ActorContext,
-): Promise<ResolvedRow<E>[]> {
-  if (!misses.length) return [];
-  const plan = { ...resolvePlan(entity), entity };
-  const extras: Partial<InferInsertModel<ShortcodeTableFor<E>>>[] = [];
-  for (const miss of misses) extras.push((await miss.values?.()) ?? {});
-  const values = misses.map((miss, index) => ({
-    ...Object.fromEntries(
-      plan.match.map(({ key, array }) => [key, array ? [] : miss.name]),
-    ),
-    ...extras[index],
-  }));
-  const keys = new Set(plan.match.map(({ key }) => key));
-  const stored = values.map((row) =>
-    Object.entries(row).flatMap(([key, value]) =>
-      keys.has(key)
-        ? [value]
-            .flat()
-            .flatMap((entry) =>
-              typeof entry === "string" ? [entry.toLowerCase()] : [],
-            )
-        : [],
-    ),
-  );
-  if (
-    misses.some((miss, index) =>
-      stored.some(
-        (matches, other) =>
-          other !== index && matches.includes(miss.name.toLowerCase()),
-      ),
-    )
-  )
-    throw new Error("Names one layer mints must not match each other");
-  // SAFETY: the name plus empty declared `text[]` match columns are the
-  // entity's required inserts beyond the minted shortcode (see createMiss).
-  const created = await layer.insert(
-    entity,
-    layer.stage(entity, values as never[]),
-  );
-  if (isAuditableEntity(entity))
-    layer.audit(
-      actor,
-      created.map((row) => ({
-        entityKind: entity,
-        entityId: z.object({ id: z.string() }).parse(row).id,
-        action: "create" as const,
-      })),
-    );
-  const minted = z.object({ id: z.string(), shortcode: z.string() });
-  return created.map((row, index) => {
-    const { id, shortcode } = minted.parse(row);
-    const inserted = Object.entries(values[index]!);
-    return resolvedRow(
-      entity,
-      {
-        id,
-        shortcode,
-        name: misses[index]!.name,
-        values: [],
-        scope: {},
-        // As `selectMatches` reads them: match columns in declared order,
-        // non-empty values only.
-        matchValues: plan.match.flatMap(({ key }) =>
-          inserted
-            .filter(([column]) => column === key)
-            .flatMap(([, value]) => [value].flat())
-            .filter(
-              (value): value is string =>
-                typeof value === "string" && value.length > 0,
-            ),
-        ),
-      },
-      true,
-    );
-  });
-}
 
 /**
  * One batched candidate pass for every miss — not a round trip per name.

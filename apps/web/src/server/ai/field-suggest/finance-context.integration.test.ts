@@ -15,7 +15,6 @@ import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialTransaction,
-  financialTransactionAllocation,
   product,
   expense,
   purchase as purchaseTable,
@@ -23,6 +22,8 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
@@ -91,14 +92,15 @@ describe("reviewed linked finance category suggestions", () => {
       postedDate: "2026-09-01",
       spendingCategoryId: explicit.id,
     });
-    const [allocation] = await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
+    const [allocation] = await insertPurchaseEventRows(
+      ctx.db,
+      "FinancialTransactionAllocation",
+      {
         transactionId: charge.id,
         purchaseId: purchase.id,
         amountMinor: moneyToMinor(29.99),
-      })
-      .returning();
+      },
+    );
     if (!allocation) throw new Error("Missing fixture allocation");
     const decisionPort = vi.fn<DecisionPort>(async (input) => {
       const entries = Object.entries(input.questions.selection.criteria);
@@ -211,10 +213,12 @@ describe("reviewed linked finance category suggestions", () => {
       .update(product)
       .set({ name: "Fixture black crew shirt" })
       .where(eq(product.id, f.good.entityId));
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 2000n })
-      .where(eq(expense.id, f.line.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 2000n },
+      eq(expense.id, f.line.id),
+    );
     await expect(apply()).rejects.toThrow(/changed.*review again/i);
     expect(await stored()).toBeNull();
     const fresh = (await f.suggest()).suggestions.spendingCategoryId;
@@ -345,10 +349,12 @@ describe("reviewed linked finance category suggestions", () => {
       ).rejects.toThrow(/changed.*review again/i);
     };
     await apply("expense", f.line.shortcode, async () => {
-      await getDb(ctx.db)
-        .update(expense)
-        .set({ name: "Fixture different line" })
-        .where(eq(expense.id, f.line.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { name: "Fixture different line" },
+        eq(expense.id, f.line.id),
+      );
     });
     await apply("expense", f.line.shortcode, async () => {
       await getDb(ctx.db)
@@ -357,20 +363,26 @@ describe("reviewed linked finance category suggestions", () => {
         .where(eq(spendingCategory.id, f.category.id));
     });
     await apply("expense", f.line.shortcode, async () => {
-      await getDb(ctx.db)
-        .update(expense)
-        .set({ productQuantity: 3 })
-        .where(eq(expense.id, f.line.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { productQuantity: 3 },
+        eq(expense.id, f.line.id),
+      );
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ spendingCategoryId: f.explicit.id })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { spendingCategoryId: f.explicit.id },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     await apply("expense", f.line.shortcode, async () => {
-      await getDb(ctx.db)
-        .update(expense)
-        .set({ spendingCategoryId: f.explicit.id })
-        .where(eq(expense.id, f.line.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "expense",
+        { spendingCategoryId: f.explicit.id },
+        eq(expense.id, f.line.id),
+      );
     });
     expect(
       (

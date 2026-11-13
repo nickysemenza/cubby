@@ -17,7 +17,6 @@ import { transferPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import {
   transferPairJudgment,
-  type StatementTransferPairRef,
   type TransferPairJudgment,
   type TransferPairLeg,
 } from "@cubby/schemas/transfer-pair-suggestion";
@@ -516,12 +515,6 @@ const parseLegKey = (key: string) => {
 };
 
 /** Source charges a pair action can write, using the owning leg-key parser. */
-export function transferPairSourceCharges(pairKey: string): ChargeRef[] {
-  return pairKey.split("~").flatMap((key) => {
-    const parsed = parseLegKey(key);
-    return parsed?.charge ? [parsed.charge] : [];
-  });
-}
 
 /** Page-local advisory reads only. Exact pool scopes preserve each seed's
  * duplicate/competitor semantics; acceptance always rebuilds fresh evidence. */
@@ -684,7 +677,7 @@ const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
 const isRule = (producer: SuggestionProducer) => producer.kind === "rule";
 
 /** Acquire shared leg locks before any review-state or settlement-ref locks. */
-export async function lockTransferPairLegs(db: Database, pairKey: string) {
+async function lockTransferPairLegs(db: Database, pairKey: string) {
   for (const key of [...new Set(pairKey.split("~"))].sort())
     await advisoryXactLock(getDb(db), "transfer-pair-leg", key);
 }
@@ -930,9 +923,8 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
     const subject = suggestionSubjects.transfer_pair.parse(prediction.subject);
     await lockTransferPairLegs(db, subject.pairKey);
   },
-  apply: async (db, context, state, input, automatic) => {
+  apply: async (db, context, state, input) => {
     if (
-      automatic ||
       input.verdict !== "correct" ||
       input.correction.present ||
       input.application?.kind !== "transfer_pair"
@@ -981,65 +973,11 @@ async function storedPairs(
   }));
 }
 
-const legKeysAny = (keys: readonly string[]) =>
-  sql`s.data->'legKeys' ?| ARRAY[${sql.join(
-    keys.map((key) => sql`${key}`),
-    sql`, `,
-  )}]::text[]`;
-
 /**
  * Each charge's published pair, fresh only while today's rule evidence still
  * matches the stored evidence. A charge in several pending pairs has
  * competitors, so it is never clean. Never builds statement proposals.
  */
-export async function findTransferPairsForCharges(
-  db: Database,
-  charges: readonly ChargeRef[],
-): Promise<Map<string, StatementTransferPairRef>> {
-  const result = new Map<string, StatementTransferPairRef>();
-  if (!charges.length) return result;
-  const keys = charges.map((charge) => `stmt:${chargeId(charge)}`);
-  const stored = await storedPairs(db, legKeysAny(keys));
-  if (!stored.length) return result;
-  const wanted = new Set(keys);
-  const current = new Map(
-    (
-      await discover(db, {
-        kind: "legs",
-        keys: uniq(
-          stored.flatMap((pair) =>
-            pair.data.legKeys.filter((key) => wanted.has(key)),
-          ),
-        ),
-      })
-    ).map((pair) => [pair.judgment.key, pair]),
-  );
-  const byCharge = new Map<string, StatementTransferPairRef[]>();
-  for (const pair of stored) {
-    const now = current.get(pair.data.pairKey);
-    const fresh =
-      now !== undefined &&
-      (await transferPairEvidenceFingerprint(now.judgment)) ===
-        pair.data.evidenceFingerprint;
-    for (const key of pair.data.legKeys.filter((leg) => wanted.has(leg))) {
-      const charge = key.slice("stmt:".length);
-      byCharge.set(charge, [
-        ...(byCharge.get(charge) ?? []),
-        {
-          key: pair.data.pairKey,
-          fingerprint: pair.fingerprint ?? "",
-          clean: fresh && pair.data.clean,
-        },
-      ]);
-    }
-  }
-  for (const [charge, refs] of byCharge)
-    result.set(
-      charge,
-      refs.length === 1 ? refs[0]! : { ...refs[0]!, clean: false },
-    );
-  return result;
-}
 
 // ------------------------------------------------------------------ apply
 
@@ -1078,7 +1016,7 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
   );
 }
 
-export async function applyTransferPair(
+async function applyTransferPair(
   db: Database,
   context: EntityKernelContext,
   input: {
@@ -1118,7 +1056,7 @@ export async function applyTransferPair(
       );
     const raw = current.judgment;
     const { assertStatementSourceIdentity } =
-      await import("~/server/domains/transaction-import/repo/statement-suggestions");
+      await import("~/server/domains/transaction-import/repo/statement-source-identity");
     await assertStatementSourceIdentity(
       txDb,
       [raw.outflow, raw.inflow].flatMap((leg) =>

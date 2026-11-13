@@ -1,14 +1,13 @@
-import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
+import {
+  seedFieldSuggestion,
+  applyFieldAnswerFixture,
+} from "tooling/shared-suggestion-fixtures";
 import { eq, inArray } from "drizzle-orm";
-
 import { getDb } from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
-
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
-import { buildCrudServices } from "~/server/http/request-context";
 
 import {
   createEntityFixture,
@@ -56,10 +55,7 @@ test("Changes by Cubby lists a value Cubby set and Wrong, clear it empties the f
         .from(productTable)
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId ?? null;
-  const applied = await applyAutomaticRules(db, [suggestion.id], {
-    context: buildCrudServices,
-  });
-  expect(applied.applied).toHaveLength(1);
+  await applyFieldAnswerFixture(db, suggestion);
   expect(await categoryOf()).toBe(
     await resolveOrThrow(db, "productCategory", category.id),
   );

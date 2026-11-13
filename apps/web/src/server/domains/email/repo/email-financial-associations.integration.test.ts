@@ -19,6 +19,7 @@ import {
 } from "~/server/domains/email/repo/email";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { emailReviewReport } from "~/server/domains/email/repo/report-email";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
@@ -134,10 +135,11 @@ describe("reviewed Email financial evidence", () => {
       (await readEmailAssociations(ctx.db, email.shortcode, ctx.actor))
         .financialAssociations,
     ).toEqual([expected]);
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ accountId: current.id })
-      .where(eq(financialTransaction.id, transaction.id));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { accountId: current.id },
+      eq(financialTransaction.id, transaction.id),
+    );
     expect(await readEmailFinancialAssociations(ctx.db, emailId)).toEqual([
       {
         ...expected,
@@ -145,10 +147,11 @@ describe("reviewed Email financial evidence", () => {
         accountChanged: true,
       },
     ]);
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(eq(financialTransaction.id, transaction.id));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { deletedAt: new Date() },
+      eq(financialTransaction.id, transaction.id),
+    );
     await getDb(ctx.db)
       .update(financialAccount)
       .set({ deletedAt: new Date() })

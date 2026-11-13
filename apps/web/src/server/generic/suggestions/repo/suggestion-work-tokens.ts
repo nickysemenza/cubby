@@ -7,10 +7,7 @@ import { and, isNotNull, ne, sql, type SQL } from "drizzle-orm";
 
 import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-import {
-  reviewSuggestion,
-  entities,
-} from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { reviewSuggestion } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
 /** Rule applications leave pending and name the rule that applied them. */
 export function automaticSuggestionEligibility(appliedRule: SQL) {
@@ -50,7 +47,7 @@ export function pendingSuggestionRecordsSql(
   const pending = (families: readonly SuggestionFamily[]) =>
     sql`s.family = ANY(${columnArrayParam(families)}) AND s.active AND s.status = ${suggestionStatus.enum.pending}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
-  const { recommendation, statement_transaction } = suggestionFamily.enum;
+  const { recommendation } = suggestionFamily.enum;
   const declared = [
     suggestionFamily.enum.transfer_pair,
     suggestionFamily.enum.product_pair,
@@ -70,14 +67,6 @@ export function pendingSuggestionRecordsSql(
       JOIN LATERAL (SELECT e.* FROM "ConnectionCandidateEvidence" e WHERE e."scopeKey"=s."scopeKey" ORDER BY e."createdAt" DESC, e.id DESC LIMIT 1) e ON true
       CROSS JOIN LATERAL (VALUES (e."sourceEntity",e."sourceId"::text),(e."targetEntity",e."targetId"::text)) endpoints(entity,token)
       WHERE s."scopeKind"=${"connections"} AND jsonb_array_length(s.gaps)>0`,
-        ]
-      : []),
-    // Statement review belongs to the account, not every settlement reference:
-    // one token per account keeps thousands of pending charges out of the joins.
-    ...(admits(statement_transaction)
-      ? [
-          sql`SELECT DISTINCT s.family, ${entities.financialAccount}::text AS entity, s.data->>'accountId' AS token
-      FROM "Suggestion" s WHERE ${pending([statement_transaction])}`,
         ]
       : []),
     // An explicit correction its Suggestion never applied stays a manual notice.

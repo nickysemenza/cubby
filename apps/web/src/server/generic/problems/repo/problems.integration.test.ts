@@ -18,6 +18,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
@@ -331,10 +332,11 @@ describe("problems — charges not reconciling", () => {
       (await publishedProblems(ctx.db)).purchasesNotReconciling,
     ).toHaveLength(1);
 
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ status: "posted", postedDate: "2026-07-03" })
-      .where(eq(financialTransaction.id, refund.id));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { status: "posted", postedDate: "2026-07-03" },
+      eq(financialTransaction.id, refund.id),
+    );
 
     expect((await publishedProblems(ctx.db)).purchasesNotReconciling).toEqual(
       [],

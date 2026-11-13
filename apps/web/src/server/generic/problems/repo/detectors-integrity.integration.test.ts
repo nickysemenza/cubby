@@ -23,9 +23,7 @@ import {
   entityExternalId,
   entityIdentity,
   entityLink,
-  expenseAttribution,
   externalSource,
-  financialTransactionAllocation,
   imageDerivative,
   imageSighting,
   importPreparedOrder,
@@ -63,6 +61,7 @@ import {
   shipmentSourcePackage,
   user,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   retainedMailFixture,
   sourceOrderObservationFixture,
@@ -911,7 +910,7 @@ const SOURCE_FACTORIES = {
 
   "ExpenseAttribution.expenseId": async (db, targetId) => {
     const party = await mkLedgerParty(db);
-    return insertAndReturn(db, expenseAttribution, {
+    return createPurchaseEventRecord(db, "ExpenseAttribution", {
       expenseId: parseEntityId("expense", targetId),
       role: "funder",
       ledgerPartyId: party.id,
@@ -972,7 +971,7 @@ const SOURCE_FACTORIES = {
       trade: "other",
       date: "2024-01-15",
     });
-    return insertAndReturn(db, expenseAttribution, {
+    return createPurchaseEventRecord(db, "ExpenseAttribution", {
       expenseId: expense.id,
       role: "funder",
       ledgerPartyId: parseEntityId("ledgerParty", targetId),
@@ -1603,7 +1602,7 @@ const SOURCE_FACTORIES = {
       status: "pending",
       amount: moneyToMinor(1),
     });
-    return insertAndReturn(db, financialTransactionAllocation, {
+    return createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
       transactionId: txn.id,
       purchaseId: parseEntityId("purchase", targetId),
       amountMinor: moneyToMinor(1),
@@ -1612,7 +1611,7 @@ const SOURCE_FACTORIES = {
 
   "FinancialTransactionAllocation.transactionId": async (db, targetId) => {
     const purch = await mkPurchase(db);
-    return insertAndReturn(db, financialTransactionAllocation, {
+    return createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
       transactionId: parseEntityId("financialTransaction", targetId),
       purchaseId: purch.id,
       amountMinor: moneyToMinor(1),

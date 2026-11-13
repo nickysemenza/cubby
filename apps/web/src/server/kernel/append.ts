@@ -27,6 +27,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { insertFactKeys, markDirty } from "./dirty";
+import { tableKey } from "./keys";
 import type { KernelRegistry } from "./registry";
 
 /** A losing source-identity race must discard its unused Entity reservation. */
@@ -140,7 +141,16 @@ export async function append(
     }
     await insertFactKeys(q, facts);
     await markDirty(q, registry, {
-      keys: [...new Set(facts.flatMap((fact) => fact.keys))],
+      keys: [
+        ...new Set([
+          ...facts.flatMap((fact) => fact.keys),
+          ...[...groups.values()]
+            .filter(({ evidence }) =>
+              facts.some((fact) => fact.kind === evidence.kind),
+            )
+            .map(({ evidence }) => tableKey(getTableName(evidence.table))),
+        ]),
+      ],
       discovers,
       reason: `evidence:${[...groups.keys()].join(",")}`,
     });

@@ -22,6 +22,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
@@ -157,10 +158,12 @@ describe("server verified financial convergence", () => {
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
     ).toMatchObject({ status: "already_recorded" });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 3000n })
-      .where(eq(expense.bookingTransactionCode, transaction.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 3000n },
+      eq(expense.bookingTransactionCode, transaction.output.id),
+    );
     expect(
       await convergeFinancialTransaction(ctx.db, input, ctx.actor),
     ).toMatchObject({ status: "review_required" });
@@ -473,10 +476,12 @@ describe("server verified financial convergence", () => {
       purchaseId: purchase.output.id,
     });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 3000n })
-      .where(eq(expense.bookingTransactionCode, transaction.output.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 3000n },
+      eq(expense.bookingTransactionCode, transaction.output.id),
+    );
     expect(
       await convergeFinancialTransaction(
         ctx.db,
@@ -508,10 +513,12 @@ describe("server verified financial convergence", () => {
       ),
     ).toMatchObject({ status: "applied", expenseId: null });
     expect(await liveCosts()).toEqual([{ cost: 25 }]);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 2700n })
-      .where(eq(expense.purchaseId, purchase.entityId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 2700n },
+      eq(expense.purchaseId, purchase.entityId),
+    );
     expect(
       await convergeFinancialTransaction(
         ctx.db,
