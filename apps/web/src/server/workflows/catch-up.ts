@@ -20,7 +20,6 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
-    await recoverMissedWork(db, { daily: false, wake: false });
     // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
@@ -41,22 +40,10 @@ export async function requestCatchUp(
   return { status: "queued" };
 }
 
-/** Admit periodic families and drain due Jobs; stopped work needs explicit retry. */
-export async function recoverMissedWork(
-  db: Database,
-  { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
-) {
-  let failed = true;
-  try {
-    const { scheduleRunsReconcile } = await import("./runs/reconcile-pass");
-    await scheduleRunsReconcile(db);
-    failed = false;
-  } finally {
-    if (wake || failed)
-      await (
-        await import("~/server/workflows/background-tasks/publish")
-      ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
-  }
+/** Bring stopped-execution reconciliation forward; Pass admission owns its wake. */
+export async function recoverMissedWork(db: Database) {
+  const { scheduleRunsReconcile } = await import("./runs/reconcile-pass");
+  await scheduleRunsReconcile(db);
 }
 
 /** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */

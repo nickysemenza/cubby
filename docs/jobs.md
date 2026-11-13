@@ -1204,8 +1204,8 @@ context's `work`.
   concurrent work and are not additive phase timings.
 - **Unmeasured drivers.** A page that records no phase stores no sample.
 
-A Run's Diagnostics section and an Image's or Location's Jobs slot read one
-Job's raw Worker lines through `job.logs`; credentials and limits are in
+`job.logs` reads raw Worker lines for Job-backed execution. Run Passes keep
+step progress and raw failures on their Run and Pass rows; credentials and limits are in
 [infrastructure](infrastructure.md#inline-job-logs-and-limits).
 
 ## Apple version gate
@@ -1256,8 +1256,7 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
 - A drain unit without a stream is owed and not progressing: its drain's `due`
   rows report work with a `since` 30 minutes old and its record row has no
   successful page in those 30 minutes. `since` is when the work fell owed:
-  for `reconcile`, when the earliest stranded execution or failed start
-  dispatch stopped; for `field-automation:policy`, the policy cursor's last
+  for `field-automation:policy`, the policy cursor's last
   write; for Email purchase discovery, its cursor's next hour or last page. A
   pass that has never run has no cursor and reports the read time.
 - An AI feature has `result_ready` evaluations that are owed, that no page

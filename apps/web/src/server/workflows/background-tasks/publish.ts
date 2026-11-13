@@ -176,7 +176,14 @@ export async function publishBackgroundTasks(
         invalidate: true,
       });
     }
-    await runAfterCommit(tx, () => wakeJobs(options));
+    if (
+      parsed.some(
+        (task) =>
+          task.kind !== "maintenance.purchase-discovery" &&
+          task.kind !== "calendar-feed.mark-dirty",
+      )
+    )
+      await runAfterCommit(tx, () => wakeJobs(options));
   });
   return { count: tasks.length };
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { definePass } from "~/server/kernel/api";
 
-import { discoverPurchases } from "./catch-up";
+import { discoverPurchases, recoverMissedWork } from "./catch-up";
 
 const cursorSchema = z.object({
   senderAfter: z
@@ -16,6 +16,7 @@ export const purchaseDiscoveryPass = definePass({
   name: "purchase.discovery",
   async run(db, raw) {
     const cursor = cursorSchema.parse(raw ?? {});
+    await recoverMissedWork(db);
     const next = await discoverPurchases(db, cursor);
     return { cursor: { senderAfter: next.senderAfter }, done: !next.more };
   },

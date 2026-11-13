@@ -416,11 +416,6 @@ async function launchPassRun(
       })
       .where(eq(runTable.id, input.runId));
     if (!input.automatic) await reviveRunEvaluations(tx, input.runId);
-    await runAfterCommit(tx, async () => {
-      await (
-        await import("../background-tasks/publish")
-      ).wakeJobs({ source: "run-launch" });
-    });
     return {
       attempt: generation,
       instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`,
