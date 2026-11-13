@@ -66,7 +66,7 @@ export function pendingSuggestionRecordsSql(
           sql`SELECT ${"recommendation"}::text AS family, endpoints.entity, endpoints.token FROM "ScopeState" s
       JOIN LATERAL (SELECT e.* FROM "ConnectionCandidateEvidence" e WHERE e."scopeKey"=s."scopeKey" ORDER BY e."createdAt" DESC, e.id DESC LIMIT 1) e ON true
       CROSS JOIN LATERAL (VALUES (e."sourceEntity",e."sourceId"::text),(e."targetEntity",e."targetId"::text)) endpoints(entity,token)
-      WHERE s."scopeKind"=${"connections"} AND jsonb_array_length(s.gaps)>0`,
+      WHERE s."scopeKind"=${"connections"} AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap WHERE gap->>${"actor"}=${"you"})`,
         ]
       : []),
     // An explicit correction its Suggestion never applied stays a manual notice.

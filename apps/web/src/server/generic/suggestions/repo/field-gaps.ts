@@ -40,7 +40,7 @@ export async function readFieldSuggestions(
     WHERE s."scopeKind"=${"fields"} AND a.feature=${"field-suggestion"}
       AND jsonb_typeof(a.output->${"proposal"})=${"object"}
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap,
-        jsonb_array_elements(gap->${"actions"}) action WHERE action->>${"field"}=k.input->${"input"}->>${"field"}
+        jsonb_array_elements(gap->${"actions"}) action WHERE gap->>${"actor"}=${"you"} AND action->>${"field"}=k.input->${"input"}->>${"field"}
           AND action->${"value"}=a.output->${"proposal"}->${"value"})
       ${ids ? sql`AND k.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${
