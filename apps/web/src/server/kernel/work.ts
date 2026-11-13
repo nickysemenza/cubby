@@ -89,7 +89,7 @@ export async function readNeedsYou(
       WHERE m."scopeKind" IN ('fields', 'quality')
         AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
       UNION
-      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, m.gap->>${"input"}, m.gap->>'since'
+      SELECT m."scopeKind", m."scopeKey", e.kind, e.shortcode, m.stage, m.gap->>${"input"}, m.gap->'actions', m.gap->>'since'
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
       JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL

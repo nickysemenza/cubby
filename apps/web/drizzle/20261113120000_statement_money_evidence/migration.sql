@@ -1,3 +1,4 @@
+-- Baseline bindings preserve stored ledger identities and exact minor-unit values.
 CREATE TABLE "ManualEntry" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
 	"entity" text NOT NULL,

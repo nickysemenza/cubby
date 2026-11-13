@@ -11,7 +11,7 @@ import {
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
 
-export const automaticDecisionFamily = suggestionFamily;
+const automaticDecisionFamily = suggestionFamily;
 
 const automaticDecisionFilters = z.object({
   family: automaticDecisionFamily.optional(),
@@ -51,7 +51,7 @@ export const automaticDecisionRow = z.object({
     })
     .nullable(),
 });
-export type AutomaticDecisionRow = z.infer<typeof automaticDecisionRow>;
+
 export const automaticDecisionListOut = z.object({
   items: z.array(automaticDecisionRow),
   totalCount: z.number().int().nonnegative(),

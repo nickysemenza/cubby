@@ -195,6 +195,8 @@ export type SourceRef =
       readonly table: PgTable;
       readonly name: string;
       readonly columns: readonly string[];
+      /** Committed money history informs Catalog inference without an ordering dependency. */
+      readonly history?: true;
     }
   | { readonly type: "evidence"; readonly evidence: EvidenceKind }
   | { readonly type: "bindings" };
@@ -208,6 +210,16 @@ export const source = {
     table,
     name: getTableName(table),
     columns,
+  }),
+  history: <T extends PgTable>(
+    table: T,
+    columns: readonly (keyof T["_"]["columns"] & string)[],
+  ): SourceRef => ({
+    type: "table",
+    table,
+    name: getTableName(table),
+    columns,
+    history: true,
   }),
   evidence: <T extends KeyedTable>(evidence: EvidenceKind<T>): SourceRef => ({
     type: "evidence",

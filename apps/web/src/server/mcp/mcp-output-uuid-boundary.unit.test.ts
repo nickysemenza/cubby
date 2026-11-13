@@ -124,7 +124,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "suggestions_read.items[].field.acceptanceReceipt.auditIds[]",
   "suggestions_read.items[].field.id",
   // A draft preview echoes the same Suggestion child-row handle for explicit review.
-  "finance_read.suggestionId",
   // Each review result names its Suggestion and the opaque Feedback row it
   // recorded; neither is an entity.
   "suggestions.results[].item.suggestionId",

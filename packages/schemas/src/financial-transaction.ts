@@ -464,9 +464,7 @@ export const financialTransactionImportPreviewOut = z.object({
     indistinguishableDuplicate: z.number().int(),
   }),
 });
-export type FinancialTransactionImportPreviewOut = z.infer<
-  typeof financialTransactionImportPreviewOut
->;
+
 const rawFinancialTransactionImportPreviewRow =
   financialTransactionImportPreviewRow.extend({
     existingTransactions: z

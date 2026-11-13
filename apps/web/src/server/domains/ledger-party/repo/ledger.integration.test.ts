@@ -12,7 +12,6 @@ import {
   expenseAttribution,
   financialAccount,
   financialTransaction,
-  financialTransactionAllocation,
   ledgerParty,
   ledgerSourceClaim,
   ledgerTransfer,
@@ -26,6 +25,7 @@ import {
   updateFinancialAccount,
 } from "~/server/domains/financial-account/repo/financial-account";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createLedgerParty,
   deleteLedgerParties,
@@ -200,13 +200,11 @@ describe("consolidated household ledger", () => {
         postedDate: "2026-08-20",
       },
     );
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: allocated.id,
-        purchaseId: allocatedPurchase.id,
-        amountMinor: moneyToMinor(12),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: allocated.id,
+      purchaseId: allocatedPurchase.id,
+      amountMinor: moneyToMinor(12),
+    });
     const expectInvalidEvidence = async (
       rows: Array<{ shortcode: string }>,
       message: string,
@@ -408,22 +406,20 @@ describe("consolidated household ledger", () => {
       costType: "materials",
       trade: "other",
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: expense.id,
-          role: "funder",
-          ledgerPartyId: keep.entityId,
-          weight: 2,
-        },
-        {
-          expenseId: expense.id,
-          role: "funder",
-          ledgerPartyId: lose.entityId,
-          weight: 3,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: expense.id,
+        role: "funder",
+        ledgerPartyId: keep.entityId,
+        weight: 2,
+      },
+      {
+        expenseId: expense.id,
+        role: "funder",
+        ledgerPartyId: lose.entityId,
+        weight: 3,
+      },
+    ]);
     const largeExpense = await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",
       name: "Large-weight placeholder expense",
@@ -432,22 +428,20 @@ describe("consolidated household ledger", () => {
       costType: "materials",
       trade: "other",
     });
-    await unwrapDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: largeExpense.id,
-          role: "funder",
-          ledgerPartyId: keep.entityId,
-          weight: 3_000_000_000,
-        },
-        {
-          expenseId: largeExpense.id,
-          role: "funder",
-          ledgerPartyId: lose.entityId,
-          weight: 4_000_000_000,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: largeExpense.id,
+        role: "funder",
+        ledgerPartyId: keep.entityId,
+        weight: 3_000_000_000,
+      },
+      {
+        expenseId: largeExpense.id,
+        role: "funder",
+        ledgerPartyId: lose.entityId,
+        weight: 4_000_000_000,
+      },
+    ]);
     const transfer = await createLedgerTransfer(
       ctx.db,
       {

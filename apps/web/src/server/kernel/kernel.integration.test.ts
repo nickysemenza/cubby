@@ -20,6 +20,7 @@ import {
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
 import {
+  auditLog,
   ledgerParty,
   transactionImport,
   vendor,
@@ -44,13 +45,11 @@ import {
   defineReconciler,
   source,
   defineEvidence,
-  defineReconciler,
   writes,
   definePass,
   evidenceRow,
   recordSubject,
   type Kernel,
-  source,
 } from "./api";
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
@@ -140,7 +139,7 @@ describe("evidence-facts kernel", () => {
       scope: scope.kind,
       version: 1,
       lane: "catalog",
-      reads: [source.table(fixtureReceipt, ["sourceRef"])],
+      reads: [source.history(fixtureReceipt, ["sourceRef"])],
       writes: [],
       async load(reads, keys) {
         return new Map(
@@ -769,6 +768,65 @@ describe("evidence-facts kernel", () => {
         )
       ).rows,
     ).toHaveLength(1);
+  });
+
+  it("applies several field patches to one row in a single fenced update", async () => {
+    const original = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic original vendor",
+    });
+    const target = writes(vendor, ["name", "aliases"], { entity: "vendor" });
+    const reconciler = defineReconciler({
+      scope: "fixture.catalogPatches",
+      lane: "catalog",
+      version: 1,
+      reads: [source.table(vendor, ["name", "aliases"])],
+      writes: [target],
+      load: (reads, keys) => reads.rows(vendor, keys),
+      reconcile(row, c) {
+        c.patch(target, row.id, { name: "Synthetic revised vendor" });
+        c.patch(target, row.id, { aliases: ["Synthetic vendor alias"] });
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "patches", reconcilers: [reconciler] }),
+    ]);
+    const scope = { kind: reconciler.scope, key: original.id };
+    await kernel.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [original.id],
+      columns: ["name"],
+      discovers: [scope],
+    });
+    expect((await kernel.reconcileNow(ctx.db, [scope]))[0]?.status).toBe(
+      "applied",
+    );
+    expect(
+      (
+        await repositoryQueries(ctx.db)
+          .select()
+          .from(vendor)
+          .where(eq(vendor.id, original.id))
+      )[0],
+    ).toMatchObject({
+      name: "Synthetic revised vendor",
+      aliases: ["Synthetic vendor alias"],
+    });
+    expect((await kernel.reconcileNow(ctx.db, [scope]))[0]?.status).toBe(
+      "applied",
+    );
+    const audit = await repositoryQueries(ctx.db)
+      .select({ provenance: auditLog.provenance })
+      .from(auditLog)
+      .where(eq(auditLog.entityId, original.id));
+    expect(audit).toHaveLength(2);
+    expect(
+      audit.every(
+        (entry) =>
+          entry.provenance?.scope.kind === scope.kind &&
+          entry.provenance.scope.key === scope.key,
+      ),
+    ).toBe(true);
   });
 
   it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {
@@ -1481,7 +1539,9 @@ describe("evidence-facts kernel", () => {
         key: `row:Vendor:${seller.id}`,
       }),
     );
-    expect(await dirtyCount(ctx.db)).toBe(0);
+    const dirty = await repositoryQueries(ctx.db).execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind} AND "scopeKey"=${scope.key}`);
+    expect(dirty.rows[0]?.n).toBe(0);
     expect(await repositoryQueries(ctx.db).select().from(drift)).toEqual([]);
   });
 

@@ -2451,7 +2451,13 @@ export const productMergeEdgeHandlers = (context: ProductMergeEdgeContext) => {
       }
     },
     moveExpenses: async () => {
-      const movedExpenses = await updatePurchaseEventWhere(tx, "expense", { productId: keepId }, and(inArray(expense.productId, plan.loserIds), notDeleted(expense)), actor);
+      const movedExpenses = await updatePurchaseEventWhere(
+        tx,
+        "expense",
+        { productId: keepId },
+        and(inArray(expense.productId, plan.loserIds), notDeleted(expense)),
+        actor,
+      );
       summary.expensesMoved = movedExpenses.length;
       await logAuditEntries(
         tx,

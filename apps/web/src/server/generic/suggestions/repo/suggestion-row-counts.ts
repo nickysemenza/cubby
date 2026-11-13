@@ -38,11 +38,7 @@ export async function loadSuggestionRowCounts(
           database,
           {
             kind: "suggestions",
-            families: [
-              "statement_transaction",
-              "transfer_pair",
-              "product_pair",
-            ],
+            families: ["transfer_pair", "product_pair"],
             status: suggestionStatus.enum.pending,
           },
           {

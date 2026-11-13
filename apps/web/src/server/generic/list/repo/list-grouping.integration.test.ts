@@ -11,10 +11,10 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import {
   ledgerParty,
-  expenseAttribution,
   product as productTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   createLedgerParty,
   ledgerPartyScaffold,
@@ -639,22 +639,20 @@ describe("expanded grouped list memberships", () => {
     const knownParty = await createRepoEntity(ctx, "ledgerParty", {
       name: "Grouping known party",
     });
-    await getDb(ctx.db)
-      .insert(expenseAttribution)
-      .values([
-        {
-          expenseId: basis.entityId,
-          role: "funder",
-          ledgerPartyId: knownParty.entityId,
-          weight: 1,
-        },
-        {
-          expenseId: basis.entityId,
-          role: "beneficiary",
-          ledgerPartyId: null,
-          weight: 1,
-        },
-      ]);
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
+      {
+        expenseId: basis.entityId,
+        role: "funder",
+        ledgerPartyId: knownParty.entityId,
+        weight: 1,
+      },
+      {
+        expenseId: basis.entityId,
+        role: "beneficiary",
+        ledgerPartyId: null,
+        weight: 1,
+      },
+    ]);
     const byParty = await executeEntity(kernel(), {
       action: "list",
       entity: "expense",
@@ -677,7 +675,7 @@ describe("expanded grouped list memberships", () => {
         date: "2026-01-01",
       }),
     );
-    await getDb(ctx.db).insert(expenseAttribution).values({
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
       expenseId: complete.entityId,
       role: "funder",
       ledgerPartyId: knownParty.entityId,

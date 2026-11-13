@@ -1,5 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
-
 import {
   decisionConfidence,
   financeCategoryReviewSchema,
@@ -63,7 +61,6 @@ import {
 import { fieldPrecedents } from "~/server/ai/field-suggest/precedents";
 import {
   fieldSuggestSpecFor,
-  withFieldSuggestionPreparation,
   type FieldSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
 import { type AiCallOwner } from "~/server/ai/policy/call-owner";
@@ -1025,28 +1022,8 @@ async function savedSuggestionContext(
   db: Database,
   input: FieldSuggestionsInput,
 ) {
-  const batch = savedContexts.getStore();
-  if (!batch) return loadSavedSuggestionContext(db, input);
-  const key = JSON.stringify([
-    input.entity,
-    input.entityId,
-    requestsReview(input, "finance"),
-    requestsReview(input, "vendor"),
-  ]);
-  let result = batch.get(key);
-  if (!result) {
-    result = loadSavedSuggestionContext(db, input);
-    batch.set(key, result);
-  }
-  return result;
+  return loadSavedSuggestionContext(db, input);
 }
-
-const savedContexts = new AsyncLocalStorage<
-  Map<string, ReturnType<typeof loadSavedSuggestionContext>>
->();
-
-export const withFieldSuggestionBatch = <T>(work: () => Promise<T>) =>
-  savedContexts.run(new Map(), () => withFieldSuggestionPreparation(work));
 
 const requestsReview = (
   input: FieldSuggestionsInput,

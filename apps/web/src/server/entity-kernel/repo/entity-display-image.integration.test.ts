@@ -30,6 +30,7 @@ import {
 } from "~/server/domains/cookbook/repo/cookbook";
 import { createDevice } from "~/server/domains/device/repo/device";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { updateBankTransactionsWhere } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   createGardenEntry,
   createPlanting,
@@ -228,10 +229,11 @@ describe("entity display image resolver", () => {
         count: 1,
       });
     }
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(eq(financialTransaction.id, transaction.entityId));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { deletedAt: new Date() },
+      eq(financialTransaction.id, transaction.entityId),
+    );
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
     ).toBeUndefined();
@@ -325,10 +327,11 @@ describe("entity display image resolver", () => {
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key)?.url,
     ).toBe(getR2PublicUrl(otherLogo.key));
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ deletedAt: new Date() })
-      .where(eq(financialTransaction.id, confirmed.entityId));
+    await updateBankTransactionsWhere(
+      ctx.db,
+      { deletedAt: new Date() },
+      eq(financialTransaction.id, confirmed.entityId),
+    );
     await addHistory(otherPurchase.output.id);
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),

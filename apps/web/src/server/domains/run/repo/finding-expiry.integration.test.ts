@@ -9,6 +9,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
@@ -114,11 +115,11 @@ describe("finding expiry", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic finding vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       displayLabel: "Synthetic finding order",
     });
-    const line = await insertWithShortcode(ctx.db, "expense", {
+    const line = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic unlinked line",
       purchaseId: purchase.id,
       cost: 1000n,

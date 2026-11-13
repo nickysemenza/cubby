@@ -331,14 +331,33 @@ describe("incomplete itemized purchase identity", () => {
         booking: "partial",
         itemization: "present",
       });
-      const original = await lines();
+      const insertedLines = await lines();
+      const bindings = await getDb(ctx.db)
+        .select({
+          expenseId: importSourceProduct.expenseId,
+          lineIndex: importSourceProduct.lineIndex,
+        })
+        .from(importSourceProduct)
+        .innerJoin(
+          importSourceOrder,
+          eq(importSourceOrder.id, importSourceProduct.sourceOrderId),
+        )
+        .where(eq(importSourceOrder.purchaseId, purchaseId))
+        .orderBy(importSourceProduct.lineIndex);
+      const original = bindings.map((binding) => {
+        const row = insertedLines.find((line) => line.id === binding.expenseId);
+        if (!row) throw new Error("Synthetic foreign line binding is missing");
+        return row;
+      });
+      const reviewedItem = original[0]!;
       expect(original).toHaveLength(4);
       expect(original.map((row) => row.cost)).toEqual([null, null, null, null]);
       expect(
         original
           .filter((row) => row.productId === item.entityId)
-          .map((row) => row.productQuantity),
-      ).toEqual([2, 2, null]);
+          .map((row) => row.productQuantity)
+          .sort((a, b) => (a ?? -1) - (b ?? -1)),
+      ).toEqual([null, 2, 2]);
       const [order] = await getDb(ctx.db)
         .select()
         .from(purchase)
@@ -393,21 +412,21 @@ describe("incomplete itemized purchase identity", () => {
       await expect(
         updateExpense(
           ctx.db,
-          parseShortcodeFor("expense", original[0]!.shortcode),
+          parseShortcodeFor("expense", reviewedItem.shortcode),
           { cost: 28 },
           ctx.actor,
         ),
       ).rejects.toThrow(/reviewed source reconciliation/);
       await updateExpense(
         ctx.db,
-        parseShortcodeFor("expense", original[0]!.shortcode),
+        parseShortcodeFor("expense", reviewedItem.shortcode),
         { lineKind: "fee", productId: null },
         ctx.actor,
       );
       await expect(
         updateExpense(
           ctx.db,
-          parseShortcodeFor("expense", original[0]!.shortcode),
+          parseShortcodeFor("expense", reviewedItem.shortcode),
           { cost: 10 },
           ctx.actor,
         ),
@@ -418,21 +437,21 @@ describe("incomplete itemized purchase identity", () => {
       });
       await updateExpense(
         ctx.db,
-        parseShortcodeFor("expense", original[0]!.shortcode),
+        parseShortcodeFor("expense", reviewedItem.shortcode),
         { purchaseId: parseShortcodeFor("purchase", otherOrder.shortcode) },
         ctx.actor,
       );
       await expect(
         updateExpense(
           ctx.db,
-          parseShortcodeFor("expense", original[0]!.shortcode),
+          parseShortcodeFor("expense", reviewedItem.shortcode),
           { cost: 10 },
           ctx.actor,
         ),
       ).rejects.toThrow(/reviewed source reconciliation/);
       await updateExpense(
         ctx.db,
-        parseShortcodeFor("expense", original[0]!.shortcode),
+        parseShortcodeFor("expense", reviewedItem.shortcode),
         {
           purchaseId: parseShortcodeFor("purchase", order.shortcode),
           lineKind: "principal",

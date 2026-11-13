@@ -293,6 +293,18 @@ describe("spending category merge", () => {
     const child = await category("Synthetic pet toys");
     await merge(pets.shortcode, [pet.shortcode]);
     const late = await referencesTo(pet.id);
+    // Reconciled money references resolve an absorbed category to its survivor.
+    for (const [table, row] of [
+      [expense, late.line],
+      [purchase, late.order],
+      [financialTransaction, late.transaction],
+    ] as const) {
+      const [saved] = await unwrapDb(ctx.db)
+        .select({ category: table.spendingCategoryId })
+        .from(table)
+        .where(eq(table.id, row.id));
+      expect(saved?.category).toBe(pets.id);
+    }
     await unwrapDb(ctx.db)
       .update(spendingCategory)
       .set({ parentId: pet.id })
@@ -302,9 +314,6 @@ describe("spending category merge", () => {
       .map((row) => [row.edgeKey, row.sourceId]);
     expect(reported).toEqual(
       expect.arrayContaining([
-        ["Expense.spendingCategoryId", late.line.id],
-        ["Purchase.spendingCategoryId", late.order.id],
-        ["FinancialTransaction.spendingCategoryId", late.transaction.id],
         ["Vendor.defaultSpendingCategoryId", late.shop.id],
         ["ProductCategory.spendingCategoryId", late.mapping.id],
         ["SpendingCategory.parentId", child.id],

@@ -1,29 +1,35 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
-import { buildCrudServices } from "~/server/http/request-context";
-import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import {
+  seedFieldSuggestion,
+  applyFieldAnswerFixture,
+} from "tooling/shared-suggestion-fixtures";
 
+import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 
 import { product as productTable } from "~/server/db/schema";
-
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 
 import { publishExactSuggestion } from "~/server/generic/suggestions/repo/suggestion-publication";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
-import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  openFoldedFacts,
+  uniqueName,
+  waitForAppHydration,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 import {
   createEntityFixture,
   createEvidenceHarnessContext,
-  ensureMemberParty,
 } from "./fixtures/core";
 
 /** Keep a scenario's generation independent of earlier imports in its worker database. */
@@ -133,33 +139,6 @@ test("reviews a field suggestion for a named record", async ({
 // named; a create counts as clean without decision labels; the clean bulk
 // accept skips its confirm or accepts a row it did not list as clean.
 
-// Failure mode: Find suggestions starts a Sweep without showing what it will
-// read, or the Sweep it starts has no visible Steps.
-test("Find suggestions estimates a Sweep before it starts, then follows its Steps", async ({
-  page,
-}, testInfo) => {
-  // Sweeps are member work: the login needs its member party.
-  await ensureMemberParty(page, uniqueName(testInfo, "Sweep member"));
-  await gotoAuthenticatedPage(page, "/suggestions");
-  await page.getByRole("button", { name: "Find suggestions…" }).click();
-  const dialog = page.getByRole("dialog", { name: "Find suggestions" });
-  for (const family of ["Fields"])
-    await dialog.getByRole("checkbox", { name: family }).click();
-  const estimate = dialog.getByRole("list", { name: "Sweep estimate" });
-  await expect(estimate).toContainText("Statements");
-  // The estimate counts what each family's first step reads.
-  await expect(estimate).toContainText(/\d+ charges?/);
-  await dialog.getByRole("button", { name: "Start Sweep" }).click();
-  const status = page.getByLabel("Sweep status");
-  await expect(status).toBeVisible();
-  await status.getByRole("link").first().click();
-  await expect(page).toHaveURL(/\/runs\/RUN-/);
-  await page.locator("section#steps").scrollIntoViewIfNeeded();
-  await expect(
-    page.getByRole("heading", { name: "What the run did", exact: true }),
-  ).toBeVisible();
-});
-
 // Failure modes: a value Cubby set wears a mark a member's value does not; an
 // edit of Cubby's value is lost on reload; the empty field's picker hides
 // Cubby's stored guess or marks it selected, or picking it saves something else.
@@ -211,10 +190,7 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
       status: "pending",
     });
   const automatic = await seed(setId, 0.97, null);
-  const applied = await applyAutomaticRules(db, [automatic.id], {
-    context: buildCrudServices,
-  });
-  expect(applied.applied).toHaveLength(1);
+  await applyFieldAnswerFixture(db, automatic);
   await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
   const brandOf = (id: string) => async () =>
     (

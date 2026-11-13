@@ -144,7 +144,11 @@ export async function reconcileNow(
     await sleep(100);
   }
   for (const scope of pending.values())
-    outcomes.set(`${scope.kind}\u0000${scope.key}`, { scope, status: "waiting", gaps: [] });
+    outcomes.set(`${scope.kind}\u0000${scope.key}`, {
+      scope,
+      status: "waiting",
+      gaps: [],
+    });
   if (options.runId) {
     const q = repositoryQueries(db);
     await q.execute(sql`

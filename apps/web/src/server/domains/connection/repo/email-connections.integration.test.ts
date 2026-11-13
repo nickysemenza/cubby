@@ -16,6 +16,7 @@ import {
   orderMail,
   orderMailEvent,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
@@ -283,10 +284,12 @@ describe("fresh retained Email connection recommendations", () => {
       vendorId: f.purchase.vendorId,
       ledgerPartyId: foreign.id,
     });
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: account.id })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: account.id },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     await getDb(ctx.db)
       .update(vendorAccount)
@@ -302,10 +305,12 @@ describe("fresh retained Email connection recommendations", () => {
       .where(eq(vendorAccount.id, account.id));
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
     expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ vendorAccountId: null })
-      .where(eq(purchaseTable.id, f.purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorAccountId: null },
+      eq(purchaseTable.id, f.purchase.id),
+    );
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );

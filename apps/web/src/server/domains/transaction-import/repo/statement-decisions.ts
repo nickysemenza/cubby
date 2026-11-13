@@ -8,7 +8,6 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { withTransactionDatabase } from "~/server/db/helpers/core";
 import { recordKey } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
@@ -18,6 +17,7 @@ import {
   sourceTransactionRecord,
 } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
+import { householdWrite } from "~/server/kernel/api";
 import type { DecisionInput, Outcome } from "~/server/kernel/api";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
@@ -43,7 +43,7 @@ export async function decideStatement(
   } = await import("~/server/kernel/api");
   const { updateBankTransactions } =
     await import("~/server/domains/financial-transaction/repo/bank-mutations");
-  return withTransactionDatabase(db, async (tx) => {
+  return householdWrite(db, async (tx) => {
     const q = repositoryQueries(tx);
     const [observation] = await q
       .select()

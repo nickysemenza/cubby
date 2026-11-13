@@ -16,7 +16,6 @@ import {
   databaseForTransaction,
   isTransaction,
   unwrapDb,
-  withTransaction,
 } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { evidenceBinding, recordKey } from "~/server/db/kernel-schema";
@@ -76,10 +75,10 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
   options: { basis?: "manual" | "decision" } = {},
 ): Promise<Saved<K>[]> {
   if (!inputs.length) return [];
-  return withTransaction(
+  const { householdWrite } = await import("~/server/kernel/api");
+  return householdWrite(
     isTransaction(db) ? databaseForTransaction(db) : db,
-    async (tx) => {
-      const database = databaseForTransaction(tx);
+    async (database) => {
       const { purchaseEventTables } =
         await import("~/server/domains/financial-transaction/repo/purchase-event-records");
       const { target, table } = purchaseEventTables[entity];
@@ -263,65 +262,68 @@ export async function updatePurchaseEventRecords<K extends PurchaseEventTable>(
   actor: ActorContext,
 ): Promise<void> {
   if (!changes.length) return;
-  const { purchaseEventTables } =
-    await import("~/server/domains/financial-transaction/repo/purchase-event-records");
-  const { target } = purchaseEventTables[entity];
-  const owners = await repositoryQueries(db)
-    .select()
-    .from(recordKey)
-    .where(
-      and(
-        eq(recordKey.entity, target.entity ?? target.name),
-        inArray(
-          recordKey.entityId,
-          changes.map((change) => change.id),
+  const { householdWrite } = await import("~/server/kernel/api");
+  return householdWrite(db, async (db) => {
+    const { purchaseEventTables } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-records");
+    const { target } = purchaseEventTables[entity];
+    const owners = await repositoryQueries(db)
+      .select()
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.entity, target.entity ?? target.name),
+          inArray(
+            recordKey.entityId,
+            changes.map((change) => change.id),
+          ),
         ),
+      );
+    if (
+      changes.some(
+        (change) => !owners.some((owner) => owner.entityId === change.id),
+      )
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        `The ${target.name} has no purchase-event ownership.`,
+      );
+    const { decide, reconcileNow, recordSubject } =
+      await import("~/server/kernel/api");
+    await decide(
+      db,
+      actor,
+      changes.flatMap((change) =>
+        Object.entries(change.values)
+          .filter(
+            ([field, value]) =>
+              value !== undefined && target.columns.includes(field),
+          )
+          .map(([field, value]) => ({
+            channel: "assignment",
+            kind: value === null ? "none" : "set",
+            subject: recordSubject(target.entity ?? target.name, change.id),
+            field,
+            value: jsonSnapshot.parse(
+              typeof value === "bigint" ? value.toString() : value,
+            ),
+          })),
       ),
     );
-  if (
-    changes.some(
-      (change) => !owners.some((owner) => owner.entityId === change.id),
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `The ${target.name} has no purchase-event ownership.`,
+    const outcomes = await reconcileNow(
+      db,
+      owners.map((owner) => ({ kind: owner.scopeKind, key: owner.scopeKey })),
     );
-  const { decide, reconcileNow, recordSubject } =
-    await import("~/server/kernel/api");
-  await decide(
-    db,
-    actor,
-    changes.flatMap((change) =>
-      Object.entries(change.values)
-        .filter(
-          ([field, value]) =>
-            value !== undefined && target.columns.includes(field),
-        )
-        .map(([field, value]) => ({
-          channel: "assignment",
-          kind: value === null ? "none" : "set",
-          subject: recordSubject(target.entity ?? target.name, change.id),
-          field,
-          value: jsonSnapshot.parse(
-            typeof value === "bigint" ? value.toString() : value,
-          ),
-        })),
-    ),
-  );
-  const outcomes = await reconcileNow(
-    db,
-    owners.map((owner) => ({ kind: owner.scopeKind, key: owner.scopeKey })),
-  );
-  const failure = outcomes.find(
-    (outcome) => outcome.status === "failed" || outcome.status === "conflict",
-  );
-  if (failure)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      failure.error ??
-        "The purchase event changed while applying the decision.",
+    const failure = outcomes.find(
+      (outcome) => outcome.status === "failed" || outcome.status === "conflict",
     );
+    if (failure)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        failure.error ??
+          "The purchase event changed while applying the decision.",
+      );
+  });
 }
 
 /** Builder callers retain their predicate; its next values become decisions. */
@@ -336,73 +338,78 @@ export async function updatePurchaseEventWhere<K extends PurchaseEventTable>(
   where: SQL | undefined,
   actor: ActorContext = systemActor(),
 ): Promise<InferSelectModel<Table<K>>[]> {
-  const database = isTransaction(db) ? databaseForTransaction(db) : db;
-  const { purchaseEventTables } =
-    await import("~/server/domains/financial-transaction/repo/purchase-event-records");
-  const { table, target } = purchaseEventTables[entity];
-  const columns = getTableColumns(table);
-  const entries = Object.entries(values).filter(
-    ([, value]) => value !== undefined,
-  );
-  const selected = {
-    id: table.id,
-    ...Object.fromEntries(
-      entries
-        .filter(([field]) => target.columns.includes(field))
-        .map(([field, value]) => {
-          const column = Object.entries(columns).find(
-            ([name]) => name === field,
-          )?.[1];
-          if (!column)
-            throw new Error(`Unknown ${target.name} column ${field}`);
-          return [
-            field,
-            sql`CAST(${value} AS ${sql.raw(column.getSQLType())})`
-              .mapWith(column)
-              .as(field),
-          ];
-        }),
-    ),
-  };
-  const rows = await repositoryQueries(database)
-    .select(selected)
-    .from(table)
-    .where(where);
-  await updatePurchaseEventRecords(
-    database,
-    entity,
-    rows.map((row) => ({
-      id: row.id,
-      // SAFETY: selected expressions have the insert column names supplied above.
-      values: Object.fromEntries(
-        Object.entries(row).filter(([field]) => field !== "id"),
-      ) as Partial<InferInsertModel<Table<K>>>,
-    })),
-    actor,
-  );
-  const authored = entries.filter(([field]) => !target.columns.includes(field));
-  if (rows.length && authored.length)
-    await unwrapDb(database).execute(
-      sql`UPDATE ${table} SET ${sql.join(
-        authored.map(([field, value]) => {
-          const column = Object.entries(columns).find(
-            ([name]) => name === field,
-          )?.[1];
-          if (!column)
-            throw new Error(`Unknown ${target.name} column ${field}`);
-          return sql`${sql.identifier(column.name)} = ${value}`;
-        }),
-        sql`, `,
-      )} WHERE ${table.id} = ANY(${textArrayParam(rows.map((row) => row.id))}::uuid[])`,
+  const source = isTransaction(db) ? databaseForTransaction(db) : db;
+  const { householdWrite } = await import("~/server/kernel/api");
+  return householdWrite(source, async (database) => {
+    const { purchaseEventTables } =
+      await import("~/server/domains/financial-transaction/repo/purchase-event-records");
+    const { table, target } = purchaseEventTables[entity];
+    const columns = getTableColumns(table);
+    const entries = Object.entries(values).filter(
+      ([, value]) => value !== undefined,
     );
-  if (!rows.length) return [];
-  // SAFETY: these are the table's typed rows, with its column decoding intact.
-  return (await repositoryQueries(database)
-    .select()
-    .from(table)
-    .where(
-      sql`${table.id} = ANY(${textArrayParam(rows.map((row) => row.id))}::uuid[])`,
-    )) as InferSelectModel<Table<K>>[];
+    const selected = {
+      id: table.id,
+      ...Object.fromEntries(
+        entries
+          .filter(([field]) => target.columns.includes(field))
+          .map(([field, value]) => {
+            const column = Object.entries(columns).find(
+              ([name]) => name === field,
+            )?.[1];
+            if (!column)
+              throw new Error(`Unknown ${target.name} column ${field}`);
+            return [
+              field,
+              sql`CAST(${value} AS ${sql.raw(column.getSQLType())})`
+                .mapWith(column)
+                .as(field),
+            ];
+          }),
+      ),
+    };
+    const rows = await repositoryQueries(database)
+      .select(selected)
+      .from(table)
+      .where(where);
+    await updatePurchaseEventRecords(
+      database,
+      entity,
+      rows.map((row) => ({
+        id: row.id,
+        // SAFETY: selected expressions have the insert column names supplied above.
+        values: Object.fromEntries(
+          Object.entries(row).filter(([field]) => field !== "id"),
+        ) as Partial<InferInsertModel<Table<K>>>,
+      })),
+      actor,
+    );
+    const authored = entries.filter(
+      ([field]) => !target.columns.includes(field),
+    );
+    if (rows.length && authored.length)
+      await unwrapDb(database).execute(
+        sql`UPDATE ${table} SET ${sql.join(
+          authored.map(([field, value]) => {
+            const column = Object.entries(columns).find(
+              ([name]) => name === field,
+            )?.[1];
+            if (!column)
+              throw new Error(`Unknown ${target.name} column ${field}`);
+            return sql`${sql.identifier(column.name)} = ${value}`;
+          }),
+          sql`, `,
+        )} WHERE ${table.id} = ANY(${textArrayParam(rows.map((row) => row.id))}::uuid[])`,
+      );
+    if (!rows.length) return [];
+    // SAFETY: these are the table's typed rows, with its column decoding intact.
+    return (await repositoryQueries(database)
+      .select()
+      .from(table)
+      .where(
+        sql`${table.id} = ANY(${textArrayParam(rows.map((row) => row.id))}::uuid[])`,
+      )) as InferSelectModel<Table<K>>[];
+  });
 }
 
 export async function createPurchaseEventRecord<K extends PurchaseEventTable>(

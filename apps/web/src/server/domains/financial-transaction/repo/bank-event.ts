@@ -61,7 +61,7 @@ export const bankTransactionWrites = writes(
 );
 
 /** The retained statement-kind question; this consumer never calls a producer. */
-export const statementKindAsk = defineAsk({
+const statementKindAsk = defineAsk({
   feature: "statement-transaction-kind",
   producer: "model",
   promptVersion: "2026-11-12.1",

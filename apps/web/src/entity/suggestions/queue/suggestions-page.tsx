@@ -7,7 +7,6 @@ import {
   suggestionCountsInput,
 } from "@cubby/schemas/suggestion-list";
 import { suggestionFilterDeclaration } from "@cubby/schemas/suggestion-list-declarations";
-import { humanize } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { ProhibitIcon } from "@phosphor-icons/react/dist/csr/Prohibit";

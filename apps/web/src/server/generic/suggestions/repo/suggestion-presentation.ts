@@ -54,8 +54,6 @@ export type SuggestionKey = {
   automaticRule: string | null;
 };
 
-export const stamps = z.array(z.string()).catch([]);
-
 /** `records` is set when the caller filters by recordIds (resolved, maybe empty). */
 export type SuggestionFamilyQuery = {
   filters: SuggestionListFilters;
@@ -210,7 +208,6 @@ for (const [entity, checks] of Object.entries(dataChecksByEntity))
     const key = `${entity}.${placement.field}`;
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
-
 
 /** Accept as is: the recommended action; an attach always names its candidate. */
 

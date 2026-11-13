@@ -6,7 +6,6 @@ import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { loadVendorAttributionDefaults } from "~/server/domains/expense/repo/attribution-defaults";
 import {
   createExpense,

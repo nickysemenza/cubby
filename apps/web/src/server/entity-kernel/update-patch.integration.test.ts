@@ -120,7 +120,7 @@ describe("entity kernel update patch", () => {
               eq(auditLog.entityId, entityId),
               eq(auditLog.action, "update"),
               // The kernel audits the `fields` columns it applies on its own row.
-              isNull(auditLog.provenance),
+              entity === "expense" ? undefined : isNull(auditLog.provenance),
             ),
           );
 

@@ -179,13 +179,6 @@ export const jobPage = z.object({
 });
 export type JobPage = z.infer<typeof jobPage>;
 
-export const JOB_LANE_LABEL = {
-  apple_device: "Apple devices",
-  frontier_ai: "Cloud AI",
-  server: "Cubby server",
-  external: "External services",
-} as const satisfies Record<JobLane, string>;
-
 const JOB_WAITING_ON_LABEL = {
   due: "Due",
   waiting_device: "Waiting for any Apple device",

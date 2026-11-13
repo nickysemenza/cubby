@@ -1,6 +1,6 @@
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { minorToMoney } from "@cubby/shared";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, or, sql, type SQL } from "drizzle-orm";
 import { TEST_ACTOR } from "tooling/test-setup";
 
 import type { Database } from "~/server/db/database";
@@ -100,4 +100,32 @@ export async function updateSeedBankTransaction(
     );
   if (!row) throw new Error("Synthetic transaction is missing");
   await updateBankTransactions(db, [{ id: row.id, values }], TEST_ACTOR);
+}
+
+/** Fixture corrections retain the production bank-event decision boundary. */
+export async function updateBankTransactionsWhere(
+  db: Database,
+  values: Partial<typeof financialTransaction.$inferInsert>,
+  where: SQL | undefined,
+) {
+  const rows = await repositoryQueries(db)
+    .select()
+    .from(financialTransaction)
+    .where(where);
+  await updateBankTransactions(
+    db,
+    rows.map((row) => ({ id: row.id, values })),
+    TEST_ACTOR,
+  );
+  const { bankTransactionWrites } = await import("./bank-event");
+  const metadata = Object.fromEntries(
+    Object.entries(values).filter(
+      ([field]) => !bankTransactionWrites.columns.includes(field),
+    ),
+  );
+  if (Object.keys(metadata).length)
+    await repositoryQueries(db)
+      .update(financialTransaction)
+      .set(metadata)
+      .where(where);
 }

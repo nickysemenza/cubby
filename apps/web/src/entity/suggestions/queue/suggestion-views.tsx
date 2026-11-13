@@ -4,11 +4,11 @@ import {
   type SuggestionListFamily,
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
+import { suggestionValueLabel } from "@cubby/schemas/suggestion-list-declarations";
 import {
   suggestionFilterDeclaration,
   suggestionRelationLists,
 } from "@cubby/schemas/suggestion-list-declarations";
-import { humanize } from "@cubby/shared";
 import type { ReactNode } from "react";
 
 import { EntityIcon } from "~/entity/entities";

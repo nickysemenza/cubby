@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import {
@@ -302,8 +303,11 @@ describe("loadProductQuantityLedgers", () => {
       productId: prod.id,
       productQuantity: -8,
     });
-    await getDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "productQuantity" = 8 WHERE "id" = ${returned.entityId}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { productQuantity: 8 },
+      sql`"id" = ${returned.entityId}`,
     );
     await seed({
       name: "bought 2 more",

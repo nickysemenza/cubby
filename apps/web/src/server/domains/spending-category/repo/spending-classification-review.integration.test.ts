@@ -13,6 +13,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   entityKernelContextSchema,
@@ -568,16 +569,22 @@ describe("reviewed spending classification", () => {
     };
     const preview = await previewSpendingClassificationReview(ctx.db, request);
     expect(preview.changedExpenseCount).toBe(1);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "costMinor"=900 WHERE id=${unrelated.id}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 900n },
+      sql`id=${unrelated.id}`,
     );
     const stillCurrent = await previewSpendingClassificationReview(
       ctx.db,
       request,
     );
     expect(stillCurrent.fingerprint).toBe(preview.fingerprint);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "vendorId"=${reviewed.id} WHERE id=${joining.purchaseId}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { vendorId: reviewed.id },
+      sql`id=${joining.purchaseId}`,
     );
     await expect(
       applySpendingClassificationReview(context(), {
@@ -622,8 +629,11 @@ describe("reviewed spending classification", () => {
       "objects",
     );
     expect(before[0]?.spendingCategoryId).toBeNull();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "costMinor"=1500 WHERE id=${expense.id}`,
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 1500n },
+      sql`id=${expense.id}`,
     );
     await expect(
       applySpendingClassificationReview(context(), {

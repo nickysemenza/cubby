@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
-import { AUTOMATIC_AI_CALL } from "~/server/ai/policy/call-owner";
 import {
   getDb,
   insertAndReturn,
@@ -30,6 +29,7 @@ import {
   product,
   vendor,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   updateProduct,
   deleteProducts,
@@ -556,10 +556,12 @@ describe("vendor repository — mergeVendors", () => {
         .set({ orderEmailSenders: ["late@synthetic-seller.example"] })
         .where(eq(vendor.id, lose.entityId));
 
-      await tx
-        .update(purchase)
-        .set({ notes: sql`${purchase.notes} || E'\nConcurrent research'` })
-        .where(eq(purchase.id, keeper.entityId));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        { notes: sql`${purchase.notes} || E'\nConcurrent research'` },
+        eq(purchase.id, keeper.entityId),
+      );
     });
     const pid = await locked.promise;
     const merging = mergeVendors(

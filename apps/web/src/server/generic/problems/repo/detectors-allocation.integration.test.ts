@@ -10,9 +10,10 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
-import { getDb, insertAndReturn } from "~/server/db/helpers";
-import { financialTransactionAllocation } from "~/server/db/schema";
+import { getDb } from "~/server/db/helpers";
+import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { type ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -71,15 +72,19 @@ const mkTransaction = async (
   };
   // Only a transaction that actually settles a purchase gets an allocation;
   // the rest are unlinked evidence and take the plain insert.
-  return overrides.purchaseId
-    ? insertSettlementTransaction(db, {
-        ...values,
-        purchaseId: overrides.purchaseId,
-      })
-    : insertWithShortcode(db, "financialTransaction", {
-        ...values,
-        amount: moneyToMinor(values.amount),
-      });
+  if (overrides.purchaseId)
+    return insertSettlementTransaction(db, {
+      ...values,
+      purchaseId: overrides.purchaseId,
+    });
+  const row = await insertWithShortcode(db, "financialTransaction", {
+    ...values,
+    kind: values.amount < 0 ? "refund" : "purchase",
+    amount: moneyToMinor(values.amount),
+  });
+  if (row.kind !== values.kind)
+    await updateSeedBankTransaction(db, row.id, { kind: values.kind });
+  return { ...row, kind: values.kind };
 };
 
 const allocate = (
@@ -88,7 +93,7 @@ const allocate = (
   purchaseId: PurchaseId,
   amount: number,
 ) =>
-  insertAndReturn(db, financialTransactionAllocation, {
+  createPurchaseEventRecord(db, "FinancialTransactionAllocation", {
     transactionId,
     purchaseId,
     amountMinor: moneyToMinor(amount),

@@ -512,6 +512,9 @@ describe("image execution history conservation", () => {
         completeCompanionImageProcessingResult(ctx.db, result),
       ];
       await vi.waitFor(() => expect(read).toHaveBeenCalled());
+      // Keep the owner's storage read blocked until the competing delivery
+      // has reached the claim fence; scheduling a later retry is a different case.
+      await Promise.race(completions);
       release();
       await Promise.all(completions);
       expect(read).toHaveBeenCalledTimes(1);

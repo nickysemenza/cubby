@@ -2,7 +2,6 @@ import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";

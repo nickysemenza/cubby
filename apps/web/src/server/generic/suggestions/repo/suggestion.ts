@@ -6,7 +6,7 @@ import {
   suggestionDecision,
 } from "@cubby/schemas/suggestion";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
-import { eq, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -64,8 +64,6 @@ export const automaticApplicationRule = (suggestionId: SQL) => sql<
   LIMIT 1)`;
 
 /** The rule stamps a Suggestion's publication matched. */
-export const matchedRulesOf = (data: SQL) =>
-  sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
 /** Immutable evidence and the creation projection of one Suggestion. */
 export type SuggestionPublication = {

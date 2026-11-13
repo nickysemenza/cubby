@@ -153,13 +153,29 @@ function orderedInserts(
  * A row that moved is a conflict.
  */
 async function updateRecords(q: Q, updates: Difference["updates"]) {
-  const groups = new Map<string, Difference["updates"]>();
-  for (const entry of updates)
-    groups.set(entry.target.name, [
-      ...(groups.get(entry.target.name) ?? []),
-      entry,
-    ]);
-  for (const group of groups.values()) {
+  const tables = new Map<string, Map<string, Difference["updates"][number]>>();
+  for (const entry of updates) {
+    const rows = tables.get(entry.target.name) ?? new Map();
+    const existing = rows.get(entry.id);
+    if (existing) {
+      for (const [column, value] of Object.entries(entry.set))
+        if (
+          Object.hasOwn(existing.set, column) &&
+          canonicalJson(existing.set[column]) !== canonicalJson(value)
+        )
+          throw new KernelContractError(
+            `Conflicting declarations for ${entry.target.name}.${column}`,
+          );
+      rows.set(entry.id, {
+        ...entry,
+        set: { ...existing.set, ...entry.set },
+        seen: { ...existing.seen, ...entry.seen },
+      });
+    } else rows.set(entry.id, entry);
+    tables.set(entry.target.name, rows);
+  }
+  for (const table of tables.values()) {
+    const group = [...table.values()];
     const target = group[0]!.target;
     const columns = getTableColumns(target.table);
     const props = [
@@ -482,6 +498,7 @@ async function applyBatch(
         id: row.entityId,
       })),
       ...computed.desired!.records,
+      ...computed.desired!.patches,
     ])
       if (!provenance.has(`${recordEntity(target.target)}:${target.id}`))
         provenance.set(`${recordEntity(target.target)}:${target.id}`, source);
@@ -900,8 +917,8 @@ export async function runClaimedScopes(
 }
 
 /**
- * Apply computed scopes in transactions that yield the gate after 1.5 s in
- * the background money lane. `claimed[i]` is `computed[i]`'s claim.
+ * Apply one coherent, bounded batch under one write gate and revision fence.
+ * `claimed[i]` is `computed[i]`'s claim.
  */
 export async function applyComputed(
   db: Database,

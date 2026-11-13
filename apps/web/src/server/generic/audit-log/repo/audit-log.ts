@@ -228,7 +228,7 @@ export async function logAuditEntry(
       action: entry.action,
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
-      provenance: kernelApplyProvenance(),
+      provenance: kernelApplyProvenance(entry.entityKind, entry.entityId),
     })
     .returning({ id: auditLog.id });
   if (inserted) {

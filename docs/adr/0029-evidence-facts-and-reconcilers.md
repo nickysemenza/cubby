@@ -92,6 +92,13 @@ the read-write graph between scope kinds. Only the kernel's apply step writes a
 column a reconciler owns; the repository boundary rejects any other write.
 Repositories, commands, imports and MCP tools write evidence and decisions.
 
+Catalog inference may declare `source.history(table, columns)` for committed
+money history. It retains the ordinary read revisions, fences and invalidations,
+but introduces no derivation ordering dependency: an inferred Vendor default may
+inform a new purchase while committed purchases inform that default. The registry
+rejects history reads in a money lane or of Catalog-owned columns. Current-value
+sources retain the acyclic read-write rule.
+
 A reconciled record belongs to exactly one owning scope, recorded in
 `RecordKey`. Its desired output carries each record's provenance, its
 relationship effects, and an explicit disposition for a record that should no
@@ -294,7 +301,10 @@ Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. A batch's set-based writes publish
 atomically; session timeouts bound in-flight statements. A member's write
 uses a 2 second `lock_timeout` and reports a timeout as a retryable wait.
-Evidence appends and decision inserts take no gate; a rejection that invokes
+
+A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions. This gives concurrent commands one lock order; an input-only transaction remains ungated.
+
+Evidence-only appends and decision-only inserts take no gate; a rejection that invokes
 a money entity's deletion policy takes the gate before that policy runs; unique constraints on
 source identity decide a race between two writers of the same evidence.
 
