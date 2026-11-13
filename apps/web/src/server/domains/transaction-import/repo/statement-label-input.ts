@@ -1,3 +1,4 @@
+import { reusableStatementSpendingAnswers } from "@cubby/schemas/statement-answers";
 import {
   statementAnswers,
   type StatementAnswers,
@@ -71,6 +72,7 @@ export function compatibleStatementAnswer(
 export function mergeStatementAnswers(
   judgment: StatementTransactionJudgment,
   history: readonly unknown[],
+  isLoan = false,
 ): StatementAnswers {
   const result = statementAnswers.parse({});
   const statement = statementLabelSubject(judgment);
@@ -101,9 +103,24 @@ export function mergeStatementAnswers(
       )
         result.candidates[candidate.transactionId] = answer!;
     }
-    // Spending owns validation of its feature projections and versions.
-    result.escrow ??= answers.escrow;
-    result.merchant ??= answers.merchant;
+    const spending = judgment.create
+      ? reusableStatementSpendingAnswers(judgment.create, isLoan, answers)
+      : {};
+    if (spending.escrow) result.escrow ??= spending.escrow;
+    if (!result.merchant) {
+      if (spending.merchant) result.merchant = spending.merchant;
+    } else if (
+      !result.merchant.support &&
+      spending.merchant?.support &&
+      compatibleStatementAnswer(
+        result.merchant.identity,
+        spending.merchant.identity.input,
+        spending.merchant.identity.versions,
+      ) &&
+      canonicalJson(result.merchant.identity.value) ===
+        canonicalJson(spending.merchant.identity.value)
+    )
+      result.merchant.support = spending.merchant.support;
   }
   return result;
 }

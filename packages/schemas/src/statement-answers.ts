@@ -15,7 +15,39 @@ export const statementAnswer = <T extends z.ZodType>(value: T) =>
     models: z.array(z.string()).default([]),
   });
 
-export const statementEscrowAnswer = statementAnswer(z.boolean());
+export const statementQuestionSubject = z.object({
+  descriptor: z.string().nullable(),
+  merchant: z.string().nullable(),
+  category: z.string().nullable(),
+  date: z.string(),
+  amount: z.number().finite(),
+  status: z.enum(["pending", "posted"]).nullable(),
+});
+export const statementCandidateQuestionInput = z.object({
+  statement: statementQuestionSubject.nullable(),
+  transaction: z.object({
+    descriptor: z.string().nullable(),
+    merchant: z.string().nullable(),
+    date: z.string().nullable(),
+    amount: z.number().finite(),
+    status: z.string(),
+  }),
+});
+export const statementEscrowQuestionInput = z.object({
+  merchant: z.string().nullable(),
+  description: z.string().nullable(),
+  sourceCategory: z.string().nullable(),
+  amount: z.number().finite(),
+});
+export const statementMerchantQuestionInput = z.object({
+  merchant: z.string(),
+});
+export const statementMerchantSupportQuestionInput =
+  statementMerchantQuestionInput.extend({ proposed: z.string() });
+
+export const statementEscrowAnswer = statementAnswer(z.boolean()).extend({
+  input: statementEscrowQuestionInput,
+});
 export type StatementEscrowAnswer = z.infer<typeof statementEscrowAnswer>;
 
 /** Identity and support are separate questions; support depends on identity. */
@@ -26,9 +58,11 @@ export const statementMerchantAnswer = z.object({
       counterparty: z.string(),
       confidence: z.string(),
     }),
-  ),
+  ).extend({ input: statementMerchantQuestionInput }),
   /** Null when support was inapplicable to the identity answer. */
-  support: statementAnswer(z.boolean()).nullable(),
+  support: statementAnswer(z.boolean())
+    .extend({ input: statementMerchantSupportQuestionInput })
+    .nullable(),
 });
 export type StatementMerchantAnswer = z.infer<typeof statementMerchantAnswer>;
 

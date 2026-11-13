@@ -22,6 +22,10 @@ import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
 import {
+  statementAdviceFromAnswers,
+  statementSpendingAnswersComplete,
+} from "@cubby/schemas/statement-answers";
+import {
   type StatementCounterparty,
   type StatementKindVotes,
   type StatementTransactionCandidate,
@@ -74,6 +78,7 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import {
@@ -1262,6 +1267,7 @@ async function prepareChargePreviews(
           },
           account,
           preparation.accounts,
+          input.observations,
         ),
       }).effectiveAmount;
   }
@@ -1447,9 +1453,11 @@ async function loanEvidence(
     PreparedChargePreviews["preview"]["rows"][number]
   >,
   ids: ReadonlyMap<string, string>,
-  _preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
-  const loans = accounts.filter((account) => account.kind === "loan");
+  const loans = accounts.filter((account) =>
+    liveHouseholdLoan(preparation.accounts.find((a) => a.id === account.id)),
+  );
   const allLoanIds = loans.map((account) => account.id);
   const evidence = allLoanIds.length
     ? await getDb(db).execute<{
@@ -1460,17 +1468,21 @@ async function loanEvidence(
         sourceCategory: string | null;
         date: string;
         key: string;
+        source: string | null;
+        account: string | null;
+        providerAccountId: string | null;
       }>(
         sql`
     SELECT s.judgment->>'accountId' AS "accountId", (r."providerAmountMinor"::numeric/100)::float8 AS "providerAmount",
       r."rawDescription" AS description, r.merchant, r."sourceCategory", s.judgment->>'statementDate' AS date,
-      'stmt:' || (s.data->>${financialTransactionSourceRef.keyof().enum.source}) || ':' || (s.data->>'chargeKey') AS key
+      'stmt:' || (s.data->>${financialTransactionSourceRef.keyof().enum.source}) || ':' || (s.data->>'chargeKey') AS key,
+      r.source, r."accountDescriptor" AS account, r."providerAccountId"
     FROM "Suggestion" s JOIN "SourceTransactionRecord" r ON r.id=s."recordId"
     WHERE s.family=${suggestionFamily.enum.statement_transaction} AND s.active AND s.status=${suggestionStatus.enum.pending}
       AND s.judgment->>'accountId'=ANY(${textArrayParam(allLoanIds)}) AND ${notDeleted("r")}
     UNION ALL
     SELECT ft."accountId"::text, (-ft."amountMinor"::numeric/100)::float8, ft."rawDescription", ft.merchant, NULL::text,
-      coalesce(ft."postedDate", ft."transactionDate")::text, 'ftx:' || ft.shortcode
+      coalesce(ft."postedDate", ft."transactionDate")::text, 'ftx:' || ft.shortcode, NULL::text, NULL::text, NULL::text
     FROM "FinancialTransaction" ft WHERE ft."accountId"=ANY(${uuidArrayParam(allLoanIds)}) AND ${notDeleted("ft")}
       AND ft.status<>${financialTransactionStatus.enum.void} AND coalesce(ft."postedDate",ft."transactionDate") IS NOT NULL
   `,
@@ -1489,6 +1501,9 @@ async function loanEvidence(
         sourceCategory: canonical.sourceCategory,
         date: canonical.statementDate,
         key: `stmt:${chargeId(charge)}`,
+        source: canonical.source,
+        account: canonical.accountDescriptor,
+        providerAccountId: canonical.providerAccountId,
       });
   }
   const loanPayments: LoanPaymentEvidence[] = [];
@@ -1498,7 +1513,20 @@ async function loanEvidence(
     const movement = statementEffectiveMovement({
       ...row,
       providerAmount: Number(row.providerAmount),
-      loan: { providerVendorNames: account.names },
+      loan:
+        row.source && row.account
+          ? statementLoanInput(
+              {
+                source: row.source,
+                account: row.account,
+                providerAccountId: row.providerAccountId,
+              },
+              preparation.accounts.find((a) => a.id === account.id),
+              preparation.accounts,
+              grouped.find((g) => chargeId(g.charge) === row.key.slice(5))
+                ?.observations ?? [row],
+            )
+          : { providerVendorNames: account.names },
     });
     if (movement.movementClass === "loan_payment")
       loanPayments.push({
@@ -1842,6 +1870,7 @@ export async function buildChargeProposals(
         },
         resolvedAccount,
         preparation.accounts,
+        rows,
       ),
     });
     const loanDecision = loanStatementDecision({
@@ -2192,10 +2221,15 @@ async function postedTwinExists(
   const preparation = await prepareFinancialStatementPreview(db);
   const account = preparation.accounts.find((a) => a.id === hold.accountId);
   const rows = await unwrapDb(db).execute<
-    StatementMovementInput & { statementDate: unknown }
+    StatementMovementInput & {
+      statementDate: unknown;
+      source: string;
+      account: string;
+      providerAccountId: string | null;
+    }
   >(
     sql`
-    SELECT r."providerAmount", r."rawDescription" AS description, r.merchant, r."sourceCategory", r."statementDate" FROM ${sourceObservationFacts} r
+    SELECT r."providerAmount", r."rawDescription" AS description, r.merchant, r."sourceCategory", r."statementDate", r.source, r."accountDescriptor" AS account, r."providerAccountId" FROM ${sourceObservationFacts} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
       AND r."statementDate" BETWEEN ${date}::date - ${PENDING_POST_WINDOW_DAYS}::int
@@ -2214,15 +2248,7 @@ async function postedTwinExists(
         amount: statementEffectiveMovement({
           ...row,
           providerAmount: Number(row.providerAmount),
-          loan:
-            account?.identity.kind === "loan"
-              ? {
-                  providerVendorNames: [
-                    account.vendorName,
-                    ...(account.vendorAliases ?? []),
-                  ].filter((name): name is string => !!name),
-                }
-              : null,
+          loan: statementLoanInput(row, account, preparation.accounts, rows),
         }).effectiveAmount,
         date: plainDateOf(row.statementDate),
       },
@@ -2387,6 +2413,7 @@ function chargePublication(
   priorCount: number,
   applicationOrder: z.infer<typeof statementApplicationOrder> | null = null,
   answers: StatementAnswers = statementAnswers.parse({}),
+  isLoan = false,
 ) {
   const { charge, judgment } = proposal;
   return {
@@ -2425,7 +2452,7 @@ function chargePublication(
         evidenceFingerprint: proposal.evidenceFingerprint,
         // Rule output awaits the decision model's labels: candidate
         // identity, and the kind and counterparty of every create.
-        needsLabel: needsStatementAnswers(judgment, answers),
+        needsLabel: needsStatementAnswers(judgment, answers, isLoan),
         applicationPending: producer.kind === "model",
         ...(applicationOrder && { applicationOrder }),
         answers,
@@ -2576,10 +2603,12 @@ const chargeSettled = (
 type StatementCandidate = {
   proposal: ChargeProposal;
   answers?: StatementAnswers;
+  isLoan?: boolean;
 };
 type StatementPublicationFacts = {
   states: Map<string, ChargeState>;
   history: Map<string, ChargePublicationHistory[]>;
+  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>;
 };
 
 const statementRevisionSuppresses = (
@@ -2594,12 +2623,13 @@ const statementRevisionSuppresses = (
 export function needsStatementAnswers(
   judgment: StatementTransactionJudgment,
   answers: StatementAnswers,
+  isLoan = false,
 ) {
   if (!judgment.create || judgment.reviewReason) return false;
   return (
     judgment.candidates.some((c) => !answers.candidates[c.transactionId]) ||
     (!judgment.transfer && (!answers.kind || !answers.counterparty)) ||
-    judgment.spending?.status === "deferred"
+    !statementSpendingAnswersComplete(judgment.create, isLoan, answers)
   );
 }
 
@@ -2645,6 +2675,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   applicationError:
     "Statement application requires a Transaction suggestion Suggestion",
   financial: true,
+  replaced: "deactivate",
   suppressionKey: (subject) => ({
     scope: "statement_transaction",
     candidateKey: `${subject.source}:${subject.chargeKey}`,
@@ -2691,6 +2722,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       tx,
       candidates.map(({ proposal }) => proposal.charge),
     ),
+    preparation: await prepareFinancialStatementPreview(tx),
     history: await priorStatementPublications(
       tx,
       candidates.map(({ proposal }) => proposal),
@@ -2711,26 +2743,32 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
     );
     const judgment = structuredClone(candidate.proposal.judgment);
-    const answers = mergeStatementAnswers(
+    const isLoan = liveHouseholdLoan(
+      context.loaded.preparation.accounts.find(
+        (account) => account.id === judgment.accountId,
+      ),
+    );
+    let answers = mergeStatementAnswers(
       judgment,
       history.map((row) => row.answers),
+      isLoan,
     );
     applyStatementAnswers(judgment, answers);
-    const identity = answers.merchant?.identity.value;
-    const advice = financialSpendingAdvice.parse({
-      escrowDisbursement: answers.escrow?.value === true,
-      vendorName: identity?.name ?? null,
-      vendorConfidence:
-        answers.merchant?.support?.value === false
-          ? "low"
-          : (identity?.confidence ?? "low"),
-      counterparty: identity?.counterparty ?? "unknown",
-    });
-    judgment.spending = await prepareStatementSpending(tx, judgment, advice);
-    judgment.clean = isClean(
+    answers = mergeStatementAnswers(
       judgment,
-      judgment.create?.amount ?? candidate.proposal.canonical.amount,
+      history.map((row) => row.answers),
+      isLoan,
     );
+    const advice = financialSpendingAdvice.parse(
+      statementAdviceFromAnswers(answers),
+    );
+    judgment.spending = await prepareStatementSpending(tx, judgment, advice);
+    judgment.clean =
+      !needsStatementAnswers(judgment, answers, isLoan) &&
+      isClean(
+        judgment,
+        judgment.create?.amount ?? candidate.proposal.canonical.amount,
+      );
     const models = [
       ...new Set(
         [
@@ -2747,8 +2785,9 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       candidate: {
         proposal: await labelledProposal(candidate.proposal, judgment),
         answers,
+        isLoan,
       },
-      producer: needsStatementAnswers(judgment, answers)
+      producer: needsStatementAnswers(judgment, answers, isLoan)
         ? producer
         : {
             ...producer,
@@ -2780,18 +2819,25 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     return undefined;
   },
   onUnchanged: "none",
-  async refreshUnchanged(tx, rows, candidate) {
+  async refreshUnchanged(tx, rows, candidate, context) {
     const judgment = candidate.proposal.judgment;
     const answers = candidate.answers ?? statementAnswers.parse({});
-    const needsLabel = needsStatementAnswers(judgment, answers);
+    const isLoan = liveHouseholdLoan(
+      context.loaded.preparation.accounts.find(
+        (account) => account.id === judgment.accountId,
+      ),
+    );
+    const needsLabel = needsStatementAnswers(judgment, answers, isLoan);
     const refresh = (row: ChargePublicationHistory) => ({
       ...row.data,
-      answers: z.json().parse(answers),
+      answers: z.json().parse(jsonSnapshot.parse(answers)),
       needsLabel,
       ...(row.needsLabel === "true" && !needsLabel
         ? {
             applicationPending: true,
-            applicationOrder: row.applicationOrder ?? {
+            applicationOrder: statementApplicationOrder
+              .nullable()
+              .parse(row.applicationOrder) ?? {
               createdAt: row.createdAt,
               id: row.id,
             },
@@ -2831,7 +2877,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         : row,
     );
   },
-  publication({ proposal, answers }, rows, producer) {
+  publication({ proposal, answers, isLoan }, rows, producer) {
     const position = rows.find((row) => row.active && row.status === "pending");
     const order = position
       ? (statementApplicationOrder
@@ -2841,7 +2887,14 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
           id: position.id,
         })
       : null;
-    return chargePublication(proposal, producer, rows.length, order, answers);
+    return chargePublication(
+      proposal,
+      producer,
+      rows.length,
+      order,
+      answers,
+      isLoan,
+    );
   },
   async afterPublish(tx, published) {
     await retireRetainedStatementAdvice(
@@ -3683,7 +3736,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      // Import generation also admits money writes before its checkpoint.
+      // Every generation page admits money writes before recording progress.
       input.scope?.importId
         ? JOB_PAGE_LIMITS.statementApplicationsPerPage
         : JOB_PAGE_LIMITS.statementGenerationPerPage,
@@ -3912,10 +3965,21 @@ export async function recordStatementAnswers(
     )
       return "out_of_scope";
     const judgment = statementTransactionJudgment.parse(active.judgment);
-    const answers = mergeStatementAnswers(judgment, [
-      active.answers,
-      input.answers,
-    ]);
+    const preparation = await prepareFinancialStatementPreview(tx);
+    const isLoan = liveHouseholdLoan(
+      preparation.accounts.find((account) => account.id === judgment.accountId),
+    );
+    let answers = mergeStatementAnswers(
+      judgment,
+      [active.answers, input.answers],
+      isLoan,
+    );
+    applyStatementAnswers(judgment, answers);
+    answers = mergeStatementAnswers(
+      judgment,
+      [active.answers, input.answers],
+      isLoan,
+    );
     if (
       canonicalJson(jsonSnapshot.parse(active.answers ?? {})) !==
       canonicalJson(answers)
@@ -3926,7 +3990,7 @@ export async function recordStatementAnswers(
         (row) => ({
           data: {
             ...stateData.parse(row.data),
-            answers: z.json().parse(answers),
+            answers: z.json().parse(jsonSnapshot.parse(answers)),
           },
         }),
       );
@@ -4112,7 +4176,7 @@ export async function suggestionsNeedingLabels(
   }
   if (!selected.length) return [];
   // Account preparation is bounded by cursor candidates; only the filled page
-  // hydrates judgments/checkpoints. Exclusions never end a partial scan early.
+  // hydrates judgments and answers. Exclusions never end a partial scan early.
   const page = requestedRows(
     selected.map((row) => ({
       id: row.id,

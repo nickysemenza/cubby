@@ -2,6 +2,7 @@ import type { FinancialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
+import { statementSpendingAnswersComplete } from "@cubby/schemas/statement-answers";
 import {
   statementCounterparty,
   type StatementTransactionJudgment,
@@ -100,13 +101,18 @@ function prepareLabelledJudgment(
     spendingAdvice?: SpendingAdvicePort;
     usage: DecisionChoiceArgs["usage"];
     answers: StatementAnswers;
+    isLoan: boolean;
     admission: {
       available(): boolean;
       reserve(): boolean;
     };
   },
 ) {
-  const answers = mergeStatementAnswers(current.judgment, [input.answers]);
+  const answers = mergeStatementAnswers(
+    current.judgment,
+    [input.answers],
+    input.isLoan,
+  );
   const judgment = structuredClone(current.judgment);
   for (const candidate of judgment.candidates)
     candidate.label =
@@ -241,7 +247,10 @@ function prepareLabelledJudgment(
   }
   // Reserve spending before preparing the next charge, preserving the original
   // identity/kind/counterparty/spending order. Context defaults reserve nothing.
-  const spendingReserved = needsSpendingAdvice(judgment);
+  const spendingReserved =
+    needsSpendingAdvice(judgment) &&
+    !!judgment.create &&
+    !statementSpendingAnswersComplete(judgment.create, input.isLoan, answers);
   const spendingAdmitted = spendingReserved && input.admission.reserve();
   return {
     decisions,
@@ -271,7 +280,15 @@ function prepareLabelledJudgment(
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
-      if (!needsSpendingAdvice(judgment)) {
+      if (
+        !needsSpendingAdvice(judgment) ||
+        (judgment.create &&
+          statementSpendingAnswersComplete(
+            judgment.create,
+            input.isLoan,
+            answers,
+          ))
+      ) {
         spendingComplete = true;
         return { advice: null };
       }
@@ -584,7 +601,7 @@ async function runStatementLabelBatch(
       ),
     });
     // Model work holds no publish transaction. All started decisions settle
-    // before checkpoint/publication, whose separate DB fan-out stays at four.
+    // before answer persistence and publication.
     const preparations = await time("statement_label_preparation", async () =>
       ready
         .map((entry) => {
@@ -597,6 +614,10 @@ async function runStatementLabelBatch(
               spendingAdvice: input.spendingAdvice,
               usage,
               answers: entry.target.row.answers,
+              isLoan:
+                preparation.accounts.find(
+                  (account) => account.id === entry.current.judgment.accountId,
+                )?.identity.kind === "loan",
               admission,
             });
             if (!value) {

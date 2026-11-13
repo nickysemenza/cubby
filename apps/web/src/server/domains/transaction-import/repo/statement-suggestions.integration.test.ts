@@ -649,7 +649,7 @@ describe("statement Transaction suggestions", () => {
     expect(
       await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
     ).toMatchObject([
-      { id: before.id, checkpoint: null, applicationPending: false },
+      { id: before.id, answers: { candidates: {} }, applicationPending: false },
     ]);
   });
 
@@ -1622,7 +1622,7 @@ describe("statement Transaction suggestions", () => {
   });
 
   it.each([false, true])(
-    "checkpoints high-fanout work across a changed candidate roster: %s",
+    "retains answers for high-fanout work across a changed candidate roster: %s",
     async (addCandidate) => {
       const queue = captureBackgroundQueue();
       try {
@@ -2306,7 +2306,7 @@ describe("statement Transaction suggestions", () => {
           if (!row) throw new Error("Expected the reviewed synthetic charge");
           const selection = (
             await automaticRuleRuntime.selectAutomaticRules(ctx.db, [row.id], {
-              importClean: true,
+              settlement: true,
             })
           ).get(row.id);
           if (!selection)

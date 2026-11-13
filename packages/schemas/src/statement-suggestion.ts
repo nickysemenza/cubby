@@ -1,4 +1,9 @@
-import { statementAnswer, statementSpendingAnswers } from "./statement-answers";
+import {
+  statementAnswer,
+  statementSpendingAnswers,
+  statementQuestionSubject,
+  statementCandidateQuestionInput,
+} from "./statement-answers";
 import { z } from "zod";
 
 import {
@@ -183,10 +188,19 @@ export type StatementTransactionJudgment = z.infer<
 >;
 
 export const statementAnswers = statementSpendingAnswers.extend({
-  kind: statementAnswer(kind).optional(),
-  counterparty: statementAnswer(counterpartyKind).optional(),
+  kind: statementAnswer(kind)
+    .extend({ input: statementQuestionSubject.nullable() })
+    .optional(),
+  counterparty: statementAnswer(counterpartyKind)
+    .extend({ input: statementQuestionSubject.nullable() })
+    .optional(),
   candidates: z
-    .record(z.string(), statementAnswer(statementCandidateLabel))
+    .record(
+      z.string(),
+      statementAnswer(statementCandidateLabel).extend({
+        input: statementCandidateQuestionInput,
+      }),
+    )
     .default({}),
 });
 export type StatementAnswers = z.infer<typeof statementAnswers>;
