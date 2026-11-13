@@ -337,8 +337,8 @@ explicit choices.
 outcome with its matching provenance. Inherit,
 explicit value and explicit None are distinct intents. A successful empty outcome is not a missing
 computation: a missing result renders Waiting for Cubby, never the
-successful empty state. Who set an own value is not part of the envelope: `fieldAuthority` reads it
-from the audit trail when Why this value or the automatic gate asks.
+successful empty state. Who set an own value comes from kernel provenance: an Answer is Cubby's value and an assignment Decision is a person's. Why this value reads that provenance
+and the independent veto channel.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the twin owners of empty and missing labels and
@@ -3753,45 +3753,43 @@ confident Emails and member resolutions keep their domain authority. Applied fie
 including inactive saved-form applications and rejected corrections with application receipts, are
 reevaluated when evidence or policy changes.
 
-#### Field authority and automatic writes
+#### Field decisions and automatic writes
 
-`AuditLog.authority` records who holds a field after a write: `automatic` for an Automatic rule's
-field write, `released` for a member's Let Cubby decide, null for a member, import or agent write.
-`fieldAuthority` reads the newest update audit row naming the field: no row and an empty stored value
-is `open`; `released` is `open` or `cubby`; `automatic` whose `to` equals the stored value and whose
-applied Suggestion no member kept (a member `correct` decision) is `cubby`; anything else, including a
-value set at creation, a timestamp tie or an out-of-band write, is `person`.
+The newest assignment Decision per record and field holds a person's explicit value (`set`),
+explicit None (`none`), or hand-back (`release`). A veto is independent of that assignment:
+changing an assignment never removes a value the member ruled out. Authority comes from the
+Decision or Answer in the kernel's provenance, not an audit flag.
 
-The automatic gate saves an answer at 85% or more for an `apply: "auto"` fill field with supporting
-basis evidence, complete current dependency stamps and a current input fingerprint, when the holder is
-`open` and the effective value is empty, or the holder is `cubby`. Cubby never writes a `person`
-field, an explicit None, a value rejected for that record and field, or a `fillOnly` field it already
-filled. A replacement of a Cubby value needs a 0.20 lead over the runner-up, and a value Cubby already
-replaced is never applied again. `apply: "review"` answers wait for a member; `apply: "offer"` answers
-wait as the field's picker guess. Fields are asked only where their classification admits them: an
-unclassified record is not asked a field its classification refuses by default.
+The `fields` reconciler owns eligible `apply: "auto"` columns. Entity writers hold these columns
+out of their SQL, record decisions in the writer's transaction and reconcile the scope before
+returning. Other columns stay with their ordinary writer. Money-lane entities, spending reviews,
+inheritance-mode assignments and required columns without defaults keep their owning writers.
+Reference fields are offered in pickers. Why this value and reset preview read the same assignment
+and provenance as the field actions.
 
-An edit of a Cubby-set value is the correction: the field-automation drain records a `wrong` decision
-with the right value on the applied Suggestion and rejects it. An import or cron replacing it records
-nothing. `suggestion.fieldAuthority` keeps a Cubby value (it becomes the member's), clears a wrong
-one (the field empties as `released`, the value is ruled out) or releases a person's value.
+Cubby fills an open field at 85% confidence, never overwrites an assignment or explicit None,
+never reapplies a vetoed value, and fills `fillOnly` fields only once. Revising Cubby's own value
+requires a 0.20 lead over the runner-up and cannot restore a value already replaced.
+`apply: "review"` requires a member; `apply: "offer"` stays a picker guess. Classification must
+admit the field before it is asked.
+
+An edit over Cubby's value records the chosen assignment and vetoes the replaced value. Keep
+records the displayed value as an assignment. "Wrong, clear it" records a veto; the reconciler
+clears the value. "Let Cubby decide" releases the assignment. System imports record assignments
+without grading the model. Corrections recheck at most 25 similar Cubby-held records.
 
 #### Field automation triggers
 
-Field evaluation follows events only. Every create and update audit row of an entity with automated
-fields is written with `automationPending`; the `field-automation` drain reads them oldest first,
-records corrections, rechecks up to 25 similar Cubby-held values after a signed-in member's
-correction (records holding the value Cubby got wrong first), and schedules evaluation of open or
-Cubby-held fields whose basis or backing keys changed, every such field of a created record, and a
-released field. A row Cubby wrote never re-triggers its own field. A full automatic backlog leaves the
-remaining rows pending. After an activation revision the drain's policy unit re-asks every pending
-guess and Cubby-held value once, paging by record and field. Page views schedule nothing and there is
-no periodic pass. Records nobody writes are evaluated by a member-started Sweep.
+Authored writes, Decisions and Answers dirty keyed `fields` scopes in the transaction that makes
+them. The kernel loads stored basis columns, replaced values and up to eight person-held precedents
+on records sharing a reference-valued basis key, corrections first. Its pure reconciliation reads
+Answers and Decisions and applies the owned-column diff. The field Ask owns the response-cache
+claim; the nested decision call disables its application cache. Page views schedule nothing.
 
-Saved-record evaluations prepare evidence from the saved entity and carry up to eight precedents:
-values a person set for the same field on records sharing a reference-valued basis key, corrections
-of Cubby first. Cubby-set values are never precedents. Interactive form predictions ask live on the
-unsaved basis, stay inactive and never schedule automatic writes.
+A prompt or policy version change alone never dirties a scope or places a producer call.
+`version.sweep` computes from retained Answers and records exact Drift proposals when approval
+is needed. Member-started Sweeps remain Runs. Interactive form predictions use unsaved basis and
+never schedule automatic writes.
 
 A Suggestion's mutable columns keep the latest evaluation's input and policy beside its application
 metadata whenever nothing replaces it, including when an exact wrong review or value suppression
