@@ -1,3 +1,6 @@
+import { getTableName, is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
+import type { CompiledEntity } from "./declarations.ts";
 import {
   edgeDefinitionSchema,
   defineEdge,
@@ -25,6 +28,7 @@ export const validateEdgeDeclarations = (
 ): void => {
   const keys = new Set<string>();
   const storageOwners = new Map<string, string>();
+  const columnPartitions = new Map<string, Set<string>>();
   for (const edge of edges) {
     if (keys.has(edge.key))
       throw new EntityDeclarationError(`Duplicate edge key ${edge.key}.`);
@@ -49,6 +53,16 @@ export const validateEdgeDeclarations = (
       storage.kind === "foreign-key"
         ? `${storage.column}${storage.partition ? `[${storage.partition.column}=${storage.partition.value}]` : ""}`
         : `EntityLink[${storage.linkKind}]`;
+    if (storage.kind === "foreign-key") {
+      const claims = columnPartitions.get(storage.column) ?? new Set<string>();
+      const partition = storage.partition?.value ?? "*";
+      if (claims.size && (partition === "*" || claims.has("*")))
+        throw new EntityDeclarationError(
+          `${edge.key}: overlapping storage claims for ${storage.column}.`,
+        );
+      claims.add(partition);
+      columnPartitions.set(storage.column, claims);
+    }
     const owner = storageOwners.get(key);
     if (owner !== undefined)
       throw new EntityDeclarationError(
@@ -154,4 +168,77 @@ export const renderEdgePolicyChecks = (
       : "\n") +
     `export type EntityEdgePolicyChecks = [${refs.map((ref, index) => `CallableEdgePolicy<${ref.member ? `ReturnType<typeof edgePolicy${index}>[${JSON.stringify(ref.member)}]` : `typeof edgePolicy${index}`}>`).join(", ")}];\n`
   );
+};
+
+/** Schema introspection makes an undeclared FK fail even when no navigation uses it. */
+export const validateEdgeStorageCoverage = (
+  edges: readonly EdgeDefinition[],
+  entities: readonly CompiledEntity[],
+  schema: typeof import("~/server/db/drizzle-schema").drizzleSchema,
+  declaredEntities: ReadonlySet<string>,
+): void => {
+  const tables = Object.values(schema).flatMap((value) =>
+    is(value, PgTable) ? [value] : [],
+  );
+  const byName = new Map<string, PgTable>(
+    tables.map((table) => [getTableName(table), table]),
+  );
+  const byEntity = new Map(
+    entities.flatMap((entity) =>
+      entity.table ? [[entity.key, entity.table.name] as const] : [],
+    ),
+  );
+  const byTable = new Map([...byEntity].map(([key, table]) => [table, key]));
+  const physical = edges.filter((edge) => edge.storage.kind === "foreign-key");
+  for (const edge of physical) {
+    const storage = edge.storage;
+    if (storage.kind !== "foreign-key") continue;
+    const [name, column] = storage.column.split(".");
+    const table = name ? byName.get(name) : undefined;
+    if (
+      !table ||
+      !getTableConfig(table).columns.some(
+        (candidate) => candidate.name === column,
+      )
+    )
+      throw new EntityDeclarationError(
+        `${edge.key}: unknown storage column ${storage.column}.`,
+      );
+    if (!storage.constrained) continue;
+    const target = storage.partition ? "Entity" : byEntity.get(edge.to);
+    if (
+      !getTableConfig(table).foreignKeys.some((key) => {
+        const ref = key.reference();
+        return (
+          getTableName(ref.foreignTable) === target &&
+          ref.columns.some((candidate) => candidate.name === column)
+        );
+      })
+    )
+      throw new EntityDeclarationError(
+        `${edge.key}: declared constraint does not target ${target}.`,
+      );
+  }
+  for (const table of tables) {
+    const config = getTableConfig(table);
+    for (const key of config.foreignKeys) {
+      const ref = key.reference(),
+        target = byTable.get(getTableName(ref.foreignTable));
+      if (!target || !declaredEntities.has(target)) continue;
+      for (const column of ref.columns) {
+        const name = `${config.name}.${column.name}`;
+        if (
+          !physical.some(
+            (edge) =>
+              edge.to === target &&
+              edge.storage.kind === "foreign-key" &&
+              edge.storage.column === name,
+          )
+        )
+          throw new EntityDeclarationError(
+            `${name}: missing defineEdge declaration for ${target}.`,
+          );
+      }
+    }
+  }
 };

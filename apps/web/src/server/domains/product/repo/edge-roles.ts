@@ -1,87 +1,7 @@
-/**
- * Product's delete policy, and the retaining-edge set derived from the shared
- * edge semantics — replacing the "must agree on both" prose comment that used
- * to sit next to `deleteProducts` in `crud.ts`.
- *
- * Product incoming edges (`INCOMING_EDGES.product` in
- * `entity-incoming-edges.ts`) have stable roles in
- * `ENTITY_EDGE_SEMANTICS.product` (`~/server/db/entity-edge-semantics`)
- * alongside every other entity's, because a role describes what an edge means
- * and not what deleting does about it. Roles distinguish acquisition,
- * durable history, associations, references, usage, composition, metadata,
- * and media:
- *
- *  - acquisition: `InventoryEntry.productId` (it's on a shelf right now),
- *    `Expense.productId` (it was bought — the ledger's net cost and
- *    owned/sold window derive from this row, so an orphaned product would
- *    silently corrupt that derivation with no restore path), and
- *    `EntityLink[purchaseProduct].to` (the vendor order it was bought on —
- *    provenance an allocation-basis Expense can never carry).
- *  - history: `Task.subjectProductId` (work performed on the product; deleting
- *    the subject would leave that durable task history nameless) and
- *    `EntityLink[projectTool].to` (a reusable tool's project-use history).
- *    `ImportSourceProduct.productId` preserves an exact original ordered line,
- *    including historical source rows; it implies no stock or financial value.
- *  - reference: `Location.productId` (a Location that IS this product — the
- *    bin itself) and `Cookbook.productId` (a Cookbook whose physical copy
- *    this product is — the book on the shelf behind the imported EPUB).
- *    Retaining because each linked row deliberately carries no identity of
- *    its own beyond the Product it points at: a Location's `type` and a
- *    Cookbook's shelf link both live only on this side of the edge, so
- *    orphaning the Product would leave the other row with no identity at
- *    all, not merely a broken link.
- *  - usage: `EntityLink[productComponent].to` — this product is cited as
- *    a part inside another (kit) product's component list. Retaining for the
- *    same reason as a purchase link: deleting it would silently shrink the
- *    kit's contents with no record of what used to be there.
- *  - composition: `EntityLink[productComponent].from` — this product's OWN
- *    component list, when it's a kit. NOT retaining, deliberately asymmetric
- *    with the edge above: deleting a kit is supposed to take its component
- *    list with it, the same way deleting a recipe takes its sections.
- *  - metadata / media: `EntityExternalId.entityId`,
- *    `ProductUnitMapping.productId`, `ProductConversionCoverage.productId`,
- *    `ProductImage.productId` — none of which say anything about ownership on
- *    their own.
- *
- * ## Why the retaining filter is positive, not `!== "metadata"`
- *
- * Both consumers below used to select blocking edges by *excluding* the
- * metadata role. That was safe only while `metadata` was the sole non-retaining
- * role. Moving `ProductImage.productId` to the shared `media` role would, under
- * a negative filter, have silently promoted a photo attachment into a delete
- * blocker — every product with an image becomes undeletable, and
- * `findOrphanedProducts` stops reporting them. {@link RETAINING_ROLES} makes
- * the set an allowlist instead, so a future role added to the shared vocabulary
- * defaults to *not* retaining and can't quietly change delete behavior.
- *
- * ## Two consumers, two SQL shapes, one declaration
- *
- *  - `findOrphanedProducts` (repo/problems/detectors-product.ts) — a
- *    correlated `notExists` per retaining edge, feeding the Problems page's
- *    one-click delete.
- *  - `deleteProducts` (repo/product/crud.ts) — an `inArray` fetch +
- *    `assertNoDependents` per retaining edge, actually blocking the delete.
- *
- * Both key their own `Record<ProductRetainingEdgeKey, ...>` off the type below,
- * so adding or dropping an acquisition/history edge is a compile error at BOTH
- * call sites until they're updated to match — the guarantee the old prose
- * comment could only ask a reviewer to enforce by hand.
- *
- * **Residual weakness** (the same one `image.ts`'s `DECLARED_EDGE_DELETE_POLICIES.image`
- * carries): declaring a retaining edge only forces each consumer to have *an
- * entry* for it — nothing stops that entry from being wired to the wrong
- * column, or otherwise written incorrectly. Completeness of the *edge set* is
- * compile-time guaranteed; correctness of each edge's SQL is not. The
- * `PRODUCT_EDGE_ROLES backstop` describe block in `product.integration.test.ts`
- * is the cheap regression test that buys back some of that: it exercises every
- * retaining edge (must block delete) and every non-retaining edge (must
- * cascade-soft-delete on a successful delete) against a real product, so a
- * wrong-column or silently-dropped predicate fails a test instead of shipping.
+/** Product retention uses the acquisition/history roles emitted from edge declarations.
+ * Orphan detection and deletion share this allowlist; adding another role does
+ * not grant it authority to retain a Product.
  */
-
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import type { AppErrorReason } from "@cubby/shared";
-
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 
 export const PRODUCT_EDGE_ROLES = ENTITY_EDGE_SEMANTICS.product;
@@ -117,19 +37,3 @@ export const isRetainingEdgeKey = (
 ): key is ProductRetainingEdgeKey =>
   isProductEdgeKey(key) &&
   RETAINING_ROLES.some((role) => role === PRODUCT_EDGE_ROLES[key].role);
-
-export type ProductDeleteDisposition =
-  | (OperationDisposition & {
-      effect: "block";
-      reason: AppErrorReason;
-      /** Plural noun phrase naming the dependent rows, for the error message
-       *  (e.g. "inventory entries", "expenses"). */
-      label: string;
-    })
-  | (OperationDisposition & { effect: "soft-delete" | "hard-delete" })
-  // `Device.productId` is the first product-retaining edge that clears
-  // rather than blocks or cascades: a device survives its hardware Product's
-  // deletion as a device with no linked hardware. Deliberately narrow (only
-  // this effect, not a general escape hatch) — see the `Cookbook.productId`
-  // comment below for why every other optional back-reference still blocks.
-  | (OperationDisposition & { effect: "detach" });

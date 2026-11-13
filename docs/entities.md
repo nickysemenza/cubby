@@ -2905,11 +2905,14 @@ external references, and inherits their ownership and policies without claiming 
 Polymorphic foreign keys name their entity-kind partition; a storage claim includes that partition.
 Link declarations own both endpoint meanings and collision policies; their catalog is a generated
 bootstrap leaf. Custom merge callbacks are named factory members whose typed context carries the
-transaction, plan, actor and result state.
+transaction, plan, actor and result state. Delete policy references also name the `beforeLock`,
+`before`, `after` and `expand` phases; generation binds them at their operation phase.
 A relationship callback can return `{ edges }`; `r.declare(handle.named(...), inverseKey)` builds
 a composition from the typed handle and emits its navigation metadata from that declaration.
 Inverse endpoints are checked by TypeScript and generation. Generation rejects repeated physical
-storage, duplicate keys and invalid composition paths; the server compiler checks named policy
+storage (including overlapping polymorphic claims), duplicate keys and invalid composition paths.
+The physical schema check rejects undeclared foreign keys into declaration-owned endpoints and declarations whose
+columns or constraints do not exist; the server compiler checks named policy
 exports for existence and callability; policy implementations retain their branded identifier types.
 
 Relationship authorship uses `entity-definitions/relationships.ts`. A stored singular identifier
@@ -3169,8 +3172,9 @@ Two generic tables carry pure pairings and identifiers (ADR 0007):
 - `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds every pure pairing of
   two entities: `purchaseProduct`, `purchasePaymentAccount`, `projectTool`, `gardenEntryPlanting`, `productComponent`,
   `taskDependency`, `projectDependency`. Link kinds are declared in
-  `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and cycle rules,
-  per-end role, label, liveness, merge collision rule); the table's CHECKs and edge-source branches
+  `packages/schemas/src/entity-definitions/link-edges.ts` (endpoint kinds, quantity, self-link and cycle rules,
+  per-end role, label, liveness, merge collision rule and lifecycle policies). Generation emits
+  `entity-link-catalog.gen.ts`; the table's CHECKs and edge-source branches
   derive from that declaration, and write helpers live in `generic/entity-links/repo/entity-links.ts`.
   Every query names its `kind` and filters `deletedAt`. Dependency reads and writes resolve the kind
   from the entity's `blocked-by` relationship path.

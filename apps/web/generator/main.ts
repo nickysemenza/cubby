@@ -106,8 +106,11 @@ const main = async () => {
   await settle([renderLinkCatalog(declaredLinkEdges)]);
   const { modulesChildren } =
     await import("@cubby/schemas/compiler/child-tables/modules");
-  const { collectEdgeDeclarations, validateEdgeDeclarations } =
-    await import("./entities/edges.ts");
+  const {
+    collectEdgeDeclarations,
+    validateEdgeDeclarations,
+    validateEdgeStorageCoverage,
+  } = await import("./entities/edges.ts");
   const { validateEntityDeclarationImportBoundary } =
     await import("./entities/import-boundary.ts");
   const { validateRetainedTableBoundary } =
@@ -184,6 +187,17 @@ const main = async () => {
     ...renderTimelineArtifacts(entities),
     ...renderBrowserRouteArtifacts(entities),
   ]);
+  const { drizzleSchema } = await import("~/server/db/drizzle-schema");
+  validateEdgeStorageCoverage(
+    edges,
+    entities,
+    drizzleSchema,
+    new Set(
+      declarations
+        .filter((declaration) => declaration.edgeSource === "declaration")
+        .map((declaration) => String(declaration.key)),
+    ),
+  );
   // Detector schemas depend on the entity artifacts above. Emit their lean
   // browser classification only after those canonical schemas can initialize.
   const { PROBLEM_CLASS } = await import("@cubby/schemas/problems");
