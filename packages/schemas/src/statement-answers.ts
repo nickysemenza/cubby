@@ -104,7 +104,7 @@ const canonicalJson = (value: StatementAnswerInput): string =>
 /** A stored answer is reusable only for an equal input under equal versions. */
 export function statementAnswerMatches(
   answer:
-    | { input: unknown; versions: Record<string, string> }
+    | { input: StatementAnswerInput; versions: Record<string, string> }
     | undefined
     | null,
   input: StatementAnswerInput,
