@@ -8,6 +8,9 @@ read" rule of [ADR 0024](0024-repository-read-declaration.md). It amends item 1
 of ADR 0028 for one case (section 9). Everything else in those ADRs stays in
 force, including ADR 0026's occurrence, head-selection and proof rules.
 
+Where an older ADR conflicts with this one, this one wins, and the older ADR
+is edited or reduced to a stub as [the index](README.md) describes.
+
 ## Context
 
 Booking a statement charge decided identity, candidate uniqueness, receipt
