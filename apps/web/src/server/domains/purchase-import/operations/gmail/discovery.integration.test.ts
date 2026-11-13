@@ -5,6 +5,7 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -1239,7 +1240,7 @@ describe("scheduled Gmail discovery", () => {
         restart: false,
       });
       await repositoryQueries(ctx.db).execute(
-        sql`UPDATE "Pass" SET "availableAt" = ${until.toISOString()}::timestamp, "waitCause" = 'funding' WHERE name = 'run.execute' AND key = ${waitingRun}`,
+        sql`UPDATE "Pass" SET "availableAt" = ${until.toISOString()}::timestamp, "waitCause" = ${kernelWaitCause.enum.funding} WHERE name = 'run.execute' AND key = ${waitingRun}`,
       );
       const retainedRun = await readRun(waitingRun);
       const retainedPass = await readRunPass(ctx.db, waitingRun);
