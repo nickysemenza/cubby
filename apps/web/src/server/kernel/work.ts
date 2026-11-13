@@ -198,7 +198,10 @@ export async function readRunWork(
         loadRunPasses(q, runId),
       ]);
       return runWork.parse({
-        scopes: scopes.rows,
+        scopes: scopes.rows.map((scope) => ({
+          ...scope,
+          label: scope.firstGap ?? "Record reconciliation",
+        })),
         asks: asks.rows.map((ask) => ({
           ...ask,
           label: registry.asks.get(ask.feature)?.label ?? "Answer",

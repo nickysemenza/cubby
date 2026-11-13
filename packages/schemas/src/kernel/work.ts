@@ -22,6 +22,7 @@ export const runWork = z.object({
   scopes: z.array(
     z.object({
       kind: z.string(),
+      label: z.string(),
       key: z.string(),
       attempts: z.number().default(0),
       nextAt: z.iso.datetime().nullable().default(null),

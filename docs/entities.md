@@ -2837,7 +2837,9 @@ public records with a kernel member gap and the member's human-executor Work
 sources. Shared scope gaps and records count once. Kernel gaps carry their stage,
 first gap and offered actions; other member work links to its owning record. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
 adapter exposes `pageSize` and an opaque continuation `cursor`.
-Record machinery holds the complete inputs and actions.
+Record machinery holds the complete inputs and actions. A record with no scope
+memberships reads null and retains its declared state badge. Declared needs, header
+facts and open quality checks remain visible alongside machinery.
 
 The browser's separate `/work-queue` list evaluates the composed source union live.
 Filters, search, sorting, groups, counts, summaries and hydration operate over that

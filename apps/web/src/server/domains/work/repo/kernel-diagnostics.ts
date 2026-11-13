@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { MAX_SCOPE_ATTEMPTS } from "~/server/kernel/claim";
 import { productionKernel } from "~/server/kernel/kernel";
@@ -96,8 +97,16 @@ export async function readKernelDiagnostics(
           error = ask.lastError;
         }
       }
+      const recordRows =
+        row.target.type === "scope"
+          ? await q.execute<{ entity: string; id: string }>(sql`
+        SELECT e.kind AS entity, e.shortcode AS id FROM "RecordKey" k JOIN "Entity" e ON e.id=k."entityId" AND e.kind=k.entity
+        WHERE k."scopeKind"=${row.target.kind} AND k."scopeKey"=${row.target.key} AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+        AND ${notDeleted("e")} AND e."mergedIntoId" IS NULL ORDER BY e.shortcode LIMIT 1`)
+          : null;
       return {
         ...row,
+        record: recordRows?.rows[0] ?? null,
         label,
         error: new TextDecoder().decode(
           new TextEncoder()

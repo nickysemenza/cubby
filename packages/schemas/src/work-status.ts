@@ -1,9 +1,14 @@
+import { entitySchema } from "./entity";
 import { z } from "zod";
 
 /** One thing that stopped, in member language; `key` is its record shortcode. */
 const workStuckItem = z.object({
   key: z.string(),
   title: z.string(),
+  record: z
+    .object({ entity: entitySchema, id: z.string() })
+    .nullable()
+    .default(null),
   body: z.string(),
   since: z.iso.datetime(),
   action: z.discriminatedUnion("type", [
@@ -55,6 +60,10 @@ export const workDiagnostics = z.object({
   failures: z.array(
     z.object({
       target: workRetryTarget,
+      record: z
+        .object({ entity: entitySchema, id: z.string() })
+        .nullable()
+        .default(null),
       label: z.string(),
       unknown: z.boolean(),
       error: z.string(),

@@ -150,6 +150,7 @@ const machineryScope = z.object({
 });
 
 export const passWork = z.object({
+  label: z.string().default("Background work"),
   durationMs: z.number().nonnegative().nullable().default(null),
   updatedAt: z.iso.datetime().nullable().default(null),
   /** Pass pages do no paid work; their Asks carry producer cost. */

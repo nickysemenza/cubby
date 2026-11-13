@@ -27,7 +27,7 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
   const rows = [
     ...work.scopes.map((scope) => ({
       key: `scope:${scope.kind}:${scope.key}`,
-      label: scope.firstGap ?? "Record reconciliation",
+      label: scope.label,
       stage: scope.stage,
       detail: scope,
     })),
@@ -39,7 +39,7 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
     })),
     ...work.passes.map((pass) => ({
       key: `pass:${pass.name}:${pass.key}`,
-      label: "Background work",
+      label: pass.label,
       stage: pass.stage,
       detail: pass,
     })),
@@ -71,9 +71,13 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
                   className="min-w-0 border-b border-border py-2"
                 >
                   <Disclosure summary={row.label}>
-                    <pre className="text-xs break-all whitespace-pre-wrap">
-                      {JSON.stringify(row.detail, null, 2)}
-                    </pre>
+                    <p>Attempts: {row.detail.attempts}</p>
+                    <p>Cost: {machineryCostLabel(row.detail.costMicros)}</p>
+                    {row.detail.lastError ? (
+                      <pre className="text-xs break-words whitespace-pre-wrap">
+                        {row.detail.lastError}
+                      </pre>
+                    ) : null}
                   </Disclosure>
                 </li>
               ))}

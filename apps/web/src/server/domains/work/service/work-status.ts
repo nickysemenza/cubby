@@ -23,6 +23,7 @@ export async function readWorkStatus(
           ? failure.target.id
           : `${failure.target.kind}:${failure.target.key}`,
       title: failure.label,
+      record: failure.record,
       body: failure.error,
       since: failure.at,
       diagnostic: failure.error,

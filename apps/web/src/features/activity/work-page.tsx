@@ -6,6 +6,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { NeedsYou } from "~/entity/machinery/needs-you";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
@@ -91,7 +92,15 @@ function StuckRow({ item }: { item: WorkStuckItem }) {
         aria-hidden
         className="mt-0.5 size-3.5 shrink-0 text-warning-ink"
       />
-      <p className="font-medium text-foreground-strong">{item.title}</p>
+      <p className="font-medium text-foreground-strong">
+        {item.title}
+        {item.record ? (
+          <>
+            {" "}
+            · <EntityRefLink entity={item.record.entity} id={item.record.id} />
+          </>
+        ) : null}
+      </p>
       <div className="col-start-2 max-md:row-start-3 md:col-start-3 md:row-span-2 md:row-start-1">
         <StuckAction action={item.action} />
       </div>
