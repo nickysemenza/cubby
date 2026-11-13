@@ -1,3 +1,4 @@
+import { entitySchema } from "../entity";
 import { z } from "zod";
 
 import { passWork, kernelWaitCause } from "./machinery";
@@ -23,6 +24,10 @@ export const runWork = z.object({
     z.object({
       kind: z.string(),
       label: z.string(),
+      record: z
+        .object({ entity: entitySchema, id: z.string() })
+        .nullable()
+        .default(null),
       key: z.string(),
       attempts: z.number().default(0),
       nextAt: z.iso.datetime().nullable().default(null),
@@ -43,6 +48,10 @@ export const runWork = z.object({
       lastError: z.string().nullable().default(null),
       feature: z.string(),
       label: z.string(),
+      record: z
+        .object({ entity: entitySchema, id: z.string() })
+        .nullable()
+        .default(null),
       state: z.enum(["queued", "sent", "answered", "unknown", "abandoned"]),
       stage: kernelStage,
       waitCause: kernelWaitCause.nullable(),

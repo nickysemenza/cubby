@@ -24,7 +24,7 @@ export async function readWorkStatus(
           : `${failure.target.kind}:${failure.target.key}`,
       title: failure.label,
       record: failure.record,
-      body: failure.error,
+      body: `${failure.label} stopped. Open Technical details for the diagnostic.`,
       since: failure.at,
       diagnostic: failure.error,
       action: { type: "none" as const },

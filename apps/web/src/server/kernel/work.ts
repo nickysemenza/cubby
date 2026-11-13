@@ -164,7 +164,12 @@ export async function readRunWork(
           UNION SELECT 'fields', 'run:' || ${runId}::text
           UNION SELECT 'quality', 'run:' || ${runId}::text
         )
-        SELECT w.kind, w.key, coalesce(d.attempts,0) AS attempts, ${isoText(sql`d."availableAt"`)} AS "nextAt",
+        SELECT w.kind, w.key,
+          (SELECT jsonb_build_object('entity',e.kind,'id',e.shortcode) FROM "RecordKey" k
+           JOIN "Entity" e ON e.id=k."entityId" AND e.kind=k.entity
+           WHERE k."scopeKind"=w.kind AND k."scopeKey"=w.key AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+             AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL ORDER BY e.shortcode LIMIT 1) AS record,
+          coalesce(d.attempts,0) AS attempts, ${isoText(sql`d."availableAt"`)} AS "nextAt",
           s."durationMs", ${isoText(sql`s."reconciledAt"`)} AS "reconciledAt", coalesce(d."lastError", s.error) AS "lastError",
           CASE WHEN d."claimToken" IS NOT NULL AND d."claimDeadline" > now() THEN ${STAGE.working}
             ELSE coalesce(s.stage, ${STAGE.waiting}) END AS stage,
@@ -193,7 +198,12 @@ export async function readRunWork(
           SELECT "askId" AS id FROM "AskScope" WHERE "runId" = ${runId}::uuid
           UNION SELECT "askId" FROM "Answer" WHERE "runId" = ${runId}::uuid AND "askId" IS NOT NULL
         )
-        SELECT a."inputHash", a.feature, a.attempts, ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", a."lastError", CASE WHEN a."cancelledAt" IS NOT NULL THEN ${askOutcomes[2]} ELSE a.state END AS state,
+        SELECT a."inputHash", a.feature, a.attempts,
+          (SELECT jsonb_build_object('entity',e.kind,'id',e.shortcode) FROM "AskScope" waiter
+           JOIN "RecordKey" k ON k."scopeKind"=waiter."scopeKind" AND k."scopeKey"=waiter."scopeKey"
+           JOIN "Entity" e ON e.id=k."entityId" AND e.kind=k.entity
+           WHERE waiter."askId"=a.id AND k."mergedAt" IS NULL AND k."rejectedAt" IS NULL
+             AND ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL ORDER BY e.shortcode LIMIT 1) AS record, ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", a."lastError", CASE WHEN a."cancelledAt" IS NOT NULL THEN ${askOutcomes[2]} ELSE a.state END AS state,
           CASE WHEN a."cancelledAt" IS NOT NULL THEN ${STAGE.ended}
             WHEN a.state = ${ASK.answered} THEN ${STAGE.done}
             WHEN a.state = ${ASK.unknown} OR a.attempts >= a."maxAttempts" THEN ${STAGE.stuck}

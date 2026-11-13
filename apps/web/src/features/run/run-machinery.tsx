@@ -5,6 +5,7 @@ import {
 import { kernelStage } from "@cubby/schemas/kernel/stage";
 import { useQuery } from "@tanstack/react-query";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { machinery } from "~/integrations/tanstack-query/generated/domains/machinery.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -30,18 +31,21 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
       label: scope.label,
       stage: scope.stage,
       detail: scope,
+      record: scope.record,
     })),
     ...work.asks.map((ask) => ({
       key: `ask:${ask.inputHash}`,
       label: ask.label,
       stage: ask.stage,
       detail: ask,
+      record: ask.record,
     })),
     ...work.passes.map((pass) => ({
       key: `pass:${pass.name}:${pass.key}`,
       label: pass.label,
       stage: pass.stage,
       detail: pass,
+      record: { entity: "run" as const, id: record.id },
     })),
   ];
   return (
@@ -70,6 +74,12 @@ export function RunMachinery({ record }: { record: DetailRecordOf<"run"> }) {
                   key={row.key}
                   className="min-w-0 border-b border-border py-2"
                 >
+                  {row.record ? (
+                    <EntityRefLink
+                      entity={row.record.entity}
+                      id={row.record.id}
+                    />
+                  ) : null}
                   <Disclosure summary={row.label}>
                     <p>Attempts: {row.detail.attempts}</p>
                     <p>Cost: {machineryCostLabel(row.detail.costMicros)}</p>
