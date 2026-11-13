@@ -539,19 +539,18 @@ export async function controlRun(
   )
     throw new Error("Only the member this Run belongs to can control it");
   return withTransaction(db, async (tx) => {
+    const kernel = await import("~/server/kernel/api");
+    // Every action ends or creates a Run, which dirties kernel scopes: the
+    // gate before the vendor-account and Run locks below.
+    await kernel.enterHouseholdGate(databaseForTransaction(tx));
     if (scope.vendorAccountId)
       await advisoryXactLock(tx, "run-vendor-account", scope.vendorAccountId);
-    const kernel = await import("~/server/kernel/api");
     const ended = {
       table: runTable,
       entity: "run",
       ids: [scope.runId],
       columns: ["status", "endedAt", "failureCode"],
     };
-    // A cancel ends the Run: revisions before the Run row lock below, the
-    // order a kernel apply takes.
-    if (input.action === "cancel" || input.action === "abort")
-      await kernel.lockWrites(databaseForTransaction(tx), ended);
     const [locked] = await tx
       .select({
         status: runTable.status,

@@ -1878,6 +1878,11 @@ export async function updateProduct<TOutput>(
 
   try {
     const updatedProduct = await withTransaction(db, async (tx) => {
+      // The kernel's `fields` settlement follows; the household write gate
+      // comes before every record lock, as in a Vendor merge.
+      await (
+        await import("~/server/kernel/api")
+      ).enterHouseholdGate(databaseForTransaction(tx));
       // Vendor merge locks identities before their Products. Match that order
       // even when an edit resubmits the Product's current Brand.
       const resolvedBrandId =

@@ -261,6 +261,7 @@ export function createEntityReader<
         actor: ActorContext,
       ) =>
         withTransactionOn(db, async (tx) => {
+          await enterKernelWrite(tx);
           // A created record's `fields` columns are the creator's decisions,
           // which the kernel applies; the insert leaves them DEFAULT.
           const fields = holdFieldsValues(
@@ -298,6 +299,12 @@ export function createEntityReader<
   }
 
   return { getByID, getByIDOrNull, getByShortcode, createWriter };
+}
+
+/** The household write gate first, before the writer locks any record. */
+async function enterKernelWrite(tx: DrizzleTransaction): Promise<void> {
+  const { enterHouseholdGate } = await import("~/server/kernel/api");
+  await enterHouseholdGate(databaseForTransaction(tx));
 }
 
 /**
@@ -423,6 +430,9 @@ export function createEntityCrud<
     ) => Promise<TResult>,
   ): Promise<TOut | TResult> {
     return withTransactionOn(db, async (tx) => {
+      // The write dirties kernel scopes; the gate before the rows that
+      // `prepare` and the relation writers lock.
+      await enterKernelWrite(tx);
       await config.prepare?.(tx, id, data);
       const before = await fetchStoredRow(tx, id);
       if (!before) {
@@ -443,14 +453,6 @@ export function createEntityCrud<
       const written = Object.entries(values)
         .filter(([, value]) => value !== undefined)
         .map(([column]) => column);
-      if (written.length) {
-        const { lockWrites } = await import("~/server/kernel/api");
-        await lockWrites(databaseForTransaction(tx), {
-          table: config.table,
-          ids: [id],
-          columns: written,
-        });
-      }
       const updated = written.length
         ? await updateLiveAndReturn(tx, config.table, values, id)
         : before;

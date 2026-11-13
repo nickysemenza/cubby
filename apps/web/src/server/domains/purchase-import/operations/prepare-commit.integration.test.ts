@@ -69,6 +69,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
+import { enterHouseholdGate } from "~/server/kernel/api";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import {
   createProductFixture,
@@ -1689,6 +1690,8 @@ describe("caller-driven purchase import writes", () => {
     let pending: ReturnType<typeof preparePurchaseImport> | undefined;
     await withTransactionDatabase(ctx.db, async (transactionDb) => {
       const tx = getDb(transactionDb);
+      // A cancellation takes the household write gate before the Run lock.
+      await enterHouseholdGate(transactionDb);
       await tx
         .select({ id: run.id })
         .from(run)
