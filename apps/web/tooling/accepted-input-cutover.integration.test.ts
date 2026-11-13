@@ -76,6 +76,10 @@ it("carries held values, paid results, redirects and every accepted money row", 
       `UPDATE "AiEvaluation" SET "runAt"='2026-01-01' WHERE id=$1`,
       [cutoverId(79)],
     );
+    await client.query(
+      `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId") VALUES ($1,$2,$3)`,
+      [cutoverId(101), cutoverId(41), cutoverId(14)],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -222,6 +226,14 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ receipt: { retained: "requester" }, sequence: 7 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT receipt,sequence FROM "AskScope" WHERE "askId"=$1 AND "scopeKind"='run'`,
+          [cutoverId(41)],
+        )
+      ).rows,
+    ).toEqual([{ receipt: null, sequence: null }]);
     expect(
       (
         await client.query(
