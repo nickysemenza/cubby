@@ -18,15 +18,27 @@ Run execution renews every 30 seconds; the kernel arranges a recovery wake at
 each claim deadline. Expired claims admit another worker. A funding or provider wait
 keeps its deadline and cause without spending a failure attempt.
 
+An Ask or Pass declaration may name a `claimLimit` partition and slot count.
+The household shares those slots across both tables, including inline
+`withAsk` calls. Admission serializes under a short database lock, counts only
+live uncancelled claims, and releases the lock before doing network work. A
+full partition parks work for 15 seconds with `provider_capacity`; it spends
+no attempt. Renewals keep a slot; completion, cancellation or expiry frees it.
+All declarations using one partition must use the same slot count.
+
+`startPass` increments a wake sequence. A holder publishing an older page
+cannot overwrite a newer cursor, completion or wait: the newer wake remains
+due. Dispatch event admission and funding resets can use the same sequence.
+
 `workflows/kernel-passes.ts` registers the platform passes:
 
-| Pass                  | Key       | Checkpoint and outcome owner                                                                                                           |
-| --------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `run.execute`         | Run id    | Step-ledger and AI-work Runs; the cursor names the execution generation, `RunStep` and Run progress keep the checkpoint                |
-| `runs.reconcile`      | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly |
-| `purchase.discovery`  | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor               |
-| `retention`           | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                     |
-| `calendar.invalidate` | origin    | Retries an idempotent dirty mark after the post-commit fast path failed                                                                |
+| Pass                  | Key       | Checkpoint and outcome owner                                                                                                                                  |
+| --------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.execute`         | Run id    | Step-ledger, AI-work and mailbox-discovery Runs; the cursor names the generation and frozen provider page; `RunStep` and Run progress keep committed outcomes |
+| `runs.reconcile`      | `default` | Projects exhausted Run Passes and stopped dispatch execution onto Run status; checks active Runs every 15 minutes and idle work hourly                        |
+| `purchase.discovery`  | `default` | Sender-attribution learning, retained-Email admission and mailbox-discovery admission; `senderAfter` stays in the cursor                                      |
+| `retention`           | `default` | Bounded pruning of execution rows, hourly or immediately while a full page remains                                                                            |
+| `calendar.invalidate` | origin    | Retries an idempotent dirty mark after the post-commit fast path failed                                                                                       |
 
 The Run module also registers `run.summary` for the summary's model Ask.
 `startPass` coalesces an existing pending instance without replacing its
@@ -42,8 +54,7 @@ path marks its Durable Object directly; only a failed mark persists a Pass.
 Purchase-discovery task publishers use their existing task shape, which
 `publishBackgroundTasks` persists as the singleton Pass.
 
-The `Job` runtime owns mailbox-discovery pages, purchase-agent dispatch,
-funding-resume timers and the producer kinds listed below. Its drains and
+The `Job` runtime owns purchase-agent dispatch, funding-resume timers and the producer kinds listed below. Its drains and
 execution contracts apply to those owners.
 
 ## Jobs are not entities
@@ -101,7 +112,6 @@ remain until retention prunes them.
 
 | Job kind                                  | Why a row                                      | Owner of the result           |
 | ----------------------------------------- | ---------------------------------------------- | ----------------------------- |
-| `run.execute`                             | Mailbox-discovery pages                        | The Run                       |
 | `purchase.dispatch`                       | Durable handoff to the agent, deduped by event | The Run and its agent session |
 | `run.funding-resume`                      | Waits for a funding window to end              | The paused Runs               |
 | `image-metadata.extract`, `location-ai.*` | One per record, replaced on re-admission       | The Image or Location         |
@@ -260,7 +270,7 @@ that reported it, and the permit runs the unit on that drain. A unit name is
 only the key of the unit's rotation and execution record, so it must be unique
 across drains but never has to match its drain's name:
 
-1. `run.execute`, Jobs whose `runId` is a running, member-visible Run, and
+1. Jobs whose `runId` is a running, member-visible Run, and
    drain units with member demand (an AI evaluation at priority 0, a Run-owned
    cloud image) lead. Routine Runs do not.
 2. Within each class, units take turns: every unit's first candidate, then
@@ -587,10 +597,10 @@ failed roster. Retry failed refuses a retained step absent from its Run's
 current execution plan before changing its ledger or launching work; it does
 not re-plan a retired population, and historical failures stay readable.
 
-An explicit Retry run can reopen a completed execution Job when a failed Mail
-discovery Run retains a valid frozen page. The same Job starts a new generation
+An explicit Retry run can reopen a completed execution Pass when a failed Mail
+discovery Run retains a valid frozen page. The Pass starts a new generation
 while preserving the Run's input and page; page settlement and mailbox
-admission still apply. A completed Job without retained work remains refused.
+admission still apply. A completed Pass without retained work remains refused.
 Executed workflow retries can resume the same Run and its committed steps; a
 retry does not always create a successor.
 
@@ -609,7 +619,11 @@ unchanged, and linkage includes child usage in the parent's cost rollup.
 
 ## Mailbox discovery admission
 
-Mailbox discovery runs as `run.execute` pages under the Job contract above.
+Mailbox discovery runs as the `run.execute` Pass keyed by Run id. Its cursor
+retains the frozen provider page across claims and the execution generation
+fences writes. Admission waits use `provider_capacity`; funding waits use
+`funding`, retain their deadline and spend no attempt. Pause cancels the claim;
+resume re-admits the same Run and retained page under its next generation.
 Its Mail-specific admission rules (targeted-search capacity, exclusive scans,
 page yielding, coverage advancement and Gmail cooldowns) are owned by the
 [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mailbox-admission-and-coverage).
