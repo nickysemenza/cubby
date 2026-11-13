@@ -36,7 +36,7 @@ try {
       UNION ALL SELECT 'FinancialTransaction',id,NULL,date_trunc('month',"transactionDate")::date,"amountMinor" FROM "FinancialTransaction"
       UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation"
     ), money_copy AS (
-      SELECT m.*, (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric copied
+      SELECT DISTINCT ON (m.source,m.id) m.*, (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric copied
       FROM money m LEFT JOIN expected e ON e.mapping='manualEntry' AND e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id
     ), failures AS (
       SELECT mapping,count(*) FILTER(WHERE
