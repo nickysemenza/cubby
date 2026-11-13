@@ -980,6 +980,52 @@ describe("evidence-facts kernel", () => {
     expect(stored?.amountMinor).toBe(900);
   });
 
+  it("isolates a poisoned scope without charging healthy siblings", async () => {
+    const target = writes(fixturePurchase, ["orderRef", "amountMinor"]);
+    const reconciler = defineReconciler({
+      scope: "fixture.poison",
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [target],
+      async load(_reads, keys) {
+        return new Map(keys.map((key) => [key, key]));
+      },
+      reconcile(key, c) {
+        c.record(target, "purchase", {
+          orderRef: key,
+          amountMinor: key === "poison" ? 1e20 : 100,
+        });
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "poison", reconcilers: [reconciler] }),
+    ]);
+    registerOwnedColumns(ownedColumns(kernel.registry));
+    const outcomes = await kernel.reconcileNow(
+      ctx.db,
+      ["healthy-a", "poison", "healthy-b"].map((key) => ({
+        kind: reconciler.scope,
+        key,
+      })),
+    );
+    expect(outcomes.filter((item) => item.status === "applied")).toHaveLength(
+      2,
+    );
+    expect(await purchases(ctx.db)).toHaveLength(2);
+    const dirty = await repositoryQueries(ctx.db).execute<{
+      key: string;
+      attempts: number;
+      errorClass: string;
+    }>(
+      sql`SELECT d."scopeKey" AS key, d.attempts, s."errorClass" FROM "ScopeDirty" d JOIN "ScopeState" s USING ("scopeKind", "scopeKey") WHERE d."scopeKind"=${reconciler.scope}`,
+    );
+    expect(dirty.rows).toEqual([
+      { key: "poison", attempts: 1, errorClass: "isolated" },
+    ]);
+  });
+
   it("returns waiting without sleeping when a member transaction encounters a held claim", async () => {
     const { kernel } = kernelWith();
     const scope = { kind: PURCHASE_SCOPE, key: "ORD-HELD" };

@@ -66,6 +66,7 @@ import type {
 import { difference, type Difference } from "./diff";
 import { lockKeyRevs, markDirty } from "./dirty";
 import { recordDrifts } from "./drift";
+import { classifyWorkFailure } from "./failure";
 import {
   enterWriteTransaction,
   HouseholdWriteBusyError,
@@ -83,6 +84,7 @@ import {
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
+import { WorkTargetError } from "./work-errors";
 
 type Q = Pick<
   RepositoryQueryClient,
@@ -946,7 +948,27 @@ export async function applyComputed(
       }
     });
   } catch (error) {
-    return settleBatchFailure(db, reconciler, claimed, error, options.mode);
+    if (computed.length > 1 && !isConflict(error)) {
+      const isolated: Outcome[] = [];
+      for (let i = 0; i < computed.length; i++)
+        isolated.push(
+          ...(await applyComputed(
+            db,
+            registry,
+            reconciler,
+            [computed[i]!],
+            [claimed[i]!],
+            options,
+          )),
+        );
+      return isolated;
+    }
+    const failure = classifyWorkFailure(error, { publication: true });
+    const surfaced =
+      failure.kind === "failed" || failure.kind === "isolated"
+        ? new WorkTargetError(rawError(error), { cause: error })
+        : error;
+    return settleBatchFailure(db, reconciler, claimed, surfaced, options.mode);
   }
 }
 
