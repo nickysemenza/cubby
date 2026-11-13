@@ -13,6 +13,8 @@ import {
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
 import { eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Client } from "pg";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { expectStatementBudget } from "tooling/statement-budget";
@@ -112,6 +114,20 @@ const providerRow = (overrides: Partial<SourceTransactionRecordInput> = {}) =>
     },
     ...overrides,
   });
+
+/** Seed retained pre-boundary states directly; member writes still use the traced repository. */
+async function historicalEvidenceFixture<T>(
+  databaseUrl: string,
+  seed: (db: ReturnType<typeof drizzle>) => Promise<T>,
+) {
+  const client = new Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    await seed(drizzle(client));
+  } finally {
+    await client.end();
+  }
+}
 
 describe("statement row ledger", () => {
   const ctx = withTestDb();
@@ -316,21 +332,23 @@ describe("statement row ledger", () => {
     await getDb(ctx.db)
       .update(sourceOccurrence)
       .set({ currentObservationId: null });
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ rowPosition: null });
+    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+      db.update(sourceTransactionRecord).set({ rowPosition: null }),
+    );
     await getDb(ctx.db)
       .update(transactionImportRecord)
       .set({ rowPosition: null, requestFingerprint: null });
-    await getDb(ctx.db).update(sourceOccurrence).set({
-      identityKind: "legacy",
-      reviewState: "ready",
-      physicalImportId: null,
-      physicalPosition: null,
-      disposition: "ignored",
-      dispositionReason: "not_modeled",
-      dispositionNote: "Explicit synthetic member ignore",
-    });
+    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+      db.update(sourceOccurrence).set({
+        identityKind: "legacy",
+        reviewState: "ready",
+        physicalImportId: null,
+        physicalPosition: null,
+        disposition: "ignored",
+        dispositionReason: "not_modeled",
+        dispositionNote: "Explicit synthetic member ignore",
+      }),
+    );
     const ignoredOwners = await getDb(ctx.db).select().from(sourceOccurrence);
     const ignoredEvidence = await getDb(ctx.db)
       .select()
@@ -1537,7 +1555,7 @@ describe("statement row ledger", () => {
     ).toHaveLength(4);
     await expect(
       getDb(ctx.db).execute(sql`UPDATE "SourceTransactionRecord" SET amount=1`),
-    ).rejects.toMatchObject({ cause: { code: "42703" } });
+    ).rejects.toMatchObject({ cause: { name: "OwnedColumnWriteError" } });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic projected account",
     });
@@ -1849,15 +1867,17 @@ describe("statement row ledger", () => {
       },
     );
     // A historical legacy row cannot be created by modern intake.
-    await getDb(ctx.db)
-      .update(sourceOccurrence)
-      .set({
-        identityKind: "legacy",
-        reviewState: "ready",
-        physicalImportId: null,
-        physicalPosition: null,
-      })
-      .where(eq(sourceOccurrence.id, owner.id));
+    await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+      db
+        .update(sourceOccurrence)
+        .set({
+          identityKind: "legacy",
+          reviewState: "ready",
+          physicalImportId: null,
+          physicalPosition: null,
+        })
+        .where(eq(sourceOccurrence.id, owner.id)),
+    );
     await deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
       bankRecord.id,
     ]);
@@ -1888,9 +1908,11 @@ describe("statement row ledger", () => {
     async (overlap) => {
       await record([rowInput(), rowInput()]);
       const legacy = (await listSourceTransactionRecords(ctx.db, {})).data;
-      await getDb(ctx.db)
-        .update(sourceTransactionRecord)
-        .set({ providerTransactionId: "synthetic-overlap" });
+      await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+        db
+          .update(sourceTransactionRecord)
+          .set({ providerTransactionId: "synthetic-overlap" }),
+      );
       const account = await createRepoEntity(ctx, "financialAccount", {
         name: "Synthetic overlap account",
       });
@@ -1933,15 +1955,17 @@ describe("statement row ledger", () => {
       if (!target?.currentObservationId || !source || !other || !legacy[0])
         throw new Error("Synthetic reviewed overlap missing");
       if (overlap === "legacy alias") {
-        await getDb(ctx.db)
-          .update(sourceOccurrence)
-          .set({
-            identityKind: "legacy",
-            reviewState: "ready",
-            physicalImportId: null,
-            physicalPosition: null,
-          })
-          .where(eq(sourceOccurrence.id, source.id));
+        await historicalEvidenceFixture(ctx.databaseUrl, async (db) =>
+          db
+            .update(sourceOccurrence)
+            .set({
+              identityKind: "legacy",
+              reviewState: "ready",
+              physicalImportId: null,
+              physicalPosition: null,
+            })
+            .where(eq(sourceOccurrence.id, source.id)),
+        );
         await getDb(ctx.db)
           .update(sourceTransactionRecord)
           .set({ providerTransactionId: null })

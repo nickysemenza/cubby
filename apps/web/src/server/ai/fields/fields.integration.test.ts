@@ -29,6 +29,7 @@ import { readPasses } from "~/server/kernel/pass.fixtures";
 import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
 import { fieldAskInput } from "./ask";
+import { insertFieldsFixture } from "./fields.fixtures";
 import { fieldsKernelModule } from "./module";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
 import { applyFieldAuthorityAction } from "./repo/field-actions";
@@ -135,13 +136,13 @@ describe("fields scope", () => {
     expect((await stored(id)).kind).toBe("garden");
   });
   it("prepares a member-held Product tag prune without making a producer call", async () => {
-    const record = await createRepoEntity(ctx, "product", {
+    const record = await insertFieldsFixture(ctx.db, "product", {
       name: "Synthetic cordless tool",
       tags: ["M18"],
     });
     const kernel = createKernel([fieldsKernelModule]);
     await kernel.reconcileNow(ctx.db, [
-      { kind: FIELDS_SCOPE, key: `product:${record.entityId}` },
+      { kind: FIELDS_SCOPE, key: `product:${record.id}` },
     ]);
     const { ask } = await import("~/server/db/kernel-schema");
     const rows = await getDb(ctx.db)
@@ -153,7 +154,7 @@ describe("fields scope", () => {
     );
     expect(
       inputs.find(
-        (input) => input.recordId === record.entityId && input.field === "tags",
+        (input) => input.recordId === record.id && input.field === "tags",
       )?.questions,
     ).toEqual(expect.any(Array));
     expect(rows.every((row) => row.sentAt === null)).toBe(true);

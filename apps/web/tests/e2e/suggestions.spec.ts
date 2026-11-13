@@ -283,7 +283,7 @@ test("shows kernel diagnostics on Image and Location and follows a field Sweep R
   );
   const location = await createEntityFixture(page, "location", {
     name: uniqueName(testInfo, "Synthetic workshop"),
-    type: "storage",
+    type: "room",
   });
   for (const path of [`/images/${image.id}`, `/locations/${location.id}`]) {
     await gotoAuthenticatedPage(page, path);
