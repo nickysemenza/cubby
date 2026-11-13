@@ -5,7 +5,6 @@ import {
   type ProjectUpdateInput,
 } from "@cubby/schemas/entities/project";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ProjectId, ProjectShortcode } from "@cubby/schemas/identifiers";
 import { MAX_PROJECT_TREE_DEPTH } from "@cubby/schemas/project";
 import {
@@ -18,7 +17,8 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   assertNoDependents,
   buildPartialUpdateValues,
@@ -69,63 +69,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { projectDependencyIds } from "./analytics";
 import { projectScaffold } from "./lookup";
-
-export const PROJECT_DELETE_EDGE_POLICY = {
-  "Purchase.defaultProjectId": {
-    code: "block-live-purchase-default",
-    effect: "block",
-    description:
-      "A project selected as a live purchase default cannot be deleted until the purchase is reassigned.",
-  },
-  "Project.parentProjectId": {
-    code: "block-live-child",
-    effect: "block",
-    description:
-      "A project with live sub-projects can't be deleted — delete or reparent them first.",
-  },
-  "EntityLink[projectDependency].from": {
-    code: "soft-delete-dependency",
-    effect: "soft-delete",
-    description:
-      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
-  },
-  "EntityLink[projectDependency].to": {
-    code: "soft-delete-dependency",
-    effect: "soft-delete",
-    description:
-      "Blocks/blocked-by dependency links naming the project are soft-deleted with it.",
-  },
-  "Task.projectId": {
-    code: "block-live-task",
-    effect: "block",
-    description:
-      "A project with live tasks can't be deleted — delete or reassign them first.",
-  },
-  "Expense.projectId": {
-    code: "block-live-expense",
-    effect: "block",
-    description:
-      "A project with live expenses can't be deleted — delete or reassign them first.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
-  },
-  "EntityLink[projectTool].from": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Tool-use associations are soft-deleted with the project; the tool Products and their other project history remain.",
-  },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
-    description:
-      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
-  },
-} as const satisfies IncomingEdgePolicy<"project", OperationDisposition>;
 
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];
@@ -529,19 +472,19 @@ const refuseEffectiveMembers =
  */
 export const deleteProjects = policyDelete(
   "project",
-  PROJECT_DELETE_EDGE_POLICY,
+  DECLARED_EDGE_DELETE_POLICIES.project,
   {
-    overrides: {
-      "Task.projectId": refuseEffectiveMembers(
-        fetchLiveProjectTasks,
-        "PROJECT_HAS_TASKS",
-        "tasks",
-      ),
-      "Expense.projectId": refuseEffectiveMembers(
-        fetchLiveProjectExpenses,
-        "PROJECT_HAS_EXPENSES",
-        "expenses",
-      ),
-    },
+    overrides: DECLARED_EDGE_DELETE_HOOKS.project.overrides,
   },
+);
+
+export const refuseProjectTaskMembership = refuseEffectiveMembers(
+  fetchLiveProjectTasks,
+  "PROJECT_HAS_TASKS",
+  "tasks",
+);
+export const refuseProjectExpenseMembership = refuseEffectiveMembers(
+  fetchLiveProjectExpenses,
+  "PROJECT_HAS_EXPENSES",
+  "expenses",
 );

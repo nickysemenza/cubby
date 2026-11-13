@@ -880,51 +880,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  project: {
-    ...edges({
-      "Project.parentProjectId": {
-        column: project.parentProjectId,
-        role: "hierarchy",
-        label: "sub-projects",
-        description:
-          "A project nested under this one; sub-project dates and totals roll up into the parent's derived window.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Task.projectId": {
-        column: task.projectId,
-        role: "owned-child",
-        label: "tasks",
-        description:
-          "A task filed under this project; deleting the project takes its tasks with it.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Purchase.defaultProjectId": {
-        column: purchase.defaultProjectId,
-        role: "ledger",
-        label: "purchase defaults",
-        description:
-          "The default project inherited by purchase items without an override.",
-        liveness: { kind: "must-target-live" },
-      },
-      "Expense.projectId": {
-        column: expense.projectId,
-        role: "ledger",
-        label: "expenses",
-        description:
-          "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
-        liveness: { kind: "must-target-live" },
-      },
-      "EntityAttachment.entityId": {
-        column: entityAttachment.entityId,
-        role: "media",
-        label: "project photos",
-        description: "A photo or document attached to this project.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...linkEdgesFor("project"),
-    ...externalIdEdgesFor("project"),
-  },
   task: {
     ...edges({
       "Task.parentTaskId": {

@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { workDiagnosticFacts } from "../work-diagnostic-facts";
 import {
@@ -220,6 +221,418 @@ const PROJECT_ROLLUP_INPUTS: DerivedStoredInput[] = [
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 export const { definition, readSchemas } = defineEntityModel({
   key: "project",
+  edges: [
+    defineEdge({
+      key: "Project.parentProjectId",
+      from: "project",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.Project.parentProjectId",
+        from: "project",
+        to: "project",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Project.parentProjectId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "project",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "hierarchy",
+        label: "sub-projects",
+        description:
+          "A project nested under this one; sub-project dates and totals roll up into the parent's derived window.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-child",
+              effect: "block",
+              description:
+                "A project with live sub-projects can't be deleted — delete or reparent them first.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Task.projectId",
+      from: "task",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.Task.projectId",
+        from: "project",
+        to: "task",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Task.projectId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "task",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "owned-child",
+        label: "tasks",
+        description:
+          "A task filed under this project; deleting the project takes its tasks with it.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-task",
+              effect: "block",
+              description:
+                "A project with live tasks can't be deleted — delete or reassign them first.",
+            },
+            handler: {
+              module: "~/server/domains/project/repo/crud",
+              export: "refuseProjectTaskMembership",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Purchase.defaultProjectId",
+      from: "purchase",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.Purchase.defaultProjectId",
+        from: "project",
+        to: "purchase",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Purchase.defaultProjectId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "purchase",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "ledger",
+        label: "purchase defaults",
+        description:
+          "The default project inherited by purchase items without an override.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-purchase-default",
+              effect: "block",
+              description:
+                "A project selected as a live purchase default cannot be deleted until the purchase is reassigned.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "Expense.projectId",
+      from: "expense",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.Expense.projectId",
+        from: "project",
+        to: "expense",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "Expense.projectId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "entity",
+        entity: "expense",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "ledger",
+        label: "expenses",
+        description:
+          "A spend-ledger line rolled up under this project — all money lives on Expense, so this is the source of the project's cost total.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "block-live-expense",
+              effect: "block",
+              description:
+                "A project with live expenses can't be deleted — delete or reassign them first.",
+            },
+            handler: {
+              module: "~/server/domains/project/repo/crud",
+              export: "refuseProjectExpenseMembership",
+            },
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "project/EntityAttachment.entityId",
+      from: "row:EntityAttachment",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.EntityAttachment.entityId",
+        from: "project",
+        to: "row:EntityAttachment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityAttachment.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityAttachment.entityKind",
+          value: "project",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityAttachment.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "media",
+        label: "project photos",
+        description: "A photo or document attached to this project.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-association",
+              effect: "soft-delete",
+              description:
+                "Image associations are soft-deleted with the project, and each file is\n      deleted too unless something else still references it.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "project/EntityExternalId.entityId",
+      from: "row:EntityExternalId",
+      to: "project",
+      cardinality: "one",
+      inverse: {
+        key: "project.incoming.EntityExternalId.entityId",
+        from: "project",
+        to: "row:EntityExternalId",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityExternalId.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityExternalId.entityKind",
+          value: "project",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityExternalId.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "metadata",
+        label: "external ids",
+        description:
+          "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-metadata",
+              effect: "soft-delete",
+              description:
+                "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Project", plural: "Projects" },
   route: { basePath: "projects" },
   table: "Project",
@@ -1969,108 +2382,152 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("assigneeId").named("assignee", "Default assignee"),
-    r
-      .path("project", "many", [
-        { edge: "Project.parentProjectId", direction: "incoming" },
-      ])
-      .named("sub-projects", "Sub-projects"),
-    r
-      .path("purchase", "many", [
-        { edge: "Expense.projectId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "outgoing" },
-      ])
-      .named("purchases", "Purchases"),
-    r.field("parentProjectId").named("parent", "Parent project"),
-    r.link("projectDependency", "outgoing").named("blocked-by", "Blocked by", {
-      view: {
-        key: "blockedBy",
-        columnGroup: "Dependencies",
-        defaultVisible: true,
-      },
-    }),
-    r.link("projectTool", "outgoing").named("resources", "Reusable resources", {
-      view: {
-        key: "usedTools",
-        columnGroup: "Work",
-        filterPrefix: "usedTool",
-        inverseKey: "product.usedOnProjects",
-        defaultVisible: true,
-      },
-      sourceKey: "explicit",
-      mutation: {
-        source: "explicit",
-        itemSchema: {
-          module: "@cubby/schemas/common",
-          export: "entityRelationReferenceItemSchema",
-        },
-        rowSchema: {
-          module: "@cubby/schemas/project",
-          export: "projectResourceOut",
-        },
-        adapter: {
-          module: "~/server/domains/project/repo/tools",
-          export: "projectResourcesRelationAdapter",
-        },
-        audiences: ["browser", "mcp"],
-      },
-    }),
-    r
-      .path("purchase", "many", [
-        { edge: "Purchase.defaultProjectId", direction: "incoming" },
-      ])
-      .named("defaultPurchases", "Purchases using this default"),
-    r
-      .path("task", "many", [{ edge: "Task.projectId", direction: "incoming" }])
-      .named("tasks", "Tasks", {
-        view: { columnGroup: "Work", order: "task" },
-      }),
-    r
-      .path("expense", "many", [
-        { edge: "Expense.projectId", direction: "incoming" },
-      ])
-      .named("expenses", "Expenses", {
-        view: { columnGroup: "Purchasing", order: "newest" },
-      }),
-    r
-      .path("product", "many", [
-        { edge: "Task.projectId", direction: "incoming" },
-        { edge: "Task.subjectProductId", direction: "outgoing" },
-      ])
-      .named("task-products", "Task products", {
-        view: {
-          key: "taskProducts",
-          columnGroup: "Work",
-          filterPrefix: "taskProduct",
-        },
-      }),
-    r
-      .path("product", "many", [
-        { edge: "Expense.projectId", direction: "incoming" },
-        { edge: "Expense.productId", direction: "outgoing" },
-      ])
-      .named("purchased-products", "Purchased products", {
-        view: {
-          key: "purchasedProducts",
-          columnGroup: "Purchasing",
-          filterPrefix: "purchasedProduct",
-          inverseKey: "product.projects",
-        },
-      }),
-    r
-      .path("vendor", "many", [
-        { edge: "Expense.projectId", direction: "incoming" },
-        { edge: "Expense.purchaseId", direction: "outgoing" },
-        { edge: "Purchase.vendorId", direction: "outgoing" },
-      ])
-      .named("vendors", "Vendors", {
-        view: {
-          columnGroup: "Purchasing",
-          inverseKey: "vendor.projects",
-        },
-      }),
-    r.images(),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("assigneeId").named("assignee", "Default assignee"),
+        "ledgerParty.projects",
+      ),
+      r.declare(
+        r
+          .path("project", "many", [
+            { edge: "Project.parentProjectId", direction: "incoming" },
+          ])
+          .named("sub-projects", "Sub-projects"),
+        "project.parent",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Expense.projectId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+          ])
+          .named("purchases", "Purchases"),
+        "purchase.projects",
+      ),
+      r.declare(
+        r.field("parentProjectId").named("parent", "Parent project"),
+        "project.sub-projects",
+      ),
+      r.declare(
+        r
+          .link("projectDependency", "outgoing")
+          .named("blocked-by", "Blocked by", {
+            view: {
+              key: "blockedBy",
+              columnGroup: "Dependencies",
+              defaultVisible: true,
+            },
+          }),
+        "project.project.blocked-by",
+      ),
+      r.declare(
+        r
+          .link("projectTool", "outgoing")
+          .named("resources", "Reusable resources", {
+            view: {
+              key: "usedTools",
+              columnGroup: "Work",
+              filterPrefix: "usedTool",
+              inverseKey: "product.usedOnProjects",
+              defaultVisible: true,
+            },
+            sourceKey: "explicit",
+            mutation: {
+              source: "explicit",
+              itemSchema: {
+                module: "@cubby/schemas/common",
+                export: "entityRelationReferenceItemSchema",
+              },
+              rowSchema: {
+                module: "@cubby/schemas/project",
+                export: "projectResourceOut",
+              },
+              adapter: {
+                module: "~/server/domains/project/repo/tools",
+                export: "projectResourcesRelationAdapter",
+              },
+              audiences: ["browser", "mcp"],
+            },
+          }),
+        "product.usedOnProjects",
+      ),
+      r.declare(
+        r
+          .path("purchase", "many", [
+            { edge: "Purchase.defaultProjectId", direction: "incoming" },
+          ])
+          .named("defaultPurchases", "Purchases using this default"),
+        "purchase.defaultProject",
+      ),
+      r.declare(
+        r
+          .path("task", "many", [
+            { edge: "Task.projectId", direction: "incoming" },
+          ])
+          .named("tasks", "Tasks", {
+            view: { columnGroup: "Work", order: "task" },
+          }),
+        "task.project",
+      ),
+      r.declare(
+        r
+          .path("expense", "many", [
+            { edge: "Expense.projectId", direction: "incoming" },
+          ])
+          .named("expenses", "Expenses", {
+            view: { columnGroup: "Purchasing", order: "newest" },
+          }),
+        "expense.project",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Task.projectId", direction: "incoming" },
+            { edge: "Task.subjectProductId", direction: "outgoing" },
+          ])
+          .named("task-products", "Task products", {
+            view: {
+              key: "taskProducts",
+              columnGroup: "Work",
+              filterPrefix: "taskProduct",
+            },
+          }),
+        "product.project.task-products",
+      ),
+      r.declare(
+        r
+          .path("product", "many", [
+            { edge: "Expense.projectId", direction: "incoming" },
+            { edge: "Expense.productId", direction: "outgoing" },
+          ])
+          .named("purchased-products", "Purchased products", {
+            view: {
+              key: "purchasedProducts",
+              columnGroup: "Purchasing",
+              filterPrefix: "purchasedProduct",
+              inverseKey: "product.projects",
+            },
+          }),
+        "product.projects",
+      ),
+      r.declare(
+        r
+          .path("vendor", "many", [
+            { edge: "Expense.projectId", direction: "incoming" },
+            { edge: "Expense.purchaseId", direction: "outgoing" },
+            { edge: "Purchase.vendorId", direction: "outgoing" },
+          ])
+          .named("vendors", "Vendors", {
+            view: {
+              columnGroup: "Purchasing",
+              inverseKey: "vendor.projects",
+            },
+          }),
+        "vendor.projects",
+      ),
+      r.declare(r.images(), "image.project.images"),
+    ],
+  }),
   readSchemas,
 );
