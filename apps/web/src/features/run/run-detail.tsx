@@ -22,9 +22,9 @@ import { Button } from "~/ui/primitives/button";
 import type { KeyNumber } from "~/ui/records/key-numbers";
 import { RecordList } from "~/ui/records/record-list";
 
-import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";
 import { decisionFacetCounts, presenterFor } from "./decision-presenters";
+import { RunMachinery } from "./run-machinery";
 import { RunStepStrip } from "./run-step-strip";
 import {
   type BreakdownGroup,
@@ -273,7 +273,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
         className="inline-flex items-center gap-1 text-link hover:underline"
       >
         <StackIcon aria-hidden className="size-3" />
-        Job diagnostics
+        Passes and asks
       </a>
     </>
   );
@@ -357,31 +357,9 @@ export function RunDecisions({ record }: { record: RunOut }) {
   );
 }
 
-/** The Job executing the Run, its pages and raw logs. */
+/** The kernel work carrying this Run, including raw pass and ask diagnostics. */
 export function RunDiagnostics({ record }: { record: RunOut }) {
-  const { jobs } = useRunDetail(record);
-  return (
-    <div className="grid gap-2">
-      <p className="text-xs/4.5 text-muted-foreground">
-        The Job executing this Run, its pages and raw logs.
-      </p>
-      <JobDiagnostics
-        jobs={jobs.data}
-        state={
-          jobs.isError
-            ? {
-                status: "error",
-                error: jobs.error,
-                title: "Couldn't load Jobs",
-                onRetry: () => void jobs.refetch(),
-              }
-            : jobs.isPending
-              ? { status: "pending", rows: 4 }
-              : { status: "success" }
-        }
-      />
-    </div>
-  );
+  return <RunMachinery record={record} />;
 }
 
 type RunOut = DetailRecordOf<"run">;
