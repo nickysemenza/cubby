@@ -263,7 +263,11 @@ export function mobileColumnLabel<TItem extends RowData>(
   return (
     column.columnDef.meta?.presentation?.label ??
     column.columnDef.meta?.filterConfig?.label ??
-    "Details"
+    (meta?.entityColumnRole === "selection"
+      ? "Select"
+      : meta?.entityColumnRole === "action"
+        ? "Actions"
+        : "Details")
   );
 }
 
