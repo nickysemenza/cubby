@@ -11,6 +11,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
@@ -28,6 +29,7 @@ import { readPasses } from "~/server/kernel/pass.fixtures";
 import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
 import { fieldAskInput } from "./ask";
+import { fieldsKernelModule } from "./module";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
 import { applyFieldAuthorityAction } from "./repo/field-actions";
 import { fieldAnswer, type FieldAnswer } from "./repo/field-answer";
@@ -132,6 +134,31 @@ describe("fields scope", () => {
     await kernel.run(ctx.db, RUN);
     expect((await stored(id)).kind).toBe("garden");
   });
+  it("prepares a member-held Product tag prune without making a producer call", async () => {
+    const record = await createRepoEntity(ctx, "product", {
+      name: "Synthetic cordless tool",
+      tags: ["M18"],
+    });
+    const kernel = createKernel([fieldsKernelModule]);
+    await kernel.reconcileNow(ctx.db, [
+      { kind: FIELDS_SCOPE, key: `product:${record.entityId}` },
+    ]);
+    const { ask } = await import("~/server/db/kernel-schema");
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(ask)
+      .where(eq(ask.feature, FIELD_SUGGESTION_FEATURE.feature));
+    const inputs = rows.map(
+      (row) => z.object({ input: fieldAskInput }).parse(row.input).input,
+    );
+    expect(
+      inputs.find(
+        (input) => input.recordId === record.entityId && input.field === "tags",
+      )?.questions,
+    ).toEqual(expect.any(Array));
+    expect(rows.every((row) => row.sentAt === null)).toBe(true);
+  });
+
   it("dismisses a proposal on a blank field without assigning None or requiring a current value", async () => {
     const record = await createRepoEntity(ctx, "project", {
       name: "Synthetic blank field review",
