@@ -276,7 +276,7 @@ export function listReadPlan<Row>(
             (row, rows) => ({
               machinery: rows
                 ? (rows.get(sourceIdentity.parse(row).id) ?? {
-                    stage: "done",
+                    stage: "done" as const,
                     nextActor: null,
                     firstGap: null,
                     eta: null,
