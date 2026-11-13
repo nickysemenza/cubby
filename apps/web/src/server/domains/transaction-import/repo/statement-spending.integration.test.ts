@@ -33,6 +33,8 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { readExistingOrderCandidates } from "~/server/domains/purchase-import/repo/existing-order-candidates";
+import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
@@ -49,6 +51,7 @@ describe("statement spending review and re-import", () => {
   async function fixture(
     providerTransactionId: string | null = null,
     ownerKind: "member" | "household" = "member",
+    amount = 42.5,
   ) {
     const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic statement member",
@@ -95,7 +98,7 @@ describe("statement spending review and re-import", () => {
         {
           accountDescriptor: "Synthetic card 4242",
           statementDate: "2026-05-04",
-          providerAmount: -42.5,
+          providerAmount: -amount,
           merchant: "Synthetic Orchard",
           rawDescription: "SYNTHETIC ORCHARD",
           sourceCategory: "Groceries",
@@ -122,6 +125,51 @@ describe("statement spending review and re-import", () => {
     );
     return { input, recorded, account, advice };
   }
+  it("matches statement lumps in cents and reports work amounts in dollars", async () => {
+    const setup = await fixture("money-unit-boundary", "member", 19.99);
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const result = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action: "book", kindOverride: "purchase" },
+      }),
+    );
+    expect(result.status).toBe("applied");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const [account] = await getDb(ctx.db)
+      .select()
+      .from(financialAccount)
+      .where(eq(financialAccount.shortcode, setup.account.output.id));
+    const candidates = await readExistingOrderCandidates(
+      ctx.db,
+      {
+        ledgerPartyId: account!.ledgerPartyId!,
+        vendorId: seller!.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: "synthetic-order",
+        threadId: null,
+        receivedAt: new Date("2026-05-04T20:00:00Z"),
+      },
+      { lumpAmount: 19.99 },
+    );
+    expect(candidates).toEqual([
+      expect.objectContaining({ basis: "statement_lump", amount: 19.99 }),
+    ]);
+    expect(
+      await getDb(ctx.db)
+        .select({ amount: purchaseWorkFacts().amount })
+        .from(purchaseTable),
+    ).toEqual([{ amount: 19.99 }]);
+  });
+
   it("books a statement charge with stable linked records through the kernel", async () => {
     const setup = await fixture("kernel-charge-one");
     const [observation] = await getDb(ctx.db)

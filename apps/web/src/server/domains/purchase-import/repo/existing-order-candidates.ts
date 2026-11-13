@@ -6,7 +6,7 @@ import {
   type ShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { minorToMoney } from "@cubby/shared";
+import { minorToMoney, moneyToMinor } from "@cubby/shared";
 import {
   and,
   between,
@@ -221,7 +221,7 @@ export async function readExistingOrderCandidates(
                       eq(line.future, false),
                       lumpAmount === undefined
                         ? undefined
-                        : sql`round(${line.cost}::numeric, 2) = ${lumpAmount}::numeric`,
+                        : eq(line.cost, moneyToMinor(lumpAmount)),
                     ),
                   ),
               ),
