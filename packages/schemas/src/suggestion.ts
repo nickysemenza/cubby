@@ -14,10 +14,7 @@ import {
   nonEmptyTuple,
 } from "./identifiers";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
-import {
-  statementTransactionApplication,
-  statementTransactionJudgment,
-} from "./statement-suggestion";
+
 import { z } from "zod";
 import { entityGraphRootSchema } from "./entity-graph";
 import { transferPairJudgment } from "./transfer-pair-suggestion";
@@ -34,7 +31,7 @@ export const suggestionFamily = z.enum([
   "mail_import_outcome",
   "product_pair",
   "recommendation",
-  "statement_transaction",
+
   "transfer_pair",
 ]);
 /** Families whose decisions live with their domain owners, never on a Suggestion. */
@@ -101,13 +98,7 @@ export const suggestionSubjects = {
     candidateKey: z.string(),
   }),
   /** One provider charge: every observation sharing its v1 identity. */
-  statement_transaction: z.object({
-    kind: z.literal("statement_transaction"),
-    entity: z.literal("sourceTransactionRecord"),
-    recordId: z.uuid(),
-    source: z.string().min(1),
-    chargeKey: z.string().min(1),
-  }),
+
   transfer_pair: z.object({
     kind: z.literal("transfer_pair"),
     entity: z.literal("financialAccount"),
@@ -122,7 +113,7 @@ const suggestionSubject = z.discriminatedUnion("kind", [
   suggestionSubjects.mail_import_outcome,
   suggestionSubjects.product_pair,
   suggestionSubjects.recommendation,
-  suggestionSubjects.statement_transaction,
+
   suggestionSubjects.transfer_pair,
 ]);
 
@@ -180,10 +171,7 @@ export const suggestionProjectionTargets = {
   product_pair: z.object({ entity: z.literal("product"), recordId: z.uuid() }),
   recommendation: publicSuggestionTarget,
   /** A Suggestion retains the canonical observation UUID behind its public code. */
-  statement_transaction: z.object({
-    entity: z.literal("sourceTransactionRecord"),
-    recordId: z.uuid(),
-  }),
+
   transfer_pair: z.object({
     entity: z.literal("financialAccount"),
     recordId: z.uuid(),
@@ -238,7 +226,7 @@ export const suggestionJudgments = {
   email_link: z.object({ decision: z.enum(["linked", "dismissed"]) }),
   product_pair: z.object({ actionable: z.boolean(), conflict: z.boolean() }),
   recommendation: z.object({ candidateKey: z.string() }),
-  statement_transaction: statementTransactionJudgment,
+
   transfer_pair: transferPairJudgment,
 };
 
@@ -337,7 +325,7 @@ export const suggestionReviewInput = feedbackEvent
           kind: z.literal("saved_field"),
           recordId: anyShortcodeSchema(nonEmptyTuple(shortcodeEntities)),
         }),
-        statementTransactionApplication,
+
         z.object({ kind: z.literal("transfer_pair") }),
       ])
       .optional(),

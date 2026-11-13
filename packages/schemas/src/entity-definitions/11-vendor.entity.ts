@@ -2410,7 +2410,7 @@ export const { definition, readSchemas } = defineEntityModel({
 
   search: { mode: "semantic", inputs: [...imageDescriptionInputs("vendor")] },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     images: {
       storage: "logo",
       ingress: [

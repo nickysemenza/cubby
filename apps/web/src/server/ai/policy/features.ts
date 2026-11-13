@@ -198,7 +198,7 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   collectPayload: false,
 });
 
-export const MERCHANT_IDENTITY_FEATURE = defineFeature({
+const MERCHANT_IDENTITY_FEATURE = defineFeature({
   request: merchantIdentityRequest,
   feature: "merchant-identity",
   promptVersion: STATEMENT_ANSWER_VERSIONS.merchantIdentity,
@@ -210,7 +210,7 @@ export const MERCHANT_IDENTITY_FEATURE = defineFeature({
   schema: merchantIdentityProposal,
 });
 
-export const MERCHANT_IDENTITY_SUPPORT_FEATURE = defineFeature({
+const MERCHANT_IDENTITY_SUPPORT_FEATURE = defineFeature({
   feature: "merchant-identity-support",
   promptVersion: STATEMENT_ANSWER_VERSIONS.merchantSupport,
   cache: true,
@@ -246,7 +246,7 @@ export const MAIL_ATTACHMENT_PURPOSE_FEATURE = defineFeature({
 });
 
 /** Advisory label on a statement Transaction suggestion's attach candidate. */
-export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
+const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
   prompt: statementChargeIdentityPrompt,
   choices: statementChargeIdentityChoices,
   feature: "statement-charge-identity",
@@ -257,7 +257,7 @@ export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
 });
 
 /** The decision model's vote on a statement Transaction suggestion's kind. */
-export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
+const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
   prompt: statementTransactionKindPrompt,
   choices: statementTransactionKindChoices,
   feature: "statement-transaction-kind",
@@ -283,7 +283,7 @@ export const LOAN_ESCROW_DISBURSEMENT_FEATURE = defineFeature({
 });
 
 /** Person or business on the other side of a statement Transaction suggestion. */
-export const STATEMENT_COUNTERPARTY_FEATURE = defineFeature({
+const STATEMENT_COUNTERPARTY_FEATURE = defineFeature({
   prompt: statementCounterpartyPrompt,
   choices: statementCounterpartyChoices,
   feature: "statement-counterparty",

@@ -74,7 +74,6 @@ import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/rep
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
 import { createPurchases } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -1282,30 +1281,6 @@ async function writeBookingFingerprints(
     kind: "source",
     categories: ["purchase", "financialTransaction", "expense"],
   });
-}
-
-/**
- * Book transactions this layer created, under the caller's locks: each a new
- * aggregate Expense on a new bare Purchase. Purchases and Expenses are staged
- * together, allocations are one insert, and lineage comes from the inserted
- * Expense rows. Any other booking shape takes `commitFinancialBookings`.
- */
-export async function bookFreshFinancialTransactions(
-  layer: WriteLayer,
-  raws: readonly FinancialBookingInput[],
-  actor: ActorContext,
-  known: KnownBookingFacts,
-  loanEscrowIds: ReadonlySet<string> = new Set(),
-) {
-  if (!raws.length) return [];
-  const { previews, rows } = await prepareBookingPreviews(
-    databaseForTransaction(layer.tx),
-    raws,
-    [],
-    known,
-    loanEscrowIds,
-  );
-  return commitFinancialBookings(layer.tx, previews, actor, true, rows);
 }
 
 export async function loadFinancialBookingLineage(

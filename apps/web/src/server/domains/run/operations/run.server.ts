@@ -74,33 +74,11 @@ async function memberParty(context: AuthenticatedRequestContext) {
 
 /** Resolve public entity scopes before estimating or creating any Sweep work. */
 async function sweepScopes(
-  db: AuthenticatedRequestContext["db"],
   input: SweepStartInput,
 ): Promise<SweepFamilyScope[]> {
   return Promise.all(
     input.families.map(async (entry): Promise<SweepFamilyScope> => {
       switch (entry.family) {
-        case "statement_transaction":
-          return {
-            family: entry.family,
-            scope: {
-              ...(entry.importId && {
-                importId: await resolveOrThrow(
-                  db,
-                  "transactionImport",
-                  entry.importId,
-                ),
-              }),
-              ...(entry.accountIds?.length && {
-                accountIds: await Promise.all(
-                  entry.accountIds.map((code) =>
-                    resolveOrThrow(db, "financialAccount", code),
-                  ),
-                ),
-              }),
-              ...(entry.since && { since: entry.since }),
-            },
-          };
         case "field":
           return {
             family: entry.family,
@@ -392,7 +370,7 @@ export const runHandlers = implementOperationDomain(runContract, {
     const { startSweep } = await import("../service/sweep");
     const runId = await startSweep(context.db, context.actorContext, {
       trigger: "manual",
-      families: await sweepScopes(context.db, input),
+      families: await sweepScopes(input),
     });
     const [row] = await getDb(context.db)
       .select({ shortcode: runTable.shortcode })
@@ -404,10 +382,7 @@ export const runHandlers = implementOperationDomain(runContract, {
     await memberParty(context);
     const { estimateSweep } = await import("../service/sweep");
     return {
-      families: await estimateSweep(
-        context.db,
-        await sweepScopes(context.db, input),
-      ),
+      families: await estimateSweep(context.db, await sweepScopes(input)),
     };
   },
   retryStep: async (context, { runId, stepKey }) => {

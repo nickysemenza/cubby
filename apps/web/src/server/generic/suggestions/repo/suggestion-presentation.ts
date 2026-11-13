@@ -10,11 +10,6 @@ import {
   type ConnectionProposal,
   type ConnectionRelation,
 } from "@cubby/schemas/entity-connections";
-import type {
-  StatementSuggestionOut,
-  StatementTransactionAction,
-  StatementTransactionApplication,
-} from "@cubby/schemas/statement-suggestion";
 import {
   suggestionFamily,
   type suggestionReviewInput,
@@ -36,7 +31,6 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { suggestionCounts } from "~/server/generic/suggestions/repo/field-gaps";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
@@ -217,74 +211,8 @@ for (const [entity, checks] of Object.entries(dataChecksByEntity))
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
 
-// ---------------------------------------------------- statement_transaction
-
-export const statementImpact = {
-  // No data-quality check closes: the outcome is the unmatched charge.
-  create: [
-    outcome("Statement charge matched"),
-    {
-      kind: "caution",
-      label: "The new transaction may open its own data-quality checks",
-    },
-  ],
-  attach: [outcome("Statement charge matched")],
-  supersede: [
-    outcome("Statement charge matched"),
-    outcome("Pending hold retired"),
-  ],
-  void: [outcome("Statement charge matched"), outcome("Hold voided")],
-  book: [outcome("Spending booked")],
-} satisfies Record<StatementTransactionAction, SuggestionImpact[]>;
-
-export const statementStrength = (key: {
-  clean: boolean;
-  labelSame: string | null;
-  labelConfidence: string | null;
-}): SuggestionStrength =>
-  key.clean || (key.labelSame === "same" && key.labelConfidence === "high")
-    ? "strong"
-    : key.labelConfidence === "medium"
-      ? "medium"
-      : "weak";
-
-export const otherTransaction = (row: StatementSuggestionOut) => {
-  if (row.matchedTransactionId) return row.matchedTransactionId;
-  if (row.recommended === "attach" && row.candidates[0])
-    return row.candidates[0].transactionId;
-  if (row.recommended === "supersede" && row.supersedeTransactionId)
-    return row.supersedeTransactionId;
-  if (row.recommended === "void" && row.voidTransactionId)
-    return row.voidTransactionId;
-  return null;
-};
 
 /** Accept as is: the recommended action; an attach always names its candidate. */
-export function statementAcceptApplication(
-  row: StatementSuggestionOut,
-): StatementTransactionApplication | null {
-  const target = row.candidates[0]?.transactionId;
-  if (row.recommended === "attach" && !target) return null;
-  return {
-    kind: "statement_transaction",
-    action: row.recommended,
-    ...(row.recommended === "attach" ? { transactionId: target } : {}),
-    fields: [],
-    // The server refuses a create while any candidate is still live.
-    rejectedCandidateIds:
-      row.recommended === "create"
-        ? row.candidates.map((candidate) => candidate.transactionId)
-        : [],
-  };
-}
-
-export function statementScope(
-  query: SuggestionFamilyQuery,
-): StatementSuggestionScope | null {
-  const { status, runId } = query.filters;
-  if (status !== "pending" && status !== "applied") return null;
-  return { runCode: runId, status, suggestionIds: query.suggestionIds };
-}
 
 // ------------------------------------------------------------ recommendation
 

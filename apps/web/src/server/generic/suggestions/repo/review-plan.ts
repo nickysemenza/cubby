@@ -1,4 +1,3 @@
-import { AUTOMATIC_RULE_FAMILIES } from "@cubby/schemas/automatic-rule";
 import { suggestionReviewOut } from "@cubby/schemas/suggestion";
 import type { SuggestionFamily } from "@cubby/schemas/suggestion";
 import { isEqual } from "es-toolkit";
@@ -17,7 +16,7 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
 
-import type { AutomaticReview, Review } from "./review";
+import type { Review } from "./review";
 
 export type Prediction = Pick<
   typeof suggestionTable.$inferSelect,
@@ -33,10 +32,7 @@ export type Prediction = Pick<
 export function assertReviewAction(
   name: ReviewFamily,
   verdict: Review["verdict"],
-  automatic: AutomaticReview | null,
 ) {
-  if (automatic && !AUTOMATIC_RULE_FAMILIES.some((rule) => rule === name))
-    throw new Error(`${name} Suggestions have no Automatic rule; review them`);
   if (
     !(
       suggestionFamilies[name].actions ?? [

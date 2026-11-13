@@ -3,7 +3,6 @@ import {
   type acceptCleanSuggestionsOut,
   suggestionCountsInput,
   suggestionCountsOut,
-  suggestionGroup,
   suggestionListFamily,
   suggestionListInput,
   suggestionListOut,
@@ -473,67 +472,18 @@ async function hydrate(
   return new Map(maps.flatMap((map) => [...map]));
 }
 
-/** Account × month sections of the filtered statements, in page order. */
-async function statementGroups(
-  db: Database,
-  relation: SQL,
-  filters: SuggestionListFilters,
-) {
-  const month = relationColumn("month");
-  const account = sql`(${relationColumn("account")})[1]`;
-  const action = relationColumn("action");
-  const count = (value: string) =>
-    sql`count(*) FILTER (WHERE ${action} = ${value})::int`;
-  const groups = await getDb(db)
-    .select({
-      month: sql<string>`${month}`,
-      accountId: sql<string>`${account}`,
-      ownerId: sql<string | null>`min((${relationColumn("owner")})[1])`,
-      count: sql<number>`count(*)::int`,
-      clean: sql<number>`count(*) FILTER (WHERE ${relationColumn("clean")} = 'true')::int`,
-      create: count("create"),
-      attach: count("attach"),
-      supersede: count("supersede"),
-      void: count("void"),
-      amount: sql<string>`coalesce(sum(${relationColumn("amount")}), 0)`,
-    })
-    .from(relation)
-    .where(and(...predicates(filters)))
-    .groupBy(month, account)
-    .orderBy(sql`${month} DESC NULLS LAST`, sql`${account} ASC NULLS LAST`);
-  return suggestionGroup.array().parse(
-    groups.map((group) => ({
-      ...group,
-      key: `${group.accountId}|${group.month}`,
-      label: group.month,
-      amount: Number(group.amount),
-    })),
-  );
-}
-
 /** One SQL-filtered, ordered page of pending family rows. */
 export async function listSuggestionPage(
   db: Database,
   raw: z.input<typeof suggestionListInput>,
 ) {
   const input = suggestionListInput.parse(raw);
-  const grouped = input.group === "account_month";
-  const filters = grouped
-    ? { ...input, family: "statement_transaction" as const }
-    : input;
+  const filters = input;
   const requested = suggestionFilterDeclaration.sortsOf(input.sort);
-  const order: SortTerm[] = [
-    ...(grouped
-      ? [
-          { by: "month", direction: "desc" as const },
-          { by: "account", direction: "asc" as const },
-        ]
-      : []),
-    ...requested.map((sort) => ({
-      by: sort.orderBy,
-      direction: sort.direction,
-    })),
-  ];
+  const order: SortTerm[] = requested.map((sort) => ({
+    by: sort.orderBy,
+    direction: sort.direction,
+  }));
   const orderKey = JSON.stringify(order);
   const cursor = input.cursor
     ? suggestionCursor.decode(input.cursor)
@@ -542,13 +492,7 @@ export async function listSuggestionPage(
     throw new Error(
       "Cursor was issued for another order; restart without a cursor",
     );
-  const needs = factNeeds(
-    filters,
-    order,
-    grouped
-      ? ["clean", "month", "account", "owner", "action", "amount"]
-      : ["clean"],
-  );
+  const needs = factNeeds(filters, order, ["clean"]);
   const { relation } = await preparedFacts(db, filters, needs);
   const entries = await selectFacts(db, relation, filters, order, {
     limit: input.limit + 1,
@@ -576,9 +520,6 @@ export async function listSuggestionPage(
       pageSize: input.limit,
       totalCount: totals?.total ?? 0,
       cleanCount: totals?.clean ?? 0,
-      ...(grouped
-        ? { groups: await statementGroups(db, relation, filters) }
-        : {}),
     },
     next:
       more && last

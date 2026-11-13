@@ -474,11 +474,7 @@ function QueueDecisionLedger(props: LedgerProps) {
     <DecisionLedgerBody
       {...props}
       reviewReady={async (rows) =>
-        (
-          await review.review(rows, (row) =>
-            acceptItem(row, review.statementChoice(row)),
-          )
-        ).length
+        (await review.review(rows, (row) => acceptItem(row))).length
       }
     />
   );

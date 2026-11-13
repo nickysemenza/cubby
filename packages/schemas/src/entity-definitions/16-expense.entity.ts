@@ -2180,7 +2180,7 @@ Rules:
     ],
   },
   capabilities: {
-    suggestions: ["statement_transaction"],
+    suggestions: [],
     images: {
       storage: false,
       displaySourceOverrides: [

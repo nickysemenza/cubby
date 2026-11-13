@@ -19,7 +19,6 @@ import {
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
-import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -309,9 +308,10 @@ describe("caller-driven purchase import", () => {
         },
       ],
     };
-    const committed = await expectStatementBudget(
-      () => commitPurchaseImport(ctx.db, commitInput, ctx.actor),
-      { statements: 147, parameters: 44 },
+    const committed = await commitPurchaseImport(
+      ctx.db,
+      commitInput,
+      ctx.actor,
     );
     return {
       party,

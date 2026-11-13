@@ -24,7 +24,6 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** JSON metadata on both statement and transfer-pair Suggestions. */
-export const suggestionStateData = z.record(z.string(), z.json());
 
 /**
  * Versioned positional input deliberately avoids free-form JSON key ordering.

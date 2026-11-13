@@ -1,6 +1,4 @@
-import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
-
-export type ChargeRef = Pick<StatementSuggestionOut, "source" | "chargeKey">;
+export type ChargeRef = { source: string; chargeKey: string };
 
 /** Stable statement identity shared by individual and transfer-pair proposals. */
 export const chargeId = (charge: ChargeRef): string =>

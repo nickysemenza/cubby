@@ -22,7 +22,6 @@ import {
   financialTransaction,
   sourceOccurrence,
   sourceTransactionRecord,
-  suggestionTable,
 } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
@@ -39,7 +38,6 @@ import {
 import { providerIdentityClaims } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { emitWrites } from "~/server/kernel/api";
 
 import { auditEvidenceRows } from "./intake-audit";
@@ -370,19 +368,6 @@ export async function applySourceIdentity(
           .where(eq(financialEvidenceAlias.occurrenceId, write.from));
         break;
       }
-      case "supersede_suggestions":
-        await transitionSuggestionStates(
-          databaseForTransaction(tx),
-          and(
-            eq(suggestionTable.family, "statement_transaction"),
-            eq(suggestionTable.status, "pending"),
-            suggestionTable.active,
-            inArray(suggestionTable.recordId, write.recordIds),
-            sql`${suggestionTable.data}->>'chargeKey'=${write.chargeKey}`,
-          ),
-          { active: false, status: "superseded" },
-        );
-        break;
       case "set_owner": {
         const overlaps = write.overlap
           ? (

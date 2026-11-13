@@ -1184,10 +1184,7 @@ export const { definition, readSchemas } = defineEntityModel({
           successor: { reference: "sourceTransactionRecord", connection: true },
         },
       },
-      runStepInputs: {
-        label: "Run step inputs",
-        repository: { token: "text" },
-      },
+
       receivedImports: { label: "Received imports", relation: "imports" },
       acceptedTransactions: {
         label: "Accepted transactions",
@@ -1221,7 +1218,6 @@ export const { definition, readSchemas } = defineEntityModel({
       withdrawalImportId: { via: "reconciliation.withdrawal" },
       supersededByRowId: { via: "reconciliation.successor" },
 
-      runStepInput: { via: "runStepInputs.token" },
       importId: { via: "imports" },
       matchState: {
         type: "enum",
@@ -1357,18 +1353,7 @@ export const { definition, readSchemas } = defineEntityModel({
         },
         placeholder: "Filter by last observed...",
       },
-      {
-        columnId: "runStepInput",
-        kind: "text",
-        label: "Run step input",
-        placeholder: "RUN shortcode:step key",
-        deriveSchema: true,
-        schemaRef: {
-          module: "@cubby/schemas/run-step-input",
-          export: "runStepInputFilterToken",
-        },
-        derived: true,
-      },
+
       {
         columnId: "rawDescription",
         field: "search",

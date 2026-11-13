@@ -91,7 +91,7 @@ const review = (
   reason,
 });
 
-export async function acceptedAutomaticFacts(
+async function acceptedAutomaticFacts(
   db: Database,
   transactionId: FinancialConvergenceInput["transactionId"],
 ) {

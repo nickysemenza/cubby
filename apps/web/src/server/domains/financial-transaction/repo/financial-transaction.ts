@@ -96,7 +96,6 @@ import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { evidenceAuditEntries } from "~/server/domains/transaction-import/repo/intake-audit";
 import { enrichFinancialTransactionVendorRead } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
@@ -144,7 +143,6 @@ export const financialTransactionScaffold = listScaffold(
     readSchema: financialTransactionRepositoryReadSchema,
     rows: {
       settlementRefs: sql`SELECT owner,source,"externalId" FROM ${financialSourceReferenceRows} reference`,
-      runStepInputs: runStepInputListRows("financialTransaction"),
       acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {

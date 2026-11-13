@@ -47,7 +47,7 @@ export async function advisoryXactLocks(
  * volatile, so Postgres evaluates it above the ordinality sort rather than in
  * a collation order.
  */
-export async function advisoryXactLockSequence(
+async function advisoryXactLockSequence(
   tx: Pick<RepositoryQueryClient, "execute">,
   groups: readonly (readonly string[])[],
 ): Promise<void> {

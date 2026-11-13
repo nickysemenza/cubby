@@ -388,13 +388,7 @@ describe("fresh retained Email connection recommendations", () => {
     };
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
-        await reviewSuggestion(
-          db,
-          { ...kernelCtx(ctx), db },
-          command,
-          undefined,
-          scope,
-        );
+        await reviewSuggestion(db, { ...kernelCtx(ctx), db }, command, scope);
         throw new Error("synthetic rollback");
       }),
     ).rejects.toThrow("synthetic rollback");

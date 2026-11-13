@@ -75,8 +75,9 @@ missing lookup rows remain inputs to the decisions.
 Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
-Clean purchases and fees book spending automatically; uncertain work remains in
-the shared Suggestions queue. Transfers, card payments, earned interest and ordinary income
+Supported purchases and fees book spending automatically; ambiguous identity,
+missing order details and unsupported facts remain machinery gaps. A member
+resolves these gaps through durable kernel decisions. Transfers, card payments, earned interest and ordinary income
 remain settlement-only: clean ones are created automatically without Expenses.
 A uniquely supported opposite leg is created as a pair; an unpaired movement
 with supported kind evidence can be recorded alone. Ambiguous pairings remain
@@ -173,58 +174,31 @@ dates; settlement never freezes that derived value into an override.
 
 ### Shared planner
 
-The financial spending planner and booking writer are shared by direct finance
-commands, statement create/attach/supersede, matched-transaction `book`, and
-import convergence. Current evidence and the complete allocation graph are
-revalidated in the outer serializable write with its application receipt. The
-review family declares this snapshot requirement; unrelated review families
-keep their transaction boundaries. Attach plans use the target transaction's
-current facts, since attaching evidence alone changes no kind, amount or
-posting state. Already-booked spending is a no-op, and another possible
-Purchase prevents a new clean booking.
+Statement intake appends immutable source occurrences and observations. The
+`bankEvent` reconciler owns the FinancialTransaction projection for one occurrence
+or manual entry. It composes head selection, effective movement and kind policy,
+and reads stored answers for its declared statement-kind ask. The `purchaseEvent`
+reconciler owns one bank event's Purchases, Expenses, allocations and attributions.
+It composes spending prerequisites, candidates, blockers, recorded splits, Vendor
+selection, category selection and `statementBookingRows`; exact minor-unit
+conservation is checked before apply.
 
-Discovery selects candidates from names, dates, amounts and retained payment
-evidence before reading their receipt graphs. The payment matcher rejects
-prospective charges that cannot match any retained payment line before loading
-stored charge competitors; plausible payments keep the complete planner. A
-review-only positive-charge plan with an unresolved booking prerequisite does
-not hydrate candidate Expenses, attributions, allocations or vendor category
-history; refund category inheritance and already-booked checks still read their
-graphs. Page preparation batches read-only candidate facts and coalesces
-in-flight receipt-graph reads for concurrent previews; eligible candidates'
-payment-evidence rows load together in per-Purchase order, and review-only
-candidates load none. Cached page evidence never reaches a booking commit. The
-graph reader keeps compact decision fields and canonical JSON of the complete
-graph, and snapshot hashing reproduces identical fingerprint bytes;
-attributions, notes and payment-account facts remain evidence dependencies.
-Ready plans and commit-time validation recheck those dependencies and current
-ownership. A read-only preview group resolves its prospective aggregate Expense
-categories together after preparing every draft. Commit groups prepare fresh
-drafts under their locks and resolve them before any financial write. Persisted booking-lineage fingerprints are unchanged by any of this.
-A booking preview's classification revision covers the live spending
-categories, the Product category mappings and that booking's own Vendors (its
-Vendor and its target Purchase's Vendor); every preview and commit path uses
-that definition, so a policy change to another Vendor never stales a review.
+Both reconcilers load every key of a batch together. The kernel reserves linked
+identities, compares input revisions and applies records, dependencies and audit
+rows as a bounded atomic batch. Natural keys preserve ids across replay. Baseline
+bindings accept retained ledger records; disagreement produces drift and writes
+no derived ledger changes. Member decisions override derivation and survive reruns.
 
-Statement creates and attaches commit one independent layer per serializable
-transaction. The layer's facts (accounts, attach targets, purchaser proof,
-retained payments, Vendor identity and candidates) are read once in that
-transaction. A create is planned on its prospective source and an attach on
-its target with the pending reference, and the written transaction must
-reproduce that plan's snapshot. A charge on an earlier charge's target, or
-whose ready booking shares a Vendor, Purchase, Vendor name (equal or
-contained) or an equal amount within seven days with an earlier charge of the
-layer, is declined as dependent and commits in a later transaction. Every
-refusal, including an unavailable occurrence, is decided before any write; a
-plan that changes after the write raises a divergence error so the caller
-rolls the layer back and applies that charge alone. A layer's new entities
-are written kind by kind, each kind in one insert, with one audit insert.
+Statement apply, attach, book, purchaser and Expense overrides, allocations,
+splits and rejection record decisions through `decide`. Attach names a reviewed
+transaction and records explicit identity; selected fields become assignments.
+An ambiguous event stays unbooked until a same or distinct decision resolves it.
+Waiting for order details remains a gap with a member booking action.
 
-Matched transactions with live allocations create no new statement booking
-work; an existing pending booking is revisited so completion can retire it.
-Expense edits use generic field Suggestions, and allocation reconciliation uses
-explicit finance commands. Transactions without statement observations can
-invoke the shared commands directly; statement discovery uses retained rows.
+Direct finance commands and order/payment convergence use the same pure money
+policies. Their reviewed correction, payment-match and transfer boundaries retain
+their owning evidence and concurrency rules. Their ledger writes pass through
+purchase-event evidence or decisions and the reconciler.
 
 ### Categories and Vendors
 
@@ -323,33 +297,14 @@ vendor spending, excluding future and reimbursement lines, supplies the refund
 category unless a member explicitly chooses another. An unmatched refund needs
 explicit review before a standalone refund Purchase is booked.
 
-### Automatic booking rule
+### Automatic booking
 
-Applying statement evidence refreshes pending advice on the same account within
-seven days of each affected date, plus explicit copies. Disjoint date windows
-stay disjoint. Refreshes coalesce within a page and use the shared Suggestion
-batch publisher, preserving unchanged advice, paid labels and member decisions.
-
-The clean booking rule (clean spending creates, books and supersedes,
-clean non-spending creates, and supported non-spending or paired copy attaches) is fixed code and always on; there is no member
-switch or audit sample. Each application still uses `suggestions.review` and records automatic authority and its policy
-revision in Changes by Cubby. Booking writes are import evidence: they are not
-Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
-transaction-only receipt into proof of spending; regenerate and revalidate the
-unbooked work.
-
-Wrong feedback preserves the original Suggestion, its automatic application
-receipt and booked records. It records a review, not an undo or a repair
-request for already-booked Purchases, Expenses or allocations. The next
-suggestion run uses the current-evidence rules: eligible field questions can be
-reassessed, while an unchanged rejected answer is withheld from automatic
-application. An unchanged rejected statement suggestion remains rejected.
-Changed evidence may produce a new suggestion; there is no historical
-correction pass. Shared correction coordination explicitly holds semantic
-repair for `statement_transaction` and `transfer_pair`; these families have no
-supported ready plan. Source amount/withdrawal correction requires its own
-current source proof and never grants authority for kind/category changes or
-transfer re-pairing.
+Supported statement spending reconciles without a Suggestion or review receipt.
+The kernel audit records the input evidence, decisions, scope and rules revision.
+Changing a derivation never overwrites a baseline or a member assignment. Rejection
+is a durable decision; releasing it is explicit. Source identity and withdrawal
+proof remain with the occurrence owner. Amount, category and transfer decisions
+have separate authority and cannot substitute for one another.
 
 ## Mail evidence admission
 
@@ -1535,142 +1490,30 @@ capture, photo approval and product import end to end.
 
 ## Reviewing statement outcomes
 
-Public `run.sweep` family entries take `importId`, `accountIds` and `since`
-directly, for example `{ family: "statement_transaction", importId: "TIM-4K7MN" }`.
-Unknown fields, including a nested `scope`, are rejected before any Run starts;
-an invalid scope must never silently broaden a financial pass.
+Source transaction records browse immutable observations; Transaction imports
+browse retained collections. Each import's reconciliation report separates
+observation match states from booking coverage for distinct FinancialTransactions.
+Collection membership follows charge identity across revisions. Overlapping
+collections are not additive, and booking proves neither source completeness nor
+itemization.
 
-Matched booking discovery can use the accepted transaction's live account when
-retained source bindings, provider scope, aliases and card evidence resolve no
-account. This server-owned fallback neither writes an alias nor changes source
-facts. Ambiguous or conflicting provider scope cannot use it. A resolved source
-account that differs from the accepted transaction remains an explicit review
-conflict and cannot qualify as clean advice. Generation and fresh application
-rebuild use the same account resolution.
+A record's machinery exposes its gaps, evidence, decisions and drift. Apply the
+current observation with `sourceTransactionRecord.apply` (MCP `finance.apply`):
+create, attach, supersede, void, book or reject. An attach names the reviewed
+FinancialTransaction; selected transaction columns become assignments. Purchaser,
+Vendor, category and booking choices become purchase-event decisions. Ambiguous
+identity requires an explicit same or distinct decision. A missing order leaves
+a waiting gap with an explicit book action.
 
-The shared Suggestions list and counts accept retained source observations and
-TransactionImports in `recordIds`. Source scope follows the charge identity
-across revisions, and collection scope uses retained membership rather than
-first ownership. Multiple observations of one charge return one proposal. These
-reads expose served proposals only: an empty result does not establish complete
-source coverage or reconciliation, and listing does not refresh or validate an
-application. Preview and acceptance keep their current-evidence guards. Source
-scoping changes no overlap or financial identity decisions.
-
-Suggestions is the reconciliation workspace: pending proposals and the Changes
-by Cubby audit. Source transaction records is
-the generic imported-evidence browser; Transaction imports shows the retained
-collections. Each import's reconciliation report separates retained-observation
-match states from booking coverage for its distinct matched Financial
-Transactions. Charge matching includes retained revisions outside the selected
-collection; repeated observations do not multiply its transaction counts.
-Collections can overlap, so their figures are not additive. Unmatched evidence
-is outside the booking denominator, and recorded booking proves neither
-balanced settlement, source completeness nor itemization. Filter the declared
-evidence projection by account, amount, date and match state as needed. Several
-observations can describe the same charge.
-
-Statement review shows Source, Proposed result and Evidence. The read-only
-`sourceTransactionRecord.previewSuggestion` (MCP
-`finance_read.preview_suggestion`) revalidates the Suggestion fingerprint and
-live charge before projecting a draft through the same action gates and
-spending planner as acceptance. Published review holds, including source
-lifecycle conflicts, refuse both preview and acceptance before projecting
-financial effects. It writes no aliases or records. The preview identifies
-transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
-and settlement effects, purchaser basis and the explicit vendor-account state.
-Changing a web draft refreshes the reviewed result; acceptance still replans
-inside its write boundary. Agents may call the preview to inspect uncertain
-effects; it is optional, never acceptance authority or a prerequisite to a
-supported `suggestions.review`. The write always validates the current
-Suggestion, application and spending. Preview and acceptance rebuild the charge
-from retained evidence, carry the reviewed model labels onto it, and refuse,
-naming each part, only when what the chosen action writes changed: the
-account, statement date and provider status, plus a create's transaction fields,
-paired transaction and transfer, an attach's target (its amount, differing
-fields and eligibility), or the superseded, voided or matched transaction.
-Accepting the recommendation as reviewed also refuses when a ready booking's
-effect, purchaser, Vendor, category or Purchase moved (`spending.<field>`).
-Other candidates, merchant history, sibling and snapshot drift do not refuse; a
-correction's own action, kind or booking is replanned at acceptance.
-
-Candidates share the generic eligible-target predicate. A transaction another
-charge already settles or claims, or one of the wrong sign, amount or kind,
-stays listed as `eligibility: "context"` with its `contextReason`; it never
-blocks a create, never earns an attach recommendation, and attaching to it
-refuses with the next step. Evidence that names a transaction (a provider match,
-an identity hold, or the booked copy of the same bank event) marks it
-`explicit`.
-
-Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
-nonrecommended action, uses `verdict: "wrong"` with
-`correction: { present: true, value: application }` and the same `application`.
-This includes a Create draft that keeps the recommended action but supplies
-booking choices. Preview checks financial effects; application also enforces
-the verdict and correction-presence contract. Kind controls apply only to a
-Create draft; an attachment first uses Preview new transaction to review that
-alternative. Provider category is evidence, not a Cubby spending-category
-assignment: keep each provider/category observation, joining other provider
-charges only through authoritative settlement references to the same
-transaction.
-
-Statement attachment also converges spending. A spending result requiring
-review blocks attachment even when no transaction fields are selected. For an
-already accepted transaction with a separately authorized explicit booking,
-inspect existing spending, book through the supported command, then refresh the
-proposal against that booking. Preserve the accepted transaction, source
-references and allocations. A lineage refusal remains unresolved; never restore
-Expense values or member attribution to force attachment. An authorized
-identity-only repair must merge the current reference set atomically through
-the writer; replacing a client-side snapshot can remove concurrent attachments.
-
-### Working the statement backlog
+Retained baseline bindings accept existing FinancialTransactions, Purchases,
+Expenses, allocations and attributions. Derivation that disagrees reports drift
+without ledger writes. Member assignments and rejections survive replay. Review
+source holds and withdrawal proof before changing identity or movement; a new
+answer or a successful replay cannot override a member decision.
 
 The [statement backlog workflow](../.agents/skills/financial-evidence-import/references/statement-backlog.md)
-owns the step-by-step review of the Transaction suggestion backlog.
-
-### Retained review holds and preservation
-
-For temporary review holds, keep prior judgments and a unique marker, keep the
-cases visible in the member review, and count them as unresolved. If holding
-depends on current booking eligibility, check that eligibility and apply the
-hold atomically with the relevant source and transaction locks. Intake copies
-judgments into later revisions: reopening must discover original rows and
-marked descendants within the proven source identity. Restore only exact
-temporary-hold matches and preserve every newer member decision; restoring a
-fixed list of old row IDs can leave newer observations held.
-
-Before resuming a retained booking case, read the member review and saved case
-plans for the exact source, transaction and Purchase identities. Carry
-unresolved objections and explicit decisions into the next review brief. A new
-preview, approval or successful replay does not itself supersede a prior hold.
-Resolve the objection against current evidence and the owning policy before
-writing; keep the earlier finding and record why the case can proceed.
-Distinguish a reviewer's recommendation from a member's decision. A later
-review cannot override an explicit member decision.
-
-Identify intended targets inside protected cohort snapshots before writing.
-Preserve every unrelated row and allow only the exact reviewed target effects,
-including their specific booking timestamps and allocations. Do not exclude an
-entire set or broadly ignore timestamp changes because a target appears there.
-Receipt replay and independent preservation read-back establish separate facts.
-
-### Statement review receipts and classification
-
-Statement `suggestions.review` application records a command receipt with
-operation ID `command-application:<operationId>` in the `decisions` of the
-Suggestion identified by the review handle. Read that Suggestion by the handle,
-not by `evaluationId`. This family does not require `acceptanceReceipt` to
-establish successful application.
-
-Replay the exact committed review request under the same actor and operation
-ID. The generic command returns its original applied outcome from the receipt
-before reapplying the family or checking current spending fingerprints. Compare
-the original Suggestion, its decision entry, status and applied result, then
-independently verify unchanged source, ledger and attribution graphs. This API
-does not return the `replayed: true` flag used by direct
-`finance.commit_booking`; that writer has its own replay and current-lineage
-checks.
+owns the agent's review sequence. Direct finance previews retain their reviewed
+fingerprints and lineage contracts.
 
 Direct booking previews distinguish `candidateCategoryId` (also kept as
 `spendingCategoryId`) from `categoryOverride`, the category input persisted on a

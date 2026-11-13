@@ -131,11 +131,6 @@ type SourceIdentityWrite =
     }
   | { kind: "move_evidence"; from: Owner["id"]; to: Owner["id"] }
   | {
-      kind: "supersede_suggestions";
-      recordIds: Observation["id"][];
-      chargeKey: string;
-    }
-  | {
       kind: "set_owner";
       id: Owner["id"];
       set: Partial<typeof sourceOccurrence.$inferInsert>;
@@ -260,11 +255,6 @@ export function planSourceIdentity(
         },
       },
       { kind: "move_evidence", from: originalOwner.id, to: owner.id },
-      {
-        kind: "supersede_suggestions",
-        recordIds: closure.map((record) => record.id),
-        chargeKey: originalOwner.shortcode,
-      },
     );
   }
   writes.push({

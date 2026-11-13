@@ -87,10 +87,8 @@ import {
 } from "~/server/domains/financial-transaction/policy/spending-category";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import {
-  bookFreshFinancialTransactions,
   bookLockedFinancialTransactions,
   bookingGraph,
-  type KnownBookingFacts,
   bookingGraphs,
   loadFinancialBookingLineage,
   loadFinancialBookingLineages,
@@ -119,8 +117,7 @@ import {
   bookingVendorSelection,
   createdVendorConflict,
 } from "~/server/domains/vendor/policy/booking-vendor";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
-import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
+import { resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { eligibleTargets } from "~/server/generic/suggestions/repo/eligible-targets";
@@ -135,17 +132,7 @@ function refuse(message: string): never {
 }
 
 type Request = z.infer<typeof financialSpendingRequest>;
-export async function financialSpendingAccountIdentity(
-  db: Database,
-  id: string,
-) {
-  return (
-    await getDb(db)
-      .select({ identity: financialAccount.identity })
-      .from(financialAccount)
-      .where(eq(financialAccount.id, parseEntityId("financialAccount", id)))
-  )[0];
-}
+
 const spendingRequestBoundary = z.union([
   financialSpendingRequest.extend({
     transactionId: financialSpendingRequest.shape.transactionId.unwrap(),
@@ -350,7 +337,7 @@ export type FinancialSpendingPage = Awaited<
  * Hydrate the candidate union once; each preview still selects its exact
  * evidence. `vendorNames` are cleaned names the previews will also resolve.
  */
-export async function prepareFinancialSpendingCandidates(
+async function prepareFinancialSpendingCandidates(
   db: Database,
   page: FinancialSpendingPage,
   vendorNames: readonly string[] = [],
@@ -967,7 +954,7 @@ function reviewedSpendingAdvice(request: Request) {
   });
 }
 
-export function resolveFinancialSpendingVendors(
+function resolveFinancialSpendingVendors(
   db: Database,
   names: readonly string[],
   page?: Pick<FinancialSpendingPage, "vendors"> &
@@ -1834,7 +1821,7 @@ export async function previewFinancialSpending(
 }
 
 /** Resolve one category vector after every read-only preview has prepared its draft. */
-export async function previewFinancialSpendings(
+async function previewFinancialSpendings(
   db: Database,
   entries: readonly {
     request: z.input<typeof financialSpendingRequest>;
@@ -2348,7 +2335,7 @@ export async function commitFinancialSpendings(
  * holds each transaction's source locks in this serializable transaction and
  * previewed `fresh` on `page` there.
  */
-export async function writeRecheckedSpendings(
+async function writeRecheckedSpendings(
   tx: DrizzleTransaction,
   committed: readonly {
     plan: Exclude<
@@ -2360,8 +2347,6 @@ export async function writeRecheckedSpendings(
   fresh: readonly FinancialSpendingPlan[],
   page: FinancialSpendingPage,
   actor: ActorContext,
-  /** Every committed transaction was created in this layer. */
-  layer?: WriteLayer,
 ): Promise<FinancialSpendingResult[]> {
   const txDb = databaseForTransaction(tx);
   const results: (FinancialSpendingResult | null)[] = committed.map(() => null);
@@ -2427,12 +2412,7 @@ export async function writeRecheckedSpendings(
       results[index] = await settleFinancialSpending(txDb, tx, outcome, actor);
     else booking.push({ index, transactionId, ...outcome });
   }
-  const vendors = await resolveBookingVendors(
-    txDb,
-    booking,
-    actor,
-    layer && { layer, page },
-  );
+  const vendors = await resolveBookingVendors(txDb, booking, actor);
   const inputs = booking.map(({ fresh, facts, transactionId }, position) =>
     financialBookingInput.parse({
       transactionId,
@@ -2459,15 +2439,12 @@ export async function writeRecheckedSpendings(
       )
       .map(({ transactionId }) => transactionId),
   );
-  const booked = layer
-    ? await bookFreshFinancialTransactions(
-        layer,
-        inputs,
-        actor,
-        await knownBookingFacts(page, vendors.ids),
-        loanEscrowIds,
-      )
-    : await bookLockedFinancialTransactions(tx, inputs, actor, loanEscrowIds);
+  const booked = await bookLockedFinancialTransactions(
+    tx,
+    inputs,
+    actor,
+    loanEscrowIds,
+  );
   for (const [position, { index }] of booking.entries()) {
     const saved = booked[position]!;
     results[index] = {
@@ -2479,39 +2456,6 @@ export async function writeRecheckedSpendings(
     if (!result) throw new Error("A spending plan in the batch has no result");
     return result;
   });
-}
-
-/** The page's reads, keyed the way a booking preview reads them. */
-async function knownBookingFacts(
-  page: FinancialSpendingPage,
-  vendorIds: ReadonlyMap<string, VendorId>,
-): Promise<KnownBookingFacts> {
-  const categories = new Map<string, typeof spendingCategory.$inferSelect>();
-  for (const loading of page.categories.values()) {
-    const category = await loading;
-    if (category) {
-      categories.set(category.id, category);
-      categories.set(category.shortcode, category);
-    }
-  }
-  const accounts = new Map(
-    [...page.accounts.values()].map((account) => [account.id, account]),
-  );
-  return {
-    transactions: page.transactions,
-    vendorIds,
-    categories,
-    parties: new Map(
-      [...accounts.values()].flatMap((account) =>
-        account.ledgerParty
-          ? [[account.ledgerParty.shortcode, account.ledgerParty] as const]
-          : [],
-      ),
-    ),
-    accounts,
-    purchaserProofs: page.purchaserProofs,
-    fresh: true,
-  };
 }
 
 type RecheckedSpending =
@@ -2622,8 +2566,6 @@ async function resolveBookingVendors(
     facts: Awaited<ReturnType<typeof spendingFacts>>;
   }[],
   actor: ActorContext,
-  /** The page this transaction read the names on, and the layer to mint in. */
-  layered?: { layer: WriteLayer; page: FinancialSpendingPage },
 ) {
   const lookups = bookings.map(({ fresh, facts }) => {
     const merchant = issuerCardFee(facts)
@@ -2652,14 +2594,7 @@ async function resolveBookingVendors(
       results.slice(offset, (offset += names.length)),
     );
   };
-  // The page resolved these names in this snapshot, before any own write.
-  const checked = layered
-    ? await Promise.all(
-        lookups.map(({ names }) =>
-          resolveFinancialSpendingVendors(txDb, names, layered.page),
-        ),
-      )
-    : await lookup();
+  const checked = await lookup();
   const selectedCodes = uniq(
     bookings.flatMap(({ fresh }) =>
       fresh.request.vendorId ? [fresh.request.vendorId] : [],
@@ -2695,11 +2630,10 @@ async function resolveBookingVendors(
     name,
     values: async () => ({ aliases }),
   }));
-  const created = layered
-    ? (await mintNamesInLayer(layered.layer, "vendor", misses, actor)).map(
-        (row) => ({ row, candidates: [] }),
-      )
-    : await resolveNames(txDb, "vendor", misses, { create: true, actor });
+  const created = await resolveNames(txDb, "vendor", misses, {
+    create: true,
+    actor,
+  });
   const createdFor = new Map(
     creating.map((index, position) => [index, created[position]]),
   );

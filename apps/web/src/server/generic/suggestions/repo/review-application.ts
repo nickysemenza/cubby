@@ -32,7 +32,7 @@ import {
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 
-import type { Review, AutomaticReview } from "./review";
+import type { Review } from "./review";
 import {
   planApplicationReceipt,
   planApplicableState,
@@ -43,14 +43,13 @@ export function executeReviewApplication(
   db: Database,
   context: EntityKernelContext,
   input: Review,
-  automatic: AutomaticReview | null,
   emailScope: EmailEvidenceWriteScope | undefined,
   prediction: Prediction,
   name: ReviewFamily,
   family: (typeof suggestionFamilies)[ReviewFamily],
   writeReview: (db: Database) => Promise<{ event: FeedbackEvent }>,
 ) {
-  const authority = automatic ? "automatic" : "member";
+  const authority = "member" as const;
   const executeApplication = () => {
     const apply = async (transactionDb: Database) => {
       // The review and its application commit together: a refused or stale
@@ -151,7 +150,6 @@ export function executeReviewApplication(
             { ...context, db: transactionDb },
             applicableState,
             input,
-            automatic,
           )) ?? undefined;
         // Domain parent locks precede the Suggestion row lock Feedback takes.
         ({ event } = await writeReview(transactionDb));
@@ -202,7 +200,6 @@ export function executeReviewApplication(
           kind: "assessment_application",
           commandFeedbackId: event.id,
           ...(fieldApplicationReceipt && { fieldApplicationReceipt }),
-          ...(automatic && { rule: automatic.rule }),
         },
       });
       return applied;

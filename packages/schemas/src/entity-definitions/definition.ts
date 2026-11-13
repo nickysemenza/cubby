@@ -2802,9 +2802,7 @@ const buildMetadataSchemas = () => {
        * record scope of the Suggestions list reads this.
        */
       suggestions: z
-        .array(
-          z.enum(["statement_transaction", "transfer_pair", "product_pair"]),
-        )
+        .array(z.enum(["transfer_pair", "product_pair"]))
         .optional()
         .default([]),
       /**

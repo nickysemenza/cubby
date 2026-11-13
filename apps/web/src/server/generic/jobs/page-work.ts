@@ -112,5 +112,3 @@ export function withExecutionMetrics<T>(
 }
 
 /** `forEachConcurrently` starts `min(limit, items)` workers at once. */
-export const peakWorkers = (limit: number, items: number) =>
-  Math.min(limit, items);

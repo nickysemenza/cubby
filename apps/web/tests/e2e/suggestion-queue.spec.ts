@@ -5,13 +5,10 @@ import { getDb } from "~/server/db/helpers";
 import { product as productTable } from "~/server/db/schema";
 
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
-import { buildCrudServices } from "~/server/http/request-context";
 
 import {
-  createEntityFixture,
   createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";

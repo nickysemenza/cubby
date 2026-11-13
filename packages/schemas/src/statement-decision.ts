@@ -4,12 +4,23 @@ import {
   financialAccountShortcode,
   financialTransactionShortcode,
 } from "./identifiers";
-import { statementTransactionApplication } from "./statement-suggestion";
+import { financialTransactionKind } from "./financial-transaction-fields";
+import { financialSpendingRequest } from "./financial-booking";
+
+// These values address transaction columns rather than a separate enum vocabulary.
+const transactionFields = ["amount", "postedDate", "status"] as const;
 
 export const statementDecisionInput = z.strictObject({
   observationId: shortcodeSchema("sourceTransactionRecord"),
   accountId: financialAccountShortcode.optional(),
-  application: statementTransactionApplication.omit({ kind: true }).extend({
+  application: z.strictObject({
+    transactionId: financialTransactionShortcode.optional(),
+    fields: z.array(z.enum(transactionFields)).default([]),
+    kindOverride: financialTransactionKind.optional(),
+    rejectedCandidateIds: z.array(financialTransactionShortcode).default([]),
+    booking: financialSpendingRequest
+      .omit({ transactionId: true, source: true, advice: true })
+      .optional(),
     action: z.enum(["create", "attach", "supersede", "void", "book", "reject"]),
   }),
 });

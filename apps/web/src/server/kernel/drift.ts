@@ -177,7 +177,7 @@ export async function recordDrifts(
   );
 }
 
-export async function recordDrift(
+async function recordDrift(
   q: Q,
   computed: Computed,
   diff: Difference,

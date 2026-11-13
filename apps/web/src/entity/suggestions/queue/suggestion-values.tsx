@@ -1,7 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
-import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
-import type { StatementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionListFamily } from "@cubby/schemas/suggestion-list";
 import type {
   SuggestionImpact,
@@ -25,15 +23,6 @@ import { Badge } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
 
 /** Older saved projections retain their original provider observation. */
-export const providerCategories = (
-  evidence: Pick<
-    StatementSuggestionOut,
-    "sourceCategories" | "source" | "sourceCategory"
-  >,
-) =>
-  evidence.sourceCategories.length
-    ? evidence.sourceCategories
-    : [{ source: evidence.source, sourceCategory: evidence.sourceCategory }];
 
 export const FAMILY_LABEL = mapRecord(
   suggestionListFamily.options,
@@ -89,44 +78,6 @@ export function CleanBadge({ clean }: { clean: boolean }) {
 }
 
 /** DESIGN.md action channel: create blue, attach graphite inset, change ochre, remove destructive. */
-const ACTION_PRESENTATION = {
-  create: {
-    label: "Create",
-    className: "bg-action-create-surface text-action-create",
-  },
-  attach: {
-    label: "Attach",
-    className: "bg-action-link-surface text-action-link",
-  },
-  supersede: {
-    label: "Settle hold",
-    className: "bg-action-change-surface text-action-change",
-  },
-  void: {
-    label: "Void hold",
-    className: "bg-destructive/10 text-action-remove",
-  },
-  book: {
-    label: "Book spending",
-    className: "bg-action-create-surface text-action-create",
-  },
-} satisfies Record<
-  StatementTransactionAction,
-  { label: string; className: string }
->;
-
-export function ActionBadge({
-  action,
-}: {
-  action: StatementTransactionAction;
-}) {
-  const presentation = ACTION_PRESENTATION[action];
-  return (
-    <Badge variant="secondary" className={presentation.className}>
-      {presentation.label}
-    </Badge>
-  );
-}
 
 /** What accepting restores or risks, each as its server-worded label. */
 /** Impact chips; cautions lead so the "+N" never hides one. */
@@ -282,20 +233,6 @@ export function WhatChanges({ row }: { row: SuggestionListRow }) {
         />
       </span>
     ))
-    .with({ family: "statement_transaction" }, ({ evidence }) => (
-      <span className="inline-flex min-w-0 items-center gap-1.5">
-        <ActionBadge action={evidence.recommended} />
-        <span className="tabular-nums">{formatCurrency(evidence.amount)}</span>
-        {row.other ? (
-          <>
-            <span className="text-muted-foreground">
-              {evidence.recommended === "attach" ? "to" : "·"}
-            </span>
-            <RecordLink record={row.other} />
-          </>
-        ) : null}
-      </span>
-    ))
     .with({ family: "recommendation" }, ({ evidence }) => (
       <span className="inline-flex max-w-full min-w-0 items-center gap-1.5">
         <span
@@ -330,14 +267,6 @@ export function SuggestionRecord({ row }: { row: SuggestionListRow }) {
         }
       />
     );
-  if (row.family === "statement_transaction") {
-    const charge = row.evidence;
-    return (
-      <RecordLink
-        record={row.record}
-        name={charge.merchant ?? charge.rawDescription}
-      />
-    );
-  }
+
   return <RecordLink record={row.record} />;
 }

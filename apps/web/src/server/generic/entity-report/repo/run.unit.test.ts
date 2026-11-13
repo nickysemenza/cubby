@@ -1219,7 +1219,7 @@ describe("changesBlocks", () => {
 describe("suggestionBlocks", () => {
   it("totals each outcome across families", () => {
     const row = (
-      family: "field" | "statement_transaction",
+      family: "field" | "transfer_pair",
       pending: number,
       applied: number,
     ) => ({
@@ -1236,7 +1236,7 @@ describe("suggestionBlocks", () => {
       fields: [],
     });
     const [stats] = suggestionBlocks({
-      families: [row("field", 2, 3), row("statement_transaction", 4, 0)],
+      families: [row("field", 2, 3), row("transfer_pair", 4, 0)],
     });
     expect(stats).toMatchObject({
       kind: "stats",

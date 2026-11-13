@@ -175,11 +175,3 @@ export const transferPairJudgment = z.object({
   }),
 });
 export type TransferPairJudgment = z.infer<typeof transferPairJudgment>;
-
-/** A statement charge's found pair, for the statement family's clean test. */
-export const statementTransferPairRef = z.object({
-  key: z.string().min(1),
-  fingerprint: z.string().min(1),
-  clean: z.boolean(),
-});
-export type StatementTransferPairRef = z.infer<typeof statementTransferPairRef>;

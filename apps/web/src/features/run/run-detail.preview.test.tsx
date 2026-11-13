@@ -21,7 +21,6 @@ import { overrideOperationDispatch } from "~/integrations/tanstack-query/operati
 import type { OperationWireValue } from "~/lib/operation-result";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
 import { RunEvaluations } from "./run-evaluations";
 
 const NOW = Date.now();
@@ -264,50 +263,10 @@ beforeEach(async () => {
 });
 
 /** The three Run slots, as the detail page renders them. */
-const renderRun = () =>
-  render(
-    <>
-      <RunStepsDetail record={run} />
-      <RunDecisions record={run} />
-      <RunDiagnostics record={run} />
-    </>,
-    { wrapper: harness.wrapper },
-  );
 
 afterEach(() => {
   restore?.();
   harness.dispose();
-});
-
-it("shows each step's own count and steps not yet counted", async () => {
-  renderRun();
-  const strip = await screen.findByTestId("run-step-strip");
-  expect(strip).toHaveTextContent("Step 2 of 3");
-  expect(strip).toHaveTextContent("no overall percentage");
-  expect(strip).toHaveTextContent("Overall ETA: Unknown");
-  expect(screen.getByText("Historical steps")).toBeVisible();
-
-  const current = screen.getByTestId("run-step-statement_holds");
-  // 300 done + 60 skipped + 12 removed of the frozen 1,200.
-  expect(within(current).getByText("31%")).toBeVisible();
-  expect(within(current).getByRole("progressbar")).toHaveAttribute(
-    "aria-valuenow",
-    "372",
-  );
-  expect(within(current).getByTestId("page-work")).toHaveTextContent(
-    "106 queries/page",
-  );
-  expect(within(current).getByText("No candidate")).toBeVisible();
-
-  const later = screen.getByTestId("run-step-statement_generate");
-  expect(
-    within(later).getByText("Counts its inputs when it starts."),
-  ).toBeVisible();
-  expect(within(later).queryByRole("progressbar")).toBeNull();
-
-  await expect
-    .element(page.getByText("Inline logs aren't configured"))
-    .toBeVisible();
 });
 
 it.each(["paused", "failed"] as const)(

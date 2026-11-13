@@ -224,10 +224,7 @@ function referenceMatches(
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
-export function touchingSuggestionQuery(
-  db: Database,
-  scope: SuggestionRecordScope,
-) {
+function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
   const client = unwrapDb(db);
   const s = reviewSuggestion;
   const families =

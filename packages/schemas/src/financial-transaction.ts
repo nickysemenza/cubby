@@ -323,7 +323,7 @@ export const financialTransactionOut = withFieldEnvelopes(
   financialTransactionPublicReadFields,
 );
 
-export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
+const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 
 /**
  * Provider slugs seen in the wild. Advisory only — `source` is an open slug, not

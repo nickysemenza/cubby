@@ -199,3 +199,35 @@ FROM fields ON CONFLICT (id) DO NOTHING;
 INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage)
 SELECT 'purchaseEvent', id::text, 0, '', 'done' FROM "FinancialTransaction"
 ON CONFLICT ("scopeKind", "scopeKey") DO NOTHING;
+--> statement-breakpoint
+WITH retained AS (
+  SELECT DISTINCT ON (owner.id) owner.id AS occurrence_id, s.id AS suggestion_id,
+    member.value AS review
+  FROM "Suggestion" s
+  JOIN "SourceTransactionRecord" observation ON observation.id=s."recordId"
+  JOIN "SourceOccurrence" owner ON owner.id=observation."occurrenceId"
+  CROSS JOIN LATERAL (
+    SELECT value FROM jsonb_array_elements(s.decisions) value
+    WHERE value->>'authority'='member'
+    ORDER BY (value->>'createdAt')::timestamp DESC, value->>'id' DESC LIMIT 1
+  ) member
+  WHERE s.family='statement_transaction' AND s.active
+    AND owner."acceptedTransactionId" IS NULL
+    AND s.suppression->>'scope'='statement_transaction'
+    AND member.value->>'verdict' IN ('wrong','dismissed')
+  ORDER BY owner.id, (member.value->>'createdAt')::timestamp DESC, s.id DESC
+)
+INSERT INTO "Decision" (id, channel, subject, slot, kind, value, "actorKind", "actorId", at)
+SELECT md5('statement-rejection:' || suggestion_id || ':' || (review->>'id'))::uuid,
+  'rejection', 'bank:' || occurrence_id, '', 'reject', review,
+  'member', review->>'actorUserId', (review->>'createdAt')::timestamp
+FROM retained ON CONFLICT (id) DO NOTHING;
+--> statement-breakpoint
+UPDATE "Suggestion" SET active=false, status=CASE WHEN status='pending' THEN 'superseded' ELSE status END
+WHERE family='statement_transaction' AND active;
+--> statement-breakpoint
+DROP INDEX IF EXISTS "Suggestion_statement_charge_key";
+DROP INDEX IF EXISTS "Suggestion_statement_charge_history_idx";
+DROP INDEX IF EXISTS "Suggestion_statement_account_idx";
+DROP INDEX IF EXISTS "Suggestion_statement_label_native_idx";
+DROP INDEX IF EXISTS "Suggestion_statement_label_receipt_idx";
