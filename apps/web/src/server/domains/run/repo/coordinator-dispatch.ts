@@ -29,7 +29,7 @@ async function dispatchRunEvent(
     VALUES ('purchase.dispatch', ${event.runId}, ${event.runId}::uuid,
       ${JSON.stringify({ runId: event.runId, events: [event] })}::jsonb)
     ON CONFLICT (name, key) DO UPDATE SET
-      cursor = jsonb_build_object('runId', excluded.key, ${EVENT_QUEUE}::text,
+      cursor = coalesce("Pass".cursor, '{}'::jsonb) || jsonb_build_object('runId', excluded.key, ${EVENT_QUEUE}::text,
         CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL THEN excluded.cursor->${EVENT_QUEUE}::text
           WHEN coalesce("Pass".cursor->${EVENT_QUEUE}::text, '[]'::jsonb) @> (excluded.cursor->${EVENT_QUEUE}::text) THEN "Pass".cursor->${EVENT_QUEUE}::text
           ELSE coalesce("Pass".cursor->${EVENT_QUEUE}::text, '[]'::jsonb) || (excluded.cursor->${EVENT_QUEUE}::text) END),

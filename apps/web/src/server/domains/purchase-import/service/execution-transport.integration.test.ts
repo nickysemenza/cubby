@@ -480,6 +480,11 @@ describe("household AI funding at the paid transport boundary", () => {
 
   it("resumes expired imports and releases discovery's retained funding Pass on an explicit reset", async () => {
     const runId = await setup("mail_import");
+    const legacyJobs = [{ kind: "purchase.dispatch", input: { runId } }];
+    await getDb(ctx.db)
+      .update(kernelPass)
+      .set({ cursor: { runId, events: [], legacyJobs } })
+      .where(eq(kernelPass.key, runId));
     await spend(runId, AI_BUDGET_LIMIT_USD);
     await expect(
       paidRunPreflight(ctx.db, runId)(chatRequest()),
@@ -497,6 +502,14 @@ describe("household AI funding at the paid transport boundary", () => {
     await pausedBefore(runId);
     expect(await resumeFundingPausedRuns(ctx.db)).toBe(1);
     expect(await status(runId)).toMatchObject({ status: "running" });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(kernelPass)
+          .where(eq(kernelPass.key, runId))
+      )[0]?.cursor,
+    ).toMatchObject({ legacyJobs });
     expect(await status(discovery)).toMatchObject({
       status: "paused_auth",
       failureCode: "execution_limit",
