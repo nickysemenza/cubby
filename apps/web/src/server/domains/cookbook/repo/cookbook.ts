@@ -27,7 +27,6 @@ import {
   cookbookRawOut as rawCookbookOutput,
   type CookbookRawOut as RawCookbookOutput,
 } from "@cubby/schemas/entity-contracts/cookbook";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
   type CookbookShortcode,
@@ -47,8 +46,10 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import { cookbookRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.cookbook.gen";
+import type { DrizzleTransaction } from "~/server/db";
 import type { Database } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   databaseForTransaction,
@@ -94,21 +95,6 @@ import { listAll } from "~/server/generic/list/repo/list-all";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-export const COOKBOOK_DELETE_EDGE_POLICY = {
-  "EntityAttachment.entityId": {
-    code: "cascade-delete-attachment",
-    effect: "soft-delete",
-    description:
-      "The cover association is soft-deleted with the cookbook; the cover image is reaped when nothing else uses it.",
-  },
-  "Recipe.cookbookId": {
-    code: "cascade-delete-entity",
-    effect: "soft-delete",
-    description:
-      "Deleting a cookbook soft-deletes every recipe it produced, along with their sections, images, and meal associations.",
-  },
-} as const satisfies IncomingEdgePolicy<"cookbook", OperationDisposition>;
 
 // Everything an import knows about a cookbook before its recipes are written: the
 // book name plus the full extraction and OPF metadata. `author`/`subjects` default
@@ -624,7 +610,7 @@ export const getCookbookRecipePhotoSource = async (
  * ({@link deleteRecipesByCookbookTx} — sections / ingredients / images /
  * embeddings / audit) instead of the policy's default per-column soft-delete,
  * and the `Cookbook` row itself (plus its cover attachment, per
- * {@link COOKBOOK_DELETE_EDGE_POLICY}) is removed by the same
+ * {@link DECLARED_EDGE_DELETE_POLICIES.cookbook}) is removed by the same
  * {@link deleteByPolicy} call. Returns the deleted recipe ids so the caller
  * can run mutation side-effects and recompute the surviving parent recipes.
  */
@@ -646,16 +632,19 @@ export const deleteCookbook = async (
 
   const { detachedImageKeys } = await deleteByPolicy(db, {
     entity: "cookbook",
-    policy: COOKBOOK_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.cookbook,
     ids: [id],
     actor,
-    overrides: {
-      "Recipe.cookbookId": async (tx) => {
-        const result = await deleteRecipesByCookbookTx(tx, id, actor);
-        deletedRecipeIds = result.recipeIds;
-        recipeImageKeys = result.detachedImageKeys;
-      },
-    },
+    overrides: (
+      await DECLARED_EDGE_DELETE_HOOKS.cookbook({
+        id,
+        actor,
+        onDeleted: (result) => {
+          deletedRecipeIds = result.recipeIds;
+          recipeImageKeys = result.detachedImageKeys;
+        },
+      })
+    ).overrides,
   });
 
   return {
@@ -780,3 +769,23 @@ export const getStaleCookbookRecipeIds = async (
         ),
       )
   ).map((row) => row.id);
+
+interface CookbookDeleteEdgeContext {
+  id: CookbookId;
+  actor: ActorContext;
+  onDeleted: (result: {
+    recipeIds: RecipeId[];
+    detachedImageKeys: string[];
+  }) => void;
+}
+export const cookbookDeleteEdgeHandlers = (
+  context: CookbookDeleteEdgeContext,
+) => {
+  const { id, actor, onDeleted } = context;
+  return {
+    cascadeRecipes: async (tx: DrizzleTransaction): Promise<void> => {
+      const result = await deleteRecipesByCookbookTx(tx, id, actor);
+      onDeleted(result);
+    },
+  };
+};

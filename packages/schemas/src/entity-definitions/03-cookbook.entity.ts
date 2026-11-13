@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { borrowedImagesField } from "./image-fields";
 import { idField, readOnly, timestampField } from "./field-policy";
 import {
@@ -13,6 +14,149 @@ import { z } from "zod";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "cookbook",
+    edges: [
+      defineEdge({
+        key: "Recipe.cookbookId",
+        from: "recipe",
+        to: "cookbook",
+        cardinality: "one",
+        inverse: {
+          key: "cookbook.incoming.Recipe.cookbookId",
+          from: "cookbook",
+          to: "recipe",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Recipe.cookbookId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "recipe",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "owned-child",
+          label: "recipes",
+          description:
+            "A recipe filed under this cookbook; deleting the cookbook takes its recipes with it.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "cascade-delete-entity",
+                effect: "soft-delete",
+                description:
+                  "Deleting a cookbook soft-deletes every recipe it produced, along with their sections, images, and meal associations.",
+              },
+              handler: {
+                module: "~/server/domains/cookbook/repo/cookbook",
+                export: "cookbookDeleteEdgeHandlers",
+                member: "cascadeRecipes",
+              },
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "cookbook/EntityAttachment.entityId",
+        from: "row:EntityAttachment",
+        to: "cookbook",
+        cardinality: "one",
+        inverse: {
+          key: "cookbook.incoming.EntityAttachment.entityId",
+          from: "cookbook",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityAttachment.entityKind",
+            value: "cookbook",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "cookbook covers",
+          description:
+            "The cover photo for this cookbook, shown in cookbook lists and detail headers.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "cascade-delete-attachment",
+                effect: "soft-delete",
+                description:
+                  "The cover association is soft-deleted with the cookbook; the cover image is reaped when nothing else uses it.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Cookbook", plural: "Cookbooks" },
     route: {
       listColumns: {
@@ -489,25 +633,36 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("recipe", "many", [
-        { edge: "Recipe.cookbookId", direction: "incoming" },
-      ])
-      .named("recipes", "Recipes"),
-    r
-      .path("image", "one", [
-        { edge: "EntityAttachment.entityId", direction: "incoming" },
-        { edge: "EntityAttachment.imageId", direction: "outgoing" },
-      ])
-      .named("cover", "Cover image", {
-        inverseOmit:
-          "The image's associations slot lists what uses it, cookbook covers included.",
-      }),
-    r.field("productId").named("product", "Product", {
-      inverseOmit:
-        "The product page's cookbooks slot already lists the cookbooks this product is.",
-    }),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("recipe", "many", [
+            { edge: "Recipe.cookbookId", direction: "incoming" },
+          ])
+          .named("recipes", "Recipes"),
+        "recipe.cookbook",
+      ),
+      r.declare(
+        r
+          .path("image", "one", [
+            { edge: "EntityAttachment.entityId", direction: "incoming" },
+            { edge: "EntityAttachment.imageId", direction: "outgoing" },
+          ])
+          .named("cover", "Cover image", {
+            inverseOmit:
+              "The image's associations slot lists what uses it, cookbook covers included.",
+          }),
+        "image.cookbook.cover",
+      ),
+      r.declare(
+        r.field("productId").named("product", "Product", {
+          inverseOmit:
+            "The product page's cookbooks slot already lists the cookbooks this product is.",
+        }),
+        "product.cookbook.product",
+      ),
+    ],
+  }),
   readSchemas,
 );

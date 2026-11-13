@@ -81,7 +81,6 @@ import {
   project,
   purchase,
   purchasePaymentEvidence,
-  recipe,
   planting,
   sourceTransactionRecord,
   sourceObservationAnnotation,
@@ -553,24 +552,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       },
     },
   }),
-  cookbook: edges({
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "cookbook covers",
-      description:
-        "The cover photo for this cookbook, shown in cookbook lists and detail headers.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Recipe.cookbookId": {
-      column: recipe.cookbookId,
-      role: "owned-child",
-      label: "recipes",
-      description:
-        "A recipe filed under this cookbook; deleting the cookbook takes its recipes with it.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+
   image: edges({
     "SourceOrderObservation.primaryDocumentImageId": {
       column: sourceOrderObservation.primaryDocumentImageId,
