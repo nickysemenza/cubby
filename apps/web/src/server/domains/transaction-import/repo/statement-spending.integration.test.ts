@@ -759,6 +759,7 @@ describe("statement spending review and re-import", () => {
     const before = await ledgerRows();
     const first = before.transactions[0]!;
     const line = before.expenses[0]!;
+    const manualId = crypto.randomUUID();
     const [owned] = await getDb(ctx.db)
       .select()
       .from(recordKey)
@@ -794,8 +795,8 @@ describe("statement spending review and re-import", () => {
         });
         await getDb(tx).insert(evidenceBinding).values({
           factKind: "manualEntry",
-          factId: crypto.randomUUID(),
-          eventKey: line.purchaseId!,
+          factId: manualId,
+          eventKey: line.id,
           basis: "baseline",
           scopeKind: "purchaseEvent",
           scopeKey: first.id,
@@ -804,7 +805,7 @@ describe("statement spending review and re-import", () => {
     );
     await append(ctx.db, [
       evidenceRow(manualTransactionEvidence, {
-        id: crypto.randomUUID(),
+        id: manualId,
         entity: "expense",
         userId: ctx.actor.userId,
         payload: {

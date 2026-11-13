@@ -552,7 +552,11 @@ export function createPurchaseEvent({
               ...referenceIds("purchase"),
             ]),
             scoped.bindings({
-              events: [key, ...ownSeeds.map((row) => row.id)],
+              events: [key],
+              facts: ownSeeds.map((row) => ({
+                kind: "manualEntry",
+                id: row.id,
+              })),
             }),
             scoped.rows(
               sourceOccurrence,
