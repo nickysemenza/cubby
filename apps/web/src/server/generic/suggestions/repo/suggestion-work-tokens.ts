@@ -57,7 +57,7 @@ export function pendingSuggestionRecordsSql(
       ? [
           sql`SELECT ${"field"}::text AS family, split_part(s."scopeKey", ':', 1) AS entity, split_part(s."scopeKey", ':', 2) AS token
       FROM "ScopeState" s WHERE s."scopeKind"='fields' AND EXISTS (
-        SELECT 1 FROM jsonb_array_elements(s.gaps) gap, jsonb_array_elements(gap->'actions') action WHERE action ? ${"field"})
+        SELECT 1 FROM jsonb_array_elements(s.gaps) gap, jsonb_array_elements(gap->'actions') action WHERE gap->>${"actor"}=${"you"} AND action ? ${"field"})
       ${ids ? sql`AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.inputs) used JOIN "Ask" k ON k."inputHash"=used->>'inputHash' WHERE k.id=ANY(${uuidArrayParam(ids)}))` : sql``}`,
         ]
       : []),

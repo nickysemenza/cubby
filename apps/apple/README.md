@@ -270,7 +270,7 @@ no device claimed work recently and this one is not processing, says to keep Cub
 Below the device, Work lists Runs in progress and Runs needing attention (the manifest's
 `in-progress` and `attention` saved views, which exclude system AI passes, each bounded to 10) and
 reloads every 15 s while on screen. The household job queue is web's
-([Work hands off the job queue](DESIGN.md#work-hands-off-the-job-queue)).
+([Work hands off household diagnostics](DESIGN.md#work-hands-off-household-diagnostics)).
 
 On iOS, a `BGProcessingTaskRequest` (`com.nickysemenza.cubby.image-queue`)
 requires external power and network connectivity for opportunistic overnight
