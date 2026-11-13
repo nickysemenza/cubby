@@ -9,6 +9,10 @@ struct RecordMachineryHeader: View {
     @State private var showingPanel = false
     private typealias Words = FieldEnvelopePresentation
 
+    static func inlineAction<Action>(_ actions: [Action]) -> Action? {
+        actions.count == 1 ? actions.first : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let read = model.read {
@@ -16,7 +20,7 @@ struct RecordMachineryHeader: View {
                 WrappingFactsLayout(spacing: 4) {
                     if let gap = read.gaps.items.first {
                         if let since = gap.since { Text("Since \(Words.instant(since))") }
-                        if let action = gap.actions.first {
+                        if let action = Self.inlineAction(gap.actions) {
                             Button(action.label) {
                                 Task { await model.act(app, subject: subject, field: nil, action: action) }
                             }
