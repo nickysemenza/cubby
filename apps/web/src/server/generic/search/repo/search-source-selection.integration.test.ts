@@ -218,22 +218,12 @@ describe("search source selection", () => {
           adapter.publish(tx, [first.source.entityId], changed),
         );
       await publish();
-      await unwrapDb(ctx.db).execute(
-        sql`UPDATE "SearchDocument" SET "embeddingAttempts" = 3, "embeddingError" = 'Synthetic provider backoff', "embeddingDueAt" = '2099-01-01' WHERE "entityId" = ${first.source.entityId}::uuid`,
-      );
       await publish();
-      const backoff = await unwrapDb(ctx.db).execute(
-        sql`SELECT "embeddingGeneration", "embeddingAttempts", "embeddingError", "embeddingDueAt" = '2099-01-01' AS delayed FROM "SearchDocument" WHERE "entityId" = ${first.source.entityId}::uuid AND "deletedAt" IS NULL`,
+      const passes = await unwrapDb(ctx.db).execute(
+        sql`SELECT count(*)::int AS n FROM "Pass" WHERE name='vectorize.sync' AND cursor->>'entityId'=${first.source.entityId}`,
         "objects",
       );
-      expect(backoff).toEqual([
-        {
-          embeddingGeneration: 1,
-          embeddingAttempts: 3,
-          embeddingError: "Synthetic provider backoff",
-          delayed: true,
-        },
-      ]);
+      expect(passes).toEqual([{ n: 1 }]);
     } finally {
       configured.mockRestore();
     }

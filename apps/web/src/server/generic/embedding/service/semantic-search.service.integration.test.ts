@@ -368,7 +368,9 @@ describe("semantic search background tasks", () => {
 
     await markEmbeddingFixture(ctx.db, [ref]);
     await advanceEmbeddingFixture(ctx.db, writerAPort);
-    expect(remote.vectors.size).toBe(0);
+    expect(
+      [...remote.vectors.values()].every((values) => values[0] === 0.9),
+    ).toBe(true);
     await embedFixtures(ctx.db, [ref], writerAPort);
 
     const currentText = await getSearchDocumentEmbeddingText(
@@ -454,10 +456,10 @@ describe("semantic search background tasks", () => {
     const port = fakeEmbeddingPort(calls);
     const saved = await embedFixtures(ctx.db, [...refs, first], port);
     expect(saved).toHaveLength(10);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(10);
     expect(await countUnembeddedSearchDocuments(ctx.db, port.config())).toBe(0);
     await embedFixtures(ctx.db, refs, port);
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(10);
   });
 
   it("pages the unembedded selection with a keyset cursor", async () => {

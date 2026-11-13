@@ -203,24 +203,12 @@ export const entityEmbedding = pgTable(
     observedAt: timestamp("observedAt", { mode: "date" }),
     indexedAt: timestamp("indexedAt", { mode: "date" }),
     deletionId: text("deletionId"),
-    /** A failed vector deletion waits until then (`embeddingCleanupStore`). */
-    deletionRetryAt: timestamp("deletionRetryAt", { mode: "date" }),
-    /** Consecutive failed deletions; the drain stops at its bound and keeps the error. */
-    deletionAttempts: integer("deletionAttempts").notNull().default(0),
-    deletionError: text("deletionError"),
-    /** First failed deletion of the current streak, transient ones included. */
-    deletionFailingSince: timestamp("deletionFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("EntityEmbedding_entity_fk", table),
-    index("EntityEmbedding_cleanup_idx")
-      .on(table.deletionRetryAt)
-      .where(
-        sql`${table.deletionId} IS NULL AND ${table.artifactState} <> ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
-      ),
     uniqueIndex("EntityEmbedding_entity_model_key")
       .on(
         table.entityKind,
@@ -232,13 +220,6 @@ export const entityEmbedding = pgTable(
       // One selected vector per source and config; an upload in flight sits beside it.
       .where(
         sql`${table.deletedAt} IS NULL AND ${table.artifactState} = ${sqlEnumConstant(embeddingArtifactState, "selected")}`,
-      ),
-    // Work status asks for deletions that exhausted their attempts
-    // (`JOB_NEEDS_ATTENTION_ATTEMPTS`); the table holds the vectors' text.
-    index("EntityEmbedding_deletion_exhausted_idx")
-      .on(table.updatedAt)
-      .where(
-        sql`${table.deletionId} IS NULL AND ${table.deletionAttempts} >= 5`,
       ),
     index("EntityEmbedding_entity_idx").on(table.entityKind, table.entityId),
     index("EntityEmbedding_model_idx").on(
@@ -286,32 +267,12 @@ export const searchDocument = pgTable(
     normalizedText: text("normalizedText").notNull(),
     searchVector: pgTsVector("searchVector").notNull(),
     sourceHash: text("sourceHash").notNull(),
-    /** When a fresh embedding is owed; null when none is (`embeddingRefreshStore`). */
-    embeddingDueAt: timestamp("embeddingDueAt", { mode: "date" }),
-    /** Bumped by each mark: which intent a page settles, not who may pay for it. */
-    embeddingGeneration: integer("embeddingGeneration").notNull().default(0),
-    /** The page allowed to call the provider for this source. A mark never touches it. */
-    embeddingLeaseToken: uuid("embeddingLeaseToken"),
-    embeddingLeaseUntil: timestamp("embeddingLeaseUntil", { mode: "date" }),
-    embeddingAttempts: integer("embeddingAttempts").notNull().default(0),
-    embeddingError: text("embeddingError"),
-    /** First failed refresh of the current streak, transient ones included. */
-    embeddingFailingSince: timestamp("embeddingFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
   (table) => [
     // A rebuildable projection of one live identity (ADR 0006).
     entityRefFk("SearchDocument_entity_fk", table),
-    // Work status asks for refreshes that exhausted their attempts.
-    index("SearchDocument_embedding_exhausted_idx")
-      .on(table.updatedAt)
-      .where(
-        sql`${table.embeddingAttempts} >= 5 AND ${table.deletedAt} IS NULL`,
-      ),
-    index("SearchDocument_embedding_due_idx")
-      .on(table.embeddingDueAt)
-      .where(sql`${table.embeddingDueAt} IS NOT NULL`),
     uniqueIndex("SearchDocument_live_entity_key")
       .on(table.entityKind, table.entityId)
       .where(sql`${table.deletedAt} IS NULL`),

@@ -1,10 +1,9 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { and, inArray, isNotNull, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { searchDocument } from "~/server/db/retained-tables";
-import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
+import { textArrayParam } from "~/server/db/helpers/array-param";
 import {
   prepareSearchDocuments,
   publishPreparedSearchDocuments,
@@ -25,34 +24,47 @@ export async function markEmbeddingFixture(
   await enqueueEmbeddingRefs(db, prepared);
 }
 
-/** What each source still owes: its due time, attempts and last error. */
-export const embeddingWorkFor = (db: Database, entityIds: readonly string[]) =>
-  getDb(db)
-    .select({
-      ref: searchDocument.entityId,
-      attempts: searchDocument.embeddingAttempts,
-      lastError: searchDocument.embeddingError,
-      readyAt: searchDocument.embeddingDueAt,
-    })
-    .from(searchDocument)
-    .where(
-      and(
-        inArray(searchDocument.entityId, [...entityIds]),
-        isNotNull(searchDocument.embeddingDueAt),
-        isNull(searchDocument.deletedAt),
-      ),
-    );
+/** Inspect the kernel pass waiting for these source revisions. */
+export async function embeddingWorkFor(
+  db: Database,
+  entityIds: readonly string[],
+) {
+  const rows = await getDb(db).execute<{
+    ref: string;
+    attempts: number;
+    lastError: string | null;
+    readyAt: Date;
+  }>(
+    sql`SELECT cursor->>'entityId' AS ref, attempts, "lastError", "availableAt" AS "readyAt" FROM "Pass" WHERE name='vectorize.sync' AND "doneAt" IS NULL AND cursor->>'entityId'=ANY(${textArrayParam(entityIds)})`,
+  );
+  return rows.rows;
+}
 
-/** Advance one source-keyed embedding page; tests move postponed work due explicitly. */
+/** The real kernel claim/Answer/pass path with only provider and vector storage faked. */
 export async function advanceEmbeddingFixture(
   db: Database,
   port: EmbeddingRefreshPort,
 ) {
-  await getDb(db)
-    .update(searchDocument)
-    .set({ embeddingDueAt: new Date(0) })
-    .where(isNotNull(searchDocument.embeddingDueAt));
-  await embeddingRefreshDrain(port).page(db, "embedding.refresh");
+  const { createKernel, defineModule } = await import("~/server/kernel/api");
+  const { embeddingAsk, vectorizeSync } =
+    await import("~/server/generic/embedding/module");
+  const { syncVectorize } = await import("./vectorize-sync");
+  await getDb(db).execute(
+    sql`UPDATE "Pass" SET "availableAt"=now() WHERE name='vectorize.sync' AND "doneAt" IS NULL`,
+  );
+  const kernel = createKernel([
+    defineModule({
+      name: "embedding",
+      asks: [embeddingAsk],
+      passes: [
+        {
+          ...vectorizeSync,
+          run: (d, cursor, claim) => syncVectorize(d, cursor, claim, port),
+        },
+      ],
+    }),
+  ]);
+  await kernel.run(db, { budgetMs: 1000 });
 }
 
 export async function embedFixtures(

@@ -22,8 +22,6 @@ import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
-import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
-import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { type PermitRuntime } from "~/server/generic/jobs/service/permits";
@@ -152,8 +150,6 @@ const kernelDrain: BackgroundDrain = {
 const productionDrains = (): readonly BackgroundDrain[] => [
   kernelDrain,
   cloudImageDrain,
-  embeddingRefreshDrain(),
-  embeddingCleanupDrain(),
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,

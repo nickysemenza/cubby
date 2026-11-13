@@ -130,17 +130,6 @@ export const fundingWaiters: readonly FundingWait[] = [
       ).wakeFundingWaitingEvaluations(db),
   },
   {
-    name: "embeddings",
-    count: async (db) =>
-      (
-        await import("~/server/generic/embedding/repo/embedding-work")
-      ).countFundingWaitingEmbeddings(db),
-    wake: async (db) =>
-      (
-        await import("~/server/generic/embedding/repo/embedding-work")
-      ).wakeFundingWaitingEmbeddings(db),
-  },
-  {
     name: "images",
     count: async (db) =>
       (

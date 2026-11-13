@@ -150,15 +150,13 @@ async function readEmbeddingStreams(
   >(
     sql`
     WITH owed AS MATERIALIZED (
-      SELECT "embeddingDueAt" AS due, "embeddingAttempts" AS attempts,
-        coalesce("embeddingLeaseUntil" > ${at}, false) AS leased
-      FROM "SearchDocument"
-      WHERE "embeddingDueAt" IS NOT NULL AND ${notDeleted("SearchDocument")}
+      SELECT "availableAt" AS due, attempts, coalesce("claimDeadline" > ${at}, false) AS leased
+      FROM "Pass" WHERE name='vectorize.sync' AND "doneAt" IS NULL
     ), indexed AS MATERIALIZED (
       SELECT "indexedAt" AS at FROM "EntityEmbedding"
       WHERE "indexedAt" > ${since(RECENT_MINUTES.failed)}
     ), retired AS MATERIALIZED (
-      SELECT "deletionRetryAt" AS retry FROM "EntityEmbedding"
+      SELECT NULL::timestamp AS retry FROM "EntityEmbedding"
       WHERE "deletionId" IS NULL AND "artifactState" <> ${embeddingArtifactState.enum.selected}
         AND ("deletedAt" IS NOT NULL OR "artifactState" IN (${embeddingArtifactState.enum.retired}, ${embeddingArtifactState.enum.failed}))
     )
@@ -862,13 +860,6 @@ async function readFailedWork(db: Database, now: Date) {
             WHERE source.id = image_job."imageId" AND ${notDeleted("source")}
               AND source.sha256 = image_job."sourceContentHash"
               AND NOT ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: "image_job", imageId: sql`source.id`, sourceContentHash: sql`source.sha256` })})
-      UNION ALL SELECT 'embedding.refresh', "updatedAt", "updatedAt", "embeddingError" FROM "SearchDocument"
-        WHERE "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
-          AND ("embeddingDueAt" IS NOT NULL OR ("embeddingError" IS NOT NULL AND "updatedAt" > ${since}::timestamp))
-          AND ${notDeleted("SearchDocument")}
-      -- includes-deleted: a deleted artifact still owes its vector deletion.
-      UNION ALL SELECT 'embedding.cleanup', "updatedAt", "updatedAt", "deletionError" FROM "EntityEmbedding"
-        WHERE "deletionId" IS NULL AND "deletionAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
     ) SELECT kind, count(*)::int AS count, min(failing_since) AS since,
       (array_agg(error ORDER BY at DESC))[1] AS diagnostic FROM failed GROUP BY kind`);
   return rows.rows.map((row): WorkStuckItem => ({
