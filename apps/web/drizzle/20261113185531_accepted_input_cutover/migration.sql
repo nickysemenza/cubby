@@ -64,6 +64,15 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  FROM "AuditLog" a CROSS JOIN LATERAL jsonb_object_keys(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f(field)
  WHERE a."entityKind" IN ('financialTransaction','purchase','expense','FinancialTransactionAllocation','ExpenseAttribution')
  GROUP BY a."entityKind",a."entityId"
+), allocation_authority AS MATERIALIZED (
+ SELECT DISTINCT ON ("entityId") a.* FROM "AuditLog" a WHERE "entityKind"='financialTransaction' AND changes ? 'allocations'
+ ORDER BY "entityId","createdAt" DESC,id DESC
+), held_allocations AS (
+ SELECT r.*,a."userId",a."oauthClientId" FROM records r
+ JOIN allocation_authority a ON a."entityId"=(r.payload->>'transactionId')::uuid
+ JOIN "Purchase" p ON p.id=(r.payload->>'purchaseId')::uuid
+ WHERE r.entity='FinancialTransactionAllocation' AND a.authority IS NULL AND a.channel IS DISTINCT FROM 'system' AND a."userId" IS DISTINCT FROM 'cubby-system'
+ AND a.changes->'allocations'->'to' @> jsonb_build_array(p.shortcode||':'||round((r.payload->>'amountMinor')::numeric/100,2)::text)
 ), field_values AS (
  SELECT r.entity,r.id, f.field, r.payload->f.field value, a.id audit_id, a.authority,
  a."userId", a."oauthClientId", a.channel, a."createdAt" audit_at, a.changes, a.audit_value,
@@ -71,7 +80,7 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  a.authority IN ('automatic','released') AND a.audit_value=r.payload->f.field cubby_holds
  FROM record_ids k JOIN records r USING(entity,id,scope_key)
  LEFT JOIN audited_money_fields audited USING(entity,id)
- CROSS JOIN LATERAL unnest(CASE WHEN r.scope_kind='fields' THEN r.fields ELSE ARRAY(SELECT field FROM unnest(r.fields) field WHERE field=ANY(coalesce(audited.fields,ARRAY[]::text[])) OR r.entity='purchase' AND field='purchaserOverrideId') END) f(field)
+ CROSS JOIN LATERAL unnest(CASE WHEN r.scope_kind='fields' THEN r.fields ELSE ARRAY(SELECT field FROM unnest(r.fields) field WHERE field=ANY(coalesce(audited.fields,ARRAY[]::text[])) OR r.entity='purchase' AND (field='purchaserOverrideId' OR field='spendingCategoryId' AND r.payload->>'spendingCategoryOrigin'='manual')) END) f(field)
  LEFT JOIN LATERAL (SELECT a.*, CASE WHEN jsonb_typeof(a.changes->f.field->'to') IN ('number','string') AND (a.changes->f.field->'to' #>> '{}') ~ '^[+-]?[0-9]+([.][0-9]+)?$' THEN CASE
  WHEN ((r.entity='financialTransaction' AND f.field='amount') OR (r.entity='purchase' AND f.field='statedTotal') OR (r.entity='expense' AND f.field='cost'))
   AND abs((a.changes->f.field->'to' #>> '{}')::numeric*100-round((a.changes->f.field->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((a.changes->f.field->'to' #>> '{}')::numeric*100)::text)
@@ -206,7 +215,12 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind',CASE WHEN value='null'::jsonb THEN 'none' ELSE 'set' END,'value',value,
  'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR audit_value IS DISTINCT FROM value OR channel='system' OR "userId"='cubby-system' THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
  'actorId',CASE WHEN authority IS NULL AND audit_value=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
- FROM field_values WHERE (entity NOT IN ('financialTransaction','purchase','expense','FinancialTransactionAllocation','ExpenseAttribution') OR audit_id IS NOT NULL AND authority IS NULL AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system' OR entity='purchase' AND field='purchaserOverrideId' OR entity='FinancialTransactionAllocation' AND EXISTS (SELECT 1 FROM records r WHERE r.id=field_values.id AND r.payload->>'source'='manual')) AND cubby_holds IS NOT TRUE AND value IS NOT NULL AND ((value<>'null'::jsonb AND value<>'""'::jsonb AND value<>'[]'::jsonb) OR audit_id IS NOT NULL AND authority IS NULL AND changes->field ? 'to' AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system')
+ FROM field_values WHERE (entity NOT IN ('financialTransaction','purchase','expense','FinancialTransactionAllocation','ExpenseAttribution') OR audit_id IS NOT NULL AND authority IS NULL AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system' OR entity='purchase' AND (field='purchaserOverrideId' OR field='spendingCategoryId' AND EXISTS(SELECT 1 FROM records r WHERE r.id=field_values.id AND r.payload->>'spendingCategoryOrigin'='manual'))) AND cubby_holds IS NOT TRUE AND value IS NOT NULL AND ((value<>'null'::jsonb AND value<>'""'::jsonb AND value<>'[]'::jsonb) OR audit_id IS NOT NULL AND authority IS NULL AND changes->field ? 'to' AND audit_value IS NOT DISTINCT FROM value AND channel IS DISTINCT FROM 'system' AND "userId" IS DISTINCT FROM 'cubby-system')
+ UNION ALL
+ SELECT 'decision','ManualAllocation:'||id||':'||f,jsonb_build_object('id',md5('cutover:manual-allocation:'||id||':'||f)::uuid,
+ 'channel','assignment','subject','FinancialTransactionAllocation:'||id,'slot',f,'field',f,'kind','set','value',payload->f,
+ 'actorKind',CASE WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,'actorId',"userId",'at',now() AT TIME ZONE 'UTC')
+ FROM held_allocations CROSS JOIN LATERAL unnest(fields) f
  UNION ALL
  SELECT 'answer',entity||':'||id||':'||field,jsonb_build_object('inputHash','legacy:field:'||entity||':'||id||':'||field,'feature','legacy:field','producer','model','promptVersion','legacy:unknown',
  'output',jsonb_build_object('value',value,'auditId',audit_id,'subject',entity||':'||id,'field',field),'createdAt',audit_at) FROM field_values WHERE cubby_holds
@@ -343,7 +357,7 @@ WHERE e.mapping='ask'
 ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "Answer" ("inputHash","feature","producer","promptVersion","output","model","askId","runId","createdAt")
-SELECT r."inputHash",r."feature",r."producer",r."promptVersion",r."output",r."model",r."askId",r."runId",r."createdAt" FROM cutover_expected e
+SELECT r."inputHash",r."feature",r."producer",r."promptVersion",e.row->'output',r."model",r."askId",r."runId",r."createdAt" FROM cutover_expected e
 CROSS JOIN LATERAL jsonb_populate_record(NULL::"Answer",e.row) r
 WHERE e.mapping='answer'
 ON CONFLICT DO NOTHING;

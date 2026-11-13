@@ -32,6 +32,17 @@ it("carries held values, paid results, redirects and every accepted money row", 
       through: "20261113113834_model_evaluation_asks",
     });
     await seedCutoverPredecessor(client);
+    await client.query(
+      `INSERT INTO "Suggestion" ("publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,data)
+      VALUES ('synthetic:null-answer','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','null','synthetic-model','{"answers":{"kind":{"input":{},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":null}}}')`,
+      [cutoverId(19)],
+    );
+    await client.query(
+      `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority)
+      SELECT 'financialTransaction',$1,'update',jsonb_build_object('allocations',jsonb_build_object('to',jsonb_agg(p.shortcode||':'||round(a."amountMinor"::numeric/100,2)::text ORDER BY p.shortcode))),'synthetic-cutover',NULL
+      FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id=a."purchaseId" WHERE a."transactionId"=$1`,
+      [cutoverId(3)],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -57,6 +68,21 @@ it("carries held values, paid results, redirects and every accepted money row", 
       ).rows,
     ).toEqual([{ identities: 0, entries: 0, bindings: 0 }]);
     await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "Answer" WHERE feature='statement-transaction-kind' AND output='null'::jsonb`,
+        )
+      ).rows,
+    ).toEqual([{ n: 1 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "Decision" WHERE subject LIKE 'FinancialTransactionAllocation:%' AND "actorKind"='member'`,
+        )
+      ).rows,
+    ).toEqual([{ n: 8 }]);
+
     expect(
       (
         await client.query(
