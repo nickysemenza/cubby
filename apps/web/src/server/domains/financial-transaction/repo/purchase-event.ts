@@ -791,7 +791,7 @@ export function createPurchaseEvent({
               );
           }
         }
-        const projectedSlices = slices.map((slice) => {
+        const projectedAmount = (slice: Input["allocations"][number]) => {
           const seed = seeds.find(
             (seed) =>
               seed.target === allocationRecords &&
@@ -800,7 +800,23 @@ export function createPurchaseEvent({
           return seed && typeof seed.values.amountMinor === "bigint"
             ? seed.values.amountMinor
             : slice.amountMinor;
-        });
+        };
+        const projectedSlices = slices.map(projectedAmount);
+        const purchaseTotal =
+          aggregateSeeds.length === 1
+            ? input.allocations
+                .filter(
+                  (row) =>
+                    !row.deletedAt &&
+                    row.purchaseId === aggregateSeeds[0]!.values.purchaseId &&
+                    input.transactions.some(
+                      (transaction) =>
+                        transaction.id === row.transactionId &&
+                        !transaction.deletedAt,
+                    ),
+                )
+                .reduce((sum, row) => sum + projectedAmount(row), 0n)
+            : null;
         if (
           acceptedTransaction &&
           accepted &&
@@ -808,14 +824,11 @@ export function createPurchaseEvent({
           (projectedSlices.reduce((sum, value) => sum + value, 0n) !==
             acceptedTransaction.amount ||
             (aggregateSeeds.length === 1 &&
-              slices.length === 1 &&
-              aggregateSeeds[0]!.values.cost !== acceptedTransaction.amount))
+              aggregateSeeds[0]!.values.cost !== purchaseTotal))
         ) {
           c.disagree(
             "the retained baseline spending and allocation slices disagree with the statement movement",
           );
-          retained(c);
-          return c.done();
         }
         for (const seed of seeds) c.identity(seed.target, seed.naturalKey);
         const seeded = new Set<string>();

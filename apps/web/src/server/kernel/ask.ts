@@ -28,12 +28,10 @@ import {
   repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
-import { classifyWorkFailure } from "~/server/kernel/failure";
 import { WorkDeferredError } from "~/server/kernel/work-errors";
 
 import type { AskOutcome } from "./ask-gap";
 import {
-  backoffMs,
   claimAsks,
   claimAsk,
   claimExternalAskRow,
@@ -295,67 +293,24 @@ async function commitAnswer(
 async function settleSent(
   db: Database,
   registry: KernelRegistry,
-  ask: {
-    id: string;
-    token: string;
-    attempts: number;
-    maxAttempts: number;
-    wakeVersion: number;
-  },
+  ask: { id: string; token: string },
   error: UnparsedError,
-  aborted: boolean,
 ): Promise<void> {
-  const failure = classifyWorkFailure(error);
-  const raw = rawError(error);
+  // Admission failures settle before sent. Once sent, an unclassified failure
+  // or malformed response cannot prove that the provider did no paid work.
   await repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
-    const owned = sql`id = ${ask.id}::uuid AND state = ${ASK.sent} AND "claimToken" = ${ask.token}::uuid`;
-    let dirties = false;
-    if (
-      !aborted &&
-      (failure.kind === "deferred" || failure.kind === "paused")
-    ) {
-      const until =
-        failure.kind === "deferred"
-          ? failure.until
-          : new Date(Date.now() + backoffMs(1));
-      const cause =
-        failure.kind === "deferred" && failure.reason === "ai_funding_window"
-          ? "funding"
-          : "provider_capacity";
-      const released =
-        cause === "funding"
-          ? sql`"wakeVersion" <> ${ask.wakeVersion}`
-          : sql`false`;
-      await q.execute(sql`
-        UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL, "claimToken" = NULL, "claimDeadline" = NULL,
-          "availableAt" = CASE WHEN ${released} THEN now() ELSE ${until.toISOString()}::timestamp END,
-          "waitCause" = CASE WHEN ${released} THEN NULL ELSE ${cause} END, "lastError" = ${raw}
-        WHERE ${owned}`);
-    } else if (
-      aborted ||
-      failure.kind === "transient" ||
-      failure.kind === "interrupted"
-    ) {
-      await q.execute(sql`
-        UPDATE "Ask" SET state = ${ASK.unknown}, "claimToken" = NULL, "claimDeadline" = NULL,
-          "lastError" = ${raw}
-        WHERE ${owned}`);
-      dirties = true;
-    } else {
-      await q.execute(sql`
-        UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL, "claimToken" = NULL, "claimDeadline" = NULL,
-          attempts = attempts + 1, "waitCause" = NULL, "lastError" = ${raw},
-          "availableAt" = now() + make_interval(secs => ${backoffMs(ask.attempts + 1) / 1000})
-        WHERE ${owned}`);
-      dirties = ask.attempts + 1 >= ask.maxAttempts;
-    }
-    if (dirties)
-      await markDirty(q, registry, {
-        keys: [],
-        discovers: await waitingScopes(q, ask.id),
-        reason: "ask-stuck",
-      });
+    const changed = await q.execute<{ id: string }>(sql`
+      UPDATE "Ask" SET state = ${ASK.unknown}, "claimToken" = NULL, "claimDeadline" = NULL,
+        "lastError" = ${rawError(error)}
+      WHERE id = ${ask.id}::uuid AND state = ${ASK.sent} AND "claimToken" = ${ask.token}::uuid
+      RETURNING id`);
+    if (!changed.rows.length) return;
+    await markDirty(q, registry, {
+      keys: [],
+      discovers: await waitingScopes(q, ask.id),
+      reason: "ask-unknown",
+    });
   });
 }
 
@@ -498,13 +453,7 @@ async function executeClaimed(
           .release(ask.inputHash, cacheToken)
           // SILENT: an unreleased cache claim lapses on its own lease.
           .catch(() => undefined);
-        await settleSent(
-          db,
-          registry,
-          { ...ask, maxAttempts: ask.maxAttempts },
-          error,
-          controller.signal.aborted,
-        );
+        await settleSent(db, registry, ask, error);
         results[index] = { status: "failed", error };
         return;
       }

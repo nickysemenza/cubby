@@ -75,7 +75,7 @@ import {
   fenceClaim,
 } from "./claim";
 import { computeBatch } from "./compute";
-import { householdWrite } from "./gate";
+import { enterWriteTransaction, householdWrite } from "./gate";
 import { runOnePass } from "./pass";
 import { ownedColumns } from "./registry";
 import {
@@ -471,14 +471,27 @@ describe("evidence-facts kernel", () => {
         unresolved!.proposalHash,
       ),
     ).toBe("stale");
-    expect((await purchases(ctx.db))[0]?.amountMinor).toBe(1250);
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject(PURCHASE_TABLE, booked!.id),
+        field: "merchant",
+        value: "Member seller during disagreement",
+      },
+    ]);
+    await settle(kernel);
+    expect((await purchases(ctx.db))[0]).toMatchObject({
+      amountMinor: 1250,
+      merchant: "Member seller during disagreement",
+    });
     disagreement = null;
     await kernel.append(ctx.db, [charge("ORD-BASELINE", 1400)]);
     await settle(kernel);
     expect((await purchases(ctx.db))[0]).toMatchObject({
       id: booked!.id,
       amountMinor: 1250,
-      merchant: "Member seller",
+      merchant: "Member seller during disagreement",
     });
     const [proposal] = await repositoryQueries(ctx.db).select().from(drift);
     expect(proposal).toMatchObject({
@@ -1634,7 +1647,7 @@ describe("evidence-facts kernel", () => {
         )
       ).rows;
       expect(row).toEqual({
-        state: "queued",
+        state: phase === "admit" ? "queued" : "unknown",
         due: true,
         waitCause: null,
         attempts: 0,
@@ -1670,7 +1683,8 @@ describe("evidence-facts kernel", () => {
         ctx.db,
         {
           ...ask,
-          produce: async () => {
+          produce: async () => ({ output: "unreachable" }),
+          admit: async () => {
             throw new WorkDeferredError(
               "Synthetic funding",
               until,
@@ -2013,6 +2027,76 @@ describe("evidence-facts kernel", () => {
       );
     }
   });
+
+  it.each(["schema", "provider"])(
+    "never repays a sent ask after a %s failure",
+    async (failure) => {
+      let calls = 0;
+      const { kernel, fixture } = kernelWith({
+        categorize: async () => {
+          calls++;
+          if (failure === "provider")
+            throw new Error("Synthetic unclassified provider failure");
+          return "Groceries";
+        },
+      });
+      const kind = {
+        ...fixture.categorize,
+        output: z.literal("Synthetic expected response"),
+      };
+      const input = { merchant: "Synthetic malformed market" };
+      await expect(kernel.withAsk(ctx.db, kind, input)).rejects.toThrow(
+        failure === "provider"
+          ? "Synthetic unclassified provider failure"
+          : "Synthetic expected response",
+      );
+      await expect(kernel.withAsk(ctx.db, kind, input)).rejects.toBeInstanceOf(
+        AskUnknownError,
+      );
+      expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+      const rows = await repositoryQueries(ctx.db).execute<{
+        state: string;
+        attempts: number;
+        lastError: string;
+      }>(sql`SELECT state,attempts,"lastError" FROM "Ask"`);
+      expect(rows.rows).toEqual([
+        { state: "unknown", attempts: 0, lastError: expect.any(String) },
+      ]);
+      expect(calls).toBe(1);
+    },
+  );
+
+  it.each([0, 3])(
+    "releases a gate wait with %i previous conflicts without spending attempts",
+    async (conflicts) => {
+      const { kernel } = kernelWith();
+      const scope = { kind: PURCHASE_SCOPE, key: "ORD-GATE-WAIT" };
+      await kernel.append(ctx.db, [charge(scope.key, 100)]);
+      const q = repositoryQueries(ctx.db);
+      await q.execute(
+        sql`UPDATE "ScopeDirty" SET conflicts=${conflicts} WHERE "scopeKind"=${scope.kind}`,
+      );
+      const claims = await claimScopes(q, kernel.registry, "money", 1, [scope]);
+      await repositoryTransactionDatabase(ctx.db, async (tx) => {
+        await enterWriteTransaction(repositoryQueries(tx), {
+          lane: "money",
+          mode: "member",
+        });
+        const outcomes = await runClaimedScopes(
+          ctx.db,
+          kernel.registry,
+          kernel.registry.reconcilers.get(scope.kind)!,
+          claims,
+          { mode: "background", releaseBaseline: false },
+        );
+        expect(outcomes.map((item) => item.status)).toEqual(["conflict"]);
+      });
+      const dirty = await q.execute<{ attempts: number; conflicts: number }>(
+        sql`SELECT attempts, conflicts FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind}`,
+      );
+      expect(dirty.rows).toEqual([{ attempts: 0, conflicts: conflicts + 1 }]);
+    },
+  );
 
   it("never sends an unknown ask again", async () => {
     let calls = 0;

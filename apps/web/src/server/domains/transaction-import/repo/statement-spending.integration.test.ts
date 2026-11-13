@@ -19,7 +19,12 @@ import {
 import { getDb } from "~/server/db/helpers";
 import { textArrayParam } from "~/server/db/helpers/array-param";
 import { withKernelApply } from "~/server/db/kernel-apply-context";
-import { evidenceBinding, drift, ask } from "~/server/db/kernel-schema";
+import {
+  evidenceBinding,
+  drift,
+  ask,
+  recordKey,
+} from "~/server/db/kernel-schema";
 import {
   expense,
   financialTransaction,
@@ -34,12 +39,15 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import { expenseRecords } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import { readExistingOrderCandidates } from "~/server/domains/purchase-import/repo/existing-order-candidates";
 import { purchaseWorkFacts } from "~/server/domains/purchase/repo/work-facts";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
+import { append, evidenceRow } from "~/server/kernel/api";
 import { runQueuedAsks } from "~/server/kernel/ask";
 import { productionKernel } from "~/server/kernel/kernel";
 
@@ -744,6 +752,106 @@ describe("statement spending review and re-import", () => {
       { kind: "purchaseEvent", key: before.transactions[0]!.id },
     ]);
     expect((await ledgerRows()).expenses[0]).toEqual(saved);
+  });
+  it("conserves a baseline Purchase across two charges and applies field decisions during disagreement", async () => {
+    const setup = await fixture("kernel-split-baseline", "member", 100);
+    await applyKernelCharge(setup);
+    const before = await ledgerRows();
+    const first = before.transactions[0]!;
+    const line = before.expenses[0]!;
+    const [owned] = await getDb(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.entityId, line.id));
+    await householdWrite(ctx.db, async (tx) =>
+      withKernelApply(null, async () => {
+        await getDb(tx)
+          .update(financialTransaction)
+          .set({ amount: 6000n })
+          .where(eq(financialTransaction.id, first.id));
+        await getDb(tx)
+          .update(financialTransactionAllocation)
+          .set({ amountMinor: 6000n })
+          .where(eq(financialTransactionAllocation.transactionId, first.id));
+        const [second] = await insertManyWithShortcode(
+          tx,
+          "financialTransaction",
+          [
+            {
+              accountId: first.accountId,
+              kind: "purchase",
+              status: "posted",
+              amount: 4000n,
+              postedDate: first.postedDate,
+              transactionDate: first.transactionDate,
+            },
+          ],
+        );
+        await getDb(tx).insert(financialTransactionAllocation).values({
+          transactionId: second!.id,
+          purchaseId: line.purchaseId!,
+          amountMinor: 4000n,
+        });
+        await getDb(tx).insert(evidenceBinding).values({
+          factKind: "manualEntry",
+          factId: crypto.randomUUID(),
+          eventKey: line.purchaseId!,
+          basis: "baseline",
+          scopeKind: "purchaseEvent",
+          scopeKey: first.id,
+        });
+      }),
+    );
+    await append(ctx.db, [
+      evidenceRow(manualTransactionEvidence, {
+        id: crypto.randomUUID(),
+        entity: "expense",
+        userId: ctx.actor.userId,
+        payload: {
+          purchaseEvent: first.id,
+          table: expenseRecords.name,
+          naturalKey: owned!.naturalKey,
+          values: {
+            cost: "10000",
+            purchaseId: line.purchaseId!,
+            lineBasis: "allocation",
+            economicRole: line.economicRole,
+          },
+        },
+      }),
+    ]);
+    const scope = { kind: "purchaseEvent", key: first.id };
+    await reconcileNow(ctx.db, [scope]);
+    expect(await getDb(ctx.db).select().from(drift)).toEqual([
+      expect.objectContaining({
+        difference: expect.objectContaining({ disagreements: [] }),
+      }),
+    ]);
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", line.shortcode),
+      { cost: 110, spendingCategoryId: setup.advice.spendingCategoryId },
+      ctx.actor,
+    );
+    const saved = (await ledgerRows()).expenses[0]!;
+    expect(saved).toMatchObject({
+      cost: 11000n,
+      spendingCategoryId: expect.any(String),
+    });
+    expect(await getDb(ctx.db).select().from(drift)).toEqual([
+      expect.objectContaining({
+        scopeKind: "purchaseEvent",
+        scopeKey: first.id,
+        difference: expect.objectContaining({
+          disagreements: [expect.any(String)],
+        }),
+      }),
+    ]);
+    await reconcileNow(ctx.db, [scope]);
+    expect((await ledgerRows()).expenses[0]).toEqual(saved);
+    expect(
+      (await ledgerRows()).transactions.map((row) => row.amount).sort(),
+    ).toEqual([4000n, 6000n]);
   });
   it("writes no ledger rows when a kernel baseline disagrees with a revised statement", async () => {
     const setup = await fixture("kernel-baseline");

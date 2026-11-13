@@ -561,8 +561,8 @@ gate for a money-owned reference. Callers take it before acquiring other
 record locks. Repointing raises table and row
 keys, including for scopes whose earlier predicate found no matching row.
 `c.disagree(input)` records unresolved drift when accepted inputs contradict
-one another and no automatic replacement is justified. It applies no records
-or asks, and approval cannot bypass the unresolved disagreement; evidence or
+one another and no automatic replacement is justified. It applies only field
+updates citing current Decisions, and files no asks. Approval cannot bypass the unresolved disagreement; evidence or
 a decision must first resolve it.
 
 ### 12. Cutover migration

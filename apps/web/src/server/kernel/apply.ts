@@ -112,7 +112,7 @@ const isConflict = (error: UnparsedError) =>
   error instanceof KernelConflict ||
   error instanceof LockedReadChangedError ||
   isEntityShortcodeCollision(error, "Entity") ||
-  ["40001", "40P01"].includes(findPgError(error)?.code ?? "");
+  ["40001", "40P01", "55P03"].includes(findPgError(error)?.code ?? "");
 
 /** Dependency waves preserve foreign keys, including links within one table. */
 function orderedInserts(
@@ -273,6 +273,37 @@ function holdsBaseline(
             ),
         )))
   );
+}
+
+/** A disagreement holds automatic changes, while current field decisions still apply. */
+function decisionUpdates(computed: Computed, proposed: Difference): Difference {
+  const decisionIds = new Set(
+    computed.decisions.map((decision) => decision.id),
+  );
+  const records = computed.desired!.records;
+  const result = emptyDifference();
+  for (const update of proposed.updates) {
+    const record = records.find(
+      (record) =>
+        record.target.name === update.target.name && record.id === update.id,
+    );
+    const fields = Object.keys(update.set).filter((field) =>
+      decisionIds.has(record?.provenance[field] ?? ""),
+    );
+    if (!fields.length) continue;
+    const set = Object.fromEntries(
+      fields.map((field) => [field, update.set[field]]),
+    );
+    result.updates.push({
+      ...update,
+      set,
+      seen: Object.fromEntries(
+        fields.map((field) => [field, update.seen[field]]),
+      ),
+      row: { ...update.row, ...update.seen, ...set },
+    });
+  }
+  return result;
 }
 
 type Plan = {
@@ -608,7 +639,7 @@ async function applyBatch(
     const heldBaseline = holdsBaseline(item.computed, proposed, options);
     plans.push({
       ...item,
-      diff: heldBaseline ? emptyDifference() : proposed,
+      diff: heldBaseline ? decisionUpdates(item.computed, proposed) : proposed,
       heldBaseline,
       gaps: heldBaseline
         ? [

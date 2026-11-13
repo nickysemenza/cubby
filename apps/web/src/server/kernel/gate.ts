@@ -24,7 +24,8 @@ const TIMEOUTS = {
   // A member waits at most 2 s behind a background apply.
   member: { lock: 2_000, statement: 15_000, idle: 20_000, transaction: 20_000 },
   background: {
-    lock: 10_000,
+    // A held member gate must produce 55P03 before the transaction deadline.
+    lock: 500,
     statement: 20_000,
     idle: 30_000,
     transaction: 1_500,
