@@ -46,6 +46,16 @@ it("carries held values, paid results, redirects and every accepted money row", 
         `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) value FROM "FinancialTransaction" t`,
       )
     ).rows[0].value;
+    await migrateDatabase(db, {
+      through: "20261113120000_statement_money_evidence",
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT (SELECT count(*) FROM "RecordKey")::int identities,(SELECT count(*) FROM "ManualEntry")::int entries,(SELECT count(*) FROM "EvidenceBinding")::int bindings`,
+        )
+      ).rows,
+    ).toEqual([{ identities: 0, entries: 0, bindings: 0 }]);
     await migrateDatabase(db);
     expect(
       (
@@ -75,6 +85,14 @@ it("carries held values, paid results, redirects and every accepted money row", 
       { scopeKey: cutoverId(17), entityId: cutoverId(3) },
       { scopeKey: cutoverId(63), entityId: cutoverId(3) },
     ]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "EvidenceBinding" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1 AND basis='baseline'`,
+          [`manual:${cutoverId(56)}`],
+        )
+      ).rows[0].n,
+    ).toBe(1);
     expect(
       (
         await client.query(

@@ -107,8 +107,18 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
    AND jsonb_typeof(model_input->'request'->'systemPrompts')='array' AND NOT jsonb_path_exists(model_input,'$.request.systemPrompts[*] ? (@.type() != "string")')
    AND jsonb_typeof(model_input->'request'->'messages')='array' AND NOT jsonb_path_exists(model_input,'$.request.messages[*] ? (@.role != "user" || !(exists(@.content)))')
    AND jsonb_typeof(model_input->'parameters'->'schema')='object' AND jsonb_typeof(model_input->'parameters'->'maxTokens')='number')
-), envelope_nodes(id,path,value,prefix) AS (
- SELECT id,ARRAY[]::text[],envelope,''::text FROM work_envelopes
+), captured_answers AS (
+ SELECT md5('cutover:captured:'||s.id||':'||a.feature)::uuid id,s."updatedAt" at,a.feature,a.version,a.answer,
+ jsonb_build_object('feature',a.feature,'producer','model','tier',NULL,'model',NULL,'outputRevision',a.revision,'parameters',NULL,'promptVersion',a.version,'input',a.answer->'input') envelope
+ FROM "Suggestion" s CROSS JOIN LATERAL (VALUES
+ ('statement-transaction-kind','2026-11-12.1','financial-transaction-kind.v1',s.data->'answers'->'kind'),
+ ('merchant-identity','2026-11-13.1','merchant-identity.v1',s.data->'answers'->'merchant'->'identity'),
+ ('merchant-identity-support','2026-11-13.1','merchant-identity-support.v1',s.data->'answers'->'merchant'->'support'),
+ ('loan-escrow-disbursement','2026-11-12.1','loan-escrow-disbursement.v1',s.data->'answers'->'escrow')
+ ) a(feature,version,revision,answer)
+ WHERE s.family='statement_transaction' AND jsonb_typeof(a.answer->'input')='object' AND a.answer->'versions'->>a.feature=a.version AND a.answer ? 'value'
+), all_envelopes AS (SELECT id,envelope FROM work_envelopes UNION ALL SELECT id,envelope FROM captured_answers), envelope_nodes(id,path,value,prefix) AS (
+ SELECT id,ARRAY[]::text[],envelope,''::text FROM all_envelopes
  UNION ALL
  SELECT n.id,n.path||child.part,child.value,child.prefix FROM envelope_nodes n
  CROSS JOIN LATERAL (
@@ -167,8 +177,13 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  UNION ALL
  SELECT 'manualEntry',entity||':'||id,
  jsonb_build_object('id',md5('cutover:'||entity||':'||id||CASE WHEN scope_kind='bankEvent' THEN ':'||scope_key ELSE '' END)::uuid,'entity',entity,'userId','legacy:unknown',
- 'payload',jsonb_build_object('table',table_name,'naturalKey','legacy:'||id,'values',CASE WHEN cardinality(fields)>0 THEN (SELECT jsonb_object_agg(f,payload->f) FROM unnest(fields) f) ELSE payload END,'legacy',payload,'acceptedScope',jsonb_build_object('kind',scope_kind,'key',scope_key)))
+ 'payload',jsonb_build_object('purchaseEvent',CASE WHEN scope_kind='purchaseEvent' THEN scope_key END,'table',table_name,'naturalKey','legacy:'||id,'values',CASE WHEN cardinality(fields)>0 THEN (SELECT jsonb_object_agg(f,payload->f) FROM unnest(fields) f) ELSE payload END,'legacy',payload,'acceptedScope',jsonb_build_object('kind',scope_kind,'key',scope_key)))
  FROM records WHERE scope_kind<>'fields'
+ UNION ALL
+ SELECT 'manualInput',entity||':'||id,jsonb_build_object('id',id,'entity',entity,'userId','legacy:unknown','payload',jsonb_build_object(
+ 'accountId',(SELECT shortcode FROM "FinancialAccount" WHERE id=(records.payload->>'accountId')::uuid),'kind',payload->'kind','status',payload->'status','amount',(payload->>'amount')::numeric/100,
+ 'transactionDate',payload->'transactionDate','postedDate',payload->'postedDate','merchant',payload->'merchant','rawDescription',payload->'rawDescription','sourceCategory',payload->'sourceCategory','notes',payload->'notes','itemizationExpectation',payload->'itemizationExpectation','sourceRefs','[]'::jsonb,'allocations','[]'::jsonb)
+) FROM records WHERE scope_kind='bankEvent' AND scope_key='manual:'||id
  UNION ALL
  SELECT 'binding',entity||':'||id,jsonb_build_object('factKind','manualEntry','factId',md5('cutover:'||entity||':'||id||CASE WHEN scope_kind='bankEvent' THEN ':'||scope_key ELSE '' END)::uuid,'basis','baseline','eventKey',CASE WHEN scope_kind='fields' THEN 'baseline:snapshot:'||entity||':'||id ELSE id::text END,'scopeKind',scope_kind,'scopeKey',scope_key) FROM records WHERE scope_kind<>'fields'
  UNION ALL
@@ -195,6 +210,9 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  UNION ALL
  SELECT 'answer',source_table||':'||id,jsonb_build_object('inputHash',hash,'feature','legacy:'||feature,'producer',producer,'promptVersion',prompt_version,
  'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',ask_id,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
+ UNION ALL
+ SELECT 'answer','Captured:'||c.id,jsonb_build_object('inputHash',h.hash,'feature',c.feature,'producer','model','promptVersion',c.version,'output',c.answer->'value','model',c.answer->'models'->>0,'createdAt',c.at)
+ FROM captured_answers c JOIN envelope_hashes h USING(id)
  UNION ALL
  SELECT 'askScope',source_table||':'||id||':owner',jsonb_build_object('askId',ask_id,'scopeKind','run','scopeKey',run_id,'runId',run_id,'receipt',legacy->'receipt','createdAt',created_at) FROM imports WHERE run_id IS NOT NULL
  UNION ALL
@@ -248,6 +266,10 @@ FROM statement_applications a CROSS JOIN LATERAL jsonb_array_elements_text(CASE 
 JOIN "Entity" candidate ON candidate.kind='financialTransaction' AND (candidate.shortcode=rejected.code OR candidate.id::text=rejected.code)
 WHERE a.event->>'intent'='apply' AND a.transaction_id IS NOT NULL AND candidate.id<>a.transaction_id
 UNION ALL
+SELECT 'decision','StatementRejection:'||v.id||':'||v.ord,jsonb_build_object('id',md5('cutover:statement-rejection:'||v.id||':'||v.ord)::uuid,'channel','rejection','subject','bank:'||o.id,'slot','','kind','reject','value',v.event,'actorKind','member','actorId',v.event->>'actorUserId','at',(v.event->>'createdAt')::timestamp)
+FROM reviews v JOIN "SourceTransactionRecord" observation ON observation.id=v."recordId" JOIN "SourceOccurrence" o ON o.id=observation."occurrenceId"
+WHERE v.family='statement_transaction' AND v.event->>'authority'='member' AND v.event->>'verdict' IN ('wrong','dismissed') AND v.suppression->>'scope'='statement_transaction' AND o."acceptedTransactionId" IS NULL
+UNION ALL
 SELECT 'decision','Rejected:'||entity||':'||id,jsonb_build_object('id',md5('cutover:rejected:'||entity||':'||id)::uuid,
  'channel','rejection','subject',entity||':'||id,'slot','','kind','reject','value',NULL,'actorKind','system','actorId',NULL,'at',payload->'deletedAt')
 FROM records WHERE payload->>'deletedAt' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM survivors WHERE survivors.id=records.id)
@@ -284,7 +306,7 @@ ON CONFLICT ("scopeKind","scopeKey",entity,"naturalKey") DO UPDATE SET "entityId
 INSERT INTO "ManualEntry" ("id","entity","userId","payload")
 SELECT r."id",r."entity",r."userId",r."payload" FROM cutover_expected e
 CROSS JOIN LATERAL jsonb_populate_record(NULL::"ManualEntry",e.row) r
-WHERE e.mapping='manualEntry'
+WHERE e.mapping IN ('manualEntry','manualInput')
 ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "EvidenceBinding" ("factKind","factId","basis","eventKey","scopeKind","scopeKey")
@@ -325,7 +347,13 @@ ON CONFLICT ("askId","scopeKind","scopeKey") DO UPDATE SET receipt=excluded.rece
 --> statement-breakpoint
 INSERT INTO "FactKey" (key,"factKind","factId")
 SELECT row->'payload'->'acceptedScope'->>'kind'||':'||(row->'payload'->'acceptedScope'->>'key'),'manualEntry',row->>'id'
-FROM cutover_expected WHERE mapping='manualEntry' ON CONFLICT DO NOTHING;
+FROM cutover_expected WHERE mapping='manualEntry'
+UNION ALL SELECT 'manual:'||(row->>'id'),'manualEntry',row->>'id' FROM cutover_expected WHERE mapping IN ('manualEntry','manualInput')
+UNION ALL SELECT 'occurrence:'||id,'sourceOccurrence',id::text FROM "SourceOccurrence"
+UNION ALL SELECT 'row:SourceOccurrence:'||id,'sourceOccurrence',id::text FROM "SourceOccurrence"
+UNION ALL SELECT 'occurrence:'||"occurrenceId",'statementObservation',id::text FROM "SourceTransactionRecord"
+UNION ALL SELECT 'row:SourceTransactionRecord:'||id,'statementObservation',id::text FROM "SourceTransactionRecord"
+ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 CREATE TEMP VIEW cutover_money_readback AS
  SELECT DISTINCT ON (m.payload->>'table',m.payload->>'naturalKey') m.payload->>'table' source,substr(m.payload->>'naturalKey',8)::uuid id,
@@ -348,7 +376,7 @@ DO $verify$ BEGIN
  ) (SELECT * FROM cutover_money_totals EXCEPT SELECT * FROM actual) UNION ALL (SELECT * FROM actual EXCEPT SELECT * FROM cutover_money_totals)
  ) THEN RAISE EXCEPTION 'Accepted-input cutover: money totals preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='recordKey' AND NOT EXISTS (SELECT 1 FROM "RecordKey" t WHERE t."scopeKind"::text=e.row->>'scopeKind' AND t."scopeKey"::text=e.row->>'scopeKey' AND t."entity"::text=e.row->>'entity' AND t."naturalKey"::text=e.row->>'naturalKey' AND coalesce(to_jsonb(t)->'scopeKind','null'::jsonb)=coalesce(e.row->'scopeKind','null'::jsonb) AND coalesce(to_jsonb(t)->'scopeKey','null'::jsonb)=coalesce(e.row->'scopeKey','null'::jsonb) AND coalesce(to_jsonb(t)->'entity','null'::jsonb)=coalesce(e.row->'entity','null'::jsonb) AND coalesce(to_jsonb(t)->'naturalKey','null'::jsonb)=coalesce(e.row->'naturalKey','null'::jsonb) AND coalesce(to_jsonb(t)->'entityId','null'::jsonb)=coalesce(e.row->'entityId','null'::jsonb) AND coalesce(to_jsonb(t)->'rejectedAt','null'::jsonb)=coalesce(e.row->'rejectedAt','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: recordKey preservation mismatch'; END IF;
- IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='manualEntry' AND NOT EXISTS (SELECT 1 FROM "ManualEntry" t WHERE t."id"::text=e.row->>'id' AND coalesce(to_jsonb(t)->'id','null'::jsonb)=coalesce(e.row->'id','null'::jsonb) AND coalesce(to_jsonb(t)->'entity','null'::jsonb)=coalesce(e.row->'entity','null'::jsonb) AND coalesce(to_jsonb(t)->'userId','null'::jsonb)=coalesce(e.row->'userId','null'::jsonb) AND coalesce(to_jsonb(t)->'payload','null'::jsonb)=coalesce(e.row->'payload','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: manualEntry preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping IN ('manualEntry','manualInput') AND NOT EXISTS (SELECT 1 FROM "ManualEntry" t WHERE t."id"::text=e.row->>'id' AND coalesce(to_jsonb(t)->'id','null'::jsonb)=coalesce(e.row->'id','null'::jsonb) AND coalesce(to_jsonb(t)->'entity','null'::jsonb)=coalesce(e.row->'entity','null'::jsonb) AND coalesce(to_jsonb(t)->'userId','null'::jsonb)=coalesce(e.row->'userId','null'::jsonb) AND coalesce(to_jsonb(t)->'payload','null'::jsonb)=coalesce(e.row->'payload','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: manualEntry preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='binding' AND NOT EXISTS (SELECT 1 FROM "EvidenceBinding" t WHERE t."factKind"::text=e.row->>'factKind' AND t."factId"::text=e.row->>'factId' AND t."basis"::text=e.row->>'basis' AND coalesce(to_jsonb(t)->'factKind','null'::jsonb)=coalesce(e.row->'factKind','null'::jsonb) AND coalesce(to_jsonb(t)->'factId','null'::jsonb)=coalesce(e.row->'factId','null'::jsonb) AND coalesce(to_jsonb(t)->'basis','null'::jsonb)=coalesce(e.row->'basis','null'::jsonb) AND coalesce(to_jsonb(t)->'eventKey','null'::jsonb)=coalesce(e.row->'eventKey','null'::jsonb) AND coalesce(to_jsonb(t)->'scopeKind','null'::jsonb)=coalesce(e.row->'scopeKind','null'::jsonb) AND coalesce(to_jsonb(t)->'scopeKey','null'::jsonb)=coalesce(e.row->'scopeKey','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: binding preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='scope' AND NOT EXISTS (SELECT 1 FROM "ScopeState" t WHERE t."scopeKind"::text=e.row->>'scopeKind' AND t."scopeKey"::text=e.row->>'scopeKey' AND t.version=0 AND (t."scopeKind" NOT IN ('bankEvent','purchaseEvent') OR EXISTS(SELECT 1 FROM "EvidenceBinding" b WHERE b."scopeKind"=t."scopeKind" AND b."scopeKey"=t."scopeKey" AND b.basis='baseline')))) THEN RAISE EXCEPTION 'Accepted-input cutover: scope preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='decision' AND NOT EXISTS (SELECT 1 FROM "Decision" t WHERE t."id"::text=e.row->>'id' AND coalesce(to_jsonb(t)->'id','null'::jsonb)=coalesce(e.row->'id','null'::jsonb) AND coalesce(to_jsonb(t)->'channel','null'::jsonb)=coalesce(e.row->'channel','null'::jsonb) AND coalesce(to_jsonb(t)->'subject','null'::jsonb)=coalesce(e.row->'subject','null'::jsonb) AND coalesce(to_jsonb(t)->'slot','null'::jsonb)=coalesce(e.row->'slot','null'::jsonb) AND coalesce(to_jsonb(t)->'field','null'::jsonb)=coalesce(e.row->'field','null'::jsonb) AND coalesce(to_jsonb(t)->'kind','null'::jsonb)=coalesce(e.row->'kind','null'::jsonb) AND coalesce(to_jsonb(t)->'value','null'::jsonb)=coalesce(e.row->'value','null'::jsonb) AND coalesce(to_jsonb(t)->'other','null'::jsonb)=coalesce(e.row->'other','null'::jsonb) AND coalesce(to_jsonb(t)->'actorKind','null'::jsonb)=coalesce(e.row->'actorKind','null'::jsonb) AND coalesce(to_jsonb(t)->'actorId','null'::jsonb)=coalesce(e.row->'actorId','null'::jsonb) AND coalesce(to_jsonb(t)->'at','null'::jsonb)=coalesce(e.row->'at','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: decision preservation mismatch'; END IF;
