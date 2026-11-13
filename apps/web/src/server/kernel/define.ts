@@ -23,7 +23,7 @@ import type {
 } from "@cubby/schemas/kernel/stage";
 import type { ShortcodeType } from "@cubby/shared";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
-import { getTableName } from "drizzle-orm";
+import { getTableName, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
@@ -191,6 +191,25 @@ export function defineAsk<I, O>(spec: {
   };
 }
 
+export type ReadIndex = {
+  readonly table: KeyedTable;
+  readonly name: string;
+  values(row: ColumnValues): string[];
+  where(values: readonly string[]): SQL;
+};
+
+export function defineReadIndex<T extends KeyedTable>(
+  table: T,
+  spec: {
+    name: string;
+    values(row: InferSelectModel<T>): string[];
+    where(values: readonly string[]): SQL;
+  },
+): ReadIndex {
+  // SAFETY: the index receives rows selected from its declared table.
+  return { ...spec, table, values: spec.values as ReadIndex["values"] };
+}
+
 /** A declared read: a table's columns, an evidence kind, or the kernel's bindings. */
 export type SourceRef =
   | {
@@ -198,6 +217,7 @@ export type SourceRef =
       readonly table: PgTable;
       readonly name: string;
       readonly columns: readonly string[];
+      readonly indexes?: readonly ReadIndex[];
       /** Committed money history informs Catalog inference without an ordering dependency. */
       readonly history?: true;
     }
@@ -208,11 +228,13 @@ export const source = {
   table: <T extends PgTable>(
     table: T,
     columns: readonly (keyof T["_"]["columns"] & string)[],
+    indexes?: readonly ReadIndex[],
   ): SourceRef => ({
     type: "table",
     table,
     name: getTableName(table),
     columns,
+    indexes,
   }),
   history: <T extends PgTable>(
     table: T,

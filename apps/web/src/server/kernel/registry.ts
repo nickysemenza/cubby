@@ -19,6 +19,7 @@ import {
   type EvidenceKind,
   type Pass,
   type Reconciler,
+  type ReadIndex,
 } from "./define";
 
 const BINDINGS = getTableName(evidenceBinding);
@@ -39,6 +40,7 @@ export class KernelGraphError extends Error {
 }
 
 export type KernelRegistry = {
+  readonly indexes: ReadonlyMap<string, readonly ReadIndex[]>;
   readonly modules: readonly DomainModule[];
   readonly evidence: ReadonlyMap<string, EvidenceKind>;
   readonly asks: ReadonlyMap<string, AskKind>;
@@ -233,7 +235,17 @@ export function buildRegistry(
       readersByTable.set(ref.name, list);
     }
 
+  const indexes = new Map<string, ReadIndex[]>();
+  for (const reconciler of reconcilers.values())
+    for (const ref of reconciler.reads) {
+      if (ref.type !== "table") continue;
+      const known = indexes.get(ref.name) ?? [];
+      for (const index of ref.indexes ?? [])
+        if (!known.some((item) => item.name === index.name)) known.push(index);
+      indexes.set(ref.name, known);
+    }
   return {
+    indexes,
     modules,
     evidence: unique(
       modules.flatMap((module) => module.evidence),

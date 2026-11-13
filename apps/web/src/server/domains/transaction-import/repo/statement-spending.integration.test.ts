@@ -254,20 +254,15 @@ describe("statement spending review and re-import", () => {
     expect(live[0]?.shortcode).toBe(target.output.id);
     const [first] = await getDb(ctx.db).select().from(sourceOccurrence);
     const second = crypto.randomUUID();
-    await insertManyWithShortcode(
-      ctx.db,
-      sourceOccurrence,
-      "sourceOccurrence",
-      [
-        {
-          ...first!,
-          id: second,
-          source: "synthetic-other-source",
-          identityKey: "synthetic-other-identity",
-          acceptedTransactionId: live[0]!.id,
-        },
-      ],
-    );
+    await insertManyWithShortcode(ctx.db, "sourceOccurrence", [
+      {
+        ...first!,
+        id: second,
+        source: "synthetic-other-source",
+        identityKey: "synthetic-other-identity",
+        acceptedTransactionId: live[0]!.id,
+      },
+    ]);
     await reconcileNow(ctx.db, [{ kind: "bankEvent", key: second }]);
     await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
     await reconcileNow(ctx.db, [
@@ -284,6 +279,63 @@ describe("statement spending review and re-import", () => {
         ?.acceptedTransactionId,
     ).toBe(live[0]?.id);
   });
+  it("leaves a possible manual transaction duplicate unbooked until identity is decided", async () => {
+    const setup = await fixture("manual-duplicate");
+    const manual = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: setup.account.output.id,
+      amount: 42.5,
+      kind: "purchase",
+      status: "posted",
+      transactionDate: "2026-05-04",
+      merchant: "Synthetic Orchard",
+    });
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "accountId",
+        value: setup.account.output.id,
+      },
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "kind",
+        value: "purchase",
+      },
+    ]);
+    const outcomes = await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: occurrence!.id },
+    ]);
+    expect(
+      outcomes
+        .flatMap((row) => row.gaps)
+        .flatMap((gap) => gap.actions)
+        .map((action) => action.kind),
+    ).toEqual(["same", "distinct"]);
+    expect((await ledgerRows()).transactions).toHaveLength(1);
+    expect((await ledgerRows()).purchases).toHaveLength(1);
+    expect((await ledgerRows()).expenses).toHaveLength(1);
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    expect(transaction!.shortcode).toBe(manual.output.id);
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: `bank:${occurrence!.id}`,
+        field: `financialTransaction:${transaction!.id}`,
+      },
+    ]);
+    await reconcileNow(ctx.db, [{ kind: "bankEvent", key: occurrence!.id }]);
+    expect((await ledgerRows()).transactions).toHaveLength(1);
+    expect((await ledgerRows()).purchases).toHaveLength(1);
+    expect((await ledgerRows()).expenses).toHaveLength(1);
+  });
+
   it("keeps an ambiguous kernel charge unbooked until a same decision", async () => {
     const setup = await fixture("kernel-ambiguous");
     const [seller] = await getDb(ctx.db)

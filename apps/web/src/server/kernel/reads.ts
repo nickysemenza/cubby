@@ -34,9 +34,16 @@ import type {
   Key,
   KeyedTable,
   Reconciler,
+  ReadIndex,
 } from "./define";
 import { readKeyRevs } from "./dirty";
-import { bindingEventKey, bindingFactKey, rowKey, tableKey } from "./keys";
+import {
+  bindingEventKey,
+  bindingFactKey,
+  rowKey,
+  tableKey,
+  indexKey,
+} from "./keys";
 
 export class LockedReadChangedError extends Error {}
 
@@ -89,6 +96,11 @@ export class KeyLedger {
 
 /** The reads one scope makes; every read records its keys for that scope. */
 export interface ScopeReads {
+  lookup<T extends KeyedTable>(
+    table: T,
+    index: ReadIndex,
+    values: readonly string[],
+  ): Promise<InferSelectModel<T>[]>;
   /** Prepare a source-derived question under tracked roster revisions. The callback is read-only and makes no producer call. */
   prepare<T>(
     tables: readonly PgTable[],
@@ -250,7 +262,54 @@ export function createReads(
     };
   });
 
+  const indexReaders = new Map<
+    string,
+    ReturnType<typeof coalesced<ColumnValues[]>>
+  >();
+
   const scopeReads = (scopes: readonly string[]): ScopeReads => ({
+    async lookup<T extends KeyedTable>(
+      table: T,
+      index: ReadIndex,
+      values: readonly string[],
+    ) {
+      const name = requireTable(table);
+      if (
+        !reconciler.reads.some(
+          (ref) =>
+            ref.type === "table" &&
+            ref.name === name &&
+            ref.indexes?.includes(index),
+        )
+      )
+        throw new KernelContractError(`Undeclared index ${index.name}`);
+      let reader = indexReaders.get(index.name);
+      if (!reader) {
+        reader = coalesced(async (keys) => {
+          const prefix = `index:${index.name}:`;
+          const rows: ColumnValues[] = keys.length
+            ? await q
+                .select()
+                .from(table)
+                .where(index.where(keys.map((key) => key.slice(prefix.length))))
+            : [];
+          return (requested) => {
+            const wanted = new Set(requested);
+            return rows.filter((row) =>
+              index
+                .values(row)
+                .some((value) => wanted.has(indexKey(index.name, value))),
+            );
+          };
+        });
+        indexReaders.set(index.name, reader);
+      }
+      // SAFETY: the index selects and partitions rows of this exact table.
+      return (await reader(
+        scopes,
+        values.map((value) => indexKey(index.name, value)),
+      )) as InferSelectModel<T>[];
+    },
     async prepare(tables, load) {
       if (!mode.db)
         throw new KernelContractError(

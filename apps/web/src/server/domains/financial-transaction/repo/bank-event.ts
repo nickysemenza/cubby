@@ -16,6 +16,7 @@ import {
   sourceTransactionRecord,
   vendor,
 } from "~/server/db/schema";
+import { withinPostingDateWindow } from "~/server/domains/financial-transaction/policy/settlement-window";
 import { mergeBankEvents } from "~/server/domains/financial-transaction/repo/bank-merge";
 import {
   statementEffectiveMovement,
@@ -36,6 +37,10 @@ import {
 import type { Pure } from "~/server/kernel/api";
 
 import { manualTransactionEvidence } from "./manual-evidence";
+import {
+  transactionCandidates,
+  acceptedOccurrences,
+} from "./money-read-indexes";
 
 export const bankTransactionWrites = writes(
   financialTransaction,
@@ -82,6 +87,7 @@ type BankInput = {
   observations: (typeof sourceTransactionRecord.$inferSelect)[];
   manual: typeof manualEntry.$inferSelect | null;
   accounts: Account[];
+  candidates: (typeof financialTransaction.$inferSelect)[];
 };
 
 const retained = (c: Pure) => {
@@ -193,15 +199,24 @@ export const bankEvent = defineReconciler<BankInput>({
     source.evidence(occurrenceEvidence),
     source.evidence(statementEvidence),
     source.evidence(manualTransactionEvidence),
-    source.table(sourceOccurrence, [
-      "currentObservationId",
-      "accountId",
-      "reviewState",
-      "disposition",
-      "withdrawnAt",
-      "acceptedTransactionId",
-      "supersededByOccurrenceId",
-    ]),
+    source.table(
+      financialTransaction,
+      ["accountId", "amount", "transactionDate", "postedDate", "deletedAt"],
+      [transactionCandidates],
+    ),
+    source.table(
+      sourceOccurrence,
+      [
+        "currentObservationId",
+        "accountId",
+        "reviewState",
+        "disposition",
+        "withdrawnAt",
+        "acceptedTransactionId",
+        "supersededByOccurrenceId",
+      ],
+      [acceptedOccurrences],
+    ),
     source.table(financialAccount, [
       "identity",
       "providerVendorId",
@@ -255,6 +270,26 @@ export const bankEvent = defineReconciler<BankInput>({
               manualId ? [`manual:${manualId}`] : [],
             ),
           ]);
+          const observationsForScope =
+            observations.get(`occurrence:${key}`) ?? [];
+          const current = observationsForScope.find(
+            (row) => row.id === occurrence?.currentObservationId,
+          );
+          const candidates = current
+            ? await scoped.lookup(
+                financialTransaction,
+                transactionCandidates,
+                accounts.flatMap((account) => [
+                  `${account.id}:${current.providerAmount}`,
+                  `${account.id}:${-current.providerAmount}`,
+                ]),
+              )
+            : [];
+          const accepted = await scoped.lookup(
+            sourceOccurrence,
+            acceptedOccurrences,
+            candidates.map((row) => row.id),
+          );
           return [
             key,
             {
@@ -263,12 +298,21 @@ export const bankEvent = defineReconciler<BankInput>({
               observations: observations.get(`occurrence:${key}`) ?? [],
               manual: manuals.get(`manual:${manualId}`)?.[0] ?? null,
               accounts,
+              candidates: candidates.filter(
+                (row) =>
+                  !accepted.some(
+                    (owner) =>
+                      owner.acceptedTransactionId === row.id &&
+                      !owner.deletedAt,
+                  ),
+              ),
             },
           ] as const;
         }),
       ),
     );
   },
+  // oxlint-disable-next-line complexity -- bank identity, evidence and assignment refusals form one atomic money plan.
   reconcile(input, c) {
     const owner = input.occurrence;
     const subject = `bank:${input.key}`;
@@ -390,6 +434,66 @@ export const bankEvent = defineReconciler<BankInput>({
       c,
     });
     if (!values) return retained(c);
+    if (!existing && owner && !owner.acceptedTransactionId) {
+      const date = values.transactionDate ?? values.postedDate;
+      const candidates = input.candidates.filter(
+        (row) =>
+          !row.deletedAt &&
+          row.accountId === resolved.id &&
+          row.amount === values.amount &&
+          date &&
+          (row.transactionDate ?? row.postedDate) &&
+          withinPostingDateWindow(
+            date,
+            (row.transactionDate ?? row.postedDate)!,
+          ),
+      );
+      const same = candidates.filter(
+        (row) =>
+          c.decision(
+            "identity",
+            subject,
+            recordSubject("financialTransaction", row.id),
+          )?.kind === "same",
+      );
+      const unresolved = candidates.filter(
+        (row) =>
+          c.decision(
+            "identity",
+            subject,
+            recordSubject("financialTransaction", row.id),
+          )?.kind !== "distinct",
+      );
+      if (same.length === 1) {
+        c.attach(bankTransactionWrites, naturalKey, same[0]!.id);
+        c.emit({ kind: "purchaseEvent", key: same[0]!.id });
+        return c.done();
+      }
+      if (unresolved.length) {
+        c.gap.decision(
+          "whether this statement charge and the existing transaction are the same or distinct",
+          {
+            actions: unresolved.flatMap((row) => [
+              {
+                channel: "identity",
+                kind: "same",
+                subject,
+                field: recordSubject("financialTransaction", row.id),
+                label: `Same transaction: ${row.shortcode}`,
+              },
+              {
+                channel: "identity",
+                kind: "distinct",
+                subject,
+                field: recordSubject("financialTransaction", row.id),
+                label: `Distinct transaction: ${row.shortcode}`,
+              },
+            ]),
+          },
+        );
+        return retained(c);
+      }
+    }
     const provenance: Record<string, string> = {};
     for (const field of bankTransactionWrites.columns) {
       const decision = assigned(field);

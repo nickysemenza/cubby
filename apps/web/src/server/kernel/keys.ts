@@ -107,3 +107,6 @@ function canonicalize(value: unknown): Json {
 // oxlint-disable-next-line anti-slop/no-unknown-parameters -- as canonicalJson.
 export const hashCanonical = (value: unknown) =>
   sha256Hex(canonicalJson(value));
+
+export const indexKey = (name: string, value: string): Key =>
+  `index:${name}:${value}`;

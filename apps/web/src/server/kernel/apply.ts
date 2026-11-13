@@ -76,6 +76,7 @@ import { mergeRecords, removeRecords } from "./identity";
 import {
   canonicalJson,
   decisionKey,
+  indexKey,
   bindingEventKey,
   bindingFactKey,
   recordSubject,
@@ -298,6 +299,9 @@ function plannedKeys(
     keys.add(tableKey(target.name));
     keys.add(rowKey(target.name, String(row.id)));
     for (const key of target.keys?.(row) ?? []) keys.add(key);
+    for (const index of registry.indexes.get(target.name) ?? [])
+      for (const value of index.values(row))
+        keys.add(indexKey(index.name, value));
   };
   for (const item of computed) {
     if (!item.desired || item.error) continue;
@@ -462,7 +466,7 @@ async function applyBatch(
     q,
     computed,
     claims,
-    plannedKeys(computed, options),
+    plannedKeys(computed, options, registry),
   );
   const plans: Plan[] = [];
   const drifts: { computed: Computed; diff: Difference }[] = [];
@@ -572,6 +576,9 @@ async function applyBatch(
     changed.add(tableKey(target.name));
     changed.add(rowKey(target.name, String(row.id)));
     for (const key of target.keys?.(row) ?? []) changed.add(key);
+    for (const index of registry.indexes.get(target.name) ?? [])
+      for (const value of index.values(row))
+        changed.add(indexKey(index.name, value));
     discovered.push(...(target.discovers?.(row) ?? []));
     if (target.entity) entities.add(target.entity);
   };

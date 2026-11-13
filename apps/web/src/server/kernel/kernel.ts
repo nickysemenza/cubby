@@ -47,7 +47,7 @@ import {
 } from "./drift";
 import { householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { rowKey, tableKey } from "./keys";
+import { rowKey, tableKey, indexKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
@@ -277,6 +277,44 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           .where(
             and(
               eq(factKey.factKind, evidence.kind),
+              inArray(factKey.factId, [...write.ids]),
+            ),
+          );
+        await insertFactKeys(q, indexed);
+        evidenceKeys.push(
+          ...previous.map((row) => row.key),
+          ...indexed.flatMap((row) => row.keys),
+        );
+      }
+      const indexes = bound.indexes.get(name) ?? [];
+      if (indexes.length && write.ids.length) {
+        const q = repositoryQueries(db);
+        const kind = `index:${name}`;
+        const previous = await q
+          .select()
+          .from(factKey)
+          .where(
+            and(
+              eq(factKey.factKind, kind),
+              inArray(factKey.factId, [...write.ids]),
+            ),
+          );
+        const rows = await q
+          .select()
+          .from(indexes[0]!.table)
+          .where(inArray(idColumn(indexes[0]!.table), [...write.ids]));
+        const indexed = rows.map((row) => ({
+          kind,
+          id: String(row.id),
+          keys: indexes.flatMap((index) =>
+            index.values(row).map((value) => indexKey(index.name, value)),
+          ),
+        }));
+        await q
+          .delete(factKey)
+          .where(
+            and(
+              eq(factKey.factKind, kind),
               inArray(factKey.factId, [...write.ids]),
             ),
           );
