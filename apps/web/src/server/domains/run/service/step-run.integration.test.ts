@@ -9,11 +9,10 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
+import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "../repo/ai-work-state";
 import {
@@ -71,42 +70,21 @@ function scripted(key: string, pages: StepPage[], total?: number) {
 const advanceStepRun = (
   ...args: Parameters<typeof advanceStepRunImplementation>
 ) =>
-  withJobFixtureExecution(
-    args[0],
-    {
-      key: `run:${args[1].runId}`,
-      kind: "run.execute",
-      input: { runId: args[1].runId, purpose: "maintenance" },
-      runId: args[1].runId,
-    },
-    () => advanceStepRunImplementation(...args),
+  withRunPassFixture(args[0], args[1].runId, () =>
+    advanceStepRunImplementation(...args),
   );
 
 const recordRunEvent = (
   ...args: Parameters<typeof recordRunEventImplementation>
 ) =>
-  withJobFixtureExecution(
-    args[0],
-    {
-      key: `run:${args[1].runId}`,
-      kind: "run.execute",
-      input: { runId: args[1].runId, purpose: "mail_discovery" },
-      runId: args[1].runId,
-    },
-    () => recordRunEventImplementation(...args),
+  withRunPassFixture(args[0], args[1].runId, () =>
+    recordRunEventImplementation(...args),
   );
 const writeRunningAttemptProgress = (
   ...args: Parameters<typeof writeRunningAttemptProgressImplementation>
 ) =>
-  withJobFixtureExecution(
-    args[0],
-    {
-      key: `run:${args[1]}`,
-      kind: "run.execute",
-      input: { runId: args[1], purpose: "mail_discovery" },
-      runId: args[1],
-    },
-    () => writeRunningAttemptProgressImplementation(...args),
+  withRunPassFixture(args[0], args[1], () =>
+    writeRunningAttemptProgressImplementation(...args),
   );
 
 describe("step-ledger Runs", () => {
@@ -162,11 +140,6 @@ describe("step-ledger Runs", () => {
       kind: "continue",
       waitSeconds: 60,
     });
-    await updateJobs(
-      ctx.db,
-      { key: `run:${params.runId}` },
-      { leaseExpiresAt: new Date(0) },
-    );
     const successor = { runId: id, attempt: attemptOf(await readRun(id)) };
     expect(await advanceStepRun(ctx.db, successor, drivers)).toMatchObject({
       kind: "continue",

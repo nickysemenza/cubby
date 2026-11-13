@@ -33,17 +33,19 @@ async function runHourlyBackstop(
       env.HYPERDRIVE_BACKGROUND.connectionString,
       async () => {
         const [
-          { productionPermitRuntime, reconcileStoppedWork },
+          { productionPermitRuntime },
           { runPermit, sendSuccessor },
           { ringDueDeviceWork },
           { publishAiRefreshActivation },
           { maintainJobs },
+          { scheduleRunsReconcile },
         ] = await Promise.all([
           import("~/server/workflows/jobs"),
           import("~/server/generic/jobs/service/permits"),
           import("~/server/domains/image-processing/repo/image-processing-ring"),
           import("~/server/workflows/ai-refresh-startup"),
           import("~/server/workflows/job-maintenance"),
+          import("~/server/workflows/runs/reconcile-pass"),
         ]);
         await withTrace(
           "cf.scheduled.job",
@@ -57,7 +59,7 @@ async function runHourlyBackstop(
             ).catch((error: unknown) => Sentry.captureException(error));
             await ringDueDeviceWork(db);
             const errors: unknown[] = [];
-            for (const step of [reconcileStoppedWork, maintainJobs])
+            for (const step of [scheduleRunsReconcile, maintainJobs])
               await step(db).catch((error: unknown) => errors.push(error));
             const runtime = productionPermitRuntime(db, (error, unit) =>
               Sentry.withScope((scope) => {

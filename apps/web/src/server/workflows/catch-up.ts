@@ -48,13 +48,8 @@ export async function recoverMissedWork(
 ) {
   let failed = true;
   try {
-    const { reconcileWorkflowRuns } =
-      await import("~/server/workflows/runs/lifecycle");
-    // Every bounded page is owed; don't stop after the first hundred Runs.
-    let after: string | null = null;
-    do {
-      after = (await reconcileWorkflowRuns(db, after)).next;
-    } while (after);
+    const { scheduleRunsReconcile } = await import("./runs/reconcile-pass");
+    await scheduleRunsReconcile(db);
     failed = false;
   } finally {
     if (wake || failed)

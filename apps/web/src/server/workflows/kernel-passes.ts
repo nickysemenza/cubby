@@ -6,6 +6,10 @@
  */
 import type { Pass } from "~/server/kernel/api";
 
+import { runsReconcilePass } from "./runs/reconcile-pass";
 import { runExecutePass } from "./runs/run-pass";
 
-export const WORKFLOW_PASSES: readonly Pass[] = [runExecutePass];
+export const WORKFLOW_PASSES: readonly Pass[] = [
+  runExecutePass,
+  runsReconcilePass,
+];

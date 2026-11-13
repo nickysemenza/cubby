@@ -23,12 +23,13 @@ import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-re
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runProductionKernel } from "~/server/kernel/api";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
-import { runJobHandler } from "~/server/workflows/runs/job-execution";
+import { startRunPass } from "~/server/workflows/runs/run-pass";
 
 import { readRun, runScaffold } from "./run";
+import { readRunPass } from "./run-execution";
 
 const collisionGenerator = (
   first: string,
@@ -424,16 +425,16 @@ describe("Run attention entity view", () => {
       trigger: "scheduled",
       execution: false,
     });
-    const execution = await enqueueJob(ctx.db, {
-      key: `run:${emptyJobOwner}`,
-      kind: "run.execute",
+    await startRunPass(ctx.db, {
       runId: emptyJobOwner,
-      input: { runId: emptyJobOwner, purpose: "ai_refresh" },
+      purpose: "ai_refresh",
+      generation: 1,
+      restart: false,
     });
-    await advanceJob(ctx.db, execution.id, { "run.execute": runJobHandler });
-    expect(await readJob(ctx.db, { id: execution.id })).toMatchObject({
-      state: "retry_wait",
-      error: expect.stringContaining("no durable evaluation roster"),
+    await runProductionKernel(ctx.db, { budgetMs: 1 });
+    expect(await readRunPass(ctx.db, emptyJobOwner)).toMatchObject({
+      state: "waiting",
+      lastError: expect.stringContaining("no durable evaluation roster"),
     });
     expect(
       (

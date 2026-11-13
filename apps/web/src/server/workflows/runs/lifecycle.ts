@@ -383,7 +383,10 @@ async function launchPassRun(
       (pass.state === "due" ||
         pass.state === "waiting" ||
         pass.state === "working");
-    if (input.automatic && pass && !live) return null;
+    if (input.automatic && pass) {
+      if (!live) return null;
+      return {attempt: pass.generation ?? 1, instanceId: `${RUN_EXECUTE_PASS}:${input.runId}`};
+    }
     if (owner.status === "completed") {
       if (input.automatic) return null;
       if (!(await runOwesWork(tx, input.runId)))
