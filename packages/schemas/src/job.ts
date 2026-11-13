@@ -442,17 +442,7 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Never claimed or executed as a Job; item retries live on the drain's rows.",
   },
-  "calendar-feed.mark-dirty": {
-    ...SERVER,
-    label: "Refresh calendar feed",
-    purpose: "Marks the calendar feed for regeneration.",
-    trigger: "A calendar-relevant change.",
-    targets: "The household calendar feed.",
-    effects: "Invalidates the feed so it can reflect current records.",
-    dependencies: "Calendar configuration and current source records.",
-    cost: "No AI call is required.",
-    exclusions: "Does not edit unrelated household records.",
-  },
+
 } as const satisfies Record<string, JobKindDeclaration>;
 
 const POLICY_BY_KIND: ReadonlyMap<string, JobKindDeclaration> = new Map(

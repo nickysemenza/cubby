@@ -150,7 +150,7 @@ export function scheduleCalendarFeedDirty(
   const origin = execution?.origin ?? options.origin;
   if (!origin || !getCalendarFeedNamespace()) return;
   // `markDirty` only sets a flag, so a failed mark hands the same idempotent
-  // mark to the durable queue (`calendar-feed.mark-dirty`) rather than leaving
+  // mark to the durable `calendar.invalidate` Pass rather than leaving
   // the feed stale; the response is already committed.
   const task = (async () => {
     try {
