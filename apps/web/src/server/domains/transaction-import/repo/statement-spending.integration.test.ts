@@ -372,7 +372,7 @@ describe("statement spending review and re-import", () => {
       .from(financialTransaction);
     await updateFinancialTransaction(
       ctx.db,
-      transaction!.shortcode,
+      parseShortcodeFor("financialTransaction", transaction!.shortcode),
       { kind: "adjustment" },
       ctx.actor,
     );

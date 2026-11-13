@@ -108,6 +108,7 @@ import {
 } from "~/server/generic/merge/repo/core";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { ensureSlotPrimaries } from "./update-helpers";
 
@@ -1306,6 +1307,7 @@ export const mergeProducts = async (
   });
 
   return await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     // Lock every row first so a concurrent merge or delete can't interleave and
     // leave a unique index deciding the outcome.
     await lockAndValidateForDelete(

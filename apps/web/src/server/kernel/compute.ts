@@ -183,6 +183,17 @@ async function computeBatchInPhase(
       loadStoredBindings(q, reconciler, scopes),
     ]);
   } catch (error) {
+    // A keyed loader can reject one scope's malformed evidence. Retry smaller
+    // batches before attributing that failure to otherwise healthy scopes.
+    if (scopes.length > 1 && !mode.locked) {
+      const middle = Math.ceil(scopes.length / 2);
+      const results: Computed[] = [];
+      for (const group of [scopes.slice(0, middle), scopes.slice(middle)])
+        results.push(
+          ...(await computeBatchInPhase(q, registry, reconciler, group, mode)),
+        );
+      return results;
+    }
     return scopes.map((scope) =>
       failed(scope, reconciler, error, performance.now() - started),
     );
