@@ -336,13 +336,13 @@ explicit choices.
 `current` carries authoritative assignment intent and controls; `result` couples the effective
 outcome with its matching provenance. Inherit,
 explicit value and explicit None are distinct intents. A successful empty outcome is not a missing
-computation: a missing result renders Updating…, never the
+computation: a missing result renders Waiting for Cubby, never the
 successful empty state. Who set an own value is not part of the envelope: `fieldAuthority` reads it
 from the audit trail when Why this value or the automatic gate asks.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the twin owners of empty and missing labels and
-assignment-action rules. Surfaces ask them for an absent value's words rather than writing Updating…
+assignment-action rules, and of the machinery panel's stage, actor and row-status words. Surfaces ask them for an absent value's words rather than writing Waiting for Cubby
 or Unavailable; a native read that carried no envelope reads Unavailable through the same owner.
 Query loading, mutation progress and list totals keep their own wording.
 
@@ -609,7 +609,9 @@ Three optional roles name the fields a record's state, progress and kind come fr
 
 - `presentation.state: { field, reason?, wait?, stalled?, recentBy?, recentDays? }`. `field` is a
   status roster with a single-valued group key (a stored column or a `model.derived` value); the
-  generator refuses any other. Each option declares `phase` (`needs`, `active` or `finished`);
+  generator refuses any other. Each option declares `phase` (`needs`, `active` or `finished`) and
+  `stage`, the stage word `StateBadge` draws (Needs you, Waiting, Working, Stuck, Done, Ended);
+  colour never stands in for either;
   without one, a `closed` option is `finished` and the rest `active`, so `needs` is always explicit.
   `reason` is muted text after the label, `wait` the Run-wait value, and a true `stalled` places
   the record in `needs`. `recentBy` and `recentDays` bound the finished phase; older finished
@@ -1472,7 +1474,7 @@ active-view matching. Native saved views compile column filters into operation J
 expanding nullable sentinels into presence filters and static range presets into their patches;
 generation refuses an unsupported expansion rather than dropping scope. Applying a native saved view
 replaces filters and sort in one refresh. Native manual reference selection applies the
-declaration's explicit-intent patch before its value, so choosing after Use inherited replaces the
+declaration's explicit-intent patch before its value, so choosing after Let Cubby decide replaces the
 staged reset. Every filtered task presentation (Next, charts, board, timeline) resolves `@me` before
 reading.
 

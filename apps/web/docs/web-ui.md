@@ -39,9 +39,28 @@ heading for the surface you are changing.
   entity-specific copy: `StateBadge` (`ui/records/state-badge.tsx`),
   `ProgressMeter` (`ui/feedback/progress-meter.tsx`, fed a `ProgressValue`;
   `countedProgress` builds one from a plain count) and `KindTag`
-  (`ui/records/kind-tag.tsx`). `StateBadge` draws needs-you, stalled and failed
-  as filled pills and the rest as a dot or glyph with a label; a wait adds its
-  queue position and estimate on the display clock.
+  (`ui/records/kind-tag.tsx`). `StateBadge` draws the option's declared stage:
+  Needs you and Stuck as filled pills, Working, Waiting, Done and Ended as a dot
+  or glyph with a label; a wait adds its queue position and estimate on the
+  display clock. A local value-to-tone map for a state is a bug: map the value
+  to a stage and draw it with `StateBadge`.
+- What is happening to a record has one hierarchy (ADR 0029 section 10); each
+  level answers one question and a fact appears only at the highest level whose
+  question it answers. A list row says the stage, who acts next and the first
+  gap in six words or fewer, with an ETA only when the actor is a queue or
+  time. The detail header says why and what to do in three lines: the stage
+  line, the first gap as one sentence with its single action, and a count line
+  ("3 inputs · 2 asks · 1 decision · $0.004") that opens the machinery panel.
+  The panel (`ui/derived/machinery-panel.tsx`, read through
+  `entity/machinery/record-machinery.tsx`) lists every gap, then every input
+  in the order the reconciler used it, then drift; raw model, tier, cost,
+  input hash, error and payload sit inside each row with Copy. Cubby's routine
+  work sits in the panel at the same weight as a member's. Every word comes
+  from `field-envelope-presentation.ts`: the stage words Needs you, Waiting,
+  Working, Stuck, Done and Ended; the actors you, Cubby, an agent, a named
+  source and time; the sentence `{Stage} · {waiting|working} for {input} from
+  {actor}`; row statuses Used, Skipped, Gap, Blocked and Failed as visible
+  words. An entity without a machinery capability keeps its `StateBadge`.
 
 ## Spacing and layout primitives
 
@@ -489,7 +508,9 @@ never call `PageWrapper` directly. Detail bodies use `DetailSections`
 
 - The detail header draws breadcrumb, title, `KindTag`, `StateBadge`, commands,
   then up to three declared `detail.lines` (64px label column) beside the
-  labelled AI summary from 1120px of pane width.
+  labelled AI summary from 1120px of pane width. For an entity with a
+  machinery capability the three machinery lines replace the `StateBadge` and
+  lead the summary; they wrap rather than truncate.
 - The workspace is a 272px side column (236px at 1000px or narrower) beside
   declared section groups as 44px tabs with counts. Without `detail.groups` an
   entity gets Overview, Work, Evidence, Relations and Activity. Every panel
