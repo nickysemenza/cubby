@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import { shortcodeSchema } from "../identifier-fields";
@@ -35,6 +36,194 @@ const enumPresentation = (values: readonly string[], quiet?: string) => ({
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "sourceOccurrence",
+    edges: [
+      defineEdge({
+        key: "SourceTransactionRecord.occurrenceId",
+        from: "sourceTransactionRecord",
+        to: "sourceOccurrence",
+        cardinality: "one",
+        inverse: {
+          key: "sourceOccurrence.incoming.SourceTransactionRecord.occurrenceId",
+          from: "sourceOccurrence",
+          to: "sourceTransactionRecord",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "SourceTransactionRecord.occurrenceId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "sourceTransactionRecord",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "source observations",
+          description:
+            "Immutable observations keep their proven occurrence identity.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "Retiring an identity never rewrites the observations that reserved it.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "SourceOccurrence.supersededByOccurrenceId",
+        from: "sourceOccurrence",
+        to: "sourceOccurrence",
+        cardinality: "one",
+        inverse: {
+          key: "sourceOccurrence.incoming.SourceOccurrence.supersededByOccurrenceId",
+          from: "sourceOccurrence",
+          to: "sourceOccurrence",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "SourceOccurrence.supersededByOccurrenceId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "sourceOccurrence",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "reviewed replacements",
+          description:
+            "An explicit replacement keeps naming its reserved target identity.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason:
+              "Source lifecycle history never releases or silently reassigns replacement identity.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "FinancialEvidenceAlias.occurrenceId",
+        from: "row:FinancialEvidenceAlias",
+        to: "sourceOccurrence",
+        cardinality: "one",
+        inverse: {
+          key: "sourceOccurrence.incoming.FinancialEvidenceAlias.occurrenceId",
+          from: "sourceOccurrence",
+          to: "row:FinancialEvidenceAlias",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "FinancialEvidenceAlias.occurrenceId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "excluded",
+          reason: "Retained financial provenance, never current ownership.",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "source aliases",
+          description:
+            "Alias provenance keeps its original proven source occurrence.",
+          liveness: {
+            kind: "allow-target-deleted",
+            reason: "Evidence is retained through occurrence retirement.",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Source occurrence", plural: "Source occurrences" },
     table: "SourceOccurrence",
     identifiers: { brand: "SourceOccurrenceId", shortcode: "SOC-" },
@@ -477,30 +666,55 @@ export const { definition, readSchemas } = defineEntityModel(
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .field("physicalImportId")
-      .named("physicalImport", "Original physical collection"),
-    r
-      .field("currentObservationId")
-      .named("currentObservation", "Current observation"),
-    r.field("accountId").named("account", "Resolved account"),
-    r
-      .field("supersededByOccurrenceId")
-      .named("replacementOccurrence", "Replacement occurrence"),
-    r
-      .field("replacementObservationId")
-      .named("replacementObservation", "Reviewed replacement observation", {
-        inverseOmit:
-          "The source observation reaches its reserved occurrence; replacement evidence is read on that owner.",
-      }),
-    r.field("withdrawalImportId").named("withdrawalProof", "Withdrawal proof", {
-      inverseOmit:
-        "A collection reaches source identities through its original physical relation and observation memberships.",
-    }),
-    r
-      .field("acceptedTransactionId")
-      .named("acceptedTransaction", "Accepted transaction"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .field("physicalImportId")
+          .named("physicalImport", "Original physical collection"),
+        "transactionImport.source-occurrences",
+      ),
+      r.declare(
+        r
+          .field("currentObservationId")
+          .named("currentObservation", "Current observation"),
+        "sourceTransactionRecord.source-occurrences",
+      ),
+      r.declare(
+        r.field("accountId").named("account", "Resolved account"),
+        "financialAccount.source-occurrences",
+      ),
+      r.declare(
+        r
+          .field("supersededByOccurrenceId")
+          .named("replacementOccurrence", "Replacement occurrence"),
+        "sourceOccurrence.source-occurrences",
+      ),
+      r.declare(
+        r
+          .field("replacementObservationId")
+          .named("replacementObservation", "Reviewed replacement observation", {
+            inverseOmit:
+              "The source observation reaches its reserved occurrence; replacement evidence is read on that owner.",
+          }),
+        "sourceTransactionRecord.sourceOccurrence.replacementObservation",
+      ),
+      r.declare(
+        r
+          .field("withdrawalImportId")
+          .named("withdrawalProof", "Withdrawal proof", {
+            inverseOmit:
+              "A collection reaches source identities through its original physical relation and observation memberships.",
+          }),
+        "transactionImport.sourceOccurrence.withdrawalProof",
+      ),
+      r.declare(
+        r
+          .field("acceptedTransactionId")
+          .named("acceptedTransaction", "Accepted transaction"),
+        "financialTransaction.source-occurrences",
+      ),
+    ],
+  }),
   readSchemas,
 );

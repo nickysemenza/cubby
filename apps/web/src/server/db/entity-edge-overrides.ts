@@ -32,7 +32,6 @@ import {
   importSourceProduct,
   ledgerSourceClaim,
   purchasePaymentEvidence,
-  sourceTransactionRecord,
   sourceOccurrence,
   financialEvidenceAlias,
 } from "./schema";
@@ -207,44 +206,6 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 export const ENTITY_EDGE_OVERRIDES = {
   // The generated vocabulary owns empty groups; explicit semantics retain literal edge keys.
   ...mapRecord(ENTITY_KEYS, () => ({})),
-
-  sourceOccurrence: edges({
-    "SourceTransactionRecord.occurrenceId": {
-      column: sourceTransactionRecord.occurrenceId,
-      role: "history",
-      label: "source observations",
-      description:
-        "Immutable observations keep their proven occurrence identity.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Retiring an identity never rewrites the observations that reserved it.",
-      },
-    },
-    "FinancialEvidenceAlias.occurrenceId": {
-      column: financialEvidenceAlias.occurrenceId,
-      role: "history",
-      label: "source aliases",
-      description:
-        "Alias provenance keeps its original proven source occurrence.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason: "Evidence is retained through occurrence retirement.",
-      },
-    },
-    "SourceOccurrence.supersededByOccurrenceId": {
-      column: sourceOccurrence.supersededByOccurrenceId,
-      role: "history",
-      label: "reviewed replacements",
-      description:
-        "An explicit replacement keeps naming its reserved target identity.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Source lifecycle history never releases or silently reassigns replacement identity.",
-      },
-    },
-  }),
 
   purchase: {
     ...edges({
