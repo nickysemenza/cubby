@@ -171,7 +171,11 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   for (const retired of ["/jobs", "/jobs/JOB-SYNTH12345", "/JOB-SYNTH12345"]) {
     await page.goto(retired);
     await expect(page).toHaveURL(/\/activity\?from=jobs/);
-    await expect(page.getByText("The Jobs page is gone.")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Open a record's machinery to inspect its scopes, Asks and Passes.",
+      ),
+    ).toBeVisible();
   }
   await page.goto("/activity?tab=maintenance");
   await expect(page).toHaveURL(/\/settings#maintenance/);
