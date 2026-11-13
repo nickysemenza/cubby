@@ -93,6 +93,7 @@ export function enumDisplayValue(
     color: option?.color ?? UNKNOWN_ENUM_COLOR,
     icon: option?.icon,
     role: option?.role,
+    stage: option?.stage,
     glyph: option?.glyph,
     description: option?.description,
   };

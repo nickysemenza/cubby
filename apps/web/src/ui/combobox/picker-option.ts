@@ -1,3 +1,4 @@
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import { parseShortcode } from "@cubby/shared";
 import type React from "react";
 import { createElement } from "react";
@@ -13,6 +14,7 @@ import type { ComboboxItem } from "./combobox-types";
  * `ComboboxItem` rows at the boundary.
  */
 export interface PickerOption {
+  stage?: KernelStage;
   value: string;
   label: string;
   /** Leading glyph — a trade icon, a category mark, a vendor's brand logo. */

@@ -1,3 +1,4 @@
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import type { EnumIcon, EnumRole } from "@cubby/shared/enum-palette";
 import { createElement, type ReactNode } from "react";
 
@@ -6,6 +7,7 @@ import { OptionGlyph } from "~/ui/media/option-glyph";
 
 /** One picker option: a value/label pair plus an optional leading icon or swatch color. */
 export type EntitySelectOption = Readonly<{
+  stage?: KernelStage;
   value: string;
   label: string;
   /** What choosing this option means; shown as the pill's tooltip. */
