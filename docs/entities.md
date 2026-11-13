@@ -244,7 +244,7 @@ validation, tree extensions and list outputs. Explicit list-item schema ids pres
 `<Entity>ListItem` names. HTTP and MCP project one kernel capability owner; MCP is an explicit
 subset. The generated summary lists read dependents from reference fields, derived paths and image
 fallback paths (including transitive media inputs); notifications add those consumers' cache roots
-without recursively applying mutation ripples or scheduling Jobs. List responses share one metadata
+without recursively applying mutation ripples or scheduling kernel work. List responses share one metadata
 schema across entities and clients.
 
 ### Rosters and routes
@@ -571,7 +571,7 @@ and VendorAccounts belong to Purchases.
 
 `nativeBrowse` (default `true`) declares whether the root appears in native Browse and the native
 sidebar (`EntityCatalog.browsable`). Set it to `false` only for operator plumbing whose list serves
-no member task on a phone or Mac (Jobs, Image jobs, source transaction records, transaction
+no member task on a phone or Mac (Image processing receipts, source transaction records, transaction
 imports), with the reason beside the flag; records still open natively from links, and web
 navigation ignores it. The summary also carries the resolved `primarySearch` (declared, else
 `searchQuery` for a searchable entity) and the `bulkUpdate` roster, from the same helpers the
@@ -3518,16 +3518,10 @@ immutable; current targets and scoped suppression are projections. Merges and de
 subjects. Handles accept the PostgreSQL GUID shape. Runs attribute requests and writes without owning
 history. Mail reviews and findings live with their domain owners.
 
-A statement transaction Suggestion stores each paid model answer under `data.answers` (kind,
-counterparty, per-candidate labels, escrow, merchant) as `{value, input, versions, models}`; the
-shared schema is `packages/schemas/src/statement-answers.ts`. An answer is reusable when its exact
-input and versions equal the current question's, read across the charge's slot rows and prior
-publications, newest first; it never enters a fingerprint. The rule evidence hash keeps a frozen
-hash-scheme tag, the labelled output hash excludes the spending judgment, and a revision-scoped
-dismissal holds while both hashes are equal, so a policy-only change restamps the row in place and
-keeps the dismissal. A "Never suggest" suppression holds independently. The
-[statement Sweep contract](import-evidence-convergence.md#statement-sweeps) owns reuse, scope and
-settlement.
+Statement questions retain their producer input and paid results as kernel Asks and Answers.
+Input changes dirty the owning scopes; unchanged input reuses its Answer. A member's assignment
+or veto is an independent Decision. Scope stages and gaps expose unresolved statement work,
+and Work retries an exhausted scope or Ask without a bulk statement pass.
 
 `suggestion.review` and `suggestion.reviewBatch` commit each applying review with its domain
 application. A refused or stale application records nothing. Every applying command carries the
@@ -3721,11 +3715,11 @@ and provenance as the field actions.
 Cubby fills an open field at 85% confidence, never overwrites an assignment or explicit None,
 never reapplies a vetoed value, and fills `fillOnly` fields only once. Revising Cubby's own value
 requires a 0.20 lead over the runner-up and cannot restore a value already replaced.
-`apply: "review"` requires a member; `apply: "offer"` stays a picker guess. Classification must
+`apply: "review"` files an Ask and exposes the proposal as a member gap on the record and Suggestions. Dismiss vetoes the proposed value while leaving an empty field open. `apply: "offer"` reads an existing picker guess without filing a background Ask. Classification must
 admit the field before it is asked.
 
 An edit over Cubby's value records the chosen assignment and vetoes the replaced value. Keep
-records the displayed value as an assignment. "Wrong, clear it" records a veto; the reconciler
+records the displayed value as an assignment. "Wrong, clear it" records a veto and releases the assignment; the reconciler
 clears the value. "Let Cubby decide" releases the assignment. System imports record assignments
 without grading the model. Corrections recheck at most 25 similar Cubby-held records.
 

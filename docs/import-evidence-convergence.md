@@ -1096,14 +1096,10 @@ including zeros. A page or visible-only query cannot establish absence. The
 skill must identify unsupported accounts, including Monarch connections
 excluded by its MCP, rather than reporting them current.
 
-Evidence, memberships, revisions and the statement Sweep's Pass intent commit in
-one transaction; waking happens after commit. Corrections recheck the automatic
-spending switch under its transaction lock; pausing it blocks money changes and
-retirement as well as new booking. Scheduling failure rolls admission back. The
-outer DB-only snapshot write uses bounded retries for serialization conflicts,
-including late derived-refresh claim contention, rebuilding evidence and Sweep
-admission together on each attempt. Dry runs and unchanged replays create no
-Runs, Jobs, Suggestions or money; Jobs own interrupted execution recovery. A
+Evidence, memberships, revisions and dirty scope keys commit in one transaction;
+waking happens after commit. The outer DB-only snapshot write uses bounded
+retries for serialization conflicts and rebuilds the evidence and dirty keys
+together. Dry runs and unchanged replays create no money or producer demand. A
 new collection can advance observation time without changing the original
 source record; `refreshed` counts those new observations of known facts.
 Completed collections reject additional membership. A reappearing withdrawn
@@ -1161,155 +1157,14 @@ same transaction. An occurrence whose replacement anyone already set or
 cleared is never superseded automatically. Any other group keeps its
 `siblings`.
 
-### Statement Sweeps
+### Statement reconciliation
 
-Recording rows starts a routine statement Sweep; `run.sweep` reruns it. Default
-background labeling is unscoped.
-
-**Stored answers.** Each model question is asked once per distinct input. A
-statement Suggestion stores `data.answers` per question (kind, counterparty,
-each candidate, escrow, merchant) as `{value, input, versions, models}`, where
-`input` is that question's exact projected input and `versions` the feature
-prompt versions that produced it. A later pass reuses an answer when its input
-and versions equal the current ones, reading the charge's slot rows and prior
-publications through observation identity and aliases, newest first, per
-question. A completed abstention is an answer; a failed or unavailable call is
-not and stays a retained item failure. Reuse is per question, so a changed
-candidate re-asks only its own label. Answers never enter either hash. The AI
-response cache holds every completed answer, so a missing stored answer usually
-refills from it without a provider call. An unchanged repeat pass makes no
-model call, publication insert or answer write.
-
-A statement amount reaching a question is the effective movement. Escrow and
-merchant answers come from spending advice: merchant identity and support
-inputs use the merchant key, and the escrow input carries the merchant,
-description, source category and effective amount. A stored answer saves under
-the charge's advisory lock to the active slot row; if the charge moved, the
-write is dropped.
-
-**Fingerprints and dismissals.** Two hashes keep their meanings: the rule
-evidence hash and the labelled output hash. The rule evidence payload carries
-the frozen hash-scheme tag `{revision, cleanPolicy}`, which changes only with
-the serialized payload shape. The labelled hash excludes the spending judgment,
-so a Vendor or alias edit neither reopens a dismissal nor republishes. A revision-scoped dismissal holds
-while both hashes are equal, so a policy-only change keeps it; changed rule
-evidence or changed labelled output reopens the charge. A permanent "Never
-suggest" holds separately. The automatic policy revision is separate from the
-hash scheme: an unchanged row whose matched rules differ under the current
-policy is restamped in place under its lock and never republished, and an
-active pending row's stamp must match the live policy to apply.
-
-**Pages.** Generation and labeling commit bounded pages of independent charges;
-[statement pages](jobs.md#scopes-asks-and-passes) owns the page sizes and the
-cooperative page budget. Generation is a scan: charges that need a label,
-member review, no action, a hold or are out of scope do not bar a later ready
-charge. Labeling asks only unanswered applicable questions, saves each paid
-answer before publication, and hands the charges to the shared
-publish-and-settle path that generation and retries use. Identity questions
-stay batched; merchant/spending preparation runs in waves of
-`STATEMENT_SPENDING_CONCURRENCY`, with field questions batched within each
-wave, and a single page allowance admits fresh context-fitting questions in
-identity/kind/counterparty/spending order, reserving spending before the next
-charge. Stored answers stay usable after the allowance is exhausted. Untouched
-charges keep their complete candidate population and inclusive cursor; they
-receive no skipped outcome or completion. When the page budget ends, a page
-settles started work and saves answered questions before yielding; it does not
-interrupt an in-flight provider request. Cache contention and lookup deferrals
-remain typed waits, neither retained item failures nor triggers for uncached
-model calls. Failed items remain unresolved even after scanning ends: a
-completed scan with retained failures is not completed reconciliation. Page
-caches are discarded after their page: label work, publication and financial
-application rebuild current facts, and a commit never uses a page cache as
-validation. These bounds limit repeated work after interruption; they are no
-wall-time guarantee.
-
-**Publication and settlement.** Every Sweep, scoped or not, settles every
-eligible statement row: an active pending row whose current stamp matches the
-live automatic policy, whose source is eligible, whose kind and clean status
-agree and whose scope admits it. Import scope narrows what a pass admits; it is
-not what makes a row eligible. A Sweep that completes leaves no eligible row
-unapplied; commit refusals, member-review rows and Uncategorized bookings are
-counted, never hidden. Publication carries each charge's Suggestion receipt and
-original application order. A failed batch reconciles each charge through the
-same locked admission path: committed publications recover their pending
-application receipts before testing the obsolete input fence, and finish
-retirement before acknowledgement; recovery does not recreate or restamp
-labels. Resumed application receipts repeat that exact retirement check before
-application, including recovery from a crash before the after-commit callback
-started. Automatic financial application admits only the original ready prefix.
-Generation and label pages apply compatible creates through the same guarded
-transactions of at most 32, one dependency layer each
-([statement pages](jobs.md#scopes-asks-and-passes)). Each rebuilds current evidence
-under its locks and preserves per-charge receipts; declined items use single
-admission, and a row whose Suggestion moved is re-found by charge before it is
-applied. A booked primary's copies come from other sources, so no import scope
-admits them; the neighbour refresh republishes their paired attach for the pass
-that owns them. Before any application on a generation page, its own rule
-selection decides which charges need admission. An as-is attach uses its proven
-paired Transaction even beside other candidates; an unpaired ambiguous attach
-requires an explicit target. Preview, stale-term comparison, spending
-preparation and application use that same target. Charges already skipped by
-the current label page do not split that prefix; failed, unfinished and
-applicable-rule charges stop it. Unscoped passes may complete consecutive
-no-action receipts in bounded transactions: lock the exact receipts, verify
-their charge/evidence, active pending state and absent rule descriptors, then
-clear only the proven prefix through the projection writer. A missing, replaced
-or rule-bearing receipt stops the batch. Single-item admissions regenerate
-first once the page has written, since regeneration can introduce actionable
-rules, and the page's charges a write affects are republished together before
-their admission. A failed proposal build bisects so failures retain their own
-references. Statement application and booking request only identity output from
-their mutation writers when they consume only IDs; the writers keep validation,
-locks, audits, allocations and receipts.
-
-**Retries.** Retrying failed statement labels consumes only the retained charge
-references, one charge at a time, without moving the original population
-cursor. Each charge is regenerated under the Run's retained account/date/import
-scope before its current label work is selected. Model waits and funding pauses
-keep that charge; disabled automatic AI work pauses the retry rather than
-discarding it. Healthy charges and later arrivals are not added to the retry
-population. An obsolete Pass generation or claim interrupts the invocation;
-per-charge error isolation must not turn that ownership signal into an item
-failure or retry.
-
-**Scope.** A statement Sweep carries its full account/date/import scope
-through hold counting, paging, input inspection, label counting, selection,
-retries and receipt admission. Hold selection intersects the account filter
-with retained charge membership/date before cursor limits; it admits whole
-holds and keeps every pending settlement reference's evidence. Explicit
-withdrawal proof is still required for a void proposal; incomplete membership
-supplies none. Date and import filters intersect on retained source
-observations, including withdrawal imports; the date is the source
-`statementDate`, not the Suggestion timestamp. Account scope uses live
-generation-preview resolution, including stored and accepted-settlement hints;
-void targets use their live transaction's account. Scope follows regeneration
-and is checked again inside automatic review's serializable write admission,
-and scoped answer saves, label publications and receipt completions recheck the
-live resolver inside their write transactions, so valid fresh evidence for
-another account cannot authorize an effect. An out-of-scope result keeps
-evidence and stored answers without publishing or acknowledging that target;
-excluded receipts keep `applicationPending` and their original
-`applicationOrder`, and completion counts include only IDs the writer admitted.
-
-`run.sweep` and its estimate accept a statement family's optional `importId` as
-a TransactionImport shortcode (`TIM-…`). Both resolve the live retained
-collection before estimation or Run/Pass creation; invalid, missing and deleted
-references refuse. Account and date filters intersect its retained charge
-membership. Selected charges still use current observations from other
-collections sharing their identity; unrelated charge identities stay excluded.
-This reprocesses retained evidence under the automatic policies, including
-clean spending booking. An empty or unscoped Sweep does not admit held or
-ambiguous sources, and attachments wait for review. Incomplete collections
-allow supported positive processing but prove no absence, withdrawal,
-reconciliation or completion. A Sweep changes neither collection coverage nor
-`completedAt` and records no withdrawals.
-
-**Logs.** RunStep page samples keep selection, discovery, label preparation,
-decision, spending-fact, spending, publication and ordered-application wall
-times plus database metrics; ordered application includes no-action prefix
-validation and receipt settlement and must not be mistaken for model latency.
-Generation logs separate selection, preparation, publication and
-import-application durations with aggregate counts, without source records.
+Evidence mutations dirty their keyed statement scopes in the same transaction.
+The kernel reconciles each scope against retained Answers and independent member
+Decisions. Every charge shows its stage, gaps and provenance; Work exposes due,
+claimed and exhausted scopes and Asks with Retry and raw failures. Statement
+reconciliation uses no member-started Sweep or label-page booking path. The
+member-started field Sweep evaluates declared fields over its selected population.
 
 ### Unlinked spending and ownership exits
 

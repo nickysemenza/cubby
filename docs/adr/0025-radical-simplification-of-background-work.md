@@ -133,7 +133,7 @@ is unused.
   mirror, so calendar sync runs without waking Neon.
 - **Derived snapshots and the hourly pass**: they keep list reads cheap; the pass
   runs as queue-permit pages.
-- **Sweeps**: the member-started way to evaluate fields and statement charges.
+- **Sweeps**: the member-started way to evaluate fields.
 - **Garden**: seasonal, so it is idle for months at a time.
 - **Ledger transfers**: household contribution positions depend on them.
 - **The financial evidence stack**: it holds statement history from before the
