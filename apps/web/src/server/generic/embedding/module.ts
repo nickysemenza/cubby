@@ -9,6 +9,7 @@ export const embeddingAsk = defineAsk({
   feature: "entity.embedding",
   producer: "embedding",
   promptVersion: "1",
+  maxAttempts: 100,
   input: z.object({
     entityId: z.uuid(),
     entityKind: z.string(),
@@ -36,10 +37,25 @@ export const embeddingAsk = defineAsk({
 
 export const vectorizeSync = definePass({
   name: "vectorize.sync",
-  run: async (db, cursor, claim) =>
-    (
-      await import("~/server/generic/embedding/repo/vectorize-sync")
-    ).syncVectorize(db, cursor, claim),
+  async run(db, cursor, claim) {
+    try {
+      return await (
+        await import("~/server/generic/embedding/service/vectorize-sync")
+      ).syncVectorize(db, cursor, claim);
+    } catch (error) {
+      const { AskUnknownError, AskAbandonedError } =
+        await import("~/server/kernel/api");
+      if (error instanceof AskAbandonedError) return { cursor, done: true };
+      if (error instanceof AskUnknownError)
+        return {
+          cursor,
+          done: false,
+          availableAt: new Date(Date.now() + 21600000),
+          waitCause: "provider_capacity",
+        };
+      throw error;
+    }
+  },
 });
 
 export const embeddingKernelModule = defineModule({

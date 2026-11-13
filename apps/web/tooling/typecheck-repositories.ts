@@ -14,6 +14,8 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/domains/image-processing/repo/execution-receipts.ts",
+  "src/server/generic/embedding/repo/vectorize-sync.ts",
   "src/server/lib/sha256-text.ts",
   "src/server/domains/transaction-import/repo/statement-policy-wire.ts",
   "src/server/domains/financial-transaction/repo/spending-prerequisites-wire.ts",
@@ -50,7 +52,6 @@ export const repositoryOwners = [
   "src/server/domains/image-processing/repo/description-policy.ts",
   "src/server/domains/image-processing/repo/processor-policy.ts",
   "src/server/generic/relatedness/repo/scalar-overlap.ts",
-  "src/server/generic/embedding/service/upload-chunks.ts",
   "src/server/generic/problems/repo/problem-filter-semantics.ts",
   "src/server/generic/problems/repo/problem-registry-validation.ts",
   "src/server/wasm.ts",

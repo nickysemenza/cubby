@@ -53,7 +53,8 @@ export async function publishExtractedImageMetadata(
     if (
       !current ||
       current.key !== source.key ||
-      current.contentType !== source.contentType
+      current.contentType !== source.contentType ||
+      current.sourceRevision !== source.sourceRevision
     )
       throw new Error("Image metadata source changed during extraction");
     await write(tx);

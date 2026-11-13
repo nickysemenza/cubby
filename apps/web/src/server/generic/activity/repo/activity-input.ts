@@ -1,14 +1,15 @@
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
-  imageProcessingAttempt,
   imageProcessingJob,
   imageProcessingOrphan,
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
+import { appendExecutionReceipt } from "~/server/domains/image-processing/repo/execution-receipt-write";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 
 export async function recordImageDescriptionInput(
   db: Database,
@@ -38,12 +39,27 @@ export async function recordImageDescriptionInput(
           ),
     )
     .join("\n");
-  await getDb(db)
-    .update(imageProcessingAttempt)
-    .set({
-      diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ ...metadata, systemPrompts: request.systemPrompts, userPrompt, inputAvailability: input.renditionKey ? "recorded" : input.cached ? "historical input unavailable" : "input not yet recorded" })}::jsonb`,
-    })
-    .where(eq(imageProcessingAttempt.id, attemptId));
+  const [current] = await getDb(db)
+    .select()
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, attemptId));
+  if (current)
+    await appendExecutionReceipt(db, {
+      id: attemptId,
+      jobId: current.jobId,
+      patch: {
+        diagnostics: {
+          ...metadata,
+          systemPrompts: request.systemPrompts,
+          userPrompt,
+          inputAvailability: input.renditionKey
+            ? "recorded"
+            : input.cached
+              ? "historical input unavailable"
+              : "input not yet recorded",
+        },
+      },
+    });
 }
 
 /** Register the output before PUT; image deletion retains the key for late cleanup. */
@@ -55,19 +71,19 @@ export async function reserveImageAnalysisInput(
 ) {
   return withTransaction(db, async (tx) => {
     const [attempt] = await tx
-      .select({ id: imageProcessingAttempt.id })
-      .from(imageProcessingAttempt)
+      .select({ id: imageExecutionReceipts.id })
+      .from(imageExecutionReceipts)
       .innerJoin(
         imageProcessingJob,
-        eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+        eq(imageProcessingJob.id, imageExecutionReceipts.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
       .where(
         and(
-          eq(imageProcessingAttempt.id, attemptId),
+          eq(imageExecutionReceipts.id, attemptId),
           expectedInputKey === undefined
             ? undefined
-            : eq(imageProcessingAttempt.inputKey, expectedInputKey),
+            : eq(imageExecutionReceipts.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
           // The unchanged attempt is the authority: an expired lease no newer
@@ -78,16 +94,22 @@ export async function reserveImageAnalysisInput(
           notDeleted(image),
         ),
       )
-      .for("update");
+      .for("update", { of: [imageProcessingJob, image] });
     if (!attempt) return false;
     await tx
       .insert(imageProcessingOrphan)
       .values({ key, attemptId, reason: "analysis_input_upload" })
       .onConflictDoNothing();
-    await tx
-      .update(imageProcessingAttempt)
-      .set({ inputKey: key })
-      .where(eq(imageProcessingAttempt.id, attemptId));
+    const [current] = await tx
+      .select()
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, attemptId));
+    if (current)
+      await appendExecutionReceipt(tx, {
+        id: attemptId,
+        jobId: current.jobId,
+        patch: { inputKey: key },
+      });
     return true;
   });
 }
@@ -99,17 +121,17 @@ export async function retainImageAnalysisInput(
 ) {
   return withTransaction(db, async (tx) => {
     const [attempt] = await tx
-      .select({ id: imageProcessingAttempt.id })
-      .from(imageProcessingAttempt)
+      .select({ id: imageExecutionReceipts.id })
+      .from(imageExecutionReceipts)
       .innerJoin(
         imageProcessingJob,
-        eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+        eq(imageProcessingJob.id, imageExecutionReceipts.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
       .where(
         and(
-          eq(imageProcessingAttempt.id, attemptId),
-          eq(imageProcessingAttempt.inputKey, key),
+          eq(imageExecutionReceipts.id, attemptId),
+          eq(imageExecutionReceipts.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
           // The unchanged attempt is the authority: an expired lease no newer
@@ -120,7 +142,7 @@ export async function retainImageAnalysisInput(
           notDeleted(image),
         ),
       )
-      .for("update");
+      .for("update", { of: [imageProcessingJob, image] });
     if (!attempt) return false;
     await tx
       .delete(imageProcessingOrphan)

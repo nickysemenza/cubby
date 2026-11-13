@@ -38,6 +38,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { textArrayParam } from "~/server/db/helpers/query";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { job, run } from "~/server/db/retained-tables";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import {
@@ -109,7 +110,7 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
       0 AS "paused",
       count(*) FILTER (WHERE ${finished} AND p."completedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
       count(*) FILTER (WHERE ${finished} AND p."completedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
-      (SELECT count(*)::int FROM "ImageProcessingAttempt" a
+      (SELECT count(*)::int FROM (SELECT * FROM ${imageExecutionReceipts}) a
         JOIN "ImageProcessingJob" job ON job.id = a."jobId"
         WHERE job.lane = p.lane AND a.state = ${imageProcessingAttemptState.enum.failed}
           AND a."completedAt" > ${since(RECENT_MINUTES.failed)}) AS "failed",
@@ -124,7 +125,7 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
       ) AS "runs"
     FROM "ImageProcessingJob" p
     WHERE p.state = ${pending} OR p."completedAt" > ${since(RECENT_MINUTES.failed)}
-      OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
+      OR EXISTS (SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) a
         WHERE a."jobId" = p.id AND a.state = ${imageProcessingAttemptState.enum.failed}
           AND a."completedAt" > ${since(RECENT_MINUTES.failed)})
     GROUP BY p.lane`,

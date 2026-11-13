@@ -389,18 +389,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Runs that ended before summaries existed, hidden automatic Runs, and Runs that changed again before the summary was written.",
   },
-  "image-metadata.extract": {
-    ...SERVER,
-    label: "Extract image metadata",
-    purpose: "Reads embedded capture time and location from an image.",
-    trigger: "Image metadata extraction request.",
-    targets: "The requested uploaded Image original.",
-    effects: "Records extracted metadata or a diagnostic outcome.",
-    dependencies: "Readable original image storage.",
-    cost: "No AI model call is required for EXIF extraction.",
-    exclusions:
-      "Missing originals and unsupported metadata retain their recorded outcome.",
-  },
   "background.drain": {
     ...SERVER,
     internal: true,

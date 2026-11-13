@@ -1,6 +1,4 @@
 import {
-  imageMetadataExtractTaskSchema,
-  imageMetadataJobKey,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   locationAiJobKey,
@@ -109,21 +107,6 @@ const BACKGROUND_TASK_KINDS = {
       const { writeRunSummary } =
         await import("~/server/domains/run/service/run-summary");
       return writeRunSummary(db, task, fenced);
-    },
-  },
-  "image-metadata.extract": {
-    schema: imageMetadataExtractTaskSchema,
-    key: (task) => imageMetadataJobKey(task.imageId),
-    run: async (db, task, fenced) => {
-      const { extractAndStoreImageMetadata } =
-        await import("~/server/domains/image/service/image-metadata-extraction.service");
-      const outcome = await extractAndStoreImageMetadata(
-        db,
-        task.imageId,
-        undefined,
-        fenced,
-      );
-      return outcome === "succeeded" ? "succeeded" : "skipped";
     },
   },
 } satisfies {

@@ -78,7 +78,6 @@ import {
   aiAnalysis,
   image,
   imageProcessingJob,
-  imageProcessingAttempt,
   run as runTable,
   photoRunImage,
   ledgerParty,
@@ -88,6 +87,7 @@ import {
   productCategory,
   entityExternalId,
 } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
 import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
@@ -2287,12 +2287,12 @@ async function loadPhotoRunImages(
   const descriptionAttempts = descriptionJobIds.length
     ? await getDb(db)
         .select({
-          jobId: imageProcessingAttempt.jobId,
-          startedAt: imageProcessingAttempt.startedAt,
-          completedAt: imageProcessingAttempt.completedAt,
+          jobId: imageExecutionReceipts.jobId,
+          startedAt: imageExecutionReceipts.startedAt,
+          completedAt: imageExecutionReceipts.completedAt,
         })
-        .from(imageProcessingAttempt)
-        .where(inArray(imageProcessingAttempt.jobId, descriptionJobIds))
+        .from(imageExecutionReceipts)
+        .where(inArray(imageExecutionReceipts.jobId, descriptionJobIds))
     : [];
   const locallyAnalyzed = new Set(localAnalyses.map((entry) => entry.imageId));
   const hashById = new Map(rows.map((row) => [row.imageId, row.sha256]));

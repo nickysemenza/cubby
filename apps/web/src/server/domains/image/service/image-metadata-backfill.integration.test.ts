@@ -9,6 +9,7 @@ import { createDevice } from "~/server/domains/device/repo/device";
 import {
   readImageById,
   getImageMetadataExtractionRow,
+  clearImageMetadataOutcomes,
 } from "~/server/domains/image/repo/image";
 import { applyImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata";
 import { recordImageSightings } from "~/server/domains/image/repo/image-sighting";
@@ -195,7 +196,7 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
       const imageId = parseEntityId("image", source.id);
       const saved = await enqueueJob(ctx.db, {
         key: `synthetic-metadata:${imageId}`,
-        kind: "image-metadata.extract",
+        kind: "background.drain",
         input: {},
       });
       const claim = await claimJob(ctx.db, saved.id);
@@ -240,6 +241,12 @@ describe("image metadata extraction + backfill (real Postgres)", () => {
     });
     const imageId = parseEntityId("image", image.id);
 
+    const missing = await extractAndStoreImageMetadata(ctx.db, imageId, {
+      ...stubbedPorts(jpeg),
+      getBytes: async () => null,
+    });
+    expect(missing).toHaveProperty("missing");
+    await clearImageMetadataOutcomes(ctx.db, [imageId]);
     const outcome = await extractAndStoreImageMetadata(
       ctx.db,
       imageId,

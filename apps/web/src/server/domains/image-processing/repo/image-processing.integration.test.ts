@@ -25,14 +25,16 @@ import {
   aiAnalysis,
   image,
   imageDerivative,
-  imageProcessingAttempt,
   imageProcessingJob,
   imageProcessingOrphan,
   searchDocument,
 } from "~/server/db/schema";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
+import { appendExecutionReceipt } from "~/server/domains/image-processing/repo/execution-receipt-write";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   readImageExecutions,
+  releaseImageFixture,
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import {
@@ -290,9 +292,9 @@ describe("durable image representations", () => {
     }
   });
 
-  it.each(["expired", "cutover"])(
+  it.each(["released", "stopped"])(
     "rotates %s attempt output keys and rejects stale completion without orphaning the current result",
-    async (transition) => {
+    async (_transition) => {
       const row = await source();
       const first = await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
@@ -307,13 +309,7 @@ describe("durable image representations", () => {
           leaseMs: 60000,
         }),
       ).toBeNull();
-      await updateImageExecution(
-        ctx.db,
-        row.jobId,
-        transition === "expired"
-          ? { leaseUntil: new Date(0) }
-          : { leaseUntil: null, failures: 0, runAt: new Date(0) },
-      );
+      await releaseImageFixture(ctx.db, row.jobId);
       expect(
         (
           await getDb(ctx.db)
@@ -1207,17 +1203,24 @@ describe("durable image representations", () => {
     const first = await legacy("no_subject");
     const second = await legacy("not_suitable");
     // Older persisted skips can also have been reopened as pending work.
-    await getDb(ctx.db)
-      .update(imageProcessingAttempt)
-      .set({
-        state: "skipped",
-        result: {
-          kind: "subject_lift",
-          status: "skipped",
-          reason: "not_suitable",
+    const [receipt] = await getDb(ctx.db)
+      .select()
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.jobId, second.jobId));
+    if (receipt)
+      await appendExecutionReceipt(ctx.db, {
+        id: receipt.id,
+        jobId: second.jobId,
+        patch: {
+          state: "skipped",
+          result: {
+            kind: "subject_lift",
+            status: "skipped",
+            reason: "not_suitable",
+          },
         },
-      })
-      .where(eq(imageProcessingAttempt.jobId, second.jobId));
+      });
+
     await getDb(ctx.db)
       .update(imageProcessingJob)
       .set({
@@ -1274,9 +1277,9 @@ describe("durable image representations", () => {
     const attempts = () =>
       getDb(ctx.db)
         .select()
-        .from(imageProcessingAttempt)
-        .where(inArray(imageProcessingAttempt.jobId, ids))
-        .orderBy(imageProcessingAttempt.id);
+        .from(imageExecutionReceipts)
+        .where(inArray(imageExecutionReceipts.jobId, ids))
+        .orderBy(imageExecutionReceipts.id);
     const evidence = () =>
       getDb(ctx.db)
         .select({
@@ -1403,8 +1406,8 @@ describe("durable image representations", () => {
       expect(execution).toMatchObject({ state: "completed", leaseToken: null });
       const [attempt] = await getDb(ctx.db)
         .select()
-        .from(imageProcessingAttempt)
-        .where(eq(imageProcessingAttempt.id, lease.attemptId));
+        .from(imageExecutionReceipts)
+        .where(eq(imageExecutionReceipts.id, lease.attemptId));
       expect(attempt).toMatchObject({ state: "skipped", error: reason });
       expect(
         (await repairImageProcessingExecution(ctx.db, 10)).negativesSettled,
@@ -1444,8 +1447,8 @@ describe("durable image representations", () => {
         (
           await getDb(ctx.db)
             .select()
-            .from(imageProcessingAttempt)
-            .where(eq(imageProcessingAttempt.id, lease.attemptId))
+            .from(imageExecutionReceipts)
+            .where(eq(imageExecutionReceipts.id, lease.attemptId))
         )[0],
       ).toEqual(attempt);
       const replacementHash = "b".repeat(64);

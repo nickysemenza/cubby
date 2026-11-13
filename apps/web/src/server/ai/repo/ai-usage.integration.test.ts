@@ -4,6 +4,8 @@ import type { AiModelPricing } from "@cubby/shared/ai/pricing";
 
 import { createDatabase } from "~/server/db/database-runtime";
 import { relationalSchema } from "~/server/db/schema";
+import { seedImageAnswerCost } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import { seedImageExecutionReceipts } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -16,7 +18,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
   imageProcessingJob,
-  imageProcessingAttempt,
   run as runTable,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -130,7 +131,7 @@ describe("listAiUsageForRun", () => {
       chargedCost: 1,
     });
     await getDb(ctx.db).execute(
-      sql`ANALYZE "AiUsage", "ImageProcessingJob", "ImageProcessingAttempt", "Run"`,
+      sql`ANALYZE "AiUsage", "ImageProcessingJob", "Run"`,
     );
     const statements: { text: string; params: unknown[] }[] = [];
     const pool = createPostgresPool({
@@ -225,6 +226,13 @@ describe("listAiUsageForRun", () => {
           jobId: job.id,
         },
       ]);
+    await seedImageAnswerCost(ctx.db, {
+      jobId: job.id,
+      token: crypto.randomUUID(),
+      chargedCost: 1,
+      standardCost: 2,
+      includesJobCost: true,
+    });
     expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
       count: 2,
       chargedCost: 2,
@@ -382,16 +390,15 @@ describe("listAiUsageForRun", () => {
       purpose: "ai_suggest",
     });
     const attempts = [crypto.randomUUID(), crypto.randomUUID()];
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values(
-        attempts.map((id, index) => ({
-          id,
-          jobId: job.id,
-          number: index + 1,
-          state: index ? "ready" : "failed",
-        })),
-      );
+    await seedImageExecutionReceipts(
+      ctx.db,
+      attempts.map((id, index) => ({
+        id,
+        jobId: job.id,
+        number: index + 1,
+        state: index ? "ready" : "failed",
+      })),
+    );
     const usage = (
       attempt: number,
       chargedCost: number,
@@ -413,6 +420,13 @@ describe("listAiUsageForRun", () => {
     await getDb(ctx.db)
       .insert(aiUsage)
       .values(usage(1, 0.2, true));
+    await seedImageAnswerCost(ctx.db, {
+      jobId: job.id,
+      token: attempts[0]!,
+      chargedCost: 0.2,
+      standardCost: 0.4,
+      generation: 1,
+    });
     expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
       count: 1,
       chargedCost: 0.2,
@@ -422,6 +436,13 @@ describe("listAiUsageForRun", () => {
     await getDb(ctx.db)
       .insert(aiUsage)
       .values(usage(2, 0.3, false));
+    await seedImageAnswerCost(ctx.db, {
+      jobId: job.id,
+      token: attempts[1]!,
+      chargedCost: 0.3,
+      standardCost: 0.6,
+      generation: 2,
+    });
     const complete = await listAiUsageForRun(ctx.db, root, { limit: 1 });
     expect(complete).toMatchObject({
       count: 2,
@@ -440,22 +461,20 @@ describe("listAiUsageForRun", () => {
         purpose: "ai_suggest",
       });
       const job = await imageJob(root);
-      await getDb(ctx.db)
-        .insert(imageProcessingAttempt)
-        .values({
-          id: crypto.randomUUID(),
-          jobId: job.id,
-          number: 1,
-          state,
-          executor: {
-            kind: "device",
-            name: "Synthetic device",
-            deviceId: crypto.randomUUID(),
-            platform: "macos",
-            appVersion: "1",
-            osVersion: "1",
-          },
-        });
+      await seedImageExecutionReceipts(ctx.db, {
+        id: crypto.randomUUID(),
+        jobId: job.id,
+        number: 1,
+        state,
+        executor: {
+          kind: "device",
+          name: "Synthetic device",
+          deviceId: crypto.randomUUID(),
+          platform: "macos",
+          appVersion: "1",
+          osVersion: "1",
+        },
+      });
       expect(await listAiUsageForRun(ctx.db, root)).toMatchObject({
         count: 0,
         chargedCost: 0,

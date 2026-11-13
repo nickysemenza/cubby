@@ -10,10 +10,7 @@ import type {
 import { getS3Object } from "~/server/clients/s3";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
-import {
-  buildImageMetadataExtractionTasks,
-  isImageContentType,
-} from "~/server/domains/image/repo/image-metadata-tasks";
+import { publishImageMetadataExtraction } from "~/server/domains/image/repo/image-metadata-tasks";
 import {
   resolveImportSightingContext,
   setImageOwnDeviceSource,
@@ -33,7 +30,6 @@ import type { EntityKernelContext } from "~/server/entity-kernel";
 import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 /** A staged image's bytes/dimensions checked against its row, independent of any caller-specific payload. */
 export interface StagedImageIntegrityItem {
@@ -97,7 +93,7 @@ export interface PhotoImportRouteAdapter {
 }
 
 export interface PhotoImportCommitPorts {
-  publishBackgroundTasks: typeof publishBackgroundTasks;
+  publishImageMetadataExtraction: typeof publishImageMetadataExtraction;
   getImages: typeof getImportImageRows;
   lockImages: typeof lockImportImageRows;
   getObject: typeof getS3Object;
@@ -114,7 +110,7 @@ export interface PhotoImportCommitPorts {
 }
 
 export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
-  publishBackgroundTasks,
+  publishImageMetadataExtraction,
   getImages: getImportImageRows,
   lockImages: lockImportImageRows,
   getObject: getS3Object,
@@ -536,15 +532,13 @@ export async function commitPhotoImport(
         ({ analysis }) => analysis !== null,
       );
       if (freshlyUploaded.length > 0) {
-        await ports.publishBackgroundTasks(
-          transactionDb,
-          buildImageMetadataExtractionTasks(
-            freshlyUploaded
-              .filter(({ row }) => isImageContentType(row.contentType))
-              .map(({ row }) => parseEntityId("image", row.id)),
-          ),
-          { source: "photo-import.commit" },
-        );
+        for (const { row } of freshlyUploaded)
+          await ports.publishImageMetadataExtraction(
+            transactionDb,
+            parseEntityId("image", row.id),
+            row.contentType,
+            "photo-import.commit",
+          );
       }
       return {
         committedPhotoIds: imageCodes,

@@ -48,7 +48,7 @@ export async function advanceEmbeddingFixture(
   const { createKernel, defineModule } = await import("~/server/kernel/api");
   const { embeddingAsk, vectorizeSync } =
     await import("~/server/generic/embedding/module");
-  const { syncVectorize } = await import("./vectorize-sync");
+  const { syncVectorize } = await import("../service/vectorize-sync");
   await getDb(db).execute(
     sql`UPDATE "Pass" SET "availableAt"=now() WHERE name='vectorize.sync' AND "doneAt" IS NULL`,
   );

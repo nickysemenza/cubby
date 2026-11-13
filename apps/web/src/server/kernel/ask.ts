@@ -11,6 +11,7 @@ import { recordScopeKey } from "@cubby/schemas/kernel/capability";
  */
 import {
   kernelJson,
+  askState,
   MACHINERY_RESPONSE_BYTES,
 } from "@cubby/schemas/kernel/machinery";
 import { sql } from "drizzle-orm";
@@ -33,19 +34,21 @@ import {
   backoffMs,
   claimAsks,
   claimAsk,
+  claimExternalAskRow,
   rawError,
   renewClaim,
   settleFailure,
   type ClaimedAsk,
 } from "./claim";
-import type { AskKind, Json, Produced, ScopeRef } from "./define";
+import type { AskKind, Json, Produced, ScopeRef, EvidenceRow } from "./define";
 import { markDirty } from "./dirty";
 import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
 import { answerKey } from "./keys";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
+import { isoText } from "./sql-time";
 import { ASK, PASS_WAITER, RECORD_WAITER, RUN_WAITER } from "./vocab";
-import { wakeAfterCommit } from "./wake";
+import { wakeAfterCommit, wakeClaimRecovery } from "./wake";
 
 type Q = Pick<RepositoryQueryClient, "execute" | "insert" | "select">;
 
@@ -123,11 +126,12 @@ async function ensureAsk(
   envelope: AskEnvelope,
   inputHash: string,
   waiters: AskWaiters,
+  preferredId?: string,
 ): Promise<AskRow> {
   const result = await q.execute<AskRow>(sql`
-    INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input, "maxAttempts")
-    VALUES (${inputHash}, ${kind.feature}, ${kind.producer}, ${kind.promptVersion},
-      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts})
+    INSERT INTO "Ask" (id,"inputHash", feature, producer, "promptVersion", input, "maxAttempts",executor)
+    VALUES (coalesce(${preferredId ?? null}::uuid,gen_random_uuid()),${inputHash}, ${kind.feature}, ${kind.producer}, ${kind.promptVersion},
+      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"})
     ON CONFLICT ("inputHash") DO UPDATE SET "inputHash" = excluded."inputHash"
     RETURNING id, state, attempts, "maxAttempts",
       (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed,
@@ -393,7 +397,7 @@ async function executeClaimed(
   if (!ready.length) return results;
   // One statement marks the batch sent before any request leaves.
   const marked = await q.execute<{ id: string }>(sql`
-    UPDATE "Ask" a SET state = ${ASK.sent}, "sentAt" = now(), "waitCause" = NULL
+    UPDATE "Ask" a SET state = ${ASK.sent}, "sentAt" = now(), "waitCause" = NULL, executor = NULL
     FROM jsonb_to_recordset(${JSON.stringify(
       ready.map(({ index }) => ({
         id: entries[index]!.ask.id,
@@ -579,7 +583,7 @@ export async function expireAsks(
         UPDATE "Ask" a SET
           state = CASE WHEN EXISTS (SELECT 1 FROM "Answer" WHERE "inputHash" = a."inputHash")
             THEN ${ASK.answered} ELSE ${ASK.unknown} END,
-          "claimToken" = NULL, "claimDeadline" = NULL
+          "claimToken" = CASE WHEN a.executor IS NOT NULL THEN a."claimToken" ELSE NULL END, "claimDeadline" = NULL
         WHERE a.state = ${ASK.sent} AND a."claimDeadline" <= now()
         RETURNING a.id
       )
@@ -593,5 +597,177 @@ export async function expireAsks(
         reason: "ask-expired",
       });
     return new Set(result.rows.map((row) => row.id)).size;
+  });
+}
+
+/** Queue an owed answer without running its producer (external executors and passes). */
+export async function queueAsk<I, O>(
+  db: Database,
+  kind: AskKind<I, O>,
+  input: I,
+  waiters: AskWaiters = {},
+  preferredId?: string,
+): Promise<string> {
+  const envelope = askEnvelope(kind, input);
+  return (
+    await ensureAsk(
+      repositoryQueries(db),
+      kind,
+      envelope,
+      await inputHashOf(envelope),
+      waiters,
+      preferredId,
+    )
+  ).id;
+}
+
+export type ExternalAskClaim<I> = {
+  id: string;
+  token: string;
+  deadline: Date;
+  executor: string;
+  input: I;
+};
+
+/** Claim one eligible ask for a named executor before handing its command out. */
+export async function claimExternalAsk<I, O>(
+  db: Database,
+  kind: AskKind<I, O>,
+  options: { id: string; executor: string; leaseMs: number },
+): Promise<ExternalAskClaim<I> | null> {
+  if (kind.produce)
+    throw new KernelContractError(
+      "An externally claimed Ask must not have an inline producer",
+    );
+  if (!options.executor || options.leaseMs <= 0)
+    throw new KernelContractError(
+      "An external claim needs an executor and positive lease",
+    );
+  const row = await claimExternalAskRow(db, kind, options);
+  if (!row) return null;
+  return {
+    id: row.id,
+    token: row.token,
+    executor: options.executor,
+    deadline: row.deadline,
+    input: kind.input.parse(
+      z.object({ input: z.unknown() }).parse(row.input).input,
+    ),
+  };
+}
+
+/** A heartbeat accepts an expired but unchanged device claim, matching late result adoption. */
+export async function renewExternalAsk(
+  db: Database,
+  claim: Pick<ExternalAskClaim<unknown>, "id" | "token" | "executor">,
+  leaseMs = 60_000,
+): Promise<Date | null> {
+  const result = await repositoryQueries(db).execute<{ deadline: string }>(sql`
+    UPDATE "Ask" SET state=${ASK.sent}, "claimDeadline"=clock_timestamp()+make_interval(secs=>${leaseMs / 1000})
+    WHERE id=${claim.id}::uuid AND "claimToken"=${claim.token}::uuid AND executor=${claim.executor}
+      AND state IN (${ASK.sent},${ASK.unknown}) AND "cancelledAt" IS NULL
+    RETURNING ${isoText(sql`"claimDeadline"`)} AS deadline`);
+  const row = result.rows[0];
+  if (!row) return null;
+  const deadline = new Date(row.deadline);
+  await wakeClaimRecovery(deadline);
+  return deadline;
+}
+
+/** A device promises it stopped before a result; release spends no attempt. */
+export async function releaseExternalAsk(
+  db: Database,
+  claim: Pick<ExternalAskClaim<unknown>, "id" | "token" | "executor">,
+  availableAt?: Date,
+): Promise<boolean> {
+  const result = await repositoryQueries(db).execute<{ id: string }>(sql`
+    UPDATE "Ask" SET state=${ASK.queued}, "sentAt"=NULL, "claimToken"=NULL, "claimDeadline"=NULL,
+      "availableAt"=${availableAt ? sql`${availableAt.toISOString()}::timestamp` : sql`now()`}
+    WHERE id=${claim.id}::uuid AND "claimToken"=${claim.token}::uuid AND executor=${claim.executor}
+      AND state IN (${ASK.sent},${ASK.unknown}) AND "cancelledAt" IS NULL RETURNING id`);
+  return result.rows.length > 0;
+}
+
+/** Cancellation refuses every later claim and settlement. */
+export async function cancelExternalAsk(
+  db: Database,
+  id: string,
+): Promise<void> {
+  await repositoryQueries(db).execute(
+    sql`UPDATE "Ask" SET "cancelledAt"=coalesce("cancelledAt",now()) WHERE id=${id}::uuid`,
+  );
+}
+
+/**
+ * Settle once, with the Answer and evidence in one transaction. The unchanged
+ * claim may report late; a released, cancelled or superseded claim cannot.
+ * Source validation runs under the same transaction before any append.
+ */
+export async function settleExternalAsk<I, O>(
+  db: Database,
+  registry: KernelRegistry,
+  kind: AskKind<I, O>,
+  claim: Pick<ExternalAskClaim<I>, "id" | "token" | "executor">,
+  produced: Produced<O>,
+  options: {
+    validate(tx: Database, input: I): Promise<boolean>;
+    evidence(tx: Database, output: O): Promise<readonly EvidenceRow[]>;
+    runId?: string | null;
+  },
+): Promise<
+  { status: "settled" | "replayed"; output: O } | { status: "refused" }
+> {
+  return repositoryTransactionDatabase(db, async (tx) => {
+    const q = repositoryQueries(tx);
+    const result = await q.execute<{
+      inputHash: string;
+      input: unknown;
+      state: string;
+      token: string | null;
+      executor: string | null;
+      cancelled: boolean;
+    }>(sql`
+      SELECT "inputHash",input,state,"claimToken" AS token,executor,"cancelledAt" IS NOT NULL AS cancelled FROM "Ask" WHERE id=${claim.id}::uuid AND feature=${kind.feature} FOR UPDATE`);
+    const row = result.rows[0];
+    if (!row) return { status: "refused" };
+    const [stored] = await q
+      .select()
+      .from(answer)
+      .where(sql`${answer.inputHash}=${row.inputHash}`);
+    if (stored)
+      return stored.claimToken === claim.token &&
+        stored.executor === claim.executor
+        ? { status: "replayed", output: kind.output.parse(stored.output) }
+        : { status: "refused" };
+    if (
+      row.cancelled ||
+      row.token !== claim.token ||
+      row.executor !== claim.executor ||
+      ![askState.enum.sent, askState.enum.unknown].some(
+        (state) => state === row.state,
+      )
+    )
+      return { status: "refused" };
+    const input = kind.input.parse(
+      z.object({ input: z.unknown() }).parse(row.input).input,
+    );
+    if (!(await options.validate(tx, input))) return { status: "refused" };
+    const output = kind.output.parse(produced.output);
+    const { append } = await import("./append");
+    await append(tx, registry, await options.evidence(tx, output), {
+      runId: options.runId,
+    });
+    await commitAnswer(
+      tx,
+      registry,
+      kind,
+      { id: claim.id, inputHash: row.inputHash },
+      { ...produced, output },
+      options.runId ?? null,
+    );
+    await q.execute(
+      sql`UPDATE "Answer" SET "claimToken"=${claim.token}::uuid,executor=${claim.executor} WHERE "inputHash"=${row.inputHash}`,
+    );
+    return { status: "settled", output };
   });
 }

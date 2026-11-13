@@ -6,16 +6,7 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
-import {
-  and,
-  count,
-  desc,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { evaluationSlotKey } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
@@ -33,9 +24,6 @@ import {
   suggestionStateColumns,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-
-import { tryLockAiRefreshScheduling } from "./ai-refresh-admission";
-import { readAutomaticAiStop } from "./automatic-ai-stop";
 
 export type { SuggestionStateRow };
 const jsonSnapshot = (value: unknown) =>
@@ -139,22 +127,11 @@ async function slotAdmissions(
   });
 }
 
-/** Whether any logical slot admits current input, using one history read. */
-async function hasAdmissibleTarget(
-  db: Database,
-  targets: readonly EvaluationTargetInput[],
-) {
-  return (await slotAdmissions(db, targets)).some(
-    (entry) => entry.kind !== "unchanged",
-  );
-}
-
 /** Admit/update a finite slot set with one history read and set-based writes. */
 export async function insertEvaluationTargets(
   db: Database,
   runId: string | null,
   targets: readonly EvaluationTargetInput[],
-  options: { updatesOnly?: boolean } = {},
 ) {
   if (!targets.length) return 0;
   const keys = [
@@ -175,9 +152,7 @@ export async function insertEvaluationTargets(
       )}]::text[]) key ORDER BY key`,
     );
     const admissions = (await slotAdmissions(tx, targets)).filter(
-      (entry) =>
-        entry.kind !== "unchanged" &&
-        (!options.updatesOnly || entry.kind === "update"),
+      (entry) => entry.kind !== "unchanged",
     );
     const prepared = await Promise.all(
       admissions.map(async (entry) => {
@@ -291,41 +266,6 @@ export async function insertEvaluationTargets(
       changed += inserted.length;
     }
     return changed;
-  });
-}
-
-/** Automatic evaluations waiting before a discovery page holds its cursor. */
-const AUTOMATIC_EVALUATION_BACKLOG = 1_000;
-
-/**
- * Admit automatic refresh work, which has no Run: the drain runs it and the activation
- * authorizes it. A full backlog defers the page, so a pass drains at the drain's pace.
- */
-export async function scheduleAutomaticEvaluations(
-  db: Database,
-  targets: EvaluationTargetInput[],
-): Promise<
-  | { kind: "scheduled" | "unchanged" }
-  | { kind: "deferred"; reason: "scheduling_busy" | "capacity" | "stopped" }
-> {
-  if (!(await hasAdmissibleTarget(db, targets))) return { kind: "unchanged" };
-  return withTransactionDatabase(db, async (tx) => {
-    if (!(await tryLockAiRefreshScheduling(tx)))
-      return { kind: "deferred", reason: "scheduling_busy" };
-    if (await readAutomaticAiStop(tx))
-      return { kind: "deferred", reason: "stopped" };
-    // An update keeps its slot's owner and adds no backlog.
-    await insertEvaluationTargets(tx, null, targets, { updatesOnly: true });
-    if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "scheduled" };
-    const [backlog] = await getDb(tx)
-      .select({ owed: count() })
-      .from(aiEvaluation)
-      .where(and(isNull(aiEvaluation.runId), isNotNull(aiEvaluation.runAt)));
-    if ((backlog?.owed ?? 0) >= AUTOMATIC_EVALUATION_BACKLOG)
-      return { kind: "deferred", reason: "capacity" };
-    return (await insertEvaluationTargets(tx, null, targets))
-      ? { kind: "scheduled" }
-      : { kind: "unchanged" };
   });
 }
 

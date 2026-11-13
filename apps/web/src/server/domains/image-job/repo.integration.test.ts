@@ -8,12 +8,9 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  aiUsage,
-  imageProcessingAttempt,
-  imageProcessingJob,
-} from "~/server/db/schema";
+import { aiUsage, imageProcessingJob, answer } from "~/server/db/schema";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
+import { seedImageExecutionReceipts } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { updateImageExecution } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -61,21 +58,20 @@ describe("image job cost", () => {
   // Regression: the per-attempt and per-kind usage sources were one OR whose
   // attempt-id IN list could not use the (jobKind, jobId) index. The rewrite
   // must still count both sources, once each, and skip deleted usage.
-  it("sums attempt and job-kind usage once each, excluding other jobs' usage", async () => {
+  it("reads retained Answer cost once and excludes unrelated usage", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const target = await job();
     const other = await job();
     const attempts = [crypto.randomUUID(), crypto.randomUUID()];
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values(
-        attempts.map((id, index) => ({
-          id,
-          jobId: target.id,
-          number: index + 1,
-          state: "ready",
-        })),
-      );
+    await seedImageExecutionReceipts(
+      ctx.db,
+      attempts.map((id, index) => ({
+        id,
+        jobId: target.id,
+        number: index + 1,
+        state: "ready",
+      })),
+    );
     const usage = (jobKind: string, jobId: string, chargedCost: number) => ({
       runId,
       jobKind,
@@ -97,6 +93,38 @@ describe("image job cost", () => {
         usage("describe_image", target.id, 1),
         usage("describe_image", other.id, 16),
       ]);
+    const { queueAsk } = await import("~/server/kernel/api");
+    const { cloudImageAsk } =
+      await import("~/server/domains/image-processing/module");
+    for (const [generation, cost] of [250000, 500000, 1000000].entries()) {
+      const id = await queueAsk(ctx.db, cloudImageAsk, {
+        receiptId: target.id,
+        imageId: target.imageId,
+        sourceContentHash: target.sourceContentHash,
+        processorRevision: target.processorRevision,
+        kind: target.kind,
+        generation,
+      });
+      const { ask } = await import("~/server/db/kernel-schema");
+      const [owed] = await getDb(ctx.db)
+        .select()
+        .from(ask)
+        .where(eq(ask.id, id));
+      if (!owed) throw new Error("Expected synthetic Ask");
+      await getDb(ctx.db)
+        .insert(answer)
+        .values({
+          inputHash: owed.inputHash,
+          feature: owed.feature,
+          producer: "image",
+          promptVersion: "1",
+          askId: id,
+          claimToken: attempts[generation] ?? crypto.randomUUID(),
+          costMicros: cost,
+          raw: JSON.stringify({ standardCostMicros: cost * 2 }),
+          output: { synthetic: true },
+        });
+    }
     const read = await executeEntity(
       kernelCtx(ctx),
       entityCommandSchema.parse({
@@ -122,39 +150,35 @@ describe("image job cost", () => {
     const held = await job("pending");
     const parked = await job("pending");
     const attemptId = crypto.randomUUID();
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values({
-        id: attemptId,
-        jobId: held.id,
-        number: 1,
-        state: "leased",
-        executor: {
-          kind: "device",
-          deviceId: installationId,
-          name: "Synthetic Mac",
-          platform: "macos",
-          appVersion: "1",
-          osVersion: "26",
-        },
-      });
+    await seedImageExecutionReceipts(ctx.db, {
+      id: attemptId,
+      jobId: held.id,
+      number: 1,
+      state: "leased",
+      executor: {
+        kind: "device",
+        deviceId: installationId,
+        name: "Synthetic Mac",
+        platform: "macos",
+        appVersion: "1",
+        osVersion: "26",
+      },
+    });
     // A reclaim within the window is a second claim of the same Job.
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values({
-        id: crypto.randomUUID(),
-        jobId: held.id,
-        number: 2,
-        state: "expired",
-        executor: {
-          kind: "device",
-          deviceId: installationId,
-          name: "Synthetic Mac",
-          platform: "macos",
-          appVersion: "1",
-          osVersion: "26",
-        },
-      });
+    await seedImageExecutionReceipts(ctx.db, {
+      id: crypto.randomUUID(),
+      jobId: held.id,
+      number: 2,
+      state: "expired",
+      executor: {
+        kind: "device",
+        deviceId: installationId,
+        name: "Synthetic Mac",
+        platform: "macos",
+        appVersion: "1",
+        osVersion: "26",
+      },
+    });
     const leaseExpiresAt = new Date(Date.now() + 60_000);
     await updateImageExecution(ctx.db, held.id, {
       attemptId,
@@ -245,43 +269,41 @@ describe("image job cost", () => {
       executor: device,
       completedAt: now,
     });
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values([
-        {
-          ...attempt(completed.id, 1),
-          state: "ready",
-          result: { status: "completed" },
-        },
-        // Multiple accepted attempts of one job do not inflate its completion rate.
-        {
-          ...attempt(completed.id, 2),
-          state: "ready",
-          result: { status: "completed" },
-        },
-        {
-          ...attempt(stale.id, 1),
-          state: "ready",
-          result: { status: "completed" },
-        },
-        {
-          ...attempt(pending.id, 1),
-          state: "waiting",
-          result: { status: "normalized" },
-        },
-        {
-          ...attempt(pending.id, 2),
-          state: "failed",
-          result: { status: "failed" },
-        },
-        { ...attempt(pending.id, 3), state: "expired" },
-        {
-          ...attempt(completed.id, 3),
-          state: "ready",
-          result: { status: "completed" },
-          completedAt: new Date(now.getTime() - 11 * 60_000),
-        },
-      ]);
+    await seedImageExecutionReceipts(ctx.db, [
+      {
+        ...attempt(completed.id, 1),
+        state: "ready",
+        result: { status: "completed" },
+      },
+      // Multiple accepted attempts of one job do not inflate its completion rate.
+      {
+        ...attempt(completed.id, 2),
+        state: "ready",
+        result: { status: "completed" },
+      },
+      {
+        ...attempt(stale.id, 1),
+        state: "ready",
+        result: { status: "completed" },
+      },
+      {
+        ...attempt(pending.id, 1),
+        state: "waiting",
+        result: { status: "normalized" },
+      },
+      {
+        ...attempt(pending.id, 2),
+        state: "failed",
+        result: { status: "failed" },
+      },
+      { ...attempt(pending.id, 3), state: "expired" },
+      {
+        ...attempt(completed.id, 3),
+        state: "ready",
+        result: { status: "completed" },
+        completedAt: new Date(now.getTime() - 11 * 60_000),
+      },
+    ]);
     expect(await readDeviceBacklog(ctx.db, now)).toMatchObject({
       waiting: 2,
       etaSeconds: 1200,

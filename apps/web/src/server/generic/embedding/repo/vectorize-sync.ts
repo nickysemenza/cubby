@@ -1,184 +1,150 @@
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
+import { askState } from "@cubby/schemas/kernel/machinery";
 import { and, eq, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
-import type { Claim, PassResult } from "~/server/kernel/api";
-import { productionEmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
 
-import { vectorPayloadHash } from "./embedding-artifact";
-import { embeddingTextHash } from "./semantic/hash";
-
-export const syncCursor = z
-  .object({ entityId: z.uuid(), sourceHash: z.string() })
-  .nullable();
-
-/** One source revision, plus remote retirement receipts. All publication is claim-fenced. */
-export async function syncVectorize(
+type Document = typeof searchDocument.$inferSelect;
+type Artifact = typeof entityEmbedding.$inferSelect;
+export async function loadVectorDocument(
   db: Database,
-  raw: Parameters<import("~/server/kernel/api").Pass["run"]>[1],
-  claim: Claim,
-  port = productionEmbeddingRefreshPort,
-): Promise<PassResult> {
-  const cursor = syncCursor.parse(raw);
+  cursor: { entityId: string; sourceHash: string },
+): Promise<Document | undefined> {
+  const [doc] = await repositoryQueries(db)
+    .select()
+    .from(searchDocument)
+    .where(
+      and(
+        eq(searchDocument.entityId, cursor.entityId),
+        eq(searchDocument.sourceHash, cursor.sourceHash),
+        notDeleted(searchDocument),
+      ),
+    );
+  return doc;
+}
+export async function retainedVectorArtifact(
+  db: Database,
+  entityId: string,
+  hash: string,
+): Promise<Artifact | undefined> {
+  const [row] = await repositoryQueries(db)
+    .select()
+    .from(entityEmbedding)
+    .where(
+      and(
+        eq(entityEmbedding.entityId, entityId),
+        eq(entityEmbedding.artifactHash, hash),
+        notDeleted(entityEmbedding),
+      ),
+    );
+  return row;
+}
+export async function lockVectorDocument(
+  db: Database,
+  doc: Document,
+): Promise<boolean> {
+  const result = await repositoryQueries(db).execute<{ id: string }>(
+    sql`SELECT id FROM "SearchDocument" WHERE id=${doc.id}::uuid AND "sourceHash"=${doc.sourceHash} AND ${notDeleted("SearchDocument")} FOR UPDATE`,
+  );
+  return result.rows.length > 0;
+}
+export async function stageVectorArtifact(
+  db: Database,
+  doc: Document,
+  hash: string,
+  config: Pick<Artifact, "provider" | "model" | "dimensions">,
+): Promise<Artifact | null> {
+  if (!(await lockVectorDocument(db, doc))) return null;
+  const existing = await retainedVectorArtifact(db, doc.entityId, hash);
+  if (existing) return existing;
+  const [created] = await repositoryQueries(db)
+    .insert(entityEmbedding)
+    .values({
+      entityId: doc.entityId,
+      entityKind: doc.entityKind,
+      embeddingText: doc.semanticText,
+      embeddingHash: hash,
+      artifactHash: hash,
+      ...config,
+      artifactState: embeddingArtifactState.enum.prepared,
+    })
+    .returning();
+  return created ?? null;
+}
+export async function recordVectorUpload(
+  db: Database,
+  id: string,
+  receipt: string,
+  vectorHash: string,
+): Promise<void> {
+  await repositoryQueries(db)
+    .update(entityEmbedding)
+    .set({
+      submissionId: receipt,
+      vectorHash,
+      artifactState: embeddingArtifactState.enum.submitted,
+    })
+    .where(eq(entityEmbedding.id, id));
+}
+export async function selectVisibleVector(
+  db: Database,
+  doc: Document,
+  id: string,
+): Promise<void> {
   const q = repositoryQueries(db);
-  const config = port.config();
-  if (cursor) {
-    const [doc] = await q
-      .select()
-      .from(searchDocument)
-      .where(
-        and(
-          eq(searchDocument.entityId, cursor.entityId),
-          eq(searchDocument.sourceHash, cursor.sourceHash),
-          sql`${searchDocument.deletedAt} IS NULL`,
-        ),
-      );
-    if (doc) {
-      const { embeddingAsk } =
-        await import("~/server/generic/embedding/module");
-      const { withAsk } = await import("~/server/kernel/api");
-      const values = await withAsk(
-        db,
-        {
-          ...embeddingAsk,
-          produce: async (input) => {
-            const [output] = await port.embed([input.text], {
-              db,
-              feature: "entity_embedding",
-              config,
-            });
-            if (!output) throw new Error("Missing vector");
-            return { output };
+  const current = await lockVectorDocument(db, doc);
+  if (current)
+    await q.execute(
+      sql`UPDATE "EntityEmbedding" SET "artifactState"=${embeddingArtifactState.enum.retired},"deletedAt"=now() WHERE "entityId"=${doc.entityId}::uuid AND id<>${id}::uuid AND ${notDeleted("EntityEmbedding")} AND "artifactState"=${embeddingArtifactState.enum.selected}`,
+    );
+  await q
+    .update(entityEmbedding)
+    .set(
+      current
+        ? {
+            artifactState: embeddingArtifactState.enum.selected,
+            observedAt: new Date(),
+            indexedAt: new Date(),
+          }
+        : {
+            artifactState: embeddingArtifactState.enum.retired,
+            deletedAt: new Date(),
           },
-        },
-        {
-          entityId: doc.entityId,
-          entityKind: doc.entityKind,
-          sourceHash: doc.sourceHash,
-          text: doc.semanticText,
-        },
-        {
-          record: { entity: doc.entityKind, id: doc.entityId },
-          pass: {
-            name: "vectorize.sync",
-            key: `${doc.entityId}:${doc.sourceHash}`,
-          },
-        },
-      );
-      const hash = await embeddingTextHash({
-        entityKind: doc.entityKind,
-        ...config,
-        text: doc.semanticText,
-      });
-      const artifact = await claim.fenced(async (tx) => {
-        const t = repositoryQueries(tx);
-        // Serialize against document replacement before selecting or uploading its vector.
-        const live = await t.execute<{ id: string }>(
-          sql`SELECT id FROM "SearchDocument" WHERE id=${doc.id}::uuid AND "sourceHash"=${doc.sourceHash} AND ${notDeleted("SearchDocument")} FOR UPDATE`,
-        );
-        if (!live.rows.length) return null;
-        const [existing] = await t
-          .select()
-          .from(entityEmbedding)
-          .where(
-            and(
-              eq(entityEmbedding.entityId, doc.entityId),
-              eq(entityEmbedding.artifactHash, hash),
-              sql`${entityEmbedding.deletedAt} IS NULL`,
-            ),
-          );
-        if (existing) return existing;
-        const [created] = await t
-          .insert(entityEmbedding)
-          .values({
-            entityId: doc.entityId,
-            entityKind: doc.entityKind,
-            embeddingText: doc.semanticText,
-            embeddingHash: hash,
-            artifactHash: hash,
-            ...config,
-            artifactState: "prepared",
-          })
-          .returning();
-        return created ?? null;
-      });
-      if (artifact && artifact.artifactState !== "selected") {
-        if (!artifact.submissionId) {
-          const receipts = await port.vectorStore.upsert([
-            { id: artifact.id, entityKind: doc.entityKind, values },
-          ]);
-          const receipt = receipts.get(artifact.id);
-          if (!receipt) throw new Error("Vectorize returned no upload receipt");
-          const vectorHash = await vectorPayloadHash(values);
-          await claim.fenced(async (tx) => {
-            await repositoryQueries(tx)
-              .update(entityEmbedding)
-              .set({
-                submissionId: receipt,
-                vectorHash,
-                artifactState: "submitted",
-              })
-              .where(eq(entityEmbedding.id, artifact.id));
-          });
-        }
-        const [observed] = await port.vectorStore.getByIds([artifact.id]);
-        if (
-          !observed ||
-          (await vectorPayloadHash(observed.values)) !==
-            (await vectorPayloadHash(values))
-        )
-          return {
-            cursor: raw,
-            done: false,
-            availableAt: new Date(Date.now() + 5000),
-            waitCause: "provider_capacity",
-          };
-        await claim.fenced(async (tx) => {
-          const t = repositoryQueries(tx);
-          const current = await t.execute<{ id: string }>(
-            sql`SELECT id FROM "SearchDocument" WHERE id=${doc.id}::uuid AND "sourceHash"=${doc.sourceHash} AND ${notDeleted("SearchDocument")} FOR UPDATE`,
-          );
-          await t.execute<{ id: string }>(
-            sql`UPDATE "EntityEmbedding" SET "artifactState"=${embeddingArtifactState.enum.retired}, "deletedAt"=now() WHERE "entityId"=${doc.entityId}::uuid AND id<>${artifact.id}::uuid AND ${notDeleted("EntityEmbedding")} AND "artifactState"=${embeddingArtifactState.enum.selected}`,
-          );
-          await t
-            .update(entityEmbedding)
-            .set(
-              current.rows.length
-                ? {
-                    artifactState: "selected",
-                    observedAt: new Date(),
-                    indexedAt: new Date(),
-                  }
-                : { artifactState: "retired", deletedAt: new Date() },
-            )
-            .where(eq(entityEmbedding.id, artifact.id));
-        });
-      }
-    }
-  }
-  const retired = await q
+    )
+    .where(eq(entityEmbedding.id, id));
+}
+export async function retiredVectorIds(db: Database): Promise<string[]> {
+  const rows = await repositoryQueries(db)
     .select({ id: entityEmbedding.id })
     .from(entityEmbedding)
     .where(
       sql`${entityEmbedding.deletionId} IS NULL AND (${entityEmbedding.deletedAt} IS NOT NULL OR ${entityEmbedding.artifactState} IN (${embeddingArtifactState.enum.retired},${embeddingArtifactState.enum.failed})) AND ${entityEmbedding.artifactState}<>${embeddingArtifactState.enum.selected}`,
     )
     .limit(100);
-  if (retired.length) {
-    const receipts = await port.vectorStore.deleteByIds(
-      retired.map(({ id }) => id),
+  return rows.map((row) => row.id);
+}
+
+/** A result lookup can finish its original interrupted receipt without sending another call. */
+export async function vectorLookupClaim(
+  db: Database,
+  id: string,
+): Promise<
+  { id: string; token: string | null; executor: string | null } | undefined
+> {
+  const { ask } = await import("~/server/db/kernel-schema");
+  const [row] = await repositoryQueries(db)
+    .select({ id: ask.id, token: ask.claimToken, executor: ask.executor })
+    .from(ask)
+    .where(
+      and(
+        eq(ask.id, id),
+        eq(ask.executor, "vectorize.lookup"),
+        sql`${ask.state} IN (${askState.enum.sent},${askState.enum.unknown})`,
+        sql`${ask.cancelledAt} IS NULL`,
+      ),
     );
-    await claim.fenced(async (tx) => {
-      const { recordEmbeddingDeletions } = await import("./embedding-cleanup");
-      await recordEmbeddingDeletions(
-        tx,
-        [...receipts].map(([id, receipt]) => ({ id, receipt })),
-      );
-    });
-  }
-  return { cursor: raw, done: retired.length < 100 };
+  return row;
 }

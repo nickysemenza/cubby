@@ -39,7 +39,7 @@ export {
   type ImageProcessingJobState,
 } from "./activity-fields";
 
-/** One attempt's state (`ImageProcessingAttempt_state_check`). */
+/** One executor's retained receipt state. */
 export const imageProcessingAttemptState = z.enum([
   "leased",
   "running",

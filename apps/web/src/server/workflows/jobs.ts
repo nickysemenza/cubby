@@ -7,7 +7,6 @@ import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
-import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
@@ -149,7 +148,6 @@ const kernelDrain: BackgroundDrain = {
 // Built per permit: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   kernelDrain,
-  cloudImageDrain,
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,

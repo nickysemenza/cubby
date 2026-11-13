@@ -10,6 +10,7 @@ import {
   purchaseAssociatedEmailsSql,
   emailPurchaseAssociationsSql,
 } from "~/server/domains/email/repo/email-sql";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { purchasePurchaserSetSql } from "~/server/domains/purchase/repo/purchase-purchaser";
 import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 
@@ -33,7 +34,7 @@ export function relationshipQueryCondition(
     case "imageLeaseDevice":
       // Expired leases still identify their holder until reclaimed or released.
       return sql`${s("state")} = ${imageProcessingJobState.enum.pending} AND ${s("leaseUntil")} IS NOT NULL AND EXISTS (
-        SELECT 1 FROM "ImageProcessingAttempt" attempt
+        SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) attempt
         WHERE attempt.id = ${s("attemptId")}
           AND attempt.executor->>'deviceId' = ${t("installationId")}
       )`;

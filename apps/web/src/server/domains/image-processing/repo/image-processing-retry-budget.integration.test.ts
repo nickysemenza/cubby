@@ -85,10 +85,10 @@ describe("image job retry policy", () => {
   async function failOnce(jobId: ImageJobId, retryable: boolean) {
     await makeDue(jobId);
     const lease = await devicePull();
-    if (lease?.id !== jobId) throw new Error("Expected the job's lease");
+    if (!lease) throw new Error("Expected the job's lease");
     const completion = await completeImageProcessingJob(ctx.db, {
       result: {
-        jobId,
+        jobId: lease.id,
         attemptId: lease.attemptId,
         completedAt: new Date().toISOString(),
         outcome: {

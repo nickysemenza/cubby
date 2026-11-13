@@ -120,7 +120,6 @@ import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   imageDerivative,
   imageProcessingOrphan,
-  imageProcessingAttempt,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
 import {
@@ -137,6 +136,7 @@ import {
   photoGroupProposal,
   purchase,
 } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
   imageProcessingIssueExpression,
@@ -1913,11 +1913,11 @@ const deleteImagesTx = async (
       .onConflictDoNothing();
   }
   const inputs = await tx
-    .select({ key: imageProcessingAttempt.inputKey })
-    .from(imageProcessingAttempt)
+    .select({ key: imageExecutionReceipts.inputKey })
+    .from(imageExecutionReceipts)
     .innerJoin(
       imageProcessingJob,
-      eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
+      eq(imageProcessingJob.id, imageExecutionReceipts.jobId),
     )
     .where(inArray(imageProcessingJob.imageId, ids));
   const inputKeys = inputs.flatMap((input) => (input.key ? [input.key] : []));
@@ -2287,7 +2287,7 @@ export const countImagesMissingDimensions = async (
 };
 
 /** `Image.metadataRevision IS DISTINCT FROM IMAGE_METADATA_REVISION` is the
- * `image-metadata.extract` stale marker: `NULL` (never extracted) and any
+ * image metadata stale marker: `NULL` (never extracted) and any
  * older revision number are both candidates, and `IS DISTINCT FROM` (not
  * `<>`) is what makes `NULL` compare as distinct rather than unknown. A row
  * with a terminal `metadataOutcome` has left the backlog until a retry clears
@@ -2304,6 +2304,7 @@ export interface ImageMetadataExtractionRow {
   id: ImageId;
   key: string;
   contentType: string;
+  sourceRevision: string;
 }
 
 export type ImageMetadataCursor = { createdAt: string; id: string };
@@ -2329,6 +2330,7 @@ export async function selectImagesForMetadataExtraction(
       id: image.id,
       key: image.key,
       contentType: image.contentType,
+      sourceRevision: sql<string>`to_char(${image.updatedAt},'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
       createdAt: sql<string>`${image.createdAt}::text`,
     })
     .from(image)
@@ -2383,7 +2385,11 @@ export async function clearImageMetadataOutcomes(
   if (!imageIds.length) return [];
   const rows = await getDb(db)
     .update(image)
-    .set({ metadataOutcome: null, metadataError: null })
+    .set({
+      metadataOutcome: null,
+      metadataError: null,
+      updatedAt: sql`greatest(clock_timestamp(),${image.updatedAt}+interval '1 millisecond')`,
+    })
     .where(
       and(inArray(image.id, [...imageIds]), isNotNull(image.metadataOutcome)),
     )
@@ -2492,9 +2498,15 @@ export async function getImageMetadataExtractionRow(
           and(eq(image.id, imageId), metadataExtractionCandidateWhere),
         ),
     },
-    columns: { id: true, key: true, contentType: true },
+    columns: { id: true, key: true, contentType: true, updatedAt: true },
   });
-  return row ? { ...row, id: parseEntityId("image", row.id) } : undefined;
+  if (!row) return undefined;
+  const { updatedAt, ...source } = row;
+  return {
+    ...source,
+    id: parseEntityId("image", row.id),
+    sourceRevision: updatedAt.toISOString(),
+  };
 }
 
 /** Writes the extracted EXIF (or `null`, when none was found) and advances

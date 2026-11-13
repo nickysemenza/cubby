@@ -9,7 +9,8 @@ import { z } from "zod";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { image, imageProcessingAttempt, ledgerParty } from "~/server/db/schema";
+import { image, ledgerParty } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
@@ -258,7 +259,7 @@ describe("finance.record source and Job lifecycle contention", () => {
       (SELECT count(*)::int FROM "TransactionImportRecord") AS memberships,
       (SELECT count(*)::int FROM "SourceTransactionRecord") AS records,
       (SELECT count(*)::int FROM "Run" WHERE purpose = 'sweep') AS sweeps,
-      (SELECT count(*)::int FROM "Job" WHERE kind = 'run.execute') AS "sweepJobs",
+      (SELECT count(*)::int FROM "Pass" WHERE name = 'run.execute') AS "sweepPasses",
       (SELECT count(*)::int FROM "Expense") AS expenses`,
             "objects",
           )
@@ -436,13 +437,13 @@ describe("finance.record source and Job lifecycle contention", () => {
         expect(diagnostics).toHaveLength(0);
         const completedCloudAttempts = await getDb(ctx.db)
           .select({
-            state: imageProcessingAttempt.state,
-            result: imageProcessingAttempt.result,
+            state: imageExecutionReceipts.state,
+            result: imageExecutionReceipts.result,
           })
-          .from(imageProcessingAttempt)
+          .from(imageExecutionReceipts)
           .where(
             inArray(
-              imageProcessingAttempt.id,
+              imageExecutionReceipts.id,
               cloudCompletions.map((c) => c.attemptId),
             ),
           );
@@ -500,7 +501,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           memberships: admitted,
           records: admitted,
           sweeps: admitted,
-          sweepJobs: admitted,
+          sweepPasses: admitted,
           expenses: 0,
         });
         racing.mockRestore();
@@ -510,7 +511,7 @@ describe("finance.record source and Job lifecycle contention", () => {
           memberships: 1,
           records: 1,
           sweeps: 1,
-          sweepJobs: 1,
+          sweepPasses: 1,
           expenses: 0,
         });
         const stored = await read();

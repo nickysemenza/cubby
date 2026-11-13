@@ -364,6 +364,55 @@ export async function claimAsk(
   return { ...row, token, deadline };
 }
 
+/** External dispatch shares Ask and Pass partition admission before marking sent. */
+export async function claimExternalAskRow(
+  db: Database,
+  kind: AskKind,
+  options: { id: string; executor: string; leaseMs: number },
+): Promise<{
+  id: string;
+  token: string;
+  input: unknown;
+  deadline: Date;
+} | null> {
+  const token = crypto.randomUUID();
+  const row = await withPartition<{
+    id: string;
+    input: unknown;
+    deadline: string;
+  } | null>(
+    db,
+    kind.claimLimit,
+    null,
+    async (q) => {
+      const result = await q.execute<{
+        id: string;
+        input: unknown;
+        deadline: string;
+      }>(sql`
+        UPDATE "Ask" SET state=${ASK.sent}, "sentAt"=now(), "claimToken"=${token}::uuid,
+          "claimPartition"=${kind.claimLimit?.partition ?? null},
+          "claimDeadline"=clock_timestamp()+${leaseInterval(options.leaseMs)}, executor=${options.executor}, "waitCause"=NULL
+        WHERE id=${options.id}::uuid AND feature=${kind.feature} AND state=${ASK.queued} AND "cancelledAt" IS NULL
+          AND "availableAt"<=clock_timestamp() AND attempts<"maxAttempts" AND "claimToken" IS NULL
+        RETURNING id, input, ${isoText(sql`"claimDeadline"`)} AS deadline`);
+      return result.rows[0] ?? null;
+    },
+    async (q) => {
+      await parkPartition(
+        q,
+        sql`id=${options.id}::uuid AND feature=${kind.feature}`,
+        "Ask",
+        kind.claimLimit,
+      );
+    },
+  );
+  if (!row) return null;
+  const deadline = new Date(row.deadline);
+  await wakeClaimRecovery(deadline);
+  return { ...row, token, deadline };
+}
+
 export type ClaimedAsk = {
   id: string;
   inputHash: string;
@@ -549,7 +598,7 @@ export const nextWakeSql = (): SQL => sql`(
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "ScopeDirty" WHERE attempts < ${MAX_SCOPE_ATTEMPTS}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND attempts < "maxAttempts"
+      FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND attempts < "maxAttempts"
         AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id)),
     (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)

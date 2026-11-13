@@ -1,39 +1,23 @@
-import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { ImageId } from "@cubby/schemas/identifiers";
 
-import type { Database } from "~/server/db";
-import { publishInBackground } from "~/server/workflows/background-tasks/publish";
+import type { Database } from "~/server/db/database";
 
-export const isImageContentType = (contentType: string): boolean =>
+import { getImageMetadataExtractionRow } from "./image";
+const isImageContentType = (contentType: string) =>
   contentType.toLowerCase().startsWith("image/");
-
-const imageMetadataExtractTask = (imageId: ImageId): BackgroundTaskInput => ({
-  kind: "image-metadata.extract",
-  requestedAt: new Date().toISOString(),
-  imageId,
-});
-
-/**
- * The wakeup every image-finalize seam publishes: presigned-upload finalize,
- * `createOrReuseAttachedImage` (MCP/native attach), URL import, and the
- * photo-import commit's per-item activation. Fire-and-forget like every other
- * post-mutation publish — `Image.metadataRevision` is the durable stale
- * marker a lost message doesn't threaten: automatic recovery republishes it.
- */
+/** Start the source-revision pass inside the original writer's transaction. */
 export async function publishImageMetadataExtraction(
   db: Database,
   imageId: ImageId,
   contentType: string,
-  source: string,
+  _source: string,
 ): Promise<void> {
   if (!isImageContentType(contentType)) return;
-  await publishInBackground(db, [imageMetadataExtractTask(imageId)], {
-    source,
+  const row = await getImageMetadataExtractionRow(db, imageId);
+  if (!row) return;
+  const { startPass } = await import("~/server/kernel/api");
+  await startPass(db, "image.metadata", {
+    key: `${imageId}:${row.key}`,
+    cursor: { imageId },
   });
 }
-
-/** The same task, for a caller (photo-import commit) that must defer
- * publication until after its own write transaction commits. */
-export const buildImageMetadataExtractionTasks = (
-  imageIds: readonly ImageId[],
-): BackgroundTaskInput[] => imageIds.map((id) => imageMetadataExtractTask(id));

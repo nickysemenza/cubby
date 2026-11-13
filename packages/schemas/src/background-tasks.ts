@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
-import { imageId, locationId, parseEntityRef } from "./identifiers";
+import { locationId, parseEntityRef } from "./identifiers";
 
-/** A record has one key per kind of single-item work, so re-admission replaces its Job. */
-export const imageMetadataJobKey = (imageId: string) =>
-  `image-metadata:${imageId}`;
 export const locationAiJobKey = (
   kind: "location-ai.description.refresh" | "location-ai.inventory.refresh",
   locationId: string,
@@ -45,18 +42,6 @@ export const locationAiInventoryRefreshTaskSchema = z.object({
   kind: z.literal("location-ai.inventory.refresh"),
   ...taskEnvelopeFields,
   locationId,
-});
-
-/**
- * A wakeup to (re-)extract an uploaded image's embedded EXIF/GPS metadata.
- * The handler re-reads `Image.metadataRevision` against
- * `IMAGE_METADATA_REVISION` before doing any work, so a duplicate or
- * out-of-order delivery after the image already advanced is a no-op.
- */
-export const imageMetadataExtractTaskSchema = z.object({
-  kind: z.literal("image-metadata.extract"),
-  ...taskEnvelopeFields,
-  imageId,
 });
 
 /**
@@ -107,7 +92,6 @@ export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
-  imageMetadataExtractTaskSchema,
   maintenancePurchaseDiscoveryTaskSchema,
   calendarFeedMarkDirtyTaskSchema,
   runAiSummaryWriteTaskSchema,

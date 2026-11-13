@@ -1,3 +1,4 @@
+import { seedImageExecutionReceipts } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { generateShortcode } from "@cubby/shared";
@@ -232,7 +233,7 @@ export async function seedActivityHistory(
   );
   if (!standalone)
     throw new Error("Activity fixture standalone job not created");
-  await database.insert(schema.imageProcessingAttempt).values({
+  await seedImageExecutionReceipts(db, {
     id: crypto.randomUUID(),
     jobId: job.id,
     number: 1,
@@ -327,7 +328,8 @@ export async function seedPagedActivityHistory(name: string, count: number) {
   );
   const newest = jobs[0];
   if (!newest) throw new Error("Paged activity needs at least one job");
-  await database.insert(schema.imageProcessingAttempt).values(
+  await seedImageExecutionReceipts(
+    db,
     Array.from({ length: count }, (_, index) => ({
       id: crypto.randomUUID(),
       jobId: newest.id,

@@ -3,7 +3,6 @@ export {
   imageDerivative,
   imageProcessingJob,
   imageProcessingOrphan,
-  imageProcessingAttempt,
   imageProcessingEvent,
   imageProcessingSubmission,
   imageProcessingSubmissionJob,

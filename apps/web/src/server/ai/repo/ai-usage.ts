@@ -4,13 +4,26 @@ import {
   aiUsageStatus,
 } from "@cubby/schemas/ai";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
+import {
+  imageProcessingAttemptState,
+  imageProcessingJobKind,
+} from "@cubby/schemas/image-processing";
 import { photoRunProcessor } from "@cubby/schemas/photo-run-input";
 import {
   type AiCostEvidence,
   aiCostEvidenceSchema,
 } from "@cubby/shared/ai/pricing";
-import { type AnyColumn, and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  type SQL,
+  and,
+  desc,
+  eq,
+  ilike,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -22,6 +35,7 @@ import {
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { aiUsage } from "~/server/db/schema";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { jsonCursor } from "~/server/lib/json-cursor";
 
 /**
@@ -35,20 +49,25 @@ const failedWithoutUsage = sql`(${aiUsage.status} = ${aiUsageStatus.enum.failed}
  * Run, so it must not pay for the evidence and standard-price aggregates
  * `aiCostSummarySql` adds.
  */
-export function aiChargedCostSql() {
+export function aiChargedCostSql(
+  charged: SQL | typeof aiUsage.chargedCost = aiUsage.chargedCost,
+) {
   return {
-    chargedCost: sql<number>`coalesce(sum(${aiUsage.chargedCost}), 0)`,
-    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.chargedCost} is null and not ${failedWithoutUsage}))::int`,
+    chargedCost: sql<number>`coalesce(sum(${charged}), 0)`,
+    chargedUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${charged} is null and not ${failedWithoutUsage}))::int`,
   };
 }
 
-export function aiCostSummarySql() {
+export function aiCostSummarySql(
+  charged: SQL | typeof aiUsage.chargedCost = aiUsage.chargedCost,
+  standard: SQL | typeof aiUsage.standardCost = aiUsage.standardCost,
+) {
   return {
-    ...aiChargedCostSql(),
-    standardCost: sql<number>`coalesce(sum(${aiUsage.standardCost}), 0)`,
-    standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is null and not ${failedWithoutUsage}))::int`,
-    savings: sql<number>`coalesce(sum(${aiUsage.standardCost} - ${aiUsage.chargedCost}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null), 0)`,
-    comparedCalls: sql<number>`(count(${aiUsage.id}) filter (where ${aiUsage.standardCost} is not null and ${aiUsage.chargedCost} is not null))::int`,
+    ...aiChargedCostSql(charged),
+    standardCost: sql<number>`coalesce(sum(${standard}), 0)`,
+    standardUnpricedCount: sql<number>`(count(${aiUsage.id}) filter (where ${standard} is null and not ${failedWithoutUsage}))::int`,
+    savings: sql<number>`coalesce(sum(${standard} - ${charged}) filter (where ${standard} is not null and ${charged} is not null), 0)`,
+    comparedCalls: sql<number>`(count(${aiUsage.id}) filter (where ${standard} is not null and ${charged} is not null))::int`,
     count: sql<number>`count(${aiUsage.id})::int`,
     failedWithoutUsageCount: sql<number>`(count(${aiUsage.id}) filter (where ${failedWithoutUsage}))::int`,
     billingReasons: sql<
@@ -341,29 +360,39 @@ export async function listAiUsageForRun(
       ON u."jobKind" = j.kind AND u."jobId" = j.id::text
     UNION
     SELECT u.id FROM scoped_jobs j
-      JOIN "ImageProcessingAttempt" a ON a."jobId" = j.id
-      JOIN "AiUsage" u ON u."jobKind" = 'image_processing_attempt'
-        AND u."jobId" = a.id::text
+      JOIN "Ask" owed ON owed.input->${"input"}->>${"receiptId"}=j.id::text
+      JOIN "Answer" a ON a."askId"=owed.id
+      JOIN "AiUsage" u ON u."jobKind"='image_processing_attempt' AND u."jobId"=a."claimToken"::text
   )`;
   const externalCoverage = sql`EXISTS (SELECT 1 FROM "Run" r
     WHERE r.id = ANY(${uuidArrayParam(runIds)}) AND ${notDeleted("r")} AND r.input->>${"processor"} = ${photoRunProcessor.enum.external})`;
   const missingImageCoverage = (allowDeviceCharge: boolean) => sql`EXISTS (
     SELECT 1 FROM "ImageProcessingJob" j
     WHERE ${notDeleted("j")} AND j."runId" = ANY(${uuidArrayParam(runIds)}) AND (
-      (NOT EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id)
+      (NOT EXISTS (SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) a WHERE a."jobId" = j.id)
         AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE u."jobKind" = j.kind AND u."jobId" = j.id::text))
-      OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id
+      OR EXISTS (SELECT 1 FROM (SELECT * FROM ${imageExecutionReceipts}) a WHERE a."jobId" = j.id
         AND NOT coalesce(${allowDeviceCharge} AND a.executor->>${"kind"} = ${"device"} AND a.state IN (${imageProcessingAttemptState.enum.ready}, ${imageProcessingAttemptState.enum.skipped}), false)
         AND NOT EXISTS (SELECT 1 FROM "AiUsage" u WHERE (
           (u."jobKind" = 'image_processing_attempt' AND u."jobId" = a.id::text)
           OR (u."jobKind" = j.kind AND u."jobId" = j.id::text AND u.attempt = a.number)))))
   )`;
+  const answerCost = (standard: boolean) => sql<
+    number | null
+  >`CASE WHEN ${aiUsage.jobKind} IN ('image_processing_attempt',${imageProcessingJobKind.enum.describe_image},${imageProcessingJobKind.enum.identify_image},${imageProcessingJobKind.enum.subject_lift}) THEN (
+    SELECT CASE WHEN ${aiUsage.id}=(SELECT u.id FROM "AiUsage" u WHERE u."jobId"=a."claimToken"::text OR (a.raw::jsonb->>'includesJobCost'='true' AND u."jobId"=owed.input->${"input"}->>${"receiptId"}) ORDER BY u."createdAt" DESC,u.id DESC LIMIT 1)
+      THEN ${standard ? sql`coalesce((a.raw::jsonb->>'standardCostMicros')::double precision,a."costMicros"::double precision)/1000000` : sql`a."costMicros"::double precision/1000000`} ELSE 0 END
+    FROM "Answer" a JOIN "Ask" owed ON owed.id=a."askId"
+    WHERE a.feature IN ('image.cloud','image.device') AND (a."claimToken"::text=${aiUsage.jobId} OR (a.raw::jsonb->>'includesJobCost'='true' AND owed.input->${"input"}->>${"receiptId"}=${aiUsage.jobId})) LIMIT 1
+  ) ELSE ${standard ? aiUsage.standardCost : aiUsage.chargedCost} END`;
+  const charged = answerCost(false),
+    standard = answerCost(true);
   const tokenSum = (column: AnyColumn) =>
     sql<number>`coalesce(sum(${column}), 0)::int`;
   const [totals, rows, coverage, tokensByModel] = await Promise.all([
     database
       .select({
-        ...aiCostSummarySql(),
+        ...aiCostSummarySql(charged, standard),
       })
       .from(aiUsage)
       .where(and(attributed)),
@@ -386,9 +415,9 @@ export async function listAiUsageForRun(
         applicationCacheStatus: aiUsage.applicationCacheStatus,
         transport: aiUsage.transport,
         durationMs: aiUsage.durationMs,
-        standardCost: aiUsage.standardCost,
+        standardCost: standard,
         costEvidence: aiUsage.costEvidence,
-        chargedCost: aiUsage.chargedCost,
+        chargedCost: charged,
       })
       .from(aiUsage)
       .where(

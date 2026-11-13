@@ -397,10 +397,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
   },
   // An Image job's attempts, events and submission memberships are its child
   // tables, not entities; the job's attempts slot reads them directly.
-  "ImageProcessingAttempt.jobId": {
-    classification: "ownership",
-    reason: "one claim of an Image job, owned by that job",
-  },
   "ImageProcessingEvent.jobId": {
     classification: "ownership",
     reason: "a processing step an Image job recorded, owned by that job",

@@ -1,3 +1,4 @@
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import type { APIRequestContext } from "@playwright/test";
@@ -14,11 +15,7 @@ import {
 } from "@cubby/schemas/image-processing";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import {
-  image,
-  imageProcessingAttempt,
-  imageProcessingJob,
-} from "~/server/db/schema";
+import { image, imageProcessingJob } from "~/server/db/schema";
 import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -174,8 +171,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   expect(command.jobId).toBe(jobId);
   const [assigned] = await database
     .select()
-    .from(imageProcessingAttempt)
-    .where(eq(imageProcessingAttempt.id, command.attemptId));
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, command.attemptId));
   expect(assigned?.inputKey).toBe(output.key);
   expect(assigned?.executor?.deviceId).toBe(hello.deviceId);
   expect(await stored(request, source.key)).toEqual(original);
@@ -227,8 +224,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   ).toBe(false);
   const [finished] = await database
     .select()
-    .from(imageProcessingAttempt)
-    .where(eq(imageProcessingAttempt.id, command.attemptId));
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, command.attemptId));
   expect(finished?.state, finished?.error ?? "No attempt error").toBe("ready");
   // The runtime's own key prefix: a hardcoded `cubby/` key is unreachable
   // through the public URL of any other deployment.
@@ -293,8 +290,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   ).toBe(true);
   const [failed] = await database
     .select()
-    .from(imageProcessingAttempt)
-    .where(eq(imageProcessingAttempt.id, invalid.command.attemptId));
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, invalid.command.attemptId));
   expect(failed?.state).toBe("failed");
   expect(failed?.error).toContain("does not match");
   const resumedSource = await seed();
@@ -378,8 +375,8 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   ).toBe(true);
   const [resumed] = await database
     .select()
-    .from(imageProcessingAttempt)
-    .where(eq(imageProcessingAttempt.id, reclaimed.command.attemptId));
+    .from(imageExecutionReceipts)
+    .where(eq(imageExecutionReceipts.id, reclaimed.command.attemptId));
   expect(resumed?.state, resumed?.error ?? "No attempt error").toBe("ready");
   if (!resumed?.inputKey) throw new Error("Resumed analysis snapshot missing");
   expect(await stored(request, resumed.inputKey)).toEqual(jpeg);

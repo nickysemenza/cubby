@@ -1,3 +1,4 @@
+import { seedImageExecutionReceipts } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
@@ -302,7 +303,7 @@ async function seedLocalProblemWork(
           completedAt: new Date(),
         })
         .where(eq(schema.imageProcessingJob.id, jobId));
-      await database.insert(schema.imageProcessingAttempt).values({
+      await seedImageExecutionReceipts(db, {
         id: randomUUID(),
         jobId,
         number: 1,

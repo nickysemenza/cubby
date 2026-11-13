@@ -73,7 +73,6 @@ import {
   imageDerivative,
   imageProcessingOrphan,
   imageProcessingJob,
-  imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
 import { aiAnalysis, image } from "~/server/db/schema";
@@ -81,6 +80,8 @@ import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
 } from "~/server/domains/image-processing/repo/description-policy";
+import { appendExecutionReceipt } from "~/server/domains/image-processing/repo/execution-receipt-write";
+import { imageExecutionReceipts } from "~/server/domains/image-processing/repo/execution-receipts";
 import {
   imageRepresentationRowsSql,
   imageRepresentationRow,
@@ -98,13 +99,14 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { queueImageAsk } from "./image-asks";
 import {
   imageJobClaimable,
   imageJobDisplayStateSql,
   type ImageProcessingLane,
 } from "./image-job-state";
 import {
-  insertImageProcessingAttempt,
+  appendInitialImageReceipt,
   recordImageProcessingEvent,
 } from "./image-processing-history";
 import {
@@ -398,6 +400,8 @@ async function ensureImageProcessingJob(
         state: "pending" as const,
       }),
     });
+    if (row.state === "pending")
+      await queueImageAsk(databaseForTransaction(tx), row);
     if (row.state === "pending" && row.lane === "device")
       await ringImageProcessingCompanionsAfterCommit(tx);
     return row;
@@ -484,22 +488,27 @@ export async function retireObsoleteImageProcessingJobs(
   const scoped = "jobId" in input;
   const obsolete = and(
     inArray(imageProcessingJob.state, ["pending", "failed"]),
-    scoped ? eq(imageProcessingJob.id, input.jobId) : undefined,
+    scoped
+      ? or(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.askId, input.jobId),
+        )
+      : undefined,
     // includes-deleted: retire work whose source image was removed.
     sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
   );
-  const batch = scoped
-    ? null
-    : (
-        await dbc
-          .select({ id: imageProcessingJob.id })
-          .from(imageProcessingJob)
-          .where(obsolete)
-          .orderBy(asc(imageProcessingJob.id))
-          .limit(input.limit)
-          .for("update", { skipLocked: true })
-      ).map((row) => row.id);
-  if (batch?.length === 0) return 0;
+  // Ask first, then request receipt: settlement takes the same lock order.
+  const candidates = await dbc
+    .select({ id: imageProcessingJob.id, askId: imageProcessingJob.askId })
+    .from(imageProcessingJob)
+    .where(obsolete)
+    .orderBy(asc(imageProcessingJob.id))
+    .limit(scoped ? 1 : input.limit);
+  if (!candidates.length) return 0;
+  const { cancelExternalAsk } = await import("~/server/kernel/api");
+  for (const row of candidates)
+    if (row.askId) await cancelExternalAsk(db, row.askId);
+  const batch = candidates.map((row) => row.id);
   const result = {
     rows: await dbc
       .update(imageProcessingJob)
@@ -509,7 +518,7 @@ export async function retireObsoleteImageProcessingJobs(
         leaseUntil: null,
         lastError: sql`coalesce(${imageProcessingJob.lastError}, 'Image source, type or processor is obsolete')`,
       })
-      .where(batch ? inArray(imageProcessingJob.id, batch) : obsolete)
+      .where(and(obsolete, inArray(imageProcessingJob.id, batch)))
       .returning({ id: imageProcessingJob.id }),
   };
   const ids = result.rows.map((row) => row.id);
@@ -592,36 +601,6 @@ const imageRunOwned = () =>
       )})
       AND ${notDeleted("r")}))`;
 
-/** Cloud rows an executor may take now, oldest first. */
-export const dueCloudImageJobs = async (db: Database, limit: number) =>
-  (
-    await getDb(db)
-      .select({ id: imageProcessingJob.id })
-      .from(imageProcessingJob)
-      .where(
-        and(
-          eq(imageProcessingJob.lane, "cloud"),
-          imageJobClaimable(new Date()),
-        ),
-      )
-      .orderBy(asc(imageProcessingJob.runAt), asc(imageProcessingJob.id))
-      .limit(limit)
-  ).map((row): ImageJobId => row.id);
-
-/** Permit selection: cloud work is due when a row is claimable now; Run-owned rows are demand. */
-export const cloudImageDue = (unit: string) =>
-  sql`SELECT ${unit}::text AS unit, coalesce(bool_or(${imageRunOwned()}), false) AS demand,
-      min(${imageProcessingJob.runAt}) AS since
-    FROM ${imageProcessingJob}
-    WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${imageJobClaimable(new Date())}
-    HAVING count(*) > 0`;
-
-/** When the next open cloud row comes due or its lease lapses. */
-export const cloudImageNext = () =>
-  sql`SELECT min(coalesce(${imageProcessingJob.leaseUntil}, ${imageProcessingJob.runAt}))
-    FROM ${imageProcessingJob}
-    WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${eq(imageProcessingJob.state, "pending")}`;
-
 /** Throws `JobSupersededError` once this attempt no longer holds a live lease on its row. */
 export async function assertImageLeaseHeld(
   db: Database,
@@ -632,13 +611,24 @@ export async function assertImageLeaseHeld(
     .from(imageProcessingJob)
     .where(
       and(
-        eq(imageProcessingJob.id, claim.id),
+        or(
+          eq(imageProcessingJob.id, claim.id),
+          eq(imageProcessingJob.askId, claim.id),
+        ),
         eq(imageProcessingJob.attemptId, claim.attemptId),
         eq(imageProcessingJob.state, "pending"),
         sql`${imageProcessingJob.leaseUntil} > clock_timestamp()`,
       ),
     );
   if (!held) throw new JobSupersededError();
+  const { fenceClaim } = await import("~/server/kernel/claim");
+  const { repositoryQueries } =
+    await import("~/server/db/repository-access.boundary");
+  await fenceClaim(
+    repositoryQueries(db),
+    { table: "Ask", id: claim.id },
+    claim.attemptId,
+  );
 }
 
 /**
@@ -683,9 +673,9 @@ export async function claimImageProcessingJob(
       // its own retries.
       const devicePull = input.processorRevisions !== undefined;
       const ranOnThisDevice = input.deviceId
-        ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageProcessingAttempt} a
-          WHERE a.id = ${imageProcessingJob.attemptId}
-            AND a.executor->>'deviceId' = ${input.deviceId})`
+        ? sql<boolean>`EXISTS (SELECT 1 FROM ${imageExecutionReceipts}
+          WHERE ${imageExecutionReceipts.id} = ${imageProcessingJob.attemptId}
+            AND ${imageExecutionReceipts.executor}->>'deviceId' = ${input.deviceId})`
         : undefined;
       const candidates = (limit = 1, candidateIds?: readonly ImageJobId[]) =>
         tx
@@ -721,7 +711,12 @@ export async function claimImageProcessingJob(
           )
           .where(
             and(
-              input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
+              input.jobId
+                ? or(
+                    eq(imageProcessingJob.id, input.jobId),
+                    eq(imageProcessingJob.askId, input.jobId),
+                  )
+                : undefined,
               input.attemptId
                 ? eq(imageProcessingJob.attemptId, input.attemptId)
                 : undefined,
@@ -787,8 +782,24 @@ export async function claimImageProcessingJob(
       const [candidate] = await candidates(1, batch?.candidateIds);
       if (!candidate) return null;
 
-      const attemptId = crypto.randomUUID();
-      const leaseExpiresAt = new Date(now.getTime() + input.leaseMs);
+      const [receipt] = await tx
+        .select()
+        .from(imageProcessingJob)
+        .where(eq(imageProcessingJob.id, candidate.id));
+      if (!receipt) return null;
+      const { id, kind } = await queueImageAsk(
+        databaseForTransaction(tx),
+        receipt,
+      );
+      const { claimExternalAsk } = await import("~/server/kernel/api");
+      const claim = await claimExternalAsk(databaseForTransaction(tx), kind, {
+        id,
+        executor: input.deviceId ?? "cloud",
+        leaseMs: input.leaseMs,
+      });
+      if (!claim) return null;
+      const attemptId = claim.token;
+      const leaseExpiresAt = claim.deadline;
       // A device lease can lapse while every device idles; the ring covers it.
       if (candidate.lane === "device" && !input.deviceBatch)
         await ringDeviceWorkAt(tx, leaseExpiresAt);
@@ -796,20 +807,6 @@ export async function claimImageProcessingJob(
       if (candidate.kind === "subject_lift" && !candidate.derivativeKey)
         derivativeId = (await rebuildTransparentDerivative(tx, candidate)).id;
 
-      if (candidate.previousAttemptId)
-        await tx
-          .update(imageProcessingAttempt)
-          .set({
-            state: "expired",
-            completedAt: new Date(),
-            error: "Image job lease expired",
-          })
-          .where(
-            and(
-              eq(imageProcessingAttempt.id, candidate.previousAttemptId),
-              eq(imageProcessingAttempt.state, "running"),
-            ),
-          );
       // Every lease gets a new server-chosen key. A late PUT authorized by an
       // earlier presigned URL can therefore never overwrite the next attempt.
       const derivativeKey =
@@ -835,6 +832,7 @@ export async function claimImageProcessingJob(
         .update(imageProcessingJob)
         .set({
           attemptId,
+          askId: claim.id,
           dispatchedAt: now,
           leaseUntil: leaseExpiresAt,
           waitReason: null,
@@ -863,6 +861,7 @@ export async function claimImageProcessingJob(
       } = candidate;
       return {
         ...claimed,
+        id: parseEntityId("imageJob", claim.id),
         derivativeId,
         imageId: parseEntityId("image", claimed.imageId),
         derivativeKey,
@@ -887,6 +886,22 @@ export async function finalizeCompanionImageLeases(
   const now = new Date();
   const expires = new Date(now.getTime() + input.leaseMs);
   if (!input.claims.length) return expires;
+  const { renewExternalAsk } = await import("~/server/kernel/api");
+  for (const claim of input.claims) {
+    const rows = await getDb(db).execute<{ executor: string }>(
+      sql`SELECT executor FROM "Ask" WHERE id=${claim.jobId}::uuid`,
+    );
+    const executor = rows.rows[0]?.executor;
+    if (
+      !executor ||
+      !(await renewExternalAsk(
+        db,
+        { id: claim.jobId, token: claim.attemptId, executor },
+        input.leaseMs,
+      ))
+    )
+      throw new JobSupersededError();
+  }
   const claims = requestedRows(
     input.claims,
     { jobId: "uuid", attemptId: "uuid" },
@@ -899,8 +914,8 @@ export async function finalizeCompanionImageLeases(
       and(
         eq(imageProcessingJob.state, "pending"),
         isNotNull(imageProcessingJob.leaseUntil),
-        sql`${imageProcessingJob.id} = ANY(${uuidArrayParam(input.claims.map((claim) => claim.jobId))})`,
-        sql`EXISTS (SELECT 1 FROM ${claims.from} WHERE claims."jobId" = ${imageProcessingJob.id} AND claims."attemptId" = ${imageProcessingJob.attemptId})`,
+        sql`${imageProcessingJob.askId} = ANY(${uuidArrayParam(input.claims.map((claim) => claim.jobId))})`,
+        sql`EXISTS (SELECT 1 FROM ${claims.from} WHERE claims."jobId" = ${imageProcessingJob.askId} AND claims."attemptId" = ${imageProcessingJob.attemptId})`,
       ),
     )
     .returning({ id: imageProcessingJob.id });
@@ -932,7 +947,10 @@ export async function getLeasedImageProcessingOutputKey(
     )
     .where(
       and(
-        eq(imageProcessingJob.id, input.jobId),
+        or(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.askId, input.jobId),
+        ),
         eq(imageProcessingJob.attemptId, input.attemptId),
         eq(imageProcessingJob.state, "pending"),
         attemptOwnsLease(),
@@ -955,14 +973,14 @@ export async function getLeasedImageProcessingJobContext(
       kind: imageProcessingJob.kind,
       processorRevision: imageProcessingJob.processorRevision,
       runId: imageProcessingJob.runId,
-      inputKey: imageProcessingAttempt.inputKey,
+      inputKey: imageExecutionReceipts.inputKey,
     })
     .from(imageProcessingJob)
     .innerJoin(
-      imageProcessingAttempt,
+      imageExecutionReceipts,
       and(
-        eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
-        eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
+        eq(imageExecutionReceipts.jobId, imageProcessingJob.id),
+        eq(imageExecutionReceipts.id, imageProcessingJob.attemptId),
       ),
     )
     .innerJoin(
@@ -976,7 +994,10 @@ export async function getLeasedImageProcessingJobContext(
     )
     .where(
       and(
-        eq(imageProcessingJob.id, input.jobId),
+        or(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.askId, input.jobId),
+        ),
         eq(imageProcessingJob.attemptId, input.attemptId),
         eq(imageProcessingJob.state, "pending"),
         attemptOwnsLease(),
@@ -1012,7 +1033,10 @@ export async function releaseImageProcessingLease(
       .from(imageProcessingJob)
       .where(
         and(
-          eq(imageProcessingJob.id, input.jobId),
+          or(
+            eq(imageProcessingJob.id, input.jobId),
+            eq(imageProcessingJob.askId, input.jobId),
+          ),
           eq(imageProcessingJob.attemptId, input.attemptId),
           eq(imageProcessingJob.state, "pending"),
           attemptOwnsLease(),
@@ -1020,6 +1044,20 @@ export async function releaseImageProcessingLease(
       )
       .for("update");
     if (!job) return false;
+    const { releaseExternalAsk } = await import("~/server/kernel/api");
+    const claimRows = await tx.execute<{ executor: string }>(
+      sql`SELECT executor FROM "Ask" WHERE id=${input.jobId}::uuid AND "claimToken"=${input.attemptId}::uuid`,
+    );
+    const executor = claimRows.rows[0]?.executor;
+    if (
+      !executor ||
+      !(await releaseExternalAsk(
+        databaseForTransaction(tx),
+        { id: input.jobId, token: input.attemptId, executor },
+        input.delayMs ? new Date(Date.now() + input.delayMs) : undefined,
+      ))
+    )
+      return false;
     if (job.derivativeId) {
       const [output] = await tx
         .select({ key: imageDerivative.key })
@@ -1035,20 +1073,30 @@ export async function releaseImageProcessingLease(
           })
           .onConflictDoNothing();
     }
-    await tx
-      .update(imageProcessingAttempt)
-      .set({ state: "released", completedAt: sql`now()`, error: input.reason })
-      .where(
-        and(
-          eq(imageProcessingAttempt.id, input.attemptId),
-          eq(imageProcessingAttempt.state, "running"),
-        ),
-      );
+    const [receipt] = await tx
+      .select({ id: imageExecutionReceipts.id })
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, input.attemptId));
+    if (receipt)
+      await appendExecutionReceipt(tx, {
+        id: input.attemptId,
+        jobId: input.jobId,
+        patch: {
+          state: "released",
+          completedAt: new Date().toISOString(),
+          error: input.reason,
+        },
+      });
     const runAt = new Date(Date.now() + (input.delayMs ?? 0));
     await tx
       .update(imageProcessingJob)
       .set({ leaseUntil: null, waitReason: null, runAt })
-      .where(eq(imageProcessingJob.id, input.jobId));
+      .where(
+        or(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.askId, input.jobId),
+        ),
+      );
     // The displayed status returns from Leased to Pending; rings replace polling.
     await recordChange(tx, {
       kind: "projection",
@@ -1132,6 +1180,7 @@ export async function retryImageProcessingNow(
       .set({
         state: "pending",
         completedAt: null,
+        askId: sql`CASE WHEN ${imageProcessingJob.leaseUntil} IS NULL THEN NULL ELSE ${imageProcessingJob.askId} END`,
         // Keep the negative evidence, but detach its settled attempt so maintenance cannot
         // mistake this explicit retry for legacy work still waiting for policy settlement.
         attemptId: sql`CASE WHEN ${retainedNegativeSubjectLift()}
@@ -1144,6 +1193,12 @@ export async function retryImageProcessingNow(
         ...(options.submissionId ? { submissionId: options.submissionId } : {}),
       })
       .where(inArray(imageProcessingJob.id, ids));
+    const pending = await tx
+      .select()
+      .from(imageProcessingJob)
+      .where(inArray(imageProcessingJob.id, ids));
+    for (const receipt of pending)
+      await queueImageAsk(databaseForTransaction(tx), receipt);
     if (options.submissionId)
       await tx
         .insert(imageProcessingSubmissionJob)
@@ -1199,13 +1254,13 @@ async function settleRetainedNegativeSubjectLifts(
         and(eq(image.id, imageProcessingJob.imageId), notDeleted(image)),
       )
       .innerJoin(
-        imageProcessingAttempt,
+        imageExecutionReceipts,
         and(
-          eq(imageProcessingAttempt.id, imageProcessingJob.attemptId),
-          eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
-          inArray(imageProcessingAttempt.state, ["failed", "skipped"]),
+          eq(imageExecutionReceipts.id, imageProcessingJob.attemptId),
+          eq(imageExecutionReceipts.jobId, imageProcessingJob.id),
+          inArray(imageExecutionReceipts.state, ["failed", "skipped"]),
           eq(
-            sql`${imageProcessingAttempt.result}->>'reason'`,
+            sql`${imageExecutionReceipts.result}->>'reason'`,
             sql`${imageProcessingJob.result}->>'reason'`,
           ),
         ),
@@ -1689,7 +1744,7 @@ async function adoptSuccessfulCompletion(
  * redelivered completion, expired lease, deleted image, or replaced upload is
  * a harmless stale result — its object stays in the orphan ledger for cleanup.
  */
-export async function completeImageProcessingJob(
+async function applyImageCompletion(
   db: Database,
   reported: CompletionInput,
 ): Promise<{ adopted: boolean; orphanKey: string | null }> {
@@ -1727,77 +1782,53 @@ export async function completeImageProcessingJob(
       .where(eq(imageProcessingJob.id, input.result.jobId))
       .for("update", { of: [imageProcessingJob, image] });
     if (!canAdoptCompletion(job, input)) {
-      const attempt = await tx.query.imageProcessingAttempt.findFirst({
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(
-              table,
-              and(
-                eq(imageProcessingAttempt.id, input.result.attemptId),
-                eq(imageProcessingAttempt.jobId, input.result.jobId),
-              ),
-            ),
+      await recordImageProcessingEvent(tx, {
+        jobId: input.result.jobId,
+        eventKey: `${input.result.attemptId}:rejected`,
+        event: "completion.rejected",
+        details: {
+          result: input.result.outcome,
+          reason: "Attempt, source, or lease no longer current",
         },
       });
-      if (attempt && !["ready", "skipped", "failed"].includes(attempt.state)) {
-        const outcome = input.result.outcome;
-        // A newer attempt owns the work; a late failure still lands in this
-        // attempt's history instead of vanishing. A released attempt keeps
-        // its release, which the device itself reported.
-        if (outcome.status === "failed" && attempt.state !== "released")
-          await tx
-            .update(imageProcessingAttempt)
-            .set({
-              state: "failed",
-              completedAt: sql`now()`,
-              result: outcome,
-              error: outcome.reason,
-            })
-            .where(eq(imageProcessingAttempt.id, attempt.id));
-        await recordImageProcessingEvent(tx, {
-          jobId: attempt.jobId,
-          eventKey: `${attempt.id}:rejected`,
-          event: "completion.rejected",
-          attempt: attempt.number,
-          level: outcome.status === "failed" ? "error" : "debug",
-          details: {
-            reason: "Attempt, source, or lease no longer current",
-            result: outcome,
-            diagnostics: input.result.diagnostics ?? null,
-          },
-        });
-      }
       return { adopted: false, orphanKey: null };
     }
+    const [receipt] = await tx
+      .select({ id: imageExecutionReceipts.id })
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, input.result.attemptId));
+    if (!receipt)
+      await appendInitialImageReceipt(tx, {
+        jobId: job.id,
+        attemptId: input.result.attemptId,
+        state: "running",
+      });
     const adopted =
       (await adoptFailedCompletion(tx, job, input)) ||
       (await adoptNegativeSubjectLiftCompletion(tx, job, input)) ||
       (await adoptSuccessfulCompletion(tx, job, input));
     if (!adopted) return { adopted: false, orphanKey: null };
     const outcome = input.result.outcome;
-    const recorded = await tx
-      .update(imageProcessingAttempt)
-      .set({
+    await appendExecutionReceipt(tx, {
+      id: input.result.attemptId,
+      jobId: job.id,
+      patch: {
         state: outcome.status === "completed" ? "ready" : outcome.status,
-        completedAt: sql`now()`,
+        completedAt: new Date().toISOString(),
         result: outcome,
-        diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ runtime: input.runtime ?? null, device: input.result.diagnostics ?? null, validation: input.verifiedDerivative ? { outcome: "validated transparent PNG", ...input.verifiedDerivative } : input.outputCheck ? { outcome: "rejected output", ...input.outputCheck } : input.orphanOutputKey ? { outcome: "rejected output" } : null })}::jsonb`,
         error: outcome.status === "completed" ? null : outcome.reason,
-      })
-      .where(eq(imageProcessingAttempt.id, input.result.attemptId))
-      .returning({ id: imageProcessingAttempt.id });
-    // A verdict before an executor record exists still retains its fenced attempt evidence.
-    if (
-      !recorded.length &&
-      (outcome.status === "failed" || outcome.status === "skipped")
-    )
-      await insertImageProcessingAttempt(tx, {
-        jobId: job.id,
-        attemptId: input.result.attemptId,
-        state: outcome.status,
-        error: outcome.reason,
-        result: outcome,
-      });
+        diagnostics: {
+          runtime: input.runtime ?? null,
+          device: input.result.diagnostics ?? null,
+          validation: input.verifiedDerivative
+            ? {
+                outcome: "validated transparent PNG",
+                ...input.verifiedDerivative,
+              }
+            : (input.outputCheck ?? null),
+        },
+      },
+    });
     await recordImageProcessingEvent(tx, {
       jobId: job.id,
       eventKey: `${input.result.attemptId}:completed`,
@@ -2175,18 +2206,23 @@ async function deviceAssignment(
       state: imageProcessingJob.state,
       attemptId: imageProcessingJob.attemptId,
       leaseUntil: imageProcessingJob.leaseUntil,
-      executor: imageProcessingAttempt.executor,
-      assignedUserId: imageProcessingAttempt.assignedUserId,
+      executor: imageExecutionReceipts.executor,
+      assignedUserId: imageExecutionReceipts.assignedUserId,
     })
     .from(imageProcessingJob)
     .leftJoin(
-      imageProcessingAttempt,
+      imageExecutionReceipts,
       and(
-        eq(imageProcessingAttempt.id, input.attemptId),
-        eq(imageProcessingAttempt.jobId, imageProcessingJob.id),
+        eq(imageExecutionReceipts.id, input.attemptId),
+        eq(imageExecutionReceipts.jobId, imageProcessingJob.id),
       ),
     )
-    .where(eq(imageProcessingJob.id, input.jobId))
+    .where(
+      or(
+        eq(imageProcessingJob.id, input.jobId),
+        eq(imageProcessingJob.askId, input.jobId),
+      ),
+    )
     .limit(1)
     .for("update", { of: [imageProcessingJob] });
   if (!assignment) return { status: "obsolete" as const };
@@ -2258,7 +2294,10 @@ export async function renewAssignedImageProcessingLease(
       .innerJoin(imageProcessingJob, eq(imageProcessingJob.imageId, image.id))
       .where(
         and(
-          eq(imageProcessingJob.id, input.jobId),
+          or(
+            eq(imageProcessingJob.id, input.jobId),
+            eq(imageProcessingJob.askId, input.jobId),
+          ),
           notDeleted(image),
           eq(image.status, ImageStatus.enum.UPLOADED),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
@@ -2266,11 +2305,139 @@ export async function renewAssignedImageProcessingLease(
         ),
       );
     if (!source) return { ok: false as const, reason: "job_obsolete" as const };
-    const leaseUntil = new Date(Date.now() + DEVICE_LEASE_RENEWAL_MS);
+    const { renewExternalAsk } = await import("~/server/kernel/api");
+    const leaseUntil = await renewExternalAsk(
+      databaseForTransaction(tx),
+      { id: input.jobId, token: input.attemptId, executor: input.deviceId },
+      DEVICE_LEASE_RENEWAL_MS,
+    );
+    if (!leaseUntil)
+      return { ok: false as const, reason: "lease_lost" as const };
     await tx
       .update(imageProcessingJob)
       .set({ leaseUntil })
-      .where(eq(imageProcessingJob.id, input.jobId));
+      .where(
+        or(
+          eq(imageProcessingJob.id, input.jobId),
+          eq(imageProcessingJob.askId, input.jobId),
+        ),
+      );
     return { ok: true as const, leaseExpiresAt: leaseUntil.toISOString() };
   });
+}
+
+/** The device/cloud result crosses one kernel settlement boundary before becoming Image evidence. */
+export async function completeImageProcessingJob(
+  db: Database,
+  reported: CompletionInput,
+): Promise<{ adopted: boolean; orphanKey: string | null }> {
+  const q = getDb(db);
+  const rows = await q.execute<{
+    executor: string;
+    feature: string;
+    receiptId: string;
+    inputHash: string;
+    sourceImageId: string;
+  }>(
+    sql`SELECT executor,feature,"inputHash",input->${"input"}->>${"imageId"} AS "sourceImageId",input->${"input"}->>${"receiptId"} AS "receiptId" FROM "Ask" WHERE id=${reported.result.jobId}::uuid`,
+  );
+  const row = rows.rows[0];
+  if (!row?.executor) return { adopted: false, orphanKey: null };
+  const {
+    deviceImageAsk,
+    cloudImageAsk,
+    imageExecutionEvidence,
+    imageObservationEvidence,
+  } = await import("~/server/domains/image-processing/module");
+  const { settleExternalAsk } = await import("~/server/kernel/api");
+  const { productionKernel } = await import("~/server/kernel/kernel");
+  const { evidenceRow } = await import("~/server/kernel/api");
+  const usage = await q.execute<{
+    cost: number | null;
+    standard: number | null;
+  }>(
+    sql`SELECT round(coalesce(sum("chargedCost"),0)::numeric*1000000)::bigint AS cost,round(coalesce(sum("standardCost"),0)::numeric*1000000)::bigint AS standard FROM "AiUsage" WHERE "jobId"=${reported.result.attemptId} AND "jobKind"='image_processing_attempt'`,
+  );
+  const model = z.string().safeParse(reported.runtime?.model);
+  const settled = await settleExternalAsk(
+    db,
+    (await productionKernel()).registry,
+    row.feature === deviceImageAsk.feature ? deviceImageAsk : cloudImageAsk,
+    {
+      id: reported.result.jobId,
+      token: reported.result.attemptId,
+      executor: row.executor,
+    },
+    {
+      output: reported.result,
+      costMicros: Number(usage.rows[0]?.cost ?? 0),
+      raw: JSON.stringify({
+        standardCostMicros: Number(usage.rows[0]?.standard ?? 0),
+      }),
+      model: model.success ? model.data : null,
+    },
+    {
+      validate: async (tx, input) => {
+        const current = await getDb(tx).execute<{ id: string }>(
+          sql`SELECT j.id FROM "ImageProcessingJob" j JOIN "Image" i ON i.id=j."imageId" WHERE j.id=${row.receiptId}::uuid AND i.sha256=${input.sourceContentHash} AND j."sourceContentHash"=i.sha256 AND i.status=${ImageStatus.enum.UPLOADED} AND j."processorRevision"=${input.processorRevision} AND j.state=${"pending"} AND j."attemptId"=${reported.result.attemptId}::uuid AND j."leaseUntil" IS NOT NULL AND ${notDeleted("i")} FOR UPDATE OF j,i`,
+        );
+        return current.rows.length > 0;
+      },
+      evidence: async (tx, output) => {
+        const applied = await applyImageCompletion(tx, {
+          ...reported,
+          result: {
+            ...reported.result,
+            jobId: parseEntityId("imageJob", row.receiptId),
+          },
+        });
+        if (!applied.adopted) throw new JobSupersededError();
+        return [
+          evidenceRow(imageObservationEvidence, {
+            entityKind: "image",
+            entityId: row.sourceImageId,
+            inputHash: row.inputHash,
+            kind: "processed-image",
+            value: output,
+          }),
+          evidenceRow(imageExecutionEvidence, {
+            jobId: parseEntityId("imageJob", row.receiptId),
+            eventKey: `${output.attemptId}:answer`,
+            event: "image.answer",
+            details: output,
+          }),
+        ];
+      },
+    },
+  );
+  if (settled.status === "refused")
+    await recordImageProcessingEvent(db, {
+      jobId: parseEntityId("imageJob", row.receiptId),
+      eventKey: `${reported.result.attemptId}:rejected`,
+      event: "completion.rejected",
+      level: reported.result.outcome.status === "failed" ? "error" : "debug",
+      details: {
+        reason: "Claim or source revision no longer current",
+        result: reported.result.outcome,
+      },
+    });
+  if (settled.status === "settled") {
+    const [job] = await q
+      .select()
+      .from(imageProcessingJob)
+      .where(
+        eq(imageProcessingJob.id, parseEntityId("imageJob", row.receiptId)),
+      );
+    if (
+      job?.state === "pending" &&
+      reported.result.outcome.status === "failed"
+    ) {
+      await q
+        .update(imageProcessingJob)
+        .set({ askId: null })
+        .where(eq(imageProcessingJob.id, job.id));
+      await queueImageAsk(db, { ...job, askId: null });
+    }
+  }
+  return { adopted: settled.status === "settled", orphanKey: null };
 }

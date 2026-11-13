@@ -214,7 +214,7 @@ export async function approveDriftClass(
 /** Start a pass instance (a Run's work, retention, a one-off rebuild). */
 export async function startPass(
   db: Database,
-  pass: Pass,
+  pass: Pass | string,
   options?: {
     key?: string;
     cursor?: Json | null;
@@ -222,7 +222,11 @@ export async function startPass(
     availableAt?: Date;
   },
 ): Promise<void> {
-  return (await productionKernel()).startPass(db, pass, options);
+  const kernel = await productionKernel();
+  const registered =
+    typeof pass === "string" ? kernel.registry.passes.get(pass) : pass;
+  if (!registered) throw new Error(`Unknown pass ${pass}`);
+  return kernel.startPass(db, registered, options);
 }
 
 /** The batched list binding for one entity's page of records. */
@@ -280,3 +284,13 @@ export async function needsYou(
 export async function runWork(db: Database, runId: string): Promise<RunWork> {
   return (await productionKernel()).runWork(db, runId);
 }
+
+export {
+  queueAsk,
+  claimExternalAsk,
+  renewExternalAsk,
+  releaseExternalAsk,
+  cancelExternalAsk,
+  settleExternalAsk,
+  type ExternalAskClaim,
+} from "./ask";

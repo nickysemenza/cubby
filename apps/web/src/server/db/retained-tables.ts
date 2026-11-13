@@ -875,3 +875,17 @@ export const pgStatStatementsInfo = pgView("pg_stat_statements_info", {
 }).existing();
 
 export * from "./read-snapshot-schema";
+
+/** Source-revision image observations; the mutable Image remains the display projection. */
+export const imageEvidence = pgTable(
+  "ImageEvidence",
+  {
+    id: pkUuid(),
+    ...entityRef<"image">({ nullable: false }),
+    inputHash: text("inputHash").notNull().unique(),
+    kind: text("kind").notNull(),
+    value: jsonb("value").notNull(),
+    ...baseTimestamps(),
+  },
+  (table) => [entityRefFk("ImageEvidence_entity_fk", table)],
+);

@@ -1,7 +1,4 @@
-import {
-  imageMetadataJobKey,
-  locationAiJobKey,
-} from "@cubby/schemas/background-tasks";
+import { locationAiJobKey } from "@cubby/schemas/background-tasks";
 import { type RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
 import { and, asc, count, desc, eq, inArray, ne, type SQL } from "drizzle-orm";
@@ -118,7 +115,7 @@ export async function listSubjectJobs(
   const recordId = await resolveOrThrow(db, subject.kind, subject.id);
   const keys =
     subject.kind === "image"
-      ? [imageMetadataJobKey(recordId)]
+      ? []
       : [
           locationAiJobKey("location-ai.description.refresh", recordId),
           locationAiJobKey("location-ai.inventory.refresh", recordId),

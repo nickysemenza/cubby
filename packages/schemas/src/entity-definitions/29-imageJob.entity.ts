@@ -92,68 +92,6 @@ export const { definition, readSchemas } = defineEntityModel({
   key: "imageJob",
   edges: [
     defineEdge({
-      key: "ImageProcessingAttempt.jobId",
-      from: "row:ImageProcessingAttempt",
-      to: "imageJob",
-      cardinality: "one",
-      inverse: {
-        key: "imageJob.incoming.ImageProcessingAttempt.jobId",
-        from: "imageJob",
-        to: "row:ImageProcessingAttempt",
-        cardinality: "many",
-      },
-      storage: {
-        kind: "foreign-key",
-        column: "ImageProcessingAttempt.jobId",
-        constrained: true,
-      },
-      ownership: {
-        kind: "column",
-        column: "ImageProcessingAttempt.jobId",
-      },
-      fromEnd: {
-        role: "reference",
-        label: "target",
-        description: "The referenced record.",
-        liveness: {
-          kind: "must-target-live",
-        },
-      },
-      toEnd: {
-        role: "history",
-        label: "attempts",
-        description:
-          "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
-        },
-      },
-      policies: {
-        from: {
-          delete: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-          merge: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-        },
-        to: {
-          delete: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-          merge: {
-            kind: "unsupported",
-            reason: "This operation is not exposed for this endpoint.",
-          },
-        },
-      },
-    }),
-    defineEdge({
       key: "ImageProcessingEvent.jobId",
       from: "row:ImageProcessingEvent",
       to: "imageJob",
@@ -707,6 +645,7 @@ export const { definition, readSchemas } = defineEntityModel({
         reference: "imageProcessingSubmission",
       },
       { key: "attemptId", kind: "identifier" },
+      { key: "askId", kind: "identifier" },
       { key: "runtime", kind: "json" },
       { key: "result", kind: "json" },
     ],
