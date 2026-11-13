@@ -178,17 +178,18 @@ export async function migrateDatabase(
     throw new Error(
       `Refusing to migrate: database is already beyond --through=${options.through}. No migrations were applied.`,
     );
-  await ensureDbExtensions(db);
-  // SAFETY: the concrete node-postgres HKT is the engine's runtime database;
-  // its generic query-result signature loses the concrete driver's variance.
-  const migrationDb = db as Parameters<typeof migrate>[1];
-  // Upgrade the complete applied ledger before limiting execution to the boundary.
-  // Passing only applied files lets Drizzle backfill names without executing DDL.
-  await migrate(
-    migrations.filter((entry) => applied.has(entry.name)),
-    migrationDb,
-    { migrationsFolder },
-  );
+  // Bookkeeping and extension DDL must have the same bounded lock wait as SQL.
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
+    await ensureDbExtensions(tx);
+    // SAFETY: the native migrator accepts the node-postgres transaction HKT.
+    const migrationDb = tx as Parameters<typeof migrate>[1];
+    await migrate(
+      migrations.filter((entry) => applied.has(entry.name)),
+      migrationDb,
+      { migrationsFolder },
+    );
+  });
   const pending = migrations
     .slice(0, boundary + 1)
     .filter((entry) => !applied.has(entry.name));

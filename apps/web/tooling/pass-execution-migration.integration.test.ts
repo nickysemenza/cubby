@@ -219,6 +219,11 @@ it("does not revive a failed Run job that spent fewer than its attempt ceiling",
     await migrateDatabase(db, {
       through: "20261113054519_kernel_ownership_and_provenance",
     });
+    await client.query(`INSERT INTO "Job" (key,kind,input,"availableAt")
+      SELECT 'synthetic:discovery:'||n,'maintenance.purchase-discovery',jsonb_build_object('senderAfter',CASE WHEN n=13 THEN 'null'::jsonb ELSE jsonb_build_object('mailboxId','synthetic-mailbox','afterId',lpad(n::text,3,'0')) END), '2026-01-01'::timestamp+n*interval '1 second' FROM generate_series(1,13) n`);
+    await client.query(
+      `INSERT INTO "Job" (key,kind,input) VALUES ('synthetic:calendar:1','calendar-feed.mark-dirty','{"origin":"synthetic-origin","reason":"first"}'),('synthetic:calendar:2','calendar-feed.mark-dirty','{"origin":"synthetic-origin","reason":"second"}')`,
+    );
     const { seedCutoverPredecessor, cutoverId } =
       await import("./accepted-input-cutover.fixtures");
     await seedCutoverPredecessor(client);
@@ -232,6 +237,22 @@ it("does not revive a failed Run job that spent fewer than its attempt ceiling",
     await migrateDatabase(db, {
       through: "20261113065151_workflow_pass_intent",
     });
+    expect(
+      (
+        await client.query(
+          `SELECT cursor->'senderAfter' checkpoint,jsonb_array_length(cursor->'legacyJobs') receipts,to_char("availableAt",'YYYY-MM-DD HH24:MI:SS') available FROM "Pass" WHERE name='purchase.discovery'`,
+        )
+      ).rows,
+    ).toEqual([
+      { checkpoint: null, receipts: 13, available: "2026-01-01 00:00:01" },
+    ]);
+    expect(
+      (
+        await client.query(
+          `SELECT jsonb_array_length(cursor->'legacyJobs') receipts FROM "Pass" WHERE name='calendar.invalidate'`,
+        )
+      ).rows,
+    ).toEqual([{ receipts: 2 }]);
     expect(
       (
         await client.query(

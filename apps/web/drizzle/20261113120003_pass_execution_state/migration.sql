@@ -1,17 +1,20 @@
+LOCK TABLE "Job", "Run", "Pass", "DerivedRebuild" IN SHARE ROW EXCLUSIVE MODE;
+--> statement-breakpoint
 -- Run and RunStep retain member intent, discovery pages and step checkpoints.
 -- A live legacy lease delays its successor; the kernel never adopts its token.
 INSERT INTO "Pass" (name, key, "runId", cursor, attempts, "maxAttempts", "availableAt", "waitCause", "lastError", "cancelledAt", "createdAt", "updatedAt")
-SELECT 'run.execute', r.id::text, r.id,
+SELECT DISTINCT ON (r.id) 'run.execute', r.id::text, r.id,
   jsonb_build_object('runId', r.id::text, 'purpose', r.purpose, 'generation', j.generation, 'page', j.cursor),
-  CASE WHEN j.state = 'failed' THEN greatest(j.attempts, coalesce(j."maxAttempts", 3)) ELSE j.attempts END,
+  CASE WHEN j.state = 'failed' OR r.status IN ('failed','dispatch_failed') THEN greatest(j.attempts, coalesce(j."maxAttempts", 3)) ELSE j.attempts END,
   coalesce(j."maxAttempts", 3),
   greatest(j."availableAt", CASE WHEN j.state = 'running' THEN j."leaseExpiresAt" END),
   CASE WHEN j."waitReason" = 'ai_funding_window' THEN 'funding'
     WHEN j.state = 'running' AND j."leaseExpiresAt" > now() THEN 'in_flight' ELSE j."waitReason" END,
-  j.error, CASE WHEN j.state IN ('paused', 'cancelled') OR r.status IN ('cancelled', 'paused') AND r."failureCode" IS DISTINCT FROM 'mail_discovery_queued' THEN j."updatedAt" END,
+  j.error, CASE WHEN j.state IN ('paused', 'cancelled') OR r.status IN ('failed','dispatch_failed','completed','needs_review','cancelled', 'paused') AND r."failureCode" IS DISTINCT FROM 'mail_discovery_queued' THEN j."updatedAt" END,
   j."createdAt", j."updatedAt"
 FROM "Job" j JOIN "Run" r ON r.id = j."runId"
 WHERE j.kind = 'run.execute' AND r.purpose = 'mail_discovery' AND j.state <> 'completed'
+ORDER BY r.id,j.generation DESC,(j.state IN ('queued','running','retry_wait')) DESC,j."updatedAt" DESC,j.id
 ON CONFLICT (name, key) DO NOTHING;
 --> statement-breakpoint
 -- A Run may be waiting without a live Job after a delivered page or coordinator event.
@@ -78,6 +81,16 @@ SELECT 'derived.snapshot', 'default', jsonb_build_object(
   d.error, d."createdAt", coalesce(d."lastMovementAt", d."createdAt")
 FROM "DerivedRebuild" d
 ON CONFLICT (name, key) DO NOTHING;
+--> statement-breakpoint
+UPDATE "Pass" p SET cursor=coalesce(p.cursor,'{}'::jsonb)||jsonb_build_object('legacyJobs',
+ (SELECT jsonb_agg(to_jsonb(j) ORDER BY j.id) FROM "Job" j WHERE j."runId"=p."runId" AND j.kind=p.name AND j.state<>'completed'))
+WHERE p.name IN ('run.execute','purchase.dispatch') AND EXISTS(SELECT 1 FROM "Job" j WHERE j."runId"=p."runId" AND j.kind=p.name AND j.state<>'completed');
+--> statement-breakpoint
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM "Job" j WHERE j.kind IN ('run.execute','purchase.dispatch') AND j.state<>'completed' AND NOT EXISTS(
+ SELECT 1 FROM "Pass" p WHERE p.name=j.kind AND p."runId"=j."runId" AND EXISTS(SELECT 1 FROM jsonb_array_elements(p.cursor->'legacyJobs') r WHERE r=to_jsonb(j)))) THEN RAISE EXCEPTION 'Execution source preservation mismatch'; END IF;
+ IF (SELECT count(*) FROM "Job" WHERE kind IN ('run.execute','purchase.dispatch') AND state<>'completed')<>(SELECT coalesce(sum(jsonb_array_length(cursor->'legacyJobs')),0) FROM "Pass" WHERE name IN ('run.execute','purchase.dispatch') AND "runId" IN (SELECT "runId" FROM "Job" WHERE kind IN ('run.execute','purchase.dispatch') AND state<>'completed')) THEN RAISE EXCEPTION 'Execution source count preservation mismatch'; END IF;
+END $$;
 --> statement-breakpoint
 DELETE FROM "Job" WHERE kind IN ('run.execute', 'purchase.dispatch', 'run.funding-resume', 'maintenance.purchase-discovery', 'calendar-feed.mark-dirty');
 --> statement-breakpoint
