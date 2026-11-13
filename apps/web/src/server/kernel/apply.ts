@@ -108,6 +108,9 @@ export type ApplyOptions = {
   releaseBaseline: boolean;
 };
 
+/** Baseline-hidden computations of held scopes, by scope id. */
+type Proposals = ReadonlyMap<string, Computed>;
+
 const isConflict = (error: UnparsedError) =>
   error instanceof KernelConflict ||
   error instanceof LockedReadChangedError ||
@@ -221,6 +224,27 @@ async function updateRecords(q: Q, updates: Difference["updates"]) {
   }
 }
 
+/** A new record whose supplied values all cite current Decisions. */
+function citesDecisions(
+  computed: Computed,
+  insert: Difference["inserts"][number],
+): boolean {
+  const decisionIds = new Set(
+    computed.decisions.map((decision) => decision.id),
+  );
+  const record = computed.desired!.records.find(
+    (record) =>
+      record.target.name === insert.target.name &&
+      record.naturalKey === insert.naturalKey,
+  );
+  return (
+    !!record &&
+    Object.keys(record.values).every((field) =>
+      decisionIds.has(record.provenance[field] ?? ""),
+    )
+  );
+}
+
 function holdsBaseline(
   computed: Computed,
   proposed: Difference,
@@ -234,19 +258,7 @@ function holdsBaseline(
     desired.disagreements.length > 0 ||
     (!options.releaseBaseline &&
       computed.storedBindings.some((binding) => binding.basis === "baseline") &&
-      (proposed.inserts.some((insert) => {
-        const record = desired.records.find(
-          (record) =>
-            record.target.name === insert.target.name &&
-            record.naturalKey === insert.naturalKey,
-        );
-        return (
-          !record ||
-          Object.keys(record.values).some(
-            (field) => !decisionIds.has(record.provenance[field] ?? ""),
-          )
-        );
-      }) ||
+      (proposed.inserts.some((insert) => !citesDecisions(computed, insert)) ||
         proposed.removals.length > 0 ||
         proposed.merges.length > 0 ||
         proposed.rejections.length > 0 ||
@@ -275,7 +287,11 @@ function holdsBaseline(
   );
 }
 
-/** A disagreement holds automatic changes, while current field decisions still apply. */
+/**
+ * A held scope still applies what current Decisions supply: field updates
+ * citing them, new records whose values all cite them, and decision-basis
+ * bindings with the decision binding each replaces.
+ */
 function decisionUpdates(computed: Computed, proposed: Difference): Difference {
   const decisionIds = new Set(
     computed.decisions.map((decision) => decision.id),
@@ -303,7 +319,74 @@ function decisionUpdates(computed: Computed, proposed: Difference): Difference {
       row: { ...update.row, ...update.seen, ...set },
     });
   }
+  // A carried record never references a new record that stays held.
+  let inserts = proposed.inserts.filter((insert) =>
+    citesDecisions(computed, insert),
+  );
+  for (let size = -1; size !== inserts.length;) {
+    size = inserts.length;
+    const held = new Set(
+      proposed.inserts
+        .filter((insert) => !inserts.includes(insert))
+        .map((insert) => insert.id),
+    );
+    inserts = inserts.filter(
+      (insert) =>
+        !Object.values(insert.values).some(
+          (value) => typeof value === "string" && held.has(value),
+        ),
+    );
+  }
+  result.inserts = inserts;
+  const fact = (entry: { fact: { kind: string; id: string } }) =>
+    `${entry.fact.kind}:${entry.fact.id}`;
+  result.bindingsAdd = proposed.bindingsAdd.filter(
+    (binding) => binding.basis === "decision",
+  );
+  const replaced = new Set(result.bindingsAdd.map(fact));
+  result.bindingsRemove = proposed.bindingsRemove.filter(
+    (binding) => binding.basis === "decision" && replaced.has(fact(binding)),
+  );
   return result;
+}
+
+/** What remains of a proposed difference once a held scope applies its decision changes. */
+function withoutApplied(proposed: Difference, applied: Difference): Difference {
+  const binding = (entry: Difference["bindingsRemove"][number]) =>
+    `${entry.fact.kind}:${entry.fact.id}:${entry.basis}:${entry.eventKey}`;
+  const added = new Set(applied.bindingsAdd.map(binding));
+  const removed = new Set(applied.bindingsRemove.map(binding));
+  const inserted = new Set(
+    applied.inserts.map((entry) => `${entry.target.name}:${entry.naturalKey}`),
+  );
+  return {
+    ...proposed,
+    inserts: proposed.inserts.filter(
+      (entry) => !inserted.has(`${entry.target.name}:${entry.naturalKey}`),
+    ),
+    updates: proposed.updates.flatMap((entry) => {
+      const done = applied.updates.find(
+        (update) =>
+          update.target.name === entry.target.name && update.id === entry.id,
+      );
+      const columns = Object.keys(entry.set).filter(
+        (column) =>
+          !done ||
+          !Object.hasOwn(done.set, column) ||
+          canonicalJson(done.set[column]) !== canonicalJson(entry.set[column]),
+      );
+      if (!columns.length) return [];
+      const pick = (values: ColumnValues) =>
+        Object.fromEntries(columns.map((column) => [column, values[column]]));
+      return [{ ...entry, set: pick(entry.set), seen: pick(entry.seen) }];
+    }),
+    bindingsAdd: proposed.bindingsAdd.filter(
+      (entry) => !added.has(binding(entry)),
+    ),
+    bindingsRemove: proposed.bindingsRemove.filter(
+      (entry) => !removed.has(binding(entry)),
+    ),
+  };
 }
 
 type Plan = {
@@ -413,30 +496,32 @@ function indexChanges(
   computed: readonly Computed[],
   options: ApplyOptions,
 ): IndexChange[] {
-  return computed.flatMap((item) => {
-    if (!item.desired || item.error) return [];
-    const diff = difference(item, options);
-    return [
-      ...diff.inserts.map((entry) => ({
-        table: entry.target.name,
-        id: entry.id,
-        before: null,
-        after: { ...entry.values, id: entry.id },
-      })),
-      ...diff.updates.map((entry) => ({
-        table: entry.target.name,
-        id: entry.id,
-        before: { ...entry.row, ...entry.seen },
-        after: entry.row,
-      })),
-      ...diff.removals.map((entry) => ({
-        table: entry.target.name,
-        id: entry.id,
-        before: entry.row,
-        after: null,
-      })),
-    ];
-  });
+  return computed.flatMap((item) =>
+    !item.desired || item.error ? [] : changesOf(difference(item, options)),
+  );
+}
+
+function changesOf(diff: Difference): IndexChange[] {
+  return [
+    ...diff.inserts.map((entry) => ({
+      table: entry.target.name,
+      id: entry.id,
+      before: null,
+      after: { ...entry.values, id: entry.id },
+    })),
+    ...diff.updates.map((entry) => ({
+      table: entry.target.name,
+      id: entry.id,
+      before: { ...entry.row, ...entry.seen },
+      after: entry.row,
+    })),
+    ...diff.removals.map((entry) => ({
+      table: entry.target.name,
+      id: entry.id,
+      before: entry.row,
+      after: null,
+    })),
+  ];
 }
 async function relatedMemberships(
   db: Database,
@@ -595,6 +680,39 @@ async function batchAsks(q: Q, plans: readonly Plan[]) {
   return byScope;
 }
 
+/**
+ * An input-triggered run keeps accepted baselines. A scope it holds is
+ * proposed from the computation approval applies: baseline hidden, then
+ * released. Computed before the apply transaction opens.
+ */
+async function heldProposals(
+  db: Database,
+  registry: KernelRegistry,
+  reconciler: Reconciler,
+  computed: readonly Computed[],
+  options: ApplyOptions,
+): Promise<Proposals> {
+  if (options.releaseBaseline) return new Map();
+  const held = computed.filter((item) => {
+    if (item.error !== null || !item.desired) return false;
+    try {
+      return holdsBaseline(item, difference(item, options), options);
+    } catch {
+      // SILENT: the apply reports this scope's contract error itself.
+      return false;
+    }
+  });
+  if (!held.length) return new Map();
+  const hidden = await computeBatch(
+    repositoryQueries(db),
+    registry,
+    reconciler,
+    held.map((item) => item.scope),
+    { db, locked: false, hideBaseline: true },
+  );
+  return new Map(hidden.map((item) => [scopeId(item.scope), item]));
+}
+
 /** One coherent batch publishes against the same locked input snapshot. */
 async function applyBatch(
   tx: Database,
@@ -602,6 +720,7 @@ async function applyBatch(
   computed: readonly Computed[],
   claims: readonly ClaimedScope[],
   options: ApplyOptions,
+  proposals: Proposals,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
   const membershipsBefore = await relatedMemberships(
@@ -637,9 +756,12 @@ async function applyBatch(
     }
     const proposed = difference(item.computed, options);
     const heldBaseline = holdsBaseline(item.computed, proposed, options);
+    const diff = heldBaseline
+      ? decisionUpdates(item.computed, proposed)
+      : proposed;
     plans.push({
       ...item,
-      diff: heldBaseline ? decisionUpdates(item.computed, proposed) : proposed,
+      diff,
       heldBaseline,
       gaps: heldBaseline
         ? [
@@ -655,7 +777,20 @@ async function applyBatch(
           ]
         : [...item.computed.desired.gaps],
     });
-    if (heldBaseline) drifts.push({ computed: item.computed, diff: proposed });
+    // Approval releases the baseline itself; an input-triggered hold shows
+    // the baseline-released computation, or nothing it cannot apply. The
+    // decision changes this apply makes are not part of what is proposed.
+    const shown = options.releaseBaseline
+      ? item.computed
+      : proposals.get(scopeId(item.computed.scope));
+    if (heldBaseline && shown?.desired && shown.error === null)
+      drifts.push({
+        computed: shown,
+        diff: withoutApplied(
+          difference(shown, { releaseBaseline: true }),
+          diff,
+        ),
+      });
   }
   if (!plans.length) return outcomes;
   await withDatabaseOperationPhase("apply", () => recordDrifts(q, drifts));
@@ -901,10 +1036,7 @@ async function applyBatch(
   const membershipsAfter = await relatedMemberships(
     tx,
     registry,
-    indexChanges(
-      plans.filter((plan) => !plan.heldBaseline).map((plan) => plan.computed),
-      options,
-    ),
+    plans.flatMap((plan) => changesOf(plan.diff)),
   );
   const lockedMembershipKeys = new Set(
     membershipKeys(membershipsBefore, false),
@@ -1074,8 +1206,11 @@ async function applyOne(
   computed: Computed,
   claimed: ClaimedScope,
   options: ApplyOptions,
+  proposals: Proposals,
 ): Promise<Outcome> {
-  return (await applyBatch(tx, registry, [computed], [claimed], options))[0]!;
+  return (
+    await applyBatch(tx, registry, [computed], [claimed], options, proposals)
+  )[0]!;
 }
 
 /** Settle claimed scopes whose whole apply transaction failed. */
@@ -1235,9 +1370,12 @@ export async function applyComputed(
   reconciler: Reconciler,
   computed: readonly Computed[],
   claimed: readonly ClaimedScope[],
-  options: ApplyOptions & { mode: WriteMode },
+  options: ApplyOptions & { mode: WriteMode; proposals?: Proposals },
 ): Promise<Outcome[]> {
   if (!computed.length) return [];
+  const proposals =
+    options.proposals ??
+    (await heldProposals(db, registry, reconciler, computed, options));
   try {
     return await repositoryTransactionDatabase(db, async (tx) => {
       await enterWriteTransaction(repositoryQueries(tx), {
@@ -1246,7 +1384,7 @@ export async function applyComputed(
       });
       try {
         return await repositoryTransactionDatabase(tx, (nested) =>
-          applyBatch(nested, registry, computed, claimed, options),
+          applyBatch(nested, registry, computed, claimed, options, proposals),
         );
       } catch (error) {
         if (!isConflict(error)) throw error;
@@ -1269,7 +1407,7 @@ export async function applyComputed(
             reconciler,
             [computed[i]!],
             [claimed[i]!],
-            options,
+            { ...options, proposals },
           )),
         );
       return isolated;
@@ -1303,6 +1441,13 @@ async function runLocked(
     reconciler,
     [scope],
     { db, locked: false, hideBaseline: options.hideBaseline ?? false },
+  );
+  const proposals = await heldProposals(
+    db,
+    registry,
+    reconciler,
+    [prepared!],
+    options,
   );
   try {
     return await repositoryTransactionDatabase(db, async (tx) => {
@@ -1355,6 +1500,7 @@ async function runLocked(
         computed!,
         { ...claimed, seq: Number(current.rows[0]?.seq ?? claimed.seq) },
         options,
+        proposals,
       );
     });
   } catch (error) {

@@ -414,7 +414,7 @@ describe("evidence-facts kernel", () => {
     ).toHaveLength(1);
   });
 
-  it("keeps accepted baseline records and reports drift while applying a member's field decision", async () => {
+  it("keeps accepted baseline records and reports drift while applying a member's decisions", async () => {
     let disagreement: string | null = null;
     const { kernel } = kernelWith({
       linkedDecision: true,
@@ -434,6 +434,9 @@ describe("evidence-facts kernel", () => {
     await repositoryQueries(ctx.db).execute(
       sql`UPDATE "ScopeState" SET version=0 WHERE "scopeKind"=${PURCHASE_SCOPE} AND "scopeKey"=${"ORD-BASELINE"}`,
     );
+    // A pending automatic correction holds the baseline while the member decides.
+    await kernel.append(ctx.db, [charge("ORD-BASELINE", 1300)]);
+    await settle(kernel);
     await kernel.decide(ctx.db, ctx.actor, [
       {
         channel: "assignment",
@@ -451,13 +454,22 @@ describe("evidence-facts kernel", () => {
       },
     ]);
     await settle(kernel);
-    expect((await purchases(ctx.db))[0]?.merchant).toBe("Member seller");
+    expect((await purchases(ctx.db))[0]).toMatchObject({
+      amountMinor: 1250,
+      merchant: "Member seller",
+    });
     expect(
       await repositoryQueries(ctx.db).select().from(fixtureExpense),
     ).toHaveLength(1);
     expect(
       await repositoryQueries(ctx.db).select().from(fixtureAllocation),
     ).toHaveLength(1);
+    expect(
+      await repositoryQueries(ctx.db)
+        .select({ basis: evidenceBinding.basis })
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.basis, "decision")),
+    ).toHaveLength(2);
     disagreement = "accepted allocation slices do not conserve the movement";
     await kernel.emitWrites(ctx.db, {
       table: fixtureCharge,
@@ -500,9 +512,23 @@ describe("evidence-facts kernel", () => {
       merchant: "Member seller during disagreement",
     });
     const [proposal] = await repositoryQueries(ctx.db).select().from(drift);
+    // The input-triggered proposal shows the baseline released, as approval applies it.
     expect(proposal).toMatchObject({
       scopeKind: PURCHASE_SCOPE,
       scopeKey: "ORD-BASELINE",
+      difference: {
+        bindings: {
+          remove: expect.arrayContaining([
+            expect.objectContaining({ basis: "baseline" }),
+          ]),
+        },
+        updates: expect.arrayContaining([
+          expect.objectContaining({
+            table: PURCHASE_TABLE,
+            to: { amountMinor: 1400 },
+          }),
+        ]),
+      },
     });
     expect(
       (
@@ -512,6 +538,21 @@ describe("evidence-facts kernel", () => {
         })
       ).drift,
     ).not.toBeNull();
+    expect(
+      await kernel.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind: PURCHASE_SCOPE, key: "ORD-BASELINE" },
+        proposal!.proposalHash,
+      ),
+    ).toBe("applied");
+    expect((await purchases(ctx.db))[0]?.amountMinor).toBe(1400);
+    expect(
+      await repositoryQueries(ctx.db)
+        .select()
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.basis, "baseline")),
+    ).toEqual([]);
   });
 
   it("dirties a negative predicate read when an authored row starts matching it", async () => {
@@ -2417,6 +2458,42 @@ describe("evidence-facts kernel", () => {
     ).resolves.toBe("applied");
     const [approved] = await purchases(ctx.db);
     expect(approved?.merchant).toBe("SYNTHETIC GROCER");
+
+    // A proposal stored under older rules is replaced, never applied.
+    const { kernel: later } = kernelWith({ purchaseVersion: 3 });
+    const [older] = proposals.slice(1);
+    await expect(
+      later.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind: PURCHASE_SCOPE, key: older!.scopeKey },
+        older!.proposalHash,
+      ),
+    ).resolves.toBe("stale");
+    const [current] = await repositoryQueries(ctx.db)
+      .select()
+      .from(drift)
+      .where(eq(drift.scopeKey, older!.scopeKey));
+    expect(current?.rules).toBe(
+      later.registry.reconcilers.get(PURCHASE_SCOPE)!.rules,
+    );
+    expect(current?.proposalHash).not.toBe(older!.proposalHash);
+    expect(
+      (await purchases(ctx.db)).find((row) => row.orderRef === older!.scopeKey)
+        ?.merchant,
+    ).toBe("Synthetic Grocer");
+    await expect(
+      later.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind: PURCHASE_SCOPE, key: older!.scopeKey },
+        current!.proposalHash,
+      ),
+    ).resolves.toBe("applied");
+    expect(
+      (await purchases(ctx.db)).find((row) => row.orderRef === older!.scopeKey)
+        ?.merchant,
+    ).toBe("synthetic grocer");
   });
 
   it("prices a Drift proposal's asks from answer history and marks a missing history unknown", async () => {

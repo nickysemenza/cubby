@@ -153,7 +153,10 @@ export type FixtureHooks = {
   afterLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
   /** The categorize producer; counts calls in tests. */
   categorize?: (merchant: string) => Promise<string>;
-  /** The purchase reconciler's version; version 2 upper-cases receipt merchants. */
+  /**
+   * The purchase reconciler's version; version 2 upper-cases receipt
+   * merchants and version 3 lower-cases them.
+   */
   purchaseVersion?: number;
 };
 
@@ -306,9 +309,11 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         ? assigned.kind === "set"
           ? String(assigned.value)
           : null
-        : version >= 2 && observed
-          ? observed.toUpperCase()
-          : observed;
+        : observed && version >= 3
+          ? observed.toLowerCase()
+          : observed && version >= 2
+            ? observed.toUpperCase()
+            : observed;
       const purchaseId = c.record(
         purchaseWrites,
         "event",
@@ -323,6 +328,14 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       const linked = id
         ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
         : null;
+      // A member's link also binds the order's charges on the decision basis.
+      if (hooks.linkedDecision && linked?.value === true)
+        for (const own of input.charges)
+          c.bind(
+            { kind: chargeEvidence.kind, id: own.id },
+            input.orderRef,
+            "decision",
+          );
       if (hooks.linked || (hooks.linkedDecision && linked?.value === true)) {
         const provenance = (target: typeof expenseWrites, fields: string[]) =>
           linked &&

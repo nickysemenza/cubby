@@ -196,6 +196,21 @@ async function proposeOrAdvance(
 const COST_HISTORY = 100;
 
 /**
+ * What a member approves: the exact difference with the baseline released,
+ * the disagreements and the ask count. Storage and approval derive the hash
+ * here so an approval applies only the difference it was shown.
+ */
+async function proposalOf(computed: Computed, diff: Difference) {
+  const proposal = {
+    difference: Object.assign({}, describeDifference(diff), {
+      disagreements: computed.desired?.disagreements ?? [],
+    }),
+    askCount: computed.missing.length,
+  };
+  return { ...proposal, proposalHash: await hashCanonical(proposal) };
+}
+
+/**
  * Store exact proposals in one statement; no producer calls are owed. Each
  * ask a proposal would file costs the median of the last {@link COST_HISTORY}
  * priced Answers for its feature and requested tier, else the ask kind's
@@ -210,18 +225,12 @@ export async function recordDrifts(
   if (!proposals.length) return;
   const rows = await Promise.all(
     proposals.map(async ({ computed, diff }) => {
-      const proposal = {
-        difference: Object.assign({}, describeDifference(diff), {
-          disagreements: computed.desired?.disagreements ?? [],
-        }),
-        askCount: computed.missing.length,
-      };
+      const proposal = await proposalOf(computed, diff);
       return {
         scopeKind: computed.scope.kind,
         scopeKey: computed.scope.key,
         version: computed.reconciler.version,
         rules: computed.reconciler.rules,
-        proposalHash: await hashCanonical(proposal),
         inputsHash: computed.inputsHash,
         ...proposal,
         asks: computed.missing.map((missing) => ({
@@ -377,9 +386,11 @@ async function claimForApproval(
 export type ApprovalOutcome = "applied" | "stale" | "busy" | "missing";
 
 /**
- * Approve one scope's proposal by its hash. A proposal whose inputs moved is
- * recomputed and must be approved again; a matching one applies the
- * difference without the baseline and files the asks it counted.
+ * Approve one scope's proposal by its hash. Approval recomputes the scope
+ * under the current rules with the baseline released; a proposal stored under
+ * other rules, or whose re-derived proposal hash moved, is replaced and must
+ * be approved again. A matching one applies exactly that difference under the
+ * input fence and files the asks it counted.
  */
 export async function approveDrift(
   db: Database,
@@ -418,9 +429,16 @@ export async function approveDrift(
     hideBaseline: true,
   });
   if (
-    computed!.inputsHash !== proposal.inputsHash ||
-    !!computed!.desired?.disagreements.length ||
-    computed!.error !== null
+    proposal.rules !== reconciler.rules ||
+    computed!.error !== null ||
+    !computed!.desired ||
+    !!computed!.desired.disagreements.length ||
+    (
+      await proposalOf(
+        computed!,
+        difference(computed!, { releaseBaseline: true }),
+      )
+    ).proposalHash !== proposalHash
   ) {
     await releaseClaim(
       q,
