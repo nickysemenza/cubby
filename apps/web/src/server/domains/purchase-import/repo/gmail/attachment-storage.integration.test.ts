@@ -207,7 +207,7 @@ describe("Gmail ingestion and attachment storage", () => {
     expect(await attachments()).toHaveLength(1);
   });
 
-  it("invalidates created and changed metadata but leaves replayed Email unchanged", async () => {
+  it("keeps first observations while refreshing mutable search metadata", async () => {
     const party = await seedParty();
     const { mail } = normalizeMessage(
       "synthetic-google-subject",
@@ -232,17 +232,14 @@ describe("Gmail ingestion and attachment storage", () => {
 
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
+      checksum: "b".repeat(64),
       mail: {
         ...mail,
         headers: { ...mail.headers, subject: "Synthetic changed receipt" },
       },
     });
     const changedEmail = await readEmail(ctx.db, identity);
-    expect(changedEmail).toEqual({
-      ...originalEmail,
-      subject: "Synthetic changed receipt",
-      updatedAt: expect.any(Date),
-    });
+    expect(changedEmail).toEqual(originalEmail);
     await saveMailboxMetadata(ctx.db, {
       ...metadata,
       mail: {
