@@ -119,6 +119,11 @@ export interface SuggestFieldsPorts {
   recordId?: string;
   /** False replays a question without household precedents. */
   precedents?: boolean;
+  /**
+   * The precedent lines a kernel Ask declared in its input; the prompt reads
+   * them instead of loading its own, so the answer is keyed by them.
+   */
+  precedentText?: string | null;
   /** Pure model evaluations and isolated unit mechanics may bypass correction lookup. */
   /** One accounting group per operation within a finite list batch. */
   usageFor?: (operation: string) => AiSelectionUsage;
@@ -1291,9 +1296,13 @@ export async function suggestFields(
         );
       // Saved records learn from what people set on similar records.
       const precedents =
-        ports?.recordId && ports.precedents !== false && spec.kind !== "prune"
-          ? await fieldPrecedents(db, input.entity, target, ports.recordId)
-          : null;
+        ports?.precedentText !== undefined
+          ? ports.precedentText
+          : ports?.recordId &&
+              ports.precedents !== false &&
+              spec.kind !== "prune"
+            ? await fieldPrecedents(db, input.entity, target, ports.recordId)
+            : null;
       const { suggestion, rawValue, outcome } = await resolve();
       if (
         suggestion &&

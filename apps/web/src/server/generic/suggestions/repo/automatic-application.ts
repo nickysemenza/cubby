@@ -167,11 +167,6 @@ function automaticContext(
       runId: selection.row.runId
         ? runEntityId.parse(selection.row.runId)
         : null,
-      // Only Cubby's own field values are revisable; statement booking is
-      // import evidence and stays protected.
-      ...(selection.policy.authority && {
-        authority: selection.policy.authority,
-      }),
     },
   };
 }
@@ -204,14 +199,10 @@ export async function applyAutomaticRules(
   // Built on first application so a pass with nothing to apply builds nothing.
   let base: EntityKernelContext | undefined;
   for (const selection of selections.values()) {
-    const { row, policy, review } = selection;
+    const { row, review } = selection;
     try {
       base ??= baseContext(db, options.context);
       const context = automaticContext(db, base, selection);
-      // Ineligible or stale field work stays reviewable/refreshable without
-      // reporting an expected policy hold as an application error every pass.
-      if (policy.canApply && !(await policy.canApply(db, context, row.id)))
-        continue;
       await reviewSuggestion(
         db,
         context,
@@ -290,10 +281,7 @@ export async function applyAutomaticRulePage<T>(
   const base = baseContext(db, options.context);
   const batchable = selections.filter(
     (selection) =>
-      selection.name === first?.name &&
-      selection.row.runId === first.row.runId &&
-      !selection.policy.canApply &&
-      !selection.policy.authority,
+      selection.name === first?.name && selection.row.runId === first.row.runId,
   );
   const page = await reviewAutomaticPage(
     db,

@@ -8,7 +8,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { fieldSuggestSpecFor } from "~/server/ai/field-suggest/registry";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { getDb } from "~/server/db/helpers";
-import { suggestionTable, financialAccount } from "~/server/db/schema";
+import { financialAccount } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   kernelCtx,
@@ -81,45 +81,6 @@ describe("Account scalar suggestion acceptance", () => {
           network: { result: { decision: { outcome: { kind: "empty" } } } },
         },
       },
-    });
-  });
-
-  it("refuses automatic acceptance of a declared review-required field at the shared sink", async () => {
-    const account = await createRepoEntity(ctx, "financialAccount", {
-      identity: { kind: "credit_card", network: null },
-    });
-    const pending = await seedPending(ctx, {
-      entity: "financialAccount",
-      recordId: await recordId(ctx.db, account.output.id, "financialAccount"),
-      field: "network",
-      currentValue: null,
-      suggestedValue: "visa",
-      kind: "addition",
-    });
-    // Confident enough that the review-required declaration alone refuses it.
-    await getDb(ctx.db)
-      .update(suggestionTable)
-      .set({ confidence: 0.99 })
-      .where(eq(suggestionTable.id, pending.id));
-    await expect(
-      acceptSuggestion(
-        ctx.db,
-        kernelCtx(ctx),
-        { id: pending.id },
-        { mode: "automatic", confidence: 0.99 },
-      ),
-    ).rejects.toThrow(
-      "Field financialAccount.network is not eligible for automatic fill",
-    );
-    expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
-    const [stored] = await getDb(ctx.db)
-      .select({ identity: financialAccount.identity })
-      .from(financialAccount)
-      .where(eq(financialAccount.shortcode, account.output.id));
-    expect(stored?.identity).toEqual({
-      kind: "credit_card",
-
-      network: null,
     });
   });
 

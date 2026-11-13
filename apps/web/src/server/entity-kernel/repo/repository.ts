@@ -57,9 +57,16 @@ import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { type output as ZodOutput, type ZodSchema, type ZodType, z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
+import {
+  holdFieldsValues,
+  settleFieldEdits,
+  splitFieldsValues,
+} from "~/server/ai/fields/repo/field-decisions";
+import { fieldsPlanOf } from "~/server/ai/fields/repo/plan";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import {
+  databaseForTransaction,
   notDeleted,
   updateLiveAndReturn,
   withTransactionOn,
@@ -254,10 +261,16 @@ export function createEntityReader<
         actor: ActorContext,
       ) =>
         withTransactionOn(db, async (tx) => {
+          // A created record's `fields` columns are the creator's decisions.
+          const fields = holdFieldsValues(
+            config.entity,
+            await values(tx, data),
+            "create",
+          );
           const row = await insertWithShortcode(
             tx,
             config.entity,
-            await values(tx, data),
+            fields.values,
           );
           const identity = z
             .object({ id: z.string(), shortcode: z.string() })
@@ -270,6 +283,7 @@ export function createEntityReader<
               action: "create",
             });
           }
+          await fields.settle(tx, actor, entityId);
           return readOutput(
             { entityId, shortcode: identity.shortcode },
             async () => publish(await readCreated(tx, entityId), entityId),
@@ -388,7 +402,12 @@ export function createEntityCrud<
       const relationsBefore: RelationSnapshot<TRelKey> =
         (await config.relations?.read(tx, id, data)) ?? {};
       await config.relations?.write?.(tx, id, data);
-      const values = config.toUpdate(data, before);
+      // `fields` columns are decisions the kernel applies; the rest is written here.
+      const fieldsPlan = fieldsPlanOf(config.entity);
+      const { authored: values, owned } = splitFieldsValues(
+        fieldsPlan,
+        config.toUpdate(data, before),
+      );
       const updated = Object.values(values).some((value) => value !== undefined)
         ? await updateLiveAndReturn(tx, config.table, values, id)
         : before;
@@ -426,7 +445,24 @@ export function createEntityCrud<
             action: "update",
             changes,
           });
-      }
+        await settleFieldEdits(
+          databaseForTransaction(tx),
+          actor,
+          fieldsPlan,
+          id,
+          before,
+          owned,
+          changes,
+        );
+      } else
+        await settleFieldEdits(
+          databaseForTransaction(tx),
+          actor,
+          fieldsPlan,
+          id,
+          before,
+          owned,
+        );
       // Re-read on `tx`: the new state is uncommitted, so another pool
       // connection would neither see it nor be free to.
       return readOutput

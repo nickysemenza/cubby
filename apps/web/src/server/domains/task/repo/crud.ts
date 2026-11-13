@@ -22,6 +22,7 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { type ListReadRow } from "~/entity/model/list-read-fields";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -293,29 +294,37 @@ const createTaskWithOutput = async <TOutput>(
       await assertSubjectProductLive(tx, subjectProductId);
     }
 
-    const created = await insertWithShortcode(tx, "task", {
-      name: data.name,
-      assigneeId:
-        data.assigneeMode === "inherit"
-          ? null
-          : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
-      assigneeMode:
-        data.assigneeMode ??
-        (data.assigneeId === undefined ? "inherit" : "explicit"),
-      status: data.status,
-      completedOn: data.completedOn,
-      projectId,
-      projectMode:
-        data.projectMode ?? (data.projectId === null ? "inherit" : "explicit"),
-      subjectProductId,
-      subjectProductMode:
-        data.subjectProductMode ??
-        (data.subjectProductId === null ? "inherit" : "explicit"),
-      parentTaskId,
-      dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
-      dueEndDate: data.due === undefined ? undefined : (data.due?.end ?? null),
-      trade: data.trade,
-    });
+    const fields = holdFieldsValues(
+      "task",
+      {
+        name: data.name,
+        assigneeId:
+          data.assigneeMode === "inherit"
+            ? null
+            : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
+        assigneeMode:
+          data.assigneeMode ??
+          (data.assigneeId === undefined ? "inherit" : "explicit"),
+        status: data.status,
+        completedOn: data.completedOn,
+        projectId,
+        projectMode:
+          data.projectMode ??
+          (data.projectId === null ? "inherit" : "explicit"),
+        subjectProductId,
+        subjectProductMode:
+          data.subjectProductMode ??
+          (data.subjectProductId === null ? "inherit" : "explicit"),
+        parentTaskId,
+        dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
+        dueEndDate:
+          data.due === undefined ? undefined : (data.due?.end ?? null),
+        trade: data.trade,
+      },
+      "create",
+    );
+    const created = await insertWithShortcode(tx, "task", fields.values);
+    await fields.settle(tx, actor, created.id);
     await assertEffectiveTaskTrade(tx, created.id);
     if (data.pendingImageIds && data.pendingImageIds.length > 0) {
       const resolvedImageIds = await resolveAllPresent(
@@ -524,16 +533,21 @@ const updateTaskWithOutput = async <TOutput>(
       );
     }
 
-    const updateValues = buildPartialUpdateValues({
-      name: data.name,
-      status: data.status,
-      completedOn: data.completedOn,
-      ...assignments,
-      dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
-      dueEndDate: data.due === undefined ? undefined : (data.due?.end ?? null),
-      sortOrder: data.sortOrder,
-    });
-    const updated = await updateLiveAndReturn(tx, task, updateValues, id);
+    const fields = holdFieldsValues(
+      "task",
+      buildPartialUpdateValues({
+        name: data.name,
+        status: data.status,
+        completedOn: data.completedOn,
+        ...assignments,
+        dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
+        dueEndDate:
+          data.due === undefined ? undefined : (data.due?.end ?? null),
+        sortOrder: data.sortOrder,
+      }),
+    );
+    const updated = await updateLiveAndReturn(tx, task, fields.values, id);
+    await fields.settle(tx, actor, id, before);
     if (
       [
         "trade",

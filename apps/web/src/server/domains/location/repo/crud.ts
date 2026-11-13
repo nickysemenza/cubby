@@ -32,6 +32,7 @@ import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
@@ -304,18 +305,28 @@ const createLocationTx = defineMutationWriter({
         : null;
       const type = data.type ?? (productId ? "furniture" : raiseMissingType());
       assertClassificationPolicies("location", { type, productId });
-      const newLocation = await insertWithShortcode(tx, "location", {
-        name: data.name,
-        aliases: data.aliases,
-        tags: data.tags ?? [],
-        // `type` is the physical form factor; `productId` is identity. A
-        // product-linked location can still carry a type (e.g. a raised bed
-        // that is also a specific product); without one it is `furniture`.
-        type,
-        notes: data.notes ?? null,
-        productId,
-        parentId,
-      });
+      const fields = holdFieldsValues(
+        "location",
+        {
+          name: data.name,
+          aliases: data.aliases,
+          tags: data.tags ?? [],
+          // `type` is the physical form factor; `productId` is identity. A
+          // product-linked location can still carry a type (e.g. a raised bed
+          // that is also a specific product); without one it is `furniture`.
+          type,
+          notes: data.notes ?? null,
+          productId,
+          parentId,
+        },
+        "create",
+      );
+      const newLocation = await insertWithShortcode(
+        tx,
+        "location",
+        fields.values,
+      );
+      await fields.settle(tx, actor, newLocation.id);
 
       if (data.pendingImageIds && data.pendingImageIds.length > 0) {
         const resolvedImageIds = await resolveAllPresent(
@@ -511,17 +522,26 @@ export const updateLocation = defineMutationWriter({
         productId: nextProductId,
       });
 
-      const updateValues = buildPartialUpdateValues({
-        name: data.name,
-        aliases: data.aliases,
-        tags: data.tags,
-        type: data.type,
-        notes: data.notes,
-        productId,
-        parentId,
-      });
+      const fields = holdFieldsValues(
+        "location",
+        buildPartialUpdateValues({
+          name: data.name,
+          aliases: data.aliases,
+          tags: data.tags,
+          type: data.type,
+          notes: data.notes,
+          productId,
+          parentId,
+        }),
+      );
 
-      const updated = await updateLiveAndReturn(tx, location, updateValues, id);
+      const updated = await updateLiveAndReturn(
+        tx,
+        location,
+        fields.values,
+        id,
+      );
+      await fields.settle(tx, actor, id, before ?? {});
 
       // Reorder existing images (first = cover) before appending new ones so
       // additions always land after the reordered set. `data.imageOrder` /

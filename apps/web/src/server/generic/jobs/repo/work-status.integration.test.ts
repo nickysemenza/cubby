@@ -2,17 +2,14 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { AI_DISCOVERY_SETTINGS_ID } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   DERIVED_REBUILD_KEY,
   derivedRebuild,
 } from "~/server/db/derived-rebuild-schema";
 import { getDb } from "~/server/db/helpers";
-import { appSettings } from "~/server/db/retained-tables";
 import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
 import {
@@ -468,28 +465,5 @@ describe("background work status", () => {
         count: 3,
       }),
     ]);
-  });
-
-  it("dates a never-run policy pass from its cursor's last write", async () => {
-    const now = new Date();
-    await getDb(ctx.db)
-      .insert(appSettings)
-      .values({
-        id: AI_DISCOVERY_SETTINGS_ID,
-        metadata: { fieldDone: false },
-        updatedAt: minutesAgo(40, now),
-      });
-
-    const status = await readBackgroundWorkStatus(ctx.db, now, [
-      { name: fieldAutomationDrain.name, due: fieldAutomationDrain.due()! },
-    ]);
-
-    expect(
-      status.stuck.find(
-        (entry) => entry.key === "drain:field-automation:policy",
-      ),
-    ).toMatchObject({
-      body: expect.stringContaining("Its work has waited 40 minutes."),
-    });
   });
 });

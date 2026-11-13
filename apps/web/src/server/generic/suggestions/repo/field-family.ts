@@ -9,9 +9,8 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
-import { matchFieldRules } from "~/server/generic/suggestions/repo/automatic-policy";
+import { cubbyHeldFields } from "~/server/ai/fields/repo/field-decisions";
 import { fieldAfterApply } from "~/server/generic/suggestions/repo/field-after-apply";
-import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
   stamps,
@@ -30,7 +29,6 @@ import {
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
-  canAutomaticallyFillField,
   fieldSuggestionKeys,
   readFieldSuggestions,
   suggestionCounts,
@@ -45,23 +43,6 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   supportsDraft: true,
   fieldHistory: true,
   afterApply: fieldAfterApply,
-  automatic: {
-    requiresStamp: false,
-    authority: "automatic",
-    canApply: (db, context, id) => canAutomaticallyFillField(db, context, id),
-    match: (row) => {
-      const entity = shortcodeEntity.safeParse(row.entity);
-      return entity.success
-        ? matchFieldRules({
-            entity: entity.data,
-            field: row.field,
-            kind: row.kind,
-            confidence: row.confidence,
-            model: row.model,
-          })
-        : [];
-    },
-  },
   keys: async (db, query) => {
     const { filters } = query;
     const rows = await fieldSuggestionKeys(db, {
@@ -217,17 +198,9 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   actionable: sql`true`,
   summarize: (value: unknown) =>
     `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
-  apply: async (db, context, state, input, automatic) => {
-    // The automatic mode keeps acceptSuggestion's apply-policy refusal.
+  apply: async (db, context, state, input) => {
     if (input.verdict === "correct" && !input.correction.present)
-      await acceptSuggestion(
-        db,
-        context,
-        { id: state.id },
-        automatic
-          ? { mode: "automatic", confidence: state.confidence }
-          : undefined,
-      );
+      await acceptSuggestion(db, context, { id: state.id });
     else if (input.correction.present)
       await applyFieldCorrection(db, context, {
         id: state.id,

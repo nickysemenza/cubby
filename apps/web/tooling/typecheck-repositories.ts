@@ -37,7 +37,6 @@ export const repositoryOwners = [
   "src/server/generated/entity-field-envelope-projectors.gen.ts",
   "src/server/domains/purchase/repo/purchase-evidence-policy.ts",
   "src/server/generic/data-quality/repo/presentation.ts",
-  "src/server/generic/suggestions/repo/field-authority.ts",
 
   "src/server/generic/suggestions/repo/pending-admission.ts",
   "src/server/domains/transaction-import/repo/statement-charge.ts",
