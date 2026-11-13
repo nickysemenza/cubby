@@ -6,13 +6,17 @@
  * In the same transaction it records the rows' fact keys and dirties every
  * scope they discover or that read one of their keys.
  */
-import { getTableColumns } from "drizzle-orm";
+import { generateShortcode } from "@cubby/shared";
+import { getTableColumns, getTableName, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   repositoryQueries,
+  repositorySavepoint,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { isEntityShortcodeCollision } from "~/server/entity-kernel/repo/entity-identity-writer";
 
 import type {
   ColumnValues,
@@ -24,6 +28,73 @@ import type {
 } from "./define";
 import { insertFactKeys, markDirty } from "./dirty";
 import type { KernelRegistry } from "./registry";
+
+/** A losing source-identity race must discard its unused Entity reservation. */
+async function insertEvidence(
+  db: Database,
+  evidence: EvidenceKind,
+  values: ColumnValues[],
+): Promise<ColumnValues[]> {
+  if (!evidence.entity) {
+    // SAFETY: evidenceRow checked the insert model for this same table.
+    return (await repositoryQueries(db)
+      .insert(evidence.table)
+      .values(values as never[])
+      .onConflictDoNothing()
+      .returning()) as ColumnValues[];
+  }
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      return await repositorySavepoint(db, async (q) => {
+        const entity = evidence.entity;
+        const rows = entity
+          ? values.map((row) => ({
+              ...row,
+              id: row.id ?? crypto.randomUUID(),
+              shortcode: row.shortcode ?? generateShortcode(entity),
+            }))
+          : values;
+        const reserved = entity
+          ? await q
+              .insert(entityIdentity)
+              .values(
+                rows.map((row) => ({
+                  id: String(row.id),
+                  shortcode: String(row.shortcode),
+                  kind: entity,
+                })),
+              )
+              .onConflictDoNothing({ target: entityIdentity.id })
+              .returning({ id: entityIdentity.id })
+          : [];
+        // SAFETY: `evidenceRow` typed these values as this table's insert model;
+        // returning() selects that same table's rows.
+        const inserted = (await q
+          .insert(evidence.table)
+          .values(rows as never[])
+          .onConflictDoNothing()
+          .returning()) as ColumnValues[];
+        const accepted = new Set(inserted.map((row) => String(row.id)));
+        const unused = reserved
+          .filter((row) => !accepted.has(row.id))
+          .map((row) => row.id);
+        if (unused.length)
+          await q
+            .delete(entityIdentity)
+            .where(inArray(entityIdentity.id, unused));
+        return inserted;
+      });
+    } catch (error) {
+      if (
+        !evidence.entity ||
+        !isEntityShortcodeCollision(error, getTableName(evidence.table)) ||
+        attempt === 9
+      )
+        throw error;
+    }
+  }
+  throw new Error("Failed to reserve evidence identities");
+}
 
 export async function append(
   db: Database,
@@ -55,14 +126,7 @@ export async function append(
           ? { ...value, runId: options.runId }
           : value,
       );
-      // A duplicate observation inserts nothing: the first writer's row stands.
-      // SAFETY: `evidenceRow` typed each value as this table's insert model,
-      // and `returning()` yields rows of the same table.
-      const inserted = (await q
-        .insert(evidence.table)
-        .values(insertValues as never[])
-        .onConflictDoNothing()
-        .returning()) as ColumnValues[];
+      const inserted = await insertEvidence(tx, evidence, insertValues);
       for (const row of inserted) {
         // SAFETY: returned rows are this evidence table's select model.
         const typed = row as Parameters<EvidenceKind["keys"]>[0];

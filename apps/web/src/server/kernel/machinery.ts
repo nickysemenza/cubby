@@ -310,6 +310,7 @@ export async function machinery(
             input.fact.id,
           ]);
       const evidenceRows = new Map<string, ColumnValues>();
+      const evidenceOwners = new Map<string, string | null>();
       await Promise.all(
         [...evidenceIds].map(async ([kind, ids]) => {
           const evidence = registry.evidence.get(kind);
@@ -320,6 +321,22 @@ export async function machinery(
             .where(inArray(idColumn(evidence.table), ids));
           for (const row of rows)
             evidenceRows.set(`${kind}:${String(row.id)}`, row);
+          if (evidence.resolveOwners && evidence.owner) {
+            const keys = [
+              ...new Set(
+                rows.flatMap((row) => {
+                  // SAFETY: selected from this evidence kind's own table.
+                  const key = evidence.owner!(row as never);
+                  return key ? [key] : [];
+                }),
+              ),
+            ];
+            const owners = keys.length
+              ? await evidence.resolveOwners(tx, keys)
+              : new Map<string, string | null>();
+            for (const [key, owner] of owners)
+              evidenceOwners.set(`${kind}:${key}`, owner);
+          }
         }),
       );
       const decisionIds = refs.flatMap((input) =>
@@ -379,7 +396,11 @@ export async function machinery(
           // SAFETY: the row was selected from this evidence kind's own table.
           const owner =
             row && evidence?.owner ? evidence.owner(row as never) : null;
-          const visible = !owner || owner === viewer.userId;
+          const user =
+            owner && evidence?.resolveOwners
+              ? evidenceOwners.get(`${input.fact.kind}:${owner}`)
+              : owner;
+          const visible = !owner || user === viewer.userId;
           if (!visible) hidden = true;
           const shortcode =
             row && "shortcode" in getTableColumns(evidence!.table)

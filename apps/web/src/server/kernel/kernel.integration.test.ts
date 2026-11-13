@@ -3,20 +3,26 @@
  * the `seq` and `rev` fences, claim expiry, never resending an unknown ask,
  * history protection, and decisions that outlive recomputation.
  */
-import { eq, sql } from "drizzle-orm";
+import { ledgerPartyId } from "@cubby/schemas/identifiers";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db/database";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { ledgerParty, transactionImport } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   createKernel,
   defineModule,
+  defineEvidence,
   definePass,
   evidenceRow,
   recordSubject,
@@ -87,6 +93,143 @@ describe("evidence-facts kernel", () => {
       ).rows[0]!.n,
     );
   const settle = (kernel: Kernel) => kernel.run(ctx.db, RUN);
+
+  it("reserves entity evidence atomically without leaking identities from a duplicate race", async () => {
+    const evidence = defineEvidence({
+      kind: "fixture.collection",
+      table: transactionImport,
+      entity: "transactionImport",
+      keys: (row) => [`collection:${row.fingerprint}`],
+      discovers: () => [],
+    });
+    const kernel = createKernel([
+      defineModule({ name: "collection", evidence: [evidence] }),
+    ]);
+    await ensureExternalSources(ctx.db, ["synthetic-statement"]);
+    const identities = () =>
+      repositoryQueries(ctx.db)
+        .select({ id: entityIdentity.id })
+        .from(entityIdentity);
+    const before = await identities();
+    const row = evidenceRow(evidence, {
+      source: "synthetic-statement",
+      label: "Synthetic statement",
+      fingerprint: "synthetic-collection",
+    });
+    const results = await Promise.all([
+      kernel.append(ctx.db, [row]),
+      kernel.append(ctx.db, [row]),
+    ]);
+    expect(results.flat()).toHaveLength(1);
+    expect(await identities()).toHaveLength(before.length + 1);
+    const [saved] = await repositoryQueries(ctx.db)
+      .select()
+      .from(transactionImport)
+      .where(eq(transactionImport.fingerprint, "synthetic-collection"));
+    expect(saved?.shortcode).toMatch(/^TIM-/);
+    const [identity] = await repositoryQueries(ctx.db)
+      .select()
+      .from(entityIdentity)
+      .where(eq(entityIdentity.id, saved!.id));
+    expect(identity).toMatchObject({
+      id: saved!.id,
+      shortcode: saved!.shortcode,
+      kind: "transactionImport",
+    });
+    expect(
+      await kernel.append(ctx.db, [evidenceRow(evidence, saved!)]),
+    ).toEqual([]);
+    expect(await identities()).toHaveLength(before.length + 1);
+    const [indexed] = (
+      await repositoryQueries(ctx.db).execute<{ n: number }>(sql`
+      SELECT count(*)::int AS n FROM "FactKey" WHERE "factKind" = ${evidence.kind} AND "factId" = ${saved!.id}
+    `)
+    ).rows;
+    expect(indexed?.n).toBe(1);
+    await expect(
+      kernel.append(ctx.db, [
+        evidenceRow(evidence, {
+          source: "missing-synthetic-source",
+          label: "Synthetic invalid statement",
+          fingerprint: "synthetic-invalid-collection",
+        }),
+      ]),
+    ).rejects.toThrow(/TransactionImport/);
+    expect(await identities()).toHaveLength(before.length + 1);
+  });
+
+  it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic evidence owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const fixture = fixtureModule({ categorize: async () => "Groceries" });
+    const unknownOwner = crypto.randomUUID();
+    const resolved: string[][] = [];
+    const privateEvidence = {
+      ...receiptEvidence,
+      async resolveOwners(db: Database, keys: readonly string[]) {
+        resolved.push([...keys]);
+        const rows = await repositoryQueries(db)
+          .select({ id: ledgerParty.id, userId: ledgerParty.userId })
+          .from(ledgerParty)
+          .where(
+            inArray(
+              ledgerParty.id,
+              keys.map((key) => ledgerPartyId.parse(key)),
+            ),
+          );
+        return new Map(rows.map((row) => [row.id, row.userId]));
+      },
+    };
+    const kernel = createKernel([
+      defineModule({
+        ...fixture.module,
+        evidence: [chargeEvidence, privateEvidence],
+      }),
+    ]);
+    await kernel.append(ctx.db, [
+      charge("ORD-PRIVATE", 1250),
+      ...["a", "b", "c"].map((sourceRef) =>
+        evidenceRow(privateEvidence, {
+          sourceRef,
+          orderRef: "ORD-PRIVATE",
+          amountMinor: 1250,
+          merchant: "Synthetic Grocer",
+          owner: sourceRef === "c" ? unknownOwner : party.id,
+        }),
+      ),
+    ]);
+    await settle(kernel);
+    const [booked] = await purchases(ctx.db);
+    const own = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: PURCHASE_TABLE,
+      id: booked!.id,
+    });
+    expect(resolved.map((keys) => keys.sort())).toEqual([
+      [party.id, unknownOwner].sort(),
+    ]);
+    expect(
+      own.inputs.items
+        .filter((input) => input.kind === "evidence")
+        .filter((input) => input.at === null),
+    ).toHaveLength(1);
+    await repositoryQueries(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: null })
+      .where(eq(ledgerParty.id, party.id));
+    const hidden = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: PURCHASE_TABLE,
+      id: booked!.id,
+    });
+    expect(resolved).toHaveLength(2);
+    expect(
+      hidden.inputs.items.filter(
+        (input) => input.kind === "evidence" && input.at === null,
+      ),
+    ).toHaveLength(3);
+  });
 
   it("converges two pieces of evidence to one record in either arrival order", async () => {
     const { kernel } = kernelWith();

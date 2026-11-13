@@ -21,6 +21,7 @@ import type {
   KernelGap,
   KernelGapAction,
 } from "@cubby/schemas/kernel/stage";
+import type { ShortcodeType } from "@cubby/shared";
 import type { InferInsertModel, InferSelectModel } from "drizzle-orm";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -45,19 +46,41 @@ export type EvidenceKind<T extends KeyedTable = KeyedTable> = {
   readonly type: "evidence";
   readonly kind: string;
   readonly table: T;
+  /** Reserve this entity's identity and shortcode atomically with the observation. */
+  readonly entity?: ShortcodeType;
   keys(row: InferSelectModel<T>): Key[];
   discovers(row: InferSelectModel<T>): ScopeRef[];
-  /** The member a viewer-owned row belongs to (an Email); others never see its details. */
+  /** User id, or an indirect owner key when `resolveOwners` is declared. */
   owner?(row: InferSelectModel<T>): string | null;
+  /** Resolve indirect owners once per batch; an unresolved owner stays private. */
+  resolveOwners?(
+    db: Database,
+    keys: readonly string[],
+  ): Promise<ReadonlyMap<string, string | null>>;
 };
 
-export function defineEvidence<T extends KeyedTable>(spec: {
+type EvidenceSpec<T extends KeyedTable> = {
   kind: string;
   table: T;
+  entity?: ShortcodeType;
   keys(row: InferSelectModel<T>): Key[];
   discovers(row: InferSelectModel<T>): ScopeRef[];
   owner?(row: InferSelectModel<T>): string | null;
-}): EvidenceKind<T> {
+  resolveOwners?(
+    db: Database,
+    keys: readonly string[],
+  ): Promise<ReadonlyMap<string, string | null>>;
+};
+
+export function defineEvidence<T extends KeyedTable>(
+  spec: EvidenceSpec<T> & { entity: ShortcodeType },
+): EvidenceKind<T> & { entity: ShortcodeType };
+export function defineEvidence<T extends KeyedTable>(
+  spec: EvidenceSpec<T>,
+): EvidenceKind<T>;
+export function defineEvidence<T extends KeyedTable>(
+  spec: EvidenceSpec<T>,
+): EvidenceKind<T> {
   return { type: "evidence", ...spec };
 }
 
@@ -68,10 +91,20 @@ export type EvidenceRow = {
 };
 
 /** A typed {@link EvidenceRow}. */
-export const evidenceRow = <T extends KeyedTable>(
+export function evidenceRow<T extends KeyedTable>(
+  evidence: EvidenceKind<T> & { entity: ShortcodeType },
+  values: Omit<InferInsertModel<T>, "shortcode"> & { shortcode?: string },
+): EvidenceRow;
+export function evidenceRow<T extends KeyedTable>(
   evidence: EvidenceKind<T>,
   values: InferInsertModel<T>,
-): EvidenceRow => ({ evidence, values });
+): EvidenceRow;
+export function evidenceRow(
+  evidence: EvidenceKind,
+  values: ColumnValues,
+): EvidenceRow {
+  return { evidence, values };
+}
 
 /** What a producer returned; the kernel commits it as an `Answer`. */
 export type Produced<O> = {
