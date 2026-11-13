@@ -7,7 +7,7 @@ import Foundation
 public struct RecordState: Sendable, Hashable {
     /// The badge treatment. Needs-you, stalled and failed are filled; the rest are a mark and a
     /// label. A wait refines an active state into queued or paused; a finished option is done only
-    /// when its declared colour is positive.
+    /// when its declared stage is done.
     public enum Role: String, Sendable, Hashable {
         case needs, stalled, failed, running, queued, paused, done, ended
     }
@@ -28,13 +28,16 @@ public struct RecordState: Sendable, Hashable {
     ) {
         self.option = option
         phase = option.statePhase
-        let failed = option.isFailure
-        role =
-            if failed { .failed } else if stalled { .stalled } else if phase == .needs {
-                .needs
-            } else if phase == .finished { option.isPositive ? .done : .ended } else if waitReason == "paused"
-            { .paused } else if let waitReason, waitReason != "in_progress" { .queued } else { .running }
-        label = role == .stalled ? "Stalled" : option.label
+        role = switch option.stage {
+        case .needsYou: .needs
+        case .stuck: .stalled
+        case .working: .running
+        case .waiting: .queued
+        case .done: .done
+        case .ended: .ended
+        case nil: .ended
+        }
+        label = option.stage.map { FieldEnvelopePresentation.stageLabel($0.rawValue) } ?? option.label
         trailing = reason ?? waitLabel.map { Self.withoutLabel($0, label: option.label) }
         self.jobs = jobs
     }
@@ -49,9 +52,7 @@ public struct RecordState: Sendable, Hashable {
 extension LabeledOption {
     /// `optionPhase`: the declared phase, else finished for a closed option and active otherwise.
     public var statePhase: EntityPhase { phase ?? (closed == true ? .finished : .active) }
-    /// A destructive option is a failure outcome.
-    public var isFailure: Bool { color == "var(--destructive)" || color == "var(--brand-destructive)" }
-    var isPositive: Bool { color == "var(--positive)" || color == "var(--brand-positive)" }
+
 }
 
 extension FieldDescriptor {
@@ -253,7 +254,7 @@ public struct ListBatchSummary: Sendable, Hashable {
         }
         progress = ProgressValue(
             done: batch.phases["finished"] ?? 0,
-            failed: counted.filter { $0.option.isFailure }.reduce(0) { $0 + $1.count },
+            failed: counted.filter { $0.option.stage == .stuck }.reduce(0) { $0 + $1.count },
             active: batch.phases["active"] ?? 0, total: batch.count,
             unit: descriptor.plural.lowercased())
     }
