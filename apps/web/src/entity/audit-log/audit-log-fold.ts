@@ -4,6 +4,7 @@ type AuditLogEntry = AuditLogListOut["entries"][number];
 
 export type FoldableAuditEntry = Pick<
   AuditLogEntry,
+  | "provenance"
   | "entryKey"
   | "entityKind"
   | "entityId"
@@ -47,6 +48,8 @@ export function foldAuditEntries<Entry extends FoldableAuditEntry>(
       previous.action === "update" &&
       entry.entityKind === previous.entityKind &&
       entry.entityId === previous.entityId &&
+      !entry.provenance &&
+      !previous.provenance &&
       sameWriter(entry, previous) &&
       Math.abs(previous.createdAt.getTime() - entry.createdAt.getTime()) <=
         FOLD_WINDOW_MS
