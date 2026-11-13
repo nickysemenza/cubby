@@ -16,15 +16,13 @@ import {
   type PurchaseId,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { paymentTender } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
-import { and, asc, between, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, between, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers";
-import { columnArrayParam } from "~/server/db/helpers/query";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
 import {
@@ -51,7 +49,7 @@ import {
   purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
-import { withinPostingInstantWindowSql } from "~/server/domains/financial-transaction/repo/settlement-window";
+import { competingPaymentClaimants } from "~/server/domains/purchase-import/policy/competing-payments";
 import { matchCompletePaymentSet } from "~/server/domains/purchase-import/policy/import-lines";
 import {
   RetainedPayment,
@@ -338,9 +336,16 @@ async function competingClaimants(
   charge: Charge,
   excludePurchaseId: PurchaseId,
 ): Promise<PurchaseId[]> {
-  const cards = charge.cardLastFours;
+  const amountMinor = financialEvidenceAmountMinor(charge.amount);
   const rows = await tx
-    .selectDistinct({ purchaseId: purchasePaymentEvidence.purchaseId })
+    .select({
+      purchaseId: purchasePaymentEvidence.purchaseId,
+      chargedAt: purchasePaymentEvidence.chargedAt,
+      tender: purchasePaymentEvidence.tender,
+      cardLastFour: purchasePaymentEvidence.cardLastFour,
+      paidMinor: sql<string>`coalesce((SELECT sum(fta."amountMinor") FROM "FinancialTransactionAllocation" fta WHERE fta."purchaseId"=${purchasePaymentEvidence.purchaseId} AND ${notDeleted("fta")} AND sign(fta."amountMinor")=sign(${amountMinor}::numeric)),0)::text`,
+      evidenceMinor: sql<string>`(SELECT sum(ppe."amountMinor") FROM "PurchasePaymentEvidence" ppe WHERE ppe."purchaseId"=${purchasePaymentEvidence.purchaseId} AND sign(ppe."amountMinor")=sign(${amountMinor}::numeric))::text`,
+    })
     .from(purchasePaymentEvidence)
     .innerJoin(
       purchase,
@@ -352,36 +357,17 @@ async function competingClaimants(
     .where(
       and(
         sql`${purchasePaymentEvidence.purchaseId} <> ${excludePurchaseId}::uuid`,
-        eq(
-          purchasePaymentEvidence.amountMinor,
-          financialEvidenceAmountMinor(charge.amount),
-        ),
-        // An undated line's charge date is unknown, so it competes for any
-        // charge of its amount; the order-date anchor never narrows it.
-        sql`(${purchasePaymentEvidence.chargedAt} IS NULL
-          OR ${withinPostingInstantWindowSql(purchasePaymentEvidence.chargedAt, charge.occurredAt)})`,
-        charge.storedValue
-          ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
-          : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
-        cards.length > 0
-          ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
-              OR ${purchasePaymentEvidence.cardLastFour} = ANY(${columnArrayParam(cards)}))`
-          : undefined,
-        // A Purchase whose allocations already cover its payment lines makes
-        // no further claim; a partly settled one still does.
-        sql`abs(coalesce((
-          SELECT sum((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) FROM "FinancialTransactionAllocation" fta
-          WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND ${notDeleted("fta")}
-            AND sign((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) = sign(${charge.amount}::numeric)
-        ), 0)) < abs((
-          SELECT ${minorToDollarsSql(sql`sum(ppe."amountMinor")`, "numeric")} FROM "PurchasePaymentEvidence" ppe
-          WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
-            AND sign(ppe."amountMinor") = sign(${charge.amount}::numeric)
-        ))`,
+        eq(purchasePaymentEvidence.amountMinor, amountMinor),
       ),
     );
-  return rows.map((row) => row.purchaseId);
+  return competingPaymentClaimants(
+    { ...charge, amountMinor },
+    rows.map((row) => ({
+      ...row,
+      paidMinor: BigInt(row.paidMinor),
+      evidenceMinor: BigInt(row.evidenceMinor),
+    })),
+  );
 }
 
 type PlannedAllocation = {
