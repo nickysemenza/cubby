@@ -166,6 +166,9 @@ SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SE
  'createdAt',coalesce(nullif(s."acceptanceReceipt"->>'acceptedAt',''),s."updatedAt"::text,s."createdAt"::text)),
  0::bigint FROM "Suggestion" s WHERE s.family IN ('field','statement_transaction','recommendation') AND jsonb_array_length(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END)=0
  AND (s.suppression IS NOT NULL OR s."confirmedValue"->>'present'='true' OR s."acceptanceReceipt"->>'mode'='member')
+), review_times AS MATERIALIZED (
+ SELECT s.entity,s."recordId" id,s.field,max((v.event->>'createdAt')::timestamp) review_at
+ FROM review_events v JOIN "Suggestion" s ON s.id=v.id GROUP BY s.entity,s."recordId",s.field
 ), reviews AS (
  SELECT s.*, d.event, d.ord,
  CASE WHEN d.event->'correction'->>'present'='true' THEN d.event->'correction'->'value' ELSE s."suggestedValue" END accepted
@@ -299,8 +302,8 @@ UNION ALL
 -- A current automatic/released trail supersedes old held assignments. This is
 -- an observation of authority at cutover, not a fabricated member release.
 SELECT 'decision','CubbyRelease:'||entity||':'||id||':'||field,jsonb_build_object('id',md5('cutover:cubby-release:'||entity||':'||id||':'||field)::uuid,
- 'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind','release','value',NULL,'actorKind','system','actorId',NULL,'at',greatest(now() AT TIME ZONE 'UTC',coalesce((SELECT max((event->>'createdAt')::timestamp) FROM review_events v JOIN "Suggestion" s ON s.id=v.id WHERE s.entity=field_values.entity AND s."recordId"=field_values.id AND s.field=field_values.field),audit_at))+interval '1 microsecond')
-FROM field_values WHERE cubby_holds
+ 'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind','release','value',NULL,'actorKind','system','actorId',NULL,'at',greatest(now() AT TIME ZONE 'UTC',coalesce(review_at,audit_at))+interval '1 microsecond')
+FROM field_values LEFT JOIN review_times USING(entity,id,field) WHERE cubby_holds
 ), empty_scopes AS (
  SELECT DISTINCT e.row->>'scopeKind' kind,e.row->>'scopeKey' key FROM expected e WHERE e.mapping='scope' AND e.row->>'scopeKind' IN ('bankEvent','purchaseEvent')
  AND NOT EXISTS (SELECT 1 FROM expected k WHERE k.mapping='recordKey' AND k.row->>'scopeKind'=e.row->>'scopeKind' AND k.row->>'scopeKey'=e.row->>'scopeKey')
