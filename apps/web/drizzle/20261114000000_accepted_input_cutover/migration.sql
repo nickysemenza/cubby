@@ -2,7 +2,7 @@
 -- verification and contraction are atomic. Acquire every lock before the first read.
 SET LOCAL lock_timeout='2s';
 --> statement-breakpoint
-LOCK TABLE "EmailPurchaseDecision", "EmailReview", "EmailFinancialAssociation", "SourceObservationAnnotation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "LedgerTransfer", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "Shipment", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE "ConnectionCandidateEvidence", "EmailClassificationObservation", "EmailPurchaseDecision", "EmailReview", "EmailFinancialAssociation", "SourceObservationAnnotation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "LedgerTransfer", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "Shipment", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_money ON COMMIT DROP AS
 SELECT 'Expense'::text source, id, "purchaseId" owner, date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
@@ -82,10 +82,19 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  -- Preserve complete proposals, including negative/undecided paid results and review receipts.
 ), imports AS (
  SELECT *, 'legacy:'||source_table||':'||id::text hash FROM source_answers
+), review_events AS (
+ SELECT s.id, d.event, d.ord FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) WITH ORDINALITY d(event,ord)
+ UNION ALL
+ SELECT s.id,jsonb_build_object('verdict',CASE WHEN s.suppression IS NOT NULL THEN 'wrong' ELSE 'correct' END,
+ 'intent','apply','correction',CASE WHEN s."confirmedValue"->>'present'='true' THEN s."confirmedValue" ELSE jsonb_build_object('present',s."correctValue" IS NOT NULL,'value',s."correctValue") END,
+ 'authority',CASE WHEN s."acceptanceReceipt"->>'mode'='automatic' THEN 'automatic' ELSE 'unknown' END,
+ 'createdAt',coalesce(s."acceptanceReceipt"->>'acceptedAt','1970-01-01T00:00:00Z')),
+ 0::bigint FROM "Suggestion" s WHERE jsonb_array_length(s.decisions)=0
+ AND (s.suppression IS NOT NULL OR s."confirmedValue"->>'present'='true' OR s."acceptanceReceipt"->>'mode'='member')
 ), reviews AS (
  SELECT s.*, d.event, d.ord,
  CASE WHEN d.event->'correction'->>'present'='true' THEN d.event->'correction'->'value' ELSE s."suggestedValue" END accepted
- FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(s.decisions) WITH ORDINALITY d(event,ord)
+ FROM "Suggestion" s JOIN review_events d ON d.id=s.id
  WHERE d.event->>'authority' IS DISTINCT FROM 'automatic'
 ), expected AS (
  SELECT 'recordKey'::text mapping, entity||':'||id source_id,
@@ -105,10 +114,12 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  UNION ALL
  SELECT 'scope','purchaseEvent:'||id,jsonb_build_object('scopeKind','purchaseEvent','scopeKey',id,'version',0,'rules','','stage','done') FROM "FinancialTransaction"
  UNION ALL
+ SELECT 'scope','connections:'||"scopeKey",jsonb_build_object('scopeKind','connections','scopeKey',"scopeKey",'version',0,'rules','','stage','done') FROM "ConnectionCandidateEvidence" GROUP BY "scopeKey"
+ UNION ALL
  SELECT 'decision',entity||':'||id||':'||field,jsonb_build_object('id',('ffffffff'||substr(md5('cutover-held:'||entity||':'||id||':'||field),9))::uuid,
  'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind',CASE WHEN value='null'::jsonb THEN 'none' ELSE 'set' END,'value',value,
  'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR changes->field->'to' IS DISTINCT FROM value THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
- 'actorId',CASE WHEN authority IS NULL AND changes->field->'to'=value THEN "userId" END,'at',coalesce(audit_at,(payload->>'createdAt')::timestamp,'epoch'::timestamp))
+ 'actorId',CASE WHEN authority IS NULL AND changes->field->'to'=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
  FROM field_values WHERE cubby_holds IS NOT TRUE
  UNION ALL
  SELECT 'answer',entity||':'||id||':'||field,jsonb_build_object('inputHash','legacy:field:'||entity||':'||id||':'||field,'feature','legacy:field','producer','model','promptVersion','legacy:unknown',
@@ -147,6 +158,17 @@ SELECT 'decision','AuditLog:release:'||a.id||':'||f.key,jsonb_build_object('id',
 
 UNION ALL
 SELECT 'decision','AuditLog:held:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:audit-held:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind',CASE WHEN f.value->'to'='null'::jsonb THEN 'none' ELSE 'set' END,'value',f.value->'to','actorKind',CASE WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(a.changes) f WHERE a.authority IS NULL AND f.value ? 'to' AND EXISTS(SELECT 1 FROM records r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND f.key=ANY(r.fields))
+
+UNION ALL
+SELECT 'decision','Suggestion:correction-veto:'||id||':'||ord,jsonb_build_object('id',md5('cutover:correction-veto:'||id||':'||ord)::uuid,
+ 'channel','veto','subject',entity||':'||"recordId",'slot',field||chr(31)||encode(sha256(convert_to("suggestedValue"::text,'UTF8')),'hex'),'field',field,'kind','veto','value',"suggestedValue",
+ 'actorKind',CASE WHEN event->>'authority'='member' THEN 'member' ELSE 'system' END,'actorId',event->>'actorUserId','at',(event->>'createdAt')::timestamp)
+FROM reviews WHERE field<>'' AND "recordId" IS NOT NULL AND event->>'verdict'='correct' AND event->>'intent'='apply' AND event->'correction'->>'present'='true' AND accepted IS DISTINCT FROM "suggestedValue"
+UNION ALL
+SELECT 'decision','Suggestion:review:'||id||':'||ord,jsonb_build_object('id',md5('cutover:review-event:'||id||':'||ord)::uuid,
+ 'channel','assignment','subject','legacy:suggestion:'||id,'slot','review:'||ord,'field','review','kind','set','value',event,
+ 'actorKind',CASE WHEN event->>'authority'='member' THEN 'member' ELSE 'system' END,'actorId',event->>'actorUserId','at',(event->>'createdAt')::timestamp)
+FROM reviews WHERE field=''
 )
 SELECT mapping,source_id,row FROM expected
 -- cutover:select:end
@@ -236,6 +258,10 @@ CREATE TABLE archive."AuditLog_authority_preimage" AS SELECT id,authority,"autom
 DO $verify$ BEGIN
  IF EXISTS(SELECT 1 FROM "AuditLog" a FULL JOIN archive."AuditLog_authority_preimage" b USING(id) WHERE a.id IS NULL OR b.id IS NULL OR a.authority IS DISTINCT FROM b.authority OR a."automationPending" IS DISTINCT FROM b."automationPending") THEN RAISE EXCEPTION 'Accepted-input cutover: audit preimage preservation mismatch'; END IF;
 END $verify$;
+--> statement-breakpoint
+DO $archive$ BEGIN
+ IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='archive' AND c.conrelid IN ('archive."AuditLog_authority_preimage"'::regclass)) THEN RAISE EXCEPTION 'Accepted-input cutover: archive retains a live relationship'; END IF;
+END $archive$;
 --> statement-breakpoint
 DROP INDEX "AuditLog_automationPending_idx";
 DROP INDEX "AuditLog_automatic_createdAt_idx";
