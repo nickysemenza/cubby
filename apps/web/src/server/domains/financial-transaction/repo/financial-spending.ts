@@ -80,6 +80,12 @@ import {
   type SpendingCandidateRead,
 } from "~/server/domains/financial-transaction/policy/spending-candidates";
 import {
+  spendingCategoryForDiscovery,
+  refundSpendingCategory,
+  bookingSpendingCategory,
+  reviewedCategoryRefusal,
+} from "~/server/domains/financial-transaction/policy/spending-category";
+import {
   spendingBlocker,
   issuerCardFee,
 } from "~/server/domains/financial-transaction/policy/spending-prerequisites";
@@ -1195,7 +1201,7 @@ async function categoryHistoryForDiscovery(
   return lookup;
 }
 
-function spendingCategoryForDiscovery(
+function loadSpendingCategory(
   db: Database,
   reference:
     | { id: (typeof spendingCategory.$inferSelect)["id"] }
@@ -1210,7 +1216,7 @@ function spendingCategoryForDiscovery(
   if (cached) return cached;
   // Coalesce concurrent page reads, including misses.
   const lookup = getDb(db)
-    .query.spendingCategory.findFirst({
+    .query.spendingCategory.findMany({
       where: {
         RAW: (table: PgTable) =>
           relationalSql(
@@ -1224,7 +1230,7 @@ function spendingCategoryForDiscovery(
           ),
       },
     })
-    .then((row) => row);
+    .then((rows) => spendingCategoryForDiscovery(rows, reference));
   page?.categories.set(key, lookup);
   return lookup;
 }
@@ -1299,7 +1305,7 @@ async function discoverSpendingEvidence(
         ? [...vendors.values()][0]
         : undefined);
   let category = advice?.spendingCategoryId
-    ? await spendingCategoryForDiscovery(
+    ? await loadSpendingCategory(
         db,
         { shortcode: advice.spendingCategoryId },
         page,
@@ -1552,26 +1558,15 @@ async function discoverSpendingEvidence(
         ? candidateEvidence.find((candidate) => strong.has(candidate.shortcode))
         : undefined;
     if (original) {
-      const eligibleLines = original.graph.lines.filter(
-        (line) => !line.future && line.economicRole === "vendor",
+      const categoryId = refundSpendingCategory(
+        original.graph.lines.map((line) => ({
+          ...line,
+          costMinor: line.cost === null ? null : moneyToMinor(line.cost),
+        })),
+        original.graph.categories,
       );
-      const negative = eligibleLines.filter(
-        (line) =>
-          line.cost !== null && line.cost < 0 && line.lineKind === "principal",
-      );
-      const lines = negative.length
-        ? negative
-        : eligibleLines.filter((line) => line.cost !== null && line.cost > 0);
-      const categories = new Set(
-        lines.map(
-          (line) =>
-            original.graph.categories.find((entry) => entry.id === line.id)
-              ?.category ?? null,
-        ),
-      );
-      const [categoryId] = categories;
-      if (categories.size === 1 && categoryId) {
-        const inherited = await spendingCategoryForDiscovery(
+      if (categoryId) {
+        const inherited = await loadSpendingCategory(
           db,
           { id: parseEntityId("spendingCategory", categoryId) },
           page,
@@ -1958,20 +1953,14 @@ async function prepareFinancialSpendingPreview(
     return review(violation?.message ?? "Spending must have a nonzero amount.");
   if (request.vendorId && vendor?.shortcode !== request.vendorId)
     return review("The reviewed Vendor is no longer live.");
-  if (request.spendingCategoryId) {
-    if (!category)
-      return review("The reviewed spending category is no longer live.");
-    if (
-      !request.categoryHistoryReviewed &&
-      (advice?.historyConflict ||
-        history.some(
-          (entry) => entry.category !== null && entry.category !== category.id,
-        ))
-    )
-      return review(
-        "Merchant spending history conflicts with the reviewed category.",
-      );
-  }
+  const categoryRefusal = reviewedCategoryRefusal({
+    explicit: Boolean(request.spendingCategoryId),
+    categoryId: category?.id ?? null,
+    historyReviewed: request.categoryHistoryReviewed,
+    historyConflict: advice?.historyConflict,
+    history,
+  });
+  if (categoryRefusal) return review(categoryRefusal);
   const blocker = spendingBlocker({
     facts: currentFacts,
     advice,
@@ -2086,17 +2075,14 @@ async function prepareReadySpending(
     liveHouseholdLoan(facts.account) && source.kind === "refund";
   // Category uncertainty must not invent a classification or prevent otherwise
   // supported spending. Missing effective categories enter the existing Work queue.
-  const bookingCategory =
-    category &&
-    advice?.categoryConfidence === "high" &&
-    (evidence.categoryFromPurchase ||
-      basis.request.categoryHistoryReviewed ||
-      (!advice.historyConflict &&
-        evidence.history.every(
-          (entry) => entry.category === null || entry.category === category.id,
-        )))
-      ? category
-      : undefined;
+  const bookingCategory = bookingSpendingCategory({
+    category,
+    confidence: advice?.categoryConfidence,
+    fromPurchase: evidence.categoryFromPurchase,
+    historyReviewed: basis.request.categoryHistoryReviewed,
+    historyConflict: advice?.historyConflict,
+    history: evidence.history,
+  });
   const review = (reason: string): FinancialSpendingPlan => ({
     ...basis,
     status: "review_required",
