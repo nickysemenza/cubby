@@ -1279,7 +1279,8 @@ describe("shared spending booking", () => {
         .from(expenseAttribution)
         .where(
           sql`${expenseAttribution.role} = ${contributionRole.enum.beneficiary} AND ${expenseAttribution.deletedAt} IS NULL`,
-        );
+        )
+        .orderBy(expenseAttribution.ledgerPartyId);
       expect(
         attribution.map((share) => ({
           ...share,
