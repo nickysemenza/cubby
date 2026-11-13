@@ -26,7 +26,7 @@ describe("purchase reconciliation statuses", () => {
     const label = screen.getByText("Refund-adjusted -$127.10");
     const pill = label.closest("[data-enum-role]");
     expect(pill).toHaveAttribute("data-enum-role", "status");
-    expect(pill).toHaveClass("text-muted-foreground");
+    expect(pill).toHaveClass("text-foreground");
   });
 
   it("reserves the warning tone and Needs review label for unexplained gaps", () => {
@@ -45,7 +45,7 @@ describe("purchase reconciliation statuses", () => {
     expect(label.closest("[data-enum-role]")).toHaveClass("bg-warning-surface");
   });
 
-  it("keeps a matched financial settlement green", () => {
+  it("keeps a matched financial settlement quiet", () => {
     render(
       <FinancialSettlementStatus
         purchase={fromPartial<
@@ -70,9 +70,7 @@ describe("purchase reconciliation statuses", () => {
 
     // "Settled", not the raw `match` enum this status used to interpolate.
     const label = screen.getByText("Settled · 2");
-    expect(label.closest("[data-enum-role]")).toHaveClass(
-      "bg-positive-surface",
-    );
+    expect(label.closest("[data-enum-role]")).toHaveClass("text-foreground");
   });
 
   it("pre-associates a new settlement transaction with its purchase", () => {

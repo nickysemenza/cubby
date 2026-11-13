@@ -1694,6 +1694,7 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               value: "unknown",
               label: "No evidence",
+              stage: "waiting",
               color: "neutral-status",
               glyph: {
                 phosphor: "Question",
@@ -1703,16 +1704,19 @@ export const { definition, readSchemas } = defineEntityModel({
             {
               value: "pending",
               label: "Pending",
+              stage: "waiting",
               color: "warning",
             },
             {
               value: "match",
               label: "Settled",
+              stage: "done",
               color: "positive",
             },
             {
               value: "mismatch",
               label: "Mismatch",
+              stage: "needs_you",
               color: "destructive",
             },
           ],
