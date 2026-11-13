@@ -162,6 +162,23 @@ export function validateKernelGraph(reconcilers: readonly Reconciler[]): void {
   for (const reconciler of reconcilers) visit(reconciler.scope);
 }
 
+/** A dependency on an entire reconciled table turns a write into household-wide replay. */
+export function validateKernelReadKeys(
+  reconcilers: readonly Reconciler[],
+  keys: Iterable<string>,
+): void {
+  const written = new Set(
+    reconcilers.flatMap((reconciler) =>
+      reconciler.writes.map((target) => `table:${target.name}`),
+    ),
+  );
+  for (const key of keys)
+    if (written.has(key))
+      throw new KernelGraphError(
+        `Table-wide dependency on reconciled table ${key}`,
+      );
+}
+
 /** Every column a registered reconciler owns, for the write boundary. */
 export function ownedColumns(registry: KernelRegistry): OwnedColumn[] {
   return [...registry.reconcilers.values()].flatMap((reconciler) =>

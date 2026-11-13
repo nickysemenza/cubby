@@ -1,9 +1,14 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  type SourceTransactionRecordId,
+} from "@cubby/schemas/identifiers";
 import type { SourceIdentityResolution } from "@cubby/schemas/source-occurrence-fields";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { planSourceIdentity } from "~/server/domains/transaction-import/policy/source-identity-plan";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   lockAndLoadSourceIdentity,
@@ -17,6 +22,11 @@ export async function resolveSourceIdentity(
   input: SourceIdentityResolution,
   actor: ActorContext,
 ): Promise<{ source: string; chargeKey: string }> {
+  if (input.decision === "accept_existing")
+    await enterWriteTransaction(repositoryQueries(tx), {
+      lane: "money",
+      mode: "member",
+    });
   const loaded = await lockAndLoadSourceIdentity(tx, observationId, input);
   const aliases = await loadSourceIdentityAliases(tx, loaded);
   const plan = planSourceIdentity(input, actor, loaded, aliases, new Date());
@@ -35,7 +45,10 @@ export async function resolveSourceIdentity(
       .from(sourceTransactionRecord)
       .where(eq(sourceTransactionRecord.id, observationId));
     await decideStatement(db, actor, {
-      observationId: observation!.shortcode,
+      observationId: parseShortcodeFor(
+        "sourceTransactionRecord",
+        observation!.shortcode,
+      ),
       application: {
         action: "attach",
         transactionId: input.transactionId,

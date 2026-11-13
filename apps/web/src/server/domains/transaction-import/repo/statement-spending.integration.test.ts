@@ -1,5 +1,5 @@
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementDecisionInput } from "@cubby/schemas/statement-decision";
 import { eq, sql } from "drizzle-orm";
@@ -15,10 +15,13 @@ import {
   withDatabaseOperationPhase,
 } from "~/server/db/db-observability";
 import { getDb } from "~/server/db/helpers";
+import { textArrayParam } from "~/server/db/helpers/array-param";
+import { withKernelApply } from "~/server/db/kernel-apply-context";
 import { evidenceBinding, drift } from "~/server/db/kernel-schema";
 import {
   expense,
   financialTransaction,
+  financialAccount,
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import {
@@ -30,8 +33,9 @@ import {
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
+import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { emitWrites, machinery } from "~/server/kernel/api";
+import { householdWrite, emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
 import { productionKernel } from "~/server/kernel/kernel";
 
@@ -253,13 +257,15 @@ describe("statement spending review and re-import", () => {
     expect(live).toHaveLength(1);
     expect(live[0]?.shortcode).toBe(target.output.id);
     const [first] = await getDb(ctx.db).select().from(sourceOccurrence);
-    const second = crypto.randomUUID();
+    const second = parseEntityId("sourceOccurrence", crypto.randomUUID());
+    await ensureExternalSources(ctx.db, ["mint"]);
     await insertManyWithShortcode(ctx.db, "sourceOccurrence", [
       {
         ...first!,
         id: second,
-        source: "synthetic-other-source",
-        identityKey: "synthetic-other-identity",
+        source: "mint",
+        identityScope: "provider:mint",
+        currentObservationId: null,
         acceptedTransactionId: live[0]!.id,
       },
     ]);
@@ -287,8 +293,15 @@ describe("statement spending review and re-import", () => {
       kind: "purchase",
       status: "posted",
       transactionDate: "2026-05-04",
+      postedDate: "2026-05-04",
       merchant: "Synthetic Orchard",
     });
+    const [manualTransaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: manualTransaction!.id },
+    ]);
     const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
     await decide(ctx.db, ctx.actor, [
       {
@@ -529,6 +542,34 @@ describe("statement spending review and re-import", () => {
         identity: { kind: "credit_card", network: "visa" },
         ledgerPartyId: owner.output.id,
       });
+      let seededScopes: { kind: string; key: string }[] = [];
+      if (count === 32) {
+        const [seller] = await insertManyWithShortcode(ctx.db, "vendor", [
+          { name: "Synthetic historical seller" },
+        ]);
+        const historical = await withKernelApply(null, () =>
+          insertManyWithShortcode(
+            ctx.db,
+            "purchase",
+            Array.from({ length: 2048 }, (_, index) => ({
+              vendorId: seller!.id,
+              displayLabel: `Synthetic history ${index}`,
+              date: "2024-01-01",
+            })),
+          ),
+        );
+        seededScopes = historical.map((row) => ({
+          kind: "purchaseEvent",
+          key: row.id,
+        }));
+        await reconcileNow(ctx.db, [seededScopes[0]!]);
+        await getDb(ctx.db)
+          .execute(sql`INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+          SELECT 'purchaseEvent', historical.id, replace(dep.key, ${seededScopes[0]!.key}, historical.id)
+          FROM unnest(${textArrayParam(seededScopes.slice(1).map((scope) => scope.key))}) historical(id)
+          CROSS JOIN "ScopeDep" dep WHERE dep."scopeKind"='purchaseEvent' AND dep."scopeKey"=${seededScopes[0]!.key}
+          ON CONFLICT DO NOTHING`);
+      }
       const merchants = Array.from(
         { length: count },
         (_, index) => `Synthetic budget merchant ${index}`,
@@ -587,10 +628,47 @@ describe("statement spending review and re-import", () => {
       );
       const kernel = await productionKernel();
       const measured = await withDatabaseOperationMetrics(async (metrics) => {
+        if (count === 32) {
+          await reconcileNow(
+            ctx.db,
+            occurrences.map((row) => ({ kind: "bankEvent", key: row.id })),
+          );
+          const dirty = await getDb(ctx.db).execute<{
+            n: number;
+            historical: number;
+          }>(
+            sql`SELECT count(*)::int n, count(*) FILTER (WHERE "scopeKey" = ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "ScopeDirty" WHERE "scopeKind"='purchaseEvent'`,
+          );
+          if (
+            dirty.rows.length !== 1 ||
+            dirty.rows[0]!.n !== 32 ||
+            dirty.rows[0]!.historical !== 0
+          )
+            throw new Error(
+              `Unexpected statement fanout: ${JSON.stringify(dirty.rows)}`,
+            );
+          console.log(
+            "statement-kernel-fanout",
+            JSON.stringify({
+              householdPurchases: 2048,
+              page: 32,
+              dirtied: dirty.rows[0]!.n,
+              historicalDirtied: dirty.rows[0]!.historical,
+            }),
+          );
+        }
         await expectStatementBudget(
           () =>
             withDatabaseOperationPhase("fence", () =>
-              kernel.run(ctx.db, { budgetMs: 20_000 }),
+              Promise.all([
+                kernel.run(ctx.db, { budgetMs: 20_000 }),
+                householdWrite(ctx.db, async (tx) => {
+                  await getDb(tx)
+                    .update(financialAccount)
+                    .set({ notes: "Synthetic concurrent member edit" })
+                    .where(eq(financialAccount.shortcode, account.output.id));
+                }),
+              ]),
             ),
           { statements: 150, parameters: 128 },
         );
@@ -623,7 +701,7 @@ describe("statement spending review and re-import", () => {
       (SELECT sum("costMinor")::text FROM "Expense" WHERE "deletedAt" IS NULL) cost,
       (SELECT sum("amountMinor")::text FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocated`);
       expect(totals.rows[0]).toEqual({
-        purchases: count,
+        purchases: count + seededScopes.length,
         expenses: count,
         allocations: count,
         cost: String(count * 1000),

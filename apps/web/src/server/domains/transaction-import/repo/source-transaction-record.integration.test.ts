@@ -47,6 +47,7 @@ import {
   sourceObservationField,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
+import { reconcileNow } from "~/server/kernel/api";
 import { createMcpServer } from "~/server/mcp/server";
 import {
   deleteThroughKernel,
@@ -1635,6 +1636,13 @@ describe("statement row ledger", () => {
           judgment: { disposition: "open" },
         },
       },
+    );
+    await recordSourceTransactionRecords(ctx.db, legacyInput, ctx.actor);
+    await reconcileNow(ctx.db, [{ kind: "bankEvent", key: legacyOwner.id }]);
+    const replayed = await getDb(ctx.db).select().from(financialTransaction);
+    expect(replayed.filter((row) => !row.deletedAt)).toHaveLength(1);
+    expect(replayed.find((row) => !row.deletedAt)?.shortcode).toBe(
+      money.output.id,
     );
     await record([providerRow()], {
       fingerprint: "synthetic-consolidate-provider",

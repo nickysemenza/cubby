@@ -265,7 +265,9 @@ graph is `bankEvent → paymentMatch → purchaseEvent`, `bankEvent →
 transferPair`, and across lanes `purchaseEvent → emailState`; `shipment`,
 `fields` and `quality` have no upstream.
 
-Predicate reads also record a table-membership key. A matching authored or
+Predicate reads record declared index membership keys, including empty reads.
+Catalog rosters track the declared columns they consume. The registry rejects
+a table-wide dependency on any reconciled table. A matching authored or
 catalog mutation raises that key, including when the previous predicate read
 was empty. Reviewed evidence-association changes replace the affected
 `FactKey` entries and raise both the old and the new keys in their transaction.
@@ -280,7 +282,7 @@ admission locks shared by Ask and Pass claims; producer calls happen after
 those transactions close. Money applies use no serializable transactions. A synchronous reconcile inside a
 member transaction returns waiting immediately for a claim held by another
 worker; it never sleeps while holding the gate. The transaction sets `lock_timeout`, `statement_timeout` and
-`idle_in_transaction_session_timeout` with `SET LOCAL`, so Postgres releases
+`idle_in_transaction_session_timeout` and `transaction_timeout` with `SET LOCAL`, so Postgres releases
 the gate when a Worker dies. Loading, matching, planning and producer calls
 happen before the transaction opens.
 

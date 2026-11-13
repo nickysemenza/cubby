@@ -110,3 +110,6 @@ export const hashCanonical = (value: unknown) =>
 
 export const indexKey = (name: string, value: string): Key =>
   `index:${name}:${value}`;
+
+export const columnKey = (table: string, column: string): Key =>
+  `column:${table}:${column}`;

@@ -41,8 +41,8 @@ import {
   bindingEventKey,
   bindingFactKey,
   rowKey,
-  tableKey,
   indexKey,
+  columnKey,
 } from "./keys";
 
 export class LockedReadChangedError extends Error {}
@@ -114,7 +114,7 @@ export interface ScopeReads {
     evidence: EvidenceKind<T>,
     keys: readonly Key[],
   ): Promise<Map<Key, InferSelectModel<T>[]>>;
-  select<T extends KeyedTable>(
+  select<T extends PgTable>(
     table: T,
     keys: readonly Key[],
     where: SQL,
@@ -174,8 +174,43 @@ export function createReads(
       );
     return name;
   };
+  const observedRevisions = new Map<Key, number>();
+  let revisionQueue: {
+    keys: readonly Key[];
+    resolve(revs: Map<Key, number>): void;
+    reject(error: unknown): void;
+  }[] = [];
+  const readRevisions = (keys: readonly Key[]): Promise<Map<Key, number>> => {
+    if (keys.every((key) => observedRevisions.has(key)))
+      return Promise.resolve(
+        new Map(keys.map((key) => [key, observedRevisions.get(key)!])),
+      );
+    return new Promise((resolve, reject) => {
+      revisionQueue.push({ keys, resolve, reject });
+      if (revisionQueue.length > 1) return;
+      queueMicrotask(() => {
+        const pending = revisionQueue;
+        revisionQueue = [];
+        void (async () => {
+          const revs = await readKeyRevs(q, [
+            ...new Set(pending.flatMap((entry) => entry.keys)),
+          ]);
+          for (const [key, rev] of revs)
+            if (!observedRevisions.has(key)) observedRevisions.set(key, rev);
+          for (const entry of pending)
+            entry.resolve(
+              new Map(
+                entry.keys.map((key) => [key, observedRevisions.get(key)!]),
+              ),
+            );
+        })().catch((error) => {
+          for (const entry of pending) entry.reject(error);
+        });
+      });
+    });
+  };
   const revisions = async (keys: readonly Key[]) => {
-    if (!mode.lockedRevisions) return readKeyRevs(q, keys);
+    if (!mode.lockedRevisions) return readRevisions(keys);
     if (keys.some((key) => !mode.lockedRevisions!.has(key)))
       throw new LockedReadChangedError();
     return new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]));
@@ -315,7 +350,14 @@ export function createReads(
         throw new KernelContractError(
           "Prepared sources require the computation database",
         );
-      const keys = tables.map((table) => tableKey(requireTable(table)));
+      const keys = tables.flatMap((table) => {
+        const name = requireTable(table);
+        return reconciler.reads.flatMap((ref) =>
+          ref.type === "table" && ref.name === name
+            ? ref.columns.map((column) => columnKey(name, column))
+            : [],
+        );
+      });
       const revs = await revisions(keys);
       const value = await load(mode.db);
       recordAll(scopes, revs, keys);
@@ -405,13 +447,23 @@ export function createReads(
       return rows as Map<Key, InferSelectModel<T>[]>;
     },
 
-    async select<T extends KeyedTable>(
+    async select<T extends PgTable>(
       table: T,
       keys: readonly Key[],
       where: SQL,
     ) {
       const name = requireTable(table);
-      const predicateKeys = [...new Set([...keys, tableKey(name)])];
+      const predicateKeys = [
+        ...new Set(
+          keys.length
+            ? keys
+            : reconciler.reads.flatMap((ref) =>
+                ref.type === "table" && ref.name === name
+                  ? ref.columns.map((column) => columnKey(name, column))
+                  : [],
+              ),
+        ),
+      ];
       const revs = await revisions(predicateKeys);
       const rows = await q.select().from(table).where(where);
       recordAll(scopes, revs, predicateKeys);

@@ -354,9 +354,13 @@ export const bankEvent = defineReconciler<BankInput>({
         );
         return retained(c);
       }
-      c.attach(bankTransactionWrites, naturalKey, accepted);
+      c.attach(bankTransactionWrites, `accepted:${accepted}`, accepted);
       c.emit({ kind: "purchaseEvent", key: accepted });
       return c.done();
+    }
+    if (naturalKey.startsWith("accepted:")) {
+      if (existing) c.emit({ kind: "purchaseEvent", key: existing });
+      return retained(c);
     }
     const observation = input.observations.find(
       (row) => row.id === owner?.currentObservationId,
@@ -465,7 +469,7 @@ export const bankEvent = defineReconciler<BankInput>({
           )?.kind !== "distinct",
       );
       if (same.length === 1) {
-        c.attach(bankTransactionWrites, naturalKey, same[0]!.id);
+        c.attach(bankTransactionWrites, `accepted:${same[0]!.id}`, same[0]!.id);
         c.emit({ kind: "purchaseEvent", key: same[0]!.id });
         return c.done();
       }

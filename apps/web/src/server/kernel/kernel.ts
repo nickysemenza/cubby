@@ -47,7 +47,7 @@ import {
 } from "./drift";
 import { householdWrite } from "./gate";
 import { mergeRecords, type MergeVerdict } from "./identity";
-import { rowKey, tableKey, indexKey } from "./keys";
+import { rowKey, tableKey, indexKey, columnKey } from "./keys";
 import { machinery } from "./machinery";
 import { startPass } from "./pass";
 import { loadMachineryRows, type MachineryListRow } from "./projection";
@@ -330,7 +330,11 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
           ...new Set([
             ...evidenceKeys,
             ...(read
-              ? [tableKey(name), ...write.ids.map((id) => rowKey(name, id))]
+              ? [
+                  tableKey(name),
+                  ...write.columns.map((column) => columnKey(name, column)),
+                  ...write.ids.map((id) => rowKey(name, id)),
+                ]
               : []),
           ]),
         ],

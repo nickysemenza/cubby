@@ -64,7 +64,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { difference, type Difference } from "./diff";
-import { lockKeyRevs, markDirty } from "./dirty";
+import { insertFactKeys, lockKeyRevs, markDirty } from "./dirty";
 import { recordDrifts } from "./drift";
 import { classifyWorkFailure } from "./failure";
 import {
@@ -77,6 +77,7 @@ import {
   canonicalJson,
   decisionKey,
   indexKey,
+  columnKey,
   bindingEventKey,
   bindingFactKey,
   recordSubject,
@@ -293,10 +294,13 @@ const scopeId = (scope: ScopeRef) => `${scope.kind}\u0000${scope.key}`;
 function plannedKeys(
   computed: readonly Computed[],
   options: ApplyOptions,
+  registry: KernelRegistry,
 ): Key[] {
   const keys = new Set<Key>();
   const touch = (target: ColumnRef, row: ColumnValues) => {
     keys.add(tableKey(target.name));
+    for (const column of [...target.columns, ...(target.createOnly ?? [])])
+      keys.add(columnKey(target.name, column));
     keys.add(rowKey(target.name, String(row.id)));
     for (const key of target.keys?.(row) ?? []) keys.add(key);
     for (const index of registry.indexes.get(target.name) ?? [])
@@ -331,6 +335,38 @@ function plannedKeys(
     }
   }
   return [...keys];
+}
+
+/** A merge can move bindings owned by other scopes; fence those keys before dirty claims too. */
+async function mergeOutputKeys(
+  q: Q,
+  computed: readonly Computed[],
+  options: ApplyOptions,
+): Promise<Key[]> {
+  const merges = computed.flatMap((item) =>
+    item.desired && !item.error
+      ? difference(item, options).merges.map((merge) => ({
+          entity: recordEntity(merge.target),
+          ids: [merge.survivorId, merge.absorbedId],
+        }))
+      : [],
+  );
+  if (!merges.length) return [];
+  const result = await q.execute<{
+    event: string;
+    kind: string | null;
+    id: string | null;
+  }>(sql`
+    SELECT DISTINCT k."scopeKey" AS event, b."factKind" AS kind, b."factId" AS id
+    FROM jsonb_to_recordset(${JSON.stringify(merges)}::jsonb) AS m(entity text, ids jsonb)
+    JOIN "RecordKey" k ON k.entity=m.entity AND k."entityId"::text IN (SELECT jsonb_array_elements_text(m.ids))
+    LEFT JOIN "EvidenceBinding" b ON b."eventKey"=k."scopeKey"`);
+  return result.rows.flatMap((row) => [
+    bindingEventKey(row.event),
+    ...(row.kind && row.id
+      ? [bindingFactKey({ kind: row.kind, id: row.id })]
+      : []),
+  ]);
 }
 
 /** Lock the union once, then compare every scope against that one input fence. */
@@ -462,16 +498,19 @@ async function applyBatch(
   options: ApplyOptions,
 ): Promise<Outcome[]> {
   const q = repositoryQueries(tx);
-  const fenced = await fenceBatch(
-    q,
-    computed,
-    claims,
-    plannedKeys(computed, options, registry),
-  );
+  const fenced = await fenceBatch(q, computed, claims, [
+    ...plannedKeys(computed, options, registry),
+    ...(await mergeOutputKeys(q, computed, options)),
+  ]);
   const plans: Plan[] = [];
   const drifts: { computed: Computed; diff: Difference }[] = [];
   const outcomes = [...fenced.outcomes];
   for (const item of fenced.active) {
+    if (isConflict(item.computed.error)) {
+      await releaseConflicts(q, [item.claim]);
+      outcomes.push(outcome(item.computed.scope, "conflict"));
+      continue;
+    }
     if (item.computed.error !== null || !item.computed.desired) {
       await recordScopeFailure(
         q,
@@ -574,6 +613,8 @@ async function applyBatch(
   const entities = new Set<string>();
   const touch = (target: ColumnRef, row: ColumnValues) => {
     changed.add(tableKey(target.name));
+    for (const column of [...target.columns, ...(target.createOnly ?? [])])
+      changed.add(columnKey(target.name, column));
     changed.add(rowKey(target.name, String(row.id)));
     for (const key of target.keys?.(row) ?? []) changed.add(key);
     for (const index of registry.indexes.get(target.name) ?? [])
@@ -611,6 +652,24 @@ async function applyBatch(
           for (const row of rows) touch(group[0]!.target, row);
         }
         await insertRows(q, recordKey, recordKeys);
+        const indexed = combined.inserts.flatMap((entry) => {
+          const indexes = registry.indexes.get(entry.target.name) ?? [];
+          const row = { ...entry.values, id: entry.id };
+          return indexes.length
+            ? [
+                {
+                  kind: `index:${entry.target.name}`,
+                  id: entry.id,
+                  keys: indexes.flatMap((index) =>
+                    index
+                      .values(row)
+                      .map((value) => indexKey(index.name, value)),
+                  ),
+                },
+              ]
+            : [];
+        });
+        await insertFactKeys(q, indexed);
         await updateRecords(q, combined.updates);
         for (const entry of combined.updates) {
           touch(entry.target, { ...entry.row, ...entry.seen });
@@ -1016,7 +1075,11 @@ export async function applyComputed(
       }
     });
   } catch (error) {
-    if (computed.length > 1 && !isConflict(error)) {
+    if (isConflict(error)) {
+      await releaseConflicts(repositoryQueries(db), claimed);
+      return computed.map((item) => outcome(item.scope, "conflict"));
+    }
+    if (computed.length > 1) {
       const isolated: Outcome[] = [];
       for (let i = 0; i < computed.length; i++)
         isolated.push(
@@ -1078,8 +1141,13 @@ async function runLocked(
         lockedRevisions,
         hideBaseline: options.hideBaseline ?? false,
       });
-      if (computed!.error instanceof LockedReadChangedError)
-        throw computed!.error;
+      if (isConflict(computed!.error)) throw computed!.error;
+      if (
+        plannedKeys([computed!], options, registry).some(
+          (key) => !lockedRevisions.has(key),
+        )
+      )
+        throw new LockedReadChangedError();
       return applyOne(tx, registry, computed!, claimed, options);
     });
   } catch (error) {

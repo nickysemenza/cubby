@@ -57,7 +57,11 @@ import {
   KeyLedger,
   type ReadMode,
 } from "./reads";
-import { bindingWrites, type KernelRegistry } from "./registry";
+import {
+  bindingWrites,
+  validateKernelReadKeys,
+  type KernelRegistry,
+} from "./registry";
 import { isoText } from "./sql-time";
 
 type Q = Pick<RepositoryQueryClient, "select" | "execute">;
@@ -68,7 +72,7 @@ type EntityReference = Pick<
 >;
 
 /** Rounds of demand-driven loading before a scope is failed as unstable. */
-const MAX_ROUNDS = 4;
+const MAX_ROUNDS = 8;
 
 type OwnedRecord = {
   target: ColumnRef;
@@ -135,6 +139,7 @@ type Tracked = {
     { kind: AskKind; envelope: AskEnvelope; request: boolean }
   >;
   subjects: Set<string>;
+  references: Set<string>;
 };
 
 async function computeBatchInPhase(
@@ -190,24 +195,17 @@ async function computeBatchInPhase(
   const usedBy = new Map<string, Tracked>(
     scopes.map((scope) => [
       scope.key,
-      { answers: new Map(), subjects: new Set<string>() },
+      {
+        answers: new Map(),
+        subjects: new Set<string>(),
+        references: new Set<string>(),
+      },
     ]),
   );
 
   const shortcodeOwners = new Map<string, string>();
   const entityReferences = new Map<string, EntityReference>();
-  if (
-    reconciler.writes.some(
-      (target) => target.entity && isShortcodeEntity(target.entity),
-    )
-  )
-    for (const row of await q.select().from(entityIdentity)) {
-      entityReferences.set(row.id, row);
-      if (row.shortcode) {
-        shortcodeOwners.set(row.shortcode, row.id);
-        entityReferences.set(row.shortcode, row);
-      }
-    }
+  const loadedReferences = new Set<string>();
 
   let results = new Map<string, { desired: Desired | null; error: unknown }>();
   for (let round = 0; ; round++) {
@@ -217,6 +215,7 @@ async function computeBatchInPhase(
       { kind: AskKind; envelope: AskEnvelope; scopes: Set<string> }
     >();
     const wantedSubjects = new Map<string, Set<string>>();
+    const wantedReferences = new Set<string>();
     const creations = new Map<
       string,
       { id: string; shortcode: string | null }
@@ -231,6 +230,7 @@ async function computeBatchInPhase(
       const tracked = usedBy.get(scope.key)!;
       tracked.answers.clear();
       tracked.subjects.clear();
+      tracked.references.clear();
       if (!inputs.has(scope.key)) {
         results.set(scope.key, {
           desired: null,
@@ -260,6 +260,8 @@ async function computeBatchInPhase(
       } catch (error) {
         results.set(scope.key, { desired: null, error });
       }
+      for (const ref of tracked.references)
+        if (!loadedReferences.has(ref)) wantedReferences.add(ref);
       for (const [text, request] of tracked.answers)
         if (!answers.has(text)) {
           const wanted = wantedAnswers.get(text) ?? {
@@ -276,7 +278,10 @@ async function computeBatchInPhase(
           wantedSubjects.set(subject, wanted);
         }
     }
-    if (!wantedAnswers.size && !wantedSubjects.size) break;
+    for (const code of shortcodeOwners.keys())
+      if (!loadedReferences.has(code)) wantedReferences.add(code);
+    if (!wantedAnswers.size && !wantedSubjects.size && !wantedReferences.size)
+      break;
     if (round + 1 >= MAX_ROUNDS) {
       for (const scope of scopes)
         results.set(scope.key, {
@@ -288,6 +293,29 @@ async function computeBatchInPhase(
       break;
     }
     await Promise.all([
+      (async () => {
+        if (!wantedReferences.size) return;
+        let pending = [...wantedReferences];
+        while (pending.length) {
+          for (const ref of pending) loadedReferences.add(ref);
+          const rows = await q
+            .select()
+            .from(entityIdentity)
+            .where(
+              sql`${entityIdentity.id}::text = ANY(${textArrayParam(pending)}) OR lower(${entityIdentity.shortcode}) = ANY(${textArrayParam(pending.map((ref) => ref.toLowerCase()))})`,
+            );
+          pending = [];
+          for (const row of rows) {
+            entityReferences.set(row.id, row);
+            if (row.shortcode) {
+              shortcodeOwners.set(row.shortcode, row.id);
+              entityReferences.set(row.shortcode, row);
+            }
+            if (row.mergedIntoId && !loadedReferences.has(row.mergedIntoId))
+              pending.push(row.mergedIntoId);
+          }
+        }
+      })(),
       loadAnswers(q, wantedAnswers, answers, ledger, revisions),
       loadDecisions(
         q,
@@ -314,6 +342,7 @@ async function computeBatchInPhase(
         }),
       ]);
       const keys = ledger.of(scope.key);
+      validateKernelReadKeys([...registry.reconcilers.values()], keys.keys());
       const missing: MissingAnswer[] = [];
       const used: UsedAnswer[] = [];
       for (const [text, request] of tracked.answers) {
@@ -736,6 +765,7 @@ function createPure(
       gap("decision", input, "you");
     },
     reference(entity, ref) {
+      state.tracked.references.add(ref);
       let row =
         state.entityReferences.get(ref) ??
         state.entityReferences.get(ref.toLowerCase()) ??
@@ -833,9 +863,17 @@ function createPure(
     },
     attach(target, naturalKey, id) {
       const declared = requireTarget(target);
-      if (!declared.entity || !state.entityReferences.has(id))
+      state.tracked.references.add(id);
+      if (!state.entityReferences.has(id)) return;
+      const reference = state.entityReferences.get(id)!;
+      if (
+        !declared.entity ||
+        reference.kind !== declared.entity ||
+        reference.deletedAt ||
+        reference.mergedIntoId
+      )
         throw new KernelContractError(
-          "Attach requires a loaded entity identity",
+          "Attach requires a live canonical entity identity",
         );
       attachments.push({ target: declared, naturalKey, id });
     },

@@ -11,6 +11,7 @@ import {
   buildRegistry,
   KernelGraphError,
   validateKernelGraph,
+  validateKernelReadKeys,
 } from "./registry";
 import {
   fixtureCharge,
@@ -34,6 +35,20 @@ const reconciler = (
 describe("kernel graph", () => {
   it("builds the production module list", () => {
     expect(() => buildRegistry(KERNEL_MODULES)).not.toThrow();
+  });
+
+  it("rejects table-wide dependencies on every reconciled table", () => {
+    const registry = buildRegistry(KERNEL_MODULES);
+    const reconcilers = [...registry.reconcilers.values()];
+    const tables = new Set(
+      reconcilers.flatMap((reconciler) =>
+        reconciler.writes.map((target) => target.name),
+      ),
+    );
+    for (const table of tables)
+      expect(() =>
+        validateKernelReadKeys(reconcilers, [`table:${table}`]),
+      ).toThrow("Table-wide dependency");
   });
 
   it("rejects two reconcilers writing one column", () => {

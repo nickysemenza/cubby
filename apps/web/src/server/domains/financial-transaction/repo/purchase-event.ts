@@ -12,7 +12,9 @@ import { minorToMoney } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
-import { manualEntry } from "~/server/db/kernel-schema";
+import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { textArrayParam } from "~/server/db/helpers/array-param";
+import { manualEntry, decision, answer } from "~/server/db/kernel-schema";
 import {
   expense,
   expenseAttribution,
@@ -66,6 +68,20 @@ import {
   type ColumnRef,
   type Pure,
 } from "~/server/kernel/api";
+import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
+import { decisionKey, answerKey } from "~/server/kernel/keys";
+
+import {
+  acceptedOccurrences,
+  transactionAllocations,
+  purchaseAllocations,
+  purchaseExpenses,
+  expenseAttributions,
+  vendorPurchases,
+  amountPayments,
+  purchasePayments,
+  vendorNames,
+} from "./money-read-indexes";
 
 type Input = {
   key: string;
@@ -119,45 +135,61 @@ const tableReads = [
   source.table(
     purchase,
     purchaseRecords.columns as (keyof typeof purchase.$inferSelect)[],
+    [vendorPurchases],
   ),
   // SAFETY: the target declares columns of this exact table.
   source.table(
     expense,
     expenseRecords.columns as (keyof typeof expense.$inferSelect)[],
+    [purchaseExpenses],
   ),
-  source.table(financialTransactionAllocation, [
-    "transactionId",
-    "purchaseId",
-    "amountMinor",
-    "confirmsMerchant",
-    "deletedAt",
-  ]),
-  source.table(expenseAttribution, [
-    "expenseId",
-    "role",
-    "ledgerPartyId",
-    "weight",
-    "deletedAt",
-  ]),
-  source.table(vendor, [
-    "name",
-    "aliases",
-    "defaultSpendingCategoryId",
-    "itemizationExpectation",
-    "orderEvidence",
-    "deletedAt",
-  ]),
+  source.table(
+    financialTransactionAllocation,
+    [
+      "transactionId",
+      "purchaseId",
+      "amountMinor",
+      "confirmsMerchant",
+      "deletedAt",
+    ],
+    [transactionAllocations, purchaseAllocations],
+  ),
+  source.table(
+    expenseAttribution,
+    ["expenseId", "role", "ledgerPartyId", "weight", "deletedAt"],
+    [expenseAttributions],
+  ),
+  source.table(
+    vendor,
+    [
+      "name",
+      "aliases",
+      "defaultSpendingCategoryId",
+      "itemizationExpectation",
+      "orderEvidence",
+      "deletedAt",
+    ],
+    [vendorNames],
+  ),
   source.table(spendingCategory, ["deletedAt"]),
-  source.table(purchasePaymentEvidence, [
-    "purchaseId",
-    "amountMinor",
-    "chargedAt",
-  ]),
-  source.table(sourceOccurrence, [
-    "acceptedTransactionId",
-    "currentObservationId",
+  source.table(
+    purchasePaymentEvidence,
+    ["purchaseId", "amountMinor", "chargedAt"],
+    [amountPayments, purchasePayments],
+  ),
+  source.table(
+    sourceOccurrence,
+    ["acceptedTransactionId", "currentObservationId", "deletedAt"],
+    [acceptedOccurrences],
+  ),
+  source.table(entityIdentity, [
+    "kind",
+    "shortcode",
     "deletedAt",
+    "mergedIntoId",
   ]),
+  source.table(decision, ["subject", "channel", "kind", "value", "at"]),
+  source.table(answer, ["inputHash", "output"]),
 ];
 function retained(c: Pure) {
   for (const target of targets)
@@ -255,69 +287,272 @@ export const purchaseEvent = defineReconciler<Input>({
   writes: [...targets, bindingWrites],
   asks: [merchantIdentityAsk, merchantSupportAsk, escrowAsk],
   async load(reads, keys) {
-    const [
-      transactions,
-      accounts,
-      parties,
-      purchases,
-      expenses,
-      allocations,
-      attributions,
-      vendors,
-      categories,
-      payments,
-      occurrences,
-    ] = await Promise.all([
-      reads.select(financialTransaction, [], sql`true`),
-      reads.select(financialAccount, [], sql`true`),
-      reads.select(ledgerParty, [], sql`true`),
-      reads.select(purchase, [], sql`true`),
-      reads.select(expense, [], sql`true`),
-      reads.select(financialTransactionAllocation, [], sql`true`),
-      reads.select(expenseAttribution, [], sql`true`),
-      reads.select(vendor, [], sql`true`),
-      reads.select(spendingCategory, [], sql`true`),
-      reads.select(purchasePaymentEvidence, [], sql`true`),
-      reads.select(sourceOccurrence, [], sql`true`),
+    const unique = <T extends { id: string }>(rows: T[]) => [
+      ...new Map(rows.map((row) => [row.id, row])).values(),
+    ];
+    const transactions = [
+      ...(await reads.rows(financialTransaction, keys)).values(),
+    ];
+    const subjects = keys.map((key) => `purchaseEvent:${key}`);
+    const [manuals, choices, initialVendors] = await Promise.all([
+      reads.facts(
+        manualTransactionEvidence,
+        keys.map((key) => `purchaseEvent:${key}`),
+      ),
+      reads.select(
+        decision,
+        subjects.map(decisionKey),
+        sql`${decision.subject} = ANY(${textArrayParam(subjects)})`,
+      ),
+      reads.lookup(
+        vendor,
+        vendorNames,
+        transactions.flatMap((row) =>
+          [row.merchant, row.rawDescription]
+            .filter((name): name is string => !!name)
+            .map((name) => name.trim().toLowerCase()),
+        ),
+      ),
     ]);
-    const manuals = await reads.facts(
-      manualTransactionEvidence,
-      keys.map((key) => `purchaseEvent:${key}`),
+    const strings = (value: unknown): string[] =>
+      typeof value === "string"
+        ? [value]
+        : Array.isArray(value)
+          ? value.flatMap(strings)
+          : value && typeof value === "object"
+            ? Object.values(value).flatMap(strings)
+            : [];
+    const references = choices.flatMap((row) => strings(row.value));
+    const identities = references.length
+      ? await reads.select(
+          entityIdentity,
+          subjects.map(decisionKey),
+          sql`${entityIdentity.id}::text = ANY(${textArrayParam(references)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(references)})`,
+        )
+      : [];
+    let redirects = identities.flatMap((row) =>
+      row.mergedIntoId ? [row.mergedIntoId] : [],
     );
-    const bindings = await reads.bindings({
-      events: [
-        ...transactions,
-        ...purchases,
-        ...expenses,
-        ...allocations,
-        ...attributions,
-      ].map((row) => row.id),
-    });
-    return new Map(
-      keys.map((key) => [
-        key,
-        {
-          key,
-          bindings: bindings.filter(
-            (binding) =>
-              binding.scope.kind === "purchaseEvent" &&
-              binding.scope.key === key,
+    const visited = new Set(identities.map((row) => row.id));
+    while (redirects.length) {
+      const rows = await reads.rows(
+        entityIdentity,
+        redirects.filter((id) => !visited.has(id)),
+      );
+      for (const row of rows.values()) {
+        identities.push(row);
+        visited.add(row.id);
+      }
+      redirects = [...rows.values()].flatMap((row) =>
+        row.mergedIntoId && !visited.has(row.mergedIntoId)
+          ? [row.mergedIntoId]
+          : [],
+      );
+    }
+    const referenceIds = (kind: string) =>
+      identities
+        .filter(
+          (row) => row.kind === kind && !row.deletedAt && !row.mergedIntoId,
+        )
+        .map((row) => row.id);
+    const hashes = await Promise.all(
+      transactions.map((row) =>
+        inputHashOf(
+          askEnvelope(
+            merchantIdentityAsk,
+            statementMerchantIdentityInput({
+              ...row,
+              amount: minorToMoney(row.amount),
+            }),
           ),
-          transactions,
-          accounts,
-          parties,
-          purchases,
-          expenses,
-          allocations,
-          attributions,
-          vendors,
-          categories,
-          payments,
-          occurrences,
-          manuals: manuals.get(`purchaseEvent:${key}`) ?? [],
-        },
-      ]),
+        ),
+      ),
     );
+    const saved = await reads.select(
+      answer,
+      hashes.map(answerKey),
+      sql`${answer.inputHash} = ANY(${textArrayParam(hashes)})`,
+    );
+    const names = saved.flatMap((row) =>
+      row.output &&
+      typeof row.output === "object" &&
+      !Array.isArray(row.output) &&
+      typeof row.output.name === "string"
+        ? [row.output.name.trim().toLowerCase()]
+        : [],
+    );
+    for (const row of choices)
+      if (row.field === "vendorName" && typeof row.value === "string")
+        names.push(row.value.trim().toLowerCase());
+    const namedVendors = await reads.lookup(vendor, vendorNames, names);
+    const seeded = [...manuals.values()].flat().flatMap((row) => {
+      const parsed = row.payload;
+      return parsed &&
+        typeof parsed === "object" &&
+        !Array.isArray(parsed) &&
+        typeof parsed.table === "string" &&
+        parsed.values &&
+        typeof parsed.values === "object" &&
+        !Array.isArray(parsed.values)
+        ? [{ id: row.id, table: parsed.table, values: parsed.values }]
+        : [];
+    });
+    const vendors = unique([
+      ...initialVendors,
+      ...namedVendors,
+      ...(await reads.rows(vendor, referenceIds("vendor"))).values(),
+    ]);
+    const inputs = await Promise.all(
+      keys.map(async (key): Promise<readonly [string, Input]> => {
+        const scoped = reads.for(key);
+        const transaction = transactions.find((row) => row.id === key);
+        const ownSeeds = seeded.filter((row) =>
+          (manuals.get(`purchaseEvent:${key}`) ?? []).some(
+            (manual) => manual.id === row.id,
+          ),
+        );
+        const ownIds = (table: string) =>
+          ownSeeds.filter((row) => row.table === table).map((row) => row.id);
+        const [
+          ownAllocations,
+          candidatePurchases,
+          exactPayments,
+          ownedPurchases,
+          bindings,
+          occurrences,
+          accounts,
+        ] = await Promise.all([
+          scoped.lookup(
+            financialTransactionAllocation,
+            transactionAllocations,
+            [key],
+          ),
+          scoped.lookup(
+            purchase,
+            vendorPurchases,
+            vendors.map((row) => row.id),
+          ),
+          scoped.lookup(
+            purchasePaymentEvidence,
+            amountPayments,
+            transaction ? [String(transaction.amount)] : [],
+          ),
+          scoped.rows(purchase, [
+            key,
+            ...ownIds("Purchase"),
+            ...referenceIds("purchase"),
+          ]),
+          scoped.bindings({ events: [key, ...ownSeeds.map((row) => row.id)] }),
+          scoped.lookup(sourceOccurrence, acceptedOccurrences, [key]),
+          scoped.rows(
+            financialAccount,
+            transaction ? [transaction.accountId] : [],
+          ),
+        ]);
+        const purchaseIds = [
+          ...new Set([
+            ...candidatePurchases.map((row) => row.id),
+            ...ownedPurchases.keys(),
+            ...exactPayments.map((row) => row.purchaseId),
+            ...ownAllocations.map((row) => row.purchaseId),
+          ]),
+        ];
+        const [purchases, expenses, allocations, payments] = await Promise.all([
+          scoped.rows(purchase, purchaseIds),
+          scoped.lookup(expense, purchaseExpenses, purchaseIds),
+          scoped.lookup(
+            financialTransactionAllocation,
+            purchaseAllocations,
+            purchaseIds,
+          ),
+          scoped.lookup(purchasePaymentEvidence, purchasePayments, purchaseIds),
+        ]);
+        const [settlementTransactions, attributions] = await Promise.all([
+          scoped.rows(
+            financialTransaction,
+            allocations.map((row) => row.transactionId),
+          ),
+          scoped.lookup(
+            expenseAttribution,
+            expenseAttributions,
+            expenses.map((row) => row.id),
+          ),
+        ]);
+        const allTransactions = unique([
+          ...transactions.filter((row) => row.id === key),
+          ...settlementTransactions.values(),
+        ]);
+        const moreAccounts = await scoped.rows(
+          financialAccount,
+          allTransactions.map((row) => row.accountId),
+        );
+        const allAccounts = unique([
+          ...accounts.values(),
+          ...moreAccounts.values(),
+        ]);
+        const allVendors = unique([
+          ...vendors,
+          ...(
+            await scoped.rows(
+              vendor,
+              purchases.size
+                ? [...purchases.values()].flatMap((row) =>
+                    row.vendorId ? [row.vendorId] : [],
+                  )
+                : [],
+            )
+          ).values(),
+        ]);
+        const [parties, categories] = await Promise.all([
+          scoped.rows(ledgerParty, [
+            ...referenceIds("ledgerParty"),
+            ...allAccounts.flatMap((row) =>
+              [row.ledgerPartyId, row.primaryCardholderId].filter(
+                (id): id is NonNullable<typeof id> => !!id,
+              ),
+            ),
+            ...attributions.flatMap((row) =>
+              row.ledgerPartyId ? [row.ledgerPartyId] : [],
+            ),
+          ]),
+          scoped.rows(spendingCategory, [
+            ...referenceIds("spendingCategory"),
+            ...allTransactions.flatMap((row) =>
+              row.spendingCategoryId ? [row.spendingCategoryId] : [],
+            ),
+            ...allVendors.flatMap((row) =>
+              row.defaultSpendingCategoryId
+                ? [row.defaultSpendingCategoryId]
+                : [],
+            ),
+          ]),
+        ]);
+        return [
+          key,
+          {
+            key,
+            transactions: allTransactions,
+            accounts: allAccounts,
+            parties: [...parties.values()],
+            purchases: [...purchases.values()],
+            expenses,
+            allocations: unique([...ownAllocations, ...allocations]),
+            attributions,
+            vendors: allVendors,
+            categories: [...categories.values()],
+            payments,
+            occurrences,
+            bindings: bindings.filter(
+              (binding) =>
+                binding.scope.kind === "purchaseEvent" &&
+                binding.scope.key === key,
+            ),
+            manuals: manuals.get(`purchaseEvent:${key}`) ?? [],
+          } satisfies Input,
+        ] as const;
+      }),
+    );
+    return new Map(inputs);
   },
   // oxlint-disable-next-line complexity -- prerequisite, identity and conservation refusals form one atomic money plan.
   reconcile(input, c) {

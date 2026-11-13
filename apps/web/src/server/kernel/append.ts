@@ -27,7 +27,7 @@ import type {
   ScopeRef,
 } from "./define";
 import { insertFactKeys, markDirty } from "./dirty";
-import { tableKey } from "./keys";
+import { tableKey, columnKey } from "./keys";
 import type { KernelRegistry } from "./registry";
 
 /** A losing source-identity race must discard its unused Entity reservation. */
@@ -148,7 +148,16 @@ export async function append(
             .filter(({ evidence }) =>
               facts.some((fact) => fact.kind === evidence.kind),
             )
-            .map(({ evidence }) => tableKey(getTableName(evidence.table))),
+            .flatMap(({ evidence }) => [
+              tableKey(getTableName(evidence.table)),
+              ...registry
+                .readers(getTableName(evidence.table))
+                .flatMap((reader) =>
+                  reader.columns.map((column) =>
+                    columnKey(getTableName(evidence.table), column),
+                  ),
+                ),
+            ]),
         ]),
       ],
       discovers,

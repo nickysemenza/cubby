@@ -53,7 +53,7 @@ import {
   recordSubject,
   type Kernel,
 } from "./api";
-import { applyComputed } from "./apply";
+import { applyComputed, runClaimedScopes } from "./apply";
 import {
   AskUnknownError,
   expireAsks,
@@ -978,6 +978,61 @@ describe("evidence-facts kernel", () => {
     expect(storedDuringRerun).toBe(0);
     const [stored] = await purchases(ctx.db);
     expect(stored?.amountMinor).toBe(900);
+  });
+
+  it("releases a locked-run deadlock without spending an attempt", async () => {
+    const reconciler = defineReconciler({
+      scope: "fixture.deadlock",
+      lane: "money",
+      version: 1,
+      reads: [],
+      writes: [],
+      async load() {
+        throw Object.assign(new Error("Synthetic deadlock"), { code: "40P01" });
+      },
+      reconcile(_input, c) {
+        return c.done();
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "deadlock", reconcilers: [reconciler] }),
+    ]);
+    const scope = { kind: reconciler.scope, key: "synthetic" };
+    await kernel.emitWrites(ctx.db, {
+      table: fixturePurchase,
+      ids: [],
+      columns: [],
+      discovers: [scope],
+    });
+    await repositoryQueries(ctx.db).execute(
+      sql`UPDATE "ScopeDirty" SET conflicts=3 WHERE "scopeKind"=${scope.kind}`,
+    );
+    const claims = await claimScopes(
+      repositoryQueries(ctx.db),
+      kernel.registry,
+      "money",
+      1,
+      [scope],
+    );
+    const outcomes = await runClaimedScopes(
+      ctx.db,
+      kernel.registry,
+      reconciler,
+      claims,
+      { mode: "background", releaseBaseline: false },
+    );
+    expect(outcomes.map((item) => item.status)).toEqual(["conflict"]);
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{
+          attempts: number;
+          conflicts: number;
+          claimToken: string | null;
+        }>(
+          sql`SELECT attempts,conflicts,"claimToken" FROM "ScopeDirty" WHERE "scopeKind"=${scope.kind}`,
+        )
+      ).rows,
+    ).toEqual([{ attempts: 0, conflicts: 4, claimToken: null }]);
   });
 
   it("isolates a poisoned scope without charging healthy siblings", async () => {
