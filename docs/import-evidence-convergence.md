@@ -51,9 +51,9 @@ with an unknown individual purchaser, including shared access or missing
 primary-cardholder evidence. A household is never stored as a member purchaser
 override. Missing/deleted owners, guest owners, deleted accounts and household
 other accounts remain guarded. A household loan books only a supported escrow
-disbursement for property tax or homeowners insurance, with an unknown purchaser;
-loan payments are transfers, and a checking entry matching a loan payment waits
-for its transfer pair. Escrow interest is interest. An escrow refund uses the
+disbursement for property tax or homeowners insurance, with an unknown purchaser.
+Loan payments and their matching checking entries are transfers that wait
+for their transfer pair. Escrow interest is interest. An escrow refund uses the
 original disbursement's category when identified; without a possible original,
 it is income. Explicit
 member choices and an existing Purchase's overrides and inherited

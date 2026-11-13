@@ -141,6 +141,8 @@ const card = async (ctx: Ctx) => {
 
 async function unmatchedCharge(ctx: Ctx, income = false) {
   const account = (await card(ctx)).output;
+  if (!income)
+    await createRepoEntity(ctx, "vendor", { name: "Example Grocer" });
   const recorded = await recordSourceTransactionRecords(
     ctx.db,
     recordSourceTransactionRecordsInput.parse({

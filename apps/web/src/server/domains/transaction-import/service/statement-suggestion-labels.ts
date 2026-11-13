@@ -52,7 +52,7 @@ import {
   mergeStatementAnswers,
   statementAnswerVersions,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
-import { prepareStatementSpendingFacts } from "~/server/domains/transaction-import/repo/statement-spending";
+import { recoverSettlementObligations } from "~/server/domains/transaction-import/repo/statement-settlement";
 import {
   chargeId,
   type ChargeRef,
@@ -62,7 +62,7 @@ import {
   statementLabelTargetsInScope,
   type StatementSuggestionScope,
   type LabelCursor,
-  recordStatementAnswers,
+  recordStatementAnswerBatch,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
@@ -86,6 +86,11 @@ const identityLabel = {
   different_charge: "different",
   insufficient_evidence: "insufficient",
 } as const;
+
+type LabelSpendingPage = Pick<
+  FinancialSpendingPage,
+  "accounts" | "vendors" | "pendingVendorNames"
+>;
 
 type LabelPreparation = {
   charge: ChargeRef;
@@ -271,18 +276,11 @@ function prepareLabelledJudgment(
      * `undefined` when it plans nothing; the caller plans a wave at once.
      */
     async advise(
-      page?: FinancialSpendingPage,
+      page?: LabelSpendingPage,
     ): Promise<{ advice: FinancialSpendingAdvice | null } | undefined> {
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
-      const merchant =
-        judgment.create?.merchant?.trim() ||
-        judgment.create?.rawDescription?.trim();
-      const [named] = merchant
-        ? await resolveFinancialSpendingVendors(db, [merchant], page)
-        : [];
-      const vendorResolved = Boolean(named?.row && !named.candidates.length);
       if (
         !needsSpendingAdvice(judgment) ||
         (judgment.create &&
@@ -290,8 +288,26 @@ function prepareLabelledJudgment(
             judgment.create,
             input.isLoan,
             answers,
-            vendorResolved,
+            false,
           ))
+      ) {
+        spendingComplete = true;
+        return { advice: null };
+      }
+      const merchant =
+        judgment.create?.merchant?.trim() ||
+        judgment.create?.rawDescription?.trim();
+      const [named] = merchant
+        ? await resolveFinancialSpendingVendors(db, [merchant], page)
+        : [];
+      if (
+        judgment.create &&
+        statementSpendingAnswersComplete(
+          judgment.create,
+          input.isLoan,
+          answers,
+          Boolean(named?.row && !named.candidates.length),
+        )
       ) {
         spendingComplete = true;
         return { advice: null };
@@ -376,6 +392,25 @@ function statementLabelCursors(
   };
 }
 
+function recoverStatementLabelSettlement(
+  db: Database,
+  input: {
+    recoverSince?: Date | null;
+    scope?: StatementSuggestionScope;
+    retryCharges?: readonly ChargeRef[];
+  },
+) {
+  return recoverSettlementObligations(db, {
+    since: input.recoverSince ?? null,
+    scope: input.scope,
+    within: input.retryCharges
+      ? { kind: "charges", charges: input.retryCharges }
+      : input.scope?.importId
+        ? { kind: "import", importId: input.scope.importId }
+        : { kind: "range", after: null, through: null },
+  });
+}
+
 async function runStatementLabelBatch(
   db: Database,
   input: {
@@ -437,8 +472,10 @@ async function runStatementLabelBatch(
     waitingUntil: null,
     paused: null,
   };
-  const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled && !input.port) return { ...empty, active: false };
+  const active =
+    input.port !== undefined ||
+    (await readAiRefreshActivation(db))?.enabled === true;
+  if (!active) return { ...empty, active: false };
   const limit = Math.min(
     input.limit ??
       (input.scope?.importId
@@ -452,6 +489,9 @@ async function runStatementLabelBatch(
     ? Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs
     : null;
   const budgetSpent = () => budgetEnds !== null && Date.now() >= budgetEnds;
+  await time("statement_recovery", () =>
+    recoverStatementLabelSettlement(db, input),
+  );
   const rows = await time("statement_selection", () =>
     suggestionsNeedingLabels(
       db,
@@ -537,18 +577,13 @@ async function runStatementLabelBatch(
   const labelled = new Set<string>();
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
-  // Admission resolves account-wide evidence, so each call is one preparation.
-  // A round admits twice: before model work, so nothing out of scope is paid
-  // for, and after it, because provider waits let account mappings move. The
-  // writes that follow (publication, application) enforce the scope in their
-  // own transactions, and a ledger write in this pass only happens in
-  // application, whose next round admits again.
+  // Selection SQL enforces import/date scope. Resolve account scope before paid
+  // work; answer persistence, publication and settlement admit it under locks.
   const admitTargets = async (
     preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
   ) => {
     const scope = input.scope;
-    if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
-      return;
+    if (!scope?.accountIds?.length) return;
     const live = targets.filter(
       (target) => !skipped.has(chargeId(target.charge)),
     );
@@ -665,20 +700,24 @@ async function runStatementLabelBatch(
         return { status: "rejected" as const, reason };
       }
     });
-    let spendingPage: FinancialSpendingPage | undefined;
-    try {
-      spendingPage = await time("statement_spending_facts", () =>
-        prepareStatementSpendingFacts(
-          db,
-          classified.flatMap((result) =>
-            result.status === "fulfilled" ? [result.value.judgment] : [],
-          ),
-        ),
-      );
-    } catch (error) {
-      if (isWorkflowInterrupted(error)) throw error;
-      // Shared discovery is advisory; isolate failures through the existing per-charge path.
-    }
+    const spendingPage: LabelSpendingPage = {
+      accounts: new Map(
+        preparation.accounts.flatMap((account) => [
+          [account.id, account],
+          [account.shortcode, account],
+        ]),
+      ),
+      vendors: new Map(),
+      pendingVendorNames: new Set(
+        classified.flatMap((result) => {
+          const create =
+            result.status === "fulfilled" ? result.value.judgment.create : null;
+          const merchant =
+            create?.merchant?.trim() || create?.rawDescription?.trim();
+          return merchant ? [merchant] : [];
+        }),
+      ),
+    };
     const finish = async () => {
       const finishWave = (wave: typeof classified) =>
         withFieldSuggestionBatch(async () => {
@@ -732,10 +771,27 @@ async function runStatementLabelBatch(
     const computed = await time("statement_spending", () =>
       input.cooperative ? withCooperativeAiWork(finish) : finish(),
     );
-    await admitTargets();
     const readyCharges: ChargeRef[] = targets
       .filter((t) => t.row.applicationPending)
       .map((t) => t.charge);
+    let saved: Awaited<ReturnType<typeof recordStatementAnswerBatch>> =
+      new Map();
+    let saveError: unknown;
+    try {
+      saved = await recordStatementAnswerBatch(db, {
+        scope: input.scope,
+        entries: preparedReady.flatMap((entry, index) => {
+          const result = computed[index]!;
+          return result.status === "fulfilled" &&
+            result.value.labels.generated &&
+            !skipped.has(chargeId(entry.current.charge))
+            ? [{ charge: entry.current.charge, answers: result.value.answers }]
+            : [];
+        }),
+      });
+    } catch (error) {
+      saveError = error;
+    }
     for (const [index, entry] of preparedReady.entries()) {
       const result = computed[index]!;
       if (skipped.has(chargeId(entry.current.charge))) continue;
@@ -747,12 +803,8 @@ async function runStatementLabelBatch(
       labels.generated += result.value.labels.generated;
       try {
         if (result.value.labels.generated) {
-          const saved = await recordStatementAnswers(db, {
-            charge: entry.current.charge,
-            answers: result.value.answers,
-            scope: input.scope,
-          });
-          if (saved !== "saved") {
+          if (saveError) throw saveError;
+          if (saved.get(chargeId(entry.current.charge)) !== "saved") {
             skipped.add(chargeId(entry.current.charge));
             skippedIds.push(entry.target.row.id);
             stale++;
