@@ -2329,12 +2329,7 @@ describe("mail research admission", () => {
     },
   );
 
-  it.each([
-    "retained checksum",
-    "Email checksum",
-    "Email ownership",
-    "excluded Email",
-  ])(
+  it.each(["retained checksum", "Email ownership", "excluded Email"])(
     "refuses selected Luna retries when current source changes: %s",
     async (change) => {
       const { party, mail } = await source();
@@ -2372,11 +2367,9 @@ describe("mail research admission", () => {
         await getDb(ctx.db)
           .update(emailTable)
           .set(
-            change === "Email checksum"
-              ? { checksum: "b".repeat(64) }
-              : change === "Email ownership"
-                ? { runId: admittedId }
-                : { status: "excluded" },
+            change === "Email ownership"
+              ? { runId: admittedId }
+              : { status: "excluded" },
           )
           .where(eq(emailTable.orderMailId, mail.id));
       let transmissions = 0;

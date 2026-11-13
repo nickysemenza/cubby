@@ -47,6 +47,7 @@ import {
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import {
   confirmEmailClassification,
+  hasStoredClassificationForChecksum,
   hasRetainedOrderMailContent,
   readMemberClassification,
   restoreOrderMailContent,
@@ -159,15 +160,24 @@ const retainOriginal = async (
   return orderMailId;
 };
 
-const unchangedClassification = (
+async function unchangedClassification(
+  db: Database,
   prior: Awaited<ReturnType<typeof readEmail>>,
   checksum: string,
-) =>
-  prior?.checksum === checksum &&
-  prior.classification !== null &&
-  prior.classificationVersion === MAILBOX_RESEARCH_VERSION &&
-  prior.status !== "excluded" &&
-  prior.status !== "deleted";
+): Promise<boolean> {
+  if (
+    !prior ||
+    prior.classification === null ||
+    prior.classificationVersion !== MAILBOX_RESEARCH_VERSION ||
+    prior.status === "excluded" ||
+    prior.status === "deleted"
+  )
+    return false;
+  return (
+    prior.checksum === checksum ||
+    hasStoredClassificationForChecksum(db, prior, checksum)
+  );
+}
 
 // Uncertainty is research work when source content is available; absent bytes
 // remain an explicit gap rather than an invented retained original.
@@ -607,7 +617,7 @@ async function acquireEligible(
     return { kind: "skipped" };
   }
   const unchanged =
-    !input.reclassify && unchangedClassification(prior, checksum);
+    !input.reclassify && (await unchangedClassification(db, prior, checksum));
   const search = memberSearchOwnership(input, prior, executionPolicy);
   const publication: Parameters<typeof publishGmailEvidence>[1] = {
     ...identity,

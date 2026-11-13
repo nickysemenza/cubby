@@ -3,11 +3,15 @@ import {
   MAILBOX_RESEARCH_VERSION,
   type MailboxClassificationDecision,
 } from "@cubby/schemas/mailbox-research";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { email as emailTable, orderMail } from "~/server/db/schema";
+import {
+  email as emailTable,
+  emailClassificationObservation,
+  orderMail,
+} from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -73,4 +77,28 @@ export async function restoreOrderMailContent(
       .where(eq(emailTable.orderMailId, orderMailId));
     await recordChange(tx, { kind: "source", categories: ["email"] });
   });
+}
+
+/** Routing can describe a later retrieval while Email retains its first observation. */
+export async function hasStoredClassificationForChecksum(
+  db: Database,
+  email: typeof emailTable.$inferSelect,
+  checksum: string,
+): Promise<boolean> {
+  const observations = await getDb(db)
+    .select()
+    .from(emailClassificationObservation)
+    .where(
+      and(
+        eq(emailClassificationObservation.emailId, email.id),
+        eq(emailClassificationObservation.checksum, checksum),
+      ),
+    );
+  return observations.some(
+    (observation) =>
+      observation.classification === email.classification &&
+      observation.stage === email.classificationStage &&
+      observation.reason === email.classificationReason &&
+      observation.classificationVersion === email.classificationVersion,
+  );
 }

@@ -365,6 +365,11 @@ describe("Gmail acquisition retention and replay", () => {
     );
     const [refreshed] = await getDb(ctx.db).select().from(orderMail);
     expect(refreshed?.rawChecksum).not.toBe(original.rawChecksum);
+    const [observed] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.orderMailId, original.id));
+    expect(observed?.checksum).toBe(original.rawChecksum);
     const [currentRoot] = await getDb(ctx.db)
       .select()
       .from(importSourceClaim)
@@ -724,14 +729,7 @@ describe("Gmail acquisition retention and replay", () => {
         ledgerPartyIds: [party.id],
         orderMailIds: [mail.id],
       }),
-    ).toEqual([
-      {
-        ...mail,
-        sender: "shared@platform.example",
-        subject: "Synthetic notice",
-        receivedAt: new Date("2026-09-01T00:00:00.000Z"),
-      },
-    ]);
+    ).toEqual([mail]);
     expect(await getDb(ctx.db).select().from(orderMailAttachment)).toEqual([
       attachment,
     ]);

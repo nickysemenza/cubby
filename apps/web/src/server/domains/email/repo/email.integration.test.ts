@@ -423,7 +423,7 @@ describe("Email generic persisted reads", () => {
       });
     }
   });
-  it("shows independent reviewed relevance without rewriting routing and marks changed content unreviewed", async () => {
+  it("shows independent reviewed relevance without rewriting routing", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic independent reviewer",
       kind: "member",
@@ -479,26 +479,6 @@ describe("Email generic persisted reads", () => {
               },
             },
           },
-        },
-      },
-    });
-    await getDb(ctx.db).execute(
-      sql`UPDATE "Email" SET checksum = ${"b".repeat(64)} WHERE id = ${email.id}::uuid`,
-    );
-    const changed = await executeEntity(context, {
-      action: "get",
-      missing: "error",
-      entity: "email",
-      id: parseShortcodeFor("email", email.shortcode),
-    });
-    expect(changed.item).toMatchObject({
-      classification: "unrelated",
-      fields: {
-        reviewedClassification: {
-          result: { decision: { outcome: { kind: "empty" } } },
-        },
-        reviewedClassificationReason: {
-          result: { decision: { outcome: { kind: "empty" } } },
         },
       },
     });
