@@ -72,6 +72,10 @@ import {
   digestCanonicalEvidenceStream,
 } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import {
+  availableSpendingMinor,
+  recordedSpendingOutcome,
+} from "~/server/domains/financial-transaction/policy/recorded-spending";
+import {
   decideSpendingCandidates,
   type SpendingCandidateRead,
 } from "~/server/domains/financial-transaction/policy/spending-candidates";
@@ -842,41 +846,25 @@ function availableCents(
   amount: number,
   currentId?: string,
 ) {
-  if (!graph) return null;
-  const lines = graph.lines.filter(
-    (line) => !line.future && line.economicRole === "vendor",
+  const capacity = availableSpendingMinor(
+    graph && {
+      lines: graph.lines.map((line) => ({
+        ...line,
+        costMinor: line.cost === null ? null : moneyToMinor(line.cost),
+      })),
+      settlements: graph.settlements.map((row) => ({
+        ...row,
+        amountMinor: moneyToMinor(Number(row.amount)),
+        transactionAmountMinor: moneyToMinor(Number(row.transactionAmount)),
+        allocatedMinor: moneyToMinor(Number(row.allocatedAmount)),
+        deleted: Boolean(row.deletedAt),
+        accountDeleted: Boolean(row.accountDeletedAt),
+      })),
+    },
+    moneyToMinor(amount),
+    currentId,
   );
-  if (
-    !lines.length ||
-    lines.some((line) => line.cost === null || line.lineKind === "unclassified")
-  )
-    return null;
-  const matching = lines.filter((line) =>
-    amount < 0
-      ? line.cost !== null && line.cost < 0 && line.lineKind === "principal"
-      : line.cost !== null && (line.cost >= 0 || line.lineKind !== "principal"),
-  );
-  const other = otherSettlements(graph, amount, currentId);
-  if (
-    other.some(
-      (entry) =>
-        entry.deletedAt ||
-        entry.accountDeletedAt ||
-        entry.status === "void" ||
-        entry.status === "expected" ||
-        entry.ledgerTransferId ||
-        !["purchase", "fee", "refund"].includes(entry.kind) ||
-        cents(Number(entry.allocatedAmount)) !==
-          cents(Number(entry.transactionAmount)) ||
-        Math.sign(Number(entry.amount)) !==
-          Math.sign(Number(entry.transactionAmount)),
-    )
-  )
-    return null;
-  return (
-    matching.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) -
-    other.reduce((sum, entry) => sum + cents(Number(entry.amount)), 0)
-  );
+  return capacity === null ? null : Number(capacity);
 }
 
 /** `financialSpendingCategoryHistory` for several Vendors in one statement. */
@@ -1691,60 +1679,45 @@ async function existingSpendingOutcome(
   page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan | null> {
   const { row, source, allocations, graphs } = facts;
-  const review = (reason: string): FinancialSpendingPlan => ({
-    ...basis,
-    status: "review_required",
-    reason,
+  const lineageMatches =
+    !allocations.length ||
+    basis.request.beneficiaries !== undefined ||
+    !row?.bookingExpenseFingerprint ||
+    row.bookingExpenseFingerprint ===
+      (await digestValue(
+        page?.lineages.get(row.shortcode) ??
+          (await loadFinancialBookingLineage(
+            db,
+            parseShortcodeFor("financialTransaction", row.shortcode),
+          )),
+      ));
+  const outcome = recordedSpendingOutcome({
+    amountMinor: moneyToMinor(source.amount),
+    beneficiariesSpecified: basis.request.beneficiaries !== undefined,
+    lineageMatches,
+    allocations: allocations.map((allocation) => ({
+      ...allocation,
+      amountMinor: moneyToMinor(allocation.amount),
+    })),
+    purchases: graphs.map((graph) => ({
+      id: graph.target?.id ?? "",
+      shortcode: graph.target?.shortcode ?? "",
+      availableMinor: (() => {
+        const value = availableCents(graph, source.amount, row?.id);
+        return value === null ? null : BigInt(value);
+      })(),
+    })),
   });
-  if (allocations.length) {
-    if (basis.request.beneficiaries !== undefined)
-      return review(
-        "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
-      );
-    const complete =
-      cents(
-        allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
-      ) === cents(source.amount);
-    const booked = graphs.every((graph) => {
-      const allocation = allocations.find(
-        (entry) => entry.purchaseId === graph.target?.id,
-      );
-      return (
-        allocation &&
-        Math.sign(allocation.amount) === Math.sign(source.amount) &&
-        availableCents(graph, source.amount, row?.id) ===
-          cents(allocation.amount)
-      );
-    });
-    if (
-      row?.bookingExpenseFingerprint &&
-      row.bookingExpenseFingerprint !==
-        (await digestValue(
-          page?.lineages.get(row.shortcode) ??
-            (await loadFinancialBookingLineage(
-              db,
-              parseShortcodeFor("financialTransaction", row.shortcode),
-            )),
-        ))
-    )
-      return review(
-        "The booking lineage changed; reconcile the existing Expenses.",
-      );
-    if (complete && booked)
-      return {
+  if (!outcome) return null;
+  return outcome.kind === "review"
+    ? { ...basis, status: "review_required", reason: outcome.reason }
+    : {
         ...basis,
         status: "already_booked",
-        purchaseIds: graphs.flatMap((graph) =>
-          graph.target
-            ? [parseShortcodeFor("purchase", graph.target.shortcode)]
-            : [],
-        ),
+        purchaseIds: outcome.purchaseIds
+          .filter(Boolean)
+          .map((id) => parseShortcodeFor("purchase", id)),
       };
-    return review(
-      "Existing allocations need reconciliation before booking more spending.",
-    );
-  }
-  return null;
 }
 
 // A receipt without payment evidence is this charge's Purchase only when the
