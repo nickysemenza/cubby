@@ -1,4 +1,7 @@
-LOCK TABLE "Job", "Pass", "Run", "AppSettings", "AiAnalysis" IN SHARE ROW EXCLUSIVE MODE;
+-- Tables later altered or dropped, and the tables their dropped foreign keys reference.
+LOCK TABLE "Job", "Run" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
+LOCK TABLE "AiAnalysis", "AppSettings", "Pass" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 -- Inventory admission owns the evidence publication; its model call is an Ask.
 INSERT INTO "Pass" (name,key,"runId",cursor,attempts,"maxAttempts","availableAt","waitCause","lastError","cancelledAt","createdAt","updatedAt")

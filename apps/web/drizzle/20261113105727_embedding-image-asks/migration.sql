@@ -1,4 +1,7 @@
-LOCK TABLE "Job", "SearchDocument", "EntityEmbedding", "ImageProcessingJob", "ImageProcessingAttempt", "ImageProcessingEvent", "AiUsage", "Image", "Entity", "Ask", "Answer", "AskScope", "Pass" IN SHARE ROW EXCLUSIVE MODE;
+-- Tables later altered or dropped, and the tables their dropped foreign keys reference.
+LOCK TABLE "Answer", "Ask", "EntityEmbedding", "ImageProcessingAttempt", "ImageProcessingJob", "ImageProcessingSubmission", "SearchDocument" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
+LOCK TABLE "AiUsage", "AskScope", "Entity", "Image", "ImageProcessingEvent", "Job", "Pass" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TABLE "ImageEvidence" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

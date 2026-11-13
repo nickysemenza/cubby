@@ -44,6 +44,7 @@ import type { AskKind, Json, Produced, ScopeRef, EvidenceRow } from "./define";
 import { markDirty } from "./dirty";
 import { askEnvelope, inputHashOf, type AskEnvelope } from "./envelope";
 import { answerKey } from "./keys";
+import { runProduce } from "./produce-ledger";
 import { KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { isoText } from "./sql-time";
@@ -284,22 +285,38 @@ async function commitAnswer(
 }
 
 /**
- * Settle a call that failed after it was marked `sent`. A wait proves nothing
- * left (funding admission refuses before the request), so the ask is queued
- * again with its cause; a lost connection or lapsed claim leaves the outcome
- * unknown; any other failure was answered by the provider and spends an
- * attempt.
+ * Settle a call that failed after it was marked `sent`. A failure the produce
+ * ledger proves unsent (a declared refusal and no request on the wire) is
+ * queued again and settled by the claim classifier with its refusal, so a
+ * wait keeps its cause and spends no attempt. Anything else, including a
+ * malformed response or a provider error after a request left, cannot prove
+ * that the provider did no paid work and becomes `unknown`.
  */
 async function settleSent(
   db: Database,
   registry: KernelRegistry,
-  ask: { id: string; token: string },
+  ask: ClaimedAsk,
   error: UnparsedError,
+  unsent: UnparsedError | null,
 ): Promise<void> {
-  // Admission failures settle before sent. Once sent, an unclassified failure
-  // or malformed response cannot prove that the provider did no paid work.
   await repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
+    if (unsent) {
+      const requeued = await q.execute<{ id: string }>(sql`
+        UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL
+        WHERE id = ${ask.id}::uuid AND state = ${ASK.sent} AND "claimToken" = ${ask.token}::uuid
+        RETURNING id`);
+      if (requeued.rows.length)
+        await settleFailure(
+          q,
+          { table: "Ask", id: ask.id },
+          ask.token,
+          ask.attempts,
+          unsent,
+          ask.wakeVersion,
+        );
+      return;
+    }
     const changed = await q.execute<{ id: string }>(sql`
       UPDATE "Ask" SET state = ${ASK.unknown}, "claimToken" = NULL, "claimDeadline" = NULL,
         "lastError" = ${rawError(error)}
@@ -434,9 +451,8 @@ async function executeClaimed(
             // SILENT: a failed renewal lets the claim lapse; expiry settles it.
           });
       }, RENEW_EVERY_MS);
-      let produced: Produced<unknown>;
-      try {
-        produced = await kind.produce!(entry.input, {
+      const outcome = await runProduce(() =>
+        kind.produce!(entry.input, {
           db,
           signal: controller.signal,
           ask: {
@@ -445,15 +461,33 @@ async function executeClaimed(
             promptVersion: kind.promptVersion,
           },
           runId: requesters.get(ask.id) ?? null,
-        });
-        produced = { ...produced, output: kind.output.parse(produced.output) };
+        }),
+      );
+      let produced: Produced<unknown>;
+      try {
+        if (outcome.status === "failed") throw outcome.error;
+        produced = {
+          ...outcome.value,
+          output: kind.output.parse(outcome.value.output),
+          costMicros:
+            outcome.value.costMicros === undefined
+              ? outcome.costMicros
+              : outcome.value.costMicros,
+        };
       } catch (error) {
         clearInterval(heartbeat);
         await askResponseClaims
           .release(ask.inputHash, cacheToken)
           // SILENT: an unreleased cache claim lapses on its own lease.
           .catch(() => undefined);
-        await settleSent(db, registry, ask, error);
+        // A hosted turn's transport is outside the ledger; it cannot prove unsent.
+        await settleSent(
+          db,
+          registry,
+          ask,
+          error,
+          outcome.status === "failed" && !kind.hosted ? outcome.unsent : null,
+        );
         results[index] = { status: "failed", error };
         return;
       }

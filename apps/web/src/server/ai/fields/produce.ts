@@ -1,6 +1,7 @@
 /**
  * The field Ask's producer: the saved-record decision question for one
  * field, asked only while the record's stored columns equal the Ask's input.
+ * A stale input is refused before any model call, so its Ask re-queues.
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityRef, runEntityId } from "@cubby/schemas/identifiers";
@@ -16,6 +17,7 @@ import { fieldJson, valueKey } from "~/server/ai/policy/field-rules";
 import type { Database } from "~/server/db";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { Produced } from "~/server/kernel/api";
+import { refusedBeforeSending } from "~/server/kernel/produce-ledger";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
 import type { FieldAskInput } from "./ask";
@@ -37,8 +39,10 @@ export async function produceFieldAnswer(
   >
 > {
   if (!prepareOnly && !input.questions)
-    throw new WorkEvidenceObsoleteError(
-      "The field question has no prepared model inputs",
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The field question has no prepared model inputs",
+      ),
     );
   const plan = fieldPlan(input.entity, input.field);
   if (!plan)
@@ -55,8 +59,10 @@ export async function produceFieldAnswer(
       ([key, value]) => valueKey(fieldJson(stored[key])) !== valueKey(value),
     )
   )
-    throw new WorkEvidenceObsoleteError(
-      "The record changed after Cubby read it; the new values file their own question",
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The record changed after Cubby read it; the new values file their own question",
+      ),
     );
   const prepared = await prepareSavedField(
     db,
@@ -65,8 +71,10 @@ export async function produceFieldAnswer(
     input.field,
   );
   if (!prepared)
-    throw new WorkEvidenceObsoleteError(
-      "The record or its field result is unavailable",
+    throw refusedBeforeSending(
+      new WorkEvidenceObsoleteError(
+        "The record or its field result is unavailable",
+      ),
     );
   const references = plan.field.reference;
   const labelById = new Map<string, string>();

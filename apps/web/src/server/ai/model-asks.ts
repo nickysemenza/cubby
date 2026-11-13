@@ -8,7 +8,6 @@ import {
 import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
-import { produceModel } from "~/server/ai/model-call-context";
 import { decisionImageSchema } from "~/server/ai/policy/decision-choice";
 import { AI_FEATURES, RUN_SUMMARY_FEATURE } from "~/server/ai/policy/features";
 import type {
@@ -171,75 +170,74 @@ export const modelAsks = declarations.map((feature) =>
     },
     label: feature.feature,
     admit: (db, context) => admitModel(db, feature.tier, context),
-    produce: (input, { db, runId, ask }) =>
-      produceModel(async () => {
-        const usage = {
-          db,
-          operation: feature.feature,
-          runId: runId ? runEntityId.parse(runId) : undefined,
-          applicationCache: false,
-        };
-        if (input.kind === "choice") {
-          if (feature.tier !== "decision")
-            throw new Error("A structured feature cannot answer a choice Ask");
-          const value = await (
-            await import("./decision-model")
-          ).runDecisionChoice({
-            feature: {
-              ...feature,
-              promptVersion: ask.promptVersion ?? feature.promptVersion,
-            },
-            ...input,
-            images: input.images
-              ? await resolveDecisionMedia(input.images)
-              : undefined,
-            usage,
-            decisionModel: input.model,
-          });
-          return {
-            output: { value: z.json().parse(value), model: input.model },
-            model: input.model,
-            tier: feature.tier,
-          };
-        }
-        if (!("schema" in feature))
-          throw new Error("A choice feature cannot answer a structured Ask");
-        let model: string | null = null;
-        let details: { raw: string; tier: string } | undefined;
+    async produce(input, { db, runId, ask }) {
+      const usage = {
+        db,
+        operation: feature.feature,
+        runId: runId ? runEntityId.parse(runId) : undefined,
+        applicationCache: false,
+      };
+      if (input.kind === "choice") {
+        if (feature.tier !== "decision")
+          throw new Error("A structured feature cannot answer a choice Ask");
         const value = await (
-          await import("./run-feature")
-        ).runStructuredFeature<unknown>(
-          {
+          await import("./decision-model")
+        ).runDecisionChoice({
+          feature: {
             ...feature,
             promptVersion: ask.promptVersion ?? feature.promptVersion,
-            model: input.model,
-            tier: input.tier ?? feature.tier,
-            ...(input.parameters
-              ? {
-                  maxTokens: input.parameters.maxTokens,
-                  effort: input.parameters.effort,
-                  schema: z.fromJSONSchema(input.parameters.schema),
-                }
-              : {}),
           },
-          input.request,
-          {
-            ...usage,
-            onProduced: (response) => {
-              details = response;
-            },
-            onAnswered: (answered) => {
-              model = answered;
-            },
-          },
-        );
+          ...input,
+          images: input.images
+            ? await resolveDecisionMedia(input.images)
+            : undefined,
+          usage,
+          decisionModel: input.model,
+        });
         return {
-          output: { value: z.json().parse(value), model },
-          model,
-          tier: input.tier ?? feature.tier,
-          ...details,
+          output: { value: z.json().parse(value), model: input.model },
+          model: input.model,
+          tier: feature.tier,
         };
-      }),
+      }
+      if (!("schema" in feature))
+        throw new Error("A choice feature cannot answer a structured Ask");
+      let model: string | null = null;
+      let details: { raw: string; tier: string } | undefined;
+      const value = await (
+        await import("./run-feature")
+      ).runStructuredFeature<unknown>(
+        {
+          ...feature,
+          promptVersion: ask.promptVersion ?? feature.promptVersion,
+          model: input.model,
+          tier: input.tier ?? feature.tier,
+          ...(input.parameters
+            ? {
+                maxTokens: input.parameters.maxTokens,
+                effort: input.parameters.effort,
+                schema: z.fromJSONSchema(input.parameters.schema),
+              }
+            : {}),
+        },
+        input.request,
+        {
+          ...usage,
+          onProduced: (response) => {
+            details = response;
+          },
+          onAnswered: (answered) => {
+            model = answered;
+          },
+        },
+      );
+      return {
+        output: { value: z.json().parse(value), model },
+        model,
+        tier: input.tier ?? feature.tier,
+        ...details,
+      };
+    },
   }),
 );
 

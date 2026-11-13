@@ -7,7 +7,8 @@
  * 0028's rules ({@link decideField}) and patches the `apply: "auto"` columns,
  * including a person's assignment, which only this scope may write.
  *
- * Asked: open or Cubby-held `auto` and `review` fields with a usable basis.
+ * Asked: open or Cubby-held `auto` and `review` fields with a usable basis,
+ * except a value Cubby held at cutover whose basis and value are unchanged.
  * `offer` fields only read an existing answer for the picker. A person-held
  * field and a `fillOnly` field Cubby already filled are not asked here; declared prune reviews may propose removals from a person-held
  * array and always wait for a decision.
@@ -46,7 +47,7 @@ import {
 } from "~/server/kernel/api";
 
 import { analysisSources, analysisAsk, loadAnalysis } from "./analysis";
-import { fieldAsk, type FieldAskInput } from "./ask";
+import { fieldAsk, fieldBaselineAsk, type FieldAskInput } from "./ask";
 import type { FieldAnswer } from "./repo/field-answer";
 import {
   fieldsPlanOf,
@@ -425,7 +426,7 @@ export function fieldsReconciler(
       ...analysisSources,
     ],
     writes: [...writeRefs.values()],
-    asks: [ask, analysisAsk("location"), analysisAsk("run")],
+    asks: [ask, fieldBaselineAsk, analysisAsk("location"), analysisAsk("run")],
     load: (reads, keys) => load(reads, keys, ask === fieldAsk),
     reconcile(input, c) {
       const plan = fieldsPlans().get(input.entity)!;
@@ -474,10 +475,23 @@ export function fieldsReconciler(
             precedents: [...(input.precedents.get(field.key) ?? [])],
             questions: input.questions?.get(field.key),
           };
-          const answer = c.answer(ask, askInput, {
-            request: field.apply !== "offer",
-          });
-          if (answer.status === "answered") proposal = answer.output.proposal;
+          // The cutover's value stands while its basis and value are unchanged.
+          const baseline = c.answer(
+            fieldBaselineAsk,
+            { entity: input.entity, recordId: input.id, field: field.key },
+            { request: false },
+          );
+          const held =
+            baseline.status === "answered" &&
+            Object.entries(askInput.row).every(
+              ([key, value]) =>
+                valueKey(fieldJson(baseline.output.record[key])) ===
+                valueKey(value),
+            );
+          const answer = held
+            ? null
+            : c.answer(ask, askInput, { request: field.apply !== "offer" });
+          if (answer?.status === "answered") proposal = answer.output.proposal;
         }
         // A person's decision on a column this scope owns is applied here;
         // the entity's writer applies only authored columns (decide).

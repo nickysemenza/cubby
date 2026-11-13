@@ -41,3 +41,23 @@ export const fieldAsk = defineAsk({
       context.runId,
     ),
 });
+
+/**
+ * The value Cubby held at cutover and the record it held it on, written only
+ * by the cutover migration and never produced. While the field's basis and
+ * value still equal that record, the `fields` scope keeps the value without
+ * asking (ADR 0029 section 11).
+ */
+export const fieldBaselineAsk = defineAsk({
+  feature: "legacy:field",
+  producer: "model",
+  promptVersion: "legacy",
+  input: z.object({
+    entity: z.string(),
+    recordId: z.uuid(),
+    field: z.string(),
+  }),
+  output: z.object({ value: z.json(), record: z.record(z.string(), z.json()) }),
+  policy: { outputRevision: "legacy-field.v1" },
+  label: "Cubby's value at cutover",
+});
