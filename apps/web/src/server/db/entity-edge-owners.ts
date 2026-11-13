@@ -21,10 +21,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { DECLARED_EDGE_OWNERS } from "./generated/declared-edges.gen";
 import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
-import {
-  financialTransactionAllocation,
-  purchasePaymentEvidence,
-} from "./schema";
+import { purchasePaymentEvidence } from "./schema";
 
 // `edges()` holds each key to its column's literal `Table.column` name, so the
 // key's first segment is the table that carries the edge column.
@@ -67,10 +64,6 @@ const WORKFLOW =
 
 export const ENTITY_EDGE_OWNERS = {
   ...DECLARED_EDGE_OWNERS,
-
-  FinancialTransactionAllocation: {
-    owner: financialTransactionAllocation.transactionId,
-  },
 
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
 

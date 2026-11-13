@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { financialTransactionRawOut as rawFinancialTransactionOut } from "@cubby/schemas/entity-contracts/financialTransaction";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   FinancialTransactionCreateInput,
   FinancialTransactionSourceOptionsOut,
@@ -33,7 +32,8 @@ import {
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   getDb,
@@ -1244,38 +1244,8 @@ export async function updateFinancialTransactions(
   return ids;
 }
 
-const FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY = {
-  "EmailFinancialAssociation.transactionId": {
-    code: "preserve-reviewed-email-association",
-    effect: "preserve",
-    description:
-      "A reviewed Email association keeps naming the deleted transaction's tombstone; the review is history and is never rewritten.",
-  },
-  "FinancialTransactionAllocation.transactionId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Deleting a settlement transaction soft-deletes the purchase allocations that decompose it. Those Purchases keep their expenses and their identity; they simply lose this piece of settlement evidence.",
-  },
-  "SourceOccurrence.acceptedTransactionId": {
-    code: "preserve-accepted-source-reservation",
-    effect: "preserve",
-    description:
-      "Deleting a transaction keeps its source reservation; it cannot recreate money through replay.",
-  },
-  "FinancialEvidenceAlias.historicalTransactionId": {
-    code: "retire-financial-source-provenance",
-    effect: "soft-delete",
-    description:
-      "Deleting a transaction retires its reference bindings while preserving every alias row and provenance through tombstones. Proven source occurrence reservations remain independent.",
-  },
-} as const satisfies IncomingEdgePolicy<
-  "financialTransaction",
-  OperationDisposition
->;
-
 /** Evidence for a ledger transfer stays until the transfer releases it. */
-const refuseTransferEvidence = async (
+export const refuseTransferEvidence = async (
   tx: DrizzleTransaction,
   ids: FinancialTransactionId[],
 ) => {
@@ -1301,7 +1271,7 @@ const refuseTransferEvidence = async (
  * transaction split across two purchases has a NULL mirror, so reading only
  * that column would leave both purchases' data-quality exceptions stale.
  */
-const touchAllocatedPurchases = async (
+export const touchAllocatedPurchases = async (
   tx: DrizzleTransaction,
   ids: FinancialTransactionId[],
 ) => {
@@ -1341,7 +1311,7 @@ export const financialTransactionRepository = defineRepository(
   "financialTransaction",
   {
     schemas: financialTransactionSchemaBindings,
-    lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
+    lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.financialTransaction },
     scaffold: financialTransactionScaffold,
     create: asActor(createFinancialTransaction),
     update: asActor(
@@ -1360,30 +1330,31 @@ export const financialTransactionRepository = defineRepository(
         data,
         ctx.actorContext,
       ),
-    deleteHooks: {
-      beforeLock: async (tx, ids) => {
-        await lockFinancialEvidenceKeys(
-          tx,
-          "reviewed-booking",
-          ids.map((id) => `transaction:${id}`),
-        );
-        const refs = await financialSourceRefsFor(tx, ids);
-        await lockFinancialEvidenceKeys(
-          tx,
-          "transaction-ref",
-          [...refs.values()]
-            .flat()
-            .map((ref) => JSON.stringify([ref.source, ref.externalId])),
-        );
-        await tx
-          .select({ id: sourceOccurrence.id })
-          .from(sourceOccurrence)
-          .where(inArray(sourceOccurrence.acceptedTransactionId, ids))
-          .orderBy(sourceOccurrence.id)
-          .for("update");
-      },
-      beforeDelete: refuseTransferEvidence,
-      afterDelete: touchAllocatedPurchases,
-    },
+    deleteHooks: DECLARED_EDGE_DELETE_HOOKS.financialTransaction,
   },
 );
+
+export const lockFinancialTransactionDeletion = async (
+  tx: DrizzleTransaction,
+  ids: FinancialTransactionId[],
+): Promise<void> => {
+  await lockFinancialEvidenceKeys(
+    tx,
+    "reviewed-booking",
+    ids.map((id) => `transaction:${id}`),
+  );
+  const refs = await financialSourceRefsFor(tx, ids);
+  await lockFinancialEvidenceKeys(
+    tx,
+    "transaction-ref",
+    [...refs.values()]
+      .flat()
+      .map((ref) => JSON.stringify([ref.source, ref.externalId])),
+  );
+  await tx
+    .select({ id: sourceOccurrence.id })
+    .from(sourceOccurrence)
+    .where(inArray(sourceOccurrence.acceptedTransactionId, ids))
+    .orderBy(sourceOccurrence.id)
+    .for("update");
+};

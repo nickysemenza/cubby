@@ -27,13 +27,10 @@ import {
   financialTransactionAllocation,
   importPreparedOrder,
   sourceOrderObservation,
-  emailFinancialAssociation,
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
   purchasePaymentEvidence,
-  sourceOccurrence,
-  financialEvidenceAlias,
 } from "./schema";
 
 /** `${pgTable name}.${column name}` — e.g. `"EntityAttachment.imageId"`. */
@@ -284,53 +281,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     ...linkEdgesFor("purchase"),
   },
 
-  financialTransaction: {
-    ...edges({
-      "SourceOccurrence.acceptedTransactionId": {
-        column: sourceOccurrence.acceptedTransactionId,
-        role: "history",
-        label: "accepted source reservation",
-        description: "Acceptance remains reserved after transaction deletion.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "A deleted accepted transaction never releases identity for automatic money recreation.",
-        },
-      },
-      "FinancialEvidenceAlias.historicalTransactionId": {
-        column: financialEvidenceAlias.historicalTransactionId,
-        role: "history",
-        label: "retained source bindings",
-        description: "Former source bindings remain original evidence.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "Retained provenance names transaction tombstones without establishing current ownership.",
-        },
-      },
-      "EmailFinancialAssociation.transactionId": {
-        column: emailFinancialAssociation.transactionId,
-        role: "history",
-        label: "reviewed Email associations",
-        description:
-          "A member-reviewed link from an Email's evidence to this transaction; the review keeps naming it after the transaction is deleted.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "A reviewed Email-to-transaction association is append-only history that keeps its original UUIDs through every tombstone.",
-        },
-      },
-      "FinancialTransactionAllocation.transactionId": {
-        column: financialTransactionAllocation.transactionId,
-        role: "composition",
-        label: "purchase allocations",
-        description:
-          "One slice of this transaction's amount, attributed to a single Purchase. The slices are meaningless apart from the charge whose amount they decompose: a transaction has either none of them, or a set that sums to its amount exactly and shares its sign.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...externalIdEdgesFor("financialTransaction"),
-  },
   expense: {
     ...edges({
       "ImportSourceProduct.expenseId": {
