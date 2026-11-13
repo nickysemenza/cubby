@@ -443,6 +443,16 @@ export const sweepFieldTargets = z
 /** The Suggestion families a Sweep can cover, each with its own scope. */
 export const sweepFamilyScope = z.discriminatedUnion("family", [
   z.strictObject({
+    family: z.literal("statement_transaction"),
+    scope: z
+      .strictObject({
+        importId: z.uuid().optional(),
+        accountIds: z.array(z.uuid()).max(100).optional(),
+        since: plainDate.optional(),
+      })
+      .default({}),
+  }),
+  z.strictObject({
     family: z.literal("field"),
     scope: z
       .strictObject({
@@ -460,10 +470,6 @@ export type SweepFamily = SweepFamilyScope["family"];
  */
 const retiredSweepFamilyScope = z.discriminatedUnion("family", [
   z.object({
-    family: z.literal("statement_transaction"),
-    scope: z.record(z.string(), z.json()).default({}),
-  }),
-  z.object({
     family: z.literal("transfer_pair"),
     scope: z.record(z.string(), z.json()).default({}),
   }),
@@ -474,7 +480,6 @@ const retiredSweepFamilyScope = z.discriminatedUnion("family", [
 ]);
 export type RetiredSweepFamilyScope = z.infer<typeof retiredSweepFamilyScope>;
 export const RETIRED_SWEEP_FAMILY_LABEL = {
-  statement_transaction: "Statements",
   transfer_pair: "Transfer pairs",
   recommendation: "Connections",
 } as const satisfies Record<RetiredSweepFamilyScope["family"], string>;
@@ -489,6 +494,7 @@ export const isExecutableSweepFamily = (
 ): entry is SweepFamilyScope => entry.family in SWEEP_FAMILY_LABEL;
 /** Each Suggestion family's plural name, shared by Sweep steps, chips, and dialogs. */
 export const SWEEP_FAMILY_LABEL = {
+  statement_transaction: "Statements",
   field: "Fields",
 } as const satisfies Record<SweepFamily, string>;
 export const sweepRunInput = z.strictObject({

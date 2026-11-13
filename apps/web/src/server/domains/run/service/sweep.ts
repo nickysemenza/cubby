@@ -101,6 +101,12 @@ function scopeOf<F extends SweepFamily>(
 /** Each family's first counted step: its frozen COUNT and the Sweep estimate. */
 const familyInputCount = {
   // Targets come from the Sweep's own input, a closed population.
+  statement_transaction: async (db, scope) =>
+    (
+      await (
+        await import("../repo/statement-sweep")
+      ).statementSweepScopes(db, scope)
+    ).length,
   field: async (_db, scope) => fieldTargets(scope.targets).length,
 } satisfies {
   [F in SweepFamily]: (
@@ -223,7 +229,34 @@ const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
   },
 };
 
+const statementReconcile: StepDriversFor<"sweep">["statement_reconcile"] = {
+  count: async ({ db, run }) => ({
+    total: await familyInputCount.statement_transaction(
+      db,
+      scopeOf(run, "statement_transaction"),
+    ),
+    boundary: null,
+  }),
+  page: async ({ db, run, step }) => {
+    const { statementSweepScopes } = await import("../repo/statement-sweep");
+    const scopes = await statementSweepScopes(
+      db,
+      scopeOf(run, "statement_transaction"),
+    );
+    const { reconcileNow } = await import("~/server/kernel/api");
+    const page = scopes.slice(step.done, step.done + 50);
+    await reconcileNow(db, page, { runId: run.id });
+    return {
+      kind: "progress",
+      delta: { done: page.length },
+      cursor: { scopes },
+      done: step.done + page.length >= scopes.length,
+    };
+  },
+};
+
 export const sweepStepDrivers = {
+  statement_reconcile: statementReconcile,
   field_roster: fieldRoster,
   field_evaluate: fieldEvaluate,
 } satisfies StepDriversFor<"sweep">;

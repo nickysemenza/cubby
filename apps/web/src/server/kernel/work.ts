@@ -146,6 +146,9 @@ export async function readRunWork(
           FROM facts f JOIN "FactKey" k ON k."factKind" = f.kind AND k."factId" = f.id
           JOIN "ScopeDep" d ON d.key = k.key
           UNION SELECT "scopeKind", "scopeKey" FROM "AskScope" WHERE "runId" = ${runId}::uuid
+          UNION SELECT selected.kind, selected.key FROM "RunStep" step
+            CROSS JOIN LATERAL jsonb_to_recordset(step.cursor->'scopes') selected(kind text, key text)
+            WHERE step."runId"=${runId}::uuid
           UNION SELECT 'fields', 'run:' || ${runId}::text
           UNION SELECT 'quality', 'run:' || ${runId}::text
         )
