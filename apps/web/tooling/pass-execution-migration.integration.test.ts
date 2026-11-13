@@ -212,3 +212,40 @@ it("carries interrupted discovery, dispatch, funding and snapshot work without c
     ).toBeNull();
   });
 });
+
+it("does not revive a failed Run job that spent fewer than its attempt ceiling", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113054519_kernel_ownership_and_provenance",
+    });
+    const { seedCutoverPredecessor, cutoverId } =
+      await import("./accepted-input-cutover.fixtures");
+    await seedCutoverPredecessor(client);
+    await client.query(`UPDATE "Run" SET status='running' WHERE id=$1`, [
+      cutoverId(14),
+    ]);
+    await client.query(
+      `INSERT INTO "Job" (key,kind,"runId",input,state,attempts,"maxAttempts",error) VALUES ('synthetic:failed-run','run.execute',$1,'{}','failed',0,5,'Synthetic terminal failure')`,
+      [cutoverId(14)],
+    );
+    await migrateDatabase(db, {
+      through: "20261113065151_workflow_pass_intent",
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT attempts,"maxAttempts","lastError",attempts<"maxAttempts" claimable FROM "Pass" WHERE name='run.execute' AND key=$1`,
+          [cutoverId(14)],
+        )
+      ).rows,
+    ).toEqual([
+      {
+        attempts: 5,
+        maxAttempts: 5,
+        lastError: "Synthetic terminal failure",
+        claimable: false,
+      },
+    ]);
+  });
+});

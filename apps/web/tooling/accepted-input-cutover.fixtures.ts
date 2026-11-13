@@ -162,6 +162,34 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
       ],
     );
   }
+  const { FIELD_SUGGESTION_FEATURE } =
+    await import("../src/server/ai/policy/features");
+  for (const n of [69, 79])
+    await client.query(
+      `INSERT INTO "AiEvaluation" (id,"runId","workKey",feature,target,provenance,snapshot,state,attempts) VALUES ($1,$2,$3,'field_suggest',$4,$5,$6,'queued',0)`,
+      [
+        cutoverId(n),
+        cutoverId(14),
+        `synthetic:complete:${n}`,
+        {
+          kind: "field",
+          entity: "product",
+          recordId: cutoverId(13),
+          field: `ready${n}`,
+        },
+        { promptVersion: FIELD_SUGGESTION_FEATURE.promptVersion },
+        {
+          modelInput: {
+            kind: "choice",
+            model: FIELD_SUGGESTION_FEATURE.model,
+            subject: 'Synthetic subject with spaces, brackets [] and quotes "',
+            rules: "Synthetic rules",
+            choices: ["A", "B"],
+            allowNone: true,
+          },
+        },
+      ],
+    );
   await client.query(
     `UPDATE "AiEvaluation" SET "leaseToken"=$1,"leaseUntil"=now()+interval '1 hour' WHERE id=$2`,
     [cutoverId(61), cutoverId(41)],
@@ -327,5 +355,38 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
         ]),
       ],
     );
+  }
+}
+
+/** Real runner input, with only an unapplied cutover edited for fault injection. */
+export async function withCutoverMigration<T>(
+  sql: string,
+  work: (folder: string) => Promise<T>,
+): Promise<T> {
+  const { mkdtemp, readdir, mkdir, copyFile, writeFile, rm } =
+    await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { MIGRATIONS_FOLDER } = await import("./db-migrate");
+  const folder = await mkdtemp(join(tmpdir(), "cubby-cutover-fault-"));
+  try {
+    for (const entry of await readdir(MIGRATIONS_FOLDER, {
+      withFileTypes: true,
+    })) {
+      if (entry.isDirectory() && /^\d{14}_/.test(entry.name)) {
+        await mkdir(join(folder, entry.name));
+        await copyFile(
+          join(MIGRATIONS_FOLDER, entry.name, "migration.sql"),
+          join(folder, entry.name, "migration.sql"),
+        );
+      }
+    }
+    await writeFile(
+      join(folder, "20261113185531_accepted_input_cutover", "migration.sql"),
+      sql,
+    );
+    return await work(folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
   }
 }

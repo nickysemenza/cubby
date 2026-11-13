@@ -75,13 +75,15 @@ try {
     UNION ALL SELECT 'verification','evaluation count',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluation"
     UNION ALL SELECT 'verification','requester count',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"
     UNION ALL SELECT 'verification','accepted occurrence',count(*)::int FROM "SourceOccurrence" o
-      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL
+      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored' AND o."acceptedTransactionId" IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
     UNION ALL SELECT 'identity','transactions with multiple accepting occurrences',count(*)::int FROM
-      (SELECT "acceptedTransactionId" FROM "SourceOccurrence" WHERE "deletedAt" IS NULL AND "withdrawnAt" IS NULL AND "supersededByOccurrenceId" IS NULL AND disposition<>'ignored' AND "acceptedTransactionId" IS NOT NULL GROUP BY "acceptedTransactionId" HAVING count(*)>1) multiple
+      (SELECT "acceptedTransactionId" FROM "SourceOccurrence" WHERE "deletedAt" IS NULL AND "withdrawnAt" IS NULL AND "supersededByOccurrenceId" IS NULL AND disposition IS DISTINCT FROM 'ignored' AND "acceptedTransactionId" IS NOT NULL GROUP BY "acceptedTransactionId" HAVING count(*)>1) multiple
     UNION ALL SELECT 'identity','occurrences left unbound',count(*)::int FROM "SourceOccurrence" o
-      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL
+      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition IS DISTINCT FROM 'ignored' AND o."acceptedTransactionId" IS NOT NULL
       AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
+    UNION ALL SELECT 'ask-state',CASE WHEN row->>'cancelledAt' IS NOT NULL THEN 'cancelled' ELSE row->>'state' END,count(*)::int FROM (SELECT DISTINCT ON (row->>'id') row FROM expected WHERE mapping='ask') planned GROUP BY 2
+    UNION ALL SELECT 'decisions','none',count(*)::int FROM expected WHERE mapping='decision' AND row->>'kind'='none'
     UNION ALL SELECT 'authority','member-held',count(*)::int FROM expected WHERE mapping='decision' AND row->>'id' LIKE 'ffffffff%'
     UNION ALL SELECT 'authority','Cubby-held',count(*)::int FROM expected WHERE mapping='answer' AND row->>'feature'='legacy:field'
     ORDER BY category,mapping`);

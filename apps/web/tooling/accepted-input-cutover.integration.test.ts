@@ -46,6 +46,16 @@ it("carries held values, paid results, redirects and every accepted money row", 
         `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) value FROM "FinancialTransaction" t`,
       )
     ).rows[0].value;
+    await migrateDatabase(db, {
+      through: "20261113120000_statement_money_evidence",
+    });
+    expect(
+      (
+        await client.query(
+          `SELECT (SELECT count(*) FROM "RecordKey")::int identities,(SELECT count(*) FROM "ManualEntry")::int entries,(SELECT count(*) FROM "EvidenceBinding")::int bindings`,
+        )
+      ).rows,
+    ).toEqual([{ identities: 0, entries: 0, bindings: 0 }]);
     await migrateDatabase(db);
     expect(
       (
@@ -78,11 +88,49 @@ it("carries held values, paid results, redirects and every accepted money row", 
     expect(
       (
         await client.query(
+          `SELECT count(*)::int n FROM "EvidenceBinding" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1 AND basis='baseline'`,
+          [`manual:${cutoverId(56)}`],
+        )
+      ).rows[0].n,
+    ).toBe(1);
+    expect(
+      (
+        await client.query(
           `SELECT state FROM "Ask" WHERE id IN ($1,$2,$3) ORDER BY id`,
           [cutoverId(40), cutoverId(41), cutoverId(42)],
         )
       ).rows.map((r) => r.state),
     ).toEqual(["answered", "unknown", "queued"]);
+    const { modelAsks } = await import("../src/server/ai/model-asks");
+    const { askEnvelope, inputHashOf } =
+      await import("../src/server/kernel/envelope");
+    const ready = (
+      await client.query(`SELECT * FROM "Ask" WHERE id=$1`, [cutoverId(69)])
+    ).rows[0];
+    const kind = modelAsks.find(
+      (k) => k.feature === "field-suggestion.choice",
+    )!;
+    expect(ready).toMatchObject({
+      feature: kind.feature,
+      executor: null,
+      cancelledAt: null,
+      state: "queued",
+    });
+    expect(ready.input).toEqual(askEnvelope(kind, ready.input.input));
+    expect(ready.inputHash).toBe(
+      await inputHashOf(askEnvelope(kind, ready.input.input)),
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT "cancelledAt" IS NOT NULL cancelled,"lastError" FROM "Ask" WHERE id=$1`,
+          [cutoverId(42)],
+        )
+      ).rows[0],
+    ).toMatchObject({
+      cancelled: true,
+      lastError: expect.stringContaining("incomplete canonical input"),
+    });
     expect(
       (
         await client.query(
@@ -161,7 +209,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           [`financialTransaction:${cutoverId(56)}`],
         )
       ).rows,
-    ).toEqual([{ value: "1900" }]);
+    ).toEqual([]);
     const held = (
       await client.query(
         `SELECT field,kind,"actorKind","actorId" FROM "Decision" WHERE subject=$1 AND id::text LIKE 'ffffffff%' ORDER BY field`,
@@ -175,19 +223,6 @@ it("carries held values, paid results, redirects and every accepted money row", 
         actorKind: "member",
         actorId: "synthetic-cutover",
       },
-      {
-        field: "growsPlantId",
-        kind: "none",
-        actorKind: "system",
-        actorId: null,
-      },
-      {
-        field: "ingredientId",
-        kind: "none",
-        actorKind: "system",
-        actorId: null,
-      },
-      { field: "tags", kind: "set", actorKind: "system", actorId: null },
     ]);
     expect(
       (
@@ -233,7 +268,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           `SELECT count(*)::int n FROM archive."AiEvaluation_preimage"`,
         )
       ).rows[0].n,
-    ).toBe(3);
+    ).toBe(5);
   });
 });
 
@@ -254,7 +289,7 @@ it("aborts atomically for every preservation verification", async () => {
     );
     const corrupt = {
       "money row": "UPDATE cutover_money SET amount=amount+1",
-      "money totals": "UPDATE cutover_money SET amount=amount+1",
+      "money totals": `UPDATE "ManualEntry" SET payload=jsonb_set(payload,'{values,purchaseId}',to_jsonb('${cutoverId(5)}'::text)) WHERE payload->>'naturalKey'='legacy:${cutoverId(7)}'`,
       recordKey: 'DELETE FROM "RecordKey"',
       manualEntry: 'DELETE FROM "ManualEntry"',
       binding: 'DELETE FROM "EvidenceBinding"',
@@ -263,6 +298,7 @@ it("aborts atomically for every preservation verification", async () => {
       ask: 'DELETE FROM "Ask"',
       answer: 'DELETE FROM "Answer"',
       askScope: 'DELETE FROM "AskScope"',
+      "absorbed scope": 'UPDATE "RecordKey" SET "mergedAt"=NULL',
       "accepted occurrence":
         'DELETE FROM "RecordKey" WHERE "scopeKey"=\'' + cutoverId(63) + "'",
       "audit count": 'DELETE FROM archive."AuditLog_authority_preimage"',
@@ -299,11 +335,11 @@ it("aborts atomically for every preservation verification", async () => {
         expect(
           (await client.query(`SELECT count(*)::int n FROM "AiEvaluation"`))
             .rows[0].n,
-        ).toBe(3);
+        ).toBe(5);
         checked++;
       }
     }
-    expect(checked).toBe(17);
+    expect(checked).toBe(18);
   });
 });
 
@@ -350,6 +386,16 @@ it("runs the registered scopes without changing accepted money and proposes the 
     }));
     try {
       const kernel = createKernel(KERNEL_MODULES);
+      const { claimAsks } = await import("../src/server/kernel/claim");
+      const runnable = kernel.registry.asks.get("field-suggestion.choice")!;
+      const claimed = await claimAsks(database, [runnable], 10);
+      expect(claimed.map((a) => a.id)).toContain(cutoverId(69));
+      expect(claimed.map((a) => a.id)).not.toContain(cutoverId(42));
+      await client.query(
+        `UPDATE "Ask" SET "claimToken"=NULL,"claimDeadline"=NULL WHERE id=$1`,
+        [cutoverId(69)],
+      );
+
       const money = `SELECT jsonb_agg(payload ORDER BY name,id) value FROM (
       SELECT 'transaction' name,id,to_jsonb(t) payload FROM "FinancialTransaction" t
       UNION ALL SELECT 'purchase',id,to_jsonb(t) FROM "Purchase" t
@@ -557,16 +603,351 @@ it("inspects only aggregate projections under PostgreSQL read-only enforcement",
     ).toBe(0);
     expect(result.stdout).not.toContain(cutoverId(13));
     expect(result.stdout).not.toContain("cutover@example.invalid");
-    const { writeFile } = await import("node:fs/promises");
-    await writeFile(
-      new URL(
-        "../../../artifacts/cutover-synthetic-aggregates.json",
-        import.meta.url,
-      ),
-      result.stdout,
-    );
     expect(
       (await client.query(`SELECT count(*)::int n FROM "Ask"`)).rows[0].n,
     ).toBe(0);
+  });
+});
+
+it("lets current stored authority defeat a synthesized review in both directions", async () => {
+  await withMigrationDatabase(async (client, databaseUrl) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    const { generateShortcode } = await import("@cubby/shared");
+    for (const n of [82, 83]) {
+      const code = generateShortcode("productCategory");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'productCategory',$2)`,
+        [cutoverId(n), code],
+      );
+      await client.query(
+        `INSERT INTO "ProductCategory" (id,shortcode,name) VALUES ($1,$2,'Synthetic category')`,
+        [cutoverId(n), code],
+      );
+    }
+    for (const [n, suggestion, authority] of [
+      [80, 87, "automatic"],
+      [81, 85, null],
+    ]) {
+      const code = generateShortcode("product");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
+        [cutoverId(Number(n)), code],
+      );
+      await client.query(
+        `INSERT INTO "Product" (id,shortcode,name,"categoryId") VALUES ($1,$2,'Synthetic authority product',$3)`,
+        [cutoverId(Number(n)), code, cutoverId(83)],
+      );
+      await client.query(
+        `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update',jsonb_build_object('categoryId',jsonb_build_object('to',$2::text)),'synthetic-cutover',$3,'2026-02-01')`,
+        [cutoverId(Number(n)), cutoverId(83), authority],
+      );
+      await client.query(
+        `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue","confirmedValue",model,decisions,"acceptanceReceipt","createdAt","updatedAt") VALUES ($1,$2,'field','{}','{}','product',$3,'categoryId',to_jsonb($4::text),jsonb_build_object('present',true,'value',$4::text),'synthetic-model','[]','{"mode":"member"}','2026-01-01','2026-01-02')`,
+        [
+          cutoverId(Number(suggestion)),
+          `synthetic:authority:${n}`,
+          cutoverId(Number(n)),
+          cutoverId(82),
+        ],
+      );
+    }
+    for (const n of [84, 86]) {
+      const code = generateShortcode("product");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
+        [cutoverId(n), code],
+      );
+      await client.query(
+        `INSERT INTO "Product" (id,shortcode,name) VALUES ($1,$2,'Synthetic blank category')`,
+        [cutoverId(n), code],
+      );
+    }
+    await client.query(
+      `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update','{"categoryId":{"from":null,"to":null}}','synthetic-cutover',NULL,'2026-02-01')`,
+      [cutoverId(86)],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT kind,value FROM "Decision" WHERE subject=$1 AND field='categoryId' ORDER BY at DESC,id DESC LIMIT 1`,
+          [`product:${cutoverId(80)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "release", value: null }]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind,value FROM "Decision" WHERE subject=$1 AND field='categoryId' ORDER BY at DESC,id DESC LIMIT 1`,
+          [`product:${cutoverId(81)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "set", value: cutoverId(83) }]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='categoryId'`,
+          [`product:${cutoverId(84)}`],
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='categoryId'`,
+          [`product:${cutoverId(86)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "none" }]);
+    const { createDatabase } =
+      await import("../src/server/db/database-runtime");
+    const { relationalSchema } = await import("../src/server/db/schema");
+    const { tracePool } = await import("../src/server/db/db-pg-tracing");
+    const pool = tracePool(
+      new Pool({ connectionString: databaseUrl, max: 4 }),
+      "strong",
+    );
+    const q = drizzle({ client: pool, relations: relationalSchema });
+    const database = createDatabase(() => ({
+      client: q,
+      withConnection: async (fn) => {
+        const c = await pool.connect();
+        try {
+          return await fn(drizzle({ client: c, relations: relationalSchema }));
+        } finally {
+          c.release();
+        }
+      },
+    }));
+    try {
+      const { createKernel } = await import("../src/server/kernel/api");
+      const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
+      const kernel = createKernel(KERNEL_MODULES);
+      const result = await kernel.reconcileNow(database, [
+        { kind: "fields", key: `product:${cutoverId(80)}` },
+        { kind: "fields", key: `product:${cutoverId(81)}` },
+        { kind: "fields", key: `product:${cutoverId(84)}` },
+        { kind: "fields", key: `product:${cutoverId(86)}` },
+      ]);
+      expect(result.filter((r) => r.status === "failed")).toEqual([]);
+      expect(
+        (
+          await client.query(
+            `SELECT input->'input'->>'recordId' id FROM "Ask" WHERE feature='field-suggestion' AND input->'input'->>'field'='categoryId' AND input->'input'->>'recordId' IN ($1,$2)`,
+            [cutoverId(84), cutoverId(86)],
+          )
+        ).rows,
+      ).toEqual([{ id: cutoverId(84) }]);
+
+      expect(
+        (
+          await client.query(
+            `SELECT "categoryId" FROM "Product" WHERE id IN ($1,$2) ORDER BY id`,
+            [cutoverId(80), cutoverId(81)],
+          )
+        ).rows,
+      ).toEqual([{ categoryId: cutoverId(83) }, { categoryId: cutoverId(83) }]);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
+it("matches the registered model feature envelope catalog", async () => {
+  const { modelAsks } = await import("../src/server/ai/model-asks");
+  const { acceptedInputCutoverSql } =
+    await import("./accepted-input-cutover-select");
+  const { z } = await import("zod");
+  const catalog = z
+    .array(
+      z.object({
+        feature: z.string(),
+        promptVersion: z.string(),
+        policy: z.json(),
+      }),
+    )
+    .parse(JSON.parse(acceptedInputCutoverSql().split("$features$")[1]!));
+  const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
+  const { buildRegistry } = await import("../src/server/kernel/registry");
+  const projection = acceptedInputCutoverSql().split("), record_ids AS (")[0]!;
+  for (const r of buildRegistry(KERNEL_MODULES).reconcilers.values())
+    for (const target of r.writes) {
+      if (!target.columns.length || target.name === "EvidenceBinding") continue;
+      const recordLine = projection
+        .split("\n")
+        .find((line) => line.includes(`FROM "${target.name}" r`));
+      expect(recordLine).toBeDefined();
+      for (const column of target.columns)
+        expect(recordLine).toContain(`'${column}'`);
+    }
+  expect(catalog).toEqual(
+    modelAsks.map((a) => ({
+      feature: a.feature,
+      promptVersion: a.promptVersion,
+      policy: a.policy,
+    })),
+  );
+});
+
+it("retires a historical merge even when its deletion timestamp is absent", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    await client.query(
+      `ALTER TABLE "Entity" DROP CONSTRAINT "Entity_merged_is_deleted_check"`,
+    );
+    await client.query(`UPDATE "Entity" SET "deletedAt"=NULL WHERE id=$1`, [
+      cutoverId(6),
+    ]);
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT "entityId","mergedAt" IS NOT NULL retired FROM "RecordKey" WHERE "naturalKey"=$1`,
+          [`legacy:${cutoverId(6)}`],
+        )
+      ).rows,
+    ).toEqual([{ entityId: cutoverId(4), retired: true }]);
+  });
+});
+
+it("binds an accepting occurrence even under a nullable historical disposition", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    expect(
+      (
+        await client.query(
+          `SELECT is_nullable FROM information_schema.columns WHERE table_schema='public' AND table_name='SourceOccurrence' AND column_name='disposition'`,
+        )
+      ).rows,
+    ).toEqual([{ is_nullable: "NO" }]);
+    await client.query(
+      `ALTER TABLE "SourceOccurrence" ALTER COLUMN disposition DROP NOT NULL`,
+    );
+    await client.query(
+      `UPDATE "SourceOccurrence" SET disposition=NULL WHERE id=$1`,
+      [cutoverId(63)],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT "entityId" FROM "RecordKey" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1`,
+          [cutoverId(63)],
+        )
+      ).rows,
+    ).toEqual([{ entityId: cutoverId(3) }]);
+  });
+});
+
+it("preserves a malformed legacy decision container without aborting deployment", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    await client.query(
+      `UPDATE "Suggestion" SET decisions='{}',suppression='{"scope":"link","candidateKey":"synthetic"}' WHERE id=$1`,
+      [cutoverId(67)],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT output->'legacy'->'decisions' preserved FROM "Answer" WHERE "inputHash"=$1`,
+          [`legacy:Suggestion:${cutoverId(67)}`],
+        )
+      ).rows,
+    ).toEqual([{ preserved: {} }]);
+  });
+});
+
+it("rolls back the Expense rename, Job drop and every pending receipt when the last migration fails", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, { through: "20261113012223_nappy_luke_cage" });
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'expense','EXP-SYNAT')`,
+      [cutoverId(94)],
+    );
+    await client.query(
+      `INSERT INTO "Expense" (id,shortcode,name,cost,date,"costType") VALUES ($1,'EXP-SYNAT','Synthetic atomic line',19.99,'2026-01-02','materials')`,
+      [cutoverId(94)],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,input) VALUES ('synthetic:atomic','maintenance.purchase-discovery','{}')`,
+    );
+    const before = (
+      await client.query(
+        `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) rows FROM drizzle.__drizzle_migrations t`,
+      )
+    ).rows[0].rows;
+    const { acceptedInputCutoverSql } =
+      await import("./accepted-input-cutover-select");
+    const { withCutoverMigration } =
+      await import("./accepted-input-cutover.fixtures");
+    const { findPgError } = await import("../src/server/errors/db-errors");
+    await withCutoverMigration(
+      acceptedInputCutoverSql() +
+        "\n--> statement-breakpoint\nDO $failure$ BEGIN RAISE EXCEPTION 'Synthetic final preservation failure'; END $failure$;",
+      async (folder) => {
+        let failure: unknown;
+        try {
+          await migrateDatabase(db, { migrationsFolder: folder });
+        } catch (error) {
+          failure = error;
+        }
+        expect(findPgError(failure)?.message).toBe(
+          "Synthetic final preservation failure",
+        );
+      },
+    );
+    expect(
+      (
+        await client.query(`SELECT cost FROM "Expense" WHERE id=$1`, [
+          cutoverId(94),
+        ])
+      ).rows,
+    ).toEqual([{ cost: 19.99 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "Job" WHERE key='synthetic:atomic'`,
+        )
+      ).rows[0].n,
+    ).toBe(1);
+    expect(
+      (
+        await client.query(
+          `SELECT to_regclass('public."Pass"') pass,to_regclass('archive."Expense_dollar_preimage"') preimage`,
+        )
+      ).rows,
+    ).toEqual([{ pass: null, preimage: null }]);
+    expect(
+      (
+        await client.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='Expense' AND column_name='costMinor'`,
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(
+          `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) rows FROM drizzle.__drizzle_migrations t`,
+        )
+      ).rows[0].rows,
+    ).toEqual(before);
   });
 });

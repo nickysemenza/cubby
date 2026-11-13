@@ -62,8 +62,9 @@ tables. It preserves exact minor units, rejected identities and merge redirects;
 accepted records enter as baseline bindings at version zero. The first sweep
 proposes disagreements as drift. Missing or ambiguous field authority remains
 person-held with unknown actor metadata when attribution is unproven. Current
-held-value assignments observe the accepted state at cutover; historical audit
-and review decisions retain their original event times. Proven current Cubby
+held-value assignments observe the accepted state at cutover; historical reviews retain their original event times. Audit rows retain
+their original history; historical audit changes do not mint Decisions. Held
+Decisions cover current non-null values of registered owned columns only. Proven current Cubby
 authority releases older assignments without attributing a release to a member.
 Monetary audit values retain their original JSON; assignment comparisons and
 imported money decisions use the owning field's exact minor-unit representation.
