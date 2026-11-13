@@ -68,6 +68,7 @@
     "./field-suggestion-policy": "./src/field-suggestion-policy.ts",
     "./entity-core": "./src/entity-core.ts",
     "./problem-classification": "./src/generated/problem-classification.gen.ts",
+    "./entity-definitions/edges": "./src/entity-definitions/edges.ts",
     "./entity-definitions/definition": "./src/entity-definitions/definition.ts",
     "./entity-definitions/relation-plan": "./src/entity-definitions/relation-plan.ts",
     "./entity-definitions/field-policy": "./src/entity-definitions/field-policy.ts",

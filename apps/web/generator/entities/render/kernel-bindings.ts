@@ -1,3 +1,5 @@
+import type { EdgeDefinition } from "@cubby/schemas/entity-definitions/edges";
+import { renderEdgePolicyChecks } from "../edges.ts";
 import { rawSource } from "../../artifacts.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError } from "../declarations.ts";
@@ -30,6 +32,7 @@ const adapterName = (entity: CompiledEntity): string =>
  */
 export const renderKernelBindingsArtifacts = (
   entities: readonly CompiledEntity[],
+  edges: readonly EdgeDefinition[] = [],
 ): EntityArtifacts[] => {
   const kernelEntities = kernelEntitiesFor(entities);
   const defaultEntities = kernelEntities.filter(
@@ -335,7 +338,8 @@ export const renderKernelBindingsArtifacts = (
             )
             .join("\n") +
           "\n\n/** Every declared module/export reference must exist. */\n" +
-          `export type EntityPortExportChecks = readonly [${refs.map((ref) => `typeof ${aliases.get(ref.module)}[${JSON.stringify(ref.export)}]`).join(", ")}];\n`,
+          `export type EntityPortExportChecks = readonly [${refs.map((ref) => `typeof ${aliases.get(ref.module)}[${JSON.stringify(ref.export)}]`).join(", ")}];\n` +
+          (server ? renderEdgePolicyChecks(edges) : ""),
       ),
     };
   };

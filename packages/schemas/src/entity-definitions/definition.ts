@@ -24,6 +24,7 @@ import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
 import { listGroupMetricKeys } from "./list-group-metrics";
 import { createRelationships } from "./relationships";
+import { edgeDefinitionSchema } from "./edges";
 import { entityRelationMetadataSchema } from "./relationship-shape";
 
 /** The scalar shapes the entity compiler can persist and project. */
@@ -3276,6 +3277,7 @@ const buildMetadataSchemas = () => {
         })
         .strict(),
       relations: z.array(entityRelationMetadataSchema),
+      edges: z.array(edgeDefinitionSchema).optional().default([]),
       /**
        * `semantic`: lexical search plus an `EntityEmbedding` vector.
        * `lexical`: search without a vector (the financial entities, whose
