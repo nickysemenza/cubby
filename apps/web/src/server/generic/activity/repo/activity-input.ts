@@ -1,4 +1,4 @@
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 
 import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
@@ -71,7 +71,7 @@ export async function reserveImageAnalysisInput(
 ) {
   return withTransaction(db, async (tx) => {
     const [attempt] = await tx
-      .select({ id: imageExecutionReceipts.id })
+      .select({ id: imageExecutionReceipts.id, jobId: imageProcessingJob.id })
       .from(imageExecutionReceipts)
       .innerJoin(
         imageProcessingJob,
@@ -81,9 +81,6 @@ export async function reserveImageAnalysisInput(
       .where(
         and(
           eq(imageExecutionReceipts.id, attemptId),
-          expectedInputKey === undefined
-            ? undefined
-            : eq(imageExecutionReceipts.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
           // The unchanged attempt is the authority: an expired lease no newer
@@ -96,20 +93,30 @@ export async function reserveImageAnalysisInput(
       )
       .for("update", { of: [imageProcessingJob, image] });
     if (!attempt) return false;
-    await tx
-      .insert(imageProcessingOrphan)
-      .values({ key, attemptId, reason: "analysis_input_upload" })
-      .onConflictDoNothing();
+    // Receipts are append-only: read the current one after the owner lock, in a fresh statement.
     const [current] = await tx
       .select()
       .from(imageExecutionReceipts)
       .where(eq(imageExecutionReceipts.id, attemptId));
-    if (current)
-      await appendExecutionReceipt(tx, {
-        id: attemptId,
-        jobId: current.jobId,
-        patch: { inputKey: key },
-      });
+    if (
+      !current ||
+      (expectedInputKey !== undefined && current.inputKey !== expectedInputKey)
+    )
+      return false;
+    // A repeatable-read caller must conflict rather than consume its older receipt snapshot.
+    await tx
+      .update(imageProcessingJob)
+      .set({ updatedAt: sql`clock_timestamp()` })
+      .where(eq(imageProcessingJob.id, attempt.jobId));
+    await tx
+      .insert(imageProcessingOrphan)
+      .values({ key, attemptId, reason: "analysis_input_upload" })
+      .onConflictDoNothing();
+    await appendExecutionReceipt(tx, {
+      id: attemptId,
+      jobId: current.jobId,
+      patch: { inputKey: key },
+    });
     return true;
   });
 }
@@ -131,7 +138,6 @@ export async function retainImageAnalysisInput(
       .where(
         and(
           eq(imageExecutionReceipts.id, attemptId),
-          eq(imageExecutionReceipts.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "pending"),
           // The unchanged attempt is the authority: an expired lease no newer
@@ -144,6 +150,11 @@ export async function retainImageAnalysisInput(
       )
       .for("update", { of: [imageProcessingJob, image] });
     if (!attempt) return false;
+    const [current] = await tx
+      .select({ inputKey: imageExecutionReceipts.inputKey })
+      .from(imageExecutionReceipts)
+      .where(eq(imageExecutionReceipts.id, attemptId));
+    if (current?.inputKey !== key) return false;
     await tx
       .delete(imageProcessingOrphan)
       .where(eq(imageProcessingOrphan.key, key));
