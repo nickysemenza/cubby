@@ -1177,8 +1177,9 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-suggest-posted" },
     );
     await generate(ctx);
-    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    expect(await readPendingStatements(ctx)).toEqual([]);
+    const [posted] = await readPendingStatements(ctx);
+    expect(posted).toMatchObject({ recommended: "supersede", clean: true });
+    await accept(ctx, posted!);
     const states = Object.fromEntries(
       (await listSourceTransactionRecords(ctx.db, {})).data.map((row) => [
         row.rawDescription,
