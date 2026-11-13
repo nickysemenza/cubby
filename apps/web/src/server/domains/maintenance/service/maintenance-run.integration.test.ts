@@ -24,14 +24,12 @@ import {
 } from "~/server/domains/run/service/step-run";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  withJobFixtureExecution,
-  captureBackgroundQueue,
-} from "~/server/testing/background-queue";
+import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";
 
 import {
   maintenanceStepDrivers,
@@ -42,15 +40,8 @@ import { launchMaintenanceRun } from "./maintenance.service";
 const advanceStepRun = (
   ...args: Parameters<typeof advanceStepRunImplementation>
 ) =>
-  withJobFixtureExecution(
-    args[0],
-    {
-      key: `run:${args[1].runId}`,
-      kind: "run.execute",
-      input: { runId: args[1].runId, purpose: "maintenance" },
-      runId: args[1].runId,
-    },
-    () => advanceStepRunImplementation(...args),
+  withRunPassFixture(args[0], args[1].runId, () =>
+    advanceStepRunImplementation(...args),
   );
 
 /** A JPEG with no APP1 segment: extraction succeeds with no metadata. */

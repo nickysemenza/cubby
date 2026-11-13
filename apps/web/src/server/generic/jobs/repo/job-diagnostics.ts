@@ -18,9 +18,6 @@ import {
 } from "~/server/generic/jobs/repo/job-queue";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-/** The Job that executes any Run; other kinds are the Run's fan-out. */
-const RUN_EXECUTE = "run.execute";
-
 /** Per-kind counts plus each kind's most recently touched Job. */
 async function groupsOf(
   db: Database,
@@ -75,16 +72,17 @@ async function groupsOf(
 async function readJobs(
   db: Database,
   owner: SQL,
-  primaryKind: string | null,
   run: { id: RunId; shortcode: string } | null,
 ): Promise<JobListOut> {
   const now = new Date();
-  const [primaryRow] = await getDb(db)
-    .select()
-    .from(job)
-    .where(primaryKind ? and(owner, eq(job.kind, primaryKind)) : owner)
-    .orderBy(desc(job.updatedAt))
-    .limit(1);
+  const [primaryRow] = run
+    ? []
+    : await getDb(db)
+        .select()
+        .from(job)
+        .where(owner)
+        .orderBy(desc(job.updatedAt))
+        .limit(1);
   const [primaryFacts, groups, rollups] = await Promise.all([
     primaryRow ? jobFactsOf(db, [primaryRow], now) : Promise.resolve([]),
     groupsOf(db, owner, primaryRow?.id ?? null, now),
@@ -101,7 +99,7 @@ async function readJobs(
 /** A Run's executing Job and its Job fan-out by kind. */
 export async function listRunJobs(db: Database, code: string) {
   const runId = await resolveOrThrow(db, "run", code);
-  return readJobs(db, runDemandWhere(runId), RUN_EXECUTE, {
+  return readJobs(db, runDemandWhere(runId), {
     id: runId,
     shortcode: code,
   });
@@ -117,7 +115,7 @@ export async function listSubjectJobs(
     subject.kind === "image"
       ? []
       : [locationAiJobKey("location-ai.inventory.refresh", recordId)];
-  return readJobs(db, inArray(job.key, keys), null, null);
+  return readJobs(db, inArray(job.key, keys), null);
 }
 
 /** One Job's identity and active window, for its log query. */

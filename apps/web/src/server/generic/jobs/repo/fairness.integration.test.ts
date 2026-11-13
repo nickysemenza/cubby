@@ -1,15 +1,13 @@
 import type { PermitRecovery } from "@cubby/schemas/queue-messages";
-import { sweepRunInput } from "@cubby/schemas/run-fields";
-import { eq, inArray, asc, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { job, run } from "~/server/db/schema";
+import { job } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
-import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { addJobAiCost, countDrainItems } from "~/server/generic/jobs/context";
 import { seedJobs } from "~/server/generic/jobs/jobs.fixtures";
 import {
@@ -300,117 +298,5 @@ describe("durable Job selection", () => {
       outcome: "deferred",
       deferringSince: deferrals[0]?.finishedAt,
     });
-  });
-
-  it("walks past a locked reconciliation page and revisits skipped Runs on a later pass", async () => {
-    const jobs = [];
-    for (let index = 0; index < 101; index++) {
-      const runId = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "background",
-        trigger: "manual",
-        status: "running",
-        execution: false,
-      });
-      jobs.push(
-        await enqueueJob(ctx.db, {
-          key: `synthetic.reconcile.${index}`,
-          kind: "run.execute",
-          runId,
-          input: {},
-        }),
-      );
-    }
-    await getDb(ctx.db)
-      .update(job)
-      .set({ state: "failed", error: "Synthetic stopped execution" })
-      .where(
-        inArray(
-          job.id,
-          jobs.map((row) => row.id),
-        ),
-      );
-    const ordered = await getDb(ctx.db)
-      .select({ id: job.id, runId: job.runId })
-      .from(job)
-      .where(eq(job.kind, "run.execute"))
-      .orderBy(asc(job.id));
-    const locked = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const holding = withTransaction(ctx.db, async (tx) => {
-      await tx
-        .select()
-        .from(run)
-        .where(
-          inArray(
-            run.id,
-            ordered.slice(0, 100).map((row) => row.runId!),
-          ),
-        )
-        .for("update");
-      locked.resolve();
-      await release.promise;
-    });
-    await locked.promise;
-    try {
-      const first = await reconcileWorkflowRuns(ctx.db);
-      expect(first.reconciled).toBe(0);
-      expect(first.next).not.toBeNull();
-      const second = await reconcileWorkflowRuns(ctx.db, first.next);
-      expect(second).toEqual({ reconciled: 1, next: null });
-    } finally {
-      release.resolve();
-      await holding;
-    }
-    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(100);
-  });
-
-  it("holds a Sweep's page while another Sweep on its import source holds a lease", async () => {
-    const importOn = async (source: string) => {
-      await ensureExternalSources(ctx.db, [source]);
-      return (
-        await insertWithShortcode(ctx.db, "transactionImport", {
-          source,
-          label: source,
-          fingerprint: crypto.randomUUID(),
-        })
-      ).id;
-    };
-    const sweepOn = async (importId: string) => {
-      const runId = await ensureRun(ctx.db, ctx.actor, {
-        purpose: "sweep",
-        trigger: "manual",
-        status: "running",
-        execution: false,
-        input: sweepRunInput.parse({
-          kind: "sweep",
-          families: [{ family: "statement_transaction", scope: { importId } }],
-        }),
-      });
-      return enqueueJob(ctx.db, {
-        key: `run:${runId}`,
-        kind: "run.execute",
-        input: { runId, purpose: "sweep" },
-        runId,
-      });
-    };
-    const held = await sweepOn(await importOn("synthetic-bank"));
-    const waiting = await sweepOn(await importOn("synthetic-bank"));
-    const other = await sweepOn(await importOn("synthetic-card"));
-    expect(await claimJob(ctx.db, held.id)).not.toBeNull();
-
-    const selected = await dueUnits(ctx.db, [], 10);
-    const ids = selected.flatMap((entry) =>
-      entry.type === "job" ? [entry.id] : [],
-    );
-    expect(ids).toEqual([other.id]);
-    expect(await claimJob(ctx.db, waiting.id)).toBeNull();
-    expect(await claimJob(ctx.db, other.id)).not.toBeNull();
-
-    // A lapsed lease holds nothing: the waiting Sweep takes its turn.
-    await getDb(ctx.db)
-      .update(job)
-      .set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
-      .where(eq(job.id, held.id));
-    expect(await claimJob(ctx.db, waiting.id)).not.toBeNull();
   });
 });

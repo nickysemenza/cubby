@@ -22,7 +22,6 @@ import {
   DERIVED_SNAPSHOT_KEY,
   DERIVED_SNAPSHOT_PASS,
 } from "~/server/generic/derived/repo/snapshot-state";
-import type { Claim } from "~/server/kernel/define";
 
 const HISTORY_KEY = "history";
 
@@ -173,10 +172,10 @@ export async function requestDerivedRebuild(
 
 /** Save preparation attempts under the live Pass so isolate deaths remain resumable. */
 export async function recordSnapshotCursor(
-  claim: Claim,
+  fenced: (work: (tx: Database) => Promise<void>) => Promise<void>,
   cursor: SnapshotCursor,
 ): Promise<void> {
-  await claim.fenced(async (tx) => {
+  await fenced(async (tx) => {
     await getDb(tx)
       .execute(sql`UPDATE "Pass" SET cursor = ${JSON.stringify(cursor)}::jsonb
       WHERE name = ${DERIVED_SNAPSHOT_PASS} AND key = ${DERIVED_SNAPSHOT_KEY}`);

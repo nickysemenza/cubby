@@ -22,8 +22,7 @@ type ExecutionFence = Readonly<{
 }>;
 
 /**
- * One Run's execution: the `run.execute` Pass for step and AI-work Runs, or
- * the `run.execute` Job that still pages mail discovery. Workflow code reads
+ * One Run's execution under its kernel Pass. Workflow code reads
  * the generation it runs under and fences its writes on `live`.
  */
 export type RunExecution = Readonly<{
@@ -78,7 +77,7 @@ export function workflowInterruption(
 export const isWorkflowInterrupted = (error: UnparsedError): boolean =>
   workflowInterruption(error) !== null;
 
-/** A Job claim's live-lease predicate, for the mail discovery Job and Job fixtures. */
+/** A retained producer Job claim lends its authority to its requester Run. */
 function jobExecution(): Pick<RunExecution, "live" | "recovered"> {
   const claim = currentJobExecution()?.claim;
   if (!claim) return { live: sql<boolean>`false`, recovered: false };

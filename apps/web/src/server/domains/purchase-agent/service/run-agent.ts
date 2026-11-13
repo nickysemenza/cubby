@@ -182,6 +182,7 @@ export class PurchaseImportRunAgent
   private primaryModel: SupportedChatModel | undefined;
   /** The funded providers pi requests through; set when pi opens. */
   private piModels: MutableModels | undefined;
+  private requestOutcomeUnknown = false;
   private requestGeneration: string | undefined;
   private requestStartedAt = 0;
   /** What carried the current model request; the coordinator runs one at a time. */
@@ -345,7 +346,11 @@ export class PurchaseImportRunAgent
         if (!this.requestGeneration)
           throw new Error("Model request has no durable submission generation");
         return this.agentEnv.modelTurn(
-          { generation: this.requestGeneration, request },
+          {
+            generation: this.requestGeneration,
+            request,
+            ...(this.requestOutcomeUnknown && { recovery: "unknown" as const }),
+          },
           send,
         );
       },
@@ -731,6 +736,13 @@ export class PurchaseImportRunAgent
                 { generation },
                 requestContext,
               );
+              const protocolKey = `request-ask-protocol:${api.taskId}`;
+              this.requestOutcomeUnknown =
+                this.readState(`request-generation:${api.taskId}`) !==
+                  undefined && this.readState(protocolKey) !== "1";
+              // Mark the protocol before any send: a crash here can safely create its first Ask later.
+              if (!this.requestOutcomeUnknown)
+                this.writeState(protocolKey, "1");
               this.requestGeneration = z
                 .object({ generation: z.string() })
                 .parse(memo).generation;

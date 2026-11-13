@@ -45,22 +45,22 @@ export async function recoverMissedWork(db: Database) {
   await scheduleRunsReconcile(db);
 }
 
-/** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */
+/** Expires stale import Runs and projects terminal Pass outcomes; every Run is kept. */
 export async function maintainRunHistory(db: Database) {
   const [
     { expireStaleRuns },
-    { reconcileWorkflowRuns },
+    { reconcileRunPasses },
     { activeCoordinatorRuns },
   ] = await Promise.all([
     import("~/server/domains/purchase-import/operations/run-review"),
-    import("~/server/workflows/runs/lifecycle"),
+    import("~/server/workflows/runs/reconcile-pass"),
     import("~/server/domains/run/repo/coordinator-dispatch"),
   ]);
   const stale = await expireStaleRuns(db, new Date(), {
     exempt: await activeCoordinatorRuns(db),
   });
-  const reconciled = await reconcileWorkflowRuns(db);
-  return { ...stale, reconciled: reconciled.reconciled };
+  const reconciled = await reconcileRunPasses(db);
+  return { ...stale, reconciled };
 }
 
 /**
@@ -84,7 +84,7 @@ export async function retireCoordinators(db: Database, before: Date) {
 }
 
 /**
- * Admit one Gmail discovery Job per connected mailbox; Mail import Runs
+ * Admit one Gmail discovery Pass per connected mailbox; Mail import Runs
  * follow from discovery. Product research is never started here: it is a
  * member's Burn-down (ADR 0010).
  */
@@ -97,18 +97,18 @@ export async function discoverPurchases(
   const [
     { startMailDiscovery },
     { gmailOAuthConfigured },
-    { reconcileWorkflowRuns },
+    { reconcileRunPasses },
   ] = await Promise.all([
     import("~/server/domains/purchase-import/operations/gmail/discovery"),
     import("~/server/domains/purchase-import/repo/gmail/provider"),
-    import("~/server/workflows/runs/lifecycle"),
+    import("~/server/workflows/runs/reconcile-pass"),
   ]);
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
     return { mail: null, senderAfter: null, more: false };
   }
   // Project terminal execution before checking the mailbox admission slot.
-  await reconcileWorkflowRuns(db);
+  await reconcileRunPasses(db);
   const { learnAcceptedSenders } =
     await import("~/server/domains/purchase-import/repo/sender-attribution");
   const { readSenderAttributions } =

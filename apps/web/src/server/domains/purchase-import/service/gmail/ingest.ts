@@ -34,7 +34,6 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { withJobPhase } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
@@ -648,50 +647,48 @@ async function acquireEligible(
     else if (call.operation === "mailbox-relevance") relevanceCall = call;
   });
   const transientAttachments = new Map<string, string>();
-  const classification = await withJobPhase("mail.classify", () =>
-    withAiInputs(
-      preparingAiInputs(),
-      () =>
-        classifyMessage(
-          unchanged ||
-            (input.refreshStage === "mailbox-relevance" &&
-              prior?.checksum === checksum)
-            ? prior
-            : null,
-          input.searchActor
-            ? async () => ({
-                classification: "uncertain",
-                stage: "rule",
-                reason: "Awaiting classification",
-              })
-            : async () =>
-                (
-                  await routeGmailMessage(
-                    message,
-                    normalized,
-                    ports.triage,
-                    undefined,
-                    (address) =>
-                      readSenderHistory(db, {
-                        ledgerPartyId: input.ledgerPartyId,
-                        address,
-                      }),
-                  )
-                ).decision,
-          input.searchActor
-            ? null
-            : () =>
-                interpretMailRelevance(
-                  provider,
+  const classification = await withAiInputs(
+    preparingAiInputs(),
+    () =>
+      classifyMessage(
+        unchanged ||
+          (input.refreshStage === "mailbox-relevance" &&
+            prior?.checksum === checksum)
+          ? prior
+          : null,
+        input.searchActor
+          ? async () => ({
+              classification: "uncertain",
+              stage: "rule",
+              reason: "Awaiting classification",
+            })
+          : async () =>
+              (
+                await routeGmailMessage(
+                  message,
                   normalized,
-                  ports.relevance,
-                  gmailOriginalComplete(message, normalized),
-                  (sourceKey, encoded) =>
-                    transientAttachments.set(sourceKey, encoded),
-                ),
-        ),
-      { providerFree: preparingWithoutProviders() },
-    ),
+                  ports.triage,
+                  undefined,
+                  (address) =>
+                    readSenderHistory(db, {
+                      ledgerPartyId: input.ledgerPartyId,
+                      address,
+                    }),
+                )
+              ).decision,
+        input.searchActor
+          ? null
+          : () =>
+              interpretMailRelevance(
+                provider,
+                normalized,
+                ports.relevance,
+                gmailOriginalComplete(message, normalized),
+                (sourceKey, encoded) =>
+                  transientAttachments.set(sourceKey, encoded),
+              ),
+      ),
+    { providerFree: preparingWithoutProviders() },
   );
   const decision = classification.result;
   if (
@@ -712,16 +709,14 @@ async function acquireEligible(
     transientAttachments,
   );
   const staged = retain
-    ? await withJobPhase("mail.attachments", () =>
-        stageGmailAttachments(
-          db,
-          provider,
-          identity,
-          normalized,
-          prior?.orderMailId ?? null,
-          transientAttachments,
-          storage,
-        ),
+    ? await stageGmailAttachments(
+        db,
+        provider,
+        identity,
+        normalized,
+        prior?.orderMailId ?? null,
+        transientAttachments,
+        storage,
       )
     : {
         prepared: new Map<string, PreparedOrderMailAttachment>(),
@@ -956,7 +951,7 @@ async function relatedEmailPreview(
 
 /** Sequential transient routing precedes all original-content and attachment writes. */
 async function reportAcquisitionProgress(input: IngestInput, handled: number) {
-  await withJobPhase("mail.progress", async () => input.onMessage?.(handled));
+  await input.onMessage?.(handled);
 }
 
 export async function ingestGmailMessages(
@@ -1036,8 +1031,11 @@ export async function ingestGmailMessages(
       await reportAcquisitionProgress(input, handled);
       continue;
     }
-    const fetched = await withJobPhase("mail.fetch", () =>
-      fetchObservedMessage(db, provider, identity, input.runId),
+    const fetched = await fetchObservedMessage(
+      db,
+      provider,
+      identity,
+      input.runId,
     );
     const message = fetched.message;
     if (message && message.id !== messageId)
@@ -1086,21 +1084,22 @@ export async function ingestGmailMessages(
       );
       if (published) outcome[removed].push(messageId);
     } else if (message) {
-      const result = await withJobPhase("mail.acquire", () =>
-        acquireEligible(
-          db,
-          provider,
-          input,
-          message,
-          identity,
-          storage,
-          executionPolicy,
-          beforeFetch,
-        ),
+      const result = await acquireEligible(
+        db,
+        provider,
+        input,
+        message,
+        identity,
+        storage,
+        executionPolicy,
+        beforeFetch,
       );
       if (result.kind === "saved") {
-        const preview = await withJobPhase("mail.preview", () =>
-          relatedEmailPreview(db, input, messageId, executionPolicy),
+        const preview = await relatedEmailPreview(
+          db,
+          input,
+          messageId,
+          executionPolicy,
         );
         if (
           !(await deferClassificationRefresh(

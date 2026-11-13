@@ -24,7 +24,6 @@ import {
 } from "~/server/generic/derived/repo/compute";
 import { readSnapshotState as readDerivedRebuildStatus } from "~/server/generic/derived/repo/snapshot-state";
 import { runSnapshotPage } from "~/server/generic/derived/snapshot.fixtures";
-import { claimJob, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
@@ -273,74 +272,4 @@ export function captureBackgroundQueue() {
     },
     restore: () => setCfEnv(undefined),
   };
-}
-
-/**
- * Domain regression seams execute under the same persisted Job ownership as a
- * worker: `work` receives the claim's context, and a Run Job's work also runs
- * in its Run workflow context, as `run.execute` does.
- */
-export async function withJobFixtureExecution<T>(
-  db: Database,
-  input: import("@cubby/schemas/job").EnqueueJobInput,
-  work: (
-    context: ReturnType<
-      typeof import("~/server/generic/jobs/service/jobs").claimContext
-    >,
-  ) => Promise<T>,
-  options: { releaseClaim?: true } = {},
-) {
-  const { enqueueJob } = await import("~/server/generic/jobs/repo/producer");
-  const { claimContext } = await import("~/server/generic/jobs/service/jobs");
-  const { withJobExecution } = await import("~/server/generic/jobs/context");
-  const saved = await enqueueJob(db, input);
-  const existing =
-    saved.state === "running" &&
-    saved.leaseToken &&
-    saved.leaseExpiresAt &&
-    saved.leaseExpiresAt.getTime() > Date.now()
-      ? {
-          ...saved,
-          leaseToken: saved.leaseToken,
-          leaseExpiresAt: saved.leaseExpiresAt,
-        }
-      : null;
-  const claim = existing ?? (await claimJob(db, saved.id));
-  if (!claim)
-    throw new Error(`Synthetic execution ${saved.key} is ${saved.state}`);
-  const context = claimContext(db, claim);
-  const runId =
-    input.kind === "run.execute" &&
-    typeof input.input === "object" &&
-    input.input !== null &&
-    "runId" in input.input
-      ? String(input.input.runId)
-      : null;
-  try {
-    return await withJobExecution(db, claim, async () =>
-      runId
-        ? (
-            await import("~/server/workflows/runs/execution")
-          ).withWorkflowExecution(
-            { runId, attempt: claim.generation, database: db, job: context },
-            () => work(context),
-          )
-        : work(context),
-    );
-  } finally {
-    // Completed fixture work can free admission capacity. Multi-step fence
-    // fixtures retain their token by default; borrowed claims stay with their caller.
-    if (options.releaseClaim && !existing)
-      await updateJobs(
-        db,
-        { id: claim.id },
-        {
-          state: "queued",
-          waitReason: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          availableAt: new Date(),
-        },
-      );
-  }
 }

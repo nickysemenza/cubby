@@ -106,11 +106,11 @@ import {
   actorSnapshot,
   assertRunParent,
 } from "~/server/domains/run/repo/ensure-run";
+import { hasLiveRunPassClaim } from "~/server/domains/run/repo/run-execution";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { linkShipmentsByOrderId } from "~/server/domains/shipment/repo/evidence";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { hasLiveRunJobLease } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { mailReadContent } from "./gmail/read-content";
@@ -214,10 +214,7 @@ async function endedHolderLeftUnsettled(
       ),
     )
     .limit(1);
-  return (
-    Boolean(held) &&
-    !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
-  );
+  return Boolean(held) && !(await hasLiveRunPassClaim(tx, owner.id));
 }
 
 /** Changed bytes reopen a pending Email; unchanged ones need it still held unsettled. */
@@ -580,7 +577,7 @@ async function partitionOwnership(
         eligible &&
         intent.status === "captured" &&
         intent.feedbackIds.length === 0 &&
-        !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
+        !(await hasLiveRunPassClaim(tx, owner.id))
       ) {
         // A retired coordinator holds nothing to transfer; admit it afresh.
         if (owner.retiredAt) fresh.push(source);
@@ -616,7 +613,7 @@ async function partitionOwnership(
       if (transferable) {
         // A dispatch accepted before the mailbox pause may not have written
         // coordinatorStartedAt yet. Its live Job must finish before transfer.
-        if (await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
+        if (await hasLiveRunPassClaim(tx, owner.id))
           throw new JobDeferredError(
             "Waiting for the queued Mail import's dispatch to finish before transferring its selected sources",
             new Date(Date.now() + 15_000),

@@ -16,9 +16,10 @@ import { imageProcessingJob } from "~/server/db/retained-tables";
 import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
 import { runPassOwed } from "~/server/domains/run/repo/run-execution";
 import {
-  runHasLiveJobs,
-  runHasLiveExecution,
-} from "~/server/generic/jobs/repo/job-reads";
+  runPassOwed,
+  runHasLivePass,
+} from "~/server/domains/run/repo/run-execution";
+import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
 
 const RUN = runStatus.enum;
 
@@ -36,7 +37,7 @@ export function queuedMailDiscoveryPredicate(input: {
 }): SQL<boolean> {
   return sql<boolean>`CASE WHEN ${input.purpose} = ${runPurpose.enum.mail_discovery}
     AND ${input.status} = ${RUN.paused} AND ${input.failureCode} = ${MAIL_DISCOVERY_ADMISSION_WAIT}
-    THEN ${runHasLiveExecution({ id: input.id, purpose: input.purpose, generation: sql`${input.progress}->>'attempt'` })}
+    THEN ${runHasLivePass({ id: input.id, purpose: input.purpose, generation: sql`${input.progress}->>'attempt'` })}
     ELSE false END`;
 }
 const historicalRoutineStepPurposes = Object.entries(RUN_KINDS).flatMap(

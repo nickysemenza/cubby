@@ -1,8 +1,7 @@
 /**
  * `runs.reconcile` (ADR 0029 section 7): projects stopped execution onto Run
  * status. A `run.execute` Pass that spent its attempts fails its Run with the
- * raw error; the mail discovery Job and `purchase.dispatch` Jobs that still
- * run as Jobs project their failures as before. A lapsed Pass claim needs no
+ * raw error; `purchase.dispatch` projects exhausted dispatch claims. A lapsed Pass claim needs no
  * reconciliation: the kernel's claim expiry hands the page to the next
  * worker. One instance; it re-checks every 15 minutes while executed Runs are
  * active and hourly otherwise, and a Pass that fails its last attempt brings
@@ -13,12 +12,13 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries,
+  repositoryTransactionDatabase,
+} from "~/server/db/repository-access.boundary";
 import { reconcileCoordinatorDispatches } from "~/server/domains/run/repo/coordinator-dispatch";
 import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
 import { definePass, startPass } from "~/server/kernel/api";
-
-import { reconcileWorkflowRuns } from "./lifecycle";
 
 const RUNS_RECONCILE_PASS = "runs.reconcile";
 
@@ -54,40 +54,36 @@ function failureTextOf(raw: string | null): string {
 
 /** Fail Runs whose `run.execute` Pass spent its attempts; returns how many. */
 async function reconcileStuckRunPasses(db: Database): Promise<number> {
-  const q = repositoryQueries(db);
-  const stuck = await q.execute<{ id: string; lastError: string | null }>(sql`
+  return repositoryTransactionDatabase(db, async (tx) => {
+    const q = repositoryQueries(tx);
+    const stuck = await q.execute<{ id: string; lastError: string | null }>(sql`
     SELECT r.id, p."lastError" FROM "Run" r
     JOIN "Pass" p ON p.name = ${RUN_EXECUTE_PASS} AND p.key = r.id::text
     WHERE p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts >= p."maxAttempts"
       AND (p."claimToken" IS NULL OR p."claimDeadline" <= now())
       AND (r.status = ${runStatus.enum.running}
         OR (r.status = ${runStatus.enum.paused_auth} AND r."failureCode" = 'execution_limit'))
-    LIMIT 100`);
-  let failed = 0;
-  for (const row of stuck.rows) {
-    const updated = await q.execute<{ id: string }>(sql`
+    LIMIT 100 FOR UPDATE OF r SKIP LOCKED`);
+    let failed = 0;
+    for (const row of stuck.rows) {
+      const updated = await q.execute<{ id: string }>(sql`
       UPDATE "Run" SET status = ${runStatus.enum.failed}, "failureCode" = 'job_failed',
         "dispatchError" = ${failureTextOf(row.lastError)}, "endedAt" = now(), "updatedAt" = now()
       WHERE id = ${row.id}::uuid AND (status = ${runStatus.enum.running}
         OR (status = ${runStatus.enum.paused_auth} AND "failureCode" = 'execution_limit'))
       RETURNING id`);
-    failed += updated.rows.length;
-  }
-  return failed;
+      failed += updated.rows.length;
+    }
+    return failed;
+  });
 }
 
 /** Every stopped execution's Run, projected; returns how many Runs changed. */
-async function reconcileStoppedWork(db: Database) {
-  let reconciled =
+export async function reconcileRunPasses(db: Database): Promise<number> {
+  return (
     (await reconcileCoordinatorDispatches(db)) +
-    (await reconcileStuckRunPasses(db));
-  let after: string | null = null;
-  do {
-    const page = await reconcileWorkflowRuns(db, after);
-    reconciled += page.reconciled;
-    after = page.next;
-  } while (after);
-  return reconciled;
+    (await reconcileStuckRunPasses(db))
+  );
 }
 
 async function executedRunsActive(db: Database) {
@@ -100,7 +96,7 @@ async function executedRunsActive(db: Database) {
 export const runsReconcilePass = definePass({
   name: RUNS_RECONCILE_PASS,
   async run(db, cursor) {
-    await reconcileStoppedWork(db);
+    await reconcileRunPasses(db);
     const wait = (await executedRunsActive(db))
       ? ACTIVE_RECHECK_MS
       : IDLE_RECHECK_MS;

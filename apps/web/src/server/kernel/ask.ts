@@ -121,6 +121,8 @@ type AskRow = {
 };
 
 export type AskWaiters = {
+  /** A retained host request may have transmitted before kernel ownership existed. */
+  initialOutcome?: "unknown";
   scopes?: readonly ScopeRef[];
   runId?: string | null;
   /** A record that shows this ask in its machinery. */
@@ -139,9 +141,9 @@ async function ensureAsk(
   preferredId?: string,
 ): Promise<AskRow> {
   const result = await q.execute<AskRow>(sql`
-    INSERT INTO "Ask" (id,"inputHash", feature, producer, "promptVersion", input, "maxAttempts",executor, hosted)
+    INSERT INTO "Ask" (id,"inputHash", feature, producer, "promptVersion", input, "maxAttempts",executor, hosted, state)
     VALUES (coalesce(${preferredId ?? null}::uuid,gen_random_uuid()),${inputHash}, ${kind.feature}, ${kind.producer}, ${kind.promptVersion},
-      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"}, ${kind.hosted ?? false})
+      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"}, ${kind.hosted ?? false}, ${waiters.initialOutcome === "unknown" ? ASK.unknown : ASK.queued})
     ON CONFLICT ("inputHash") DO UPDATE SET "inputHash" = excluded."inputHash"
     RETURNING id, state, attempts, "maxAttempts", "waitCause", ${isoText(sql`"availableAt"`)} AS "availableAt",
       (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed,
@@ -449,7 +451,7 @@ async function executeClaimed(
       })),
     )}::jsonb) AS r(id uuid, token uuid)
     WHERE a.id = r.id AND a."claimToken" = r.token AND a.state = ${ASK.queued}
-      AND a."claimDeadline" > now()
+      AND a."claimDeadline" > now() AND a."cancelledAt" IS NULL
     RETURNING a.id`);
   const sent = new Set(marked.rows.map((row) => row.id));
   await Promise.all(

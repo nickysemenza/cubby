@@ -24,6 +24,7 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 export const RUN_EXECUTE_PASS = "run.execute";
+const RUN_PASSES = [RUN_EXECUTE_PASS, "purchase.dispatch"] as const;
 
 /** Executed kinds the `run.execute` Pass runs: the step ledger and AI work. */
 export type PassRunPurpose = ExecutedRunPurpose;
@@ -42,6 +43,7 @@ export type RunPassCursor = z.infer<typeof runPassCursor>;
 
 /** Where a Run's Pass stands; `null` when the Run has no Pass row. */
 export type RunPassState = {
+  name: string;
   runId: string;
   generation: number | null;
   /** `working` while a claim is live; `stuck` once attempts are spent. */
@@ -57,6 +59,7 @@ export type RunPassState = {
 };
 
 type PassRow = {
+  name: string;
   runId: string;
   cursor: unknown;
   availableAt: string;
@@ -83,18 +86,18 @@ export async function readRunPasses(
 ): Promise<Map<string, RunPassState>> {
   if (!runIds.length) return new Map();
   const result = await repositoryQueries(db).execute<PassRow>(sql`
-    SELECT key AS "runId", cursor, ${iso("availableAt")} AS "availableAt", "waitCause",
+    SELECT name, key AS "runId", cursor, ${iso("availableAt")} AS "availableAt", "waitCause",
       attempts, "maxAttempts", "lastError",
       (SELECT CASE WHEN count(*) >= 3 THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY (sample->>'ms')::float8) END
         FROM "Pass" history CROSS JOIN LATERAL jsonb_array_elements(history."durationHistory") sample
-        WHERE history.name = ${RUN_EXECUTE_PASS} AND (sample->>'at')::timestamptz > now() - interval '7 days') AS "medianPageMs",
+        WHERE history.name = "Pass".name AND (sample->>'at')::timestamptz > now() - interval '7 days') AS "medianPageMs",
       CASE WHEN "claimDeadline" IS NULL THEN NULL ELSE ${iso("claimDeadline")} END AS "claimDeadline",
       ${iso("updatedAt")} AS "updatedAt",
       "doneAt" IS NOT NULL AS done, "cancelledAt" IS NOT NULL AS cancelled,
       ("claimToken" IS NOT NULL AND "claimDeadline" > now()) AS working,
       "availableAt" <= now() AS due
     FROM "Pass"
-    WHERE name = ${RUN_EXECUTE_PASS} AND key = ANY(${textArrayParam(runIds)})`);
+    WHERE name = ANY(${textArrayParam(RUN_PASSES)}) AND key = ANY(${textArrayParam(runIds)})`);
   return new Map(
     result.rows.map((row) => {
       const cursor = runPassCursor.safeParse(row.cursor).data;
@@ -112,6 +115,7 @@ export async function readRunPasses(
       return [
         row.runId,
         {
+          name: row.name,
           runId: row.runId,
           generation: cursor?.generation ?? null,
           state,
@@ -138,14 +142,14 @@ export async function readRunPass(
 
 /** SQL true while `runId`'s Pass is claimable or held: its execution is still owed. */
 export const runPassOwed = (runId: SQL): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM "Pass" p WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = (${runId})::text
+  SELECT 1 FROM "Pass" p WHERE p.name = ANY(${textArrayParam(RUN_PASSES)}) AND p.key = (${runId})::text
     AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts < p."maxAttempts")`;
 
 /** SQL true while `runId`'s Pass holds a live claim: its executor is mid-page. */
 export const runPassWorking = (
   runId: SQL,
 ): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM "Pass" p WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = (${runId})::text
+  SELECT 1 FROM "Pass" p WHERE p.name = ANY(${textArrayParam(RUN_PASSES)}) AND p.key = (${runId})::text
     AND p."claimToken" IS NOT NULL AND p."claimDeadline" > now()
     AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL)`;
 
@@ -155,7 +159,7 @@ export const runPassStalled = (
   at: SQL,
   stallMs: number,
 ): SQL<boolean> => sql<boolean>`EXISTS (
-  SELECT 1 FROM "Pass" p WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = (${runId})::text
+  SELECT 1 FROM "Pass" p WHERE p.name = ANY(${textArrayParam(RUN_PASSES)}) AND p.key = (${runId})::text
     AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts < p."maxAttempts"
     AND (p."claimToken" IS NULL OR p."claimDeadline" <= ${at})
     AND p."availableAt" <= ${at} - ${stallMs} * interval '1 millisecond')`;
@@ -215,7 +219,7 @@ export function runPassRollup(
         ? 60_000 / pass.medianPageMs
         : null,
     group: {
-      kind: RUN_EXECUTE_PASS,
+      kind: pass.name,
       reason: cause ?? (pass.attempts > 0 ? "retry" : "turn"),
       mine: 1,
       position: pass.state === "due" ? (position?.position ?? null) : null,
@@ -245,7 +249,7 @@ export async function readDuePassPositions(
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
         AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
     ) ranked
-    WHERE ranked.name = ${RUN_EXECUTE_PASS} AND ranked.key = ANY(${textArrayParam(runIds)})`);
+    WHERE ranked.name = ANY(${textArrayParam(RUN_PASSES)}) AND ranked.key = ANY(${textArrayParam(runIds)})`);
   return new Map(
     result.rows.map((row) => [
       row.key,
@@ -295,3 +299,29 @@ export const fundingWaitUntilSql = (runId?: SQL): SQL => sql`least(
     AND a."waitCause" = ${kernelWaitCause.enum.funding} AND a."cancelledAt" IS NULL AND a."availableAt" > now()
     ${runId ? sql`AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId})` : sql``})
 )`;
+
+/** Admission checks whether the Run's current executor still holds its Pass. */
+export async function hasLiveRunPassClaim(
+  db: RepositoryQueryInput,
+  runId: string,
+): Promise<boolean> {
+  const result = await repositoryQueries(db).execute<{ held: boolean }>(
+    sql`SELECT ${runPassWorking(sql`${runId}::uuid`)} AS held`,
+  );
+  return result.rows[0]?.held ?? false;
+}
+
+/** Stop Run-owned Passes and hosted calls without cancelling shared scope Asks. */
+export async function cancelRunWork(
+  db: RepositoryQueryInput,
+  runId: string,
+): Promise<void> {
+  await repositoryQueries(db).execute(sql`WITH stopped AS (
+    UPDATE "Ask" a SET "cancelledAt" = coalesce(a."cancelledAt", now()), "updatedAt" = now()
+    WHERE a.hosted AND a.state <> ${askState.enum.answered} AND EXISTS (
+      SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId}::uuid)
+    RETURNING id
+  ) UPDATE "Pass" SET "cancelledAt" = coalesce("cancelledAt", now()), "updatedAt" = now()
+    WHERE "runId" = ${runId}::uuid AND "doneAt" IS NULL
+      AND (SELECT count(*) FROM stopped) >= 0`);
+}

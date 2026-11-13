@@ -50,7 +50,7 @@ export async function rebuildSnapshotPage(
     finishedAt: null,
   };
   // Persist before preparation so an isolate death still shrinks its next page.
-  await recordSnapshotCursor(claim, attempted);
+  await recordSnapshotCursor(claim.fenced, attempted);
   const compute = computes[declaration.compute];
   if (!compute)
     throw new Error(`Rebuild compute missing: ${declaration.compute}`);
@@ -138,7 +138,7 @@ export async function rebuildSnapshotPage(
     }
   } catch (error) {
     if (classifyJobFailure(error).kind === "transient") {
-      await recordSnapshotCursor(claim, {
+      await recordSnapshotCursor(claim.fenced, {
         ...attempted,
         error: diagnostic(error),
       });

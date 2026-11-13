@@ -2,7 +2,7 @@ import { ledgerPartyId } from "@cubby/schemas/identifiers";
 import { askProducer } from "@cubby/schemas/kernel/machinery";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * The kernel's dangerous rules (ADR 0029): order-independent convergence,
  * the `seq` and `rev` fences, claim expiry, never resending an unknown ask,
@@ -33,6 +33,8 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
+import * as backgroundTasks from "~/server/workflows/background-tasks/publish";
 
 import {
   cancelRunAsks,
@@ -52,7 +54,12 @@ import {
   type Kernel,
 } from "./api";
 import { applyComputed } from "./apply";
-import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
+import {
+  AskUnknownError,
+  expireAsks,
+  runQueuedAsks,
+  settleAskOutcome,
+} from "./ask";
 import {
   releaseFundingWaits,
   nextWakeSql,
@@ -1179,6 +1186,118 @@ describe("evidence-facts kernel", () => {
     }
   });
 
+  it("keeps a retained host's uncertain request unknown until the member settles it", async () => {
+    let calls = 0;
+    const ask = defineAsk({
+      feature: "fixture.retained-host",
+      producer: "model",
+      promptVersion: "1",
+      input: z.string(),
+      output: z.string(),
+      produce: async () => {
+        calls++;
+        return { output: "Synthetic answer" };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "retained-host", asks: [ask] }),
+    ]);
+    const options = { initialOutcome: "unknown" as const };
+    await expect(
+      kernel.withAsk(ctx.db, ask, "synthetic", options),
+    ).rejects.toBeInstanceOf(AskUnknownError);
+    expect(calls).toBe(0);
+    const [row] = (
+      await repositoryQueries(ctx.db).execute<{ inputHash: string }>(
+        sql`SELECT "inputHash" FROM "Ask" WHERE feature = ${ask.feature}`,
+      )
+    ).rows;
+    await settleAskOutcome(ctx.db, kernel.registry, row!.inputHash, "not_sent");
+    expect(await kernel.withAsk(ctx.db, ask, "synthetic", options)).toBe(
+      "Synthetic answer",
+    );
+    expect(calls).toBe(1);
+  });
+
+  it("cancels a Run's Pass and hosted Ask while retaining a shared scope Ask", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      trigger: "manual",
+    });
+    const pass = definePass({
+      name: "fixture.cancel-owned",
+      run: async (_db, cursor) => ({ cursor, done: true }),
+    });
+    const hosted = defineAsk({
+      feature: "fixture.owned",
+      producer: "model",
+      hosted: true,
+      promptVersion: "1",
+      input: z.string(),
+      output: z.string(),
+      produce: async () => {
+        throw new JobDeferredError(
+          "Synthetic wait",
+          new Date(Date.now() + 60_000),
+          "provider_capacity",
+        );
+      },
+    });
+    const shared = { ...hosted, feature: "fixture.shared", hosted: false };
+    const kernel = createKernel([
+      defineModule({
+        name: "cancel-owned",
+        asks: [hosted, shared],
+        passes: [pass],
+      }),
+    ]);
+    await kernel.startPass(ctx.db, pass, { runId });
+    for (const ask of [hosted, shared])
+      await expect(
+        kernel.withAsk(ctx.db, ask, "synthetic", {
+          runId,
+          pass: { name: pass.name, key: "default" },
+        }),
+      ).rejects.toBeInstanceOf(JobDeferredError);
+    await cancelRunWork(ctx.db, runId);
+    let sends = 0;
+    const racing = defineAsk({
+      ...hosted,
+      feature: "fixture.cancel-admission",
+      admit: () => cancelRunWork(ctx.db, runId),
+      produce: async () => {
+        sends++;
+        return { output: "Synthetic answer" };
+      },
+    });
+    await expect(
+      kernel.withAsk(ctx.db, racing, "synthetic", {
+        runId,
+        pass: { name: pass.name, key: "default" },
+      }),
+    ).rejects.toThrow("claim lapsed before it was sent");
+    expect(sends).toBe(0);
+    const rows = (
+      await repositoryQueries(ctx.db).execute<{
+        feature: string;
+        cancelled: boolean;
+      }>(
+        sql`SELECT feature, "cancelledAt" IS NOT NULL AS cancelled FROM "Ask" WHERE feature <> ${racing.feature} ORDER BY feature`,
+      )
+    ).rows;
+    expect(rows).toEqual([
+      { feature: hosted.feature, cancelled: true },
+      { feature: shared.feature, cancelled: false },
+    ]);
+    expect(
+      (
+        await repositoryQueries(ctx.db).execute<{ cancelled: boolean }>(
+          sql`SELECT "cancelledAt" IS NOT NULL AS cancelled FROM "Pass" WHERE name = ${pass.name}`,
+        )
+      ).rows[0]?.cancelled,
+    ).toBe(true);
+  });
+
   it("rolls back a Pass publication and its cursor together", async () => {
     const pass = definePass({
       name: "fixture.atomic-pass",
@@ -1371,7 +1490,18 @@ describe("evidence-facts kernel", () => {
       "partition is full",
     );
     expect(calls).toBe(0);
+    const recover = vi.spyOn(backgroundTasks, "wakeAt").mockResolvedValue();
+    await q.execute(
+      sql`UPDATE "Ask" SET "availableAt" = now() WHERE id = ${ids[1]!}::uuid`,
+    );
     expect(await claimAsk(ctx.db, ids[1]!, limit)).toBeNull();
+    expect(recover).toHaveBeenCalledWith(expect.any(Date), {
+      source: "kernel.claim-recovery",
+    });
+    const [when] = recover.mock.calls[0]!;
+    expect(when.getTime() - Date.now()).toBeGreaterThan(0);
+    expect(when.getTime() - Date.now()).toBeLessThanOrEqual(15_000);
+    recover.mockRestore();
     expect(await claimAsks(ctx.db, [ask], 8)).toEqual([]);
     const [parked] = (
       await q.execute<{ waitCause: string; attempts: number; future: boolean }>(

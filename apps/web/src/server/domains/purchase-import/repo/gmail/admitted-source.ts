@@ -18,7 +18,6 @@ import {
   type EmailEvidenceWriteScope,
 } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { withJobPhase } from "~/server/generic/jobs/context";
 
 /** Refresh does not transfer, repair or readmit an assigned import source. */
 async function classificationRefreshDisposition(
@@ -265,13 +264,9 @@ export async function publishGmailEvidence<T>(
   if (scope !== undefined) {
     // An existing owner must prove its gate; never acquire one after its locks.
     assertEmailEvidenceScope(db, scope);
-    return withJobPhase("mail.publish", () =>
-      withTransaction(db, (tx) => commitEvidence(tx, scope)),
-    );
+    return withTransaction(db, (tx) => commitEvidence(tx, scope));
   }
-  return withJobPhase("mail.publish", () =>
-    withEmailEvidenceWrite(db, (transactionDb, ownedScope) =>
-      withTransaction(transactionDb, (tx) => commitEvidence(tx, ownedScope)),
-    ),
+  return withEmailEvidenceWrite(db, (transactionDb, ownedScope) =>
+    withTransaction(transactionDb, (tx) => commitEvidence(tx, ownedScope)),
   );
 }

@@ -1,57 +1,19 @@
 /**
  * The read interface over Jobs for callers outside generic/jobs: rows by
- * identity, a Run's live lease, and the stopped Run executions the reconciler
- * settles. Callers never select the Job table themselves.
+ * identity and state. Callers never select the Job table themselves.
  */
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { jobState, type JobState } from "@cubby/schemas/job";
-import {
-  type AnyColumn,
-  and,
-  asc,
-  eq,
-  gt,
-  inArray,
-  or,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
 
 import { related } from "~/server/db/helpers/related";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { job, run } from "~/server/db/retained-tables";
+import { job } from "~/server/db/retained-tables";
 
 import type { JobRow } from "./queue";
-
-/** A Run's canonical generation, rather than an unrelated Job carrying its provenance. */
-export const runHasLiveExecution = (input: {
-  id: SQL;
-  purpose: SQL;
-  generation: SQL;
-  requireAttempt?: boolean;
-}): SQL<boolean> =>
-  related(job, (current) => eq(current.runId, input.id))
-    .where((current) =>
-      and(
-        eq(current.key, sql`'run:' || ${input.id}::text`),
-        eq(current.kind, "run.execute"),
-        eq(sql`${current.input}->>'runId'`, sql`${input.id}::text`),
-        eq(sql`${current.input}->>'purpose'`, input.purpose),
-        eq(sql`${current.generation}::text`, input.generation),
-        inArray(current.state, [
-          jobState.enum.queued,
-          jobState.enum.retry_wait,
-          jobState.enum.running,
-        ]),
-        input.requireAttempt
-          ? or(gt(current.generation, 1), gt(current.attempts, 0))
-          : undefined,
-      ),
-    )
-    .exists();
 
 export type { JobRow };
 
@@ -117,83 +79,3 @@ export const readJob = async (
   filter: JobFilter,
 ): Promise<JobRow | null> =>
   (await readJobs(db, filter, { limit: 1 }))[0] ?? null;
-
-const liveRunLease = (runId: AnyColumn | string, kind: string) =>
-  and(
-    typeof runId === "string"
-      ? eq(job.runId, parseEntityId("run", runId))
-      : eq(job.runId, runId),
-    eq(job.kind, kind),
-    eq(job.state, jobState.enum.running),
-    sql`${job.leaseExpiresAt}>now()`,
-  );
-
-/** Whether a `kind` Job of the Run (a correlated column) holds a live lease. */
-export const runJobLeaseLive = (runId: AnyColumn, kind: string) =>
-  sql<boolean>`EXISTS (SELECT 1 FROM ${job} WHERE ${liveRunLease(runId, kind)})`;
-
-/** Whether a `kind` Job of `runId` holds a live lease: its executor is mid-pass. */
-export async function hasLiveRunJobLease(
-  db: RepositoryQueryInput,
-  runId: string,
-  kind: string,
-) {
-  const [held] = await repositoryQueries(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(liveRunLease(runId, kind))
-    .limit(1);
-  return held !== undefined;
-}
-
-const STOPPED = ["failed", "cancelled", "paused"] as const;
-
-/** Stopped `run.execute` Jobs whose Run matches `runWhere`, for the Run reconciler. */
-export const stoppedRunExecutions = (
-  db: RepositoryQueryInput,
-  runWhere: SQL | undefined,
-  limit: number,
-  after: JobRow["id"] | null = null,
-) =>
-  repositoryQueries(db)
-    .select({
-      id: job.id,
-      generation: job.generation,
-      runId: job.runId,
-      state: job.state,
-      error: job.error,
-    })
-    .from(job)
-    .innerJoin(run, eq(run.id, job.runId))
-    .where(
-      and(
-        eq(job.kind, "run.execute"),
-        runWhere,
-        inArray(job.state, STOPPED),
-        after ? gt(job.id, after) : undefined,
-      ),
-    )
-    .orderBy(asc(job.id))
-    .limit(limit);
-
-/**
- * Lock the Job while it is still at this generation and state; false when it
- * moved on or another writer holds it.
- */
-export async function lockUnchangedJob(
-  db: RepositoryQueryInput,
-  row: Pick<JobRow, "id" | "generation" | "state">,
-) {
-  const [current] = await repositoryQueries(db)
-    .select({ id: job.id })
-    .from(job)
-    .where(
-      and(
-        eq(job.id, row.id),
-        eq(job.generation, row.generation),
-        eq(job.state, row.state),
-      ),
-    )
-    .for("update", { skipLocked: true });
-  return current !== undefined;
-}

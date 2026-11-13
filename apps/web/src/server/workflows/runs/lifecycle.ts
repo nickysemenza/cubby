@@ -8,7 +8,7 @@ import {
 import { type ExecutedRunPurpose } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
+import { and, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -39,10 +39,6 @@ import {
   JobRetryableError,
 } from "~/server/generic/jobs/errors";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
-import {
-  lockUnchangedJob,
-  stoppedRunExecutions,
-} from "~/server/generic/jobs/repo/job-reads";
 import {
   assertWorkflowEffect,
   currentRunExecution,
@@ -141,8 +137,7 @@ export async function launchWorkflowRun(
   input: LaunchWorkflowRunInput & { automatic?: false },
 ): Promise<LaunchedWorkflowRun>;
 /**
- * Run is provenance/history. Its `run.execute` Pass owns execution, retry,
- * pause and cancellation.
+ * Run is provenance/history. Its kernel Pass owns execution, retry, pause and cancellation.
  */
 export async function launchWorkflowRun(
   db: Database,
@@ -615,61 +610,4 @@ export async function claimWorkflowRun(
     )
     .limit(1);
   return row ?? null;
-}
-
-const reconcilable = () =>
-  or(
-    eq(runTable.status, "running"),
-    and(
-      eq(runTable.status, "paused_auth"),
-      eq(runTable.failureCode, "execution_limit"),
-    ),
-  )!;
-
-/** Lost permits and interrupted workers are recovered by permit selection, never new Run attempts. */
-export async function reconcileWorkflowRuns(
-  db: Database,
-  after: string | null = null,
-) {
-  const rows = await stoppedRunExecutions(db, reconcilable(), 100, after);
-  let reconciled = 0;
-  for (const row of rows) {
-    if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
-      continue;
-    const updated = await withTransactionDatabase(db, async (tx) => {
-      // Match launch's Run-before-Job order without waiting on an active writer.
-      const [owner] = await getDb(tx)
-        .select({ id: runTable.id })
-        .from(runTable)
-        .where(and(eq(runTable.id, row.runId!), reconcilable()))
-        .for("update", { skipLocked: true });
-      if (!owner) return false;
-      if (!(await lockUnchangedJob(tx, row))) return false;
-      await getDb(tx)
-        .update(runTable)
-        .set({
-          status: row.state === "paused" ? "paused" : "failed",
-          endedAt: row.state === "paused" ? null : new Date(),
-          dispatchError: row.error,
-          failureCode:
-            row.state === "cancelled"
-              ? "user_cancelled"
-              : row.state === "failed"
-                ? "job_failed"
-                : null,
-        })
-        .where(and(eq(runTable.id, row.runId!), reconcilable()));
-      await (
-        await import("~/server/kernel/api")
-      ).emitWrites(tx, {
-        table: runTable,
-        entity: "run",
-        ids: [row.runId!],
-        columns: ["status", "endedAt", "failureCode"],
-      });
-      return true;
-    });
-    if (updated) reconciled++;
-  }
-  return { reconciled, next: rows.length === 100 ? rows.at(-1)!.id : null };
 }

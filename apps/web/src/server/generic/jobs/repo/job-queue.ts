@@ -363,7 +363,7 @@ export async function readRunRollups(
         FROM "Run" WHERE status = ${runStatus.enum.running} AND ${notDeleted(run)}
       ), due AS (
         SELECT "Job".id, row_number() OVER (PARTITION BY "Job".kind
-            ORDER BY ("Job".kind = 'run.execute' OR coalesce(active_runs.visible, false)) DESC,
+            ORDER BY coalesce(active_runs.visible, false) DESC,
               "Job"."availableAt" - "Job".priority * interval '1 minute', "Job".priority DESC, "Job".id)::int AS position,
           count(*) OVER (PARTITION BY "Job".kind)::int AS total
         FROM "Job" LEFT JOIN active_runs ON active_runs.id = "Job"."runId"
@@ -465,7 +465,12 @@ export async function readRunRollups(
             group.completedPace / WORK_PACE_MINUTES,
           ]),
           ...(pass?.perMinute
-            ? [["run.execute", pass.perMinute] satisfies [string, number]]
+            ? [
+                [passGroup?.kind ?? "run.execute", pass.perMinute] satisfies [
+                  string,
+                  number,
+                ],
+              ]
             : []),
         ]),
         paceMinutes: WORK_PACE_MINUTES,

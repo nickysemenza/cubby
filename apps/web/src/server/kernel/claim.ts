@@ -292,12 +292,13 @@ async function withPartition<T>(
   limit: ClaimLimit | undefined,
   empty: T,
   work: (q: Q, available: number) => Promise<T>,
-  full?: (q: Q) => Promise<void>,
+  full?: (q: Q) => Promise<boolean>,
 ): Promise<T> {
   if (!limit) return work(repositoryQueries(db), Number.MAX_SAFE_INTEGER);
   if (!limit.partition || !Number.isInteger(limit.slots) || limit.slots < 1)
     throw new Error("Invalid claim partition");
-  return repositoryTransactionDatabase(db, async (tx) => {
+  let parked = false;
+  const result = await repositoryTransactionDatabase(db, async (tx) => {
     const q = repositoryQueries(tx);
     await q.execute(
       sql`SELECT pg_advisory_xact_lock(hashtextextended('kernel.partition:' || ${limit.partition}, 0))`,
@@ -308,9 +309,11 @@ async function withPartition<T>(
     )::int AS n`);
     const available = Math.max(0, limit.slots - (held.rows[0]?.n ?? 0));
     if (available) return work(q, available);
-    await full?.(q);
+    parked = (await full?.(q)) ?? false;
     return empty;
   });
+  if (parked) await wakeClaimRecovery(new Date(Date.now() + 15_000));
+  return result;
 }
 
 /** Full partitions wait without spending attempts or spinning the runner. */
@@ -319,12 +322,15 @@ async function parkPartition(
   match: SQL,
   table: "Ask" | "Pass",
   limit?: ClaimLimit,
-): Promise<void> {
-  await q.execute(sql`UPDATE ${sql.raw(`"${table}"`)} SET "claimPartition" = ${limit?.partition ?? null},
+): Promise<boolean> {
+  const result = await q.execute<{
+    parked: number;
+  }>(sql`UPDATE ${sql.raw(`"${table}"`)} SET "claimPartition" = ${limit?.partition ?? null},
     "waitCause" = ${kernelWaitCause.enum.provider_capacity}, "availableAt" = now() + interval '15 seconds'
     WHERE ${match} AND "cancelledAt" IS NULL AND "availableAt" <= now()
       AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-      AND ${table === "Ask" ? sql`state = ${ASK.queued}` : sql`"doneAt" IS NULL`}`);
+      AND ${table === "Ask" ? sql`state = ${ASK.queued}` : sql`"doneAt" IS NULL`} RETURNING 1 AS parked`);
+  return result.rows.length > 0;
 }
 
 /** Inline withAsk uses the same slot admission as queued Ask and Pass claims. */
@@ -361,7 +367,7 @@ export async function claimAsk(
       return result.rows[0] ?? null;
     },
     async (q) => {
-      await parkPartition(q, sql`id = ${id}::uuid`, "Ask", limit);
+      return parkPartition(q, sql`id = ${id}::uuid`, "Ask", limit);
     },
   );
   if (!row) return null;
@@ -506,7 +512,7 @@ async function claimAskGroup(
       }));
     },
     async (q) => {
-      await parkPartition(
+      return parkPartition(
         q,
         sql`feature = ANY(${textArrayParam(features)})`,
         "Ask",
@@ -591,7 +597,12 @@ async function claimPassGroup(
       return row ? { ...row, token, deadline: new Date(row.deadline) } : null;
     },
     async (q) => {
-      await parkPartition(q, sql`name = ${pass.name}`, "Pass", pass.claimLimit);
+      return parkPartition(
+        q,
+        sql`name = ${pass.name}`,
+        "Pass",
+        pass.claimLimit,
+      );
     },
   );
 }

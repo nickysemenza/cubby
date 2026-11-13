@@ -321,16 +321,13 @@ const WAIT_REASON_TEXT = {
 } satisfies Record<WorkQueueWait["reason"], string>;
 
 /** "115 Mail discovery Runs keep deferring on provider capacity." */
-function waitSummary(
-  kind: string,
-  wait: Omit<WorkQueueWait, "summary" | "runIds">,
-) {
+function waitSummary(wait: Omit<WorkQueueWait, "summary" | "runIds">) {
   // A retained purpose missing from the manifest reads as its stored name.
   const declared = runPurpose.safeParse(wait.runPurpose);
   const purpose = declared.success
     ? RUN_PURPOSE_LABEL[declared.data]
     : wait.runPurpose;
-  const noun = kind === "run.execute" ? "Run" : "Job";
+  const noun = "Job";
   const one = wait.count === 1;
   const subject = [wait.count, purpose, one ? noun : `${noun}s`]
     .filter((part) => part !== null)
@@ -525,7 +522,7 @@ async function observeWork(
           .slice(0, WAIT_GROUPS)
           .map(({ unit: _unit, runs, ...wait }) => ({
             ...wait,
-            summary: waitSummary(row.unit, wait),
+            summary: waitSummary(wait),
             // One Run can own several waiting Jobs of a kind.
             runIds: [...new Set(runs ?? [])]
               .slice(0, STREAM_RUNS)

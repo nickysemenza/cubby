@@ -168,7 +168,7 @@ export function agentModelTurn(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
-  input: { generation: string; request: z.JSONType },
+  input: { generation: string; request: z.JSONType; recovery?: "unknown" },
   send: () => Promise<Response>,
   fence: () => Promise<void>,
 ): Promise<Response> {
@@ -220,7 +220,11 @@ export function agentModelTurn(
         db,
         kind,
         { runId: rawRunId, generation, request },
-        { runId: rawRunId, pass: { name: "purchase.dispatch", key: rawRunId } },
+        {
+          runId: rawRunId,
+          pass: { name: "purchase.dispatch", key: rawRunId },
+          initialOutcome: input.recovery,
+        },
       );
       return new Response(answer.body, {
         status: answer.status,

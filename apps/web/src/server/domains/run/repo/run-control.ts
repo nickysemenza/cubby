@@ -69,6 +69,7 @@ import {
   readRunPurpose,
   runPurposePolicy,
 } from "~/server/domains/run/repo/purpose-policy";
+import { cancelRunWork } from "~/server/domains/run/repo/run-execution";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import {
@@ -805,6 +806,7 @@ export async function controlRun(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
+      await cancelRunWork(tx, scope.runId);
       await (
         await import("~/server/kernel/api")
       ).emitWrites(databaseForTransaction(tx), {
@@ -835,6 +837,7 @@ export async function controlRun(
         .update(runTable)
         .set({ status: "paused", updatedAt: new Date() })
         .where(eq(runTable.id, scope.runId));
+      await cancelRunWork(tx, scope.runId);
       return {
         publicId: input.runPublicId,
         status: "paused" as const,

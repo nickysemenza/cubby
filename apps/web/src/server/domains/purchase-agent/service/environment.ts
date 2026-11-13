@@ -153,7 +153,7 @@ export interface PurchaseAgentEnvironment {
   chatGptInference?: ChatGptInference;
   /** Retain a model response before Pi can apply its tool calls. */
   modelTurn(
-    input: { generation: string; request: JSONType },
+    input: { generation: string; request: JSONType; recovery?: "unknown" },
     send: () => Promise<Response>,
   ): Promise<Response>;
   /** The services of this object's Run. */

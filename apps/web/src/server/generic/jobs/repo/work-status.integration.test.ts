@@ -164,14 +164,14 @@ describe("background work status", () => {
       });
       await enqueueJob(ctx.db, {
         key: `synthetic.deferring.${index}`,
-        kind: "run.execute",
+        kind: "synthetic.deferring",
         input: {},
         runId,
       });
     }
     await updateJobs(
       ctx.db,
-      { kind: "run.execute" },
+      { kind: "synthetic.deferring" },
       {
         // Each deferral re-polls in 15 seconds, so the Jobs are never due
         // for long: only the deferral run's start shows how long they wait.
