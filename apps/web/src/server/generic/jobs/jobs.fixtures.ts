@@ -63,8 +63,4 @@ export const replaceJobGeneration = (
     .where(jobWhere(filter));
 
 /** Claim and settle a Job in a test, as the drain executor would. */
-export {
-  claimJob,
-  publishJobPage,
-  type JobClaim,
-} from "~/server/generic/jobs/repo/queue";
+export { claimJob, type JobClaim } from "~/server/generic/jobs/repo/queue";

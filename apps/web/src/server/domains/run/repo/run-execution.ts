@@ -11,10 +11,12 @@ import {
   type ExecutedRunPurpose,
   type RunPurpose,
 } from "@cubby/schemas/run-fields";
+import { runCause, runTrigger, runPurpose } from "@cubby/schemas/run-fields";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { textArrayParam } from "~/server/db/helpers/array-param";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -50,6 +52,7 @@ export type RunPassState = {
   lastError: string | null;
   claimDeadline: Date | null;
   updatedAt: Date;
+  medianPageMs: number | null;
 };
 
 type PassRow = {
@@ -62,6 +65,7 @@ type PassRow = {
   lastError: string | null;
   claimDeadline: string | null;
   updatedAt: string;
+  medianPageMs: number | null;
   done: boolean;
   cancelled: boolean;
   working: boolean;
@@ -80,6 +84,9 @@ export async function readRunPasses(
   const result = await repositoryQueries(db).execute<PassRow>(sql`
     SELECT key AS "runId", cursor, ${iso("availableAt")} AS "availableAt", "waitCause",
       attempts, "maxAttempts", "lastError",
+      (SELECT CASE WHEN count(*) >= 3 THEN percentile_cont(0.5) WITHIN GROUP (ORDER BY (sample->>'ms')::float8) END
+        FROM "Pass" history CROSS JOIN LATERAL jsonb_array_elements(history."durationHistory") sample
+        WHERE history.name = ${RUN_EXECUTE_PASS} AND (sample->>'at')::timestamptz > now() - interval '7 days') AS "medianPageMs",
       CASE WHEN "claimDeadline" IS NULL THEN NULL ELSE ${iso("claimDeadline")} END AS "claimDeadline",
       ${iso("updatedAt")} AS "updatedAt",
       "doneAt" IS NOT NULL AS done, "cancelledAt" IS NOT NULL AS cancelled,
@@ -114,6 +121,7 @@ export async function readRunPasses(
           lastError: row.lastError,
           claimDeadline: row.claimDeadline ? new Date(row.claimDeadline) : null,
           updatedAt: new Date(row.updatedAt),
+          medianPageMs: row.medianPageMs,
         },
       ];
     }),
@@ -178,9 +186,14 @@ const errorClassOf = (raw: string | null) => {
 export function runPassRollup(
   pass: RunPassState | undefined,
   position: { position: number; total: number } | undefined,
-): { reason: JobWaitingOnReason; group: RunWaitGroup | null } | null {
+): {
+  reason: JobWaitingOnReason;
+  group: RunWaitGroup | null;
+  perMinute: number | null;
+} | null {
   if (!pass) return null;
-  if (pass.state === "working") return { reason: "leased", group: null };
+  if (pass.state === "working")
+    return { reason: "leased", group: null, perMinute: null };
   if (pass.state !== "due" && pass.state !== "waiting") return null;
   const cause =
     // SAFETY: the `in` check narrows the stored cause to a declared key.
@@ -195,6 +208,10 @@ export function runPassRollup(
         : "backing_off";
   return {
     reason,
+    perMinute:
+      pass.medianPageMs && pass.medianPageMs > 0
+        ? 60_000 / pass.medianPageMs
+        : null,
     group: {
       kind: RUN_EXECUTE_PASS,
       reason: cause ?? (pass.attempts > 0 ? "retry" : "turn"),
@@ -207,7 +224,6 @@ export function runPassRollup(
   };
 }
 
-// TODO(Pass completion history): use retained duration samples for queued Run ETA.
 /** Each due Pass's place in the claim order (every pass name, by `availableAt`). */
 export async function readDuePassPositions(
   db: RepositoryQueryInput,
@@ -220,7 +236,8 @@ export async function readDuePassPositions(
     total: number;
   }>(sql`
     SELECT ranked.key, ranked.position, ranked.total FROM (
-      SELECT name, key, row_number() OVER (ORDER BY EXISTS (SELECT 1 FROM "Run" r WHERE r.id = "Pass"."runId" AND (r.cause = 'member_request' OR r.trigger IN ('manual', 'foreground'))) DESC, "availableAt", "createdAt", name, key)::int AS position,
+      -- includes-deleted: priority follows the originating Run's member request.
+      SELECT name, key, row_number() OVER (ORDER BY EXISTS (SELECT 1 FROM "Run" r WHERE r.id = "Pass"."runId" AND (r.cause = ${runCause.enum.member_request} OR r.trigger IN (${runTrigger.enum.manual}, ${runTrigger.enum.foreground}))) DESC, "availableAt", "createdAt", name, key)::int AS position,
         count(*) OVER ()::int AS total
       FROM "Pass"
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND "availableAt" <= now()
@@ -245,7 +262,7 @@ export async function sweepPassSourceHeld(
       SELECT r.id, ti.source FROM "Run" r
       JOIN "TransactionImport" ti ON ti.id = (jsonb_path_query_first(r.input,
         '$.families[*] ? (@.family == "statement_transaction").scope.importId') #>> '{}')::uuid
-      WHERE r.purpose = 'sweep' AND r."deletedAt" IS NULL
+      WHERE r.purpose = ${runPurpose.enum.sweep} AND ${notDeleted("r")}
     ) SELECT EXISTS (
       SELECT 1 FROM sweep_sources own JOIN sweep_sources other ON other.source = own.source AND other.id <> own.id
       JOIN "Pass" p ON p.name = ${RUN_EXECUTE_PASS} AND p.key = other.id::text

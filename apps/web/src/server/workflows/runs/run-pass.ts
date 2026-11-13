@@ -238,8 +238,9 @@ export const runExecutePass = definePass({
         // SILENT: the next fence or pre-provider check reports lost ownership.
       });
     }, HEARTBEAT_MS);
+    const started = performance.now();
     try {
-      return await withWorkflowExecution(
+      const result = await withWorkflowExecution(
         {
           runId,
           attempt: cursor.generation,
@@ -249,6 +250,22 @@ export const runExecutePass = definePass({
         },
         () => advance(db, claim, cursor),
       );
+      if (!result.waitCause && !result.availableAt) {
+        const sample = {
+          ms: Math.max(1, performance.now() - started),
+          at: new Date().toISOString(),
+        };
+        await claim.fenced(async (tx) => {
+          await repositoryQueries(tx)
+            .execute(sql`UPDATE "Pass" SET "durationHistory" = (
+            SELECT coalesce(jsonb_agg(sample ORDER BY ordinal), '[]'::jsonb)
+            FROM jsonb_array_elements("durationHistory" || ${JSON.stringify([sample])}::jsonb)
+              WITH ORDINALITY recent(sample, ordinal)
+            WHERE ordinal > jsonb_array_length("durationHistory") - 11
+          ) WHERE name = ${RUN_EXECUTE_PASS} AND key = ${runId}`);
+        });
+      }
+      return result;
     } catch (error) {
       const wait = await asWait(claim, runId, error, cursor);
       if (wait) return wait;

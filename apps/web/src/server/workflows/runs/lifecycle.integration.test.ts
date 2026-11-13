@@ -1,4 +1,5 @@
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -137,7 +138,7 @@ describe("Run Pass admission", () => {
     const fundingDeadline = new Date(Date.now() + 3_600_000);
     await getDb(ctx.db)
       .execute(sql`UPDATE "Pass" SET "availableAt" = ${fundingDeadline.toISOString()}::timestamp,
-      "waitCause" = 'funding', attempts = 1 WHERE name = 'run.execute' AND key = ${id}`);
+      "waitCause" = ${kernelWaitCause.enum.funding}, attempts = 1 WHERE name = 'run.execute' AND key = ${id}`);
     await launchWorkflowRun(ctx.db, {
       runId: id,
       purpose: "maintenance",

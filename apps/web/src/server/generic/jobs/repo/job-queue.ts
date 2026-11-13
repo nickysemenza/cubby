@@ -460,12 +460,15 @@ export async function readRunRollups(
           })),
           ...(passGroup ? [passGroup] : []),
         ],
-        perMinute: new Map(
-          runGroups.map((group) => [
+        perMinute: new Map([
+          ...runGroups.map((group): [string, number] => [
             group.kind,
             group.completedPace / WORK_PACE_MINUTES,
           ]),
-        ),
+          ...(pass?.perMinute
+            ? [["run.execute", pass.perMinute] satisfies [string, number]]
+            : []),
+        ]),
         paceMinutes: WORK_PACE_MINUTES,
         counts,
         expiredLeases,

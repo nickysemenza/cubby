@@ -54,8 +54,6 @@ const failedUnstartedDispatch = sql`j.kind='purchase.dispatch' AND j.state=${job
       AND j.input->>'type'='start_or_resume' AND j.input->>'eventId'=r."dispatchEventId"
       AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND ${notDeleted("r")}`;
 
-/** Permit selection: since when a failed start dispatch leaves its Run running. */
-
 /** Returns how many Runs it failed. */
 export async function reconcileCoordinatorDispatches(db: Database) {
   return withTransaction(db, async (tx) => {

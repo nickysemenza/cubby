@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "52c76c22-7e39-4e5c-a7c3-b7186b8e6abe",
+  "prevIds": [
+    "fa594c40-e72e-45eb-b6ac-9a70800fb4fd"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Pass",
+        "durationHistory"
+      ],
+      "writes": [
+        "s|col|public.Pass.durationHistory",
+        "n|col|public.Pass.durationHistory",
+        "e|col|public.Pass.durationHistory"
+      ],
+      "reads": [
+        "n|tbl|public.Pass",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Pass",
+        "name": "durationHistory",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'[]'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

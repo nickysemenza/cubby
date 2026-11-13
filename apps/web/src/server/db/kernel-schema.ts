@@ -396,6 +396,10 @@ export const kernelPass = pgTable(
     name: text("name").notNull(),
     key: text("key").notNull(),
     cursor: jsonb("cursor"),
+    durationHistory: jsonb("durationHistory")
+      .$type<{ ms: number; at: string }[]>()
+      .notNull()
+      .default([]),
     ...claimColumns(),
     maxAttempts: integer("maxAttempts").notNull().default(5),
     runId: uuid("runId"),

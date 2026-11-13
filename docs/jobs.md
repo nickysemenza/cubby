@@ -231,8 +231,10 @@ leases, paused or other counts, else expired leases.
 
 Run Passes add their live claim, wait cause, attempt count, next time and raw
 error to the same rollup. Due Pass positions follow the kernel's `availableAt`
-order, with member-started work first. Completion pace and a queue ETA are null without Pass duration history;
-explicit wait deadlines remain visible. Step throughput and ETA use the
+order, with member-started work first. Run execution retains at most twelve successful page durations per Pass instance.
+Queue pace uses the median of samples from the same Pass name in the last seven
+days, requiring at least three samples; queue ETA is position times that median.
+Without enough samples pace and ETA are null. Explicit wait deadlines remain visible. Step throughput and ETA use the
 retained `RunStep` progress observations independently.
 
 The Run declares `waitingOn` as its `presentation.state.wait` and `stalled` as

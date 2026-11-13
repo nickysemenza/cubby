@@ -176,11 +176,6 @@ export const stoppedRunExecutions = (
     .orderBy(asc(job.id))
     .limit(limit);
 
-/** Permit selection: when the earliest stopped `run.execute` Job whose Run matches `runWhere` stopped; null when none has. */
-export const stoppedRunExecutionsSince = (runWhere: SQL) =>
-  sql`(SELECT min(${job.updatedAt}) FROM ${job} JOIN ${run} ON ${run.id} = ${job.runId}
-    WHERE ${job.kind} = 'run.execute' AND ${inArray(job.state, STOPPED)} AND ${runWhere})`;
-
 /**
  * Lock the Job while it is still at this generation and state; false when it
  * moved on or another writer holds it.

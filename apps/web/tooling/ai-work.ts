@@ -65,16 +65,21 @@ export async function driveAiWork(
     if (["done", "stuck", "cancelled"].includes(execution.state)) return;
     const done = await withRunPassFixture(db, id, async () => {
       const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
-      const params = {runId: id, attempt: execution.generation ?? 1};
+      const params = { runId: id, attempt: execution.generation ?? 1 };
       if (owner?.purpose === "sweep") {
-        await getDb(db).update(runStep).set({meta: sql`${runStep.meta} - 'capacityUntil'`}).where(eq(runStep.runId, id));
+        await getDb(db)
+          .update(runStep)
+          .set({ meta: sql`${runStep.meta} - 'capacityUntil'` })
+          .where(eq(runStep.runId, id));
         const result = await advanceStepRun(db, params, plan);
         return result.kind === "finished" || result.kind === "lost";
       }
       return !(await advanceAiWorkRun(db, params));
     });
     if (done) {
-      await repositoryQueries(db).execute(sql`UPDATE "Pass" SET "doneAt" = now() WHERE name = 'run.execute' AND key = ${id}`);
+      await repositoryQueries(db).execute(
+        sql`UPDATE "Pass" SET "doneAt" = now() WHERE name = 'run.execute' AND key = ${id}`,
+      );
       return;
     }
     const [owner] = await getDb(db).select().from(run).where(eq(run.id, id));
@@ -117,7 +122,9 @@ export async function driveAiWork(
           (item) => !["queued", "result_ready"].includes(item.state),
         ).length;
         if (done >= ports.sweep.pauseAfter) {
-          await (await import("~/server/kernel/api")).cancelWork(db, {table: "Pass", name: "run.execute", key: id});
+          await (
+            await import("~/server/kernel/api")
+          ).cancelWork(db, { table: "Pass", name: "run.execute", key: id });
           await getDb(db)
             .update(run)
             .set({ status: "paused" })

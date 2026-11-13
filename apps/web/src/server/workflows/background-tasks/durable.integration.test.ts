@@ -19,7 +19,10 @@ describe("durable task intent", () => {
   it("persists intent when no queue producer is installed", async () => {
     await publishInBackground(ctx.db, [task], { source: "synthetic-test" });
     const rows = (
-      await repositoryQueries(ctx.db).execute(
+      await repositoryQueries(ctx.db).execute<{
+        cursor: unknown;
+        runId: string | null;
+      }>(
         sql`SELECT cursor, "doneAt", "runId" FROM "Pass" WHERE name = 'purchase.discovery'`,
       )
     ).rows;
@@ -35,7 +38,10 @@ describe("durable task intent", () => {
       source: "synthetic-optional",
     });
     const [saved] = (
-      await repositoryQueries(ctx.db).execute(
+      await repositoryQueries(ctx.db).execute<{
+        cursor: unknown;
+        runId: string | null;
+      }>(
         sql`SELECT cursor, "runId" FROM "Pass" WHERE name = 'purchase.discovery'`,
       )
     ).rows;
@@ -49,9 +55,10 @@ describe("durable task intent", () => {
         await publishBackgroundTasks(tx, [task], { source: "synthetic-test" });
         expect(
           (
-            await repositoryQueries(tx).execute(
-              sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`,
-            )
+            await repositoryQueries(tx).execute<{
+              cursor: unknown;
+              runId: string | null;
+            }>(sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`)
           ).rows,
         ).toHaveLength(1);
         throw new Error("Synthetic rejected mutation");
@@ -59,9 +66,10 @@ describe("durable task intent", () => {
     ).rejects.toThrow("Synthetic rejected mutation");
     expect(
       (
-        await repositoryQueries(ctx.db).execute(
-          sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`,
-        )
+        await repositoryQueries(ctx.db).execute<{
+          cursor: unknown;
+          runId: string | null;
+        }>(sql`SELECT * FROM "Pass" WHERE name = 'purchase.discovery'`)
       ).rows,
     ).toEqual([]);
   });
