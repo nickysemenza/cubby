@@ -45,8 +45,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   Run through `ensureRun` (`server/domains/run/repo/ensure-run.ts`). Counts, tallies, no-result reasons, raw errors and Retry failed render through the
   `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs
   add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
-  work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
-  child Run, queue chain or ad hoc counter.
+  work uses model Asks; `AskScope` associates waiting scopes and the requesting
+  Run, and Answers retain the producer result and `costMicros`.
 - Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
   (`suggestionFamilies` in `server/generic/suggestions/repo/suggestion-family-declarations.ts`)
   and the Suggestions page. Each family's `SuggestionFamilyDeclaration`

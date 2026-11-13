@@ -413,7 +413,8 @@ native PostgreSQL installation remain owned by their existing runners.
   with `withCfEnv`; authentication reads current bindings and caches only matching
   configuration values, including the current signing secret. It does not mutate
   `process.env` or retain a module-initialized auth policy. Response-independent work uses `afterResponse`, while required
-  durable work remains in Jobs/Queues/DOs. Successful WebSocket upgrades are returned
+  durable work remains in kernel scopes, Asks and Passes, with queues and DOs
+  carrying wakes and hosted sessions. Successful WebSocket upgrades are returned
   verbatim; ordinary responses, including socket refusals, receive correlation.
   Keep feature imports at their protocol/event owner. Dynamic syntax alone does not
   establish emitted size or startup savings.
@@ -427,7 +428,7 @@ native PostgreSQL installation remain owned by their existing runners.
   generated Env inference remains authoritative. DO named exports preserve namespaces.
 - **Background work.** Queue wakes, the hourly cron, the daily `maintenance`
   Run and app-open recovery are in
-  [Durable Jobs](jobs.md#wakes-and-progress).
+  [Kernel work](jobs.md#wakes-and-progress).
   Exceptional repair tools live in Work's Advanced maintenance view; Settings
   contains connection diagnostics. The read-only `/api/debug/timing` endpoint
   requires a member session in every environment and returns private,
