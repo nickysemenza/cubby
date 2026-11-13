@@ -347,7 +347,8 @@ async function load(
               plan.fields
                 .filter(
                   (field) =>
-                    (!assignments.has(`${entity}:${item.id}:${field.key}`) ||
+                    (field.mode === "prune" ||
+                      !assignments.has(`${entity}:${item.id}:${field.key}`) ||
                       assignments.get(`${entity}:${item.id}:${field.key}`) ===
                         "release") &&
                     (blank(loaded.row![field.key]) || !field.fillOnly) &&
