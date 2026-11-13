@@ -5,7 +5,6 @@ import {
   type AuditStoredChanges,
 } from "@cubby/schemas/audit";
 import { type ActorContext, type AuditChannel } from "@cubby/schemas/context";
-import { fieldAutomationWatches } from "@cubby/schemas/field-suggestion-policy";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -211,13 +210,7 @@ const auditActorColumns = (actor: ActorContext) => ({
   oauthClientId: actor.oauthClientId,
   deviceId: actor.deviceId,
   runId: actor.runId,
-  authority: actor.authority ?? null,
 });
-
-/** Creates and updates of entities with automated fields owe the drain a look. */
-const automationPending = (entry: AuditEntryInput) =>
-  (entry.action === "create" || entry.action === "update") &&
-  fieldAutomationWatches(entry.entityKind);
 
 /**
  * Insert an audit log entry.
@@ -235,7 +228,6 @@ export async function logAuditEntry(
       action: entry.action,
       changes: storedChanges(entry.changes),
       ...auditActorColumns(actor),
-      automationPending: automationPending(entry),
       provenance: kernelApplyProvenance(),
     })
     .returning({ id: auditLog.id });
@@ -258,8 +250,6 @@ const auditRecordKeys = [
   "oauthClientId",
   "deviceId",
   "runId",
-  "authority",
-  "automationPending",
   "provenance",
 ] as const satisfies readonly (keyof typeof auditLog.$inferInsert)[];
 const auditRecordColumns = sql.join(
@@ -293,7 +283,6 @@ export async function logAuditEntries(
     action: entry.action,
     changes: storedChanges(entry.changes),
     ...auditActorColumns(actor),
-    automationPending: automationPending(entry),
     provenance,
   }));
 

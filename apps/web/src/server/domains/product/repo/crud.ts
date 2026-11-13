@@ -68,6 +68,7 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -1579,12 +1580,22 @@ export async function createProductRecord<TOutput>(
         }),
       );
       await assertExternalIdsAvailable(tx, desiredExternalIds);
-      const newProduct = await insertWithShortcode(tx, "product", {
-        ...columnData,
-        brandId: await resolveProductBrand(tx, productData.brandId),
-        categoryId,
-        ingredientId: ingredientId ?? null,
-      });
+      const fields = holdFieldsValues(
+        "product",
+        {
+          ...columnData,
+          brandId: await resolveProductBrand(tx, productData.brandId),
+          categoryId,
+          ingredientId: ingredientId ?? null,
+        },
+        "create",
+      );
+      const newProduct = await insertWithShortcode(
+        tx,
+        "product",
+        fields.values,
+      );
+      await fields.settle(tx, actor, newProduct.id);
       await lockExternalIdentifierParents(tx, [
         { entityId: newProduct.id, entityKind: "product" },
       ]);
@@ -1924,12 +1935,26 @@ export async function updateProduct<TOutput>(
       // set" rather than no-op-ing. Skip the column update entirely and reuse
       // the row this same transaction already read; nothing else can have
       // changed it since.
-      const hasScalarChanges = Object.values(updateData).some(
+      const fields = holdFieldsValues("product", updateData);
+      const hasScalarChanges = Object.values(fields.values).some(
         (value) => value !== undefined,
       );
-      const updated = hasScalarChanges
-        ? await updateLiveAndReturn(tx, product, updateData, id)
+      let updated = hasScalarChanges
+        ? await updateLiveAndReturn(tx, product, fields.values, id)
         : beforeProduct;
+      await fields.settle(tx, actor, id, beforeProduct);
+      // The kernel applied the held `fields` columns in this transaction.
+      if (fields.held.length)
+        updated =
+          (await tx.query.product.findFirst({
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(eq(product.id, id), notDeleted(product)),
+                ),
+            },
+          })) ?? updated;
 
       if (updated.categoryId !== beforeProduct.categoryId)
         await validateLiveInheritedPolicies(tx, { kind: "product", ids: [id] });
@@ -2393,6 +2418,11 @@ export const quickCreateProductRecord = async (
       await applyPrimaryBarcode(tx, inserted.id, incomingGtin);
     }
 
+    await holdFieldsValues("product", productValues, "create").settle(
+      tx,
+      actor,
+      inserted.id,
+    );
     await logAuditEntry(tx, actor, {
       entityKind: "product",
       entityId: inserted.id,

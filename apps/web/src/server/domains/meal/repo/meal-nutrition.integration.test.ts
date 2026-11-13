@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => backgroundQueue.restore());
 
 import { aggregateTotals } from "~/lib/nutrition-estimates";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import {
   mealFoodEntry,
@@ -43,7 +44,6 @@ import { saveMealFood, removeMealFood } from "~/server/domains/meal/repo/food";
 import { saveMealRecipePreparation } from "~/server/domains/meal/repo/portions";
 import { getMealNutrition } from "~/server/domains/meal/service/meal-nutrition.service";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 const noUsda: UsdaFoodBatchPort = {
   findFoodsBatch: async () => {

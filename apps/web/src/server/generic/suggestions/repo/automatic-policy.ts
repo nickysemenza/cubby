@@ -1,27 +1,12 @@
-import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
-import {
-  FIELD_ASSIGNMENT_REVISION,
-  type AutomaticRuleFamily,
-  type AutomaticRuleKey,
+import type {
+  AutomaticRuleFamily,
+  AutomaticRuleKey,
 } from "@cubby/schemas/automatic-rule";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 
-/** What a field rule reads from the published proposal. */
-export type FieldRuleFacts = {
-  entity: ShortcodeEntity;
-  field: string;
-  kind: string;
-  confidence: number;
-  model: string;
-};
-
 type FactsOf = {
-  field: FieldRuleFacts;
   statement_transaction: StatementTransactionJudgment;
 };
 
@@ -48,7 +33,7 @@ type Declaration<F extends AutomaticRuleFamily> = {
   description: string;
   /** Read at call time: the statement revision lives in a module that imports this one. */
   revision: () => string;
-  execution: "statement_settlement" | "field_policy";
+  execution: "statement_settlement";
   match: (facts: FactsOf[F]) => boolean;
   application: (facts: FactsOf[F]) => RuleApplication;
 };
@@ -56,23 +41,10 @@ type Declaration<F extends AutomaticRuleFamily> = {
 /**
  * Automatic rules, keyed by `<family>.<name>`. Each reads its family's
  * published evidence directly and deterministically; model confidence is part
- * of a definition but never authorizes one alone. Field application also checks
- * live emptiness, evidence, winner margin and member intent. Connections have none.
+ * of a definition but never authorizes one alone. Field values are the `fields`
+ * reconciler's, not a rule's. Connections have none.
  */
 export const AUTOMATIC_RULES = {
-  "field.addition": {
-    execution: "field_policy",
-    family: "field",
-    description:
-      "Fill an open field, or revise a value Cubby set itself, at high confidence with current evidence; never overwrite a person's value.",
-    revision: () => FIELD_ASSIGNMENT_REVISION,
-    match: (facts) =>
-      entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
-        "fill" &&
-      suggestApplyPolicy(facts.entity, facts.field) === "auto" &&
-      facts.confidence >= HIGH_CONFIDENCE_PROBABILITY,
-    application: () => ({ kind: "accept_as_is" }),
-  },
   "statement_transaction.book_spending": {
     family: "statement_transaction",
     execution: "statement_settlement",
@@ -123,10 +95,6 @@ function evaluate<F extends AutomaticRuleFamily>(
     },
   ];
 }
-
-/** The field rules a published proposal matches now. */
-export const matchFieldRules = (facts: FieldRuleFacts) =>
-  evaluate("field.addition", AUTOMATIC_RULES["field.addition"], facts);
 
 /** The statement rules a published judgment matches now. */
 export const matchStatementRules = (judgment: StatementTransactionJudgment) => [

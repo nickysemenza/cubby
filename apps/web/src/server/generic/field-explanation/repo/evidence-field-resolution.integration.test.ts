@@ -8,6 +8,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   inventoryOwnerResolution,
@@ -17,7 +18,6 @@ import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { inheritedResetPreview } from "./inherited-reset-preview";
 import { loadFieldResolutionEvidence } from "./resolution-contributors";

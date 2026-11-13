@@ -3,19 +3,10 @@ import {
   financeCategoryApplyInput,
   suggestionStatus,
 } from "@cubby/schemas/ai";
-import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
-import {
-  financeReviewContext,
-  suggestApplyPolicy,
-  undecidedFieldValue,
-} from "@cubby/schemas/field-suggestion-policy";
+import { financeReviewContext } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import {
   suggestionChildHandle,
@@ -25,11 +16,6 @@ import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
 import { type SQL, and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import {
-  dependenciesCurrent,
-  fieldDependencyKeys,
-} from "~/server/ai/policy/refresh-manifest";
-import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -48,18 +34,11 @@ import { applyFinanceCategorySuggestion } from "~/server/domains/financial-trans
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
-  decideAutomaticField,
-  type AutomaticFieldInput,
-} from "~/server/generic/suggestions/field-policy";
-import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
-import {
   fieldInputFingerprint,
-  fieldInputFingerprintIfLive,
   readFieldInputs,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/suggestions/repo/field-input-fence";
@@ -71,10 +50,8 @@ import {
 import {
   type SuggestionStateRow,
   suggestionStateColumns,
-  suggestionRecordId,
   transitionSuggestionState,
 } from "~/server/generic/suggestions/repo/suggestion-state";
-import { canonicalJson } from "~/server/lib/canonical-json";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */
 const requestedSuggestionRun = (code: string) => sql`(
@@ -421,172 +398,10 @@ async function applySuggestionValue(
   return receipt;
 }
 
-/** Load the field, policy and history before evaluating the automatic decision. */
-async function loadAutomaticField(
-  db: Database,
-  context: EntityKernelContext,
-  row: SuggestionStateRow,
-): Promise<AutomaticFieldInput> {
-  const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
-  const recordId = suggestionRecordId(row);
-  const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
-  const input: AutomaticFieldInput = {
-    entity: row.entity,
-    field: row.field,
-    eligible: Boolean(
-      row.active &&
-      !row.suppression &&
-      policy?.mode === "fill" &&
-      suggestApplyPolicy(entity, row.field) === "auto" &&
-      !(row.confidence < HIGH_CONFIDENCE_PROBABILITY) &&
-      !undecidedFieldValue(entity, row.field, row.suggestedValue),
-    ),
-    saved: false,
-    provenanceCurrent: false,
-    subjectExists: false,
-    hasEvidence: false,
-    holder: "open",
-    explicitNone: false,
-    currentAvailable: false,
-    effectiveEmpty: true,
-    fillOnly: Boolean(policy?.fillOnly),
-    confidence: row.confidence,
-    runnerUpConfidence: row.runnerUpConfidence,
-    rejected: false,
-    replaced: false,
-  };
-  if (!input.eligible || policy?.mode !== "fill") return input;
-  const table = SHORTCODE_TABLE[entity];
-  const [saved, manifest, records, authority, previous] = await Promise.all([
-    getDb(db)
-      .select({ id: suggestionTable.id })
-      .from(suggestionTable)
-      .where(and(eq(suggestionTable.id, row.id), reviewableSuggestionSql)),
-    producingAiManifest(db),
-    getDb(db)
-      .select({ shortcode: table.shortcode })
-      .from(table)
-      .where(eq(sql`${table.id}`, row.recordId))
-      .limit(1),
-    fieldAuthority(db, entity, recordId, row.field),
-    getDb(db)
-      .select({
-        value: suggestionTable.suggestedValue,
-        status: suggestionTable.status,
-        receipt: suggestionTable.acceptanceReceipt,
-      })
-      .from(suggestionTable)
-      .where(
-        and(
-          eq(suggestionTable.family, "field"),
-          eq(suggestionTable.entity, row.entity),
-          eq(suggestionTable.recordId, recordId),
-          eq(suggestionTable.field, row.field),
-          inArray(suggestionTable.status, [
-            "rejected",
-            "superseded",
-            "applied",
-          ]),
-        ),
-      ),
-  ]);
-  input.saved = saved.length > 0;
-  const provenance = aiProvenance.safeParse(row.provenance);
-  input.provenanceCurrent =
-    provenance.success &&
-    fieldDependencyKeys(entity, row.field).every((feature) =>
-      provenance.data.dependencies.some((stamp) => stamp.feature === feature),
-    ) &&
-    dependenciesCurrent(provenance.data, manifest);
-  input.holder = authority.holder;
-  const sameValue = (value: unknown) =>
-    canonicalJson(z.json().parse(value)) ===
-    canonicalJson(z.json().parse(row.suggestedValue));
-  input.rejected = previous.some(
-    (earlier) => earlier.status === "rejected" && sameValue(earlier.value),
-  );
-  input.replaced = previous.some(
-    (earlier) =>
-      sameValue(earlier.value) &&
-      suggestionAcceptanceReceipt.safeParse(earlier.receipt).data?.mode ===
-        "automatic",
-  );
-  const record = records[0];
-  if (!record) return input;
-  const [live] = await readSelectedEntityRecords({
-    context: { ...context, db },
-    entity,
-    ids: [record.shortcode],
-    fields: [row.field, ...policy.basis],
-  });
-  if (!live) return input;
-  input.subjectExists = true;
-  const governed = (key: string) =>
-    Object.hasOwn(entityFieldEnvelopeFields[entity], key);
-  input.hasEvidence = policy.basis.some((key) => {
-    const source = fieldEnvelopeFor(live, key);
-    const value = governed(key) ? source && fieldValueOf(source) : live[key];
-    return key !== row.field && basisValueOf(value) !== null;
-  });
-  const envelope = fieldEnvelopeFor(live, row.field);
-  input.explicitNone = envelope?.current.assignment?.kind === "none";
-  input.currentAvailable =
-    !governed(row.field) ||
-    Boolean(envelope && envelope.result.kind !== "missing");
-  input.effectiveEmpty = undecidedFieldValue(
-    entity,
-    row.field,
-    governed(row.field) ? envelope && fieldValueOf(envelope) : live[row.field],
-  );
-  return input;
-}
-
-async function automaticFieldRefusal(
-  db: Database,
-  context: EntityKernelContext,
-  row: SuggestionStateRow,
-) {
-  const decision = decideAutomaticField(
-    await loadAutomaticField(db, context, row),
-  );
-  return decision.kind === "refuse" ? decision.reason : null;
-}
-
-/** Read-only preflight; acceptance repeats all checks inside its write fence. */
-export async function canAutomaticallyFillField(
-  db: Database,
-  context: EntityKernelContext,
-  id: string,
-) {
-  const [row] = await getDb(db)
-    .select(suggestionStateColumns)
-    .from(suggestionTable)
-    .where(
-      and(eq(suggestionTable.id, id), eq(suggestionTable.status, "pending")),
-    );
-  if (!row?.recordId) return false;
-  const fence = z
-    .object({ liveInputFingerprint: z.string() })
-    .safeParse(row.data);
-  if (
-    !fence.success ||
-    fence.data.liveInputFingerprint !==
-      (await fieldInputFingerprintIfLive(
-        db,
-        row.entity,
-        row.recordId,
-        row.field,
-      ))
-  )
-    return false;
-  return (await automaticFieldRefusal(db, context, row)) === null;
-}
-
 export async function acceptSuggestion(
   db: Database,
   context: EntityKernelContext,
   input: z.infer<typeof rowIdInput>,
-  automatic?: { mode: "automatic"; confidence: number },
 ) {
   const { id } = rowIdInput.parse(input);
   return withTransactionDatabase(db, async (transactionDb) => {
@@ -617,10 +432,6 @@ export async function acceptSuggestion(
       throw new Error(
         "Suggestion inputs changed; evaluate this field again before applying",
       );
-    if (automatic) {
-      const refusal = await automaticFieldRefusal(transactionDb, context, row);
-      if (refusal) throw new Error(refusal);
-    }
     // The shared write path excludes this row by status while superseding its
     // pending siblings. A failed application rolls the status transition back.
     await transitionSuggestionState(transactionDb, id, { status: "applied" });
@@ -629,7 +440,7 @@ export async function acceptSuggestion(
       { ...context, db: transactionDb },
       parsed,
       row.suggestedValue,
-      automatic ? { ...automatic, reason: "confident_assignment" } : {},
+      {},
     );
     await transitionSuggestionState(transactionDb, id, {
       acceptanceReceipt: receipt,
@@ -638,7 +449,7 @@ export async function acceptSuggestion(
       suggestionId: id,
       operationId: "saved-application",
       verdict: "correct",
-      authority: automatic ? "automatic" : "member",
+      authority: "member",
       actorUserId: context.actorContext.userId,
       intent: "apply",
       receipt: z.json().parse(receipt),

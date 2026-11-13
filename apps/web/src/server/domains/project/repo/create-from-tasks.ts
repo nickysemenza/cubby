@@ -15,6 +15,7 @@ import type { RawProjectOut, RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database } from "~/server/db";
 import { notDeleted, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -62,22 +63,28 @@ export async function createProjectFromTasks(
       );
     }
 
-    const created = await insertWithShortcode(tx, "project", {
-      name: projectInput.name,
-      status: projectInput.status,
-      kind: projectInput.kind,
-      locations: projectInput.locations,
-      locationsMode:
-        projectInput.locationsMode ??
-        (projectInput.locations.length ? "explicit" : "inherit"),
-      defaultTrade: projectInput.defaultTrade,
-      costEstimate: projectInput.costEstimate,
-      parentProjectId,
-      startDate: projectInput.dates?.start ?? null,
-      endDate: projectInput.dates?.end ?? null,
-      emoji: projectInput.emoji ?? null,
-      notes: projectInput.notes,
-    });
+    const fields = holdFieldsValues(
+      "project",
+      {
+        name: projectInput.name,
+        status: projectInput.status,
+        kind: projectInput.kind,
+        locations: projectInput.locations,
+        locationsMode:
+          projectInput.locationsMode ??
+          (projectInput.locations.length ? "explicit" : "inherit"),
+        defaultTrade: projectInput.defaultTrade,
+        costEstimate: projectInput.costEstimate,
+        parentProjectId,
+        startDate: projectInput.dates?.start ?? null,
+        endDate: projectInput.dates?.end ?? null,
+        emoji: projectInput.emoji ?? null,
+        notes: projectInput.notes,
+      },
+      "create",
+    );
+    const created = await insertWithShortcode(tx, "project", fields.values);
+    await fields.settle(tx, actor, created.id);
     await setProjectExternalUrls(tx, created.id, {
       googleDriveFolderUrl: projectInput.googleDriveFolderUrl,
       notionPageUrl: projectInput.notionPageUrl,

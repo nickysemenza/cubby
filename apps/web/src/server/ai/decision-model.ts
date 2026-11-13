@@ -594,7 +594,8 @@ async function runDecisionChoiceInternal(
     }
   }
   return withAiResponseCache({
-    enabled: feature.cache && !args.port,
+    enabled:
+      feature.cache && args.usage.applicationCache !== false && !args.port,
     batch: pending ? { batch: pending.cache, index: pending.index } : undefined,
     force: args.usage.force,
     keyInput: {

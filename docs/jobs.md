@@ -47,8 +47,7 @@ The production drain units (`workflows/jobs.ts`) are cloud images
 (`image.cloud`), embedding refresh, embedding cleanup, one unit per AI
 evaluation feature (`ai-evaluation:<feature>`), the resumable derived rebuild
 (`derived-rebuild`, one pass with its own row, not items), Email purchase
-discovery, field automation (`field-automation:events` and
-`field-automation:policy`) and reconciliation of stopped executions
+discovery, the evidence-facts kernel (`kernel`) and reconciliation of stopped executions
 (`reconcile`).
 
 Email purchase discovery holds one AppSettings cursor, publishes
@@ -513,11 +512,13 @@ overwritten by the older timer. A raise that precedes the funding stop itself
 does not release that later stop. Member pauses remain stopped.
 
 The funding wake (`resumeFundingPausedRuns` with every window) also ends the
-other funding waits: it releases funding-paused discovery, then makes due the
+other funding waits: it makes queued kernel Asks with wait cause `funding` due
+in one statement, preserving unknown outcomes, cancellations and provider waits. It
+releases funding-paused discovery, then makes due the
 AI evaluations, embeddings and image jobs waiting on `ai_funding_window`, then
 brings queued Jobs forward. Settings → AI funding and `ai_funding_read.status`
 report them as `waiting`: the import and discovery Runs eligible for release,
-the evaluation, embedding and image waits, all queued Jobs the wake brings
+the Ask, evaluation, embedding and image waits, all queued Jobs the wake brings
 forward, and when funding waits retry on their own. Released discovery is not
 counted or released again until a new funding stop clears its release marker. Automatic
 mailbox admission joins the retained Run. Run control refusals are
@@ -1218,8 +1219,7 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   rows report work with a `since` 30 minutes old and its record row has no
   successful page in those 30 minutes. `since` is when the work fell owed:
   for `reconcile`, when the earliest stranded execution or failed start
-  dispatch stopped; for `field-automation:policy`, the policy cursor's last
-  write; for Email purchase discovery, its cursor's next hour or last page. A
+  dispatch stopped; for Email purchase discovery, its cursor's next hour or last page. A
   pass that has never run has no cursor and reports the read time.
 - An AI feature has `result_ready` evaluations that are owed, that no page
   holds, and that have gone unpublished for 30 minutes: due since then, or

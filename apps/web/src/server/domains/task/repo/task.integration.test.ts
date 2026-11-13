@@ -1,7 +1,7 @@
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromAny } from "@total-typescript/shoehorn";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -17,6 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { auditLog, entityLink } from "~/server/db/schema";
 import { taskBulkReorderWorkflow } from "~/server/domains/task/operations.server";
@@ -33,7 +34,6 @@ import {
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -554,6 +554,8 @@ describe("updateTasksInBulk status patch", () => {
           eq(auditLog.entityKind, "task"),
           eq(auditLog.action, "update"),
           inArray(auditLog.entityId, [changedId, unchangedId]),
+          // The kernel audits the `fields` columns it applies on its own row.
+          isNull(auditLog.provenance),
         ),
       );
     expect(audits.filter((audit) => audit.entityId === changedId)).toHaveLength(

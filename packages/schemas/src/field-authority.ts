@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import { fieldSuggestionsInput } from "./ai";
 import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
-import { suggestionChildHandle } from "./suggestion-reference";
 
 /** A suggested field's record, by any suggestable entity's shortcode. */
 const suggestableRecordId = anyShortcodeSchema(
@@ -23,15 +22,16 @@ export const fieldAuthorityActionInput = z.object({
    * `release`: hand a person's value back to Cubby, which may replace it.
    */
   action: z.enum(["keep", "clear", "release"]),
-  /** The Suggestion a Changes by Cubby row shows; refused once Cubby revised it. */
-  suggestionId: suggestionChildHandle.optional(),
+  /** Unread: the decision applies to the stored value. The web panel drops it. */
+  suggestionId: z.string().optional(),
 });
 export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });
 
 /** Cubby's current answer for an empty or offered field, shown first in its picker. */
 const fieldGuess = z.object({
+  /** The Answer's `inputHash`: which question this guess answers. */
   suggestionId: z.string(),
-  /** What accepting the guess names as `expectedFingerprint`. */
+  /** The same `inputHash`; choosing the guess is an ordinary field edit. */
   fingerprint: z.string(),
   value: z.json(),
   confidence: z.number().min(0).max(1),

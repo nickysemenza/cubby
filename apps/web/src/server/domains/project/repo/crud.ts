@@ -15,6 +15,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -201,31 +202,37 @@ export const createProject = defineMutationWriter({
         );
       }
 
-      const created = await insertWithShortcode(tx, "project", {
-        name: data.name,
-        assigneeId:
-          data.assigneeMode === "inherit"
-            ? null
-            : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
-        assigneeMode:
-          data.assigneeMode ??
-          (data.assigneeId === undefined ? "inherit" : "explicit"),
-        status: data.status,
-        kind: data.kind,
-        locations: data.locations,
-        locationsMode:
-          data.locationsMode ??
-          (data.locations.length ? "explicit" : "inherit"),
-        defaultTrade: data.defaultTrade,
-        costEstimate: data.costEstimate,
-        parentProjectId,
-        startDate:
-          data.dates === undefined ? undefined : (data.dates?.start ?? null),
-        endDate:
-          data.dates === undefined ? undefined : (data.dates?.end ?? null),
-        emoji: data.emoji,
-        notes: data.notes,
-      });
+      const fields = holdFieldsValues(
+        "project",
+        {
+          name: data.name,
+          assigneeId:
+            data.assigneeMode === "inherit"
+              ? null
+              : ((await resolveMemberAssignee(tx, data.assigneeId)) ?? null),
+          assigneeMode:
+            data.assigneeMode ??
+            (data.assigneeId === undefined ? "inherit" : "explicit"),
+          status: data.status,
+          kind: data.kind,
+          locations: data.locations,
+          locationsMode:
+            data.locationsMode ??
+            (data.locations.length ? "explicit" : "inherit"),
+          defaultTrade: data.defaultTrade,
+          costEstimate: data.costEstimate,
+          parentProjectId,
+          startDate:
+            data.dates === undefined ? undefined : (data.dates?.start ?? null),
+          endDate:
+            data.dates === undefined ? undefined : (data.dates?.end ?? null),
+          emoji: data.emoji,
+          notes: data.notes,
+        },
+        "create",
+      );
+      const created = await insertWithShortcode(tx, "project", fields.values);
+      await fields.settle(tx, actor, created.id);
       await setProjectExternalUrls(tx, created.id, {
         googleDriveFolderUrl: data.googleDriveFolderUrl,
         notionPageUrl: data.notionPageUrl,
@@ -375,7 +382,7 @@ export const updateProject = defineMutationWriter({
         data,
         parentProjectId,
       );
-      const updateValues = buildPartialUpdateValues({
+      const fields = holdFieldsValues("project", {
         name: data.name,
         status: data.status,
         kind: data.kind,
@@ -393,9 +400,10 @@ export const updateProject = defineMutationWriter({
       const updatedRow = await updateLiveAndReturn(
         tx,
         project,
-        updateValues,
+        buildPartialUpdateValues(fields.values),
         id,
       );
+      await fields.settle(tx, actor, id, before);
       await setProjectExternalUrls(tx, id, {
         googleDriveFolderUrl: data.googleDriveFolderUrl,
         notionPageUrl: data.notionPageUrl,

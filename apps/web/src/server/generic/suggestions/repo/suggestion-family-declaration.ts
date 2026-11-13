@@ -7,7 +7,6 @@ import type { SQL } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
-import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import type { AutomaticRuleMatch } from "~/server/generic/suggestions/repo/automatic-policy";
 import type { recommendationScopes } from "~/server/generic/suggestions/repo/pending-admission";
 import type { SuggestionFamilyPresentation } from "~/server/generic/suggestions/repo/suggestion-presentation";
@@ -51,12 +50,6 @@ export interface SuggestionFamilyDeclaration<F extends SuggestionListFamily>
     match: (row: AutomaticCandidate) => AutomaticRuleMatch[];
     requiresStamp: boolean;
     application?: (row: AutomaticCandidate) => Review["application"];
-    authority?: "automatic";
-    canApply?: (
-      db: Database,
-      context: EntityKernelContext,
-      id: string,
-    ) => Promise<boolean>;
   };
   kind: "proposal" | "automatic_decision";
   label: string;

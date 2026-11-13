@@ -7,6 +7,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -17,11 +18,11 @@ import { financialTransactionItemizationSql } from "~/server/domains/financial-t
 import {
   findOrCreateVendor,
   readVendorById,
+  updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { loadDataQualities as readDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
@@ -770,10 +771,15 @@ describe("vendor itemization default from order evidence", () => {
         return result[0];
       };
     };
-    const clear = (vendorId: VendorId) =>
-      unwrapDb(ctx.db).execute(
-        sql`UPDATE "Vendor" SET "itemizationExpectation" = NULL WHERE id = ${vendorId}`,
+    const clear = async (vendorId: VendorId) => {
+      const vendor = await readVendorById(ctx.db, vendorId);
+      await updateVendor(
+        ctx.db,
+        vendor.id,
+        { itemizationExpectation: null },
+        ctx.actor,
       );
+    };
 
     const explicitUnknown = await vendorWith("receipt_only", "unknown");
     const unknownPolicy = await downstream(explicitUnknown.id);

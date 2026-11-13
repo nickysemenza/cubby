@@ -444,7 +444,7 @@ describe("mutation response demand", () => {
           (SELECT count(*)::int FROM "EntityExternalId" external
             WHERE external."entityId"=identity.id AND external."deletedAt" IS NULL) AS external_ids,
           (SELECT count(*)::int FROM "AuditLog" audit
-            WHERE audit."entityKind"=identity.kind AND audit."entityId"=identity.id) AS audits
+            WHERE audit."entityKind"=identity.kind AND audit."entityId"=identity.id AND audit.provenance IS NULL) AS audits
           FROM "Entity" identity JOIN "SearchDocument" document
             ON document."entityKind"=identity.kind AND document."entityId"=identity.id
           WHERE identity.shortcode=${id} AND identity.kind=${entity}`,

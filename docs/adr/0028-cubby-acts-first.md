@@ -27,17 +27,14 @@ asked where they do not apply (a grocery asked which plant it grows).
 1. **Cubby acts when it can take the action back with one write and no person
    has said otherwise.** It waits when an action merges or deletes a record,
    books money on a judgment, moves stock, or contradicts a person. When unsure it
-   leaves things as they are without asking. Product merges, statement attach,
-   placement moves and new vocabulary stay manual. Fields declare who decides a
+   leaves things as they are without asking. Merges follow the identity proof and decision policy in ADR 0029 section 9.
+   Statement attach, placement moves and new vocabulary stay manual. Fields declare who decides a
    confident answer: `apply: "auto"` (Cubby saves it), `"review"` (a member
    applies it) or `"offer"` (it waits as the picker's guess).
-2. **Authority is recorded on the write.** `AuditLog.authority` is `automatic`
-   for Cubby's own field writes and `released` when a member hands a field back.
-   Null means a person, an import or an agent wrote it. One function,
-   `fieldAuthority`, reads the newest audit row for the field: `open` (nothing
-   decided it), `cubby` (Cubby wrote the current value and nobody kept it) or
-   `person`. Any ambiguity, including an audit row that disagrees with the stored
-   value, is `person`. Reads do not carry ownership; Why this value asks for it.
+2. **Authority comes from provenance.** An Answer supplies Cubby's value;
+   the newest assignment Decision supplies a person's value or explicit None.
+   Releasing an assignment hands the field back. Veto decisions independently
+   rule out values. Why this value reads kernel provenance.
 3. **Cubby never overwrites a person's value.** It fills open fields and
    revises its own unconfirmed values. A replacement must beat the runner-up by
    0.20 (with probabilities summing to 1 this is already true for any winner at
@@ -45,8 +42,9 @@ asked where they do not apply (a grocery asked which plant it grows).
    applied again, and fields other records inherit from (`fillOnly`) are filled
    but never revised. The bar stays at 85% until a graded sample shows the
    0.70 to 0.85 band at 90% or better.
-4. **An edit is the correction.** A person's write over Cubby's value records a
-   Miss with the right value. Keep makes Cubby's value the member's. "Wrong,
+4. **An edit is the correction.** A person's write over Cubby's value records the
+   chosen assignment and independently vetoes the replaced value. Keep makes
+   Cubby's value the member's. "Wrong,
    clear it" empties the field, rules the value out and lets Cubby try again.
    "Let Cubby decide" hands a person's value back. An import's replacement is
    evidence, not a grade.
@@ -57,12 +55,12 @@ asked where they do not apply (a grocery asked which plant it grows).
    values it holds; each still has to clear the bar. This replaces ADR 0016's
    measured, member-switched Automatic rules and audit holdback, and the
    `AutomaticRule` table is dropped with no archive by the owner's instruction.
-6. **Field work follows events.** One drain reads audit rows flagged
-   `automationPending` in the writer's transaction (creates, input changes,
-   corrections, hand-backs) and re-asks every open guess and Cubby-held value
-   after a model, prompt or policy revision. Page views schedule nothing and
-   there is no periodic pass. Edit forms still ask live, because their basis is
-   unsaved.
+6. **Field work follows input mutations.** Authored writes, decisions and
+   answers dirty the record's `fields` scope transactionally. The reconciler
+   asks about open or Cubby-held fields and applies its owned columns. A model,
+   prompt or policy revision alone places no asks: the version sweep proposes
+   drift for approval from retained answers. Page views schedule nothing.
+   Edit forms ask live on their unsaved basis.
 7. **Only questions that apply are asked.** An unclassified record is not asked a
    field its classification refuses by default, and `growsPlantId` is asked only
    under the `planting` category feature.
@@ -75,8 +73,6 @@ asked where they do not apply (a grocery asked which plant it grows).
 ## Consequences
 
 Members stop reviewing additions. They see Cubby's changes in one feed and
-correct by editing. A wrong prompt change can now re-set many Cubby-held values
-at once; the lever replay in `decision-grading` runs before any prompt change
-ships, and no-return plus `fillOnly` bound the damage. Records nobody writes
-after deploy are evaluated only by a member-started Sweep. Fields declared
-`audit: false` cannot be recognised as Cubby's after they are filled.
+correct by editing. Rule and prompt revisions propose Drift before changing
+stored history. No-return, independent vetoes and `fillOnly` bound automatic
+changes. A member-started Sweep retains its Run and requester receipts.

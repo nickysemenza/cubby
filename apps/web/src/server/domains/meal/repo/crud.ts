@@ -18,6 +18,7 @@ import { and, asc, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { mealRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.meal.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -325,7 +326,9 @@ export const createMealWithEntityId = defineMutationWriter({
       if (data.mealKind !== undefined) {
         Object.assign(mealValues, { mealKind: data.mealKind });
       }
-      const created = await insertWithShortcode(tx, "meal", mealValues);
+      const fields = holdFieldsValues("meal", mealValues, "create");
+      const created = await insertWithShortcode(tx, "meal", fields.values);
+      await fields.settle(tx, actor, created.id);
       if (data.recipes?.length) {
         // `resolveAllOrThrow` returns ids positionally, one per input code, so
         // `recipeIds[i]` pairs with `data.recipes[i]` — the documented zip case.
@@ -398,7 +401,13 @@ export const updateMeal = defineMutationWriter({
       if (data.sortOrder !== undefined) mealPatch.sortOrder = data.sortOrder;
       if (data.mealType !== undefined) mealPatch.mealType = data.mealType;
       if (data.mealKind !== undefined) mealPatch.mealKind = data.mealKind;
-      await updateLiveAndReturn(tx, meal, mealPatch, id);
+      const [before] = await tx
+        .select({ mealType: meal.mealType, mealKind: meal.mealKind })
+        .from(meal)
+        .where(eq(meal.id, id));
+      const fields = holdFieldsValues("meal", mealPatch);
+      await updateLiveAndReturn(tx, meal, fields.values, id);
+      await fields.settle(tx, actor, id, before ?? {});
       ({ detachedImageKeys } = await syncEntityImages(
         tx,
         "meal",

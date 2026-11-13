@@ -20,6 +20,7 @@ import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
+import { decide, recordSubject } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -631,6 +632,15 @@ describe("MCP catalog", () => {
       trigger: "manual",
       status: "completed",
     });
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject("product", product.id),
+        field: "model",
+        value: "Synthetic current model",
+      },
+    ]);
     await seedFieldSuggestion(
       ctx.db,
       {

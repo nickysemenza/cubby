@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import { fieldExplanationContract } from "~/contracts/field-explanation.contract";
 import { fieldEnvelopeAtPath } from "~/entity/read-path";
+import { describeFieldOrigin } from "~/server/ai/fields/repo/field-origin";
 import { storedDerived } from "~/server/db/derived-declarations";
 import { readCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
@@ -69,7 +70,6 @@ import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/resolution-contributors";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { describeFieldOrigin } from "~/server/generic/suggestions/repo/field-authority";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 import { interpretFieldValue } from "./field-explanation-interpretation";

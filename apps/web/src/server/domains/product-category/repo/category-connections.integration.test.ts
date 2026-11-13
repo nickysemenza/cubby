@@ -1,8 +1,8 @@
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getSpendingCategoryByShortcode } from "~/server/domains/spending-category/repo/spending-category";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadCategoryConnections } from "./category-connections";
 import { productCategoryScaffold } from "./product-category";

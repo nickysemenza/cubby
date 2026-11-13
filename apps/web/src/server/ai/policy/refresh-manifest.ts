@@ -1,10 +1,8 @@
 import {
   aiRefreshManifest,
-  HIGH_CONFIDENCE_PROBABILITY,
   type AiRefreshManifest,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
-import { FIELD_ASSIGNMENT_REVISION } from "@cubby/schemas/automatic-rule";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
@@ -37,11 +35,6 @@ export function fieldPolicyFingerprint(
       fillOnly: row.fillOnly,
       // Omitted when undefined, so only fields declaring it change fingerprint.
       undecided: row.undecided,
-      automaticAssignment: {
-        ruleKey: "field.addition",
-        revision: FIELD_ASSIGNMENT_REVISION,
-        threshold: HIGH_CONFIDENCE_PROBABILITY,
-      },
       rules: row.rules,
       options: row.options,
       basis: row.basis,

@@ -19,6 +19,7 @@ import {
   spendingCategoryRepositoryReadSchema,
   spendingCategorySchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.spendingCategory.gen";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   inheritedFieldSql,
@@ -243,10 +244,20 @@ const create = defineMutationWriter({
     actor: ActorContext,
   ) =>
     withTransaction(db, async (tx) => {
-      const row = await insertWithShortcode(tx, "spendingCategory", {
-        ...data,
-        parentId: (await resolveParent(tx, data.parentId)) ?? null,
-      });
+      const fields = holdFieldsValues(
+        "spendingCategory",
+        {
+          ...data,
+          parentId: (await resolveParent(tx, data.parentId)) ?? null,
+        },
+        "create",
+      );
+      const row = await insertWithShortcode(
+        tx,
+        "spendingCategory",
+        fields.values,
+      );
+      await fields.settle(tx, actor, row.id);
       await logAuditEntry(tx, actor, {
         entityKind: "spendingCategory",
         entityId: row.id,

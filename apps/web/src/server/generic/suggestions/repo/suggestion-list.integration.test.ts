@@ -41,6 +41,7 @@ import {
   touchingSuggestionQuery,
 } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { buildCrudServices } from "~/server/http/request-context";
+import { decide, recordSubject } from "~/server/kernel/api";
 import {
   createProductFixture,
   makeProductInput,
@@ -140,6 +141,15 @@ async function fieldSuggestion(
   confidence: number,
   createdAt: Date,
 ) {
+  await decide(ctx.db, ctx.actor, [
+    {
+      channel: "assignment",
+      kind: "set",
+      subject: recordSubject("product", product.entityId),
+      field,
+      value: `Synthetic current ${field}`,
+    },
+  ]);
   const row = await seedFieldSuggestion(
     ctx.db,
     {
