@@ -38,3 +38,93 @@ export const statementSpendingAnswers = z.object({
   merchant: statementMerchantAnswer.optional(),
 });
 export type StatementSpendingAnswers = z.infer<typeof statementSpendingAnswers>;
+
+/**
+ * Prompt versions of the spending questions. `ai/policy/features.ts` reads
+ * these so repos can check answer validity without importing `ai/`.
+ */
+export const STATEMENT_ANSWER_VERSIONS = {
+  escrow: "2026-11-12.1",
+  merchantIdentity: "2026-11-13.1",
+  merchantSupport: "2026-11-13.1",
+} as const;
+
+/** One merchant key for prompts, answer reuse and Vendor alias matching. */
+export const statementMerchantKey = (merchant: string): string =>
+  merchant.trim().replace(/\s+/g, " ").toLowerCase();
+
+type SpendingSubject = {
+  kind: string;
+  merchant?: string | null;
+  rawDescription?: string | null;
+  sourceCategory?: string | null;
+  amount: number;
+};
+
+/** Null when the escrow question does not apply. `amount` is the effective amount. */
+export function statementEscrowInput(create: SpendingSubject, isLoan: boolean) {
+  if (!isLoan || create.kind !== "purchase" || create.amount <= 0) return null;
+  return {
+    merchant: create.merchant ?? null,
+    description: create.rawDescription ?? null,
+    sourceCategory: create.sourceCategory ?? null,
+    amount: create.amount,
+  };
+}
+
+/** Null when there is no merchant text, so identity is inapplicable. */
+export function statementMerchantIdentityInput(create: SpendingSubject) {
+  const text = create.merchant?.trim() || create.rawDescription?.trim();
+  const key = text ? statementMerchantKey(text) : "";
+  return key ? { merchant: key } : null;
+}
+
+/** Support applies only to a proposed business name. */
+export function statementMerchantSupportInput(
+  identityInput: { merchant: string },
+  identity: { name: string | null; counterparty: string },
+) {
+  if (!identity.name || identity.counterparty !== "business") return null;
+  return { merchant: identityInput.merchant, proposed: identity.name };
+}
+
+type StatementAnswerInput = z.infer<ReturnType<typeof z.json>>;
+
+const canonicalJson = (value: StatementAnswerInput): string =>
+  JSON.stringify(value, (_key, entry: unknown) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.entries(entry).sort(([a], [b]) =>
+            a < b ? -1 : a > b ? 1 : 0,
+          ),
+        )
+      : entry,
+  );
+
+/** A stored answer is reusable only for an equal input under equal versions. */
+export function statementAnswerMatches(
+  answer:
+    | { input: StatementAnswerInput; versions: Record<string, string> }
+    | undefined
+    | null,
+  input: StatementAnswerInput,
+  versions: Record<string, string>,
+): boolean {
+  return Boolean(
+    answer &&
+    canonicalJson(answer.input) === canonicalJson(input) &&
+    canonicalJson(answer.versions) === canonicalJson(versions),
+  );
+}
+
+/** Advice fields carried by spending answers; Vendor resolution still wins. */
+export function statementAdviceFromAnswers(answers: StatementSpendingAnswers) {
+  const identity = answers.merchant?.identity.value ?? null;
+  const supported = answers.merchant?.support?.value ?? true;
+  return {
+    ...(answers.escrow?.value === true ? { escrowDisbursement: true } : {}),
+    vendorName: identity?.name ?? null,
+    vendorConfidence: identity && supported ? identity.confidence : "low",
+    counterparty: identity?.counterparty ?? "unknown",
+  };
+}
