@@ -331,6 +331,12 @@ function MachineryFacts({ read }: { read: Machinery }) {
               {ask.nextAt}
             </p>
             <p>
+              Duration:{" "}
+              {ask.sentAt && ask.answeredAt
+                ? `${new Date(ask.answeredAt).getTime() - new Date(ask.sentAt).getTime()} ms`
+                : "Unknown"}
+            </p>
+            <p>
               Sent: {ask.sentAt ?? "Not sent"} · Answered:{" "}
               {ask.answeredAt ?? "Not answered"}
             </p>
