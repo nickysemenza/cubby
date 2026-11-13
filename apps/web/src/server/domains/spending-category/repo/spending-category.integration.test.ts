@@ -415,7 +415,7 @@ describe("spending category stock tracking", () => {
 
   // Failure: a child that stores no decision under a parent storing false
   // reads null while the arrival gate treats it as false, provenance names no
-  // parent, and "Use inherited" has no reset to apply.
+  // parent, and "Let Cubby decide" has no reset to apply.
   it("reads, explains, resets, and gates arrivals on the inherited decision", async () => {
     const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
       name: `Synthetic groceries ${crypto.randomUUID()}`,

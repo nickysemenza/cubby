@@ -5,6 +5,7 @@ import {
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import {
+  FIELD_RESET_LABEL,
   fieldAssignmentActions,
   fieldSetNoneLabel,
 } from "@cubby/schemas/field-envelope-presentation";
@@ -164,7 +165,7 @@ function BoundFormFieldResolution<TValues extends FieldValues>({
             ? [
                 {
                   kind: "use-inherited",
-                  label: "Use inherited",
+                  label: FIELD_RESET_LABEL,
                   patch: policy.reset,
                 },
               ]

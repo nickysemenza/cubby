@@ -934,7 +934,7 @@ describe("canonical Product Cost", () => {
         />
       </>,
     );
-    expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
+    expect(screen.getByText("Waiting for Cubby")).toBeVisible();
     view.rerender(
       <>
         <ProductCostValue
@@ -951,8 +951,6 @@ describe("canonical Product Cost", () => {
         />
       </>,
     );
-    expect(
-      screen.queryByLabelText("Not calculated yet"),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Waiting for Cubby")).not.toBeInTheDocument();
   });
 });

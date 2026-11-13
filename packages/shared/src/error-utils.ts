@@ -56,6 +56,8 @@ export const AppErrors = {
   // surface, its kind is not callable here, or the request was not a POST.
   OPERATION_NOT_FOUND: "NOT_FOUND",
   OPERATION_KIND_UNSUPPORTED: "BAD_REQUEST",
+  // A machinery decision the record's read does not offer, or an entity without machinery.
+  MACHINERY_DECISION_NOT_OFFERED: "BAD_REQUEST",
   OPERATION_METHOD_NOT_ALLOWED: "METHOD_NOT_ALLOWED",
 
   // Entity not found — one `<ENTITY>_NOT_FOUND` per shortcode entity, derived

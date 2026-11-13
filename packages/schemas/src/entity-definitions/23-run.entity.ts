@@ -2,6 +2,7 @@ import { attachedImageInputs } from "./image-description-inputs";
 import { timestampField, readOnly } from "./field-policy";
 import { withQuiet } from "./select-control-options.js";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
+import type { KernelStage } from "../kernel/stage";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 import { dateTime } from "../codec";
@@ -65,54 +66,63 @@ const RUN_STATUS_OPTIONS = [
     label: "Running",
     color: "info",
     phase: "active",
+    stage: "working",
   },
   {
     value: "paused",
     label: "Paused",
     color: "warning",
     phase: "active",
+    stage: "waiting",
   },
   {
     value: "paused_auth",
     label: "Agent authorization needed",
     color: "warning",
     phase: "needs",
+    stage: "needs_you",
   },
   {
     value: "paused_offline",
     label: "Paused offline (historical)",
     color: "warning",
     phase: "active",
+    stage: "waiting",
   },
   {
     value: "needs_review",
     label: "Needs review",
     color: "warning",
     phase: "needs",
+    stage: "needs_you",
   },
   {
     value: "completed",
     label: "Completed",
     color: "positive",
     phase: "finished",
+    stage: "done",
   },
   {
     value: "failed",
     label: "Failed",
     color: "destructive",
     phase: "needs",
+    stage: "stuck",
   },
   {
     value: "dispatch_failed",
     label: "Dispatch failed",
     color: "destructive",
     phase: "needs",
+    stage: "stuck",
   },
 ] satisfies {
   value: z.infer<typeof runStatus>;
   label: string;
   color: ColorToken;
   phase: EntityPhase;
+  stage: KernelStage;
 }[];
 
 /**
@@ -640,12 +650,14 @@ export const { definition, readSchemas } = defineEntityModel({
               label: "Retried",
               color: "neutral-status",
               phase: "finished",
+              stage: "ended",
             },
             {
               value: "waiting_for_funding",
               label: "Paused: waiting for AI funding",
               color: "warning",
               phase: "needs",
+              stage: "waiting",
             },
           ],
         },

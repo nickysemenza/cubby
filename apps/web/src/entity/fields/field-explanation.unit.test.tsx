@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
-import { DecisionChain } from "~/entity/fields/explanation/decision-chain";
+import { FieldChain } from "~/entity/fields/explanation/decision-chain";
 import {
   ReadableExplanationValue,
   WhyValueContents,
@@ -156,17 +156,19 @@ it("uses the declared Household label for an explicit None result and assignment
       },
     },
   });
-  render(<DecisionChain data={data} />, { wrapper: harness.wrapper });
+  render(
+    <FieldChain
+      entity="inventory"
+      id="INV-4K7M"
+      field="ownerLedgerPartyId"
+      envelope={data.envelope}
+      data={data}
+    />,
+    { wrapper: harness.wrapper },
+  );
   expect(
-    within(screen.getByRole("region", { name: "Effective result" })).getByText(
-      "Household",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  expect(
-    within(screen.getByRole("region", { name: "Your choice" })).getByText(
-      "Household",
-      { exact: true },
-    ),
+    within(
+      screen.getByRole("list", { name: "Value decision chain" }),
+    ).getByText("Household", { exact: true }),
   ).toBeVisible();
 });

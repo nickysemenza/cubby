@@ -24,7 +24,7 @@ export function inheritanceContract() {
       `Inheritance ${Date.now()}`,
     );
     const useInherited = page
-      .getByRole("button", { name: "Use inherited", exact: true })
+      .getByRole("button", { name: "Let Cubby decide", exact: true })
       .first();
     const open = () =>
       gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
@@ -51,7 +51,7 @@ export function inheritanceContract() {
     const panel = page.getByRole("dialog");
     await expect(
       panel
-        .getByText("With inherited values:", { exact: true })
+        .getByText("Let Cubby decide:", { exact: true })
         .locator("..")
         .locator(`a[href="/projects/${fixture.project.id}"]`),
     ).toBeVisible();
@@ -75,7 +75,7 @@ export function inheritanceContract() {
         },
       });
     await expect(
-      panel.getByRole("heading", { name: "Effective result", exact: true }),
+      panel.getByRole("list", { name: "Value decision chain", exact: true }),
     ).toBeVisible();
     await expect(useInherited).toHaveCount(0);
     await expectViewportBounded(page);

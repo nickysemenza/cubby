@@ -59,7 +59,7 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
   // Reset saves inheritance intent immediately; the published ownership result
   // can remain missing until the bulk pass. Household is an explicit decision.
   await page
-    .getByRole("button", { name: "Use inherited", exact: true })
+    .getByRole("button", { name: "Let Cubby decide", exact: true })
     .click();
   // With no stored owner the row folds under the not-recorded list.
   await openFoldedFacts(page, "Owner");
@@ -67,7 +67,7 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
     .getByRole("button", { name: "How owner is determined", exact: true })
     .click();
   await expect(
-    page.getByText("Following inherited values", { exact: true }),
+    page.getByText("Cubby decides this", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Set to Household", exact: true })
