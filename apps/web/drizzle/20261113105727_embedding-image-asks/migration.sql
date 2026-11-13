@@ -109,18 +109,28 @@ SELECT a.id,'record',o."entityKind"||':'||o."entityId"::text FROM embedding_owed
 --> statement-breakpoint
 INSERT INTO "Pass" (name,key,cursor,"availableAt") SELECT 'vectorize.sync','retired',null,now() WHERE EXISTS (SELECT 1 FROM "EntityEmbedding" WHERE "deletionId" IS NULL AND "artifactState"<>'selected' AND ("deletedAt" IS NOT NULL OR "artifactState" IN ('retired','failed'))) ON CONFLICT DO NOTHING;
 --> statement-breakpoint
-CREATE TEMP TABLE metadata_owed AS SELECT j.*,jsonb_build_object('feature','image.metadata','producer','image','tier',null,'model',null,'parameters',null,'outputRevision','1','promptVersion','1','input',jsonb_build_object('imageId',i.id,'key',i.key,'contentType',i."contentType",'sourceRevision',to_char(i."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) AS envelope,i.id AS "imageId",i.key AS "sourceKey" FROM "Job" j JOIN "Image" i ON i.id::text=j.input->>'imageId' WHERE j.kind='image-metadata.extract' AND j.state NOT IN ('completed','failed','cancelled');
+CREATE TEMP TABLE metadata_rows AS SELECT j.*,jsonb_build_object('feature','image.metadata','producer','image','tier',null,'model',null,'parameters',null,'outputRevision','1','promptVersion','1','input',jsonb_build_object('imageId',i.id,'key',i.key,'contentType',i."contentType",'sourceRevision',to_char(i."updatedAt",'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))) AS envelope,i.id AS "imageId",i.key AS "sourceKey" FROM "Job" j JOIN "Image" i ON i.id::text=j.input->>'imageId' WHERE j.kind='image-metadata.extract' AND j.state NOT IN ('completed','failed','cancelled');
+
+CREATE TEMP TABLE metadata_owed AS SELECT DISTINCT ON ("imageId","sourceKey") m.*,
+ (SELECT min(other."availableAt") FROM metadata_rows other WHERE other."imageId"=m."imageId" AND other."sourceKey"=m."sourceKey") first_available
+ FROM metadata_rows m ORDER BY "imageId","sourceKey",("leaseToken" IS NOT NULL) DESC,"updatedAt" DESC,id;
+CREATE INDEX ON metadata_owed ("imageId","sourceKey");
+ANALYZE metadata_owed;
 --> statement-breakpoint
-INSERT INTO "Ask" ("inputHash",feature,producer,"promptVersion",input,state,"availableAt","lastError") SELECT pg_temp.kernel_hash(envelope),'image.metadata','image','1',envelope,CASE WHEN "leaseToken" IS NOT NULL THEN 'unknown' ELSE 'queued' END,"availableAt",error FROM metadata_owed ON CONFLICT DO NOTHING;
+INSERT INTO "Ask" ("inputHash",feature,producer,"promptVersion",input,state,"availableAt","lastError") SELECT pg_temp.kernel_hash(envelope),'image.metadata','image','1',envelope,CASE WHEN "leaseToken" IS NOT NULL THEN 'unknown' ELSE 'queued' END,first_available,error FROM metadata_owed ON CONFLICT DO NOTHING;
 --> statement-breakpoint
-INSERT INTO "Pass" (name,key,cursor,"availableAt","runId") SELECT 'image.metadata',"imageId"::text||':'||"sourceKey",jsonb_build_object('imageId',"imageId"),"availableAt","runId" FROM metadata_owed ON CONFLICT DO NOTHING;
+INSERT INTO "Pass" (name,key,cursor,"availableAt","runId") SELECT 'image.metadata',"imageId"::text||':'||"sourceKey",jsonb_build_object('imageId',"imageId"),first_available,"runId" FROM metadata_owed ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "AskScope" ("askId","scopeKind","scopeKey","runId") SELECT a.id,'pass','image.metadata:'||m."imageId"::text||':'||m."sourceKey",m."runId" FROM metadata_owed m JOIN "Ask" a ON a."inputHash"=pg_temp.kernel_hash(m.envelope) ON CONFLICT DO NOTHING;
 --> statement-breakpoint
+INSERT INTO "AskScope" ("askId","scopeKind","scopeKey","runId")
+SELECT a.id,'run',m."runId"::text,m."runId" FROM metadata_rows m JOIN "Ask" a ON a."inputHash"=pg_temp.kernel_hash(m.envelope) WHERE m."runId" IS NOT NULL ON CONFLICT DO NOTHING;
+--> statement-breakpoint
 DO $$ BEGIN
- IF EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE NOT EXISTS (SELECT 1 FROM "ImageProcessingEvent" e WHERE e."eventKey"=a.id::text||':receipt:retained' AND e.details=to_jsonb(a))) THEN RAISE EXCEPTION 'Image receipt preservation mismatch'; END IF;
- IF EXISTS (SELECT 1 FROM image_carry c WHERE NOT EXISTS (SELECT 1 FROM "Answer" a WHERE a."askId"=c.id AND a.output->'outcome'=c.result)) THEN RAISE EXCEPTION 'Image result preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a WHERE NOT EXISTS (SELECT 1 FROM "ImageProcessingEvent" e WHERE e."jobId"=a."jobId" AND e."eventKey"=a.id::text||':receipt:retained' AND e.details=to_jsonb(a))) THEN RAISE EXCEPTION 'Image receipt preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM image_carry c WHERE NOT EXISTS (SELECT 1 FROM "Answer" a WHERE a."inputHash"=pg_temp.kernel_hash(c.envelope) AND a."askId"=c.id AND a.output->'outcome'=c.result)) THEN RAISE EXCEPTION 'Image result preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM image_owed o WHERE NOT EXISTS (SELECT 1 FROM "Ask" a WHERE a.id=o.id AND a.state=CASE WHEN o."leaseUntil" IS NULL THEN 'queued' ELSE 'unknown' END)) THEN RAISE EXCEPTION 'Image work preservation mismatch'; END IF;
+ IF EXISTS(SELECT 1 FROM metadata_rows m WHERE NOT EXISTS(SELECT 1 FROM "Ask" a WHERE a."inputHash"=pg_temp.kernel_hash(m.envelope))) THEN RAISE EXCEPTION 'Image metadata source preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM embedding_owed o WHERE NOT EXISTS (SELECT 1 FROM "Ask" a WHERE a."inputHash"=pg_temp.kernel_hash(o.envelope))) THEN RAISE EXCEPTION 'Embedding work preservation mismatch'; END IF;
 END $$;
 --> statement-breakpoint
