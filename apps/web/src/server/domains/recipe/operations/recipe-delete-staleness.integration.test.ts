@@ -128,7 +128,6 @@ describe("recipe deletion cost-staleness workflows", () => {
 
   it("refreshes the parent after its sub-recipe is deleted", async () => {
     const { child, childCode, parent } = await seedParentWithSubRecipe();
-    await drainDerivedRefreshFrontier(ctx.db);
     await recompute([parent, child]);
     const computedBefore = (await getRecipeTotalsState(ctx.db, parent))
       ?.totalsComputedAt;
@@ -143,10 +142,6 @@ describe("recipe deletion cost-staleness workflows", () => {
       ids: [childCode],
     });
     await drainDerivedRefreshFrontier(ctx.db);
-    await drainRecipeRefreshJobs(
-      ctx.db,
-      workflowContext().services.recipeCosting,
-    );
 
     expect(
       (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
@@ -166,7 +161,6 @@ describe("recipe deletion cost-staleness workflows", () => {
       const { child, childCode, parent } = await seedParentWithSubRecipe({
         parentIsFork: true,
       });
-      await drainDerivedRefreshFrontier(ctx.db);
       await recompute([parent, child]);
       const computedBefore = (await getRecipeTotalsState(ctx.db, parent))
         ?.totalsComputedAt;
@@ -178,10 +172,6 @@ describe("recipe deletion cost-staleness workflows", () => {
         ids: [childCode],
       });
       await drainDerivedRefreshFrontier(ctx.db);
-      await drainRecipeRefreshJobs(
-        ctx.db,
-        workflowContext().services.recipeCosting,
-      );
 
       expect(
         (await getRecipeTotalsState(ctx.db, parent))?.totalsComputedAt,
