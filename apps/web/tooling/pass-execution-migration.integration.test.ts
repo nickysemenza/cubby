@@ -147,7 +147,7 @@ it("carries interrupted discovery, dispatch, funding and snapshot work without c
       [
         JSON.stringify({ locationId: location }),
         ids[0],
-        JSON.stringify({ runId: ids[0] }),
+        JSON.stringify({ subjectRunId: ids[0] }),
       ],
     );
     await migrateDatabase(db);
