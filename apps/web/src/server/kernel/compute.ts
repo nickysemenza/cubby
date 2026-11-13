@@ -298,11 +298,19 @@ async function computeBatchInPhase(
         let pending = [...wantedReferences];
         while (pending.length) {
           for (const ref of pending) loadedReferences.add(ref);
+          const ids = pending.filter((ref) =>
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+              ref,
+            ),
+          );
+          const codes = pending
+            .filter((ref) => !ids.includes(ref))
+            .map((ref) => ref.toUpperCase());
           const rows = await q
             .select()
             .from(entityIdentity)
             .where(
-              sql`${entityIdentity.id}::text = ANY(${textArrayParam(pending)}) OR lower(${entityIdentity.shortcode}) = ANY(${textArrayParam(pending.map((ref) => ref.toLowerCase()))})`,
+              sql`${entityIdentity.id} = ANY(${columnArrayParam(ids)}) OR ${entityIdentity.shortcode} = ANY(${textArrayParam(codes)})`,
             );
           pending = [];
           for (const row of rows) {
