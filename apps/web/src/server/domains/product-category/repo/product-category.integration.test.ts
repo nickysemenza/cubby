@@ -711,7 +711,7 @@ describe("product category hierarchy", () => {
           shortcode: testShortcode("project", "PRJ-HSHD"),
           name: "Household project",
           defaultTrade: "building",
-        },
+        } satisfies typeof project.$inferInsert,
         "create",
       );
       const row = await insertPayloadWithIdentity(
