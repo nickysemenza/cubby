@@ -12,6 +12,12 @@ Publication requires the current live claim. A Pass claim lasts 90 seconds;
 Run execution renews every 30 seconds; the kernel arranges a recovery wake at
 each claim deadline. Expired claims admit another worker. A funding or provider wait
 keeps its deadline and cause without spending a failure attempt.
+A sent Ask whose producer call failed is `unknown` unless the call proves it sent
+nothing: an admission hook refused it before the request, or the provider
+answered with a classified funding or configuration stop. That Ask returns to
+`queued` with its wait cause and no spent attempt, and a funding reset releases
+it. An Answer's `costMicros` is the charged cost of the usage rows its produce
+call wrote, or null when one is unknown.
 
 An Ask or Pass declaration may name a `claimLimit` partition and slot count.
 The household shares those slots across both tables, including inline

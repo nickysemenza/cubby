@@ -80,34 +80,32 @@ fails in seconds instead of after a long copy. Dropping a foreign key also locks
 the referenced table. A wide copy can hold `ACCESS EXCLUSIVE` for many minutes;
 the Deploy job's 25-minute timeout bounds the whole run.
 
-An ordinary migration runs in one transaction. The runner retries the whole
-transaction on deadlock (`40P01`) or lock timeout (`55P03`), up to six attempts
-15 seconds apart; each attempt rolls back whole, including other pending
-migrations in that transaction. Any other error, or a sixth failure, stops the
-Deploy with the migration unapplied.
+The runner applies every pending migration in one transaction with a 2-second
+lock timeout, inserting each journal receipt inside it. Locks are held until
+that transaction commits, so a later migration in the same run that needs a
+stronger lock on a table an earlier one locked upgrades it mid-transaction. The
+runner retries the whole transaction on deadlock (`40P01`) or lock timeout
+(`55P03`), up to six attempts 15 seconds apart; each attempt rolls back every
+pending migration and receipt. Any other error, or a sixth failure, stops the
+Deploy with nothing applied.
 
 A migration that takes `ACCESS EXCLUSIVE` on many tables can deadlock against
 the running Worker's queue traffic on every attempt. Stop background work first
 if locks contend.
 
-## Migration runner opt-ins
+## Migration runner markers
 
-`-- cubby:transaction-per-statement` makes the runner commit each statement
-separately. Ordinary migrations keep Drizzle's transaction behavior. Every
-opted-in statement must be idempotent: committed statements can replay after a
-failure before the final journal receipt. Each statement has a 2-second lock
-timeout, and the runner retries a statement that hits a lock timeout or deadlock
-whole, for about two minutes, then stops the deployment. Everything committed so
-far must stay compatible with the running Worker, because the next Deploy
-resumes from there. One statement can hold several commands in one transaction,
-so a copy and its retirement stay atomic.
+The runner removes `CONCURRENTLY` from every statement, so indexes are built
+and dropped inside the transaction. It ignores
+`-- cubby:transaction-per-statement`; such a migration commits with the rest of
+the run.
 
 - `-- cubby:repeat-batch` repeats a statement whose result is
-  `{ remaining: boolean }`.
-- `-- cubby:outside-transaction` is reserved for concurrent index creation or
-  drop. The runner first drops any invalid index the statement names (left by
-  an interrupted concurrent build), and stops the deployment if one remains
-  invalid afterwards.
+  `{ remaining: boolean }` until it reports none remaining, inside the same
+  transaction.
+- `-- cubby:outside-transaction` marks an index build or drop. Before running
+  the statement in the transaction, the runner drops any invalid index the
+  statement names, left by an interrupted concurrent build.
 
 The same migration name and hash checks and deployment serialization apply.
 

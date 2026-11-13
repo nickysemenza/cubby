@@ -57,7 +57,7 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     [cutoverId(1)],
   );
   await client.query(
-    `INSERT INTO "FinancialAccount" (id,shortcode,name,identity) SELECT id,shortcode,'Synthetic account','{"kind":"bank"}' FROM "Entity" WHERE id=$1`,
+    `INSERT INTO "FinancialAccount" (id,shortcode,name,identity) SELECT id,shortcode,'Synthetic account','{"kind":"bank_account","accountType":"checking"}' FROM "Entity" WHERE id=$1`,
     [cutoverId(2)],
   );
   await client.query(

@@ -46,7 +46,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `run.steps` slot. Suggestion families add Sweep steps (`service/sweep.ts`); backlogs
   add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
   work uses model Asks; `AskScope` associates waiting scopes and the requesting
-  Run, and Answers retain the producer result and `costMicros`.
+  Run, and Answers retain the producer result and `costMicros`, the charged cost
+  of the usage rows its produce call wrote (`server/kernel/produce-ledger.ts`).
 - Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
   (`suggestionFamilies` in `server/generic/suggestions/repo/suggestion-family-declarations.ts`)
   and the Suggestions page. Each family's `SuggestionFamilyDeclaration`

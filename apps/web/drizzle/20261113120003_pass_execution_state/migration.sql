@@ -1,4 +1,7 @@
-LOCK TABLE "Job", "Run", "Pass", "DerivedRebuild" IN SHARE ROW EXCLUSIVE MODE;
+-- Tables later altered or dropped, and the tables their dropped foreign keys reference.
+LOCK TABLE "DerivedRebuild" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
+LOCK TABLE "Job", "Pass", "Run" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 -- Run and RunStep retain member intent, discovery pages and step checkpoints.
 -- A live legacy lease delays its successor; the kernel never adopts its token.

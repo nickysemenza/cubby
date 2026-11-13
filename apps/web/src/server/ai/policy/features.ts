@@ -112,8 +112,6 @@ import {
   productVariantRelationPrompt,
 } from "./prompts/semantic-decisions";
 import {
-  statementChargeIdentityChoices,
-  statementChargeIdentityPrompt,
   statementCounterpartyChoices,
   statementCounterpartyPrompt,
   statementTransactionKindChoices,
@@ -240,17 +238,6 @@ export const MAIL_ATTACHMENT_PURPOSE_FEATURE = defineFeature({
   choices: mailAttachmentPurposeChoices,
   feature: "mail-attachment-purpose",
   promptVersion: "2026-10-14.1",
-  tier: "decision",
-  cache: true,
-  collectPayload: false,
-});
-
-/** Advisory label on a statement Transaction suggestion's attach candidate. */
-export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
-  prompt: statementChargeIdentityPrompt,
-  choices: statementChargeIdentityChoices,
-  feature: "statement-charge-identity",
-  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -641,7 +628,6 @@ export const AI_FEATURES = [
   MAIL_ATTRIBUTION_FEATURE,
   MAIL_SOURCE_RELATION_FEATURE,
   MAIL_FINANCIAL_EVENT_FEATURE,
-  STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
   LOAN_ESCROW_DISBURSEMENT_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
