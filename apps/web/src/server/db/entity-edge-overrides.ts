@@ -42,7 +42,6 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  gardenEntry,
   image,
   imageDerivative,
   imageProcessingJob,
@@ -63,7 +62,6 @@ import {
   inventoryEntry,
   ledgerSourceClaim,
   ledgerTransfer,
-  location,
   mealFoodEntry,
   mealRecipe,
   mealRecipePortion,
@@ -915,54 +913,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  location: edges({
-    "InventoryEntry.locationId": {
-      column: inventoryEntry.locationId,
-      role: "contents",
-      label: "inventory entries",
-      description: "A product physically held at this location right now.",
-      liveness: { kind: "must-target-live" },
-    },
-    "EntityAttachment.entityId": {
-      column: entityAttachment.entityId,
-      role: "media",
-      label: "location photos",
-      description: "A photo attached to this location.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupProposal.inventoryLocationId": {
-      column: photoGroupProposal.inventoryLocationId,
-      role: "reference",
-      label: "photo group proposals",
-      description:
-        "A reviewed photo group that will receive its inventory entry here.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Location.parentId": {
-      column: location.parentId,
-      role: "hierarchy",
-      label: "sub-locations",
-      description:
-        "A child location nested under this one in the house → room → shelf → bin tree, enforced by the Location parent self-FK.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Planting.locationId": {
-      column: planting.locationId,
-      role: "contents",
-      label: "current plantings",
-      description:
-        "A growing planting is currently in this garden location; a planned planting names where it will go.",
-      liveness: { kind: "must-target-live" },
-    },
-    "GardenEntry.locationId": {
-      column: gardenEntry.locationId,
-      role: "history",
-      label: "garden entries",
-      description:
-        "A garden entry retains the location where the observation happened.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
+
   project: {
     ...edges({
       "Project.parentProjectId": {

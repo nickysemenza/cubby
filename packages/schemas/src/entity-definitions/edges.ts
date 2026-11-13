@@ -186,7 +186,12 @@ export const defineRelationshipEdge = (
       key: inverseKey,
       from: entitySchema.parse(target),
       to: from,
-      cardinality: "many",
+      cardinality:
+        provenance.kind === "local-path" &&
+        provenance.steps.length === 1 &&
+        provenance.steps[0]?.direction === "incoming"
+          ? "one"
+          : "many",
     },
     navigation,
     storage: {

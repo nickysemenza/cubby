@@ -329,7 +329,7 @@ describe("deleteLocations hierarchy", () => {
   });
 
   /**
-   * LOCATION_DELETE_EDGE_POLICY declares the four garden edges `block`, but
+   * DECLARED_EDGE_DELETE_POLICIES.location declares the four garden edges `block`, but
    * nothing generic enforces `block`: without the repository guard these
    * deletes went through and left plantings pointing at a tombstoned bed.
    */

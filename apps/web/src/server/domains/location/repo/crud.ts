@@ -6,7 +6,6 @@ import {
 import { entityRefKey } from "@cubby/schemas/entity";
 import type { ImageRawOut as RawImageOutput } from "@cubby/schemas/entity-contracts/image";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
   parseEntityId,
@@ -41,7 +40,8 @@ import {
   locationAiDescriptionSql,
 } from "~/server/db/computed/location-ai-description";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import {
   associatePendingImages,
   buildOrderBy,
@@ -119,44 +119,6 @@ import {
 import { loadStockItemsByLocation } from "./stock-items";
 import { loadLocationAncestors, wouldCreateParentCycle } from "./tree";
 import { loadStoredLocationValuations } from "./valuation";
-
-export const LOCATION_DELETE_EDGE_POLICY = {
-  "InventoryEntry.locationId": {
-    code: "block-live-inventory",
-    effect: "block",
-    description:
-      "A location still holding inventory can't be deleted — move or remove the inventory first.",
-  },
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
-  },
-  "Location.parentId": {
-    code: "promote-live-child",
-    effect: "detach",
-    description:
-      "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
-  },
-  "PhotoGroupProposal.inventoryLocationId": {
-    code: "clear-proposal-location",
-    effect: "detach",
-    description:
-      "Deleting a location clears a photo group proposal's inventory location; a proposed group must then pick another before approval.",
-  },
-  "Planting.locationId": {
-    code: "block-live-planting",
-    effect: "block",
-    description:
-      "A location named by a current or planned planting cannot be deleted.",
-  },
-  "GardenEntry.locationId": {
-    code: "block-garden-history",
-    effect: "block",
-    description: "A location with dated garden observations cannot be deleted.",
-  },
-} as const satisfies IncomingEdgePolicy<"location", OperationDisposition>;
 
 /**
  * Turn a `Location_name_key` violation into an error that names the blocker.
@@ -599,7 +561,7 @@ export const updateLocation = defineMutationWriter({
   item: (full) => full.location,
 });
 
-const refuseHomeLocation = async (
+export const refuseHomeLocation = async (
   tx: DrizzleTransaction,
   ids: LocationId[],
 ) => {
@@ -616,7 +578,7 @@ const refuseHomeLocation = async (
  * room and its shelf go together, the shelf's bins belong under Home, not
  * under the soon-to-be-deleted room.
  */
-const promoteSurvivingChildren = async (
+export const promoteSurvivingChildren = async (
   tx: DrizzleTransaction,
   ids: LocationId[],
 ) => {
@@ -660,11 +622,10 @@ export const deleteLocations = (
 ) =>
   deleteByPolicy(db, {
     entity: "location",
-    policy: LOCATION_DELETE_EDGE_POLICY,
+    policy: DECLARED_EDGE_DELETE_POLICIES.location,
     ids,
     actor,
-    beforeDelete: refuseHomeLocation,
-    overrides: { "Location.parentId": promoteSurvivingChildren },
+    ...DECLARED_EDGE_DELETE_HOOKS.location,
   });
 
 const qbDirect = new QueryBuilder();

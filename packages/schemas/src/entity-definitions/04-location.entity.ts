@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { aliasList, readOnly, timestampField } from "./field-policy";
 import {
@@ -27,6 +28,414 @@ import { dateTime } from "../codec";
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "location",
+    edges: [
+      defineEdge({
+        key: "Location.parentId",
+        from: "location",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.Location.parentId",
+          from: "location",
+          to: "location",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Location.parentId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "location",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "hierarchy",
+          label: "sub-locations",
+          description:
+            "A child location nested under this one in the house → room → shelf → bin tree, enforced by the Location parent self-FK.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "promote-live-child",
+                effect: "detach",
+                description:
+                  "A deleted location's children are promoted to its nearest surviving ancestor rather than the deletion being blocked.",
+              },
+              handler: {
+                module: "~/server/domains/location/repo/crud",
+                export: "promoteSurvivingChildren",
+              },
+              before: {
+                module: "~/server/domains/location/repo/crud",
+                export: "refuseHomeLocation",
+              },
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "InventoryEntry.locationId",
+        from: "inventory",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.InventoryEntry.locationId",
+          from: "location",
+          to: "inventory",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "InventoryEntry.locationId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "inventory",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "contents",
+          label: "inventory entries",
+          description: "A product physically held at this location right now.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-inventory",
+                effect: "block",
+                description:
+                  "A location still holding inventory can't be deleted — move or remove the inventory first.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "Planting.locationId",
+        from: "planting",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.Planting.locationId",
+          from: "location",
+          to: "planting",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "Planting.locationId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "planting",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "contents",
+          label: "current plantings",
+          description:
+            "A growing planting is currently in this garden location; a planned planting names where it will go.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-live-planting",
+                effect: "block",
+                description:
+                  "A location named by a current or planned planting cannot be deleted.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "GardenEntry.locationId",
+        from: "gardenEntry",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.GardenEntry.locationId",
+          from: "location",
+          to: "gardenEntry",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "GardenEntry.locationId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "entity",
+          entity: "gardenEntry",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "history",
+          label: "garden entries",
+          description:
+            "A garden entry retains the location where the observation happened.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "block-garden-history",
+                effect: "block",
+                description:
+                  "A location with dated garden observations cannot be deleted.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "location/EntityAttachment.entityId",
+        from: "row:EntityAttachment",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.EntityAttachment.entityId",
+          from: "location",
+          to: "row:EntityAttachment",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "EntityAttachment.entityId",
+          constrained: true,
+          partition: {
+            column: "EntityAttachment.entityKind",
+            value: "location",
+          },
+        },
+        ownership: {
+          kind: "identity",
+          column: "EntityAttachment.entityId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "media",
+          label: "location photos",
+          description: "A photo attached to this location.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "soft-delete-association",
+                effect: "soft-delete",
+                description:
+                  "Image associations are soft-deleted with the location, and each file is\n      deleted too unless something else still references it.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+      defineEdge({
+        key: "PhotoGroupProposal.inventoryLocationId",
+        from: "row:PhotoGroupProposal",
+        to: "location",
+        cardinality: "one",
+        inverse: {
+          key: "location.incoming.PhotoGroupProposal.inventoryLocationId",
+          from: "location",
+          to: "row:PhotoGroupProposal",
+          cardinality: "many",
+        },
+        storage: {
+          kind: "foreign-key",
+          column: "PhotoGroupProposal.inventoryLocationId",
+          constrained: true,
+        },
+        ownership: {
+          kind: "column",
+          column: "PhotoGroupProposal.runId",
+        },
+        fromEnd: {
+          role: "reference",
+          label: "target",
+          description: "The referenced record.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        toEnd: {
+          role: "reference",
+          label: "photo group proposals",
+          description:
+            "A reviewed photo group that will receive its inventory entry here.",
+          liveness: {
+            kind: "must-target-live",
+          },
+        },
+        policies: {
+          from: {
+            delete: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+          to: {
+            delete: {
+              kind: "disposition",
+              disposition: {
+                code: "clear-proposal-location",
+                effect: "detach",
+                description:
+                  "Deleting a location clears a photo group proposal's inventory location; a proposed group must then pick another before approval.",
+              },
+              handler: null,
+            },
+            merge: {
+              kind: "unsupported",
+              reason: "This operation is not exposed for this endpoint.",
+            },
+          },
+        },
+      }),
+    ],
+
     names: { singular: "Location", plural: "Locations" },
     route: {
       listColumns: {
@@ -1159,37 +1568,62 @@ Rules:
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .path("location", "many", [
-        { edge: "Location.parentId", direction: "incoming" },
-      ])
-      .named("children", "Child locations"),
-    r
-      .path("inventory", "many", [
-        { edge: "InventoryEntry.locationId", direction: "incoming" },
-      ])
-      .named("inventory", "Inventory"),
-    r.field("parentId").named("parent", "Parent location"),
-    r.field("productId").named("product", "Product"),
-    r
-      .path("ingredient", "many", [
-        { edge: "InventoryEntry.locationId", direction: "incoming" },
-        { edge: "InventoryEntry.productId", direction: "outgoing" },
-        { edge: "Product.ingredientId", direction: "outgoing" },
-      ])
-      .named("ingredients", "Ingredients", { view: { columnGroup: "Stock" } }),
-    r.images(),
-    r
-      .path("planting", "many", [
-        { edge: "Planting.locationId", direction: "incoming" },
-      ])
-      .named("plantings", "Plantings"),
-    r
-      .path("gardenEntry", "many", [
-        { edge: "GardenEntry.locationId", direction: "incoming" },
-      ])
-      .named("garden-entries", "Garden entries"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .path("location", "many", [
+            { edge: "Location.parentId", direction: "incoming" },
+          ])
+          .named("children", "Child locations"),
+        "location.parent",
+      ),
+      r.declare(
+        r
+          .path("inventory", "many", [
+            { edge: "InventoryEntry.locationId", direction: "incoming" },
+          ])
+          .named("inventory", "Inventory"),
+        "inventory.location",
+      ),
+      r.declare(
+        r.field("parentId").named("parent", "Parent location"),
+        "location.children",
+      ),
+      r.declare(
+        r.field("productId").named("product", "Product"),
+        "product.locations",
+      ),
+      r.declare(
+        r
+          .path("ingredient", "many", [
+            { edge: "InventoryEntry.locationId", direction: "incoming" },
+            { edge: "InventoryEntry.productId", direction: "outgoing" },
+            { edge: "Product.ingredientId", direction: "outgoing" },
+          ])
+          .named("ingredients", "Ingredients", {
+            view: { columnGroup: "Stock" },
+          }),
+        "ingredient.location.ingredients",
+      ),
+      r.declare(r.images(), "image.location.images"),
+      r.declare(
+        r
+          .path("planting", "many", [
+            { edge: "Planting.locationId", direction: "incoming" },
+          ])
+          .named("plantings", "Plantings"),
+        "planting.location",
+      ),
+      r.declare(
+        r
+          .path("gardenEntry", "many", [
+            { edge: "GardenEntry.locationId", direction: "incoming" },
+          ])
+          .named("garden-entries", "Garden entries"),
+        "gardenEntry.location",
+      ),
+    ],
+  }),
   readSchemas,
 );
