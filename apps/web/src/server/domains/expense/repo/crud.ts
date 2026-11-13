@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { type ExpenseUpdateInput } from "@cubby/schemas/entities/expense";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   EXPENSE_DATE_REQUIRED_MESSAGE,
   hasValidExpenseDate,
@@ -30,7 +29,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import {
   buildPartialUpdateValues,
   notDeleted,
@@ -93,33 +92,6 @@ import {
 } from "./expense-inheritance";
 import { assertQuantitySignMatchesCost, expenseAuditChildren } from "./helpers";
 import { expenseScaffold } from "./lookup";
-
-export const EXPENSE_DELETE_EDGE_POLICY = {
-  "ImportSourceProduct.expenseId": {
-    code: "preserve-receipt-line-history",
-    effect: "preserve",
-    description:
-      "Deleting an Expense retains its historical receipt reference so an identity-only association cannot revive a cleared Product claim.",
-  },
-  "ExpenseAttribution.expenseId": {
-    code: "soft-delete-attributions",
-    effect: "soft-delete",
-    description:
-      "Deleting an Expense removes its unitless beneficiary and initial-funder shares; no money exists on those child rows.",
-  },
-  "LedgerSourceClaim.expenseId": {
-    code: "soft-delete-source-references",
-    effect: "soft-delete",
-    description:
-      "Deleting an Expense retires the normalized import references that identify that ledger row.",
-  },
-  "EntityExternalId.entityId": {
-    code: "soft-delete-metadata",
-    effect: "soft-delete",
-    description:
-      "Outside identifiers (a Notion page, a Drive folder) are soft-deleted with the record, releasing them to be recorded again.",
-  },
-} as const satisfies IncomingEdgePolicy<"expense", OperationDisposition>;
 
 type ExpenseUpdateData = ExpenseUpdateInput["data"];
 
@@ -1288,7 +1260,7 @@ export const deleteExpensesWithPurchaseEffects = async (
     // transaction; the purchase and pricing effects around it are expense's.
     const { deleted } = await deleteByPolicy(tx, {
       entity: "expense",
-      policy: EXPENSE_DELETE_EDGE_POLICY,
+      policy: DECLARED_EDGE_DELETE_POLICIES.expense,
       ids,
       actor,
     });

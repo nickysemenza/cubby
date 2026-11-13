@@ -8,10 +8,6 @@ import {
   type EntityLinkKindDeclaration,
   entityLinkKinds,
 } from "@cubby/schemas/entity-links";
-import {
-  EXTERNAL_ID_KINDS,
-  type EntityExternalIdKind,
-} from "@cubby/schemas/external-id";
 import { mapRecord } from "@cubby/shared";
 import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 import type { AnyColumn } from "drizzle-orm";
@@ -20,16 +16,12 @@ import { DECLARED_EDGE_OVERRIDES } from "./generated/declared-edges.gen";
 import {
   shipment,
   entityAttachment,
-  entityExternalId,
   entityLink,
   expense,
-  expenseAttribution,
   financialTransactionAllocation,
   importPreparedOrder,
   sourceOrderObservation,
   importSourceOrder,
-  importSourceProduct,
-  ledgerSourceClaim,
   purchasePaymentEvidence,
 } from "./schema";
 
@@ -120,46 +112,6 @@ type LinkEdgesOf<E extends Entity> = {
   };
 };
 
-type ExternalIdEntity =
-  (typeof EXTERNAL_ID_KINDS)[EntityExternalIdKind]["entities"][number];
-
-/** The `EntityExternalId` edge of an entity some identifier kind attaches to. */
-type ExternalIdEdgesOf<E extends Entity> = E extends ExternalIdEntity
-  ? {
-      "EntityExternalId.entityId": Omit<EntityEdge, "role"> & {
-        role: "metadata";
-      };
-    }
-  : Record<never, never>;
-
-/**
- * `entity`'s incoming `EntityExternalId` edge, present exactly when
- * `EXTERNAL_ID_KINDS` lets some identifier kind attach to it. Identifiers are
- * metadata: they never say the entity was owned, bought, or used.
- */
-function externalIdEdgesFor<E extends Entity>(entity: E): ExternalIdEdgesOf<E> {
-  const attaches = Object.values(EXTERNAL_ID_KINDS).some((declaration) =>
-    declaration.entities.some((candidate: string) => candidate === entity),
-  );
-  // SAFETY: the edge is present exactly when some kind attaches to `entity`,
-  // which is the condition `ExternalIdEdgesOf<E>` spells out.
-  return (
-    attaches
-      ? {
-          "EntityExternalId.entityId": {
-            column: entityExternalId.entityId,
-            role: "metadata",
-            label: "external ids",
-            description:
-              "An identifier another system gives this record (an ASIN, a barcode, a settlement reference, a Notion page); says nothing about ownership or spend.",
-            liveness: { kind: "must-target-live" },
-          },
-        }
-      : {}
-  ) as ExternalIdEdgesOf<E>;
-}
-
-/** `entity`'s incoming `EntityLink` edges, generated from `ENTITY_LINK_KINDS`. */
 function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
   const entries = entityLinkKinds.flatMap((kind) => {
     const declaration: EntityLinkKindDeclaration = ENTITY_LINK_KINDS[kind];
@@ -279,40 +231,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       },
     }),
     ...linkEdgesFor("purchase"),
-  },
-
-  expense: {
-    ...edges({
-      "ImportSourceProduct.expenseId": {
-        column: importSourceProduct.expenseId,
-        role: "metadata",
-        label: "receipt lines",
-        description:
-          "The receipt line refers to its current editable Expense; the Expense owns its Product.",
-        liveness: {
-          kind: "allow-target-deleted",
-          reason:
-            "A deleted Expense remains the historical receipt target and contributes no current Product claim.",
-        },
-      },
-      "ExpenseAttribution.expenseId": {
-        column: expenseAttribution.expenseId,
-        role: "composition",
-        label: "party shares",
-        description:
-          "Unitless beneficiary or initial-funder weights that allocate this Expense without storing money.",
-        liveness: { kind: "must-target-live" },
-      },
-      "LedgerSourceClaim.expenseId": {
-        column: ledgerSourceClaim.expenseId,
-        role: "metadata",
-        label: "import source references",
-        description:
-          "Durable external identity proving which normalized source row became this Expense.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...externalIdEdgesFor("expense"),
   },
 
   // The read-only run record itself has no delete/merge operation
