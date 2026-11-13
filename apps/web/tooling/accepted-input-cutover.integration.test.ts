@@ -814,3 +814,26 @@ it("binds an accepting occurrence even under a nullable historical disposition",
     ).toEqual([{ entityId: cutoverId(3) }]);
   });
 });
+
+it("preserves a malformed legacy decision container without aborting deployment", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    await client.query(
+      `UPDATE "Suggestion" SET decisions='{}',suppression='{"scope":"link","candidateKey":"synthetic"}' WHERE id=$1`,
+      [cutoverId(67)],
+    );
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT output->'legacy'->'decisions' preserved FROM "Answer" WHERE "inputHash"=$1`,
+          [`legacy:Suggestion:${cutoverId(67)}`],
+        )
+      ).rows,
+    ).toEqual([{ preserved: {} }]);
+  });
+});
