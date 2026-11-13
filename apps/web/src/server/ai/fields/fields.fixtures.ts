@@ -160,7 +160,7 @@ export async function applyFieldAnswerFixture(
     kernel.registry,
     reconciler,
     [scope],
-    { db, locked: false },
+    { db, locked: false, hideBaseline: false },
   );
   if (!computed || computed.error)
     throw new Error(

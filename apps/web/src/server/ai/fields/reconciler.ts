@@ -506,26 +506,29 @@ export function fieldsReconciler(
           !vetoed.includes(valueKey(proposal.value)) &&
           valueKey(proposal.value) !== valueKey(current)
         )
-          c.gap.decision(`Review ${field.key}`, {
-            actions: [
-              {
-                channel: "assignment",
-                kind: "set",
-                subject,
-                field: field.key,
-                value: proposal.value,
-                label: "Use this value",
-              },
-              {
-                channel: "veto",
-                kind: "veto",
-                subject,
-                field: field.key,
-                value: proposal.value,
-                label: "Wrong",
-              },
-            ],
-          });
+          c.gap.decision(
+            `Review ${entityFieldModels[plan.entity].fields.find((candidate) => candidate.key === field.key)?.label ?? "this value"}`,
+            {
+              actions: [
+                {
+                  channel: "assignment",
+                  kind: "set",
+                  subject,
+                  field: field.key,
+                  value: proposal.value,
+                  label: "Use this value",
+                },
+                {
+                  channel: "veto",
+                  kind: "veto",
+                  subject,
+                  field: field.key,
+                  value: proposal.value,
+                  label: "Wrong",
+                },
+              ],
+            },
+          );
       }
       return c.done();
     },
