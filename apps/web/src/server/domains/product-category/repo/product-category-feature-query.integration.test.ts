@@ -70,7 +70,7 @@ describe("batched category feature lookup", () => {
       const id = (index: number) =>
         `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`;
       for (const [index, node] of nodes.entries()) {
-        await tx.execute(sql`INSERT INTO "ProductCategory"
+        await tx.execute(sql`INSERT INTO "ProductCategory" (id, "parentId", shortcode, name, feature, "deletedAt")
           VALUES (${id(index)}::uuid, ${node.parent === null ? null : id(node.parent)}::uuid,
             ${`synthetic-${index}`}, ${`Synthetic category ${index}`}, ${node.feature},
             ${node.deleted ? new Date(0) : null})`);

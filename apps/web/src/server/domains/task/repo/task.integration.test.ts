@@ -17,6 +17,7 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { auditLog, entityLink } from "~/server/db/schema";
 import { taskBulkReorderWorkflow } from "~/server/domains/task/operations.server";
@@ -33,7 +34,6 @@ import {
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

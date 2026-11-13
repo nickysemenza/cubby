@@ -71,7 +71,7 @@ type FieldsInput = {
 const SCOPE_KEY = /^([A-Za-z][\w-]*):([0-9a-f-]{36})$/u;
 
 /** The record a `fields` scope key names. */
-export function fieldsScopeRecord(
+function fieldsScopeRecord(
   key: string,
 ): { entity: ShortcodeEntity; id: string } | null {
   const match = SCOPE_KEY.exec(key);

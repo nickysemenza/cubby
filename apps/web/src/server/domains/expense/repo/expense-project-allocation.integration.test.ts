@@ -11,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, project } from "~/server/db/schema";
 import {
@@ -21,7 +22,6 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";

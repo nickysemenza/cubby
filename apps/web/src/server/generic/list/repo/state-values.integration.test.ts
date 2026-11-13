@@ -14,6 +14,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import {
@@ -44,7 +45,6 @@ import { setDataException } from "~/server/generic/data-quality/repo/exceptions"
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,

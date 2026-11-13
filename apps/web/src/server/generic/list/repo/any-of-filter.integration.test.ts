@@ -3,6 +3,7 @@ import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
 import { formatSearchTerm, textArrayMatches } from "~/server/db/helpers/query";
@@ -19,7 +20,6 @@ import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
  * Multi-field text filters (`anyOf`) compile from their declaration. Each

@@ -7,6 +7,7 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expenseHandlers } from "~/server/domains/expense/operations/expense.server";
@@ -16,7 +17,6 @@ import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { purchaseHandlers } from "~/server/domains/purchase/operations/purchase.server";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

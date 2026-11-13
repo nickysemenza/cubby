@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb, mapImages } from "~/server/db/helpers";
 import {
@@ -65,7 +66,6 @@ import {
   selectedListProjection,
 } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createIngredientFixture,

@@ -45,7 +45,7 @@ const RECHECK_LIMIT = 25;
 const ASSIGNMENT = sqlEnumConstant(decisionChannel, "assignment");
 const RELEASE = sqlEnumConstant(decisionKind, "release");
 
-export type FieldEdit = {
+type FieldEdit = {
   field: string;
   /** The stored value before the edit, as JSON. */
   from: FieldValue;
@@ -131,7 +131,7 @@ async function recheckScopes(
  * the caller's transaction. Returns the record's `fields` scope when an edit
  * names a column only the scope writes, so the caller applies it now.
  */
-export async function recordFieldEdits(
+async function recordFieldEdits(
   db: Database,
   actor: ActorContext,
   plan: EntityFieldsPlan,
