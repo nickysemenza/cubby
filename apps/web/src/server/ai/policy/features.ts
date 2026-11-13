@@ -54,7 +54,6 @@ import {
   runSummaryAnalysis,
   type RunSummaryAnalysis,
 } from "@cubby/schemas/run-fields";
-import { STATEMENT_LABEL_REVISION } from "@cubby/schemas/statement-suggestion";
 import { z } from "zod";
 
 import {
@@ -250,7 +249,7 @@ export const STATEMENT_CHARGE_IDENTITY_FEATURE = defineFeature({
   prompt: statementChargeIdentityPrompt,
   choices: statementChargeIdentityChoices,
   feature: "statement-charge-identity",
-  promptVersion: STATEMENT_LABEL_REVISION,
+  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -261,7 +260,7 @@ export const STATEMENT_TRANSACTION_KIND_FEATURE = defineFeature({
   prompt: statementTransactionKindPrompt,
   choices: statementTransactionKindChoices,
   feature: "statement-transaction-kind",
-  promptVersion: STATEMENT_LABEL_REVISION,
+  promptVersion: "2026-11-12.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
