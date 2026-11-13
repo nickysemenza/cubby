@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { galleryImagesField, galleryWriteFields } from "./image-fields";
 import { idField, readOnly, timestampField } from "./field-policy";
 import { imageDescriptionInputs } from "./image-description-inputs";
@@ -15,6 +16,78 @@ import { z } from "zod";
 const optionalText = z.string().trim().min(1).nullable();
 export const { definition, readSchemas } = defineEntityModel({
   key: "gardenEntry",
+  edges: [
+    defineEdge({
+      key: "gardenEntry/EntityAttachment.entityId",
+      from: "row:EntityAttachment",
+      to: "gardenEntry",
+      cardinality: "one",
+      inverse: {
+        key: "gardenEntry.incoming.EntityAttachment.entityId",
+        from: "gardenEntry",
+        to: "row:EntityAttachment",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "EntityAttachment.entityId",
+        constrained: true,
+        partition: {
+          column: "EntityAttachment.entityKind",
+          value: "gardenEntry",
+        },
+      },
+      ownership: {
+        kind: "identity",
+        column: "EntityAttachment.entityId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "media",
+        label: "garden journal photos",
+        description: "A photo attached to this garden journal entry.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "soft-delete-association",
+              effect: "soft-delete",
+              description:
+                "Garden entry image associations are removed with the entry.",
+            },
+            handler: null,
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Garden Entry", plural: "Garden Entries" },
   route: {
     basePath: "garden-entries",
@@ -511,10 +584,20 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r.field("locationId").named("location", "Location"),
-    r.link("gardenEntryPlanting", "outgoing").named("plantings", "Plantings"),
-    r.images(),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r.field("locationId").named("location", "Location"),
+        "location.garden-entries",
+      ),
+      r.declare(
+        r
+          .link("gardenEntryPlanting", "outgoing")
+          .named("plantings", "Plantings"),
+        "planting.entries",
+      ),
+      r.declare(r.images(), "image.gardenEntry.images"),
+    ],
+  }),
   readSchemas,
 );

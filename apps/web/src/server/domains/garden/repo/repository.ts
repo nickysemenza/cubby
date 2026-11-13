@@ -1,12 +1,10 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { parseShortcodeFor, type PlantingId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { gardenEntrySchemaBindings } from "~/entity/generated/entity-schema-bindings.gardenEntry.gen";
 import { plantingSchemaBindings } from "~/entity/generated/entity-schema-bindings.planting.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { DECLARED_EDGE_DELETE_HOOKS } from "~/server/db/generated/declared-edges.gen";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
@@ -35,20 +33,6 @@ import {
 
 const plantings = bindShortcodeResolver("planting");
 const entries = bindShortcodeResolver("gardenEntry");
-
-const GARDEN_ENTRY_DELETE_EDGE_POLICY = {
-  "EntityAttachment.entityId": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description: "Garden entry image associations are removed with the entry.",
-  },
-  "EntityLink[gardenEntryPlanting].from": {
-    code: "soft-delete-association",
-    effect: "soft-delete",
-    description:
-      "Planting associations are removed with the garden entry; plantings remain.",
-  },
-} as const satisfies IncomingEdgePolicy<"gardenEntry", OperationDisposition>;
 
 /** Live (entry, planting code) pairs of every entry naming one of `ids`. */
 const entryPlantingSets = async (
@@ -155,7 +139,7 @@ export const plantingRepository = defineRepository("planting", {
 
 export const gardenEntryRepository = defineRepository("gardenEntry", {
   schemas: gardenEntrySchemaBindings,
-  lifecycle: { delete: GARDEN_ENTRY_DELETE_EDGE_POLICY },
+  lifecycle: { delete: DECLARED_EDGE_DELETE_POLICIES.gardenEntry },
   scaffold: gardenEntryScaffold,
   create: asActor(createGardenEntry),
   update: async (ctx, shortcode, data) => {

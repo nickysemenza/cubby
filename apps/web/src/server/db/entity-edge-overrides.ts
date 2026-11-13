@@ -1108,18 +1108,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  gardenEntry: {
-    ...edges({
-      "EntityAttachment.entityId": {
-        column: entityAttachment.entityId,
-        role: "media",
-        label: "garden journal photos",
-        description: "A photo attached to this garden journal entry.",
-        liveness: { kind: "must-target-live" },
-      },
-    }),
-    ...linkEdgesFor("gardenEntry"),
-  },
   vendorAccount: edges({
     "Purchase.vendorAccountId": {
       column: purchase.vendorAccountId,
