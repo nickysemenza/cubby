@@ -144,6 +144,7 @@ import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { columnOwner } from "~/server/kernel/api";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -640,6 +641,7 @@ async function measureEdge(
   let measured = false;
   await getDb(db)
     .transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const txDb = databaseForTransaction(tx);
       if (synthetic && !(await pointEdgeAt(txDb, edge, target.id)))
         throw new Rollback();

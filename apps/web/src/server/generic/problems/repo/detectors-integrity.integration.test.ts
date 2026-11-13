@@ -53,7 +53,6 @@ import {
   runControlEvent,
   runOperation,
   runStep,
-  sourceTransactionRecord,
   sourceOccurrence,
   transactionImport,
   shipmentObservation,
@@ -634,16 +633,12 @@ const SOURCE_FACTORIES = {
     }),
   "SourceTransactionRecord.batchId": async (db: Database, targetId: string) => {
     const { record } = await createFinancialEvidenceFixture(db);
-    const [linked] = await getDb(db)
-      .insert(sourceTransactionRecord)
-      .values({
-        ...record,
-        id: parseEntityId("sourceTransactionRecord", crypto.randomUUID()),
-        batchId: parseEntityId("transactionImport", targetId),
-        rowPosition: null,
-      })
-      .returning();
-    return linked!;
+    const { id: _id, shortcode: _shortcode, ...observation } = record;
+    return insertWithShortcode(db, "sourceTransactionRecord", {
+      ...observation,
+      batchId: parseEntityId("transactionImport", targetId),
+      rowPosition: null,
+    });
   },
   "ExternalSource.vendorId": async (db, targetId) => {
     const slug = uniq("synthetic-source")
