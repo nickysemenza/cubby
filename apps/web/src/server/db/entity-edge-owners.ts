@@ -117,7 +117,7 @@ export const ENTITY_EDGE_OWNERS = {
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
   RunControlEvent: { excluded: WORKFLOW },
   RunOperation: { excluded: WORKFLOW },
-  ImportSourceClaim: { excluded: WORKFLOW },
+
   Job: { excluded: WORKFLOW },
   ImportSourceOrder: { excluded: WORKFLOW },
 

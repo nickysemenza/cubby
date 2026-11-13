@@ -993,29 +993,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  vendorAccount: edges({
-    "Purchase.vendorAccountId": {
-      column: purchase.vendorAccountId,
-      role: "reference",
-      label: "purchases",
-      description: "A purchase fetched through this member-owned vendor login.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Run.vendorAccountId": {
-      column: runTable.vendorAccountId,
-      role: "history",
-      label: "import runs",
-      description: "A durable run executed for this vendor account.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportSourceClaim.vendorAccountId": {
-      column: importSourceClaim.vendorAccountId,
-      role: "history",
-      label: "import source claims",
-      description: "An idempotent source claim scoped to this vendor account.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   // The read-only run record itself has no delete/merge operation
   // (`capabilities.delete: null`), so nothing here ever dispositions these
   // edges under a runTable operation — see entity-incoming-edges.ts's
