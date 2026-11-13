@@ -2256,7 +2256,7 @@ describe("reviewed accepted source Product association", () => {
     await w.prepare();
     await w.db
       .update(emailTable)
-      .set({ subject: "Synthetic relabelled shipment", status: "completed" })
+      .set({ status: "completed" })
       .where(eq(emailTable.orderMailId, shipped.mail.id));
     const before = await w.snapshot();
     const siblingsBefore = await siblings();

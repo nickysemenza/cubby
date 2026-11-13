@@ -9,7 +9,6 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   auditLog,
-  email,
   entityExternalId,
   externalSource,
   expense,
@@ -460,7 +459,7 @@ describe("member prepare and commit identity fences", () => {
       const second = "store+200002@t.shopifyemail.com";
       const importReceipt = async (
         key: string,
-        sender: string,
+        sender: string | null,
         vendorId: string,
       ) => {
         const mail = await retainedMailFixture(ctx.db, {
@@ -483,29 +482,22 @@ describe("member prepare and commit identity fences", () => {
       };
       await importReceipt("first-store", first, alpha.shortcode);
       await importReceipt("second-store", second, beta.id);
-      // Accepted originals may have no usable From address; discovery still reads all others.
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: null })
-        .where(eq(email.sender, first));
+      await importReceipt("missing-sender", null, alpha.shortcode);
       expect(
         (await readSenderAttributions(ctx.db)).every(
           (row) => typeof row.sender === "string",
         ),
       ).toBe(true);
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: "malformed sender" })
-        .where(isNull(email.sender));
+      await importReceipt(
+        "malformed-sender",
+        "malformed sender",
+        alpha.shortcode,
+      );
       expect(
         (await readSenderAttributions(ctx.db)).some(
           (row) => row.sender === "malformed sender",
         ),
       ).toBe(false);
-      await getDb(ctx.db)
-        .update(email)
-        .set({ sender: first })
-        .where(eq(email.sender, "malformed sender"));
 
       expect((await senderProofVendor(ctx.db, first))?.vendor.id).toBe(
         alpha.id,

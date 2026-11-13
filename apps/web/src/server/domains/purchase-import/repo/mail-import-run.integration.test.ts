@@ -351,59 +351,13 @@ describe("mail research admission", () => {
       );
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(successor);
-      const refreshedChecksum = "d".repeat(64);
-      await getDb(ctx.db)
-        .update(orderMail)
-        .set({
-          rawChecksum: refreshedChecksum,
-          content: {
-            snippet: null,
-            bodyText:
-              "Order SYN-RECOVERY-42 now includes a complete revised receipt.",
-            bodyHtml: null,
-          },
-        })
-        .where(eq(orderMail.id, mail.id));
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
-          checksum: refreshedChecksum,
-          status: "pending",
-          updatedAt: new Date(),
-        })
-        .where(eq(emailTable.orderMailId, mail.id));
-      expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
-      const refreshedOwner = await owner();
-      expect(refreshedOwner).not.toBe(successor);
-      if (!refreshedOwner)
-        throw new Error("New retained bytes must admit a successor");
-      expect(await frozenSources(successor)).toEqual([
-        { orderMailId: mail.id, checksum: mail.rawChecksum },
-      ]);
-      expect(await frozenSources(refreshedOwner)).toEqual([
-        { orderMailId: mail.id, checksum: refreshedChecksum },
-      ]);
-      expect(
-        (
-          await getDb(ctx.db)
-            .select({ trigger: run.trigger })
-            .from(run)
-            .where(eq(run.id, refreshedOwner))
-        )[0]?.trigger,
-      ).toBe("discovery");
-      expect(await attempts()).toEqual({
-        revision: expect.stringMatching(
-          new RegExp(`^${refreshedChecksum}:[0-9a-f]{64}$`, "u"),
-        ),
-        count: 1,
-      });
       // A transient failure of that revision's first attempt retries it.
       await markRunFailed(ctx.db, {
-        runId: refreshedOwner,
+        runId: successor,
         failureCode: "agent_transient",
       });
       const retried = await owner();
-      expect(retried).not.toBe(refreshedOwner);
+      expect(retried).not.toBe(successor);
       expect((await attempts())?.count).toBe(2);
     },
   );
@@ -2166,7 +2120,6 @@ describe("mail research admission", () => {
     await db
       .update(emailTable)
       .set({
-        checksum: "b".repeat(64),
         classificationReason: "Synthetic later classification",
       })
       .where(eq(emailTable.runId, child.id));

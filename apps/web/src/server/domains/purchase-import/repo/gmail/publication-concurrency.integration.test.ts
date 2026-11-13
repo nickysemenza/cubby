@@ -56,7 +56,7 @@ function signal<T>() {
 describe("Gmail final publication concurrency", () => {
   const ctx = withTestDb();
   afterEach(() => vi.restoreAllMocks());
-  async function fixture() {
+  async function fixture(sameChecksum = false) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic publication member",
       kind: "member",
@@ -70,20 +70,6 @@ describe("Gmail final publication concurrency", () => {
       accountId: mailboxId,
       userId: ctx.actor.userId,
       updatedAt: new Date(),
-    });
-    const source = await syntheticRetainedMail(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId,
-      messageId,
-      sender: null,
-      subject: null,
-      receivedAt: null,
-      rawChecksum: "a".repeat(64),
-      content: {
-        snippet: null,
-        bodyText: "Synthetic frozen original",
-        bodyHtml: null,
-      },
     });
     const message: GmailMessage = {
       id: messageId,
@@ -108,6 +94,22 @@ describe("Gmail final publication concurrency", () => {
         ],
       },
     };
+    const source = await syntheticRetainedMail(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId,
+      sender: null,
+      subject: null,
+      receivedAt: null,
+      rawChecksum: sameChecksum
+        ? await originalChecksum(normalizeMessage(mailboxId, message))
+        : "a".repeat(64),
+      content: {
+        snippet: null,
+        bodyText: "Synthetic frozen original",
+        bodyHtml: null,
+      },
+    });
     const part = normalizeMessage(mailboxId, message).attachments[0];
     if (!part) throw new Error("Synthetic attachment descriptor missing");
     await getDb(ctx.db)
@@ -244,14 +246,11 @@ describe("Gmail final publication concurrency", () => {
     },
   );
   it("preserves a newer same-checksum member resolution while unrelated triage is paused", async () => {
-    const f = await fixture();
+    const f = await fixture(true);
     const checksum = await originalChecksum(
       normalizeMessage(f.mailboxId, await f.provider.getMessage(f.messageId)),
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     await getDb(ctx.db)
       .update(orderMail)
       .set({ rawChecksum: checksum })
@@ -385,14 +384,11 @@ describe("Gmail final publication concurrency", () => {
     }
   });
   async function disposalFixture(keyless = false) {
-    const f = await fixture();
+    const f = await fixture(true);
     const checksum = await originalChecksum(
       normalizeMessage(f.mailboxId, await f.provider.getMessage(f.messageId)),
     );
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ checksum })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     await getDb(ctx.db)
       .update(orderMail)
       .set({ rawChecksum: checksum })

@@ -495,7 +495,10 @@ describe("Email Purchase links", () => {
    * An exact order-number match links automatically on the next derived pass;
    * `amount` keeps the pair a suggestion (no order id on the event).
    */
-  async function retainedReviewFixture(match: "order" | "amount" = "order") {
+  async function retainedReviewFixture(
+    match: "order" | "amount" = "order",
+    receivedAt: Date | null = new Date("2026-10-01T12:00:00Z"),
+  ) {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic retention reviewer",
       kind: "member",
@@ -532,7 +535,7 @@ describe("Email Purchase links", () => {
       threadId: "synthetic-retention-thread",
       sender: "receipts@retention.example.test",
       subject: "Synthetic retained receipt",
-      receivedAt: new Date("2026-10-01T12:00:00Z"),
+      receivedAt,
       rawChecksum: checksum,
       content: {
         bodyText: "Synthetic original retained receipt",
@@ -1373,7 +1376,7 @@ describe("Email Purchase links", () => {
   // Accepted sources, not a nullable sender hint, make a multi-merchant
   // original readable on every supported Purchase.
   it("places accepted multi-Vendor mail with no sender proof on each related Vendor and Purchase", async () => {
-    const f = await retainedReviewFixture();
+    const f = await retainedReviewFixture("order", null);
     const secondVendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic second receipt merchant",
     });
@@ -1385,10 +1388,7 @@ describe("Email Purchase links", () => {
       .update(orderMail)
       .set({ vendorId: null })
       .where(eq(orderMail.id, f.source.id));
-    await getDb(ctx.db)
-      .update(emailTable)
-      .set({ receivedAt: null })
-      .where(eq(emailTable.orderMailId, f.source.id));
+
     const [claim] = await getDb(ctx.db)
       .insert(importSourceClaim)
       .values({

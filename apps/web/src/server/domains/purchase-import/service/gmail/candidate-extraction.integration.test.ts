@@ -130,15 +130,19 @@ describe("read-only Gmail candidate production wiring", () => {
       (await getDb(ctx.db).select().from(runTable)).map((row) => row.purpose),
     ).toEqual(["mail_discovery"]);
   });
-  it("refuses a selected candidate when persisted Email source identity changes during the decision", async () => {
+  it("refuses a selected candidate when persisted Email ownership changes during the decision", async () => {
     const input = await setup();
     await expect(
       ingestGmailMessages(ctx.db, gmail, {
         ...input,
         candidateChoice: async () => {
+          const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
+            name: "Synthetic foreign owner",
+            kind: "guest",
+          });
           await getDb(ctx.db)
             .update(emailTable)
-            .set({ checksum: "b".repeat(64) })
+            .set({ ledgerPartyId: foreign.id })
             .where(eq(emailTable.messageId, "synthetic-message"));
           return { selectedIndex: 0, confidence: "high", probability: 0.95 };
         },

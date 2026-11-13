@@ -363,7 +363,6 @@ describe("public mail tool", () => {
     await getDb(ctx.db)
       .update(emailTable)
       .set({
-        checksum: "b".repeat(64),
         classification: "related",
         classificationStage: "decision",
         orderMailId: mail.id,
@@ -1693,7 +1692,15 @@ describe("public mail tool", () => {
   });
 
   describe("read attachment originals", () => {
-    async function fixture(bytes: Uint8Array = receiptBytes) {
+    async function fixture(
+      bytes: Uint8Array = receiptBytes,
+      headers: Partial<
+        Pick<
+          typeof emailTable.$inferInsert,
+          "sender" | "subject" | "receivedAt" | "threadId"
+        >
+      > = {},
+    ) {
       const party = await member();
       const mail = await retainedMailFixture(ctx.db, {
         ledgerPartyId: party.id,
@@ -1702,6 +1709,7 @@ describe("public mail tool", () => {
         sender: "receipts@example.test",
         subject: "Your original receipt",
         receivedAt: new Date("2026-10-01T12:00:00Z"),
+        ...headers,
         checksum: "a".repeat(64),
         content: {
           snippet: null,
@@ -1740,17 +1748,13 @@ describe("public mail tool", () => {
     }
 
     it("returns an attachment original's bytes", async () => {
-      const f = await fixture();
       const receivedAt = new Date("2026-10-02T15:00:00Z");
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({
-          sender: "canonical@example.test",
-          subject: "Canonical Email receipt",
-          receivedAt,
-          threadId: "canonical-thread",
-        })
-        .where(eq(emailTable.orderMailId, f.mail.id));
+      const f = await fixture(receiptBytes, {
+        sender: "canonical@example.test",
+        subject: "Canonical Email receipt",
+        receivedAt,
+        threadId: "canonical-thread",
+      });
       const read = await readMail(ctx.db, f.input, ctx.actor);
       expect(read).toMatchObject({
         sender: "canonical@example.test",
@@ -1766,17 +1770,6 @@ describe("public mail tool", () => {
         dataBase64: Buffer.from(f.bytes).toString("base64"),
       });
       expect(JSON.stringify(read)).not.toContain(f.attachment.pendingObjectKey);
-      await getDb(ctx.db)
-        .update(emailTable)
-        .set({ sender: null, subject: null, receivedAt: null, threadId: null })
-        .where(eq(emailTable.orderMailId, f.mail.id));
-      expect(await readMail(ctx.db, f.input, ctx.actor)).toMatchObject({
-        sender: null,
-        subject: null,
-        receivedAt: null,
-        threadId: null,
-        originalAttachment: read.originalAttachment,
-      });
       const otherOwner = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Other retained Email owner",
         kind: "guest",

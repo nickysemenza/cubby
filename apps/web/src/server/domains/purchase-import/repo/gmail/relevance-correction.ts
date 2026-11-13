@@ -452,10 +452,11 @@ export async function publishPreparedEmailRelevanceCorrection(
     actor,
     { originalCapture },
   );
+  // The resolution above retains the reviewed checksum; Email keeps its
+  // original source observation when retrieval produces different bytes.
   await tx
     .update(emailTable)
     .set({
-      checksum,
       classification: input.classification,
       classificationStage: "resolution",
       classificationReason: input.reason,
