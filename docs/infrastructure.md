@@ -476,7 +476,7 @@ with its route's model for the call's tier (`CHAT_TIER_MODELS`). A step advances
 only on a funding refusal. Window budgets, the plan budget and their defaults
 live in `apps/web/src/server/ai/budget.ts`; this page owns the provider setup
 and the refusal mechanics below. Run funding pauses and resumption are in
-[Durable Jobs](jobs.md#funding-waits).
+[Durable Jobs](jobs.md#waits-and-limits).
 
 Provider credits (Claude and OpenAI API) have no window budget: each runs until
 its provider refuses, and the status reports its standard-cost spend by provider
@@ -738,7 +738,7 @@ sources wait, without consuming attempts, for the normalization job's verified
 JPEG snapshot.
 
 Execution (device parking, leases, retries, cutouts) is owned by
-[Durable Jobs](jobs.md#image-processing). Payload bounds: JPEG analysis reads
+[Durable Jobs](jobs.md#scopes-asks-and-passes). Payload bounds: JPEG analysis reads
 are bounded before buffering, description and companion normalization at
 4 MiB, identification at 2 MiB. Four overlapping descriptions hold at most
 16 MiB of retained rendition bytes, with additional bounded streaming,

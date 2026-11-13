@@ -3635,7 +3635,7 @@ units, not distinct entities. Order counts and target review stay in the import 
 review stays in its own section.
 
 Automatic field writes use the high-confidence boundary shown to members (85% or above) with
-current-evidence checks, and follow [field authority](#field-authority-and-automatic-writes). Only
+current-evidence checks, and follow [field resolution](#field-resolution-and-overrides). Only
 declared `mode: "fill"` fields with `apply: "auto"` qualify. Preview and persisted application share
 the threshold, which does not change financial acceptance rules. Eligibility reads only the target and
 its declared policy basis with their assignment and result envelopes, and acceptance repeats the

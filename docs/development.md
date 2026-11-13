@@ -427,7 +427,7 @@ native PostgreSQL installation remain owned by their existing runners.
   generated Env inference remains authoritative. DO named exports preserve namespaces.
 - **Background work.** Queue wakes, the hourly cron, the daily `maintenance`
   Run and app-open recovery are in
-  [Durable Jobs](jobs.md#deadline-scheduling-and-idle-recovery).
+  [Durable Jobs](jobs.md#wakes-and-progress).
   Exceptional repair tools live in Work's Advanced maintenance view; Settings
   contains connection diagnostics. The read-only `/api/debug/timing` endpoint
   requires a member session in every environment and returns private,

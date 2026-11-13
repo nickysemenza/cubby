@@ -9,10 +9,10 @@ Postgres `Job` became the sole execution owner for background work: an
 authoritative save and its Job intent committed in one transaction, queue
 messages, app-open catch-up and cron only woke the same due-Job drain, and a
 Job carried one lease with a finite attempt budget. Broad `refresh.family` Jobs
-paged through authoritative sources instead of dependency frontiers. ADR 0025
-keeps the `Job` table as the durable form of retryable work and removes the
-broad refresh machinery; the current contract lives in
-[Durable Jobs](../jobs.md), including [Wakes](../jobs.md#wakes) and
-[Retries](../jobs.md#retries).
+paged through authoritative sources instead of dependency frontiers.
+[ADR 0029](0029-evidence-facts-and-reconcilers.md) replaces Job coordination
+with kernel scopes, Asks and Passes. The current contract lives in
+[Kernel work](../jobs.md), including [wakes](../jobs.md#wakes-and-progress)
+and [claims and retries](../jobs.md#scopes-asks-and-passes).
 
 The full text is in git history.

@@ -162,7 +162,7 @@ Image descriptions require all structured fields; partial descriptions are never
 A parsing failure with an incomplete response at its output cap retries once with a larger
 bounded budget. Other parsing failures remain terminal `structured_output_invalid`, preserving
 the model's raw diagnostic. Context exhaustion keeps its smaller-image recovery; both paths
-share the [two-attempt limit](../../docs/jobs.md#image-processing).
+share the [two-attempt limit](../../docs/jobs.md#scopes-asks-and-passes).
 `--once` exits after the worker has been connected for `--idle-seconds` (default 10) with no
 outstanding job and no unacknowledged result. A job counts as outstanding while it is queued,
 running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job

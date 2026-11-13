@@ -493,7 +493,7 @@ still holding a `researching` Email.
 ### Transcript retention
 
 Transcripts are preserved until an explicit member-authorized retirement
-([policy](../../../../../../../docs/jobs.md#coordinator-transcript-retention)).
+([policy](../../../../../../../docs/jobs.md#wakes-and-progress)).
 Authorized disposal destroys settled Runs' transcripts (`run-retirement.ts`),
 oldest first in bounded batches; the destroying call and an immediate
 follow-up that reaches a fresh, empty coordinator let one pass stamp
@@ -532,7 +532,7 @@ cache. Bindings, the OAuth client and deploy constraints are in
   retains pending events, and its live claim spans active coordinator work.
   The Pass owns bounded retries and raw errors; the coordinator keeps its
   transcript, settlement and SDK alarms. Funding pauses use kernel
-  [funding waits](../../../../../../../docs/jobs.md#funding-waits); domain
+  [funding waits](../../../../../../../docs/jobs.md#waits-and-limits); domain
   resumption regenerates funding-paused dispatches. Manual pauses stay stopped.
 - Every model call goes through AI Gateway `cubby` on the Worker's `AI`
   binding, by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The

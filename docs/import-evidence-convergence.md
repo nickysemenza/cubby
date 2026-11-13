@@ -1199,7 +1199,7 @@ policy is restamped in place under its lock and never republished, and an
 active pending row's stamp must match the live policy to apply.
 
 **Pages.** Generation and labeling commit bounded pages of independent charges;
-[statement pages](jobs.md#statement-pages) owns the page sizes and the
+[statement pages](jobs.md#scopes-asks-and-passes) owns the page sizes and the
 cooperative page budget. Generation is a scan: charges that need a label,
 member review, no action, a hold or are out of scope do not bar a later ready
 charge. Labeling asks only unanswered applicable questions, saves each paid
@@ -1238,7 +1238,7 @@ application, including recovery from a crash before the after-commit callback
 started. Automatic financial application admits only the original ready prefix.
 Generation and label pages apply compatible creates through the same guarded
 transactions of at most 32, one dependency layer each
-([statement pages](jobs.md#statement-pages)). Each rebuilds current evidence
+([statement pages](jobs.md#scopes-asks-and-passes)). Each rebuilds current evidence
 under its locks and preserves per-charge receipts; declined items use single
 admission, and a row whose Suggestion moved is re-found by charge before it is
 applied. A booked primary's copies come from other sources, so no import scope

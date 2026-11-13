@@ -24,7 +24,7 @@ Emails linked to the Purchase do not claim it; one Purchase can have order,
 shipping and delivery Emails. Retained event matching establishes compatibility.
 
 - The hourly `email-purchase-discovery` drain walks Emails whose retained
-  evidence suggests a purchase link (see [Jobs](../jobs.md#producers)).
+  evidence suggests a purchase link (see [Jobs](../jobs.md#scopes-asks-and-passes)).
 - The `connection.discover` mutation (agents: `entity_graph.discover`) runs the
   same discovery for one Email or Purchase and returns its stored proposals.
   Other record kinds return their stored proposals unchanged.
