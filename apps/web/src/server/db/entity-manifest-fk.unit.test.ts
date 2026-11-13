@@ -169,6 +169,14 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
       "retains original transaction bindings without resolving the current accepted owner",
   },
 
+  "ShipmentSourcePackage.shipmentId": {
+    classification: "ownership",
+    reason: "source package identity owned by its accepted Shipment",
+  },
+  "RunStep.runId": {
+    classification: "ownership",
+    reason: "a step-ledger Run's own ordered steps",
+  },
   "SourceOrderObservation.purchaseId": {
     classification: "metadata",
     reason:
