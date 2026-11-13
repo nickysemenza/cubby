@@ -11,9 +11,13 @@ import {
 } from "@cubby/schemas/field-authority";
 import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { FIELDS_SCOPE, recordScopeKey } from "@cubby/schemas/kernel/capability";
+import { sql } from "drizzle-orm";
 import type { z } from "zod";
 
+import { fieldJson, valueKey } from "~/server/ai/policy/field-rules";
 import type { Database } from "~/server/db/database";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
+import { decodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { recordSubject } from "~/server/kernel/keys";
 
@@ -38,6 +42,18 @@ export async function applyFieldAuthorityAction(
     readStoredColumns(db, plan.entity, recordId, [input.field]),
   ]);
   const value = stored?.[input.field] ?? null;
+  if (input.suggestionId) {
+    const cursor = decodeAuditCursor(input.suggestionId);
+    const audited = await repositoryQueries(db).execute<{ value: unknown }>(sql`
+      SELECT changes->${input.field}->'to' AS value FROM "AuditLog"
+      WHERE id=${cursor.id}::uuid AND "entityKind"=${input.entity} AND "entityId"=${recordId}::uuid
+        AND provenance->${"scope"}->>${"kind"}=${"fields"}`);
+    if (
+      !audited.rows.length ||
+      valueKey(audited.rows[0]!.value) !== valueKey(fieldJson(value))
+    )
+      throw new Error("Cubby has revised this value since this change");
+  }
   const empty = undecidedFieldValue(input.entity, input.field, value);
   const subject = recordSubject(input.entity, recordId);
   const scope = {
@@ -74,6 +90,7 @@ export async function applyFieldAuthorityAction(
   }
   // SAFETY: as above.
   await decide(db, actor, [
+    { channel: "assignment", kind: "release", subject, field: input.field },
     {
       channel: "veto",
       kind: "veto",
