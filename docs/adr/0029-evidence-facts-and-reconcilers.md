@@ -581,10 +581,12 @@ fresh database and on synthetic predecessor data. It:
    purchaser and Expense overrides, manual allocations, and every reconciled
    value a person holds or confirmed;
 4. writes `Answer` rows from retained paid results, and `AskScope` rows from
-   their requester receipts;
+   their requester receipts; on requester collisions the highest sequence
+   wins, including when a prompt change re-keys a queued Ask;
 5. carries unfinished work: a queued evaluation becomes a queued Ask; one that
    was sent with no stored result becomes `unknown`, never queued; Run
-   checkpoints become Pass cursors; member-started Sweeps and imports in
+   checkpoints become Pass cursors whose `legacyJobs` source receipts survive
+   cursor publication and restart; member-started Sweeps and imports in
    progress become Pass rows;
 6. verifies preservation row by row and aborts on a mismatch (ADR 0025 item
    9), then drops the tables section 7 retires.

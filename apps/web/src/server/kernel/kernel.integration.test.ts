@@ -1336,6 +1336,7 @@ describe("evidence-facts kernel", () => {
   });
 
   it("funding release preserves the cursor of a running pass", async () => {
+    const legacyJobs = [{ kind: "run.execute", cursor: { page: 0 } }];
     const pass = definePass({
       name: "fixture.running-funding",
       async run(db) {
@@ -1346,12 +1347,12 @@ describe("evidence-facts kernel", () => {
     const kernel = createKernel([
       defineModule({ name: "passes", passes: [pass] }),
     ]);
-    await kernel.startPass(ctx.db, pass, { cursor: { page: 0 } });
+    await kernel.startPass(ctx.db, pass, { cursor: { page: 0, legacyJobs } });
     await runOnePass(ctx.db, kernel.registry);
     const result = await repositoryQueries(ctx.db).execute<{ cursor: unknown }>(
       sql`SELECT cursor FROM "Pass" WHERE name = ${pass.name}`,
     );
-    expect(result.rows).toEqual([{ cursor: { page: 1 } }]);
+    expect(result.rows).toEqual([{ cursor: { page: 1, legacyJobs } }]);
   });
 
   it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
@@ -1926,29 +1927,63 @@ describe("evidence-facts kernel", () => {
       purpose: "background",
       execution: false,
     });
+    const scopes = [
+      { kind: "synthetic", key: "source-newer" },
+      { kind: "synthetic", key: "destination-newer" },
+    ];
+    const defer = async () => {
+      throw new WorkDeferredError(
+        "Synthetic funding",
+        new Date(Date.now() + 60_000),
+        "ai_funding_window",
+      );
+    };
     await expect(
       kernel.withAsk(
         ctx.db,
         {
           ...fixture.categorize,
           promptVersion: "synthetic-original",
-          admit: async () => {
-            throw new WorkDeferredError(
-              "Synthetic funding",
-              new Date(Date.now() + 60_000),
-              "ai_funding_window",
-            );
-          },
+          admit: defer,
         },
         { merchant: "Synthetic Original Prompt" },
-        { runId },
+        { runId, scopes },
       ),
     ).rejects.toThrow("Synthetic funding");
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        { ...fixture.categorize, admit: defer },
+        { merchant: "Synthetic Original Prompt" },
+        { runId, scopes },
+      ),
+    ).rejects.toThrow("Synthetic funding");
+    await repositoryQueries(ctx.db).execute(sql`UPDATE "AskScope" s SET
+      sequence = CASE WHEN (s."scopeKey" = ${"source-newer"}) = (a."promptVersion" = ${"synthetic-original"}) THEN 10 ELSE 5 END,
+      receipt = jsonb_build_object(${"requester"}::text, a."promptVersion")
+      FROM "Ask" a WHERE s."askId" = a.id AND s."scopeKind" = ${"synthetic"}`);
     await repositoryQueries(ctx.db).execute(
       sql`UPDATE "Ask" SET "availableAt"=now() WHERE feature=${fixture.categorize.feature}`,
     );
-    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
-    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(1);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(2);
+    const receipts = await repositoryQueries(ctx.db)
+      .execute(sql`SELECT s."scopeKey", s.sequence, s.receipt
+      FROM "AskScope" s JOIN "Ask" a ON a.id = s."askId"
+      WHERE a."promptVersion" = ${fixture.categorize.promptVersion} AND s."scopeKind" = ${"synthetic"}
+      ORDER BY s."scopeKey"`);
+    expect(receipts.rows).toEqual([
+      {
+        scopeKey: "destination-newer",
+        sequence: 10,
+        receipt: { requester: fixture.categorize.promptVersion },
+      },
+      {
+        scopeKey: "source-newer",
+        sequence: 10,
+        receipt: { requester: "synthetic-original" },
+      },
+    ]);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
     const answers = await repositoryQueries(ctx.db).execute<{
       promptVersion: string;
     }>(

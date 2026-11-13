@@ -44,7 +44,10 @@ export async function startPass(
       ${options.runId ?? null}::uuid, ${at})
     ON CONFLICT (name, key) DO UPDATE SET
       cursor = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
-        THEN excluded.cursor ELSE "Pass".cursor END,
+        THEN CASE WHEN "Pass".cursor ? ${"legacyJobs"} THEN
+          coalesce(nullif(excluded.cursor, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, "Pass".cursor->${"legacyJobs"})
+          ELSE excluded.cursor END
+        ELSE "Pass".cursor END,
       attempts = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
         THEN 0 ELSE "Pass".attempts END,
       "claimToken" = CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL
@@ -111,7 +114,11 @@ export async function runOnePass(
     await claim.fenced(async (tx) => {
       await result.publish?.(tx);
       await repositoryQueries(tx).execute(sql`
-        UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${JSON.stringify(result.cursor)}::jsonb ELSE cursor END,
+        UPDATE "Pass" SET cursor = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN
+            CASE WHEN cursor ? ${"legacyJobs"} THEN
+              coalesce(nullif(${JSON.stringify(result.cursor)}::jsonb, 'null'::jsonb), '{}'::jsonb) || jsonb_build_object(${"legacyJobs"}::text, cursor->${"legacyJobs"})
+              ELSE ${JSON.stringify(result.cursor)}::jsonb END
+            ELSE cursor END,
           "doneAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} AND ${result.done} THEN now() ELSE NULL END,
           "availableAt" = CASE WHEN "wakeVersion" = ${claimed.wakeVersion} THEN ${result.availableAt ? sql`${result.availableAt.toISOString()}::timestamp` : sql`now()`} ELSE least("availableAt", now()) END,
           attempts = 0, "claimToken" = NULL, "claimDeadline" = NULL,

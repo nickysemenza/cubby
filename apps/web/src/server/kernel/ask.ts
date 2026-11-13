@@ -606,9 +606,12 @@ export async function runQueuedAsks(
         const nextEnvelope = askEnvelope(kind, envelope.input);
         const nextHash = await inputHashOf(nextEnvelope);
         const next = await ensureAsk(q, kind, nextEnvelope, nextHash, {});
-        await q.execute(sql`INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId", sequence, "cancelledAt")
-          SELECT ${next.id}::uuid, "scopeKind", "scopeKey", "runId", sequence, "cancelledAt" FROM "AskScope" WHERE "askId" = ${ask.id}::uuid
-          ON CONFLICT DO NOTHING`);
+        await q.execute(sql`INSERT INTO "AskScope" ("askId", "scopeKind", "scopeKey", "runId", receipt, sequence, "cancelledAt")
+          SELECT ${next.id}::uuid, "scopeKind", "scopeKey", "runId", receipt, sequence, "cancelledAt" FROM "AskScope" WHERE "askId" = ${ask.id}::uuid
+          ON CONFLICT ("askId", "scopeKind", "scopeKey") DO UPDATE
+          SET "runId" = excluded."runId", receipt = excluded.receipt,
+            sequence = excluded.sequence, "cancelledAt" = excluded."cancelledAt"
+          WHERE coalesce(excluded.sequence, 0) > coalesce("AskScope".sequence, 0)`);
         await q.execute(sql`UPDATE "Ask" SET "cancelledAt" = now(), "claimToken" = NULL, "claimDeadline" = NULL,
           "lastError" = ${`Prompt version changed from ${envelope.promptVersion} to ${kind.promptVersion}; request re-keyed`}
           WHERE id = ${ask.id}::uuid AND "claimToken" = ${ask.token}::uuid`);
