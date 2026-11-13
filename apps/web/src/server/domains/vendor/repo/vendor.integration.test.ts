@@ -365,7 +365,7 @@ describe("vendor repository — spend rollup", () => {
           pagination: page,
         }),
       // Includes the page's single batched kernel machinery read.
-      { statements: 17, parameters: 27 },
+      { statements: 16, parameters: 27 },
     );
     expect(
       listed.data.find((row) => row.id === sellerRef)?.brandedProductCount,
