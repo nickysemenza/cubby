@@ -23,7 +23,6 @@ import { DECLARED_EDGE_OWNERS } from "./generated/declared-edges.gen";
 import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   emailFinancialAssociation,
-  expenseAttribution,
   financialTransactionAllocation,
   runStep,
   purchasePaymentEvidence,
@@ -73,7 +72,6 @@ const WORKFLOW =
 export const ENTITY_EDGE_OWNERS = {
   ...DECLARED_EDGE_OWNERS,
 
-  ExpenseAttribution: { owner: expenseAttribution.expenseId },
   FinancialTransactionAllocation: {
     owner: financialTransactionAllocation.transactionId,
   },
@@ -105,8 +103,6 @@ export const ENTITY_EDGE_OWNERS = {
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },
-  Suggestion: { excluded: WORKFLOW },
-  RunFinding: { excluded: WORKFLOW },
 
   EmailCandidateObservation: { excluded: "Immutable Email candidate history." },
   EmailClassificationObservation: {
@@ -122,6 +118,4 @@ export const ENTITY_EDGE_OWNERS = {
   ImportSourceOrder: { excluded: WORKFLOW },
 
   LedgerSourceClaim: { excluded: WORKFLOW },
-  MailboxCursor: { excluded: WORKFLOW },
-  OrderMail: { excluded: WORKFLOW },
 } satisfies Record<NonEntityEdgeTable, EntityEdgeOwner>;

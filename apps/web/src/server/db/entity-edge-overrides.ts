@@ -28,7 +28,6 @@ import {
   job,
   aiEvaluationRequest,
   auditLog,
-  device,
   entityAttachment,
   entityExternalId,
   entityLink,
@@ -38,9 +37,7 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  image,
   imageProcessingJob,
-  imageSighting,
   importPreparedOrder,
   sourceOrderObservation,
   emailCandidateObservation,
@@ -54,12 +51,7 @@ import {
   importSourceClaim,
   importSourceOrder,
   importSourceProduct,
-  inventoryEntry,
   ledgerSourceClaim,
-  ledgerTransfer,
-  mealFoodEntry,
-  mealRecipePortion,
-  mailboxCursor,
   email as emailTable,
   orderMail,
   photoGroupProposal,
@@ -67,7 +59,6 @@ import {
   runPushRegistration,
   runStep,
   product,
-  project,
   purchase,
   purchasePaymentEvidence,
   sourceTransactionRecord,
@@ -76,7 +67,6 @@ import {
   financialEvidenceAlias,
   transactionImportRecord,
   suggestionTable,
-  task,
   vendorAccount,
 } from "./schema";
 
@@ -502,180 +492,6 @@ export const ENTITY_EDGE_OVERRIDES = {
         reason:
           "Immutable observation history retains its original subject UUID through deletion and merge.",
       },
-    },
-  }),
-
-  ledgerParty: edges({
-    "Task.assigneeId": {
-      column: task.assigneeId,
-      role: "reference",
-      label: "assigned tasks",
-      description: "An explicit member assignee on live work.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Project.assigneeId": {
-      column: project.assigneeId,
-      role: "reference",
-      label: "project assignee defaults",
-      description: "An explicit member default for project work.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupProposal.inventoryOwnerPartyId": {
-      column: photoGroupProposal.inventoryOwnerPartyId,
-      role: "metadata",
-      label: "photo group proposals",
-      description:
-        "The member a proposed photo group's inventory will belong to; a merge follows it to the survivor.",
-      liveness: { kind: "must-target-live" },
-    },
-    "VendorAccount.ledgerPartyId": {
-      column: vendorAccount.ledgerPartyId,
-      role: "reference",
-      label: "vendor accounts",
-      description: "A member-owned login used for vendor import automation.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Run.ledgerPartyId": {
-      column: runTable.ledgerPartyId,
-      role: "history",
-      label: "import runs",
-      description: "The member whose evidence was processed by an import run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportSourceClaim.ledgerPartyId": {
-      column: importSourceClaim.ledgerPartyId,
-      role: "history",
-      label: "import source claims",
-      description: "The member scope for an idempotent imported source.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Suggestion.ledgerPartyId": {
-      column: suggestionTable.ledgerPartyId,
-      role: "history",
-      label: "import findings",
-      description: "The member whose import requires review.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunFinding.ledgerPartyId": {
-      column: runFinding.ledgerPartyId,
-      role: "history",
-      label: "run findings",
-      description: "The member whose import finding requires review.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MailboxCursor.ledgerPartyId": {
-      column: mailboxCursor.ledgerPartyId,
-      role: "metadata",
-      label: "mailbox cursors",
-      description: "A member mailbox's durable Gmail history cursor.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Email.ledgerPartyId": {
-      column: emailTable.ledgerPartyId,
-      role: "metadata",
-      label: "mailbox message status",
-      description:
-        "Minimal classification and recovery metadata for a member mailbox.",
-      liveness: { kind: "must-target-live" },
-    },
-    "OrderMail.ledgerPartyId": {
-      column: orderMail.ledgerPartyId,
-      role: "history",
-      label: "order mail",
-      description: "Normalized order evidence from a member mailbox.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealFoodEntry.ledgerPartyId": {
-      column: mealFoodEntry.ledgerPartyId,
-      role: "association",
-      label: "meal food entries",
-      description:
-        "A product or manual food amount naming this member or guest as its eater.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ExpenseAttribution.ledgerPartyId": {
-      column: expenseAttribution.ledgerPartyId,
-      role: "ledger",
-      label: "beneficiary attributions",
-      description:
-        "A weighted expense beneficiary or funder share; money remains on the expense itself.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialAccount.primaryCardholderId": {
-      column: financialAccount.primaryCardholderId,
-      role: "reference",
-      label: "primary cards",
-      description: "The member who primarily uses the credit card.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Purchase.purchaserOverrideId": {
-      column: purchase.purchaserOverrideId,
-      role: "reference",
-      label: "purchaser overrides",
-      description:
-        "An explicit purchaser independent of funding and consumption.",
-      liveness: { kind: "must-target-live" },
-    },
-    "FinancialAccount.ledgerPartyId": {
-      column: financialAccount.ledgerPartyId,
-      role: "reference",
-      label: "financial accounts",
-      description:
-        "The member or household party an evidence account belongs to.",
-      liveness: { kind: "must-target-live" },
-    },
-    "InventoryEntry.ownerLedgerPartyId": {
-      column: inventoryEntry.ownerLedgerPartyId,
-      role: "reference",
-      label: "owned inventory entries",
-      description:
-        "An explicit member or guest owner pinned on a current inventory slot.",
-      liveness: { kind: "must-target-live" },
-    },
-    "LedgerTransfer.fromPartyId": {
-      column: ledgerTransfer.fromPartyId,
-      role: "ledger",
-      label: "outgoing transfers",
-      description: "A transfer source endpoint.",
-      liveness: { kind: "must-target-live" },
-    },
-    "LedgerTransfer.toPartyId": {
-      column: ledgerTransfer.toPartyId,
-      role: "ledger",
-      label: "incoming transfers",
-      description: "A transfer target endpoint.",
-      liveness: { kind: "must-target-live" },
-    },
-    "MealRecipePortion.ledgerPartyId": {
-      column: mealRecipePortion.ledgerPartyId,
-      role: "association",
-      label: "meal portions",
-      description:
-        "A planned or confirmed recipe portion naming this member or guest as its eater.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Device.ledgerPartyId": {
-      column: device.ledgerPartyId,
-      role: "reference",
-      label: "devices",
-      description: "A native companion install owned by this member.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImageSighting.ledgerPartyId": {
-      column: imageSighting.ledgerPartyId,
-      role: "reference",
-      label: "image sightings",
-      description:
-        "The member whose photo library or cloud account a sighting was reported from.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Image.capturedByPartyId": {
-      column: image.capturedByPartyId,
-      role: "reference",
-      label: "captured images",
-      description:
-        "The member an image's capture is derived (or manually confirmed) as belonging to.",
-      liveness: { kind: "must-target-live" },
     },
   }),
 

@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/entities/ledgerParty";
 import { ledgerPartyRawOut as rawLedgerPartyOut } from "@cubby/schemas/entity-contracts/ledgerParty";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
   LedgerPartyId,
   LedgerPartyShortcode,
@@ -18,7 +17,12 @@ import { uniq } from "es-toolkit";
 
 import { ledgerPartyRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.ledgerParty.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import { DECLARED_EDGE_DELETE_POLICIES } from "~/server/db/generated/declared-edges.gen";
+import {
+  DECLARED_EDGE_DELETE_HOOKS,
+  DECLARED_EDGE_MERGE_HOOKS,
+} from "~/server/db/generated/declared-edges.gen";
 import {
   uuidArrayParam,
   amountJsonSql,
@@ -61,255 +65,6 @@ import {
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-
-export const LEDGER_PARTY_DELETE_EDGE_POLICY = {
-  "VendorAccount.ledgerPartyId": {
-    code: "block-vendor-accounts",
-    effect: "block",
-    description: "Member-owned vendor accounts retain their owner.",
-  },
-  "Run.ledgerPartyId": {
-    code: "block-runs",
-    effect: "block",
-    description: "Import provenance retains the member scope.",
-  },
-  "ImportSourceClaim.ledgerPartyId": {
-    code: "block-import-claims",
-    effect: "block",
-    description: "Import source claims retain the member scope.",
-  },
-  "Suggestion.ledgerPartyId": {
-    code: "block-import-findings",
-    effect: "block",
-    description: "Import findings retain the member scope.",
-  },
-  "RunFinding.ledgerPartyId": {
-    code: "block-import-findings",
-    effect: "block",
-    description: "Import findings retain the member scope.",
-  },
-  "MailboxCursor.ledgerPartyId": {
-    code: "block-mailbox-cursor",
-    effect: "block",
-    description: "Mailbox cursors retain their member scope.",
-  },
-  "Email.ledgerPartyId": {
-    code: "block-mailbox-messages",
-    effect: "block",
-    description:
-      "Mailbox classification and recovery metadata retain their member scope.",
-  },
-  "OrderMail.ledgerPartyId": {
-    code: "block-order-mail",
-    effect: "block",
-    description: "Order mail retains its member scope.",
-  },
-  "ExpenseAttribution.ledgerPartyId": {
-    code: "block-attributions",
-    effect: "block",
-    description: "Live expense shares retain their party.",
-  },
-  "FinancialAccount.primaryCardholderId": {
-    code: "block-cardholders",
-    effect: "block",
-    description: "Live cards retain their primary cardholder.",
-  },
-  "Purchase.purchaserOverrideId": {
-    code: "block-purchasers",
-    effect: "block",
-    description: "Purchases retain their explicit purchaser.",
-  },
-  "FinancialAccount.ledgerPartyId": {
-    code: "block-accounts",
-    effect: "block",
-    description: "Live accounts retain their ledger party.",
-  },
-  "Task.assigneeId": {
-    code: "block-assigned-tasks",
-    effect: "block",
-    description: "Live task assignments retain their member.",
-  },
-  "Project.assigneeId": {
-    code: "block-project-defaults",
-    effect: "block",
-    description: "Live project assignee defaults retain their member.",
-  },
-  "InventoryEntry.ownerLedgerPartyId": {
-    code: "block-inventory-owners",
-    effect: "block",
-    description: "Explicit inventory ownership retains its individual owner.",
-  },
-  "LedgerTransfer.fromPartyId": {
-    code: "block-outgoing-transfers",
-    effect: "block",
-    description: "Live transfers retain their source party.",
-  },
-  "LedgerTransfer.toPartyId": {
-    code: "block-incoming-transfers",
-    effect: "block",
-    description: "Live transfers retain their target party.",
-  },
-  "MealRecipePortion.ledgerPartyId": {
-    code: "block-meal-portions",
-    effect: "block",
-    description: "Live meal portions retain their eater.",
-  },
-  "MealFoodEntry.ledgerPartyId": {
-    code: "block-meal-food-entries",
-    effect: "block",
-    description: "Live meal food entries retain their eater.",
-  },
-  "Device.ledgerPartyId": {
-    code: "clear-owner",
-    effect: "detach",
-    description:
-      "Deleting a member clears its devices' owner rather than blocking the delete — a device survives as an unowned install.",
-  },
-  "ImageSighting.ledgerPartyId": {
-    code: "block-image-sightings",
-    effect: "block",
-    description:
-      "A sighting's library owner retains its member scope; the reported evidence would be meaningless attached to no one.",
-  },
-  "Image.capturedByPartyId": {
-    code: "clear-captured-by",
-    effect: "detach",
-    description:
-      "Deleting a member clears the derived capturer on its images rather than blocking the delete — the image survives with no capturer until the next derivation.",
-  },
-  "PhotoGroupProposal.inventoryOwnerPartyId": {
-    code: "clear-proposal-owner",
-    effect: "detach",
-    description:
-      "Deleting a member clears a photo group proposal's inventory owner; the group can still be approved without one.",
-  },
-} as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
-
-export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
-  "VendorAccount.ledgerPartyId": {
-    code: "block-vendor-accounts",
-    effect: "block",
-    description:
-      "Vendor-account ownership must be reconciled before merging members.",
-  },
-  "Run.ledgerPartyId": {
-    code: "block-runs",
-    effect: "block",
-    description: "Import provenance prevents member merges.",
-  },
-  "ImportSourceClaim.ledgerPartyId": {
-    code: "block-import-claims",
-    effect: "block",
-    description: "Import source identity prevents member merges.",
-  },
-  "Suggestion.ledgerPartyId": {
-    code: "block-import-findings",
-    effect: "block",
-    description: "Import findings prevent member merges.",
-  },
-  "RunFinding.ledgerPartyId": {
-    code: "block-import-findings",
-    effect: "block",
-    description: "Import findings prevent member merges.",
-  },
-  "MailboxCursor.ledgerPartyId": {
-    code: "block-mailbox-cursor",
-    effect: "block",
-    description: "Mailbox identity prevents member merges.",
-  },
-  "Email.ledgerPartyId": {
-    code: "block-mailbox-messages",
-    effect: "block",
-    description:
-      "Mailbox classification and recovery metadata prevent member merges.",
-  },
-  "OrderMail.ledgerPartyId": {
-    code: "block-order-mail",
-    effect: "block",
-    description: "Order mail provenance prevents member merges.",
-  },
-  "ExpenseAttribution.ledgerPartyId": {
-    code: "merge-attributions",
-    effect: "move-dedupe",
-    description: "Colliding weighted shares are summed.",
-  },
-  "FinancialAccount.primaryCardholderId": {
-    code: "block-cardholder-merges",
-    effect: "block",
-    description: "Reconcile card access before merging cardholders.",
-  },
-  "Purchase.purchaserOverrideId": {
-    code: "repoint-purchasers",
-    effect: "repoint",
-    description: "Purchaser overrides move to the surviving member.",
-  },
-  "FinancialAccount.ledgerPartyId": {
-    code: "repoint-accounts",
-    effect: "repoint",
-    description: "Accounts move to the surviving party.",
-  },
-  "Task.assigneeId": {
-    code: "repoint-assigned-tasks",
-    effect: "repoint",
-    description: "Task assignments move to the surviving member.",
-  },
-  "Project.assigneeId": {
-    code: "repoint-project-defaults",
-    effect: "repoint",
-    description: "Project assignee defaults move to the surviving member.",
-  },
-  "InventoryEntry.ownerLedgerPartyId": {
-    code: "merge-inventory-owners",
-    effect: "move-dedupe",
-    description:
-      "Explicitly owned inventory moves to the surviving person and folds only when the complete raw slot and unit agree.",
-  },
-  "LedgerTransfer.fromPartyId": {
-    code: "repoint-outgoing-transfers",
-    effect: "repoint",
-    description: "Transfer source endpoints move to the survivor.",
-  },
-  "LedgerTransfer.toPartyId": {
-    code: "repoint-incoming-transfers",
-    effect: "repoint",
-    description: "Transfer target endpoints move to the survivor.",
-  },
-  "MealRecipePortion.ledgerPartyId": {
-    code: "merge-meal-portions",
-    effect: "move-dedupe",
-    description:
-      "Colliding portions for one preparation and target meal are summed when their entered units match; confirmation survives only when every folded portion was confirmed.",
-  },
-  "MealFoodEntry.ledgerPartyId": {
-    code: "repoint-meal-food-entries",
-    effect: "repoint",
-    description:
-      "Meal food entries move to the surviving party without changing their recorded amounts.",
-  },
-  "Device.ledgerPartyId": {
-    code: "repoint-devices",
-    effect: "repoint",
-    description: "A merged member's devices move to the surviving party.",
-  },
-  "ImageSighting.ledgerPartyId": {
-    code: "repoint-image-sightings",
-    effect: "repoint",
-    description:
-      "A merged member's reported image sightings move to the surviving party.",
-  },
-  "Image.capturedByPartyId": {
-    code: "repoint-captured-by",
-    effect: "repoint",
-    description:
-      "Images derived to a merged member move to the surviving party.",
-  },
-  "PhotoGroupProposal.inventoryOwnerPartyId": {
-    code: "repoint-proposal-owner",
-    effect: "repoint",
-    description:
-      "A photo group proposed for a merged member is received by the surviving party.",
-  },
-} as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const ledgerPartyScaffold = listScaffold("ledgerParty", ledgerParty, {
   readSchema: ledgerPartyRepositoryReadSchema,
@@ -517,13 +272,8 @@ const refuseHouseholdParty = async (
 
 export const deleteLedgerParties = policyDelete(
   "ledgerParty",
-  LEDGER_PARTY_DELETE_EDGE_POLICY,
-  {
-    beforeDelete: async (tx, ids) => {
-      await refuseHouseholdParty(tx, ids);
-      await assertNoAccountHistory(tx, ids);
-    },
-  },
+  DECLARED_EDGE_DELETE_POLICIES.ledgerParty,
+  DECLARED_EDGE_DELETE_HOOKS.ledgerParty,
 );
 
 const lockMealRecipePortionReferences = async (
@@ -699,114 +449,29 @@ export async function mergeLedgerParties(
       .update(ledgerParty)
       .set({ notes })
       .where(eq(ledgerParty.id, keepId));
-    const partyIds = [keepId, ...loserIds];
     const repointed = await applyMergePolicy(tx, {
       entity: "ledgerParty",
-      policy: LEDGER_PARTY_MERGE_EDGE_POLICY,
+      policy: DECLARED_EDGE_MERGE_POLICIES.ledgerParty,
       keepId,
       loserIds,
       liveOnly: true,
-      overrides: {
-        // Colliding weighted shares are summed per expense and role.
-        "ExpenseAttribution.ledgerPartyId": async () => {
-          const shares = await tx
-            .select({
-              expenseId: expenseAttribution.expenseId,
-              role: expenseAttribution.role,
-              weight: expenseAttribution.weight,
-            })
-            .from(expenseAttribution)
-            .where(
-              and(
-                inArray(expenseAttribution.ledgerPartyId, [
-                  keepId,
-                  ...loserIds,
-                ]),
-                notDeleted(expenseAttribution),
-              ),
-            );
-          const sharesByExpenseRole = new Map<string, typeof shares>();
-          for (const share of shares) {
-            const key = `${share.expenseId}:${share.role}`;
-            sharesByExpenseRole.set(key, [
-              ...(sharesByExpenseRole.get(key) ?? []),
-              share,
-            ]);
-          }
-          for (const group of sharesByExpenseRole.values()) {
-            const foldedWeight = group.reduce(
-              (total, share) => total + share.weight,
-              0,
-            );
-            if (!Number.isSafeInteger(foldedWeight))
-              throw createAppError(
-                "CONSTRAINT_VIOLATION",
-                "Merged attribution weights exceed the safe integer range.",
-              );
-          }
-          await tx
-            .update(expenseAttribution)
-            .set({ deletedAt: new Date() })
-            .where(
-              and(
-                inArray(expenseAttribution.ledgerPartyId, [
-                  keepId,
-                  ...loserIds,
-                ]),
-                notDeleted(expenseAttribution),
-              ),
-            );
-          for (const [_key, group] of sharesByExpenseRole) {
-            const first = group[0]!;
-            await tx.insert(expenseAttribution).values({
-              expenseId: first.expenseId,
-              role: first.role,
-              ledgerPartyId: keepId,
-              weight: group.reduce((total, share) => total + share.weight, 0),
-            });
-          }
-          attributionEdgesRepointed = shares.length;
-        },
-        "MealRecipePortion.ledgerPartyId": async () => {
-          await lockMealRecipePortionReferences(tx, partyIds);
-          portionEdgesRepointed = await foldMealRecipePortions(
-            tx,
-            keepId,
-            loserIds,
-          );
-        },
-        // Ownership moves through the ownership mutation so its audit and
-        // inheritance rules run per entry.
-        "InventoryEntry.ownerLedgerPartyId": async () => {
-          const ownedInventory = await tx.query.inventoryEntry.findMany({
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(
-                  table,
-                  and(
-                    inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
-                    notDeleted(inventoryEntry),
-                  ),
-                ),
-            },
-            columns: { id: true },
-            orderBy: (table: PgTable) =>
-              [inventoryEntry.id]
-                .flat()
-                .map((value) => relationalSql(table, value)),
-          });
-          for (const row of ownedInventory) {
-            await applyInventoryOwnershipInTransaction(
-              tx,
-              row.id,
-              { ownershipMode: "explicit", ownerLedgerPartyId: keepId },
-              undefined,
-              actor,
-            );
-          }
-          inventoryEdgesRepointed = ownedInventory.length;
-        },
-      },
+      overrides: (
+        await DECLARED_EDGE_MERGE_HOOKS.ledgerParty({
+          tx,
+          keepId,
+          loserIds,
+          actor,
+          onAttributions: (value) => {
+            attributionEdgesRepointed = value;
+          },
+          onPortions: (value) => {
+            portionEdgesRepointed = value;
+          },
+          onInventory: (value) => {
+            inventoryEdgesRepointed = value;
+          },
+        })
+      ).overrides,
     });
     foodEntryEdgesRepointed = repointed["MealFoodEntry.ledgerPartyId"] ?? 0;
     accountEdgesRepointed = repointed["FinancialAccount.ledgerPartyId"] ?? 0;
@@ -846,3 +511,119 @@ export async function mergeLedgerParties(
     },
   };
 }
+
+export const ledgerPartyMergeEdgeHandlers = (context: {
+  tx: DrizzleTransaction;
+  keepId: LedgerPartyId;
+  loserIds: LedgerPartyId[];
+  actor: ActorContext;
+  onAttributions: (value: number) => void;
+  onPortions: (value: number) => void;
+  onInventory: (value: number) => void;
+}) => {
+  const {
+    tx,
+    keepId,
+    loserIds,
+    actor,
+    onAttributions,
+    onPortions,
+    onInventory,
+  } = context;
+  const partyIds = [keepId, ...loserIds];
+  return {
+    foldWeightedAttributions: async () => {
+      const shares = await tx
+        .select({
+          expenseId: expenseAttribution.expenseId,
+          role: expenseAttribution.role,
+          weight: expenseAttribution.weight,
+        })
+        .from(expenseAttribution)
+        .where(
+          and(
+            inArray(expenseAttribution.ledgerPartyId, [keepId, ...loserIds]),
+            notDeleted(expenseAttribution),
+          ),
+        );
+      const sharesByExpenseRole = new Map<string, typeof shares>();
+      for (const share of shares) {
+        const key = `${share.expenseId}:${share.role}`;
+        sharesByExpenseRole.set(key, [
+          ...(sharesByExpenseRole.get(key) ?? []),
+          share,
+        ]);
+      }
+      for (const group of sharesByExpenseRole.values()) {
+        const foldedWeight = group.reduce(
+          (total, share) => total + share.weight,
+          0,
+        );
+        if (!Number.isSafeInteger(foldedWeight))
+          throw createAppError(
+            "CONSTRAINT_VIOLATION",
+            "Merged attribution weights exceed the safe integer range.",
+          );
+      }
+      await tx
+        .update(expenseAttribution)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            inArray(expenseAttribution.ledgerPartyId, [keepId, ...loserIds]),
+            notDeleted(expenseAttribution),
+          ),
+        );
+      for (const [_key, group] of sharesByExpenseRole) {
+        const first = group[0]!;
+        await tx.insert(expenseAttribution).values({
+          expenseId: first.expenseId,
+          role: first.role,
+          ledgerPartyId: keepId,
+          weight: group.reduce((total, share) => total + share.weight, 0),
+        });
+      }
+      onAttributions(shares.length);
+    },
+    foldPortions: async () => {
+      await lockMealRecipePortionReferences(tx, partyIds);
+      onPortions(await foldMealRecipePortions(tx, keepId, loserIds));
+    },
+    moveInventoryOwnership: async () => {
+      const ownedInventory = await tx.query.inventoryEntry.findMany({
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
+                notDeleted(inventoryEntry),
+              ),
+            ),
+        },
+        columns: { id: true },
+        orderBy: (table: PgTable) =>
+          [inventoryEntry.id]
+            .flat()
+            .map((value) => relationalSql(table, value)),
+      });
+      for (const row of ownedInventory) {
+        await applyInventoryOwnershipInTransaction(
+          tx,
+          row.id,
+          { ownershipMode: "explicit", ownerLedgerPartyId: keepId },
+          undefined,
+          actor,
+        );
+      }
+      onInventory(ownedInventory.length);
+    },
+  };
+};
+export const beforeLedgerPartyDeletion = async (
+  tx: DrizzleTransaction,
+  ids: LedgerPartyId[],
+): Promise<void> => {
+  await refuseHouseholdParty(tx, ids);
+  await assertNoAccountHistory(tx, ids);
+};
