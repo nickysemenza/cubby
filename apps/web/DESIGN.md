@@ -659,6 +659,12 @@ send it again on its own and offers the gap's actions. Row status is a word
 never carries meaning alone. Empty, the panel says Cubby has recorded no work
 on this yet; a failed read keeps the raw error and Retry.
 
+### Machinery in lists and Runs
+
+Every list reads its machinery summary in one scaffold batch, beside the page’s other bindings. The Stage column states the stage, next actor and at most six words of the first gap. Gap reveals the full label; Actor, Attempts, Cost and ETA are optional columns. Stage and Actor filter and sort through the declared kernel SQL projections. ETA is shown only for queued or timed work.
+
+A Run’s diagnostics show the scopes, asks and passes carrying its runId, grouped by stage, with counts and total ask cost. Each row discloses its complete stored diagnostics, including attempts and raw errors. The workspace retains Sweep decisions and photo review. Passes also appear in the record machinery panel. Audit disclosures show the apply’s scope, reconciler version and inputs on Changes by Cubby and entity timelines.
+
 ### Activity and evaluation progress
 
 Run Evaluation progress uses `ProgressMeter` for Records checked and
@@ -679,7 +685,7 @@ is in [web UI contracts](docs/web-ui.md#work-page). The health line is one
 sentence in secondary ink. Stuck rows are flat with hairlines and a static
 `warning-ink` glyph. Queue details is a closed disclosure of the same flat
 hairline rows, with counts and stored names in mono tabular figures and no
-status color. An empty queue reads `Nothing needs you.` at the page's
+status color. Needs you reads the kernel’s member gaps, grouped by stage, with a record link and the gap’s action inline only when exactly one is offered. Its counts are tabular figures and its paged read has loading, raw error with Retry, and empty states. An empty queue reads `Nothing needs you.` at the page's
 largest size. The footer nav carries one plain Changes by Cubby link, with no
 count or badge. Citron is never a warning: the sidebar Work row and collapsed rail
 use a static warning glyph or dot only for stuck or stale work, and healthy work

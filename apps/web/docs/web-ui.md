@@ -566,17 +566,7 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   queued, answered-not-saved and blocked counts, oldest age and most common
   error. Rows put the name beside the facts from 768px and stack below it; no
   row scrolls sideways. A failed read shows the raw error and Try again.
-- Needs you is the embedded `WorkQueue` grouped by Reason over
-  `NEEDS_YOU_FILTERS`, the same population as the sidebar and Home. Empty, it
-  reads `Nothing needs you.`; with incomplete inputs it shows the known-work
-  notice instead, because an unknown source cannot be claimed empty. Source and
-  Problem keys never reach the member. The "More work" row leads with one quiet
-  link, "Agent backlog · N", to the Agent view; it never counts toward the
-  sidebar badge or Home.
-- When the published queue's last republish failed or its rows are over ten
-  minutes old, Home, Work and the full queue add one line: "Needs you last
-  updated <relative time>", "; the latest update failed" when it did, a closed
-  Technical details disclosure with Copy, and Retry. The rows stay.
+- Needs you reads `machinery.needsYou`, the kernel’s gaps whose actor is a member, grouped by the six stage words. Each row links its record and offers an inline decision when the gap has exactly one action. Page controls retain the full count; empty reads say `Nothing needs you.` Loading uses skeletons and failures show raw diagnostics and Retry. Home and sidebar use the same member-gap population. The health verdict remains independent.
 - The sidebar Work row shows the needs-you count and, only when something is
   stuck or the count is behind, a static warning glyph; the collapsed rail shows
   one dot with the same label. Healthy work shows nothing at any backlog size, a
@@ -586,3 +576,7 @@ refresh counts); other telemetry belongs to Run pages and MCP.
   and alias pruning require a successful preview before Apply; each
   Current/Proposed sample states its coverage, and the server rechecks
   eligibility at Apply. Repair comparisons span the width below the description.
+
+## Run machinery
+
+The Run diagnostics slot reads `machinery.runWork`, resolving the public Run code before `runWork` reads its scopes, asks and passes from one snapshot. Stage groups show live counts and total ask cost in tabular figures. Row disclosures retain full keys, states, attempts and errors; failures show raw diagnostics and Retry. Sweeps and photo review retain their existing workspace sections.

@@ -519,6 +519,10 @@ field-readiness tracking, enrichment patching or separate summary request.
   projection compiler. Inspector and relation headings request graph branch
   counts with a zero item budget.
 
+### Machinery summaries
+
+The canonical projection requests `machinery` with every roster page. A `bind.ids` loader resolves the capability once and calls `loadMachineryRows` once for the selected IDs. Count reads and empty pages load no binding. Cells render that summary without record queries. `machineryStage` and `machineryActor` are declared derived list fields; the scaffold prepares their capability and compiles their filters and sorts with `machineryStageSql` and `machineryActorSql`.
+
 ### Scope, paging and virtualization
 
 `useInfiniteTableList` query keys own filter, ordering, grouping and projection
