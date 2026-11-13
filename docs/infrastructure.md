@@ -16,7 +16,7 @@ dependency.
 | Concern                       | Provider                           | Production resource                                                                      |
 | ----------------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------- |
 | Web application and APIs      | Cloudflare Workers                 | Worker `cubby`, custom domain `cubby.nickysemenza.com`                                   |
-| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Job, Durable Object `PurchaseImportRunAgent`         |
+| Purchase-import orchestration | Agents SDK + pi-durable            | Worker `cubby`: `purchase.dispatch` Pass, Durable Object `PurchaseImportRunAgent`        |
 | PostgreSQL                    | Neon through Cloudflare Hyperdrive | One Neon origin, three Hyperdrive configurations                                         |
 | Images and documents          | Cloudflare R2                      | Bucket `foo`, public origin `https://media.nickysemenza.com`                             |
 | Product lookup                | Main Worker + PostgreSQL           | `UpcLookupCache` table, upcitemdb fallback (no key)                                      |

@@ -228,7 +228,7 @@ hydration.
 
 Admission (`mail-import-run.ts`) freezes up to 50 Emails' checksums into one
 `mail_import` Run with a RunTarget per Email, assigns ownership through
-`Email.runId`, and dispatches `start_or_resume` to a `purchase.dispatch` Job in
+`Email.runId`, and dispatches `start_or_resume` to the `purchase.dispatch` Pass in
 the admission transaction (`dispatch.ts`). Each paid call checks the Run is
 still executable and draws from the household AI budget
 (`execution-transport.ts`, `server/ai/budget.ts`).
@@ -526,16 +526,14 @@ cache. Bindings, the OAuth client and deploy constraints are in
   `photo-inventory:<Run.id>` per Run (`importRunAgentIdentity`). pi keeps the
   transcript, inbox and tasks in the object's SQLite, and lifecycle jobs wake it
   through its alarm after eviction.
-- The `purchase.dispatch` Job handler, admitted in the Run transaction, fences
+- The `purchase.dispatch` Pass is admitted in the Run transaction and fences
   duplicate and late starts with the Run's dispatch generation and
-  `coordinatorStartedAt`; stable operation IDs survive lost replies. The Job
-  completes once the coordinator accepts a stable operation identity, so an
-  acknowledged coordinator is never submitted again by retrying a start Job.
-  The Job owns bounded retries and raw terminal errors; the coordinator owns
-  conversation settlement and its SDK lifecycle alarms. Funding pauses use the
-  [funding-resume Job](../../../../../../../docs/jobs.md#funding-waits); domain
-  resumption regenerates funding-paused purchase dispatches, and manual pauses
-  stay stopped.
+  `coordinatorStartedAt`. Stable operation IDs survive lost replies. Its cursor
+  retains pending events, and its live claim spans active coordinator work.
+  The Pass owns bounded retries and raw errors; the coordinator keeps its
+  transcript, settlement and SDK alarms. Funding pauses use kernel
+  [funding waits](../../../../../../../docs/jobs.md#funding-waits); domain
+  resumption regenerates funding-paused dispatches. Manual pauses stay stopped.
 - Every model call goes through AI Gateway `cubby` on the Worker's `AI`
   binding, by the shared pi-ai providers (`@cubby/shared/ai/pi-providers`). The
   gateway shim disables parallel tool calls: pi ends a run on a terminating

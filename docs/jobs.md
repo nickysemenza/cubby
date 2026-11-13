@@ -1024,13 +1024,11 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   30 minutes. Owed is work that has been due that long, or Jobs whose run of
   deferrals (`deferringSince`) is that old and that fall due again within 30
   minutes: Jobs that defer every 15 seconds are never due for long. A Job
-  parked further ahead is a timer and is not counted. Retained tickets the drain never claims are not owed work. A
-  drain's completions are published `DerivedValue` rows and its Job's latest
-  page result. Thirty minutes outlasts the gaps between bursts and is half the
+  parked further ahead is a timer and is not counted. Retained tickets the drain never claims are not owed work. A drain's completions are its owning rows' committed results and its
+  latest page result. Thirty minutes outlasts the gaps between bursts and is half the
   one-hour lag members are promised, so the alarm shows before that breaks.
   The row leads with the cause when the stored rows name one: the largest
-  group of that kind's waiting Jobs that share a wait reason ("115 Mail
-  discovery Runs keep deferring on provider capacity."), or for a drain how
+  group of that kind's waiting Jobs that share a wait reason ("3 Maintenance Jobs keep deferring on provider capacity."), or for a drain how
   long ago it last got a page. Its Technical details hold the whole
   `job.activity` queue as text, so the units that were served instead are
   named beside it.
