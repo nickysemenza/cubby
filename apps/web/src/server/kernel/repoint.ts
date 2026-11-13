@@ -22,7 +22,7 @@ export type OwnedReferenceRepoint = {
   liveOnly?: boolean;
 };
 
-/** Runs inside the merge/removal transaction, which owns its write gate and policy checks. */
+/** Runs inside the merge/removal transaction; the kernel entry point takes the money gate. */
 export async function repointOwnedReference(
   tx: Database,
   registry: KernelRegistry,

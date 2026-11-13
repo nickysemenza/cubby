@@ -50,6 +50,7 @@ import {
   evidenceRow,
   recordSubject,
   type Kernel,
+  source,
 } from "./api";
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
@@ -484,7 +485,18 @@ describe("evidence-facts kernel", () => {
   });
 
   it("creates linked records with stable ids in dependency order and leaks nothing on a fenced apply", async () => {
-    const { kernel, fixture } = kernelWith({ linked: true });
+    let gateHeld = false;
+    const { kernel, fixture } = kernelWith({
+      linked: true,
+      onRemove: async () => {
+        const probe = await repositoryTransactionDatabase(ctx.db, (tx) =>
+          repositoryQueries(tx).execute<{ acquired: boolean }>(
+            sql`SELECT pg_try_advisory_xact_lock(hashtextextended('cubby:household-write', 0)) AS acquired`,
+          ),
+        );
+        gateHeld = probe.rows[0]?.acquired === false;
+      },
+    });
     await kernel.append(ctx.db, [charge("ORD-LINKED", 1250)]);
     const q = repositoryQueries(ctx.db);
     const [claim] = await claimScopes(q, kernel.registry, "money", 10);
@@ -542,6 +554,24 @@ describe("evidence-facts kernel", () => {
     expect((await q.select().from(fixtureAllocation))[0]?.id).toBe(
       allocation!.id,
     );
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "rejection",
+        kind: "reject",
+        subject: `purchaseEvent:${parent!.id}`,
+        scopes: [{ kind: PURCHASE_SCOPE, key: "ORD-LINKED" }],
+      },
+    ]);
+    expect((await purchases(ctx.db))[0]?.deletedAt).toBeNull();
+    await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "rejection",
+        kind: "reject",
+        subject: recordSubject(PURCHASE_TABLE, parent!.id),
+      },
+    ]);
+    expect(gateHeld).toBe(true);
+    expect((await purchases(ctx.db))[0]?.deletedAt).not.toBeNull();
   });
 
   it("reserves entity evidence atomically without leaking identities from a duplicate race", async () => {
@@ -608,6 +638,64 @@ describe("evidence-facts kernel", () => {
     expect(await identities()).toHaveLength(before.length + 1);
   });
 
+  it("projects a member gap on its input record before the consumer creates an output", async () => {
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic consumer seller",
+    });
+    const consumer = defineReconciler<null>({
+      scope: "fixture.vendorConsumer",
+      lane: "money",
+      version: 1,
+      reads: [source.table(vendor, ["name", "deletedAt"])],
+      writes: [],
+      async load(reads, keys) {
+        await reads.rows(vendor, keys);
+        return new Map(keys.map((key) => [key, null]));
+      },
+      reconcile(_input, c) {
+        c.gap.decision("a reviewed identity");
+        return c.done();
+      },
+    });
+    const capability = {
+      entity: "vendor",
+      owning: null,
+      scopes: [consumer.scope],
+      fields: false,
+      quality: false,
+    } as const;
+    const kernel = createKernel([
+      defineModule({
+        name: "consumer",
+        reconcilers: [consumer],
+        machinery: [capability],
+      }),
+    ]);
+    await kernel.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [seller.id],
+      columns: ["name"],
+      discovers: [{ kind: consumer.scope, key: seller.id }],
+    });
+    await settle(kernel);
+    const read = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: "vendor",
+      id: seller.id,
+    });
+    expect(read).toMatchObject({ stage: "needs_you", nextActor: "you" });
+    expect(read.scopes.map((scope) => scope.kind)).toEqual([consumer.scope]);
+    expect(
+      (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
+    ).toMatchObject({ stage: "needs_you", firstGap: "a reviewed identity" });
+    expect((await kernel.needsYou(ctx.db)).items).toEqual([
+      expect.objectContaining({
+        entity: "vendor",
+        shortcode: seller.shortcode,
+        firstGap: "a reviewed identity",
+      }),
+    ]);
+  });
+
   it("resolves ledger-party evidence owners once per batch and hides unresolved owners", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic evidence owner",
@@ -669,6 +757,11 @@ describe("evidence-facts kernel", () => {
       .update(ledgerParty)
       .set({ userId: null })
       .where(eq(ledgerParty.id, party.id));
+    expect(
+      own.scopes.some(
+        (scope) => scope.kind === CATEGORY_SCOPE && scope.key === booked!.id,
+      ),
+    ).toBe(true);
     const hidden = await kernel.machinery(ctx.db, ctx.actor, {
       entity: PURCHASE_TABLE,
       id: booked!.id,
@@ -738,10 +831,7 @@ describe("evidence-facts kernel", () => {
       { kind: PURCHASE_SCOPE, key: "ORD-C" },
     ]);
 
-    expect(outcomes.map((outcome) => outcome.status)).toEqual([
-      "conflict",
-      "waiting",
-    ]);
+    expect(outcomes.map((outcome) => outcome.status)).toEqual(["waiting"]);
     expect(storedDuringRerun).toBe(0);
     const [stored] = await purchases(ctx.db);
     expect(stored?.amountMinor).toBe(900);
@@ -1249,6 +1339,77 @@ describe("evidence-facts kernel", () => {
     expect(calls).toBe(1);
   });
 
+  it("reports the final outcome once when a synchronous batch invalidates a sibling scope", async () => {
+    const { kernel } = kernelWith();
+    await kernel.append(ctx.db, [
+      charge("ORD-BATCH-A", 100),
+      charge("ORD-BATCH-B", 200),
+    ]);
+    const outcomes = await kernel.reconcileNow(ctx.db, [
+      { kind: PURCHASE_SCOPE, key: "ORD-BATCH-A" },
+      { kind: PURCHASE_SCOPE, key: "ORD-BATCH-B" },
+    ]);
+    expect(outcomes).toHaveLength(2);
+    expect(outcomes.map((outcome) => outcome.status)).not.toContain("conflict");
+    expect(await purchases(ctx.db)).toHaveLength(2);
+  });
+
+  it("refreshes gaps and dependencies when a version sweep leaves records unchanged", async () => {
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic rules-only input",
+    });
+    const scope = { kind: "fixture.ruleMetadata", key: seller.id };
+    const module = (version: number) =>
+      defineModule({
+        name: "ruleMetadata",
+        reconcilers: [
+          defineReconciler<null>({
+            scope: scope.kind,
+            lane: "money",
+            version,
+            reads: [source.table(vendor, ["name"])],
+            writes: [],
+            async load(reads, keys) {
+              if (version > 1) await reads.rows(vendor, keys);
+              return new Map(keys.map((key) => [key, null]));
+            },
+            reconcile(_input, c) {
+              if (version > 1) c.gap.decision("a reviewed current rule");
+              return c.done();
+            },
+          }),
+        ],
+      });
+    const first = createKernel([module(1)]);
+    await first.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [seller.id],
+      columns: ["name"],
+      discovers: [scope],
+    });
+    await settle(first);
+    const next = createKernel([module(2)]);
+    await settle(next);
+    const state = await repositoryQueries(ctx.db).execute<{
+      version: number;
+      stage: string;
+      firstGap: string;
+      key: string;
+    }>(sql`
+      SELECT s.version, s.stage, s."firstGap", d.key FROM "ScopeState" s JOIN "ScopeDep" d USING ("scopeKind", "scopeKey")
+      WHERE s."scopeKind" = ${scope.kind} AND s."scopeKey" = ${scope.key}`);
+    expect(state.rows).toContainEqual(
+      expect.objectContaining({
+        version: 2,
+        stage: "needs_you",
+        firstGap: "a reviewed current rule",
+        key: `row:Vendor:${seller.id}`,
+      }),
+    );
+    expect(await dirtyCount(ctx.db)).toBe(0);
+    expect(await repositoryQueries(ctx.db).select().from(drift)).toEqual([]);
+  });
+
   it("turns a version change alone into a Drift proposal, not a record change", async () => {
     const { kernel } = kernelWith();
     await kernel.append(ctx.db, [
@@ -1374,15 +1535,22 @@ describe("evidence-facts kernel", () => {
       costType: "materials",
       purchaseId: parent.id,
     });
-    const detached = await repositoryTransactionDatabase(ctx.db, (tx) =>
-      repointOwnedReference(tx, {
+    const detached = await repositoryTransactionDatabase(ctx.db, async (tx) => {
+      const count = await repointOwnedReference(tx, {
         table: expense,
         column: "purchaseId",
         fromIds: [parent.id],
         toId: null,
         liveOnly: true,
-      }),
-    );
+      });
+      const probe = await repositoryTransactionDatabase(ctx.db, (other) =>
+        repositoryQueries(other).execute<{ acquired: boolean }>(
+          sql`SELECT pg_try_advisory_xact_lock(hashtextextended('cubby:household-write', 0)) AS acquired`,
+        ),
+      );
+      expect(probe.rows[0]?.acquired).toBe(false);
+      return count;
+    });
     expect(detached).toBe(1);
     expect(
       (

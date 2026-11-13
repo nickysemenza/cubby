@@ -21,7 +21,6 @@ import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sq
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   financialTransactionAllocation,
-  financialTransaction,
   inventoryEntry,
   purchase,
   expense,
@@ -29,6 +28,7 @@ import {
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { updateBankTransactions } from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   previewFinancialSpending,
@@ -299,10 +299,11 @@ describe("settlement from retained order evidence", () => {
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: pending.id, purchaseId, amount: 27 },
     ]);
-    await getDb(ctx.db)
-      .update(financialTransaction)
-      .set({ status: "posted" })
-      .where(eq(financialTransaction.id, pending.id));
+    await updateBankTransactions(
+      ctx.db,
+      [{ id: pending.id, values: { status: "posted" } }],
+      ctx.actor,
+    );
     await settleRetained();
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: pending.id, purchaseId, amount: 27 },

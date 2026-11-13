@@ -73,6 +73,7 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
   entity: K,
   inputs: readonly Omit<InferInsertModel<Table<K>>, "id" | "shortcode">[],
   actor: ActorContext = systemActor(),
+  options: { basis?: "manual" | "decision" } = {},
 ): Promise<Saved<K>[]> {
   if (!inputs.length) return [];
   return withTransaction(
@@ -116,40 +117,52 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
           values: jsonValues(values),
         };
       });
-      await append(
-        database,
-        entries.map((entry) =>
-          evidenceRow(manualTransactionEvidence, {
-            id: entry.id,
-            entity,
-            userId: actor.userId,
-            payload: {
-              purchaseEvent: entry.key,
-              table: target.name,
-              naturalKey: entry.naturalKey,
-              values: entry.values,
-            },
-          }),
-        ),
-      );
-      const accepted = await repositoryQueries(database)
-        .select({ key: evidenceBinding.scopeKey })
-        .from(evidenceBinding)
-        .where(
-          and(
-            eq(evidenceBinding.scopeKind, "purchaseEvent"),
-            eq(evidenceBinding.basis, "baseline"),
-            inArray(
-              evidenceBinding.scopeKey,
-              entries.map((entry) => entry.key),
-            ),
+      const decidedCreation =
+        options.basis === "decision" ||
+        entity === "FinancialTransactionAllocation" ||
+        entity === "ExpenseAttribution" ||
+        actor.channel === "system";
+      if (!decidedCreation)
+        await append(
+          database,
+          entries.map((entry) =>
+            evidenceRow(manualTransactionEvidence, {
+              id: entry.id,
+              entity,
+              userId: actor.userId,
+              payload: {
+                purchaseEvent: entry.key,
+                table: target.name,
+                naturalKey: entry.naturalKey,
+                values: entry.values,
+              },
+            }),
           ),
         );
+      const accepted = parents.some((parent) => !parent.minted)
+        ? await repositoryQueries(database)
+            .select({ key: evidenceBinding.scopeKey })
+            .from(evidenceBinding)
+            .where(
+              and(
+                eq(evidenceBinding.scopeKind, "purchaseEvent"),
+                eq(evidenceBinding.basis, "baseline"),
+                inArray(
+                  evidenceBinding.scopeKey,
+                  entries.map((entry) => entry.key),
+                ),
+              ),
+            )
+        : [];
       await decide(
         database,
         actor,
         entries
-          .filter((entry) => accepted.some((scope) => scope.key === entry.key))
+          .filter(
+            (entry) =>
+              decidedCreation ||
+              accepted.some((scope) => scope.key === entry.key),
+          )
           .map((entry) => ({
             channel: "assignment",
             kind: "set",
@@ -397,8 +410,15 @@ export async function createPurchaseEventRecord<K extends PurchaseEventTable>(
   entity: K,
   values: Omit<InferInsertModel<Table<K>>, "id" | "shortcode">,
   actor: ActorContext = systemActor(),
+  options: { basis?: "manual" | "decision" } = {},
 ): Promise<Saved<K>> {
-  const [row] = await createPurchaseEventRecords(db, entity, [values], actor);
+  const [row] = await createPurchaseEventRecords(
+    db,
+    entity,
+    [values],
+    actor,
+    options,
+  );
   return row!;
 }
 
@@ -416,4 +436,31 @@ export async function insertPurchaseEventRows<K extends PurchaseEventTable>(
     "id" | "shortcode"
   >[];
   return createPurchaseEventRecords(db, entity, rows, actor);
+}
+
+/** Removing an authored split is a rejection, so replay cannot resurrect it. */
+export async function rejectPurchaseEventWhere<K extends PurchaseEventTable>(
+  db: Database | DrizzleTransaction,
+  entity: K,
+  where: SQL | undefined,
+  actor: ActorContext = systemActor(),
+): Promise<void> {
+  const database = isTransaction(db) ? databaseForTransaction(db) : db;
+  const { purchaseEventTables } =
+    await import("~/server/domains/financial-transaction/repo/purchase-event-records");
+  const { table, target } = purchaseEventTables[entity];
+  const rows = await repositoryQueries(database)
+    .select({ id: table.id })
+    .from(table)
+    .where(where);
+  const { decide, recordSubject } = await import("~/server/kernel/api");
+  await decide(
+    database,
+    actor,
+    rows.map((row) => ({
+      channel: "rejection",
+      kind: "reject",
+      subject: recordSubject(target.entity ?? target.name, row.id),
+    })),
+  );
 }

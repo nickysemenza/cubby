@@ -49,7 +49,12 @@ import {
   settleFailure,
   type ClaimedScope,
 } from "./claim";
-import { computeBatch, recordEntity, type Computed } from "./compute";
+import {
+  computeBatch,
+  recordEntity,
+  usedInputs,
+  type Computed,
+} from "./compute";
 import type {
   ColumnRef,
   ColumnValues,
@@ -287,25 +292,6 @@ async function scopeAsks(q: Q, scope: ScopeRef): Promise<AskCondition[]> {
     WHERE s."scopeKind" = ${scope.kind} AND s."scopeKey" = ${scope.key}`);
   return result.rows;
 }
-
-/** The inputs the scope used, in the order it used them, for the machinery read. */
-const usedInputs = (computed: Computed) => [
-  ...computed.facts.map((fact) => ({ kind: "evidence" as const, fact })),
-  ...computed.decisions.map((decision) => ({
-    kind: "decision" as const,
-    id: decision.id,
-    subject: decision.subject,
-  })),
-  ...computed.answers.map((answer) => ({
-    kind: "answer" as const,
-    inputHash: answer.inputHash,
-  })),
-  ...computed.missing.map((missing) => ({
-    kind: "answer" as const,
-    inputHash: missing.inputHash,
-    missing: true,
-  })),
-];
 
 /**
  * Apply one computed scope inside the caller's transaction. Throws

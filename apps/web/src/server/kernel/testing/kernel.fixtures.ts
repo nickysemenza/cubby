@@ -145,6 +145,7 @@ export type FixtureHooks = {
   predicateReceipts?: boolean;
   linked?: boolean;
   linkedDecision?: boolean;
+  onRemove?: () => Promise<void>;
   disagreement?: () => string | null;
   /** Runs inside each `load`, before it reads; tests mutate inputs here. */
   onLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
@@ -189,6 +190,17 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     ["orderRef", "amountMinor", "merchant", "receiptId"],
     {
       discovers: (row) => [{ kind: CATEGORY_SCOPE, key: row.id }],
+      ...(hooks.onRemove
+        ? {
+            remove: async (tx: Database, ids: readonly string[]) => {
+              await hooks.onRemove!();
+              await repositoryQueries(tx)
+                .update(fixturePurchase)
+                .set({ deletedAt: new Date() })
+                .where(inArray(fixturePurchase.id, [...ids]));
+            },
+          }
+        : {}),
       // The absorbed purchase is retired; the kernel settles who owns the survivor.
       merge: async (tx, { loserIds }) => {
         await repositoryQueries(tx)
@@ -438,6 +450,7 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         {
           entity: PURCHASE_TABLE,
           owning: PURCHASE_SCOPE,
+          scopes: [CATEGORY_SCOPE],
           fields: false,
           quality: false,
         },

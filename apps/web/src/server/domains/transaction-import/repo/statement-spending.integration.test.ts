@@ -1,18 +1,28 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { statementDecisionInput } from "@cubby/schemas/statement-decision";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { eq, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
+import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { evidenceBinding, drift } from "~/server/db/kernel-schema";
+import {
+  expense,
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import {
   financialAccount as financialAccountTable,
   purchase as purchaseTable,
@@ -21,9 +31,12 @@ import {
   sourceOccurrence,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
+import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
@@ -35,12 +48,15 @@ import {
 } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { insertManyWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { buildCrudServices } from "~/server/http/request-context";
+import { emitWrites, machinery } from "~/server/kernel/api";
 import { decide, reconcileNow } from "~/server/kernel/api";
+import { productionKernel } from "~/server/kernel/kernel";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {
@@ -140,29 +156,19 @@ describe("statement spending review and re-import", () => {
   }
   it("books a statement charge with stable linked records through the kernel", async () => {
     const setup = await fixture("kernel-charge-one");
-    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
-    await decide(ctx.db, ctx.actor, [
-      {
-        channel: "assignment",
-        kind: "set",
-        subject: `bank:${occurrence!.id}`,
-        field: "kind",
-        value: "purchase",
-        scopes: [{ kind: "bankEvent", key: occurrence!.id }],
-      },
-      {
-        channel: "assignment",
-        kind: "set",
-        subject: `bank:${occurrence!.id}`,
-        field: "accountId",
-        value: setup.account.output.id,
-        scopes: [{ kind: "bankEvent", key: occurrence!.id }],
-      },
-    ]);
-    const bank = await reconcileNow(ctx.db, [
-      { kind: "bankEvent", key: occurrence!.id },
-    ]);
-    expect(bank[0]?.status).toBe("applied");
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const applied = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action: "book", kindOverride: "purchase" },
+      }),
+    );
+    expect(applied.status).toBe("applied");
     const transactions = await getDb(
       ctx.db,
     ).query.financialTransaction.findMany();
@@ -185,7 +191,10 @@ describe("statement spending review and re-import", () => {
       costMinor: "4250",
       amountMinor: "4250",
     });
+    const ledgerBeforeReplay = await ledgerRows();
+    await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
     await reconcileNow(ctx.db, [scope]);
+    expect(await ledgerRows()).toEqual(ledgerBeforeReplay);
     const after = await getDb(ctx.db).execute<{
       id: string;
       expense: string;
@@ -197,6 +206,376 @@ describe("statement spending review and re-import", () => {
     );
     expect(after.rows).toEqual(before.rows);
   });
+  const applyKernelCharge = async (
+    setup: Awaited<ReturnType<typeof fixture>>,
+    action: "create" | "book" = "book",
+  ) => {
+    const [row] = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    return decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: row!.shortcode,
+        accountId: setup.account.output.id,
+        application: { action, kindOverride: "purchase" },
+      }),
+    );
+  };
+  const ledgerRows = async () => ({
+    transactions: await getDb(ctx.db).select().from(financialTransaction),
+    purchases: await getDb(ctx.db).select().from(purchaseTable),
+    expenses: await getDb(ctx.db).select().from(expense),
+    allocations: await getDb(ctx.db)
+      .select()
+      .from(financialTransactionAllocation),
+  });
+  it("retains a statement rejection through a kernel replay", async () => {
+    const setup = await fixture("kernel-reject");
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const result = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        application: { action: "reject" },
+      }),
+    );
+    expect(result.status).toBe("rejected");
+    await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: observation!.occurrenceId },
+    ]);
+    expect(await ledgerRows()).toEqual({
+      transactions: [],
+      purchases: [],
+      expenses: [],
+      allocations: [],
+    });
+    expect(setup.recorded).toBeDefined();
+  });
+  it("attaches statement evidence to the older reviewed bank event", async () => {
+    const setup = await fixture("kernel-attach");
+    const target = await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: setup.account.output.id,
+      amount: 42.5,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-05-04",
+      transactionDate: "2026-05-04",
+      merchant: "Synthetic Orchard",
+    });
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const result = await decideStatement(
+      ctx.db,
+      ctx.actor,
+      statementDecisionInput.parse({
+        observationId: observation!.shortcode,
+        accountId: setup.account.output.id,
+        application: {
+          action: "attach",
+          kindOverride: "purchase",
+          transactionId: target.output.id,
+          fields: ["amount", "status"],
+        },
+      }),
+    );
+    expect(result.transactionId).toBe(target.output.id);
+    const live = (await ledgerRows()).transactions.filter(
+      (row) => row.deletedAt === null,
+    );
+    expect(live).toHaveLength(1);
+    expect(live[0]?.shortcode).toBe(target.output.id);
+    expect(
+      (await getDb(ctx.db).select().from(sourceOccurrence))[0]
+        ?.acceptedTransactionId,
+    ).toBe(live[0]?.id);
+  });
+  it("keeps an ambiguous kernel charge unbooked until a same decision", async () => {
+    const setup = await fixture("kernel-ambiguous");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const purchase = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller!.shortcode,
+      date: "2026-05-04",
+    });
+    await createRepoIdentity(ctx, "expense", {
+      name: "Synthetic accepted receipt",
+      purchaseId: purchase.output.id,
+      date: "2026-05-04",
+      cost: 42.5,
+      lineKind: "principal",
+      costType: "materials",
+      trade: "other",
+    });
+    const applied = await applyKernelCharge(setup);
+    expect(applied.status).toBe("waiting");
+    const [transaction] = await getDb(ctx.db)
+      .select()
+      .from(financialTransaction);
+    expect(
+      await getDb(ctx.db).select().from(financialTransactionAllocation),
+    ).toHaveLength(0);
+    const read = await machinery(ctx.db, ctx.actor, {
+      entity: "financialTransaction",
+      id: transaction!.id,
+    });
+    const action = read.gaps.items
+      .flatMap((gap) => gap.actions)
+      .find((action) => action.kind === "same");
+    expect(action).toBeDefined();
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "identity",
+        kind: "same",
+        subject: action!.subject,
+        field: action!.field,
+      },
+    ]);
+    const result = await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: transaction!.id },
+    ]);
+    expect(result[0]?.gaps).toEqual([]);
+    const rows = await ledgerRows();
+    expect(rows.purchases).toHaveLength(1);
+    expect(rows.expenses).toHaveLength(1);
+    expect(rows.allocations).toHaveLength(1);
+    expect(rows.allocations[0]?.amountMinor).toBe(4250n);
+  });
+  it("honours a recorded split when its kernel charge is rerun", async () => {
+    const setup = await fixture("kernel-split");
+    const [seller] = await getDb(ctx.db)
+      .select()
+      .from(vendorTable)
+      .where(eq(vendorTable.name, "Synthetic Orchard"));
+    const purchases = [];
+    for (const [index, cost] of [25, 17.5].entries()) {
+      const purchase = await createRepoIdentity(ctx, "purchase", {
+        vendorId: seller!.shortcode,
+        date: "2026-05-04",
+      });
+      await createRepoIdentity(ctx, "expense", {
+        name: `Synthetic split ${index}`,
+        purchaseId: purchase.output.id,
+        date: "2026-05-04",
+        cost,
+        lineKind: "principal",
+        costType: "materials",
+        trade: "other",
+      });
+      purchases.push(purchase.output.id);
+    }
+    const applied = await applyKernelCharge(setup, "create");
+    await updateFinancialTransaction(
+      ctx.db,
+      applied.transactionId!,
+      {
+        allocations: [
+          { purchaseId: purchases[0]!, amount: 25 },
+          { purchaseId: purchases[1]!, amount: 17.5 },
+        ],
+      },
+      ctx.actor,
+    );
+    const before = await ledgerRows();
+    const outcome = await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
+    ]);
+    expect(outcome[0]?.gaps).toEqual([]);
+    expect(await ledgerRows()).toEqual(before);
+    expect(before.allocations.map((row) => row.amountMinor).sort()).toEqual([
+      1750n,
+      2500n,
+    ]);
+  });
+  it("preserves a member Expense category decision through kernel recomputation", async () => {
+    const setup = await fixture("kernel-category");
+    await applyKernelCharge(setup);
+    const before = await ledgerRows();
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", before.expenses[0]!.shortcode),
+      { spendingCategoryId: setup.advice.spendingCategoryId },
+      ctx.actor,
+    );
+    const saved = (await ledgerRows()).expenses[0]!;
+    expect(saved.spendingCategoryId).not.toBeNull();
+    await reconcileNow(ctx.db, [
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
+    ]);
+    expect((await ledgerRows()).expenses[0]).toEqual(saved);
+  });
+  it("writes no ledger rows when a kernel baseline disagrees with a revised statement", async () => {
+    const setup = await fixture("kernel-baseline");
+    await applyKernelCharge(setup);
+    const before = await ledgerRows();
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await getDb(ctx.db)
+      .insert(evidenceBinding)
+      .values([
+        {
+          factKind: "sourceOccurrence",
+          factId: occurrence!.id,
+          eventKey: before.transactions[0]!.id,
+          basis: "baseline",
+          scopeKind: "bankEvent",
+          scopeKey: occurrence!.id,
+        },
+        {
+          factKind: "statementObservation",
+          factId: occurrence!.currentObservationId!,
+          eventKey: before.purchases[0]!.id,
+          basis: "baseline",
+          scopeKind: "purchaseEvent",
+          scopeKey: before.transactions[0]!.id,
+        },
+      ]);
+    await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        ...setup.input,
+        import: {
+          ...setup.input.import,
+          fingerprint: "synthetic-kernel-baseline-revision",
+          observedAt: "2026-06-01T00:00:00Z",
+        },
+        rows: setup.input.rows.map((row) => ({ ...row, providerAmount: -50 })),
+      }),
+      ctx.actor,
+    );
+    const revisions = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord);
+    const revision = revisions.find((row) => row.providerAmount === -5000n)!;
+    await getDb(ctx.db)
+      .update(sourceOccurrence)
+      .set({ currentObservationId: revision.id, reviewState: "ready" })
+      .where(eq(sourceOccurrence.id, occurrence!.id));
+    await emitWrites(ctx.db, {
+      table: sourceOccurrence,
+      ids: [occurrence!.id],
+      columns: ["currentObservationId", "reviewState"],
+    });
+    const result = await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: occurrence!.id },
+      { kind: "purchaseEvent", key: before.transactions[0]!.id },
+    ]);
+    expect(result.some((outcome) => outcome.error)).toBe(false);
+    expect(await ledgerRows()).toEqual(before);
+    const proposals = await getDb(ctx.db).select().from(drift);
+    expect(
+      proposals.some(
+        (row) =>
+          row.scopeKind === "bankEvent" && row.scopeKey === occurrence!.id,
+      ),
+    ).toBe(true);
+  });
+  it.each([1, 8, 32])(
+    "settles %i new statement charges through the kernel within its statement budget",
+    async (count) => {
+      const owner = await createRepoIdentity(ctx, "ledgerParty", {
+        name: "Synthetic budget member",
+        kind: "member",
+      });
+      const account = await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic budget card",
+        identity: { kind: "credit_card", network: "visa" },
+        ledgerPartyId: owner.output.id,
+      });
+      const merchants = Array.from(
+        { length: count },
+        (_, index) => `Synthetic budget merchant ${index}`,
+      );
+      await insertManyWithShortcode(
+        ctx.db,
+        "vendor",
+        merchants.map((name) => ({ name })),
+      );
+      await recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            source: "monarch",
+            label: "Synthetic kernel budget",
+            fingerprint: `kernel-budget-${count}`,
+            observedAt: "2026-05-05T00:00:00Z",
+          },
+          rows: merchants.map((merchant, index) => ({
+            providerTransactionId: `synthetic-kernel-budget-${index}`,
+            providerAccountId: "synthetic-budget-account",
+            accountDescriptor: "Synthetic budget card",
+            statementDate: "2026-05-04",
+            providerAmount: -10,
+            providerStatus: "posted",
+            merchant,
+            rawDescription: merchant,
+            sourceCategory: "Groceries",
+            rowPosition: index + 1,
+          })),
+        }),
+        ctx.actor,
+      );
+      const occurrences = await getDb(ctx.db).select().from(sourceOccurrence);
+      await decide(
+        ctx.db,
+        ctx.actor,
+        occurrences.flatMap((row) => [
+          {
+            channel: "assignment",
+            kind: "set",
+            subject: `bank:${row.id}`,
+            field: "accountId",
+            value: account.output.id,
+            scopes: [{ kind: "bankEvent", key: row.id }],
+          },
+          {
+            channel: "assignment",
+            kind: "set",
+            subject: `bank:${row.id}`,
+            field: "kind",
+            value: "purchase",
+            scopes: [{ kind: "bankEvent", key: row.id }],
+          },
+        ]),
+      );
+      const kernel = await productionKernel();
+      const measured = await withDatabaseOperationMetrics(async (metrics) => {
+        await expectStatementBudget(
+          () => kernel.run(ctx.db, { budgetMs: 20_000 }),
+          { statements: 2_000 + 400 * count, parameters: 65_535 },
+        );
+        return {
+          charges: count,
+          statements: metrics.queryCount,
+          parameters: metrics.queryMaxParameterCount,
+        };
+      });
+      console.log("statement-kernel-budget", JSON.stringify(measured));
+      const totals = await getDb(ctx.db).execute<{
+        purchases: number;
+        expenses: number;
+        allocations: number;
+        cost: string;
+        allocated: string;
+      }>(sql`SELECT
+      (SELECT count(*)::int FROM "Purchase" WHERE "deletedAt" IS NULL) purchases,
+      (SELECT count(*)::int FROM "Expense" WHERE "deletedAt" IS NULL) expenses,
+      (SELECT count(*)::int FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocations,
+      (SELECT sum("costMinor")::text FROM "Expense" WHERE "deletedAt" IS NULL) cost,
+      (SELECT sum("amountMinor")::text FROM "FinancialTransactionAllocation" WHERE "deletedAt" IS NULL) allocated`);
+      expect(totals.rows[0]).toEqual({
+        purchases: count,
+        expenses: count,
+        allocations: count,
+        cost: String(count * 1000),
+        allocated: String(count * 1000),
+      });
+    },
+  );
   const total = async () =>
     Number(
       (

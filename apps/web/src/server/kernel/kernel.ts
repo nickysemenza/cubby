@@ -172,7 +172,7 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   return {
     registry: bound,
     machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
-    needsYou: readNeedsYou,
+    needsYou: (db, options) => readNeedsYou(db, bound, options),
     runWork: (db, runId) => readRunWork(db, bound, runId),
     async append(db, rows, options) {
       const facts = await append(db, bound, rows, options);
@@ -180,7 +180,26 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       return facts;
     },
     async decide(db, actor, decisions, writers) {
-      const refs = await decide(db, bound, actor, decisions, writers);
+      const moneyEntities = new Set(
+        [...bound.reconcilers.values()]
+          .filter((reconciler) => reconciler.lane === "money")
+          .flatMap((reconciler) =>
+            reconciler.writes.map((target) => target.entity ?? target.name),
+          ),
+      );
+      const removesMoney = decisions.some(
+        (decision) =>
+          decision.channel === "rejection" &&
+          decision.kind === "reject" &&
+          moneyEntities.has(
+            decision.subject.slice(0, decision.subject.indexOf(":")),
+          ),
+      );
+      const refs = removesMoney
+        ? await householdWrite(db, (tx) =>
+            decide(tx, bound, actor, decisions, writers),
+          )
+        : await decide(db, bound, actor, decisions, writers);
       if (refs.length) await wakeAfterCommit(db);
       return refs;
     },
@@ -308,7 +327,19 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
       approveDriftClass(db, bound, actor, kind),
     startPass,
     repointOwnedReference: (tx, request) =>
-      repointOwnedReference(tx, bound, request),
+      [...bound.reconcilers.values()].some(
+        (reconciler) =>
+          reconciler.lane === "money" &&
+          reconciler.writes.some(
+            (target) =>
+              target.table === request.table &&
+              target.columns.includes(request.column),
+          ),
+      )
+        ? householdWrite(tx, (gated) =>
+            repointOwnedReference(gated, bound, request),
+          )
+        : repointOwnedReference(tx, bound, request),
     listRows: (db, capability, ids) =>
       loadMachineryRows(db, bound, capability, ids),
     run: (db, options) => runKernel(db, bound, options),

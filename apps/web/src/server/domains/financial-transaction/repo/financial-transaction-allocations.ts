@@ -15,6 +15,7 @@ import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, touchUpdatedAt } from "~/server/db/helpers";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
+import { rejectPurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createAppError } from "~/server/errors/app-error";
@@ -272,6 +273,7 @@ export async function writeAllocationSets(
       tx,
       "FinancialTransactionAllocation",
       inserts,
+      actor,
     );
 }
 
@@ -289,19 +291,19 @@ async function writeChangedAllocations(
   const removed = existing.filter((row) => !nextByPurchase.has(row.purchaseId));
 
   if (removed.length > 0)
-    await tx
-      .update(financialTransactionAllocation)
-      .set({ deletedAt: new Date() })
-      .where(
-        and(
-          eq(financialTransactionAllocation.transactionId, transactionId),
-          inArray(
-            financialTransactionAllocation.purchaseId,
-            removed.map((row) => row.purchaseId),
-          ),
-          notDeleted(financialTransactionAllocation),
+    await rejectPurchaseEventWhere(
+      tx,
+      "FinancialTransactionAllocation",
+      and(
+        eq(financialTransactionAllocation.transactionId, transactionId),
+        inArray(
+          financialTransactionAllocation.purchaseId,
+          removed.map((row) => row.purchaseId),
         ),
-      );
+        notDeleted(financialTransactionAllocation),
+      ),
+      actor,
+    );
 
   const existingByPurchase = new Map(
     existing.map((row) => [row.purchaseId, row]),

@@ -144,3 +144,58 @@ END $$;
 
 --> statement-breakpoint
 DROP TABLE cubby_purchase_event_seed;
+
+--> statement-breakpoint
+WITH retained AS (
+  SELECT s."updatedAt", a.*
+  FROM "Suggestion" s CROSS JOIN LATERAL (VALUES
+    ('merchant-identity', '2026-11-13.1', 'merchant-identity.v1', s.data->'answers'->'merchant'->'identity'),
+    ('merchant-identity-support', '2026-11-13.1', 'merchant-identity-support.v1', s.data->'answers'->'merchant'->'support'),
+    ('loan-escrow-disbursement', '2026-11-12.1', 'loan-escrow-disbursement.v1', s.data->'answers'->'escrow')
+  ) a(feature, version, revision, answer)
+  WHERE s.family = 'statement_transaction' AND jsonb_typeof(a.answer->'input') = 'object'
+    AND a.answer->'versions'->>a.feature = a.version
+), envelopes AS (
+  SELECT *, jsonb_build_object('feature', feature, 'producer', 'model', 'tier', NULL, 'model', NULL,
+    'outputRevision', revision, 'parameters', NULL, 'promptVersion', version, 'input', answer->'input') AS envelope
+  FROM retained
+), hashed AS (
+  SELECT *, encode(sha256(convert_to(pg_temp.cubby_kernel_canonical(envelope), 'UTF8')), 'hex') AS hash FROM envelopes
+)
+INSERT INTO "Answer" ("inputHash", feature, producer, "promptVersion", output, model, raw, "createdAt")
+SELECT DISTINCT ON (hash) hash, feature, 'model', version, answer->'value', answer->'models'->>0, answer::text, "updatedAt"
+FROM hashed ORDER BY hash, "updatedAt" DESC
+ON CONFLICT ("inputHash") DO NOTHING;
+
+--> statement-breakpoint
+WITH raw_values AS (
+  SELECT 'financialTransaction'::text AS entity, t.id,
+    (to_jsonb(t) - ARRAY['id','shortcode','createdAt','updatedAt','deletedAt','amountMinor','ledgerTransferId','bookingDecisionFingerprint','bookingExpenseFingerprint','bookingCorrectionReceipt'])
+      || jsonb_build_object('amount', t."amountMinor"::text) AS values
+  FROM "FinancialTransaction" t
+  UNION ALL
+  SELECT m.entity, k."entityId", m.payload->'values'
+  FROM "ManualEntry" m JOIN "RecordKey" k ON k."scopeKind" = 'purchaseEvent' AND k.entity = m.entity
+    AND k."naturalKey" = m.payload->>'naturalKey' AND k."scopeKey" = m.payload->>'purchaseEvent'
+  WHERE m.entity IN ('purchase', 'expense')
+), fields AS (
+  SELECT r.entity, r.id, f.key AS field, f.value, a.*
+  FROM raw_values r CROSS JOIN LATERAL jsonb_each(r.values) f
+  JOIN LATERAL (
+    SELECT a.id AS audit_id, a."userId", a.channel, a."oauthClientId", a."runId", a.authority, a."createdAt", a.changes
+    FROM "AuditLog" a WHERE a."entityKind" = r.entity AND a."entityId" = r.id
+      AND (a.action = 'create' OR a.changes ? f.key)
+    ORDER BY a."createdAt" DESC, a.id DESC LIMIT 1
+  ) a ON true
+  WHERE a.authority IS NULL AND a.channel <> 'system' AND a."runId" IS NULL AND a."userId" <> 'cubby-system'
+    AND (f.value <> 'null'::jsonb OR a.changes ? f.key)
+)
+INSERT INTO "Decision" (id, channel, subject, slot, field, kind, value, "actorKind", "actorId", at)
+SELECT md5('money-held:' || entity || ':' || id || ':' || field || ':' || audit_id)::uuid,
+  'assignment', entity || ':' || id, field, field, CASE WHEN value = 'null'::jsonb THEN 'none' ELSE 'set' END, value,
+  CASE WHEN "oauthClientId" IS NULL THEN 'member' ELSE 'agent' END, "userId", "createdAt"
+FROM fields ON CONFLICT (id) DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage)
+SELECT 'purchaseEvent', id::text, 0, '', 'done' FROM "FinancialTransaction"
+ON CONFLICT ("scopeKind", "scopeKey") DO NOTHING;

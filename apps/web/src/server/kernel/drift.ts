@@ -8,6 +8,7 @@
  * difference, files the asks and releases the scope's baseline bindings.
  */
 import type { ActorContext } from "@cubby/schemas/context";
+import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -15,12 +16,13 @@ import type { Database } from "~/server/db/database";
 import { drift } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
+  repositoryTransactionDatabase,
   type RepositoryQueryClient,
 } from "~/server/db/repository-access.boundary";
 
 import { applyComputed } from "./apply";
 import { CLAIM_LEASE_MS, releaseClaim, type ClaimedScope } from "./claim";
-import { computeBatch, type Computed } from "./compute";
+import { computeBatch, usedInputs, type Computed } from "./compute";
 import { decide } from "./decide";
 import {
   definePass,
@@ -34,6 +36,7 @@ import {
   isEmptyDifference,
   type Difference,
 } from "./diff";
+import { lockKeyRevs } from "./dirty";
 import { driftSubject, hashCanonical } from "./keys";
 import type { KernelRegistry } from "./registry";
 import { fromIso, isoText } from "./sql-time";
@@ -101,9 +104,32 @@ async function proposeOrAdvance(
     !computed.missing.length &&
     !computed.desired.disagreements.length
   ) {
-    await q.execute(sql`
-      UPDATE "ScopeState" SET version = ${reconciler.version}, rules = ${reconciler.rules}
-      WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`);
+    const keys = [...computed.keys.keys()].sort();
+    const revisions = await lockKeyRevs(q, keys);
+    if (keys.some((key) => revisions.get(key) !== computed.keys.get(key)))
+      return "skipped";
+    const gaps = computed.desired.gaps;
+    const advanced = await q.execute<{ key: string }>(sql`
+      UPDATE "ScopeState" SET version = ${reconciler.version}, rules = ${reconciler.rules},
+        gaps = ${JSON.stringify(gaps)}::jsonb, inputs = ${JSON.stringify(usedInputs(computed))}::jsonb,
+        stage = ${resolveStage({ ended: false, stuck: false, working: false, gaps })},
+        "nextActor" = ${nextActor(gaps)}, "firstGap" = ${gaps[0]?.input ?? null},
+        "inputsHash" = ${computed.inputsHash}, "durationMs" = ${Math.round(computed.durationMs)},
+        "reconciledAt" = now(), "errorClass" = NULL, error = NULL
+      WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}
+        AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = ${scope.kind} AND d."scopeKey" = ${scope.key})
+      RETURNING "scopeKey" AS key`);
+    if (!advanced.rows.length) return "skipped";
+    await q.execute(
+      sql`DELETE FROM "ScopeDep" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`,
+    );
+    if (keys.length)
+      await q.execute(sql`
+      INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+      SELECT ${scope.kind}, ${scope.key}, value FROM jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb)`);
+    await q.execute(
+      sql`DELETE FROM "Drift" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`,
+    );
     return "advanced";
   }
   await recordDrift(q, computed, diff);
@@ -297,7 +323,9 @@ export async function approveDrift(
       { table: "ScopeDirty", kind: scope.kind, key: scope.key },
       claimed.token,
     );
-    await proposeOrAdvance(q, computed!);
+    await repositoryTransactionDatabase(db, (tx) =>
+      proposeOrAdvance(repositoryQueries(tx), computed!),
+    );
     return "stale";
   }
   const [outcome] = await applyComputed(

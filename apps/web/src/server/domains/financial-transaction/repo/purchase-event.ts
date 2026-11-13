@@ -3,6 +3,12 @@ import {
   financialSpendingCostType,
 } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  statementMerchantIdentityInput,
+  statementMerchantSupportInput,
+  statementEscrowInput,
+} from "@cubby/schemas/statement-answers";
+import { minorToMoney } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -32,6 +38,11 @@ import { decideSpendingCandidates } from "~/server/domains/financial-transaction
 import { spendingCategoryForDiscovery } from "~/server/domains/financial-transaction/policy/spending-category";
 import { spendingBlocker } from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import {
+  merchantIdentityAsk,
+  merchantSupportAsk,
+  escrowAsk,
+} from "~/server/domains/financial-transaction/repo/purchase-asks";
 import {
   allocationRecords,
   attributionRecords,
@@ -242,6 +253,7 @@ export const purchaseEvent = defineReconciler<Input>({
     source.bindings,
   ],
   writes: [...targets, bindingWrites],
+  asks: [merchantIdentityAsk, merchantSupportAsk, escrowAsk],
   async load(reads, keys) {
     const [
       transactions,
@@ -556,7 +568,53 @@ export const purchaseEvent = defineReconciler<Input>({
       typeof value("vendorName") === "string"
         ? String(value("vendorName")).trim()
         : null;
-    const adviceResult = financialSpendingAdvice.safeParse(value("advice"));
+    const spendingSubject = {
+      ...transaction,
+      amount: minorToMoney(transaction.amount),
+    };
+    const rawVendors = input.vendors.filter(
+      (row) =>
+        !row.deletedAt &&
+        [row.name, ...row.aliases].some(
+          (alias) => alias.trim().toLowerCase() === merchant.toLowerCase(),
+        ),
+    );
+    const identityInput = rawVendors.length
+      ? null
+      : statementMerchantIdentityInput(spendingSubject);
+    const identityAnswer = identityInput
+      ? c.answer(merchantIdentityAsk, identityInput, { request: false })
+      : null;
+    const identity =
+      identityAnswer?.status === "answered" ? identityAnswer.output : null;
+    const supportInput =
+      identity && identityInput
+        ? statementMerchantSupportInput(identityInput, identity)
+        : null;
+    const support = supportInput
+      ? c.answer(merchantSupportAsk, supportInput, { request: false })
+      : null;
+    const escrowInput = statementEscrowInput(
+      spendingSubject,
+      account.identity.kind === "loan",
+    );
+    const escrow = escrowInput
+      ? c.answer(escrowAsk, escrowInput, { request: false })
+      : null;
+    const storedAdvice = {
+      vendorName: identity?.name ?? null,
+      vendorConfidence:
+        support?.status === "answered" && support.output
+          ? identity?.confidence
+          : "low",
+      counterparty: identity?.counterparty ?? "unknown",
+      ...(escrow?.status === "answered"
+        ? { escrowDisbursement: escrow.output }
+        : {}),
+    };
+    const adviceResult = financialSpendingAdvice.safeParse(
+      value("advice") ?? storedAdvice,
+    );
     const advice = adviceResult.success ? adviceResult.data : null;
     const cleanName = reviewedName ?? advice?.vendorName ?? merchant;
     const resolve = (name: string) => {
@@ -630,7 +688,18 @@ export const purchaseEvent = defineReconciler<Input>({
         !selected && checked[0]!.some((result) => result.candidates.length > 0),
     });
     if (blocker) {
-      c.gap.decision(blocker);
+      c.gap.decision(blocker, {
+        actions: input.vendors
+          .filter((row) => !row.deletedAt)
+          .map((row) => ({
+            channel: "assignment",
+            kind: "set",
+            subject,
+            field: "vendorId",
+            value: row.shortcode,
+            label: `Use ${row.name}`,
+          })),
+      });
       retained(c);
       return c.done();
     }
@@ -743,6 +812,24 @@ export const purchaseEvent = defineReconciler<Input>({
     ) {
       c.gap.decision(
         "whether this charge and the candidate Purchase are the same or distinct",
+        {
+          actions: unresolved.flatMap((candidate) => [
+            {
+              channel: "identity",
+              kind: "same",
+              subject: identitySubject,
+              field: recordSubject("purchase", candidate.id),
+              label: `Same Purchase: ${candidate.shortcode}`,
+            },
+            {
+              channel: "identity",
+              kind: "distinct",
+              subject: identitySubject,
+              field: recordSubject("purchase", candidate.id),
+              label: `Distinct Purchase: ${candidate.shortcode}`,
+            },
+          ]),
+        },
       );
       retained(c);
       return c.done();
@@ -756,7 +843,18 @@ export const purchaseEvent = defineReconciler<Input>({
       existingTarget?.itemizationExpectation ??
       resolved?.itemizationExpectation;
     if (!existingTarget && waiting === "required" && value("book") !== true) {
-      c.gap.evidence("waiting for order details", "member");
+      c.gap.evidence("waiting for order details", "you", {
+        actions: [
+          {
+            channel: "assignment",
+            kind: "set",
+            subject,
+            field: "book",
+            value: true,
+            label: "Book a lump Expense",
+          },
+        ],
+      });
       retained(c);
       return c.done();
     }

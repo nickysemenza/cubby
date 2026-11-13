@@ -5,6 +5,7 @@ import {
   getSourceTransactionRecordSummary,
   recordSourceTransactionRecords,
 } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { decideStatement } from "~/server/domains/transaction-import/repo/statement-decisions";
 import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
 import { scheduleStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-generation";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -12,6 +13,8 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 export const sourceTransactionRecordHandlers = implementOperationDomain(
   sourceTransactionRecordContract,
   {
+    apply: (context, input) =>
+      decideStatement(context.db, context.actorContext, input),
     previewSuggestion: (context, input) =>
       previewStatementSuggestion(context.db, input),
     record: (context, input) =>

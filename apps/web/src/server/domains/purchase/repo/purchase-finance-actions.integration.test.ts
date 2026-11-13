@@ -1,4 +1,4 @@
-import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { nullableWholeCentToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -12,7 +12,10 @@ import { notDeleted } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
-import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
+  createPurchaseEventRecord,
+  createPurchaseEventRecords,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -43,35 +46,52 @@ describe("split and attach checks against the ledger", () => {
       insertWithShortcode(ctx.db, "vendor", { name: "Synthetic Supply" }),
       insertWithShortcode(ctx.db, "vendor", { name: "Synthetic Other Shop" }),
     ]);
-    const [target, sameVendor, elsewhere] = await Promise.all([
-      createPurchaseEventRecord(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        date: "2026-09-01",
-      }),
-      createPurchaseEventRecord(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        date: "2026-08-01",
-      }),
-      createPurchaseEventRecord(ctx.db, "purchase", {
-        vendorId: otherVendor.id,
-        date: "2026-08-02",
-      }),
-    ]);
-    const make = (name: string, cost: number | null, purchaseId?: PurchaseId) =>
-      createPurchaseEventRecord(ctx.db, "expense", {
-        ...line,
-        name,
-        cost: nullableWholeCentToMinor(cost),
-        purchaseId: purchaseId ?? null,
-      });
-    const [here, free, sibling, foreign, unpriced] = await Promise.all([
-      make("Board on this order", 5, target.id),
-      make("Free board", 12.5),
-      make("Board on another order of this vendor", 0.1, sameVendor.id),
-      make("Board from a different vendor", 0.2, elsewhere.id),
-      make("Unpriced board", null),
-    ]);
-    return { vendor, target, here, free, sibling, foreign, unpriced };
+    const [target, sameVendor, elsewhere] = await createPurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [
+        { vendorId: vendor.id, date: "2026-09-01" },
+        { vendorId: vendor.id, date: "2026-08-01" },
+        { vendorId: otherVendor.id, date: "2026-08-02" },
+      ],
+    );
+    const [here, free, sibling, foreign, unpriced] =
+      await createPurchaseEventRecords(ctx.db, "expense", [
+        {
+          ...line,
+          name: "Board on this order",
+          cost: nullableWholeCentToMinor(5),
+          purchaseId: target!.id,
+        },
+        {
+          ...line,
+          name: "Free board",
+          cost: nullableWholeCentToMinor(12.5),
+          purchaseId: null,
+        },
+        {
+          ...line,
+          name: "Board on another order of this vendor",
+          cost: nullableWholeCentToMinor(0.1),
+          purchaseId: sameVendor!.id,
+        },
+        {
+          ...line,
+          name: "Board from a different vendor",
+          cost: nullableWholeCentToMinor(0.2),
+          purchaseId: elsewhere!.id,
+        },
+        { ...line, name: "Unpriced board", cost: null, purchaseId: null },
+      ]);
+    return {
+      vendor,
+      target: target!,
+      here: here!,
+      free: free!,
+      sibling: sibling!,
+      foreign: foreign!,
+      unpriced: unpriced!,
+    };
   }
 
   it("scopes attach candidates the way the dialog always has", async () => {

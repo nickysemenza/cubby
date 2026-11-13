@@ -112,6 +112,10 @@ async function recordScopes(
         )
       )
         scopes.push({ kind: row.kind, key: row.key });
+  if (!field)
+    for (const kind of capability.scopes ?? [])
+      if (!scopes.some((scope) => scope.kind === kind && scope.key === id))
+        scopes.push({ kind, key: id });
   if (capability.fields)
     scopes.push({ kind: FIELDS_SCOPE, key: recordScopeKey(entity, id) });
   if (capability.quality && !field)
@@ -301,7 +305,20 @@ export async function machinery(
         );
 
       // Inputs, expanded with the viewer's access applied.
-      const refs = scopes.flatMap((scope) => stateOf(scope)?.inputs ?? []);
+      const refs = [
+        ...new Map(
+          scopes
+            .flatMap((scope) => stateOf(scope)?.inputs ?? [])
+            .map((input) => [
+              input.kind === "evidence"
+                ? `evidence:${input.fact.kind}:${input.fact.id}`
+                : input.kind === "answer"
+                  ? `answer:${input.inputHash}`
+                  : `decision:${input.id}`,
+              input,
+            ]),
+        ).values(),
+      ];
       const evidenceIds = new Map<string, string[]>();
       for (const input of refs)
         if (input.kind === "evidence")

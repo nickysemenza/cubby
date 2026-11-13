@@ -327,10 +327,13 @@ describe("reviewed booking category and refund capacity", () => {
       { spendingCategoryId: otherCategory.id },
       eq(expense.id, receiptLine.id),
     );
-    await getDb(ctx.db)
-      .update(purchaseTable)
-      .set({ spendingCategoryId: otherCategory.id })
-      .where(eq(purchaseTable.id, purchase.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { spendingCategoryId: otherCategory.id },
+      eq(purchaseTable.id, purchase.id),
+      ctx.actor,
+    );
     const source = await transaction(25);
     const review = await previewFinancialBooking(
       ctx.db,

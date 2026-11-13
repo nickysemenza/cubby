@@ -22,6 +22,7 @@ import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
+import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 
 import { settleAskOutcome } from "./ask";
 import { askOfSubject, askOutcomes, ASK_OUTCOME_FIELD } from "./ask-gap";
@@ -56,9 +57,18 @@ const actorKind = (actor: ActorContext) =>
       : "member";
 
 /** `entity:id` → its parts; subjects that are not records return null. */
-const recordOf = (subject: string) => {
+const recordOf = (subject: string, registry: KernelRegistry) => {
   const match = /^([A-Za-z][\w-]*):([0-9a-f-]{36})$/u.exec(subject);
-  return match ? { entity: match[1]!, id: match[2]! } : null;
+  if (!match) return null;
+  const entity = match[1]!;
+  return isShortcodeEntity(entity) ||
+    [...registry.reconcilers.values()].some((reconciler) =>
+      reconciler.writes.some(
+        (target) => (target.entity ?? target.name) === entity,
+      ),
+    )
+    ? { entity, id: match[2]! }
+    : null;
 };
 
 /** Whether a registered reconciler owns `entity.field` (a `fields` scope's column, say). */
@@ -148,7 +158,7 @@ export async function decide(
     // they never read before (its first decision).
     const records = stored.flatMap((decision) =>
       [decision.subject, decision.other].flatMap((subject) => {
-        const record = subject ? recordOf(subject) : null;
+        const record = subject ? recordOf(subject, registry) : null;
         return record ? [record] : [];
       }),
     );
@@ -174,7 +184,7 @@ export async function decide(
     }
     for (const decision of stored) {
       discovered.push(...(decision.scopes ?? []));
-      const record = recordOf(decision.subject);
+      const record = recordOf(decision.subject, registry);
       if (decision.channel === "rejection" && record) {
         if (decision.kind === "reject") {
           const owners = await markRejected(q, record.entity, record.id);

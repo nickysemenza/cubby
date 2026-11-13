@@ -26,6 +26,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
@@ -761,9 +762,17 @@ describe("caller-driven purchase import writes", () => {
       {
         shortcode: testShortcode("project", "PRJ-HSHD"),
         name: "Synthetic household purpose",
-        defaultTrade: "building",
       },
     ]);
+    const [householdProject] = await getDb(ctx.db)
+      .select()
+      .from(project)
+      .where(eq(project.shortcode, testShortcode("project", "PRJ-HSHD")));
+    await holdFieldsValues(
+      "project",
+      { defaultTrade: "building" },
+      "update",
+    ).settle(ctx.db, ctx.actor, householdProject!.id);
     const [food] = await getDb(ctx.db)
       .select()
       .from(productCategory)

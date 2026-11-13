@@ -45,6 +45,7 @@ import {
   decisionKey,
   recordSubject,
   rowKey,
+  tableKey,
 } from "./keys";
 import { idColumn, KernelContractError } from "./reads";
 import type { KernelRegistry } from "./registry";
@@ -357,6 +358,7 @@ export async function mergeRecords(
       )
     : [];
   const keys = [
+    tableKey(target.name),
     rowKey(target.name, keepId),
     rowKey(target.name, loserId),
     decisionKey(recordSubject(entity, keepId)),

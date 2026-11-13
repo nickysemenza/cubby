@@ -302,7 +302,8 @@
     "./entity-definitions/problems/view-problems": "./src/entity-definitions/problems/view-problems.ts",
     "./entity-definitions/list-filters": "./src/entity-definitions/list-filters.ts",
     "./entity-definitions/problems/filter-fields": "./src/entity-definitions/problems/filter-fields.ts",
-    "./entity-definitions/problems/problem-actions": "./src/entity-definitions/problems/problem-actions.ts"
+    "./entity-definitions/problems/problem-actions": "./src/entity-definitions/problems/problem-actions.ts",
+    "./statement-decision": "./src/statement-decision.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",

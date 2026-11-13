@@ -281,7 +281,8 @@ same record wins and the scope reruns.
 
 Background money applies yield the gate after 1.5 seconds. A member's write
 uses a 2 second `lock_timeout` and reports a timeout as a retryable wait.
-Evidence appends and decision inserts take no gate; unique constraints on
+Evidence appends and decision inserts take no gate; a rejection that invokes
+a money entity's deletion policy takes the gate before that policy runs; unique constraints on
 source identity decide a race between two writers of the same evidence.
 
 ### 7. Three work forms, one claim
@@ -322,6 +323,9 @@ they held has this owner:
 | Retention and pruning                                            | A `retention` Pass.                                                                                                                                                       |
 | The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                       |
 | Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                        |
+
+Synchronous `reconcileNow` returns one final outcome per requested scope.
+Input-fence conflicts that are retried within the call are intermediate results.
 
 ### 8. Paid producer calls
 
@@ -384,8 +388,11 @@ Stage is not stored on any record. `ScopeState` caches the last computed
 stage and next actor so lists can filter and sort on them through declared SQL
 projections; the reconciler's gaps are the truth.
 
-A record's scopes are its owning scope, its `fields` scope and its `quality`
-scope, in that order. Its stage is the first that applies:
+A record's scopes are its owning scope, the consumer scopes declared by its
+`MachineryCapability.scopes`, its `fields` scope and its `quality` scope, in
+that order. Consumer scopes use the input record UUID as their key, so a
+source or bank event exposes its gaps before a consumer creates an output.
+Machinery deduplicates shared evidence, answers and decisions across scopes. Its stage is the first that applies:
 
 | Stage     | Applies when                                                                   |
 | --------- | ------------------------------------------------------------------------------ |
@@ -455,7 +462,9 @@ inputs changed.
 After a deploy that changes a reconciler `version` or a `promptVersion`, a
 `version.sweep` Pass visits each scope whose `ScopeState.version` is older. It
 computes the desired output from existing answers only and issues no asks.
-With no difference and no missing answer it advances the scope's version.
+With no record difference and no missing answer it advances the scope's
+version and refreshes its gaps, input provenance and dependencies under the
+input revision fence. This metadata refresh creates no dirty work or asks.
 Otherwise it writes a `Drift` proposal: the exact difference, the number of
 asks the change would issue and their estimated cost. Approval is a decision
 bound to the proposal hash, by item or by class; approval applies the
@@ -479,7 +488,9 @@ A new record whose supplied values all cite current Decisions may be added to
 an accepted scope. Creation authority applies to those immutable decision
 values; it does not authorize later changes derived from new observations.
 Reference merge and removal policies use `columnOwner` and
-`repointOwnedReference` for owned foreign keys. Repointing raises table and row
+`repointOwnedReference` for owned foreign keys. The kernel takes the money
+gate for a money-owned reference. Callers take it before acquiring other
+record locks. Repointing raises table and row
 keys, including for scopes whose earlier predicate found no matching row.
 `c.disagree(input)` records unresolved drift when accepted inputs contradict
 one another and no automatic replacement is justified. It applies no records

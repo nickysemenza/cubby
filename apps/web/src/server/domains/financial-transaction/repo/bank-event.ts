@@ -14,7 +14,9 @@ import {
   ledgerParty,
   sourceOccurrence,
   sourceTransactionRecord,
+  vendor,
 } from "~/server/db/schema";
+import { mergeBankEvents } from "~/server/domains/financial-transaction/repo/bank-merge";
 import {
   statementEffectiveMovement,
   statementLoanInput,
@@ -53,6 +55,7 @@ export const bankTransactionWrites = writes(
   ],
   {
     entity: "financialTransaction",
+    merge: mergeBankEvents,
     discovers: (row) => [{ kind: "purchaseEvent", key: row.id }],
   },
 );
@@ -70,8 +73,8 @@ export const statementKindAsk = defineAsk({
 
 type Account = typeof financialAccount.$inferSelect & {
   ledgerParty: typeof ledgerParty.$inferSelect | null;
-  vendorName: null;
-  vendorAliases: null;
+  vendorName: string | null;
+  vendorAliases: string[] | null;
 };
 type BankInput = {
   key: string;
@@ -133,20 +136,21 @@ function deriveBankValues({
         accountKind: resolved.identity.kind,
       })
     : null;
-  const answer = observation
-    ? c.answer(
-        statementKindAsk,
-        {
-          descriptor: observation.rawDescription,
-          merchant: observation.merchant,
-          category: observation.sourceCategory,
-          date: observation.statementDate,
-          amount: minorToMoney(amount),
-          status: observation.providerStatus,
-        },
-        { request: false },
-      )
-    : null;
+  const answer =
+    observation && !kindAssigned
+      ? c.answer(
+          statementKindAsk,
+          {
+            descriptor: observation.rawDescription,
+            merchant: observation.merchant,
+            category: observation.sourceCategory,
+            date: observation.statementDate,
+            amount: minorToMoney(amount),
+            status: observation.providerStatus,
+          },
+          { request: false },
+        )
+      : null;
   const unclassified =
     !manual &&
     rule?.kindSource === "sign" &&
@@ -200,11 +204,13 @@ export const bankEvent = defineReconciler<BankInput>({
     ]),
     source.table(financialAccount, [
       "identity",
+      "providerVendorId",
       "sourceAliases",
       "ledgerPartyId",
       "deletedAt",
     ]),
     source.table(ledgerParty, ["kind", "deletedAt"]),
+    source.table(vendor, ["name", "aliases", "deletedAt"]),
   ],
   writes: [bankTransactionWrites],
   asks: [statementKindAsk],
@@ -213,12 +219,21 @@ export const bankEvent = defineReconciler<BankInput>({
       reads.select(financialAccount, [], notDeleted(financialAccount)),
       reads.select(ledgerParty, [], notDeleted(ledgerParty)),
     ]);
+    const providers = await reads.rows(
+      vendor,
+      accountRows.flatMap((account) =>
+        account.identity.kind === "loan" && account.providerVendorId
+          ? [account.providerVendorId]
+          : [],
+      ),
+    );
     const accounts = accountRows.map((account): Account => ({
       ...account,
       ledgerParty:
         parties.find((party) => party.id === account.ledgerPartyId) ?? null,
-      vendorName: null,
-      vendorAliases: null,
+      vendorName: providers.get(account.providerVendorId ?? "")?.name ?? null,
+      vendorAliases:
+        providers.get(account.providerVendorId ?? "")?.aliases ?? null,
     }));
     return new Map(
       await Promise.all(
@@ -287,13 +302,25 @@ export const bankEvent = defineReconciler<BankInput>({
     const observation = input.observations.find(
       (row) => row.id === owner?.currentObservationId,
     );
-    const manual = input.manual
-      ? financialTransactionCreateInput.parse(input.manual.payload)
-      : null;
+    const manual =
+      input.manual && !input.occurrence
+        ? financialTransactionCreateInput.parse(input.manual.payload)
+        : null;
     const assigned = (field: string) =>
       c.decision("assignment", record, field) ??
-      c.decision("assignment", subject, field);
+      c.decision("assignment", subject, field) ??
+      (owner
+        ? c.decision(
+            "assignment",
+            recordSubject("sourceOccurrence", owner.id),
+            field,
+          )
+        : null);
     const accountDecision = assigned("accountId");
+    if (accountDecision?.kind === "none") {
+      c.gap.decision("the financial account");
+      return retained(c);
+    }
     const decidedAccount =
       typeof accountDecision?.value === "string"
         ? c.reference("financialAccount", accountDecision.value)
@@ -326,6 +353,16 @@ export const bankEvent = defineReconciler<BankInput>({
     if (!resolved || (!observation && !manual)) {
       c.gap.decision(
         resolved ? "the current source observation" : "the financial account",
+        {
+          actions: input.accounts.map((account) => ({
+            channel: "assignment",
+            kind: "set",
+            subject,
+            field: "accountId",
+            value: account.shortcode,
+            label: `Use ${account.name}`,
+          })),
+        },
       );
       return retained(c);
     }

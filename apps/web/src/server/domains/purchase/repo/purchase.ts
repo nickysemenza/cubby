@@ -882,6 +882,7 @@ export async function createPurchases(
         purchaserOverrideId: purchaserIds[index],
       }),
     ),
+    actor,
   );
   // Claim uploaded documents in the insert transaction so failure leaves no pending files.
   for (const [index, row] of created.entries())
@@ -1523,25 +1524,31 @@ export const splitExpense = async (
           purchaseId: chargeId,
           trade: part.trade,
         });
-        const row = await createPurchaseEventRecord(tx, "expense", {
-          name: part.name,
-          cost: nullableWholeCentToMinor(part.cost),
-          date: original.date,
-          economicRole: original.economicRole,
-          spendingCategoryId,
-          bookingTransactionCode: original.bookingTransactionCode,
-          lineBasis: original.lineBasis,
-          lineKind,
-          costType: part.costType,
-          trade: part.trade,
-          url: original.url,
-          notes: part.notes === undefined ? original.notes : part.notes,
-          future: original.future,
-          projectId,
-          productId,
-          productQuantity: part.productQuantity,
-          purchaseId: chargeId,
-        });
+        const row = await createPurchaseEventRecord(
+          tx,
+          "expense",
+          {
+            name: part.name,
+            cost: nullableWholeCentToMinor(part.cost),
+            date: original.date,
+            economicRole: original.economicRole,
+            spendingCategoryId,
+            bookingTransactionCode: original.bookingTransactionCode,
+            lineBasis: original.lineBasis,
+            lineKind,
+            costType: part.costType,
+            trade: part.trade,
+            url: original.url,
+            notes: part.notes === undefined ? original.notes : part.notes,
+            future: original.future,
+            projectId,
+            productId,
+            productQuantity: part.productQuantity,
+            purchaseId: chargeId,
+          },
+          actor,
+          { basis: "decision" },
+        );
         inserted.push(row.id);
       }
       await validateProductPolicy(tx, { expenseIds: inserted });

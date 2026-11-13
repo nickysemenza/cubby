@@ -1,4 +1,3 @@
-import type { ExpenseId } from "@cubby/schemas/identifiers";
 import { nullableWholeCentToMinor } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -7,7 +6,10 @@ import { expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
-import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
+  createPurchaseEventRecord,
+  createPurchaseEventRecords,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import {
   expenseDerivedReadSql,
@@ -89,29 +91,36 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     name: "Synthetic scope project",
     defaultTrade: "other",
   });
-  let firstPurchase;
-  let firstTax: ExpenseId | undefined;
-  for (let index = 0; index < 200; index++) {
-    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
+  const purchaseCount = 32;
+  const purchases = await createPurchaseEventRecords(
+    ctx.db,
+    "purchase",
+    Array.from({ length: purchaseCount }, () => ({
       vendorId: vendor.id,
       defaultProjectId: project.id,
       date: "2026-09-20",
-    });
-    firstPurchase ??= purchase;
-    for (const lineKind of ["principal", "principal", "tax"] as const) {
-      const line = await createPurchaseEventRecord(ctx.db, "expense", {
+    })),
+  );
+  const firstPurchase = purchases[0]!;
+  const lines = await createPurchaseEventRecords(
+    ctx.db,
+    "expense",
+    purchases.flatMap((purchase) =>
+      (["principal", "principal", "tax"] as const).map((lineKind) => ({
         name: "Synthetic scope line",
         purchaseId: purchase.id,
         date: "2026-09-20",
         cost: nullableWholeCentToMinor(lineKind === "tax" ? 0.01 : 1),
         lineKind,
-        costType: "materials",
+        costType: "materials" as const,
         trade: null,
         future: false,
-      });
-      if (lineKind === "tax") firstTax ??= line.id;
-    }
-  }
+      })),
+    ),
+  );
+  const firstTax = lines.find(
+    (line) => line.purchaseId === firstPurchase.id && line.lineKind === "tax",
+  )!.id;
   await unwrapDb(ctx.db).execute(sql`ANALYZE "Expense", "Purchase"`);
   type Node = {
     "Node Type": string;
@@ -137,8 +146,8 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
   };
   const plan = result.rows[0]!["QUERY PLAN"][0]!.Plan;
   visit(plan);
-  expect(plan["Actual Rows"]).toBe(800);
-  expect(cteRowsVisited).toBeLessThan(600 * 20);
+  expect(plan["Actual Rows"]).toBe(purchaseCount * 4);
+  expect(cteRowsVisited).toBeLessThan(purchaseCount * 3 * 20);
   expect(selected.length).toBeGreaterThan(0);
   for (const node of selected)
     expect(node["Plan Rows"]).toBeGreaterThan(node["Actual Rows"] / 4);
@@ -229,7 +238,7 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
     projections,
   );
   expect(combined).toEqual({
-    broad: [{ cents: 40200 }],
+    broad: [{ cents: purchaseCount * 201 }],
     single: [{ cents: 1 }],
   });
   const single = await executeExpenseDerivedBatch(

@@ -859,3 +859,22 @@ function createPure(
     }),
   };
 }
+
+/** The inputs the scope used, in the order it used them, for the machinery read. */
+export const usedInputs = (computed: Computed) => [
+  ...computed.facts.map((fact) => ({ kind: "evidence" as const, fact })),
+  ...computed.decisions.map((decision) => ({
+    kind: "decision" as const,
+    id: decision.id,
+    subject: decision.subject,
+  })),
+  ...computed.answers.map((answer) => ({
+    kind: "answer" as const,
+    inputHash: answer.inputHash,
+  })),
+  ...computed.missing.map((missing) => ({
+    kind: "answer" as const,
+    inputHash: missing.inputHash,
+    missing: true,
+  })),
+];

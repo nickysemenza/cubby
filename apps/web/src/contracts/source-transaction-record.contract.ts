@@ -7,6 +7,10 @@ import {
   sourceTransactionRecordSummaryOut,
 } from "@cubby/schemas/source-transaction-record";
 import {
+  statementDecisionInput,
+  statementDecisionOut,
+} from "@cubby/schemas/statement-decision";
+import {
   statementSuggestionPreviewInput,
   statementSuggestionPreviewOut,
 } from "@cubby/schemas/statement-suggestion";
@@ -16,6 +20,18 @@ import { defineContract, mutation, query } from "~/contracts/define";
 export const sourceTransactionRecordContract = defineContract(
   "sourceTransactionRecord",
   {
+    apply: mutation({
+      description:
+        "Apply, attach, book or void the current statement observation by recording decisions. Evidence is retained; ambiguous identity and missing order details remain visible in machinery. Attach names a reviewed live transaction; fields explicitly select the movement, posting date or status to copy. Reconcile an existing split before changing its movement.",
+      input: statementDecisionInput,
+      output: statementDecisionOut,
+      invalidates: [
+        "sourceTransactionRecord",
+        "financialTransaction",
+        "purchase",
+        "expense",
+      ],
+    }),
     previewSuggestion: query({
       description:
         "Preview a statement Suggestions review draft against current evidence without writing. Pass the listed suggestionId, expectedFingerprint and declared application. Returns current transaction, Purchase/Expense, vendor and settlement effects or refuses stale/unsupported evidence. A successful preview does not apply the draft; explicit Suggestions review revalidates it again. To apply a draft that differs from the recommendation, review it with verdict wrong and correction {present:true, value:<the same application>}.",

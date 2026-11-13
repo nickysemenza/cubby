@@ -8,4 +8,13 @@ export const statementKernelModule = defineModule({
   name: "statement",
   entities: ["sourceOccurrence", "sourceTransactionRecord"],
   evidence: [occurrenceEvidence, statementEvidence],
+  machinery: [
+    {
+      entity: "sourceOccurrence",
+      owning: null,
+      scopes: ["bankEvent"],
+      fields: false,
+      quality: false,
+    },
+  ],
 });

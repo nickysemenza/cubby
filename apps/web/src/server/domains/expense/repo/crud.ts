@@ -656,6 +656,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "beneficiary",
           beneficiaries ?? [],
+          actor,
         );
       }
       if (funders !== undefined) {
@@ -664,6 +665,7 @@ export const updateExpense = defineMutationWriter({
           state.id,
           "funder",
           funders ?? [],
+          actor,
         );
       }
       if (sourceClaims !== undefined) {
@@ -1008,6 +1010,7 @@ async function writeNewExpenseLedgerRows(
   tx: DrizzleTransaction,
   inputs: readonly ExpenseCreateInput[],
   created: readonly { id: ExpenseId }[],
+  actor: ActorContext,
 ) {
   for (const [index, data] of inputs.entries()) {
     const expenseId = created[index]!.id;
@@ -1017,6 +1020,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "beneficiary",
         data.beneficiaries,
+        actor,
       );
     if (data.funders?.length)
       await replaceExpenseAttributionRole(
@@ -1024,6 +1028,7 @@ async function writeNewExpenseLedgerRows(
         expenseId,
         "funder",
         data.funders,
+        actor,
       );
     if (data.sourceClaims?.length)
       await replaceLedgerSourceClaims(
@@ -1116,8 +1121,9 @@ export async function createExpenses(
       inputs.map((data, index) =>
         expenseInsertValues(data, tuples[index]!, categoryIds[index]!),
       ),
+      actor,
     );
-    await writeNewExpenseLedgerRows(tx, inputs, created);
+    await writeNewExpenseLedgerRows(tx, inputs, created, actor);
     await logAuditEntries(
       tx,
       actor,
