@@ -6,6 +6,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { MachineryCapability } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
+import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -61,6 +62,7 @@ export {
   type Missing,
   type Outcome,
   type Pass,
+  type PassResult,
   type Produced,
   type ProduceContext,
   type Pure,
@@ -257,3 +259,23 @@ export async function repointOwnedReference(
   return (await productionKernel()).repointOwnedReference(tx, request);
 }
 export type { OwnedReferenceRepoint } from "./repoint";
+
+/** A registered entity's machinery capability, or null when it has none. */
+export async function machineryCapability(
+  entity: string,
+): Promise<MachineryCapability | null> {
+  return (await productionKernel()).machineryCapability(entity);
+}
+
+/** Public records awaiting a member's input, oldest first. */
+export async function needsYou(
+  db: Database,
+  options?: { limit?: number; offset?: number },
+): Promise<NeedsYouPage> {
+  return (await productionKernel()).needsYou(db, options);
+}
+
+/** The scopes, asks and Pass instances carrying a Run, from one snapshot. */
+export async function runWork(db: Database, runId: string): Promise<RunWork> {
+  return (await productionKernel()).runWork(db, runId);
+}

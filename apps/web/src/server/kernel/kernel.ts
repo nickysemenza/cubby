@@ -11,6 +11,7 @@ import {
   type MachineryCapability,
 } from "@cubby/schemas/kernel/capability";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
+import type { NeedsYouPage, RunWork } from "@cubby/schemas/kernel/work";
 import { getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -53,9 +54,16 @@ import { buildRegistry, ownedColumns, type KernelRegistry } from "./registry";
 import { repointOwnedReference, type OwnedReferenceRepoint } from "./repoint";
 import { reconcileNow, runKernel } from "./runner";
 import { wakeAfterCommit } from "./wake";
+import { readNeedsYou, readRunWork } from "./work";
 
 export type Kernel = {
   readonly registry: KernelRegistry;
+  machineryCapability(entity: string): MachineryCapability | null;
+  needsYou(
+    db: Database,
+    options?: { limit?: number; offset?: number },
+  ): Promise<NeedsYouPage>;
+  runWork(db: Database, runId: string): Promise<RunWork>;
   append(
     db: Database,
     rows: readonly EvidenceRow[],
@@ -162,6 +170,9 @@ export function createKernel(modules: readonly DomainModule[]): Kernel {
   registerOwnedColumns(ownedColumns(bound));
   return {
     registry: bound,
+    machineryCapability: (entity) => bound.machinery.get(entity) ?? null,
+    needsYou: readNeedsYou,
+    runWork: (db, runId) => readRunWork(db, bound, runId),
     async append(db, rows, options) {
       const facts = await append(db, bound, rows, options);
       if (facts.length) await wakeAfterCommit(db);
