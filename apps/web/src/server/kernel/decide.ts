@@ -1,8 +1,9 @@
 /**
  * Decisions (ADR 0029 section 1): four independent channels, each resolved
  * by its newest row. A later assignment never removes a veto, and one
- * identity decision never removes another pair's. Inserts take no gate; the
- * scopes that read the subject are dirtied in the same transaction. A
+ * identity decision never removes another pair's. Inserts take the gate
+ * with the revisions they raise; the scopes that read the subject are
+ * dirtied in the same transaction. A
  * decision on an authored entity's field is applied by that entity's own
  * writer in the same transaction, and a `reject` runs the record's delete
  * policy and marks its `RecordKey` so its evidence does not recreate it.

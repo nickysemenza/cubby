@@ -1,8 +1,9 @@
 /**
  * Evidence appends (ADR 0029 sections 1 and 5). Rows are insert-only; a
- * correction or withdrawal is a new row. An append takes no gate: the
- * evidence table's unique constraints on source identity decide a race
- * between two writers of the same observation, and the loser inserts nothing.
+ * correction or withdrawal is a new row. An append takes the gate with the
+ * revisions it raises; the evidence table's unique constraints on source
+ * identity decide a race between two writers of the same observation, and the
+ * loser inserts nothing.
  * In the same transaction it records the rows' fact keys and dirties every
  * scope they discover or that read one of their keys.
  */
