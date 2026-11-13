@@ -17,7 +17,7 @@ WITH RECURSIVE redirects AS (
  SELECT id,kind,"mergedIntoId" target, ARRAY[id] path FROM "Entity" WHERE "mergedIntoId" IS NOT NULL
  UNION ALL SELECT r.id,r.kind,e."mergedIntoId",r.path||e.id FROM redirects r JOIN "Entity" e ON e.id=r.target WHERE e."mergedIntoId" IS NOT NULL AND NOT e.id=ANY(r.path)
 ), survivors AS (SELECT r.id,r.kind,r.target FROM redirects r JOIN "Entity" e ON e.id=r.target WHERE e."mergedIntoId" IS NULL), records AS (
-SELECT 'product'::text entity, 'Product'::text table_name, 'fields'::text scope_kind, 'product:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['brandId','categoryId','ingredientId','growsPlantId']::text[] fields FROM "Product" r
+SELECT 'product'::text entity, 'Product'::text table_name, 'fields'::text scope_kind, 'product:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['tags','brandId','categoryId','ingredientId','growsPlantId']::text[] fields FROM "Product" r
 UNION ALL
 SELECT 'cookbook'::text entity, 'Cookbook'::text table_name, 'fields'::text scope_kind, 'cookbook:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['productId']::text[] fields FROM "Cookbook" r
 UNION ALL

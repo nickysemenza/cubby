@@ -115,6 +115,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
         actorKind: "system",
         actorId: null,
       },
+      { field: "tags", kind: "set", actorKind: "system", actorId: null },
     ]);
     expect(
       (

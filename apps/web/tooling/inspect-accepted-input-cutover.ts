@@ -43,12 +43,12 @@ try {
         END)::int n FROM expected GROUP BY mapping
     )
     SELECT 'destination' category,mapping||'/'||split_part(source_id,':',1) mapping,count(*)::int rows FROM expected GROUP BY 2
-    UNION ALL SELECT 'destination','total/'||k.mapping,count(DISTINCT CASE k.mapping
+    UNION ALL SELECT 'destination','total/'||k.mapping,count(DISTINCT CASE WHEN e.source_id IS NULL THEN NULL ELSE CASE k.mapping
       WHEN 'scope' THEN jsonb_build_array(e.row->'scopeKind',e.row->'scopeKey')::text
       WHEN 'askScope' THEN jsonb_build_array(e.row->'askId',e.row->'scopeKind',e.row->'scopeKey')::text
       WHEN 'recordKey' THEN jsonb_build_array(e.row->'scopeKind',e.row->'scopeKey',e.row->'entity',e.row->'naturalKey')::text
       WHEN 'binding' THEN jsonb_build_array(e.row->'factKind',e.row->'factId',e.row->'basis')::text
-      WHEN 'answer' THEN e.row->>'inputHash' ELSE e.row->>'id' END)::int
+      WHEN 'answer' THEN e.row->>'inputHash' ELSE e.row->>'id' END END)::int
       FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping)
       LEFT JOIN expected e ON e.mapping=k.mapping GROUP BY k.mapping
     UNION ALL SELECT 'verification',k.mapping,coalesce(f.n,0) FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping) LEFT JOIN failures f ON f.mapping=k.mapping
