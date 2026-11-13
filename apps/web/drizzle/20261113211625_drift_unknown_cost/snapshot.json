@@ -1,0 +1,40 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "dd390187-4e45-4af1-80b1-fe7d12f51a77",
+  "prevIds": [
+    "2bd18154-025f-4ae0-aeda-bd66e3ceab45"
+  ],
+  "footprints": [
+    {
+      "statementType": "alter_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Drift",
+        "estimatedCostMicros"
+      ],
+      "writes": [
+        "s|colprop|public.Drift.estimatedCostMicros.notNull",
+        "s|colprop|public.Drift.estimatedCostMicros.default"
+      ],
+      "reads": [
+        "n|tbl|public.Drift",
+        "n|sch|public",
+        "n|col|public.Drift.estimatedCostMicros"
+      ],
+      "sqlHash": "c07757952c9f0696"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "alter",
+      "key": "columns\u0000[\"public\",\"Drift\",\"estimatedCostMicros\"]",
+      "set": {
+        "notNull": false,
+        "default": null
+      }
+    }
+  ]
+}

@@ -115,7 +115,7 @@ struct MachineryPanel: View {
                 if let drift = read.drift {
                     Text("Drift").font(.headline)
                     Text(
-                        "The current rules would change this record. Approving issues \(drift.askCount) \(drift.askCount == 1 ? "ask" : "asks") for about \(Words.costLabel(drift.estimatedCostMicros))."
+                        "The current rules would change this record. Approving issues \(drift.askCount) \(drift.askCount == 1 ? "ask" : "asks") \(drift.estimatedCostMicros.map { "for about \(Words.costLabel($0))" } ?? "of unknown cost")."
                     )
                     MachineryRaw(label: "Exact difference", value: raw(drift.difference))
                     if allowsActions {

@@ -133,7 +133,8 @@ const machineryDrift = z.object({
   inputsHash: z.string(),
   difference: z.json(),
   askCount: z.number().int().nonnegative(),
-  estimatedCostMicros: z.number().int().nonnegative(),
+  /** Null when an ask it would file has no cost history or declared estimate. */
+  estimatedCostMicros: z.number().int().nonnegative().nullable(),
 });
 
 /** One scope's part of a record's machinery, in owning, fields, quality order. */

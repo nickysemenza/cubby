@@ -452,9 +452,8 @@ export const drift = pgTable(
     inputsHash: text("inputsHash").notNull(),
     difference: jsonb("difference").notNull(),
     askCount: integer("askCount").notNull().default(0),
-    estimatedCostMicros: bigint("estimatedCostMicros", { mode: "number" })
-      .notNull()
-      .default(0),
+    /** NULL when any ask it would file has no cost history or declared estimate. */
+    estimatedCostMicros: bigint("estimatedCostMicros", { mode: "number" }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

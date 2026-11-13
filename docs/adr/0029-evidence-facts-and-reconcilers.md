@@ -537,14 +537,21 @@ With no record difference and no missing answer it advances the scope's
 version and refreshes its gaps, input provenance and dependencies under the
 input revision fence. This metadata refresh creates no dirty work or asks.
 Otherwise it writes a `Drift` proposal: the exact difference, the number of
-asks the change would issue and their estimated cost. Approval is a decision
+asks the change would issue and their estimated cost. Each ask costs the
+median of the most recent priced Answers for its feature and requested tier,
+else its ask kind's declared estimate; a source ask is free. The estimate is
+unknown, stored as NULL, when any ask has neither, and it stays outside the
+proposal hash. Approval is a decision
 bound to the proposal hash, by item or by class; approval applies the
 difference and files the asks. A proposal whose inputs hash no longer matches
 is recomputed before it can be approved.
 
-The sweep locks each page's input revisions once and writes its scope states,
-dependencies and proposals as sets. A scope whose revisions moved retains its
-previous version and dependencies.
+The sweep loads and computes a page outside any transaction, then publishes it
+with its cursor in the pass's fenced transaction: it locks the page's input
+revisions once and writes its scope states, dependencies and proposals as
+sets. Its tables hold no money-lane column, so it takes no write gate. A scope
+whose revisions moved retains its previous version, dependencies and
+proposal; one that went dirty retains its version and dependencies.
 
 At cutover every scope gets `ScopeState` at version 0 and its stored records
 enter as inputs: `EvidenceBinding` rows with basis `baseline`, and for each

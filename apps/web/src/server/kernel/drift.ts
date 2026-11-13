@@ -22,7 +22,6 @@ import {
 } from "~/server/db/repository-access.boundary";
 
 import { applyComputed } from "./apply";
-import { insertRows } from "./bulk-write";
 import { CLAIM_LEASE_MS, releaseClaim, type ClaimedScope } from "./claim";
 import { computeBatch, usedInputs, type Computed } from "./compute";
 import { decide } from "./decide";
@@ -98,7 +97,12 @@ const stale = (reconciler: Reconciler) => sql`
     WHERE p."scopeKind" = s."scopeKind" AND p."scopeKey" = s."scopeKey"
       AND p.rules = ${reconciler.rules})`;
 
-/** Fence one page's input revisions, then publish metadata and proposals as sets. */
+/**
+ * Fence one page's input revisions, then publish it in at most two statements:
+ * clean scopes advance with their dependencies and stale proposals cleared,
+ * and the rest become proposals. Sweep tables hold no money-lane column, so
+ * the page takes no household write gate.
+ */
 async function proposeOrAdvance(
   q: Q,
   computed: readonly Computed[],
@@ -148,49 +152,62 @@ async function proposeOrAdvance(
         keys: [...entry.keys.keys()],
       };
     });
-  if (clean.length) {
-    const advanced = await q.execute<{ kind: string; key: string }>(sql`
-      UPDATE "ScopeState" s SET version = incoming.version, rules = incoming.rules,
-        gaps = incoming.gaps, inputs = incoming.inputs, stage = incoming.stage,
-        "nextActor" = incoming."nextActor", "firstGap" = incoming."firstGap",
-        "inputsHash" = incoming."inputsHash", "durationMs" = incoming."durationMs",
-        "reconciledAt" = now(), "errorClass" = NULL, error = NULL
-      FROM jsonb_to_recordset(${JSON.stringify(clean)}::jsonb) AS incoming(
-        kind text, key text, version int, rules text, gaps jsonb, inputs jsonb, stage text,
-        "nextActor" text, "firstGap" text, "inputsHash" text, "durationMs" int)
-      WHERE s."scopeKind" = incoming.kind AND s."scopeKey" = incoming.key
-        AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
-      RETURNING s."scopeKind" AS kind, s."scopeKey" AS key`);
-    const advancedIds = new Set(
-      advanced.rows.map((row) => JSON.stringify([row.kind, row.key])),
-    );
-    const dependencies = clean.filter((row) =>
-      advancedIds.has(JSON.stringify([row.kind, row.key])),
-    );
-    if (dependencies.length) {
-      await q.execute(sql`DELETE FROM "ScopeDep" d
-        USING jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text)
-        WHERE d."scopeKind" = incoming.kind AND d."scopeKey" = incoming.key`);
-      await q.execute(sql`INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-        SELECT incoming.kind, incoming.key, dependency.value
-        FROM jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text, keys jsonb)
-        CROSS JOIN LATERAL jsonb_array_elements_text(incoming.keys) dependency(value)`);
-      await q.execute(sql`DELETE FROM "Drift" d
-        USING jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text)
-        WHERE d."scopeKind" = incoming.kind AND d."scopeKey" = incoming.key`);
-    }
-  }
+  // A scope that went dirty keeps its version, dependencies and proposal.
+  // Dependencies are replaced by difference so the delete and insert touch
+  // disjoint rows within the one statement.
+  if (clean.length)
+    await q.execute(sql`
+      WITH incoming AS (
+        SELECT * FROM jsonb_to_recordset(${JSON.stringify(clean)}::jsonb) AS incoming(
+          kind text, key text, version int, rules text, gaps jsonb, inputs jsonb, stage text,
+          "nextActor" text, "firstGap" text, "inputsHash" text, "durationMs" int, keys jsonb)
+      ), advanced AS (
+        UPDATE "ScopeState" s SET version = incoming.version, rules = incoming.rules,
+          gaps = incoming.gaps, inputs = incoming.inputs, stage = incoming.stage,
+          "nextActor" = incoming."nextActor", "firstGap" = incoming."firstGap",
+          "inputsHash" = incoming."inputsHash", "durationMs" = incoming."durationMs",
+          "reconciledAt" = now(), "errorClass" = NULL, error = NULL
+        FROM incoming
+        WHERE s."scopeKind" = incoming.kind AND s."scopeKey" = incoming.key
+          AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
+        RETURNING s."scopeKind" AS kind, s."scopeKey" AS key, incoming.keys
+      ), dependency AS (
+        SELECT advanced.kind, advanced.key, read.key AS read
+        FROM advanced CROSS JOIN LATERAL jsonb_array_elements_text(advanced.keys) AS read(key)
+      ), removed AS (
+        DELETE FROM "ScopeDep" d USING advanced
+        WHERE d."scopeKind" = advanced.kind AND d."scopeKey" = advanced.key
+          AND NOT EXISTS (SELECT 1 FROM dependency
+            WHERE dependency.kind = d."scopeKind" AND dependency.key = d."scopeKey" AND dependency.read = d.key)
+      ), added AS (
+        INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+        SELECT kind, key, read FROM dependency ORDER BY kind, key, read
+        ON CONFLICT DO NOTHING
+      )
+      DELETE FROM "Drift" p USING advanced
+      WHERE p."scopeKind" = advanced.kind AND p."scopeKey" = advanced.key`);
   await recordDrifts(
     q,
     fenced.filter((plan) => !plan.clean),
   );
 }
 
-/** Store exact proposals in one table write; no producer calls are owed. */
+/** Recent answers per feature and tier that set a proposal's cost estimate. */
+const COST_HISTORY = 100;
+
+/**
+ * Store exact proposals in one statement; no producer calls are owed. Each
+ * ask a proposal would file costs the median of the last {@link COST_HISTORY}
+ * priced Answers for its feature and requested tier, else the ask kind's
+ * declared estimate; a source ask is free. A proposal with any ask of unknown
+ * cost stores a NULL estimate. The estimate is not part of the proposal hash:
+ * new answers move it without invalidating an approval of the same change.
+ */
 export async function recordDrifts(
   q: Q,
   proposals: readonly { computed: Computed; diff: Difference }[],
 ): Promise<void> {
+  if (!proposals.length) return;
   const rows = await Promise.all(
     proposals.map(async ({ computed, diff }) => {
       const proposal = {
@@ -198,12 +215,6 @@ export async function recordDrifts(
           disagreements: computed.desired?.disagreements ?? [],
         }),
         askCount: computed.missing.length,
-        estimatedCostMicros: computed.missing.reduce(
-          (sum, missing) =>
-            sum +
-            (missing.kind.estimateCostMicros?.(missing.envelope.input) ?? 0),
-          0,
-        ),
       };
       return {
         scopeKind: computed.scope.kind,
@@ -213,24 +224,60 @@ export async function recordDrifts(
         proposalHash: await hashCanonical(proposal),
         inputsHash: computed.inputsHash,
         ...proposal,
+        asks: computed.missing.map((missing) => ({
+          feature: missing.envelope.feature,
+          tier: missing.envelope.tier,
+          declared:
+            missing.kind.estimateCostMicros?.(missing.envelope.input) ??
+            (missing.kind.producer === "source" ? 0 : null),
+        })),
       };
     }),
   );
-  await insertRows(
-    q,
-    drift,
-    rows,
-    sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
-    version = excluded.version, rules = excluded.rules, "proposalHash" = excluded."proposalHash", "inputsHash" = excluded."inputsHash",
-    difference = excluded.difference, "askCount" = excluded."askCount", "estimatedCostMicros" = excluded."estimatedCostMicros"`,
-  );
+  await q.execute(sql`
+    WITH incoming AS (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS incoming(
+        "scopeKind" text, "scopeKey" text, version int, rules text, "proposalHash" text,
+        "inputsHash" text, difference jsonb, "askCount" int, asks jsonb)
+    ), filed AS (
+      SELECT incoming."scopeKind", incoming."scopeKey", ask.feature, ask.tier, ask.declared
+      FROM incoming CROSS JOIN LATERAL jsonb_to_recordset(incoming.asks) AS ask(feature text, tier text, declared bigint)
+    ), history AS (
+      SELECT wanted.feature, wanted.tier, (
+        SELECT percentile_disc(0.5) WITHIN GROUP (ORDER BY recent."costMicros")
+        FROM (SELECT a."costMicros" FROM "Answer" a
+          WHERE a.feature = wanted.feature AND a."costMicros" IS NOT NULL
+            AND (wanted.tier IS NULL OR a.tier = wanted.tier)
+          ORDER BY a."createdAt" DESC LIMIT ${COST_HISTORY}) recent
+      ) AS median
+      FROM (SELECT DISTINCT feature, tier FROM filed) wanted
+    ), cost AS (
+      SELECT filed."scopeKind", filed."scopeKey",
+        CASE WHEN bool_and(coalesce(history.median, filed.declared) IS NOT NULL)
+          THEN sum(coalesce(history.median, filed.declared)) END AS micros
+      FROM filed JOIN history
+        ON history.feature = filed.feature AND history.tier IS NOT DISTINCT FROM filed.tier
+      GROUP BY filed."scopeKind", filed."scopeKey"
+    )
+    INSERT INTO "Drift" ("scopeKind", "scopeKey", version, rules, "proposalHash", "inputsHash",
+      difference, "askCount", "estimatedCostMicros")
+    SELECT incoming."scopeKind", incoming."scopeKey", incoming.version, incoming.rules,
+      incoming."proposalHash", incoming."inputsHash", incoming.difference, incoming."askCount",
+      CASE WHEN incoming."askCount" = 0 THEN 0 ELSE cost.micros::bigint END
+    FROM incoming LEFT JOIN cost USING ("scopeKind", "scopeKey")
+    ORDER BY incoming."scopeKind", incoming."scopeKey"
+    ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
+      version = excluded.version, rules = excluded.rules, "proposalHash" = excluded."proposalHash",
+      "inputsHash" = excluded."inputsHash", difference = excluded.difference,
+      "askCount" = excluded."askCount", "estimatedCostMicros" = excluded."estimatedCostMicros",
+      "updatedAt" = now()`);
 }
 
 /** The kernel's own pass: visit every scope derived under older rules. */
 export function versionSweepPass(registry: () => KernelRegistry): Pass {
   return definePass({
     name: VERSION_SWEEP,
-    async run(db, cursor, claim) {
+    async run(db, cursor) {
       const current = registry();
       const kinds = [...current.reconcilers.keys()].sort();
       let position = sweepCursor.parse(cursor) ?? {
@@ -257,14 +304,14 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
           rows.rows.map((row) => ({ kind: reconciler.scope, key: row.key })),
           { db, locked: false, hideBaseline: true },
         );
-        await claim.fenced(async (tx) => {
-          await withDatabaseOperationPhase("apply", async () => {
-            await proposeOrAdvance(repositoryQueries(tx), computed);
-          });
-        });
         return {
           cursor: { kind: reconciler.scope, after: rows.rows.at(-1)!.key },
           done: false,
+          // The page publishes with its cursor, in the pass's fenced transaction.
+          publish: (tx) =>
+            withDatabaseOperationPhase("apply", () =>
+              proposeOrAdvance(repositoryQueries(tx), computed),
+            ),
         };
       }
       return { cursor: null, done: true };

@@ -262,7 +262,7 @@ export async function machinery(
           inputsHash: string;
           difference: unknown;
           askCount: number;
-          estimatedCostMicros: string | number;
+          estimatedCostMicros: string | number | null;
         }>(sql`
           SELECT p."scopeKind" AS kind, p."scopeKey" AS key, p."proposalHash", p."inputsHash", p.difference, p."askCount", p."estimatedCostMicros"
           FROM "Drift" p JOIN ${wanted} w ON w.kind = p."scopeKind" AND w.key = p."scopeKey" LIMIT 1`),
@@ -680,7 +680,10 @@ export async function machinery(
               // SAFETY: the column stores the JSON the sweep wrote.
               difference: proposal.difference as Json,
               askCount: proposal.askCount,
-              estimatedCostMicros: Number(proposal.estimatedCostMicros),
+              estimatedCostMicros:
+                proposal.estimatedCostMicros === null
+                  ? null
+                  : Number(proposal.estimatedCostMicros),
             }
           : null,
         passes,

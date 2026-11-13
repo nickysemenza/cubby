@@ -238,8 +238,11 @@ function Drift({
       <h3 className="text-xs font-medium">Drift</h3>
       <p className="text-xs tabular-nums">
         The current rules would change this record. Approving issues{" "}
-        {drift.askCount} {drift.askCount === 1 ? "ask" : "asks"} for about{" "}
-        {machineryCostLabel(drift.estimatedCostMicros)}.
+        {drift.askCount} {drift.askCount === 1 ? "ask" : "asks"}
+        {drift.estimatedCostMicros === null
+          ? " of unknown cost"
+          : ` for about ${machineryCostLabel(drift.estimatedCostMicros)}`}
+        .
       </p>
       <Raw
         label="Exact difference"

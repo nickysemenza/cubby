@@ -14,7 +14,12 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import type { Database } from "~/server/db/database";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { manualEntry, evidenceBinding, drift } from "~/server/db/kernel-schema";
+import {
+  answer,
+  manualEntry,
+  evidenceBinding,
+  drift,
+} from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
 import {
   repositoryQueries,
@@ -2322,7 +2327,8 @@ describe("evidence-facts kernel", () => {
       "version-sweep-clean-page",
       JSON.stringify({ scopes: sellers.length, statements }),
     );
-    expect(statements).toBeLessThanOrEqual(5);
+    // One revision lock and one publish statement, whatever the page size.
+    expect(statements).toBeLessThanOrEqual(2);
     const state = await repositoryQueries(ctx.db).execute<{
       version: number;
       stage: string;
@@ -2411,6 +2417,95 @@ describe("evidence-facts kernel", () => {
     ).resolves.toBe("applied");
     const [approved] = await purchases(ctx.db);
     expect(approved?.merchant).toBe("SYNTHETIC GROCER");
+  });
+
+  it("prices a Drift proposal's asks from answer history and marks a missing history unknown", async () => {
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic priced input",
+    });
+    const scope = { kind: "fixture.pricedDrift", key: seller.id };
+    const ask = (feature: string) =>
+      defineAsk({
+        feature,
+        producer: "model",
+        promptVersion: "1",
+        input: z.object({ id: z.string() }),
+        output: z.object({ value: z.string() }),
+        policy: { tier: "fast" },
+      });
+    const asks = [ask("fixture.pricedA"), ask("fixture.pricedB")];
+    const module = (version: number) =>
+      defineModule({
+        name: "pricedDrift",
+        asks,
+        reconcilers: [
+          defineReconciler<null>({
+            scope: scope.kind,
+            lane: "catalog",
+            version,
+            reads: [source.table(vendor, ["name"])],
+            writes: [],
+            asks,
+            async load(reads, keys) {
+              await Promise.all(
+                keys.map((key) => reads.for(key).rows(vendor, [key])),
+              );
+              return new Map(keys.map((key) => [key, null]));
+            },
+            reconcile(_input, c) {
+              // Later rules need two answers that were never collected.
+              if (version > 1)
+                for (const kind of asks) c.answer(kind, { id: scope.key });
+              return c.done();
+            },
+          }),
+        ],
+      });
+    const priced = (feature: string, costs: readonly number[], tier = "fast") =>
+      repositoryQueries(ctx.db)
+        .insert(answer)
+        .values(
+          costs.map((costMicros, index) => ({
+            inputHash: `synthetic-${feature}-${tier}-${index}`,
+            feature,
+            producer: "model" as const,
+            promptVersion: "1",
+            output: { value: "synthetic" },
+            tier,
+            costMicros,
+          })),
+        );
+    const proposal = async () =>
+      (
+        await repositoryQueries(ctx.db)
+          .select({
+            askCount: drift.askCount,
+            estimatedCostMicros: drift.estimatedCostMicros,
+          })
+          .from(drift)
+          .where(eq(drift.scopeKey, scope.key))
+      )[0];
+    const first = createKernel([module(1)]);
+    await first.emitWrites(ctx.db, {
+      table: vendor,
+      ids: [seller.id],
+      columns: ["name"],
+      discovers: [scope],
+    });
+    await settle(first);
+
+    // One of the two asks has priced history; the other has none.
+    await priced("fixture.pricedA", [30, 90, 50]);
+    await priced("fixture.pricedB", [5_000], "quality");
+    await settle(createKernel([module(2)]));
+    expect(await proposal()).toEqual({
+      askCount: 2,
+      estimatedCostMicros: null,
+    });
+
+    await priced("fixture.pricedB", [20]);
+    await settle(createKernel([module(3)]));
+    expect(await proposal()).toEqual({ askCount: 2, estimatedCostMicros: 70 });
   });
 
   it("keeps a member's decision through recomputation", async () => {
