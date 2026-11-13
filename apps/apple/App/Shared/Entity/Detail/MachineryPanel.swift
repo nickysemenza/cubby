@@ -7,7 +7,7 @@ final class MachineryModel {
     var output: MachineryReadOutput?
     var error: String?
     var pending = false
-    var decided = false
+    var notice: String?
     var read: Machinery? { output?.machinery }
     var supported: Bool {
         guard let read else { return false }
@@ -41,7 +41,7 @@ final class MachineryModel {
         do {
             _ = try await app.client.decideMachinery(
                 .init(entity: subject.entity, id: subject.id, decisions: [decision]))
-            decided = true
+            notice = FieldEnvelopePresentation.decidedNote
             app.recordEntityMutation(keys: [subject.entity])
             await load(app, subject: subject, field: field)
         } catch {
@@ -72,9 +72,9 @@ final class MachineryModel {
         error = nil
         defer { pending = false }
         do {
-            _ = try await app.client.approveMachineryDrift(
+            let result = try await app.client.approveMachineryDrift(
                 .init(entity: subject.entity, id: subject.id, proposalHash: drift.proposalHash, scope: scope))
-            decided = true
+            notice = FieldEnvelopePresentation.approvalNote(result)
             app.recordEntityMutation(keys: [subject.entity])
             await load(app, subject: subject, field: field)
         } catch {
@@ -152,7 +152,7 @@ struct MachineryPanel: View {
             } else if model.output == nil && model.error == nil {
                 ProgressView("Loading machinery")
             }
-            if model.decided { Text(Words.decidedNote).accessibilityAddTraits(.updatesFrequently) }
+            if let notice = model.notice { Text(notice).accessibilityAddTraits(.updatesFrequently) }
             if let error = model.error {
                 MachineryRaw(label: "Raw error", value: error)
                 Button("Retry") { Task { await model.load(app, subject: subject, field: field) } }

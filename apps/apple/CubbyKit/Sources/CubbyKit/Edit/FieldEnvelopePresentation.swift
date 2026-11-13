@@ -295,6 +295,23 @@ extension FieldEnvelopePresentation {
     public static let noGapLabel = "Nothing is waiting on this."
     public static let emptyMachineryLabel = "Cubby has recorded no work on this yet."
 
+    public static func approvalNote(_ result: MachineryApproveDriftOutput) -> String {
+        var parts: [String] = []
+        if result.applied > 0 {
+            parts.append("\(result.applied) \(result.applied == 1 ? "change applied" : "changes applied").")
+        }
+        if result.stale > 0 {
+            parts.append("\(result.stale) \(result.stale == 1 ? "proposal changed" : "proposals changed"). Review the current difference and approve again.")
+        }
+        if result.busy > 0 {
+            parts.append("\(result.busy) \(result.busy == 1 ? "record is" : "records are") being worked on. Try approval again.")
+        }
+        if result.missing > 0 {
+            parts.append("\(result.missing) \(result.missing == 1 ? "record has" : "records have") no current proposal. Refresh the machinery.")
+        }
+        return parts.joined(separator: " ")
+    }
+
     public static func dataQualityLabel(_ status: String) -> String {
         switch status {
         case "complete": "Done"

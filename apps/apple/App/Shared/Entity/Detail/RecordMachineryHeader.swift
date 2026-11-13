@@ -62,8 +62,8 @@ struct RecordMachineryHeader: View {
                     "Open \(absorbed.survivor)",
                     value: Route.entityDetail(subject.entity, id: absorbed.survivor))
             }
-            if model.decided {
-                Text(Words.decidedNote).font(.caption).accessibilityAddTraits(.updatesFrequently)
+            if let notice = model.notice {
+                Text(notice).font(.caption).accessibilityAddTraits(.updatesFrequently)
             }
             if let error = model.error {
                 MachineryRaw(label: "Raw error", value: error)
