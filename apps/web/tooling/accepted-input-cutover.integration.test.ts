@@ -43,6 +43,11 @@ it("carries held values, paid results, redirects and every accepted money row", 
       FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id=a."purchaseId" WHERE a."transactionId"=$1`,
       [cutoverId(3)],
     );
+    await client.query(
+      `INSERT INTO "AiEvaluation" (id,"workKey",feature,target,provenance,snapshot,state,result)
+      VALUES ($1,'synthetic:finished-without-request','synthetic-finished','{}','{}','{"retained":"snapshot"}','completed','{"retained":"result"}')`,
+      [cutoverId(95)],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -68,6 +73,22 @@ it("carries held values, paid results, redirects and every accepted money row", 
       ).rows,
     ).toEqual([{ identities: 0, entries: 0, bindings: 0 }]);
     await migrateDatabase(db);
+    expect(
+      (
+        await client.query(`SELECT count(*)::int n FROM "Ask" WHERE id=$1`, [
+          cutoverId(95),
+        ])
+      ).rows,
+    ).toEqual([{ n: 0 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT output->'result' result,"askId" FROM "Answer" WHERE "inputHash"=$1`,
+          ["legacy:AiEvaluation:" + cutoverId(95)],
+        )
+      ).rows,
+    ).toEqual([{ result: { retained: "result" }, askId: null }]);
+
     expect(
       (
         await client.query(
