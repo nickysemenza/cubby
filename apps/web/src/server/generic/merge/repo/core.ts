@@ -32,16 +32,7 @@ import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-res
 import { repointSuggestionTargetsTx } from "~/server/generic/suggestions/repo/suggestion-state";
 
 /** Preserve original text in keeper/donor order, deduplicating only exact note values. */
-export const mergeNotes = (
-  ...notes: readonly (string | null | undefined)[]
-): string | null => {
-  const texts = [
-    ...new Set(
-      notes.filter((note): note is string => note != null && note !== ""),
-    ),
-  ];
-  return texts.length ? texts.join("\n\n") : null;
-};
+export { mergeNotes } from "~/server/lib/merge-notes";
 
 /**
  * The survivor a merge preview suggests: the candidate with the most

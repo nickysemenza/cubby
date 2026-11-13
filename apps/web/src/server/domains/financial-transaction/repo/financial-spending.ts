@@ -108,6 +108,11 @@ import {
   prepareRetainedSettlementDiscovery,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
+import {
+  bookingVendorCreations,
+  bookingVendorSelection,
+  createdVendorConflict,
+} from "~/server/domains/vendor/policy/booking-vendor";
 import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
@@ -2669,20 +2674,6 @@ async function resolveBookingVendors(
         ),
       )
     : await lookup();
-  for (const [index, { fresh }] of bookings.entries())
-    if (
-      !fresh.request.vendorId &&
-      checked[index]!.some(
-        (result) =>
-          (result.row && result.row.shortcode !== fresh.vendorId) ||
-          result.candidates.some(
-            (candidate) => candidate.shortcode !== fresh.vendorId,
-          ),
-      )
-    )
-      return refuse(
-        "The raw or cleaned Vendor identity changed before booking.",
-      );
   const selectedCodes = uniq(
     bookings.flatMap(({ fresh }) =>
       fresh.request.vendorId ? [fresh.request.vendorId] : [],
@@ -2705,26 +2696,19 @@ async function resolveBookingVendors(
       : []
     ).map((row) => [row.shortcode, row]),
   );
-  const creating = bookings.flatMap(({ fresh }, index) =>
-    !fresh.request.vendorId && !fresh.vendorId ? [index] : [],
-  );
-  const folded = creating.map((index) =>
-    bookings[index]!.fresh.vendorName.trim().toLowerCase(),
-  );
-  if (new Set(folded).size !== folded.length)
-    return refuse(
-      "Spending plans in one batch create the same Vendor; apply them separately.",
-    );
-  const misses = creating.map((index) => {
-    const { fresh } = bookings[index]!;
-    const { merchant } = lookups[index]!;
-    return {
-      name: fresh.vendorName,
-      values: async () => ({
-        aliases: merchant && merchant !== fresh.vendorName ? [merchant] : [],
-      }),
-    };
-  });
+  const policyBookings = bookings.map(({ fresh }, index) => ({
+    vendorId: fresh.vendorId,
+    selectedCode: fresh.request.vendorId,
+    name: fresh.vendorName,
+    merchant: lookups[index]!.merchant,
+  }));
+  const plan = bookingVendorCreations(policyBookings, checked);
+  if (plan.kind === "refused") return refuse(plan.reason);
+  const { creating } = plan;
+  const misses = plan.misses.map(({ name, aliases }) => ({
+    name,
+    values: async () => ({ aliases }),
+  }));
   const created = layered
     ? (await mintNamesInLayer(layered.layer, "vendor", misses, actor)).map(
         (row) => ({ row, candidates: [] }),
@@ -2733,22 +2717,17 @@ async function resolveBookingVendors(
   const createdFor = new Map(
     creating.map((index, position) => [index, created[position]]),
   );
+  const selection = bookingVendorSelection(
+    policyBookings,
+    checked,
+    [...selected.values()],
+    createdFor,
+  );
+  if (selection.kind === "refused") return refuse(selection.reason);
   const ids = new Map<VendorShortcode, VendorId>();
-  const vendorIds = bookings.map(({ fresh }, index) => {
-    const selectedVendor = fresh.request.vendorId
-      ? selected.get(fresh.request.vendorId)
-      : undefined;
-    const resolved = selectedVendor
-      ? { row: selectedVendor, candidates: [] }
-      : fresh.vendorId
-        ? checked[index]!.find(
-            (result) => result.row?.shortcode === fresh.vendorId,
-          )
-        : createdFor.get(index);
-    if (!resolved?.row || resolved.candidates.length)
-      return refuse("The Vendor identity changed before booking.");
-    const code = parseShortcodeFor("vendor", resolved.row.shortcode);
-    ids.set(code, parseEntityId("vendor", resolved.row.id));
+  const vendorIds = selection.rows.map((row) => {
+    const code = parseShortcodeFor("vendor", row.shortcode);
+    ids.set(code, parseEntityId("vendor", row.id));
     return code;
   });
   const minted = new Set(
@@ -2758,20 +2737,10 @@ async function resolveBookingVendors(
   );
   if (minted.size) {
     const rechecked = await lookup();
-    for (const [index, results] of rechecked.entries())
-      if (
-        results.some((result) =>
-          [result.row, ...result.candidates].some(
-            (row) =>
-              row &&
-              minted.has(row.shortcode) &&
-              row.shortcode !== vendorIds[index],
-          ),
-        )
-      )
-        return refuse(
-          "The raw or cleaned Vendor identity changed before booking.",
-        );
+    if (createdVendorConflict(rechecked, minted, vendorIds))
+      return refuse(
+        "The raw or cleaned Vendor identity changed before booking.",
+      );
   }
   return { vendorIds, ids };
 }
