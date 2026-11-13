@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "568412cd-d167-4f36-a488-bac1ba76fe28",
+  "prevIds": [
+    "f70013e3-8e49-45b9-8990-fadac7286363"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Ask",
+        "hosted"
+      ],
+      "writes": [
+        "s|col|public.Ask.hosted",
+        "n|col|public.Ask.hosted",
+        "e|col|public.Ask.hosted"
+      ],
+      "reads": [
+        "n|tbl|public.Ask",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Ask",
+        "name": "hosted",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import {
   mailboxCursor,
@@ -523,9 +524,12 @@ describe("scheduled Gmail discovery", () => {
       status: "researching",
     });
     expect((await readRun(selected.runId)).shortcode).toBe(request.run);
-    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
-      1,
-    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(kernelPass)
+        .where(eq(kernelPass.name, "purchase.dispatch")),
+    ).toHaveLength(1);
   });
   it.each(["advanced", "pruned"])(
     "admits retained originals once through page replay and continuation with a %s search",
@@ -899,9 +903,12 @@ describe("scheduled Gmail discovery", () => {
       executionPolicy: "import",
     });
     expect(message?.runId).not.toBeNull();
-    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
-      1,
-    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(kernelPass)
+        .where(eq(kernelPass.name, "purchase.dispatch")),
+    ).toHaveLength(1);
     const search = async () =>
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
         ?.scoped[0];
@@ -914,9 +921,12 @@ describe("scheduled Gmail discovery", () => {
     expect(await search()).not.toHaveProperty("completedAt");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
-    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
-      1,
-    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(kernelPass)
+        .where(eq(kernelPass.name, "purchase.dispatch")),
+    ).toHaveLength(1);
     expect((await search())?.emailCount).toBe(1);
   });
 

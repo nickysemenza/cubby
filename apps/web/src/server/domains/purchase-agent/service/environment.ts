@@ -51,19 +51,14 @@ export type DispatchInput = {
 
 /** The coordinator Durable Object's RPC surface. */
 export interface PurchaseImportRunAgentRpc {
-  /**
-   * `waiting` when no coordinator turn was free: nothing ran, and the
-   * dispatch should wait for one (`purchase-import/operations/coordinator-gate.ts`).
-   */
-  dispatch(input: DispatchInput): Promise<{
-    accepted: boolean;
-    /** `unavailable` when the gate could not be asked at all. */
-    waiting?: { holders: number; unavailable?: true };
-  }>;
+  dispatch(
+    input: DispatchInput,
+    claimToken: string,
+  ): Promise<{ accepted: boolean }>;
+  /** Resume durable lifecycle work under the Run's live Pass; true until idle. */
+  work(claimToken: string): Promise<boolean>;
   /** Destroy a settled Run's transcript; never enters a model turn. */
   retire(): Promise<{ disposed: boolean }>;
-  /** The household gate reserved this coordinator a turn; it takes it next alarm. */
-  turnReady(): Promise<void>;
 }
 
 /** A service result: the host's JSON answer, or null when there is none. */
@@ -156,6 +151,11 @@ export interface PurchaseAgentEnvironment {
   gateway(): AgentGateway;
   /** Returns null only when the household has no ChatGPT plan connection. */
   chatGptInference?: ChatGptInference;
+  /** Retain a model response before Pi can apply its tool calls. */
+  modelTurn(
+    input: { generation: string; request: JSONType },
+    send: () => Promise<Response>,
+  ): Promise<Response>;
   /** The services of this object's Run. */
   readonly services: RunServices;
   /**
@@ -181,6 +181,8 @@ export interface PurchaseAgentEnvironment {
 
 /** The narrowed environment of the dispatch handler, which serves every Run. */
 export interface PurchaseDispatchEnvironment {
+  /** The live dispatch Pass claim authorizing this delivery. */
+  claimToken: string;
   /** The services of the Run an event names. */
   run(runId: string): RunServices;
   /** The coordinator Durable Object for an agent identity. */

@@ -470,7 +470,7 @@ async function claimAskGroup(
       }>(sql`
     WITH picked AS (
       SELECT id FROM "Ask"
-      WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND "availableAt" <= now()
+      WHERE state = ${ASK.queued} AND NOT hosted AND "cancelledAt" IS NULL AND "availableAt" <= now()
         AND attempts < "maxAttempts" AND feature = ANY(${textArrayParam(features)})
         AND ("claimToken" IS NULL OR "claimDeadline" <= now())
         -- An ask nobody waits on is its in-line caller's to retry.
@@ -589,7 +589,7 @@ export const nextWakeSql = (): SQL => sql`(
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "ScopeDirty" WHERE attempts < ${MAX_SCOPE_ATTEMPTS}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND attempts < "maxAttempts"
+      FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND NOT hosted AND attempts < "maxAttempts"
         AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
     (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)

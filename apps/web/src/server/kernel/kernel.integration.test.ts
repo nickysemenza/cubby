@@ -54,6 +54,7 @@ import {
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
 import {
+  nextWakeSql,
   claimAsk,
   claimAsks,
   releaseClaim,
@@ -66,6 +67,7 @@ import {
 import { computeBatch } from "./compute";
 import { runOnePass } from "./pass";
 import { ownedColumns } from "./registry";
+import { kernelDueSql } from "./runner";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
@@ -1174,6 +1176,73 @@ describe("evidence-facts kernel", () => {
         waitCause: null,
       });
     }
+  });
+
+  it("leaves hosted model Asks to their Pass and wakes it when the retained Answer arrives", async () => {
+    const ask = defineAsk({
+      feature: "fixture.hosted",
+      producer: "model",
+      hosted: true,
+      promptVersion: "1",
+      input: z.string(),
+      output: z.string(),
+    });
+    const pass = definePass({
+      name: "fixture.hosted",
+      run: async (_db, cursor) => ({ cursor, done: true }),
+    });
+    const kernel = createKernel([
+      defineModule({ name: "hosted", asks: [ask], passes: [pass] }),
+    ]);
+    const q = repositoryQueries(ctx.db);
+    const until = new Date(Date.now() + 60 * 60_000);
+    await kernel.startPass(ctx.db, pass, { availableAt: until });
+    await expect(kernel.withAsk(ctx.db, ask, "synthetic")).rejects.toThrow(
+      "must name its waiting Pass",
+    );
+    const options = { pass: { name: pass.name, key: "default" } };
+    await expect(
+      kernel.withAsk(
+        ctx.db,
+        {
+          ...ask,
+          produce: async () => {
+            throw new JobDeferredError(
+              "Synthetic funding",
+              until,
+              "ai_funding_window",
+            );
+          },
+        },
+        "synthetic",
+        options,
+      ),
+    ).rejects.toBeInstanceOf(JobDeferredError);
+    await q.execute(sql`UPDATE "Ask" SET "availableAt" = now()`);
+    expect((await q.execute<{ unit: string }>(kernelDueSql())).rows).toEqual(
+      [],
+    );
+    const [wake] = (
+      await q.execute<{ later: boolean }>(
+        sql`SELECT ${nextWakeSql()} > now() + interval '50 minutes' AS later`,
+      )
+    ).rows;
+    expect(wake?.later).toBe(true);
+    expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+    expect(
+      await kernel.withAsk(
+        ctx.db,
+        { ...ask, produce: async () => ({ output: "Synthetic answer" }) },
+        "synthetic",
+        options,
+      ),
+    ).toBe("Synthetic answer");
+    const [owner] = (
+      await q.execute<{ due: boolean; version: number }>(
+        sql`SELECT "availableAt" <= now() AS due, "wakeVersion" AS version FROM "Pass" WHERE name = ${pass.name}`,
+      )
+    ).rows;
+    expect(owner).toEqual({ due: true, version: 1 });
   });
 
   it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {

@@ -9,7 +9,6 @@ import type { DatabaseFreshnessRpc } from "./db/freshness/rpc";
 import type { CalendarFeedDurableObjectRpc } from "./domains/calendar/operations/rpc";
 import type { ImageProcessingCompanionRpc } from "./domains/image-processing/operations/rpc";
 import type { PurchaseImportRunAgentRpc } from "./domains/purchase-agent/service/environment";
-import type { CoordinatorGateRpc } from "./domains/purchase-import/operations/coordinator-gate-rpc";
 import type { UsdaReleaseRpc } from "./domains/usda-release/operations/rpc";
 
 export type AiResponseCacheDurableObject = AiResponseCacheRpc &
@@ -25,8 +24,6 @@ export type ImageProcessingDurableObject = ImageProcessingCompanionRpc &
   Rpc.DurableObjectBranded;
 export type PurchaseImportRunAgent = PurchaseImportRunAgentRpc &
   Rpc.DurableObjectBranded;
-export type CoordinatorGateDurableObject = CoordinatorGateRpc &
-  Rpc.DurableObjectBranded;
 export type UsdaReleaseDurableObject = UsdaReleaseRpc &
   Rpc.DurableObjectBranded;
 
@@ -39,7 +36,6 @@ export interface WorkerRpc {
   AiResponseCacheDurableObject: AiResponseCacheDurableObject;
   ChatGptPlanDurableObject: ChatGptPlanDurableObject;
   CalendarFeedDurableObject: CalendarFeedDurableObject;
-  CoordinatorGateDurableObject: CoordinatorGateDurableObject;
   DatabaseFreshnessDurableObject: DatabaseFreshnessDurableObject;
   ImageProcessingDurableObject: ImageProcessingDurableObject;
   PurchaseImportRunAgent: PurchaseImportRunAgent;

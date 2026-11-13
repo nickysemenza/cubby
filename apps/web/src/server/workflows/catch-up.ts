@@ -2,7 +2,6 @@ import { systemActor } from "@cubby/schemas/context";
 import { createLogger } from "@cubby/worker-tracing";
 
 import {
-  getCoordinatorGateNamespace,
   getPurchaseImportRunAgentNamespace,
   isCloudflareRuntime,
 } from "~/server/cf-env";
@@ -51,34 +50,15 @@ export async function maintainRunHistory(db: Database) {
   const [
     { expireStaleRuns },
     { reconcileWorkflowRuns },
-    { COORDINATOR_GATE_NAME },
+    { activeCoordinatorRuns },
   ] = await Promise.all([
     import("~/server/domains/purchase-import/operations/run-review"),
     import("~/server/workflows/runs/lifecycle"),
-    import("~/server/domains/purchase-import/operations/coordinator-gate"),
+    import("~/server/domains/run/repo/coordinator-dispatch"),
   ]);
-  // A coordinator holding or queued for a household turn is alive, not stale
-  // (a just-granted one may not have written activity yet). Without the
-  // gate's answer nothing is expired, but Workflow reconciliation still runs.
-  const gate = getCoordinatorGateNamespace();
-  if (!gate && isCloudflareRuntime())
-    throw new Error("COORDINATOR_GATE binding is unavailable");
-  const turns = gate
-    ? await gate
-        .getByName(COORDINATOR_GATE_NAME)
-        .status()
-        .catch((error: unknown) => {
-          log.error("coordinator gate unavailable; skipping stale-Run expiry", {
-            error,
-          });
-          return null;
-        })
-    : { holders: [], waiting: [] };
-  const stale = turns
-    ? await expireStaleRuns(db, new Date(), {
-        exempt: [...turns.holders, ...turns.waiting],
-      })
-    : { expired: 0, failures: [] };
+  const stale = await expireStaleRuns(db, new Date(), {
+    exempt: await activeCoordinatorRuns(db),
+  });
   const reconciled = await reconcileWorkflowRuns(db);
   return { ...stale, reconciled: reconciled.reconciled };
 }

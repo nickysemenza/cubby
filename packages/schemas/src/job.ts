@@ -312,21 +312,6 @@ export type JobKindDeclaration = JobKindPolicy & {
 };
 
 export const JOB_KIND_POLICY = {
-  "purchase.dispatch": {
-    stuck: { consequence: "New purchases won't import until this works." },
-    activityLabel: "Purchase import",
-    label: "Dispatch purchase research",
-    purpose: "Delivers admitted purchase work to its configured agent host.",
-    trigger: "Purchase workflow dispatch.",
-    targets: "The queued purchase dispatch event.",
-    effects: "Delivers the event and records the dispatch outcome.",
-    dependencies: "Configured purchase agent host and its credentials.",
-    cost: "The receiving agent’s work follows its own usage policy.",
-    exclusions:
-      "Duplicate or ineligible dispatches follow existing dispatch reconciliation.",
-    ...SERVER,
-    lane: "external",
-  },
   "run.funding-resume": {
     ...SERVER,
     label: "Resume funded Runs",

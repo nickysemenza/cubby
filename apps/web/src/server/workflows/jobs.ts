@@ -1,13 +1,9 @@
 import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
-import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
-import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
-import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
@@ -28,52 +24,8 @@ import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 import { derivedComputes } from "./derived-computes";
 
-/** Deliver one coordinator event through the environment `open` builds. */
-export const purchaseDispatchHandler = (
-  open: (
-    waitUntil: (work: Promise<unknown>) => void,
-  ) => Promise<PurchaseDispatchEnvironment>,
-) =>
-  defineJobHandler(purchaseAgentEvent, async (_db, _claim, event) => {
-    const pending: Promise<unknown>[] = [];
-    const outcome = await deliverPurchaseDispatch(
-      event,
-      await open((work) => {
-        pending.push(work);
-      }),
-    );
-    await Promise.all(pending);
-    // A full coordinator cap is a capacity wait, not a failed attempt. The
-    // coordinator keeps its place at the gate and brings this Job forward when
-    // a turn is reserved for it; the fallback re-polls well inside the gate's
-    // waiter lifetime.
-    // An unreachable gate is the same wait, re-polled sooner: nothing will
-    // wake this Job.
-    if (typeof outcome === "object")
-      throw outcome.waiting.unavailable
-        ? new JobDeferredError(
-            "Waiting for the coordinator gate to answer",
-            new Date(Date.now() + 60_000 + Math.random() * 60_000),
-            jobWaitReason.enum.provider_capacity,
-          )
-        : new JobDeferredError(
-            `Waiting for a coordinator turn (${outcome.waiting.holders} running)`,
-            new Date(Date.now() + 8 * 60_000 + Math.random() * 4 * 60_000),
-            jobWaitReason.enum.provider_capacity,
-          );
-    return { page: { done: true, result: { outcome } } };
-  });
-
 export const productionJobHandlers: JobHandlers = {
   ...backgroundJobHandlers,
-  "purchase.dispatch": purchaseDispatchHandler(async (waitUntil) => {
-    const env = getPurchaseDispatchHostEnv();
-    if (!env)
-      throw new Error("Purchase dispatch host environment is unavailable");
-    const { purchaseDispatchEnvironment } =
-      await import("~/server/domains/purchase-import/operations/agent-services");
-    return purchaseDispatchEnvironment(env, { waitUntil });
-  }),
   "run.funding-resume": defineJobHandler(
     // Rows enqueued before window keys still carry their Run; the handler resumes all.
     fundingResumeInput,

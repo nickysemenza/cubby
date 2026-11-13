@@ -136,9 +136,9 @@ async function ensureAsk(
   preferredId?: string,
 ): Promise<AskRow> {
   const result = await q.execute<AskRow>(sql`
-    INSERT INTO "Ask" (id,"inputHash", feature, producer, "promptVersion", input, "maxAttempts",executor)
+    INSERT INTO "Ask" (id,"inputHash", feature, producer, "promptVersion", input, "maxAttempts",executor, hosted)
     VALUES (coalesce(${preferredId ?? null}::uuid,gen_random_uuid()),${inputHash}, ${kind.feature}, ${kind.producer}, ${kind.promptVersion},
-      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"})
+      ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"}, ${kind.hosted ?? false})
     ON CONFLICT ("inputHash") DO UPDATE SET "inputHash" = excluded."inputHash"
     RETURNING id, state, attempts, "maxAttempts",
       (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed,
@@ -181,7 +181,7 @@ async function ensureAsk(
 /** Passes waiting on an ask run as soon as it settles. */
 async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
   await q.execute(sql`
-    UPDATE "Pass" p SET "availableAt" = now()
+    UPDATE "Pass" p SET "availableAt" = now(), "waitCause" = NULL, "wakeVersion" = p."wakeVersion" + 1
     FROM "AskScope" s
     WHERE s."askId" = ${askId}::uuid AND s."cancelledAt" IS NULL AND s."scopeKind" = ${PASS_WAITER}
       AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL`);
@@ -524,6 +524,8 @@ export async function withAsk<I, O>(
   input: I,
   options: AskWaiters = {},
 ): Promise<O> {
+  if (kind.hosted && !options.pass)
+    throw new KernelContractError("A hosted Ask must name its waiting Pass");
   const untyped: AskKind = kind;
   const q = repositoryQueries(db);
   const envelope = askEnvelope(untyped, input);
@@ -588,7 +590,9 @@ export async function runQueuedAsks(
   registry: KernelRegistry,
   limit: number,
 ): Promise<number> {
-  const runnable = [...registry.asks.values()].filter((kind) => kind.produce);
+  const runnable = [...registry.asks.values()].filter(
+    (kind) => kind.produce && !kind.hosted,
+  );
   const claimed = await claimAsks(db, runnable, limit);
   if (!claimed.length) return 0;
   const entries = claimed.map((ask) => {

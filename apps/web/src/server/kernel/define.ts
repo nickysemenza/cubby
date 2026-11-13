@@ -148,6 +148,8 @@ export type AskKind<I = unknown, O = unknown> = {
   readonly policy: AskPolicy;
   readonly maxAttempts: number;
   readonly claimLimit?: ClaimLimit;
+  /** The durable host re-enters withAsk; the worker cannot reconstruct its transport. */
+  readonly hosted?: boolean;
   /** Member-facing name of what this ask supplies, for its gap. */
   readonly label: string;
   // Methods, so an AskKind<I, O> is an AskKind of the registry's shared shape.
@@ -171,6 +173,7 @@ export function defineAsk<I, O>(spec: {
   policy?: AskPolicy;
   maxAttempts?: number;
   claimLimit?: ClaimLimit;
+  hosted?: boolean;
   label?: string;
   admit?(
     db: Database,

@@ -26,14 +26,18 @@ import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
+import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import { startPass, withAsk } from "~/server/kernel/api";
+import { ClaimLapsedError, fenceClaim } from "~/server/kernel/claim";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
 
-import { CoordinatorLeaseLostError } from "./coordinator-turn";
+import { agentTurnAsk } from "./agent-turn-ask";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -99,7 +103,7 @@ export async function admissionRead<T>(
   } catch (error: unknown) {
     // A lost coordinator turn is a transport fault pi retries, never a
     // final admission refusal.
-    if (error instanceof CoordinatorLeaseLostError)
+    if (error instanceof ClaimLapsedError)
       throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}`, {
         cause: error,
       });
@@ -123,29 +127,108 @@ export async function admissionRead<T>(
   }
 }
 
-/**
- * Bring this Run's `purchase.dispatch` forward once the gate reserved it a
- * turn; it deferred when none was free. Whether a waiting Job was found.
- * Host-only: the agent never calls it.
- */
+/** Wake the Run's Pass for a durable coordinator alarm or member prompt. */
 export function wakeWaitingDispatch(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
-): Promise<boolean> {
-  const runId = runEntityId.parse(rawRunId);
+): Promise<void> {
   return withHostDatabase(env, ctx, async (db) => {
-    const [{ bringRunWaitingJobForward }, { wakeJobs }] = await Promise.all([
-      import("~/server/generic/jobs/repo/operator"),
-      import("~/server/workflows/background-tasks/publish"),
-    ]);
-    const woken = await bringRunWaitingJobForward(db, {
-      runId,
-      kind: "purchase.dispatch",
-      waitReason: "provider_capacity",
+    const { purchaseDispatchPass } =
+      await import("~/server/workflows/purchase-dispatch-pass");
+    await startPass(db, purchaseDispatchPass, {
+      key: rawRunId,
+      runId: rawRunId,
+      cursor: { runId: rawRunId, events: [] },
     });
-    if (woken) await wakeJobs({ source: "coordinator-turn.reserved" });
-    return woken;
+  });
+}
+
+/** Host RPCs and every scoped effect require the Run's live Pass token. */
+export function fenceDispatch(
+  env: Env,
+  ctx: HostContext,
+  runId: string,
+  token: string,
+): Promise<void> {
+  return withHostDatabase(env, ctx, (db) =>
+    fenceClaim(
+      repositoryQueries(db),
+      { table: "Pass", name: "purchase.dispatch", key: runId },
+      token,
+    ),
+  );
+}
+
+/** The committed Answer precedes replaying a complete model response to Pi. */
+export function agentModelTurn(
+  env: Env,
+  ctx: HostContext,
+  rawRunId: string,
+  input: { generation: string; request: z.JSONType },
+  send: () => Promise<Response>,
+  fence: () => Promise<void>,
+): Promise<Response> {
+  return withHostDatabase(env, ctx, async (db, service) => {
+    const scope = await service.loadRunScope(db, runEntityId.parse(rawRunId));
+    const { generation, request } = input;
+    if (scope.public.dispatchEventId !== generation)
+      throw new ClaimLapsedError();
+    const kind = {
+      ...agentTurnAsk,
+      produce: async () => {
+        await fence();
+        const response = await send();
+        if (response.status === 403 || response.status === 429) {
+          const { pendingFundingResumeAt } =
+            await import("~/server/domains/run/repo/execution-context");
+          const { readRun } =
+            await import("~/server/domains/run/repo/ai-work-state");
+          const owner = await readRun(db, runEntityId.parse(rawRunId));
+          const until =
+            owner?.status === "paused_auth" &&
+            owner.failureCode === "execution_limit"
+              ? await pendingFundingResumeAt(db)
+              : null;
+          if (until)
+            throw new JobDeferredError(
+              "Model turn waits for funding",
+              until,
+              "ai_funding_window",
+            );
+        }
+        return {
+          output: {
+            status: response.status,
+            headers: Object.fromEntries(
+              [...response.headers].filter(([key]) => key !== "set-cookie"),
+            ),
+            body: await response.text(),
+          },
+        };
+      },
+    };
+    try {
+      const answer = await withAsk(
+        db,
+        kind,
+        { runId: rawRunId, generation, request },
+        { runId: rawRunId, pass: { name: "purchase.dispatch", key: rawRunId } },
+      );
+      return new Response(answer.body, {
+        status: answer.status,
+        headers: answer.headers,
+      });
+    } catch (error) {
+      if (error instanceof JobDeferredError)
+        return Response.json(
+          {
+            error: { type: "cubby_admission_refused", message: error.message },
+          },
+          { status: error.reason === "ai_funding_window" ? 403 : 429 },
+        );
+      throw error;
+    }
   });
 }
 
@@ -170,8 +253,10 @@ export function authorizeLegacyRetirement(
 export function purchaseDispatchEnvironment(
   env: Env,
   ctx: HostContext,
+  claimToken: string,
 ): PurchaseDispatchEnvironment {
   return {
+    claimToken,
     run: (runId) => runServicesFor(env, ctx, runId),
     coordinator: (agentId) => env.PURCHASE_IMPORT_RUN.getByName(agentId),
   };
