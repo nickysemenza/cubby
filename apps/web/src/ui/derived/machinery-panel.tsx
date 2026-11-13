@@ -43,9 +43,9 @@ const SOURCE_STATUS = {
   failed: "failed",
 } as const satisfies Record<MachineryRowStatus, string>;
 
-/** An unknown paid call is an answer gap only a member can settle (ADR 0029 section 8). */
+/** A paid call only a member can settle: its actions decide `ask:<inputHash>` (ADR 0029 section 8). */
 const unknownCall = (gap: MachineryGap) =>
-  gap.kind === "answer" && gap.actor === "you";
+  gap.actions.some((action) => action.subject.startsWith("ask:"));
 
 const gapStatus = (gap: MachineryGap): MachineryRowStatus =>
   unknownCall(gap)
@@ -95,7 +95,7 @@ function GapActions({
     <div className="flex flex-wrap gap-2">
       {gap.actions.map((action) => (
         <Button
-          key={`${action.channel}:${action.kind}:${action.subject}:${action.field ?? ""}`}
+          key={`${action.channel}:${action.kind}:${action.subject}:${action.field ?? ""}:${JSON.stringify(action.value ?? null)}`}
           size="xs"
           variant="outline"
           disabled={pending}

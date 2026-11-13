@@ -80,7 +80,9 @@ function admitted(
         action.channel === decision.channel &&
         action.kind === decision.kind &&
         action.subject === target &&
-        action.field === (decision.field ?? null),
+        action.field === (decision.field ?? null) &&
+        JSON.stringify(action.value ?? null) ===
+          JSON.stringify(decision.value ?? null),
     ),
   );
 }

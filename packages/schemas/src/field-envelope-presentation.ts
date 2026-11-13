@@ -29,11 +29,13 @@ export const FIELD_WAITING_LABEL = "Waiting for Cubby";
 export const FIELD_STALE_LABEL = "out of date";
 /** The one reset action: release the field so Cubby or inheritance decides it. */
 export const FIELD_RESET_LABEL = "Let Cubby decide";
+/** The own level of a field whose intent is to inherit: Cubby or inheritance decides it. */
+export const FIELD_RELEASED_LABEL = "Cubby decides this";
 /** The veto on a value Cubby set. */
 export const FIELD_VETO_LABEL = "Wrong, clear it";
 
 /** Twin of Swift `FieldEnvelope.noneLabel(field:)`. */
-function fieldNoneLabel(labels?: Labels | null): string {
+export function fieldNoneLabel(labels?: Labels | null): string {
   return labels?.none ?? "None";
 }
 
@@ -333,9 +335,28 @@ export function machineryCoverageLabel(collection: {
     : null;
 }
 
-/** @public An unknown paid call: Cubby cannot tell whether it went through. */
+/**
+ * @public A paid call Cubby will not resend on its own. Saying it was not
+ * sent lets Cubby send it again, which is charged again if it did go through.
+ */
 export const MACHINERY_UNKNOWN_CALL_NOTE =
-  "Cubby can't tell whether this paid call went through, so it won't send it again on its own.";
+  "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again.";
+/** @public After a decision: the scope reruns before the value changes. */
+export const MACHINERY_DECIDED_NOTE =
+  "Recorded. Cubby reworks this next; the stage shows its progress.";
+
+/** @public The reset preview's caveat when it still needs answers. */
+export function machineryResetPendingNote(
+  pendingAnswers: number,
+): string | null {
+  if (pendingAnswers === 0) return null;
+  return `after ${plural(pendingAnswers, "more answer", "more answers")}`;
+}
+
+/** @public A merged record's notice: "PUR-2345 was merged into this record." */
+export function absorbedRecordNotice(absorbed: string): string {
+  return `${absorbed} was merged into this record.`;
+}
 /** @public The header's second line when nothing is owed. */
 export const MACHINERY_NO_GAP_LABEL = "Nothing is waiting on this.";
 /** @public The empty panel. */

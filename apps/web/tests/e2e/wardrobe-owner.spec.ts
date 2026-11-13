@@ -67,7 +67,7 @@ test("wardrobe lists only the owner's entries and follows explicit ownership edi
     .getByRole("button", { name: "How owner is determined", exact: true })
     .click();
   await expect(
-    page.getByText("Following inherited values", { exact: true }),
+    page.getByText("Cubby decides this", { exact: true }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "Set to Household", exact: true })

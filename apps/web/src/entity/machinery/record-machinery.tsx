@@ -3,6 +3,7 @@ import {
   kernelStageLine,
   machineryCountLine,
   machineryGapSentence,
+  MACHINERY_DECIDED_NOTE,
   MACHINERY_NO_GAP_LABEL,
 } from "@cubby/schemas/field-envelope-presentation";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
@@ -46,6 +47,7 @@ function useMachineryActions(ref: MachineryRef) {
   const approve = useMutation(machineryApi.approveDrift.mutationOptions());
   return {
     pending: decide.isPending || approve.isPending,
+    decided: decide.isSuccess || approve.isSuccess,
     error: decide.error ?? approve.error,
     act: (action: KernelGapAction) =>
       decide.mutate({
@@ -57,6 +59,7 @@ function useMachineryActions(ref: MachineryRef) {
             kind: action.kind,
             subject: action.subject,
             field: action.field,
+            ...(action.value === undefined ? {} : { value: action.value }),
           },
         ],
       }),
@@ -136,6 +139,11 @@ export function MachineryPanelFor({
         }
         pending={actions.pending}
       />
+      {/* Rendered before it changes so assistive tech announces it; the value
+          changes only when the scope reruns. */}
+      <output className="text-xs text-muted-foreground">
+        {actions.decided ? MACHINERY_DECIDED_NOTE : null}
+      </output>
       {actions.error ? (
         <ErrorDisplay error={actions.error} title="this decision" />
       ) : null}
@@ -212,6 +220,11 @@ function MachineryHeader({
           <MachineryPanelFor target={target} read={read} scope="record" />
         </PopoverContent>
       </Popover>
+      {/* Rendered before it changes so assistive tech announces it; the value
+          changes only when the scope reruns. */}
+      <output className="text-xs text-muted-foreground">
+        {actions.decided ? MACHINERY_DECIDED_NOTE : null}
+      </output>
       {actions.error ? (
         <ErrorDisplay error={actions.error} title="this decision" />
       ) : null}

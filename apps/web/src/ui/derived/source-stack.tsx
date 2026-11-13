@@ -62,7 +62,11 @@ export function SourceStack({
                     {row.statusLabel}
                   </span>
                 ) : null}
-                {row.title}
+                {typeof row.title === "string" ? (
+                  <span className="min-w-0 break-words">{row.title}</span>
+                ) : (
+                  row.title
+                )}
                 {row.statusLabel ? null : (
                   <span className="sr-only"> · {row.status}</span>
                 )}

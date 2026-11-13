@@ -1,15 +1,19 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   fieldDecisionOf,
+  fieldResult,
   fieldValueOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
 import {
+  FIELD_RELEASED_LABEL,
   FIELD_RESET_LABEL,
   FIELD_STALE_LABEL,
   FIELD_WAITING_LABEL,
   fieldDecidingLine,
   fieldEmptyLabel,
+  fieldNoneLabel,
+  machineryResetPendingNote,
 } from "@cubby/schemas/field-envelope-presentation";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import type { Machinery } from "@cubby/schemas/kernel/machinery";
@@ -74,6 +78,9 @@ function EntityDecisionValue({
   );
 }
 
+/** The machinery read's reset preview is a field result. */
+const previewResult = fieldResult(z.json());
+
 /** The deciding level from the server's envelope; clients never rerun precedence. */
 function decidingLevel(
   envelope: ReadableFieldEnvelope | null,
@@ -131,6 +138,7 @@ function OwnLevel({
   envelope,
   data,
   deciding,
+  machineryPreview,
   onSet,
 }: {
   entity: Entity;
@@ -139,21 +147,34 @@ function OwnLevel({
   envelope: ReadableFieldEnvelope;
   data?: FieldExplanationOutput;
   deciding: boolean;
+  /** The field scope's reset preview, preferred when the entity has machinery. */
+  machineryPreview?: Machinery["resetPreview"];
   onSet?: () => void;
 }) {
+  const queryClient = useQueryClient();
   const { assignment, controls } = envelope.current;
+  const labels = resolutionPolicyFor(queryClient, entity, field)?.labels;
   if (assignment === null && controls.kind !== "editable") return null;
   const origin = data?.origin ?? null;
-  const resetPreview =
-    controls.kind === "editable" &&
-    controls.reset.kind === "available" &&
-    controls.reset.preview.kind === "ready"
+  const kernelPreview = machineryPreview
+    ? previewResult.safeParse(machineryPreview.result)
+    : null;
+  const resetPreview = kernelPreview?.success
+    ? kernelPreview.data
+    : controls.kind === "editable" &&
+        controls.reset.kind === "available" &&
+        controls.reset.preview.kind === "ready"
       ? controls.reset.preview.result
       : null;
+  const pendingNote = machineryPreview
+    ? machineryResetPendingNote(machineryPreview.pendingAnswers)
+    : null;
   return (
     <div className="grid gap-1">
       {assignment?.kind === "value" ? (
         <DecisionValue entity={entity} field={field} value={assignment.value} />
+      ) : assignment?.kind === "none" ? (
+        <span>{fieldNoneLabel(labels)}</span>
       ) : deciding ? (
         <ResultValue envelope={envelope} entity={entity} field={field} />
       ) : null}
@@ -161,7 +182,9 @@ function OwnLevel({
         <FieldOriginLine
           data={data}
           origin={origin}
-          resetOffered={resetPreview !== null}
+          resetOffered={
+            controls.kind === "editable" && controls.reset.kind === "available"
+          }
           guess={
             origin.guess ? (
               <DecisionValue
@@ -194,6 +217,7 @@ function OwnLevel({
             field={field}
             value={fieldValueOf({ result: resetPreview })}
           />
+          {pendingNote ? <span>{pendingNote}</span> : null}
         </p>
       ) : null}
     </div>
@@ -246,7 +270,9 @@ export function FieldChain({
       ? fieldDecidingLine({ kind: "none", by: by ?? "you" })
       : assignment?.kind === "value" && by
         ? fieldDecidingLine({ kind: "set", by })
-        : "Set here";
+        : assignment?.kind === "inherit"
+          ? FIELD_RELEASED_LABEL
+          : "Set here";
   const result = envelope?.result;
   const firstGap = machinery?.gaps.items[0];
   const rows: Parameters<typeof DecisionLevels>[0]["rows"][number][] = [
@@ -261,6 +287,7 @@ export function FieldChain({
           envelope={envelope}
           data={data}
           deciding={deciding === "own"}
+          machineryPreview={machinery?.resetPreview}
           onSet={onSet}
         />
       ) : null,

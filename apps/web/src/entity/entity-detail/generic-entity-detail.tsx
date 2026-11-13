@@ -1,4 +1,3 @@
-// Keep the catalog constructor and its universal metadata off the detail entry.
 import { relationshipSources } from "@cubby/schemas/connected-view-definitions";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
@@ -6,9 +5,12 @@ import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
+// Keep the catalog constructor and its universal metadata off the detail entry.
+import { absorbedRecordNotice } from "@cubby/schemas/field-envelope-presentation";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { embeddableEntitySchema } from "@cubby/schemas/search";
+import { parseShortcode } from "@cubby/shared";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
@@ -22,10 +24,11 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
+import { useLocation, useSearch } from "@tanstack/react-router";
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { RecordEmoji, recordEmojiOf } from "~/entity/components/record-emoji";
 import { heroChipLabel } from "~/entity/display/enum-field-display";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
@@ -628,6 +631,15 @@ function FullEntityDetail<E extends GenericDetailEntity>({
     from: "__root__",
     select: (search) => search.nativeWorkspace !== undefined,
   });
+  // An absorbed code opens its survivor (ADR 0029 section 9); say so.
+  const requested = useLocation({
+    select: (location) =>
+      decodeURIComponent(location.pathname.split("/").pop() ?? ""),
+  });
+  const absorbed =
+    parseShortcode(requested)?.type === entity && requested !== bag.id
+      ? requested
+      : null;
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -920,6 +932,12 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         status={status}
         summary={
           <>
+            {absorbed ? (
+              <p className="py-2 text-sm">
+                {absorbedRecordNotice(absorbed)}{" "}
+                <EntityRefLink entity={entity} id={bag.id} name={title} />
+              </p>
+            ) : null}
             <RecordMachineryHeader entity={entity} id={bag.id} />
             <HeaderLines
               lines={headerLinesOf(queryClient, entity, record)}
