@@ -956,6 +956,21 @@ describe("statement spending review and re-import", () => {
         ]),
       );
       const kernel = await productionKernel();
+      // Capture wakes even when the runner consumes them before this journey ends.
+      await getDb(ctx.db).execute(sql`CREATE TABLE "SyntheticKernelWake" (
+        kind text NOT NULL, key text NOT NULL, raises int NOT NULL DEFAULT 1,
+        PRIMARY KEY (kind, key)
+      )`);
+      await getDb(ctx.db)
+        .execute(sql`CREATE FUNCTION synthetic_kernel_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN
+        INSERT INTO "SyntheticKernelWake" (kind, key) VALUES (NEW."scopeKind", NEW."scopeKey")
+        ON CONFLICT (kind, key) DO UPDATE SET raises = "SyntheticKernelWake".raises + 1;
+        RETURN NEW;
+      END $$`);
+      await getDb(ctx.db)
+        .execute(sql`CREATE TRIGGER synthetic_kernel_wake AFTER INSERT OR UPDATE OF seq ON "ScopeDirty"
+      FOR EACH ROW EXECUTE FUNCTION synthetic_kernel_wake()`);
       const measured = await withDatabaseOperationMetrics(async (metrics) => {
         if (count === 32) {
           await reconcileNow(
@@ -1025,16 +1040,25 @@ describe("statement spending review and re-import", () => {
         kind: string;
         n: number;
         historical: number;
+        raises: number;
       }>(
-        sql`SELECT "scopeKind" AS kind, count(*)::int n, count(*) FILTER (WHERE "scopeKey"=ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "ScopeDirty" GROUP BY "scopeKind"`,
+        sql`SELECT kind, count(*)::int n, sum(raises)::int raises, count(*) FILTER (WHERE key=ANY(${textArrayParam(seededScopes.map((scope) => scope.key))}))::int historical FROM "SyntheticKernelWake" GROUP BY kind`,
       );
       expect(
         settledFanout.rows.reduce((sum, row) => sum + row.historical, 0),
       ).toBe(0);
       console.log(
         "statement-kernel-settled-fanout",
-        JSON.stringify({ charges: count, pending: settledFanout.rows }),
+        JSON.stringify({ charges: count, woken: settledFanout.rows }),
       );
+      expect(
+        settledFanout.rows.find((row) => row.kind === "purchaseEvent")?.n,
+      ).toBe(count);
+      await getDb(ctx.db).execute(
+        sql`DROP TRIGGER synthetic_kernel_wake ON "ScopeDirty"`,
+      );
+      await getDb(ctx.db).execute(sql`DROP FUNCTION synthetic_kernel_wake()`);
+      await getDb(ctx.db).execute(sql`DROP TABLE "SyntheticKernelWake"`);
       const totals = await getDb(ctx.db).execute<{
         purchases: number;
         expenses: number;

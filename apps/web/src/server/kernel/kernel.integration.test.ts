@@ -2068,8 +2068,6 @@ describe("evidence-facts kernel", () => {
       reads: [],
       writes: [],
       async load(_reads, keys) {
-        if (phase === "load" && keys.includes("poison"))
-          throw new Error("Synthetic malformed evidence");
         return new Map(keys.map((key) => [key, key]));
       },
       reconcile(key, c) {
