@@ -17,6 +17,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { resumeFundingPausedRuns } from "~/server/ai/funding-wait";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
+import { kernelPass } from "~/server/db/kernel-schema";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -25,6 +26,10 @@ import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { productionJobHandlers } from "~/server/workflows/jobs";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { startPass } from "~/server/kernel/api";
+import { purchaseDispatchPass } from "~/server/workflows/purchase-dispatch-pass";
 
 import { planRunPreflight, paidRunPreflight } from "./execution-transport";
 
@@ -69,7 +74,7 @@ describe("household AI funding at the paid transport boundary", () => {
         kind: "member",
         userId: ctx.actor.userId,
       });
-    return ensureRun(ctx.db, ctx.actor, {
+    const id = await ensureRun(ctx.db, ctx.actor, {
       purpose,
       trigger,
       status: "running",
@@ -117,6 +122,13 @@ describe("household AI funding at the paid transport boundary", () => {
       }),
       ...(parentRunId && { parentRunId }),
     });
+    if (purpose === "mail_import")
+      await startPass(ctx.db, purchaseDispatchPass, {
+        key: id,
+        runId: id,
+        cursor: { runId: id, events: [] },
+      });
+    return id;
   }
 
   async function spend(
@@ -473,120 +485,37 @@ describe("household AI funding at the paid transport boundary", () => {
     });
   });
 
-  it("resumes paused imports and leaves deferred discovery to the same due Job", async () => {
+  it("resumes expired imports and releases discovery's retained funding Pass on an explicit reset", async () => {
     const runId = await setup("mail_import");
     await spend(runId, AI_BUDGET_LIMIT_USD);
     await expect(
       paidRunPreflight(ctx.db, runId)(chatRequest()),
     ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
     const discovery = await setup("mail_discovery");
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "paused_auth", failureCode: "execution_limit" })
-      .where(eq(run.id, discovery));
-    const discoveryJob = await enqueueJob(ctx.db, {
-      key: `run:${discovery}`,
-      kind: "run.execute",
-      runId: discovery,
-      input: { runId: discovery, purpose: "mail_discovery" },
-      availableAt: new Date(Date.now() + 3_600_000),
+    await expect(
+      paidRunPreflight(ctx.db, discovery)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    expect(await readRunPass(ctx.db, discovery)).toMatchObject({
+      state: "waiting",
+      waitCause: "funding",
+      attempts: 0,
     });
-    // Paused this window: still waiting.
-    expect(await resumeFundingPausedRuns(ctx.db, {})).toBe(0);
+    expect(await resumeFundingPausedRuns(ctx.db)).toBe(0);
     await pausedBefore(runId);
-    await pausedBefore(discovery);
-    await updateJobs(
-      ctx.db,
-      { id: discoveryJob.id },
-      { availableAt: new Date(0) },
-    );
-    const [resume] = await readJobs(ctx.db, { kind: "run.funding-resume" });
-    // One resume per funding window, not per Run: its handler resumes all.
-    expect(resume).toMatchObject({
-      runId: null,
-      key: expect.stringMatching(/^funding-resume:\d{4}-\d{2}-\d{2}T/),
-      waitReason: "ai_funding_window",
-      availableAt: expect.any(Date),
-    });
-    if (!resume) throw new Error("Expected durable funding resume");
-    // The window ends: the timer's own deadline has passed.
-    await updateJobs(
-      ctx.db,
-      { id: resume.id },
-      {
-        availableAt: new Date(0),
-        input: { until: new Date(0).toISOString() },
-      },
-    );
-    expect(await advanceJob(ctx.db, resume.id, productionJobHandlers)).toBe(
-      "succeeded",
-    );
+    expect(await resumeFundingPausedRuns(ctx.db)).toBe(1);
     expect(await status(runId)).toMatchObject({ status: "running" });
-    expect((await status(runId))?.failureCode).not.toBe("execution_limit");
     expect(await status(discovery)).toMatchObject({
       status: "paused_auth",
       failureCode: "execution_limit",
     });
-    expect(await claimJob(ctx.db, discoveryJob.id)).toMatchObject({
-      id: discoveryJob.id,
-      generation: discoveryJob.generation,
+    await resumeFundingPausedRuns(ctx.db, {
+      anyWindow: true,
+      now: new Date(Date.now() + 1),
     });
-    expect(
-      (await readJobs(ctx.db, { kind: "purchase.dispatch" })).map(
-        (item) => item.runId,
-      ),
-    ).toEqual([runId]);
-  });
-
-  // Production finding: each paused Run armed its own resume per window,
-  // although one handler run resumes every paused Run.
-  it("arms one funding resume per window for every paused Run", async () => {
-    const first = await setup("mail_import");
-    const second = await setup("mail_import");
-    await spend(first, AI_BUDGET_LIMIT_USD);
-    for (const runId of [first, second])
-      await expect(
-        paidRunPreflight(ctx.db, runId)(chatRequest()),
-      ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
-    expect(await status(second)).toMatchObject({ status: "paused_auth" });
-    const timers = await readJobs(ctx.db, { kind: "run.funding-resume" }).then(
-      (rows) => rows.map(({ key, runId }) => ({ key, runId })),
-    );
-    expect(timers).toEqual([
-      { key: expect.stringMatching(/^funding-resume:/), runId: null },
-    ]);
-  });
-
-  // Review finding: a budget raise brought the funding timer forward and it
-  // completed early, so a re-exhaustion in the same window reused the
-  // completed key and nothing resumed the Run.
-  it("keeps the funding timer's window end through a budget raise", async () => {
-    const runId = await setup("mail_import");
-    await spend(runId, AI_BUDGET_LIMIT_USD);
-    await expect(
-      paidRunPreflight(ctx.db, runId)(chatRequest()),
-    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
-    const timer = async () =>
-      (await readJobs(ctx.db, { kind: "run.funding-resume" }))[0];
-    const armed = await timer();
-    if (!armed) throw new Error("Expected durable funding resume");
-    await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
-    expect(await advanceJob(ctx.db, armed.id, productionJobHandlers)).toBe(
-      "succeeded",
-    );
-    expect(await timer()).toMatchObject({
-      state: "queued",
-      availableAt: armed.availableAt,
-      waitReason: "ai_funding_window",
-    });
-    await expect(
-      paidRunPreflight(ctx.db, runId)(chatRequest()),
-    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
-    expect(await status(runId)).toMatchObject({ status: "paused_auth" });
-    expect(await timer()).toMatchObject({
-      id: armed.id,
-      state: "queued",
-      availableAt: armed.availableAt,
+    expect(await readRunPass(ctx.db, discovery)).toMatchObject({
+      state: "due",
+      waitCause: null,
+      attempts: 0,
     });
   });
 
@@ -605,9 +534,12 @@ describe("household AI funding at the paid transport boundary", () => {
       resumeFundingPausedRuns(ctx.db),
     ]);
     expect([...counts].sort()).toEqual([0, 1]);
-    expect(await readJobs(ctx.db, { kind: "purchase.dispatch" })).toHaveLength(
-      1,
-    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(kernelPass)
+        .where(eq(kernelPass.name, "purchase.dispatch")),
+    ).toHaveLength(1);
   });
 
   it("pauses a reclassification Run for recovery in a later window", async () => {

@@ -12,6 +12,7 @@ import { recordScopeKey } from "@cubby/schemas/kernel/capability";
 import {
   kernelJson,
   askState,
+  kernelWaitCause,
   MACHINERY_RESPONSE_BYTES,
 } from "@cubby/schemas/kernel/machinery";
 import { sql } from "drizzle-orm";
@@ -115,6 +116,8 @@ type AskRow = {
   maxAttempts: number;
   lapsed: boolean;
   cancelled: boolean;
+  availableAt: string;
+  waitCause: string | null;
 };
 
 export type AskWaiters = {
@@ -140,7 +143,7 @@ async function ensureAsk(
     VALUES (coalesce(${preferredId ?? null}::uuid,gen_random_uuid()),${inputHash}, ${kind.feature}, ${kind.producer}, ${kind.promptVersion},
       ${JSON.stringify(envelope)}::jsonb, ${kind.maxAttempts},${kind.produce ? null : "external"}, ${kind.hosted ?? false})
     ON CONFLICT ("inputHash") DO UPDATE SET "inputHash" = excluded."inputHash"
-    RETURNING id, state, attempts, "maxAttempts",
+    RETURNING id, state, attempts, "maxAttempts", "waitCause", ${isoText(sql`"availableAt"`)} AS "availableAt",
       (state = ${ASK.sent} AND "claimDeadline" <= now()) AS lapsed,
       "cancelledAt" IS NOT NULL AS cancelled`);
   const row = result.rows[0]!;
@@ -184,7 +187,7 @@ async function wakeWaitingPasses(q: Q, askId: string): Promise<void> {
     UPDATE "Pass" p SET "availableAt" = now(), "waitCause" = NULL, "wakeVersion" = p."wakeVersion" + 1
     FROM "AskScope" s
     WHERE s."askId" = ${askId}::uuid AND s."cancelledAt" IS NULL AND s."scopeKind" = ${PASS_WAITER}
-      AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL`);
+      AND s."scopeKey" = p.name || ':' || p.key AND p."doneAt" IS NULL AND p."waitCause" IS DISTINCT FROM ${kernelWaitCause.enum.funding}`);
 }
 
 /**
@@ -290,7 +293,13 @@ async function commitAnswer(
 async function settleSent(
   db: Database,
   registry: KernelRegistry,
-  ask: { id: string; token: string; attempts: number; maxAttempts: number },
+  ask: {
+    id: string;
+    token: string;
+    attempts: number;
+    maxAttempts: number;
+    wakeVersion: number;
+  },
   error: UnparsedError,
   aborted: boolean,
 ): Promise<void> {
@@ -312,9 +321,14 @@ async function settleSent(
         failure.kind === "deferred" && failure.reason === "ai_funding_window"
           ? "funding"
           : "provider_capacity";
+      const released =
+        cause === "funding"
+          ? sql`"wakeVersion" <> ${ask.wakeVersion}`
+          : sql`false`;
       await q.execute(sql`
         UPDATE "Ask" SET state = ${ASK.queued}, "sentAt" = NULL, "claimToken" = NULL, "claimDeadline" = NULL,
-          "availableAt" = ${until.toISOString()}::timestamp, "waitCause" = ${cause}, "lastError" = ${raw}
+          "availableAt" = CASE WHEN ${released} THEN now() ELSE ${until.toISOString()}::timestamp END,
+          "waitCause" = CASE WHEN ${released} THEN NULL ELSE ${cause} END, "lastError" = ${raw}
         WHERE ${owned}`);
     } else if (
       aborted ||
@@ -419,6 +433,7 @@ async function executeClaimed(
         entry.ask.token,
         entry.ask.attempts,
         error,
+        entry.ask.wakeVersion,
       );
       results[index] = { status: "failed", error };
     }
@@ -554,6 +569,12 @@ export async function withAsk<I, O>(
     throw new AskExhaustedError(
       `The ${kind.feature} call for ${inputHash} spent its ${row.maxAttempts} attempts.`,
     );
+  if (row.waitCause === "funding" && new Date(row.availableAt) > new Date())
+    throw new JobDeferredError(
+      "The model Ask waits for funding",
+      new Date(row.availableAt),
+      "ai_funding_window",
+    );
   const claimed = await claimAsk(db, row.id, kind.claimLimit);
   if (!claimed)
     throw inFlight(
@@ -572,6 +593,7 @@ export async function withAsk<I, O>(
           feature: kind.feature,
           input: envelope,
           attempts: claimed.attempts,
+          wakeVersion: claimed.wakeVersion,
           deadline: claimed.deadline,
           token: claimed.token,
           maxAttempts: row.maxAttempts,

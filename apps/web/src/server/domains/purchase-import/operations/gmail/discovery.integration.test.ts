@@ -732,9 +732,10 @@ describe("scheduled Gmail discovery", () => {
         availableAt: budget.until,
       });
       const calls = relevance.mock.calls.length;
-      await repositoryQueries(ctx.db).execute(
-        sql`UPDATE "Pass" SET "availableAt" = now() WHERE name = 'run.execute' AND key = ${state.params.runId}`,
-      );
+      const { startPass } = await import("~/server/kernel/api");
+      const { runExecutePass } =
+        await import("~/server/workflows/runs/run-pass");
+      await startPass(ctx.db, runExecutePass, { key: state.params.runId });
       await advanceRunPass(ctx.db);
       expect(relevance).toHaveBeenCalledTimes(calls);
       expect(await readRunPass(ctx.db, state.params.runId)).toMatchObject({

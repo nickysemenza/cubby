@@ -47,6 +47,7 @@ import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
+import { fundingWaitUntilSql } from "~/server/domains/run/repo/run-execution";
 import {
   readDuePassPositions,
   readRunPasses,
@@ -335,11 +336,9 @@ export async function readRunRollups(
           startedAt: run.startedAt,
           stalled: runStalledSql(now),
           // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-          // The one resume per funding window wakes every funding-paused Run (`run.funding-resume`).
           fundingResume: sql<
             number | null
-          >`(SELECT (extract(epoch FROM min(f."availableAt")) * 1000)::float8 FROM "Job" f
-            WHERE f.kind = ${"run.funding-resume"} AND f.state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}))`,
+          >`extract(epoch FROM ${fundingWaitUntilSql(sql`${run.id}`)}) * 1000`,
         })
         .from(run)
         .where(inArray(run.id, ids)),

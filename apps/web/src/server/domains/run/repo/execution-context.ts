@@ -1,5 +1,4 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobState, jobWaitReason } from "@cubby/schemas/job";
 import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   runPurpose,
@@ -19,7 +18,6 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
@@ -29,9 +27,10 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import {
+  fundingWaitUntilSql,
+  RUN_EXECUTE_PASS,
+} from "~/server/domains/run/repo/run-execution";
 
 /** Paid work belongs to a live running Run. */
 export async function assertRunExecutable(db: Database, runId: RunId) {
@@ -98,26 +97,16 @@ export async function pauseExecutionRun(
   return paused.length > 0;
 }
 
-export const fundingResumeInput = z.object({
-  runId: z.uuid().optional(),
-  until: z.iso.datetime(),
-});
-
-/** When the earliest pending funding window ends; null when none is pending. */
+/** The earliest frozen funding wait; a due wait is ready to resume. */
 export async function pendingFundingResumeAt(
   db: Database,
+  runId?: string,
 ): Promise<Date | null> {
-  const jobs = await readJobs(
-    db,
-    { kind: "run.funding-resume", states: ["queued", "retry_wait", "running"] },
-    { order: ["availableAt"] },
+  const result = await unwrapDb(db).execute<{ epoch: number | null }>(
+    sql`SELECT extract(epoch FROM ${fundingWaitUntilSql(runId ? sql`${runId}::uuid` : undefined)}) * 1000 AS epoch`,
   );
-  return (
-    jobs
-      .map((job) => new Date(fundingResumeInput.parse(job.input).until))
-      .filter((until) => until > new Date())
-      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null
-  );
+  const epoch = result.rows[0]?.epoch;
+  return epoch === null || epoch === undefined ? null : new Date(Number(epoch));
 }
 
 /** Explicit budget raises release discovery without reopening member stops. */
@@ -189,17 +178,10 @@ export async function pauseForFunding(
     );
     // A fenced caller that lost the race owes no resume.
     if (generation !== undefined && !paused) return;
-    const { until } = error;
-    // One resume per funding window: its handler resumes every paused Run.
-    const key = `funding-resume:${error.status.windowEnd}`;
-    await enqueueJob(tx, {
-      key,
-      kind: "run.funding-resume",
-      input: { until: until.toISOString() },
-      availableAt: until,
-    });
+    // The Pass owns the frozen deadline, including a refusal before its driver catches up.
     await unwrapDb(tx)
-      .execute(sql`UPDATE "Job" SET "waitReason"=${jobWaitReason.enum.ai_funding_window}, "availableAt"=${until.toISOString()}::timestamp
-      WHERE key=${key} AND state=${jobState.enum.queued}`);
+      .execute(sql`UPDATE "Pass" SET "waitCause" = ${kernelWaitCause.enum.funding},
+      "availableAt" = ${error.until.toISOString()}::timestamp, "updatedAt" = now()
+      WHERE "runId" = ${runId}::uuid AND "doneAt" IS NULL AND "cancelledAt" IS NULL`);
   });
 }

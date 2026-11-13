@@ -311,3 +311,4 @@ export {
   type ExternalAskClaim,
 } from "./ask";
 export { cancelRunAsks, retryRunAsks } from "./requesters";
+export { releaseFundingWaits } from "./claim";

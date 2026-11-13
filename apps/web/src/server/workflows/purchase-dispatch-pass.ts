@@ -58,7 +58,13 @@ export const purchaseDispatchPass = definePass({
           current?.status === "paused_auth" &&
           current.failureCode === "execution_limit"
         ) {
-          const until = await pendingFundingResumeAt(db);
+          const until = await pendingFundingResumeAt(db, runId);
+          if (!until) {
+            await (
+              await import("~/server/ai/funding-wait")
+            ).resumeFundingPausedRuns(db);
+            return { cursor, done: false, availableAt: new Date() };
+          }
           return {
             cursor: { runId: cursor.runId, events: [] },
             done: false,
@@ -68,8 +74,21 @@ export const purchaseDispatchPass = definePass({
         }
         const working = await coordinator.work(token);
         await Promise.all(pending.splice(0));
-        if (!working)
+        if (!working) {
+          const stopped = await readRun(db, runId);
+          if (
+            stopped?.status === "paused_auth" &&
+            stopped.failureCode === "execution_limit"
+          )
+            return {
+              cursor: { runId: cursor.runId, events: [] },
+              done: false,
+              availableAt:
+                (await pendingFundingResumeAt(db, runId)) ?? new Date(),
+              waitCause: "funding",
+            };
           return { cursor: { runId: cursor.runId, events: [] }, done: true };
+        }
         await new Promise((resolve) => setTimeout(resolve, 5_000));
       }
     } finally {

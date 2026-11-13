@@ -67,7 +67,7 @@ export async function grantPaid(
 }
 
 type FundingWait = {
-  name: "runs" | "images" | "jobs" | "asks";
+  name: "runs" | "images" | "jobs" | "kernel";
   count(db: Database, now: Date): Promise<number>;
   wake(db: Database, now: Date, anyWindow: boolean): Promise<number>;
 };
@@ -75,19 +75,18 @@ type FundingWait = {
 /** A funding change counts and releases the same rows, in wake order. */
 export const fundingWaiters: readonly FundingWait[] = [
   {
-    name: "asks",
+    name: "kernel",
     async count(db) {
-      const result = await repositoryQueries(db).execute<{ n: number }>(sql`
-        SELECT count(*)::int AS n FROM "Ask"
-        WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL`);
-      return result.rows[0]!.n;
+      const result = await repositoryQueries(db).execute<{
+        n: number;
+      }>(sql`SELECT (
+        (SELECT count(*) FROM "Ask" WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL)
+        + (SELECT count(*) FROM "Pass" WHERE "waitCause" = ${kernelWaitCause.enum.funding} AND "doneAt" IS NULL AND "cancelledAt" IS NULL)
+      )::int AS n`);
+      return result.rows[0]?.n ?? 0;
     },
     async wake(db, now) {
-      const result = await repositoryQueries(db).execute<{ id: string }>(sql`
-        UPDATE "Ask" SET "waitCause" = NULL, "availableAt" = ${now}, "updatedAt" = ${now}
-        WHERE state = ${askState.enum.queued} AND "waitCause" = ${kernelWaitCause.enum.funding} AND "cancelledAt" IS NULL
-        RETURNING id`);
-      return result.rows.length;
+      return (await import("~/server/kernel/api")).releaseFundingWaits(db, now);
     },
   },
   {

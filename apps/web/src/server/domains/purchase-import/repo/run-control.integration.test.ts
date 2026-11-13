@@ -1,6 +1,7 @@
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -761,13 +762,11 @@ describe("purchase import run admission", () => {
         },
         fundingUnavailable,
       });
-    const resumes = async () => {
-      const { job } = await import("~/server/db/schema");
-      return getDb(ctx.db)
-        .select({ key: job.key })
-        .from(job)
-        .where(eq(job.kind, "run.funding-resume"));
-    };
+    const resumes = () =>
+      getDb(ctx.db)
+        .select({ key: kernelPass.key })
+        .from(kernelPass)
+        .where(eq(kernelPass.waitCause, kernelWaitCause.enum.funding));
 
     // Regression: the pause read "AI budget reached: $0 of $5" although the
     // gateway, not the budget, refused.

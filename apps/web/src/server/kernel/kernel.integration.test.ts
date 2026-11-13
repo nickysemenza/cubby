@@ -54,6 +54,7 @@ import {
 import { applyComputed } from "./apply";
 import { AskUnknownError, expireAsks, runQueuedAsks } from "./ask";
 import {
+  releaseFundingWaits,
   nextWakeSql,
   claimAsk,
   claimAsks,
@@ -1177,6 +1178,55 @@ describe("evidence-facts kernel", () => {
       });
     }
   });
+
+  it.each(["admit", "produce"] as const)(
+    "does not restore a funding wait when reset races with %s",
+    async (phase) => {
+      const until = new Date(Date.now() + 3_600_000);
+      const refuse = async () => {
+        await releaseFundingWaits(ctx.db);
+        throw new JobDeferredError(
+          "Synthetic refusal",
+          until,
+          "ai_funding_window",
+        );
+      };
+      const ask = defineAsk({
+        feature: `fixture.funding-${phase}`,
+        producer: "model",
+        promptVersion: "1",
+        input: z.string(),
+        output: z.string(),
+        ...(phase === "admit" ? { admit: refuse } : {}),
+        produce: async () => {
+          await refuse();
+          return { output: "unreachable" };
+        },
+      });
+      const kernel = createKernel([
+        defineModule({ name: "funding", asks: [ask] }),
+      ]);
+      await expect(
+        kernel.withAsk(ctx.db, ask, "synthetic"),
+      ).rejects.toBeInstanceOf(JobDeferredError);
+      const [row] = (
+        await repositoryQueries(ctx.db).execute<{
+          state: string;
+          due: boolean;
+          waitCause: string | null;
+          attempts: number;
+        }>(
+          sql`SELECT state, "availableAt" <= now() AS due, "waitCause", attempts FROM "Ask" WHERE feature = ${ask.feature}`,
+        )
+      ).rows;
+      expect(row).toEqual({
+        state: "queued",
+        due: true,
+        waitCause: null,
+        attempts: 0,
+      });
+    },
+  );
 
   it("leaves hosted model Asks to their Pass and wakes it when the retained Answer arrives", async () => {
     const ask = defineAsk({

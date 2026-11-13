@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3f3ef4ac-e0b9-4343-8018-c2f82819d18a",
+  "prevIds": [
+    "568412cd-d167-4f36-a488-bac1ba76fe28"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Ask",
+        "wakeVersion"
+      ],
+      "writes": [
+        "s|col|public.Ask.wakeVersion",
+        "n|col|public.Ask.wakeVersion",
+        "e|col|public.Ask.wakeVersion"
+      ],
+      "reads": [
+        "n|tbl|public.Ask",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Ask",
+        "name": "wakeVersion",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

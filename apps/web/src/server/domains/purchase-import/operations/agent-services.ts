@@ -195,7 +195,7 @@ export function agentModelTurn(
           const until =
             owner?.status === "paused_auth" &&
             owner.failureCode === "execution_limit"
-              ? await pendingFundingResumeAt(db)
+              ? await pendingFundingResumeAt(db, rawRunId)
               : null;
           if (until)
             throw new JobDeferredError(

@@ -1,0 +1,1 @@
+ALTER TABLE "Ask" ADD COLUMN "wakeVersion" integer DEFAULT 0 NOT NULL;

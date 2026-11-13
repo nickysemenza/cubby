@@ -1,3 +1,4 @@
+import type { JobWaitingOnReason, RunWaitGroup } from "@cubby/schemas/job";
 /**
  * A Run's execution as the kernel's `run.execute` Pass (ADR 0029 section 7):
  * one Pass row per step-ledger or AI-work Run, keyed by the Run's id. These
@@ -5,7 +6,7 @@
  * itself is declared in `workflows/runs/run-pass.ts`. Mail discovery still
  * uses the same Pass claim and retains its provider-page checkpoint.
  */
-import type { JobWaitingOnReason, RunWaitGroup } from "@cubby/schemas/job";
+import { askState, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   isExecutedRunPurpose,
   type ExecutedRunPurpose,
@@ -284,3 +285,13 @@ export const runHasLivePass = (input: {
  AND p.cursor->>'purpose' = ${input.purpose} AND p.cursor->>'generation' = (${input.generation})::text
  AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p.attempts < p."maxAttempts"
  ${input.requireAttempt ? sql`AND ((p.cursor->>'generation')::int > 1 OR p.attempts > 0 OR p."claimToken" IS NOT NULL)` : sql``})`;
+
+/** The frozen future funding deadline of a Run's kernel work, or all work when unscoped. */
+export const fundingWaitUntilSql = (runId?: SQL): SQL => sql`least(
+  (SELECT min(p."availableAt") FROM "Pass" p WHERE p."waitCause" = ${kernelWaitCause.enum.funding}
+    AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL AND p."availableAt" > now()
+    ${runId ? sql`AND p."runId" = ${runId}` : sql``}),
+  (SELECT min(a."availableAt") FROM "Ask" a WHERE a.state = ${askState.enum.queued}
+    AND a."waitCause" = ${kernelWaitCause.enum.funding} AND a."cancelledAt" IS NULL AND a."availableAt" > now()
+    ${runId ? sql`AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = a.id AND s."runId" = ${runId})` : sql``})
+)`;

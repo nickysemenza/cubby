@@ -180,7 +180,7 @@ describe("background work status", () => {
     // One deferral that parks a Job for hours is a timer, not stopped work.
     await enqueueJob(ctx.db, {
       key: "synthetic.timer",
-      kind: "run.funding-resume",
+      kind: "synthetic.timer",
       input: {},
     });
     await updateJobs(
@@ -243,7 +243,7 @@ describe("background work status", () => {
       title: "synthetic-unit keeps failing",
       diagnostic: expect.stringContaining("Synthetic drain page failure"),
     });
-    expect(item("run.funding-resume")).toBeUndefined();
+    expect(item("synthetic.timer")).toBeUndefined();
     expect(item("drain:synthetic-waiting:deferring")).toMatchObject({
       title: "synthetic-waiting keeps waiting",
       body: "Every pass has deferred for 40 minutes, so this work isn't finishing.",

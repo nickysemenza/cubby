@@ -1,10 +1,9 @@
-import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
+import { type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
-import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   derivedRebuildDue,
@@ -14,8 +13,6 @@ import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import { type PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { kernelDueSql, kernelNextSql } from "~/server/kernel/runner";
@@ -26,30 +23,7 @@ import { derivedComputes } from "./derived-computes";
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundJobHandlers,
-  "run.funding-resume": defineJobHandler(
-    // Rows enqueued before window keys still carry their Run; the handler resumes all.
-    fundingResumeInput,
-    async (db, _claim, { until }) => {
-      // A budget raise brings every queued Job forward and resumes paused
-      // work itself. This timer keeps its window end, so a re-exhaustion in
-      // the same window still has a pending resume under this key.
-      const deadline = new Date(until);
-      if (deadline.getTime() > Date.now())
-        return {
-          page: {
-            done: false,
-            waitUntil: deadline,
-            waitReason: jobWaitReason.enum.ai_funding_window,
-          },
-        };
-      await (
-        await import("~/server/ai/funding-wait")
-      ).resumeFundingPausedRuns(db);
-      return { page: { done: true } };
-    },
-  ),
 } satisfies Record<
-  // Drain record rows are never claimed as Jobs.
   Exclude<keyof typeof JOB_KIND_POLICY, "background.drain">,
   JobHandler
 >;

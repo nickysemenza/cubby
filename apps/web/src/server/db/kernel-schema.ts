@@ -189,6 +189,7 @@ export const ask = pgTable(
     claimPartition: text("claimPartition"),
     executor: text("executor"),
     hosted: boolean("hosted").notNull().default(false),
+    wakeVersion: integer("wakeVersion").notNull().default(0),
     maxAttempts: integer("maxAttempts").notNull().default(3),
     cancelledAt: timestamp("cancelledAt", { mode: "date" }),
     sentAt: timestamp("sentAt", { mode: "date" }),

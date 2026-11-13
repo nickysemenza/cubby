@@ -222,7 +222,7 @@ describe("AI funding availability", () => {
       work: 1,
     });
     const now = new Date();
-    const asks = fundingWaiters.find((entry) => entry.name === "asks")!;
+    const asks = fundingWaiters.find((entry) => entry.name === "kernel")!;
     expect(await asks.count(ctx.db, now)).toBe(1);
     expect(await asks.wake(ctx.db, now, true)).toBe(1);
     expect(await asks.count(ctx.db, now)).toBe(0);

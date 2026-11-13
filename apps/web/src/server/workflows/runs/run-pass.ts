@@ -147,7 +147,7 @@ async function advance(
     before.failureCode === "execution_limit"
   ) {
     // Only the funding window's end or an explicit launch lifts a funding pause.
-    const pending = await pendingFundingResumeAt(db);
+    const pending = await pendingFundingResumeAt(db, runId);
     if (
       pending &&
       !fundingRelease.safeParse(before.progress).data?.fundingReleasedAt

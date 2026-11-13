@@ -29,10 +29,10 @@ async function dispatchRunEvent(
     VALUES ('purchase.dispatch', ${event.runId}, ${event.runId}::uuid,
       ${JSON.stringify({ runId: event.runId, events: [event] })}::jsonb)
     ON CONFLICT (name, key) DO UPDATE SET
-      cursor = jsonb_build_object('runId', excluded.key, ${EVENT_QUEUE},
-        CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL THEN excluded.cursor->${EVENT_QUEUE}
-          WHEN coalesce("Pass".cursor->${EVENT_QUEUE}, '[]'::jsonb) @> (excluded.cursor->${EVENT_QUEUE}) THEN "Pass".cursor->${EVENT_QUEUE}
-          ELSE coalesce("Pass".cursor->${EVENT_QUEUE}, '[]'::jsonb) || (excluded.cursor->${EVENT_QUEUE}) END),
+      cursor = jsonb_build_object('runId', excluded.key, ${EVENT_QUEUE}::text,
+        CASE WHEN "Pass"."doneAt" IS NOT NULL OR "Pass"."cancelledAt" IS NOT NULL THEN excluded.cursor->${EVENT_QUEUE}::text
+          WHEN coalesce("Pass".cursor->${EVENT_QUEUE}::text, '[]'::jsonb) @> (excluded.cursor->${EVENT_QUEUE}::text) THEN "Pass".cursor->${EVENT_QUEUE}::text
+          ELSE coalesce("Pass".cursor->${EVENT_QUEUE}::text, '[]'::jsonb) || (excluded.cursor->${EVENT_QUEUE}::text) END),
       "claimToken" = CASE WHEN "Pass"."cancelledAt" IS NOT NULL THEN NULL ELSE "Pass"."claimToken" END,
       "claimDeadline" = CASE WHEN "Pass"."cancelledAt" IS NOT NULL THEN NULL ELSE "Pass"."claimDeadline" END,
       "doneAt" = NULL, "cancelledAt" = NULL, "availableAt" = now(), attempts = 0,
@@ -57,7 +57,7 @@ export async function dispatchStartedRun(
 
 /** Only the current unstarted generation can inherit terminal Pass diagnostics. */
 const failedUnstartedDispatch = sql`j.name='purchase.dispatch' AND j.attempts >= j."maxAttempts" AND j."runId"=r.id
-      AND EXISTS (SELECT 1 FROM jsonb_array_elements(j.cursor->${EVENT_QUEUE}) event WHERE event->>'type'='start_or_resume' AND event->>'eventId'=r."dispatchEventId"::text)
+      AND EXISTS (SELECT 1 FROM jsonb_array_elements(j.cursor->${EVENT_QUEUE}::text) event WHERE event->>'type'='start_or_resume' AND event->>'eventId'=r."dispatchEventId"::text)
       AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND ${notDeleted("r")}`;
 
 /** Returns how many Runs it failed. */

@@ -151,6 +151,7 @@ export async function settleFailure(
   token: string,
   attempts: number,
   error: UnparsedError,
+  wakeVersion?: number,
 ): Promise<JobFailure> {
   const failure = classifyJobFailure(error);
   const raw = rawError(error);
@@ -168,9 +169,16 @@ export async function settleFailure(
         failure.kind === "deferred"
           ? WAIT_CAUSE[failure.reason]
           : "provider_capacity";
+      const released =
+        cause === "funding" &&
+        wakeVersion !== undefined &&
+        target.table !== "ScopeDirty"
+          ? sql`"wakeVersion" <> ${wakeVersion}`
+          : sql`false`;
       await q.execute(sql`
         UPDATE ${tableOf(target)} SET "claimToken" = NULL, "claimDeadline" = NULL,
-          "availableAt" = ${until.toISOString()}::timestamp, "waitCause" = ${cause},
+          "availableAt" = CASE WHEN ${released} THEN now() ELSE ${until.toISOString()}::timestamp END,
+          "waitCause" = CASE WHEN ${released} THEN NULL ELSE ${cause} END,
           "lastError" = ${raw}
         WHERE ${owned}`);
       return failure;
@@ -324,11 +332,17 @@ export async function claimAsk(
   db: Database,
   id: string,
   limit?: ClaimLimit,
-): Promise<{ token: string; attempts: number; deadline: Date } | null> {
+): Promise<{
+  token: string;
+  attempts: number;
+  deadline: Date;
+  wakeVersion: number;
+} | null> {
   const token = crypto.randomUUID();
   const row = await withPartition<{
     attempts: number;
     deadline: string;
+    wakeVersion: number;
   } | null>(
     db,
     limit,
@@ -337,12 +351,13 @@ export async function claimAsk(
       const result = await q.execute<{
         attempts: number;
         deadline: string;
+        wakeVersion: number;
       }>(sql`
       UPDATE "Ask" SET "claimToken" = ${token}::uuid, "claimPartition" = ${limit?.partition ?? null},
         "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
       WHERE id = ${id}::uuid AND state = ${ASK.queued} AND "cancelledAt" IS NULL
         AND "availableAt" <= now() AND attempts < "maxAttempts" AND ("claimToken" IS NULL OR "claimDeadline" <= now())
-      RETURNING attempts, ${isoText(sql`"claimDeadline"`)} AS deadline`);
+      RETURNING attempts, "wakeVersion", ${isoText(sql`"claimDeadline"`)} AS deadline`);
       return result.rows[0] ?? null;
     },
     async (q) => {
@@ -405,6 +420,7 @@ export async function claimExternalAskRow(
 }
 
 export type ClaimedAsk = {
+  wakeVersion: number;
   id: string;
   inputHash: string;
   feature: string;
@@ -462,6 +478,7 @@ async function claimAskGroup(
       const token = crypto.randomUUID();
       const result = await q.execute<{
         id: string;
+        wakeVersion: number;
         inputHash: string;
         feature: string;
         input: unknown;
@@ -481,7 +498,7 @@ async function claimAskGroup(
     UPDATE "Ask" a SET "claimToken" = ${token}::uuid, "claimPartition" = ${partition?.partition ?? null},
       "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
     FROM picked WHERE a.id = picked.id
-    RETURNING a.id, a."inputHash", a.feature, a.input, a.attempts, ${isoText(sql`a."claimDeadline"`)} AS deadline`);
+    RETURNING a.id, a."wakeVersion", a."inputHash", a.feature, a.input, a.attempts, ${isoText(sql`a."claimDeadline"`)} AS deadline`);
       return result.rows.map((row) => ({
         ...row,
         token,
@@ -595,3 +612,27 @@ export const nextWakeSql = (): SQL => sql`(
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND attempts < "maxAttempts")
   )::timestamp)`;
+
+/** Clear funding waits atomically; version live holders so an older refusal cannot put them back. */
+export async function releaseFundingWaits(
+  db: Database,
+  now = new Date(),
+): Promise<number> {
+  const result = await repositoryQueries(db).execute<{ n: number }>(sql`
+    WITH asks AS (
+      UPDATE "Ask" SET "availableAt" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN ${now.toISOString()}::timestamp ELSE "availableAt" END,
+        "waitCause" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN NULL ELSE "waitCause" END,
+        "wakeVersion" = "wakeVersion" + 1, "updatedAt" = ${now.toISOString()}::timestamp
+      WHERE state IN (${ASK.queued}, ${ASK.sent}) AND "cancelledAt" IS NULL
+        AND ("waitCause" = ${kernelWaitCause.enum.funding} OR "claimToken" IS NOT NULL)
+      RETURNING id
+    ), passes AS (
+      UPDATE "Pass" SET "availableAt" = ${now.toISOString()}::timestamp,
+        "waitCause" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN NULL ELSE "waitCause" END,
+        "wakeVersion" = "wakeVersion" + 1, "updatedAt" = ${now.toISOString()}::timestamp
+      WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL
+        AND ("waitCause" = ${kernelWaitCause.enum.funding} OR "claimToken" IS NOT NULL)
+      RETURNING name
+    ) SELECT ((SELECT count(*) FROM asks) + (SELECT count(*) FROM passes))::int AS n`);
+  return result.rows[0]?.n ?? 0;
+}

@@ -312,19 +312,6 @@ export type JobKindDeclaration = JobKindPolicy & {
 };
 
 export const JOB_KIND_POLICY = {
-  "run.funding-resume": {
-    ...SERVER,
-    label: "Resume funded Runs",
-    purpose:
-      "Resumes eligible funding-paused work after the funding window ends.",
-    trigger: "A funding-window wait.",
-    targets: "Funding-paused Runs eligible when the window expires.",
-    effects: "Rechecks funding-paused work and resumes eligible execution.",
-    dependencies: "Funding policy and the scheduled window deadline.",
-    cost: "Resumed work may incur AI charges within its funding policy.",
-    exclusions:
-      "Does not bypass funding eligibility or force a member-paused Run.",
-  },
   "location-ai.inventory.refresh": {
     ...SERVER,
     maxAttempts: 10,

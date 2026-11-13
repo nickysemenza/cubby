@@ -3,6 +3,7 @@
  * resumable cursor under the shared claim. A pass page publishes only while
  * its claim is live; a cancelled or lapsed claim writes nothing.
  */
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
@@ -56,8 +57,8 @@ export async function startPass(
         THEN NULL ELSE "Pass"."lastError" END,
       "runId" = coalesce(excluded."runId", "Pass"."runId"),
       "doneAt" = NULL, "cancelledAt" = NULL,
-      "availableAt" = least("Pass"."availableAt", excluded."availableAt"),
-      "wakeVersion" = "Pass"."wakeVersion" + 1, "updatedAt" = now()`);
+      "availableAt" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."availableAt" ELSE least("Pass"."availableAt", excluded."availableAt") END,
+      "wakeVersion" = CASE WHEN "Pass"."waitCause" = ${kernelWaitCause.enum.funding} AND "Pass"."doneAt" IS NULL AND "Pass"."cancelledAt" IS NULL THEN "Pass"."wakeVersion" ELSE "Pass"."wakeVersion" + 1 END, "updatedAt" = now()`);
   await wakeAfterCommit(db);
 }
 
@@ -123,6 +124,7 @@ export async function runOnePass(
       claimed.token,
       claimed.attempts,
       error,
+      claimed.wakeVersion,
     );
   }
   return true;
