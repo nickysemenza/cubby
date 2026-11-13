@@ -241,12 +241,10 @@ describe("entity display image resolver", () => {
   });
 
   it("uses a supported unique merchant logo after confirmed images and rejects ambiguity", async () => {
-    const { record } = await createFinancialEvidenceFixture(ctx.db);
     const merchant = `Synthetic merchant ${crypto.randomUUID()}`;
-    await getDb(ctx.db)
-      .update(sourceTransactionRecord)
-      .set({ merchant })
-      .where(eq(sourceTransactionRecord.id, record.id));
+    const { record } = await createFinancialEvidenceFixture(ctx.db, {
+      merchant,
+    });
     const seller = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic inferred seller",
     });

@@ -66,6 +66,7 @@ import {
   policyDelete,
 } from "~/server/generic/removal/repo/dispositions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 export const ledgerPartyScaffold = listScaffold("ledgerParty", ledgerParty, {
   readSchema: ledgerPartyRepositoryReadSchema,
@@ -224,6 +225,7 @@ export const createLedgerParty = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const id = await withTransaction(db, async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       if (data.kind === "household") {
         const [existing] = await tx
           .select({ id: ledgerParty.id })
@@ -419,6 +421,7 @@ export async function mergeLedgerParties(
   let foodEntryEdgesRepointed = 0;
   let deviceEdgesRepointed = 0;
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const parties = await tx
       .select()
       .from(ledgerParty)

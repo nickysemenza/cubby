@@ -1,3 +1,4 @@
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import { buildEntity } from "tooling/factories/build";
 import { createBankTransactions } from "~/server/domains/financial-transaction/repo/bank-mutations";
 import { createPurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
@@ -742,6 +743,7 @@ export async function seedPerformanceCorpus(
     ]);
   };
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     // A full corpus exceeds Postgres's bind limit with three binds per row.
     // One JSON input preserves the bulk write and its ordinary FK/unique checks.
     await tx.execute(sql`

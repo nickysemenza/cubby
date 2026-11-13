@@ -41,6 +41,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { redistributeReplacementAttributions } from "./aggregate-replacement";
 import { findVendorOrderOwner, vendorOrderOwners } from "./order-identity";
@@ -616,6 +617,7 @@ export async function prepareSourceOrderReconciliation(
   if ("sourceOrderId" in input)
     return prepareAcceptedSourceOrderReconciliation(db, input, actor);
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select(runFindingColumns)

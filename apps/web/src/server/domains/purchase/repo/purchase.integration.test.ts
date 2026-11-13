@@ -42,6 +42,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import {
   makeExpenseInput,
   createProductFixture,
@@ -526,6 +527,7 @@ describe("purchase repository — mergePurchases", () => {
     const locked = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const editing = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: purchase.id })
         .from(purchase)

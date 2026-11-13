@@ -78,6 +78,7 @@ import {
   SHORTCODE_TABLE,
   type ShortcodeTable,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 type Policy = Readonly<Record<string, OperationDisposition>>;
 type Tx = DrizzleTransaction;
@@ -386,6 +387,7 @@ export const deleteByPolicy = async <E extends RemovableEntity>(
 ): Promise<PolicyDeleteResult<E>> => {
   const { entity, policy, shortcodes, actor, removal = "soft" } = args;
   return withTransactionOn(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const requested = [
       ...new Set(
         args.ids ?? (await resolveAllOrThrow(tx, entity, shortcodes ?? [])),

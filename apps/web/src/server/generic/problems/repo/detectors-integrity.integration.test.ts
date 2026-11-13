@@ -634,14 +634,16 @@ const SOURCE_FACTORIES = {
     }),
   "SourceTransactionRecord.batchId": async (db: Database, targetId: string) => {
     const { record } = await createFinancialEvidenceFixture(db);
-    await getDb(db)
-      .update(sourceTransactionRecord)
-      .set({
+    const [linked] = await getDb(db)
+      .insert(sourceTransactionRecord)
+      .values({
+        ...record,
+        id: parseEntityId("sourceTransactionRecord", crypto.randomUUID()),
         batchId: parseEntityId("transactionImport", targetId),
         rowPosition: null,
       })
-      .where(eq(sourceTransactionRecord.id, record.id));
-    return record;
+      .returning();
+    return linked!;
   },
   "ExternalSource.vendorId": async (db, targetId) => {
     const slug = uniq("synthetic-source")

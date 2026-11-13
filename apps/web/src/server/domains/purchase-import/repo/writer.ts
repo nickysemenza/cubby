@@ -125,6 +125,7 @@ import {
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   learnPurchaseProductExternalId,
@@ -1096,6 +1097,7 @@ export async function importVendorOrder(
         );
   // eslint-disable-next-line complexity
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const identityProposals: Parameters<typeof upsertAgentProductMatch>[1][] =
       [];
     const onIdentifierCollision = (

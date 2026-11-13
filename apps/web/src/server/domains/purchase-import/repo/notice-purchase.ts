@@ -14,6 +14,7 @@ import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
 import { purchase, vendorAccount } from "~/server/db/schema";
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import { lockPartySettlement } from "./retained-settlement";
@@ -61,6 +62,7 @@ export async function createNoticePurchase(
 ): Promise<ShortcodeFor<"purchase"> | null> {
   if (!input.actor.runId)
     throw new Error("A notice Purchase is written under its mail import Run");
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   await lockPartySettlement(tx, input.ledgerPartyId);
   const [held] = await tx
     .select({ id: purchase.id })

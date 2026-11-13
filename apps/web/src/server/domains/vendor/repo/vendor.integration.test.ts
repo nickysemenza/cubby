@@ -43,6 +43,7 @@ import {
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 import {
   createProductFixture,
   makeProductInput,
@@ -535,6 +536,7 @@ describe("vendor repository — mergeVendors", () => {
     const locked = Promise.withResolvers<number>();
     const release = Promise.withResolvers<void>();
     const editing = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: vendor.id })
         .from(vendor)
@@ -594,6 +596,7 @@ describe("vendor repository — mergeVendors", () => {
     const editLocked = Promise.withResolvers<number>();
     const editRelease = Promise.withResolvers<void>();
     const learning = getDb(ctx.db).transaction(async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       await tx
         .select({ id: vendor.id })
         .from(vendor)

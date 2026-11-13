@@ -30,6 +30,7 @@ import {
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   commitSourceOrderReconciliation,
@@ -349,6 +350,7 @@ export async function prepareAcceptedSourceOrderReconciliation(
   actor: ActorContext,
 ) {
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { fix, ownerId } = await acceptedFix(
       tx,
       input.sourceOrderId,
@@ -481,6 +483,7 @@ export async function commitAcceptedSourceOrderReconciliation(
 ) {
   const input = commitAcceptedSourceOrderReconciliationInput.parse(rawInput);
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const { fix, ownerId } = await acceptedFix(
       tx,
       input.sourceOrderId,

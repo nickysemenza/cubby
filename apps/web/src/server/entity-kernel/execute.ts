@@ -9,7 +9,6 @@ import { z } from "zod";
 
 import { generatedEntityRelationListResultSchema } from "~/entity/generated/entity-relation-lists.gen";
 import { deleteStoredObjects } from "~/server/clients/s3";
-import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { createAppError } from "~/server/errors/app-error";
 import { generatedEntityResolveCapabilities } from "~/server/generated/entity-kernel-entities.gen";
@@ -27,6 +26,7 @@ import {
   findRelatedSearchHits,
   findSearchHits,
 } from "~/server/generic/search/service/search.service";
+import { householdWrite } from "~/server/kernel/gate";
 import { workflow } from "~/server/workflows/runtime/builder";
 import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
@@ -102,7 +102,7 @@ const executeMerge = bindWorkflow(
       return { binding, operation };
     })
     .commit("merged", async ({ context }, { input, owner }) =>
-      withTransactionDatabase(context.db, async (db) => {
+      householdWrite(context.db, async (db) => {
         const writeContext = {
           ...context,
           db,
@@ -228,7 +228,7 @@ export const resolveEntity = async (
       `${ENTITY_LABEL[entity]} resolve never creates rows; create the missing ${ENTITY_LABEL[entity]} explicitly or pick a candidate.`,
     );
   const resolved = command.create
-    ? await withTransactionDatabase(ctx.db, async (transactionDb) => {
+    ? await householdWrite(ctx.db, async (transactionDb) => {
         const rows = await resolveNames(transactionDb, entity, requests, {
           create: true,
           actor: ctx.actorContext,

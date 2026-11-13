@@ -31,6 +31,7 @@ import {
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import { inventoryAuditRow } from "./helpers";
 import {
@@ -38,13 +39,14 @@ import {
   loadEffectiveInventoryOwnership,
 } from "./ownership";
 
-const withSerializableConfirmation = async <Result>(
+const withOwnershipConfirmation = async <Result>(
   db: Database,
   confirm: (tx: DrizzleTransaction) => Promise<Result>,
 ): Promise<Result> => {
   try {
-    return await withTransaction(db, confirm, {
-      isolationLevel: "serializable",
+    return await withTransaction(db, async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
+      return confirm(tx);
     });
   } catch (error) {
     if (isSerializationFailure(error)) {
@@ -270,7 +272,7 @@ export const confirmInventoryOwnership = async (
   quantity: number | undefined,
   actor: ActorContext,
 ): Promise<InventoryId[]> =>
-  await withSerializableConfirmation(db, async (tx) => {
+  await withOwnershipConfirmation(db, async (tx) => {
     const row = await tx.query.inventoryEntry.findFirst({
       where: {
         RAW: (table: PgTable) =>
@@ -326,7 +328,7 @@ export const confirmInventoryExpenseBeneficiary = async (
   expectedEvidenceFingerprint: string,
   actor: ActorContext,
 ) =>
-  await withSerializableConfirmation(db, async (tx) => {
+  await withOwnershipConfirmation(db, async (tx) => {
     const inventory = await tx.query.inventoryEntry.findFirst({
       where: {
         RAW: (table: PgTable) =>

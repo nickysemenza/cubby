@@ -848,6 +848,7 @@ export async function createPurchases(
   actor: ActorContext,
 ) {
   if (!inputs.length) return [];
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   const vendorIds = await resolveAllOrThrow(
     tx,
     "vendor",
@@ -2043,6 +2044,7 @@ export const foldChargeInto = async (
   actor: ActorContext,
   options: { notes?: string | null } = {},
 ): Promise<void> => {
+  await enterWriteTransaction(tx, { lane: "money", mode: "member" });
   // Implicit folds from Expense corrections must read notes after concurrent edits commit.
   await lockAndValidateForDelete(
     tx,

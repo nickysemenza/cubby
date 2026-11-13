@@ -72,6 +72,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -503,6 +504,7 @@ export async function resolveRunFinding(
       "ask_member needs the one question the member must answer.",
     );
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
       .select({
@@ -673,6 +675,7 @@ export async function resolveArrivedFindingsForPurchase(
   actor: ActorContext,
 ): Promise<{ resolved: number }> {
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const openFindings = await tx
       .select({ id: runFinding.id })
       .from(runFinding)
