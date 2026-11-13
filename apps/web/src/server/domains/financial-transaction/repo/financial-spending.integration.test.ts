@@ -991,19 +991,24 @@ describe("shared spending booking", () => {
       }),
       advice,
     };
+    const reviewed = { ...request, spendingCategoryId: category.id };
     const page = await prepare();
     const shared = await Promise.all(
       Array.from({ length: 4 }, () =>
-        previewFinancialSpending(ctx.db, request, undefined, page),
+        previewFinancialSpending(ctx.db, reviewed, undefined, page),
       ),
     );
-    const fresh = await previewFinancialSpending(ctx.db, request);
+    const fresh = await previewFinancialSpending(ctx.db, reviewed);
     expect(shared).toEqual(Array.from({ length: 4 }, () => fresh));
     expect(fresh.status).toBe("ready");
 
     const plan = await previewFinancialSpending(
       ctx.db,
-      { transactionId: transaction.output.id, advice },
+      {
+        transactionId: transaction.output.id,
+        advice,
+        spendingCategoryId: category.id,
+      },
       undefined,
       page,
     );
@@ -1017,11 +1022,11 @@ describe("shared spending booking", () => {
     ).rejects.toThrow(/changed/);
     const next = await previewFinancialSpending(
       ctx.db,
-      request,
+      reviewed,
       undefined,
       await prepare(),
     );
-    expect(next).toEqual(await previewFinancialSpending(ctx.db, request));
+    expect(next).toEqual(await previewFinancialSpending(ctx.db, reviewed));
     expect(next.snapshot).not.toBe(fresh.snapshot);
 
     await getDb(ctx.db)
@@ -1190,6 +1195,7 @@ describe("shared spending booking", () => {
       const plan = await previewFinancialSpending(ctx.db, {
         transactionId: transaction.output.id,
         advice,
+        spendingCategoryId: category.id,
         ...(costType === undefined ? {} : { costType }),
         ...(beneficiaries === undefined ? {} : { beneficiaries }),
       });

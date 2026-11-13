@@ -157,15 +157,19 @@ function spendingBlocker(input: {
       merchant: facts.source.merchant,
       sourceCategory: null,
       loan: { providerVendorNames: [] },
-    }).movementClass !== "loan_payment" &&
+    }).movementClass === "escrow_disbursement" &&
     advice?.escrowDisbursement === true;
   const escrowRefund =
     liveHouseholdLoan(facts.account) &&
     facts.source.kind === "refund" &&
     facts.source.amount < 0 &&
-    /^(escrow refund)$/i.test(
-      (facts.source.rawDescription ?? facts.source.merchant ?? "").trim(),
-    );
+    statementEffectiveMovement({
+      providerAmount: facts.source.amount,
+      description: facts.source.rawDescription,
+      merchant: facts.source.merchant,
+      sourceCategory: null,
+      loan: { providerVendorNames: [] },
+    }).movementClass === "escrow_refund";
   if (facts.account.identity.kind === "loan" && !escrow && !escrowRefund)
     return "Only a supported household loan escrow disbursement can book spending.";
   if (

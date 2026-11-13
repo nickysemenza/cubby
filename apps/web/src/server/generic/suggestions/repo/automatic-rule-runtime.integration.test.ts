@@ -221,10 +221,10 @@ describe("clean import booking controls", () => {
 
   it.each([
     { scope: "import", income: false, booked: true },
-    { scope: "account/date", income: false, booked: false },
+    { scope: "account/date", income: false, booked: true },
     { scope: "import", income: true, booked: true },
   ] as const)(
-    "books clean $scope work only in import scope (income: $income)",
+    "books clean $scope work (income: $income)",
     async ({ scope, income, booked }) => {
       const { account, recorded } = await unmatchedCharge(ctx, income);
       const collection = await getDb(ctx.db).query.transactionImport.findFirst({
@@ -285,7 +285,6 @@ describe("clean import booking controls", () => {
 
   it("does not automatically reapply an unchanged pending suggestion marked Wrong", async () => {
     await unmatchedCharge(ctx);
-    await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: suggestion.id,

@@ -381,6 +381,7 @@ async function loadFinancialPreview(
           row,
           accountsByRow.get(row.key),
           preparation.accounts,
+          providerObservations(row),
         ),
       }),
     ]),

@@ -15,6 +15,7 @@ describe("statement effective movement", () => {
       ["Homeowners insurance disbursement", 12, "escrow_disbursement", 12],
       ["payment county tax", -12, "loan_unknown", 12],
       ["generic refund", -12, "loan_unknown", 12],
+      ["payment", 0, "loan_unknown", -0],
       ["Example Lender loan servicing", -12, "loan_unknown", 12],
     ] as const;
     expect(

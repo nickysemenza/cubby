@@ -27,7 +27,9 @@ export type StatementMovementInput = {
 const normalize = (value: string) =>
   value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 
-type LoanAccount = NonNullable<Parameters<typeof liveHouseholdLoan>[0]> & {
+export type StatementLoanAccount = NonNullable<
+  Parameters<typeof liveHouseholdLoan>[0]
+> & {
   sourceAliases: {
     source: string;
     alias: string;
@@ -40,10 +42,20 @@ type LoanAccount = NonNullable<Parameters<typeof liveHouseholdLoan>[0]> & {
 /** Require the resolved account and a unique source/account alias to agree. */
 export function statementLoanInput(
   row: { source: string; account: string; providerAccountId?: string | null },
-  account: LoanAccount | null | undefined,
-  accounts: readonly LoanAccount[],
+  account: StatementLoanAccount | null | undefined,
+  accounts: readonly StatementLoanAccount[],
+  observations: readonly { providerAccountId: string | null }[],
 ): StatementMovementInput["loan"] {
   if (!account || !liveHouseholdLoan(account)) return null;
+  if (
+    row.providerAccountId &&
+    observations.some(
+      (observation) =>
+        observation.providerAccountId !== null &&
+        observation.providerAccountId !== row.providerAccountId,
+    )
+  )
+    return null;
   const scoped = row.providerAccountId
     ? accounts.filter((candidate) =>
         candidate.sourceAliases.some(
@@ -123,7 +135,8 @@ export function statementEffectiveMovement(
     payment || /\bpayment\b/.test(text),
     disbursement,
   ];
-  const contradictory = signals.filter(Boolean).length > 1;
+  const contradictory =
+    signals.filter(Boolean).length > 1 || cents(input.providerAmount) === 0;
   const movementClass: StatementMovementClass = contradictory
     ? "loan_unknown"
     : interest
