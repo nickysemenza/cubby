@@ -7,6 +7,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   enableSyntheticMailImport,
   authorizePurchaseAgent,
@@ -174,7 +175,7 @@ async function vendorPurchases(
     ? await db
         .select({
           purchaseId: schema.expense.purchaseId,
-          cost: schema.expense.cost,
+          cost: minorToDollarsSql(schema.expense.cost, "float8"),
           lineKind: schema.expense.lineKind,
           productId: schema.expense.productId,
         })
@@ -230,9 +231,9 @@ test("imports saved order mail from its Email page and follows the live Run to t
   const [claimed] = await claimOrder(seed);
   if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
-    // Claude credit answers first, with the fast tier's Anthropic model.
+    // OpenAI credit answers first, with the fast tier's OpenAI model.
     expectedInference: {
-      model: CHAT_TIER_MODELS.fast.anthropic,
+      model: CHAT_TIER_MODELS.fast.openai,
       effort: importRunAgentManifest.mail_import.effort,
     },
     steps: [
