@@ -42,8 +42,8 @@ test("Changes by Cubby lists a reconciled field and its provenance", async ({
     )[0]?.categoryId,
   ).toBe(await resolveOrThrow(db, "productCategory", category.id));
   await gotoAuthenticatedPage(page, `/automatic-decisions?record=${item.id}`);
-  const feed = page.getByRole("region", {
-    name: "Changes by Cubby",
+  const feed = page.getByRole("list", {
+    name: "Activity",
     exact: true,
   });
   await expect(feed.getByRole("link", { name: productName })).toBeVisible();

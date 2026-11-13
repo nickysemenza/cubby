@@ -2,6 +2,7 @@
 import { z } from "zod";
 
 import { preparedQuestion } from "~/server/ai/evaluation-inputs";
+import { fieldAnswer } from "~/server/ai/fields/repo/field-answer";
 import { precedentSchema } from "~/server/ai/fields/repo/precedents";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import { defineAsk } from "~/server/kernel/api";
@@ -16,22 +17,6 @@ export const fieldAskInput = z.object({
   questions: z.array(preparedQuestion).optional(),
 });
 export type FieldAskInput = z.infer<typeof fieldAskInput>;
-
-const proposalValue = z.object({
-  /** The value as the column stores it (a reference's id). */
-  value: z.union([z.string(), z.array(z.string())]),
-  label: z.string().nullable(),
-  confidence: z.number().min(0).max(1),
-});
-
-export const fieldAnswer = z.object({
-  proposal: proposalValue
-    .extend({ runnerUp: proposalValue.nullable() })
-    .nullable(),
-  /** Why there is or is not a proposal: `pick`, `none`, or a skip reason. */
-  outcome: z.string(),
-});
-export type FieldAnswer = z.infer<typeof fieldAnswer>;
 
 export const fieldAsk = defineAsk({
   feature: FIELD_SUGGESTION_FEATURE.feature,

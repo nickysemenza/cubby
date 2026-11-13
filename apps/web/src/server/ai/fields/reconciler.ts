@@ -46,7 +46,8 @@ import {
 } from "~/server/kernel/api";
 
 import { analysisSources, analysisAsk, loadAnalysis } from "./analysis";
-import { fieldAsk, type FieldAnswer, type FieldAskInput } from "./ask";
+import { fieldAsk, type FieldAskInput } from "./ask";
+import type { FieldAnswer } from "./repo/field-answer";
 import {
   fieldsPlanOf,
   fieldsPlans,

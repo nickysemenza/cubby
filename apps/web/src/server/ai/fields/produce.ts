@@ -18,7 +18,8 @@ import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-re
 import type { Produced } from "~/server/kernel/api";
 import { WorkEvidenceObsoleteError } from "~/server/kernel/work-errors";
 
-import type { FieldAnswer, FieldAskInput } from "./ask";
+import type { FieldAskInput } from "./ask";
+import type { FieldAnswer } from "./repo/field-answer";
 import { readStoredColumns, storedReferenceId } from "./repo/stored-field";
 
 export async function produceFieldAnswer(

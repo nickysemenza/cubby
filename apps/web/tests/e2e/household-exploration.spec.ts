@@ -60,7 +60,10 @@ test("connected household supports wardrobe screenshots and garden exploration",
   await expect(
     page
       .locator("#plantings")
-      .getByText("Cedar Lettuce cultivar", { exact: true })
+      .getByRole("link", {
+        name: "Cedar Lettuce cultivar · Lettuce",
+        exact: true,
+      })
       .first(),
   ).toBeVisible();
 });

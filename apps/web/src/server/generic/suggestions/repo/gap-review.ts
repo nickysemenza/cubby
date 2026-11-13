@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { fieldAnswer } from "~/server/ai/fields/repo/field-answer";
 import { fieldReviewPlan } from "~/server/ai/fields/repo/plan";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -84,9 +85,7 @@ export async function reviewGap(
       AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" changed WHERE changed."scopeKind"=s."scopeKind" AND changed."scopeKey"=s."scopeKey")) AS current`);
     if (!current.rows[0]?.current)
       throw new Error("Field inputs changed since review");
-    const proposal = z
-      .object({ proposal: z.object({ value: z.string() }).nullable() })
-      .parse(stored.output).proposal;
+    const proposal = fieldAnswer.parse(stored.output).proposal;
     if (!proposal) throw new Error("This Answer proposes no value");
     if (input.verdict === "correct" && input.intent !== "apply")
       throw new Error("Accept a field through its form or its apply action");

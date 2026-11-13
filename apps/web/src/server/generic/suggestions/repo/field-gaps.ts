@@ -4,6 +4,7 @@ import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { fieldAnswer } from "~/server/ai/fields/repo/field-answer";
 import { fieldReviewPlan } from "~/server/ai/fields/repo/plan";
 import { readStoredColumns } from "~/server/ai/fields/repo/stored-field";
 import type { Database } from "~/server/db";
@@ -21,13 +22,7 @@ const row = z.object({
   field: z.string(),
   model: z.string().nullable(),
   createdAt: z.coerce.date(),
-  proposal: z.object({
-    value: z.union([z.string(), z.array(z.string())]),
-    confidence: z.number(),
-    runnerUp: z
-      .object({ value: z.string(), confidence: z.number() })
-      .nullable(),
-  }),
+  proposal: fieldAnswer.shape.proposal.unwrap(),
 });
 export async function readFieldSuggestions(
   db: Database,
@@ -43,8 +38,10 @@ export async function readFieldSuggestions(
     JOIN "Ask" k ON k.id=a."askId"
     JOIN "Entity" e ON e.id::text=split_part(s."scopeKey", ':', 2)
     WHERE s."scopeKind"=${"fields"} AND a.feature=${"field-suggestion"}
+      AND jsonb_typeof(a.output->${"proposal"})=${"object"}
       AND EXISTS (SELECT 1 FROM jsonb_array_elements(s.gaps) gap,
-        jsonb_array_elements(gap->${"actions"}) action WHERE action->>${"field"}=k.input->${"input"}->>${"field"})
+        jsonb_array_elements(gap->${"actions"}) action WHERE action->>${"field"}=k.input->${"input"}->>${"field"}
+          AND action->${"value"}=a.output->${"proposal"}->${"value"})
       ${ids ? sql`AND k.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${
         runId

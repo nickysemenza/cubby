@@ -116,7 +116,7 @@ async function recheckScopes(
               WHERE d.channel = ${ASSIGNMENT}
                 AND d.subject = ${`${plan.entity}:`} || t.id::text AND d.slot = ${field.key}
               ORDER BY d.at DESC, d.id DESC LIMIT 1), ${RELEASE}) = ${RELEASE}
-          ORDER BY (${shares}) DESC, t.id
+          ORDER BY ${field.parents.length ? sql`(${shares}) DESC,` : sql``} t.id
           LIMIT ${RECHECK_LIMIT}`)
     ).rows,
   );
