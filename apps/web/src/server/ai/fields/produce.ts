@@ -84,6 +84,7 @@ export async function produceFieldAnswer(
         basis: prepared.basis,
       },
       {
+        applicationCache: false,
         recordId: input.recordId,
         precedentText: precedentLines(input.precedents, labelById),
       },

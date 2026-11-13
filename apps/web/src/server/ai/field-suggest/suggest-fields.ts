@@ -130,6 +130,8 @@ export interface SuggestFieldsPorts {
   decisionPort?: DecisionPort;
   resolveLabels?: LabelResolverPort;
   force?: boolean;
+  /** A kernel Ask already owns the response-cache claim. */
+  applicationCache?: boolean;
   /** Pins the decision model (a Suggestion sweep or eval); otherwise routing samples. */
   decisionModel?: SupportedDecisionModel;
   /** Keep usage persistence disabled for read-only decision evaluations. */
@@ -162,6 +164,7 @@ function suggestionUsage(
     operation,
     cacheStatus: "none",
     force: ports?.force,
+    applicationCache: ports?.applicationCache,
   };
 }
 
