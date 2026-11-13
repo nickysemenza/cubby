@@ -4,7 +4,6 @@ import {
   locationAiDescriptionRefreshTaskSchema,
   locationAiInventoryRefreshTaskSchema,
   locationAiJobKey,
-  maintenancePurchaseDiscoveryTaskSchema,
   runAiSummaryJobKey,
   runAiSummaryWriteTaskSchema,
   type BackgroundTask,
@@ -23,7 +22,7 @@ type BackgroundTaskOutcome = "succeeded" | "skipped";
 /** Embedding refresh publishes search documents in the caller's transaction; it never becomes a Job. */
 export type JobBackgroundTask = Exclude<
   BackgroundTask,
-  { kind: "entity-embedding.refresh" | "calendar-feed.mark-dirty" }
+  { kind: "entity-embedding.refresh" | "calendar-feed.mark-dirty" | "maintenance.purchase-discovery" }
 >;
 type JobBackgroundTaskKind = JobBackgroundTask["kind"];
 
@@ -120,15 +119,6 @@ const BACKGROUND_TASK_KINDS = {
         fenced,
       );
       return outcome === "succeeded" ? "succeeded" : "skipped";
-    },
-  },
-  "maintenance.purchase-discovery": {
-    schema: maintenancePurchaseDiscoveryTaskSchema,
-    key: (task) => task.kind,
-    run: async (db, task) => {
-      const { discoverPurchases } = await import("~/server/workflows/catch-up");
-      await discoverPurchases(db, { senderAfter: task.senderAfter ?? null });
-      return "succeeded";
     },
   },
 

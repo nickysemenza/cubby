@@ -415,19 +415,6 @@ export const JOB_KIND_POLICY = {
     exclusions:
       "Missing originals and unsupported metadata retain their recorded outcome.",
   },
-  "maintenance.purchase-discovery": {
-    ...SERVER,
-    label: "Discover purchase work",
-    purpose: "Requests the purchase discovery maintenance operation.",
-    trigger: "Purchase discovery maintenance request.",
-    targets:
-      "Eligible purchase discovery backlog under the owning maintenance operation.",
-    effects:
-      "Admits eligible purchase work through the existing purchase workflow.",
-    dependencies: "Purchase discovery configuration and source evidence.",
-    cost: "Downstream work follows its model and funding policy.",
-    exclusions: "Eligibility remains owned by purchase discovery.",
-  },
   "background.drain": {
     ...SERVER,
     internal: true,

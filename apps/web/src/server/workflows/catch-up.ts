@@ -138,7 +138,7 @@ export async function discoverPurchases(
   ]);
   if (!gmailOAuthConfigured()) {
     log.info("Gmail discovery skipped: Google OAuth is not configured");
-    return { mail: null };
+    return { mail: null, senderAfter: null, more: false };
   }
   // Project terminal execution before checking the mailbox admission slot.
   await reconcileWorkflowRuns(db);
@@ -158,25 +158,6 @@ export async function discoverPurchases(
     senderAfter: options.senderAfter,
   });
   const mail = await startMailDiscovery(db, { knownAttributions });
-  // Last publish wins the Job input. Inner backlog republishes omit the cursor.
-  if (senders.more || pending.senderAfter)
-    await (
-      await import("~/server/workflows/background-tasks/publish")
-    ).publishBackgroundTasks(
-      db,
-      [
-        {
-          kind: "maintenance.purchase-discovery",
-          requestedAt: new Date().toISOString(),
-          ...(pending.senderAfter ? { senderAfter: pending.senderAfter } : {}),
-        },
-      ],
-      {
-        source: pending.senderAfter
-          ? "mail-sender-page"
-          : "sender-attribution-continuation",
-      },
-    );
   log.info("purchase discovery", {
     mailPassesStarted: mail.started,
     mailPassesRunning: mail.running,
@@ -186,5 +167,5 @@ export async function discoverPurchases(
       pending.errors,
       "Retained Email admission failed; discovery continued.",
     );
-  return { mail };
+  return { mail, senderAfter: pending.senderAfter ?? null, more: senders.more || Boolean(pending.senderAfter) };
 }

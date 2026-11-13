@@ -6,11 +6,13 @@
  */
 import type { Pass } from "~/server/kernel/api";
 
+import { purchaseDiscoveryPass } from "./purchase-discovery-pass";
 import { calendarInvalidatePass } from "./calendar-invalidate-pass";
 import { runsReconcilePass } from "./runs/reconcile-pass";
 import { runExecutePass } from "./runs/run-pass";
 
 export const WORKFLOW_PASSES: readonly Pass[] = [
+  purchaseDiscoveryPass,
   calendarInvalidatePass,
   runExecutePass,
   runsReconcilePass,
