@@ -28,7 +28,11 @@ export async function reviewGap(
   const commandHash = await hashCanonical(input);
   const proposalHash = `${operationKey}:${commandHash}`;
   const [replayed] = await getDb(db)
-    .select({ id: decision.id, proposalHash: decision.proposalHash })
+    .select({
+      id: decision.id,
+      proposalHash: decision.proposalHash,
+      subject: decision.subject,
+    })
     .from(decision)
     .where(
       sql`left(${decision.proposalHash}, 64)=${operationKey} AND ${decision.actorId}=${context.actorContext.userId}`,
@@ -40,7 +44,9 @@ export async function reviewGap(
     return {
       suggestionId: input.suggestionId,
       feedbackId: replayed.id,
-      status: "decided",
+      status: replayed.subject.startsWith("connection/")
+        ? "decided"
+        : "waiting",
       applied: true,
     };
   const [stored] = await getDb(db)
@@ -89,7 +95,11 @@ export async function reviewGap(
     if (!proposal) throw new Error("This Answer proposes no value");
     if (input.verdict === "correct" && input.intent !== "apply")
       throw new Error("Accept a field through its form or its apply action");
-    if (input.verdict !== "correct" && input.verdict !== "wrong")
+    if (
+      input.verdict !== "correct" &&
+      input.verdict !== "wrong" &&
+      input.verdict !== "dismissed"
+    )
       throw new Error("A field gap accepts a value, a correction or a veto");
     const value = input.correction.present
       ? input.correction.value
@@ -101,10 +111,10 @@ export async function reviewGap(
         ? await resolveOrThrow(db, plan.field.reference, value)
         : value;
     return withTransactionDatabase(db, async (tx) => {
-      const { decide, reconcileNow } = await import("~/server/kernel/api");
+      const { decide } = await import("~/server/kernel/api");
       const subject = `${captured.entity}:${captured.recordId}`;
       const decisions = [];
-      if (input.verdict === "wrong")
+      if (input.verdict === "wrong" || input.verdict === "dismissed")
         decisions.push({
           channel: "veto" as const,
           kind: "veto" as const,
@@ -125,11 +135,12 @@ export async function reviewGap(
       const written = await decide(tx, context.actorContext, decisions, {
         field: authoredFieldWriter(context),
       });
-      await reconcileNow(tx, [scope]);
+      // decide dirties this scope and wakes it after commit. Do not load or
+      // prepare its model questions while the member's review holds the transaction.
       return {
         suggestionId: stored.id,
         feedbackId: written[0]!.id,
-        status: "decided",
+        status: "waiting",
         applied: true,
       };
     });

@@ -143,7 +143,7 @@ function FieldProposal({
           <Button
             size="xs"
             variant="outline"
-            disabled={review.isPending}
+            disabled={review.isPending || review.data?.status === "waiting"}
             onClick={() => review.mutate(accept)}
           >
             {prune ? "Remove" : "Use"} {proposed.text || "this value"}
@@ -153,7 +153,7 @@ function FieldProposal({
           <Button
             size="xs"
             variant="ghost"
-            disabled={review.isPending}
+            disabled={review.isPending || review.data?.status === "waiting"}
             onClick={() => review.mutate(keep)}
           >
             {prune
@@ -164,6 +164,9 @@ function FieldProposal({
           </Button>
         ) : null}
       </span>
+      <output>
+        {review.data?.status === "waiting" ? "Cubby is reworking this" : null}
+      </output>
       {review.error ? (
         <ErrorDisplay error={review.error} title="this suggestion" />
       ) : null}

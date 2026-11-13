@@ -905,7 +905,9 @@ export async function runStructuredFeature<T>(
     let question = media.sent;
     for (let attempt = 0; attempt < 2; attempt++) {
       const sent = question;
-      const input = structuredModelInput(spec, sent, ctx.answerRevision);
+      const input = await (
+        await import("./model-media")
+      ).retainModelMedia(structuredModelInput(spec, sent, ctx.answerRevision));
       const result = await withAsk(
         ctx.db,
         {

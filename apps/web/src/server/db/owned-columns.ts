@@ -216,9 +216,11 @@ const isCast = (token: Token) =>
   token.kind === "word" && CAST_WORDS.has(token.value.toLowerCase());
 
 /** Columns a statement writes per table: `*` for an insert with no column list. */
+// oxlint-disable-next-line complexity -- SQL update, insert and conflict clauses share token depth and table attribution.
 function writtenColumns(
   sql: string,
   params: readonly unknown[] = [],
+  observationsOnly = false,
 ): Map<string, Set<string>> {
   const tokens = tokenize(sql);
   const written = new Map<string, Set<string>>();
@@ -228,6 +230,32 @@ function writtenColumns(
     written.set(table, set);
   };
   for (let index = 0; index < tokens.length; index++) {
+    if (
+      observationsOnly &&
+      isKeyword(tokens[index], "insert") &&
+      isKeyword(tokens[index + 1], "into")
+    ) {
+      const ref = tableRef(tokens, index + 2);
+      if (ref) {
+        let depth = 0;
+        for (let at = ref.next; at < tokens.length; at++) {
+          if (isPunct(tokens[at], "(")) depth++;
+          else if (isPunct(tokens[at], ")")) {
+            if (!depth) break;
+            depth--;
+          } else if (!depth && isPunct(tokens[at], ";")) break;
+          else if (
+            !depth &&
+            isKeyword(tokens[at], "do") &&
+            isKeyword(tokens[at + 1], "update") &&
+            isKeyword(tokens[at + 2], "set")
+          ) {
+            add(ref.id, assigned(tokens, at + 3));
+            break;
+          }
+        }
+      }
+    }
     if (isKeyword(tokens[index], "update")) {
       let at = index + 1;
       if (isKeyword(tokens[at], "only")) at++;
@@ -238,6 +266,7 @@ function writtenColumns(
       if (tokens[at]?.kind === "word" && !isKeyword(tokens[at], "set")) at++;
       if (isKeyword(tokens[at], "set")) add(ref.id, assigned(tokens, at + 1));
     } else if (
+      !observationsOnly &&
       isKeyword(tokens[index], "insert") &&
       isKeyword(tokens[index + 1], "into")
     ) {
@@ -328,7 +357,22 @@ export async function guardOwnedWrites(
   sql: string,
   params: readonly unknown[] = [],
 ): Promise<void> {
-  if (inKernelApply() || !/\b(?:update|insert)\b/iu.test(sql)) return;
+  if (!/\b(?:update|insert)\b/iu.test(sql)) return;
+  for (const [table, columns] of writtenColumns(sql, params, true)) {
+    const observations = EVIDENCE_OBSERVATIONS.get(
+      table.replace(/^public\./u, ""),
+    );
+    if (
+      observations &&
+      [...columns].some(
+        (column) => observations === "*" || observations.includes(column),
+      )
+    )
+      throw new OwnedColumnWriteError(
+        `Evidence observations are insert-only: ${table}. Append a corrected observation instead.`,
+      );
+  }
+  if (inKernelApply()) return;
   production ??= import("~/server/kernel/kernel").then(async (kernel) => {
     await kernel.productionKernel();
   });
@@ -339,3 +383,65 @@ export async function guardOwnedWrites(
       `Only the kernel's apply step writes reconciler-owned columns: ${hits.join(", ")}. Append evidence or record a decision instead.`,
     );
 }
+
+/** Observation columns; attribution, acceptance, processing and lifecycle remain state. */
+const EVIDENCE_OBSERVATIONS = new Map<string, readonly string[] | "*">(
+  Object.entries({
+    ManualEntry: "*",
+    Answer: [
+      "inputHash",
+      "feature",
+      "producer",
+      "promptVersion",
+      "output",
+      "model",
+      "tier",
+      "costMicros",
+      "raw",
+      "createdAt",
+    ],
+    Decision: "*",
+    ConnectionCandidateEvidence: "*",
+    PhotoInventoryEvidence: "*",
+    ImageEvidence: "*",
+    SourceOccurrence: [
+      "source",
+      "identityKind",
+      "identityScope",
+      "providerIdentity",
+      "physicalImportId",
+      "physicalPosition",
+      "createdAt",
+    ],
+    SourceTransactionRecord: [
+      "factFingerprint",
+      "batchId",
+      "source",
+      "rowPosition",
+      "providerTransactionId",
+      "providerAccountId",
+      "providerData",
+      "accountDescriptor",
+      "statementDate",
+      "amount",
+      "providerAmount",
+      "merchant",
+      "rawDescription",
+      "sourceCategory",
+      "providerStatus",
+      "providerNotes",
+      "createdAt",
+    ],
+    Email: [
+      "provider",
+      "mailboxId",
+      "messageId",
+      "sender",
+      "subject",
+      "receivedAt",
+      "threadId",
+      "checksum",
+      "createdAt",
+    ],
+  }),
+);

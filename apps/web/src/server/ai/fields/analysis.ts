@@ -1,3 +1,4 @@
+import { VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 
 import {
@@ -58,7 +59,26 @@ export async function loadAnalysis(
   }
   if (entity === "run") {
     const row = (await reads.rows(run, [id])).get(id);
-    if (!row?.endedAt || row.deletedAt) return null;
+    if (
+      !row?.endedAt ||
+      row.deletedAt ||
+      row.routine ||
+      row.trigger === "ephemeral" ||
+      row.endedAt < new Date("2026-11-12T00:00:00.000Z") ||
+      !["completed", "failed", "dispatch_failed", "needs_review"].includes(
+        row.status,
+      ) ||
+      !VISIBLE_RUN_PURPOSES.some((purpose) => purpose === row.purpose) ||
+      [
+        "ai_suggest",
+        "background",
+        "ai_refresh",
+        "connection_discovery",
+        "derived_refresh",
+      ].includes(row.purpose) ||
+      (row.purpose === "mail_discovery" && row.status === "completed")
+    )
+      return null;
     const steps = await reads.select(
       runStep,
       [rowKey("Run", id)],

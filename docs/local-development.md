@@ -109,8 +109,8 @@ It inserts the synthetic account with Better Auth's password hasher, then runs
 the entity kernel and specialist repositories. Before a Worker exists, its
 background publications are stored in the template's development-only
 `cubby_dev_background_task` outbox. After creating the static graph, the generic
-search Job initializes its search documents in bounded pages. Other refresh and
-provider Jobs remain queued for the Worker. Clones hand those envelopes to the local
+search pass initializes its search documents in bounded pages. Other refresh
+passes and provider Asks remain queued for the Worker. Clones hand those envelopes to the local
 Worker queue on startup, deleting them only after acceptance. The corpus and
 startup handoff idempotently prepare the reserved system actor before its
 scheduled Runs can open, including when an existing completed corpus is reused.
@@ -251,9 +251,8 @@ when asserting consumer effects. Workflow finalizers and retry fallbacks also
 need a producer even when a test reads only synchronous writes. The bounded
 drain runs real handlers, including
 follow-up publications, and retains a failed task for diagnosis. Offline E2E
-search draining honors the durable Job attempt budget: it advances `retry_wait`
-without waiting out backoff, and reports terminal failures with the retained
-`Job.error` diagnostics.
+search draining honors the durable kernel attempt budget and reports terminal
+failures with the scope, Ask or Pass's retained raw error.
 
 Optional packs still add small focused graphs to the running session:
 
@@ -271,9 +270,8 @@ pnpm dev seed runs
 unknown total whose Email imports fold into a batch row, a member's import
 whose Sweeps batch beside stalled and needs-review Sweeps, Runs queued in claim
 order, a long failure, a paused Sweep, and recent and older finished Runs. Its
-queued Jobs are a handler-less fixture kind and execution stays off; the queue
-estimate reads the kind's completions of the last few minutes, so it fades
-after seeding.
+queued work is represented by kernel scopes, Asks and Passes. Queue diagnostics
+read their durable attempts, availability and failures.
 
 For performance investigations, `pnpm dev seed performance` adds a larger
 connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with
@@ -357,7 +355,7 @@ being synthetic, so keep it contained:
   before quoting. Drop the database and delete the Neon branch when tuning
   ends; local timings are not production latency.
 
-The Problems pack adds incomplete entities, a failed photo-processing Run/job,
+The Problems pack adds incomplete entities, a failed photo-processing Run and Ask,
 and an open Run with pending image work. Both work fixtures retain real local
 source bytes and avoid provider dispatch. Interactive fixture packs use the entity kernel; the
 image pack uploads and finalizes real
@@ -388,8 +386,8 @@ which the dev Worker seeds with the synthetic release `2000-01`; UPC upstream
 lookups are disabled. Images use local R2, and auth uses local
 PostgreSQL. External provider operations return unavailable diagnostics.
 Purchase-agent starts commit dispatch intent. The offline dispatch host refuses
-to open a coordinator; the Job retains the unavailable diagnostic and bounded
-retry budget. Background wake deliveries always acknowledge; Job rows retain
+to open a coordinator; the Pass retains the unavailable diagnostic and bounded
+retry budget. Background wake deliveries always acknowledge; kernel rows retain
 execution failures for recovery. Unexpected local queue names throw. Telemetry is off unless `CUBBY_DEV_TELEMETRY=true` is explicit.
 
 For billed AI/provider work, use `pnpm dev integrations`. AI requests use the

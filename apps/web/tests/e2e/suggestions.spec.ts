@@ -267,3 +267,65 @@ test("prunes real Product tags and retains the assignment Decision", async ({
     );
   expect(events).toContainEqual({ value: ["ecosystem", "mount"] });
 });
+
+// Record diagnostics stay beside their evidence; a field Sweep remains a deliberate Run.
+test("shows kernel diagnostics on Image and Location and follows a field Sweep Run", async ({
+  page,
+  e2eRuntime,
+}, testInfo) => {
+  const { seedImagePrerequisite } = await import("./fixtures/photos");
+  const { startSweep } = await import("~/server/domains/run/service/sweep");
+  const { run } = await import("~/server/db/schema");
+  const { db, actor } = await createEvidenceHarnessContext(page);
+  const image = await seedImagePrerequisite(
+    "synthetic-worker-facts",
+    e2eRuntime.objectStorageUrl,
+  );
+  const location = await createEntityFixture(page, "location", {
+    name: uniqueName(testInfo, "Synthetic workshop"),
+    type: "room",
+  });
+  for (const path of [`/images/${image.id}`, `/locations/${location.id}`]) {
+    await gotoAuthenticatedPage(page, path);
+    await page.getByText("Worker diagnostics", { exact: true }).first().click();
+    await page.screenshot({
+      path: testInfo.outputPath(
+        path.startsWith("/images")
+          ? "image-diagnostics.png"
+          : "location-diagnostics.png",
+      ),
+      fullPage: true,
+    });
+  }
+  // An empty selected population exercises the Run without owing any model call.
+  const runId = await startSweep(db, actor, {
+    trigger: "manual",
+    families: [
+      {
+        family: "field",
+        scope: {
+          targets: [
+            {
+              entity: "project",
+              fields: ["emoji"],
+              filters: { name: "Synthetic absent field sweep population" },
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const [record] = await getDb(db)
+    .select({ shortcode: run.shortcode })
+    .from(run)
+    .where(eq(run.id, runId));
+  if (!record) throw new Error("Sweep Run missing");
+  await gotoAuthenticatedPage(page, `/runs/${record.shortcode}`);
+  await expect(
+    page.getByRole("region", { name: "Work", exact: true }),
+  ).toContainText("1 passes");
+  await page.screenshot({
+    path: testInfo.outputPath("field-sweep-run.png"),
+    fullPage: true,
+  });
+});

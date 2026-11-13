@@ -7,10 +7,9 @@
  * 0028's rules ({@link decideField}) and patches the `apply: "auto"` columns,
  * including a person's assignment, which only this scope may write.
  *
- * Asked: open or Cubby-held `auto` fields with a usable basis, and `offer`
- * fields, whose confident answer stays the picker's guess. A person-held
- * field, a `fillOnly` field Cubby already filled and a `review` field are not
- * asked here; declared prune reviews may propose removals from a person-held
+ * Asked: open or Cubby-held `auto` and `review` fields with a usable basis.
+ * `offer` fields only read an existing answer for the picker. A person-held
+ * field and a `fillOnly` field Cubby already filled are not asked here; declared prune reviews may propose removals from a person-held
  * array and always wait for a decision.
  */
 import { auditLogActionSchema } from "@cubby/schemas/audit";
@@ -64,7 +63,7 @@ import {
 } from "./repo/precedents";
 
 /** The version of the rules below; a change is swept, never re-asked (ADR 0029 section 11). */
-const FIELDS_VERSION = 1;
+const FIELDS_VERSION = 2;
 
 type Row = FieldsRow;
 
@@ -348,8 +347,8 @@ async function load(
               plan.fields
                 .filter(
                   (field) =>
-                    (field.apply !== "review" || field.mode === "prune") &&
-                    (!assignments.has(`${entity}:${item.id}:${field.key}`) ||
+                    (field.mode === "prune" ||
+                      !assignments.has(`${entity}:${item.id}:${field.key}`) ||
                       assignments.get(`${entity}:${item.id}:${field.key}`) ===
                         "release") &&
                     (blank(loaded.row![field.key]) || !field.fillOnly) &&
@@ -441,7 +440,6 @@ export function fieldsReconciler(
       const subject = recordSubject(input.entity, input.id);
       for (const field of plan.fields) {
         if (field.mode === "prune" && blank(row[field.key])) continue;
-        if (field.apply === "review" && field.mode !== "prune") continue;
         const assignment = c.decision("assignment", subject, field.key);
         const vetoed = (
           c.decision("veto", subject, field.key)?.values ?? []
@@ -476,7 +474,9 @@ export function fieldsReconciler(
             precedents: [...(input.precedents.get(field.key) ?? [])],
             questions: input.questions?.get(field.key),
           };
-          const answer = c.answer(ask, askInput);
+          const answer = c.answer(ask, askInput, {
+            request: field.apply !== "offer",
+          });
           if (answer.status === "answered") proposal = answer.output.proposal;
         }
         // A person's decision on a column this scope owns is applied here;
@@ -506,6 +506,7 @@ export function fieldsReconciler(
           c.patch(target, input.id, { [field.key]: verdict.value });
         else if (
           proposal &&
+          field.apply !== "offer" &&
           (!assignment || prune) &&
           !vetoed.includes(valueKey(proposal.value)) &&
           valueKey(proposal.value) !== valueKey(current)

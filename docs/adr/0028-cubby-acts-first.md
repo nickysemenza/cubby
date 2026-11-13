@@ -1,6 +1,6 @@
 # ADR 0028: Cubby acts first; members correct
 
-Status: Accepted by the owner 2026-11-09. Supersedes the automatic-rule section
+Status: Superseded in part by [ADR 0029](0029-evidence-facts-and-reconcilers.md). Accepted by the owner 2026-11-09. Supersedes the automatic-rule section
 of [ADR 0016](0016-shared-assessments-and-feedback.md) and extends item 7 of
 [ADR 0025](0025-radical-simplification-of-background-work.md).
 

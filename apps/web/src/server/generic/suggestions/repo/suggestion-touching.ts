@@ -118,8 +118,8 @@ function referenceMatches(
     guard?.field ? eq(reviewSuggestion.field, guard.field) : undefined,
     guard?.scope
       ? guard.negate
-        ? sql`(s.subject->>'scope' LIKE ${`${guard.scope}.%`}) IS NOT TRUE`
-        : sql`s.subject->>'scope' LIKE ${`${guard.scope}.%`}`
+        ? sql`(s.subject->>${"scope"} LIKE ${`${guard.scope}.%`}) IS NOT TRUE`
+        : sql`s.subject->>${"scope"} LIKE ${`${guard.scope}.%`}`
       : undefined,
   );
   const match = (entity: string | SQL, token: SQL<string>) => {

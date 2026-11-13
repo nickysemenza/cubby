@@ -22,7 +22,7 @@ export const fieldAuthorityActionInput = z.object({
    * `release`: hand a person's value back to Cubby, which may replace it.
    */
   action: z.enum(["keep", "clear", "release"]),
-  /** Unread: the decision applies to the stored value. The web panel drops it. */
+  /** Audit entry cursor: refuse if the field has changed since the displayed change. */
   suggestionId: z.string().optional(),
 });
 export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });

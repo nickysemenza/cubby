@@ -45,6 +45,39 @@ shows all of its machinery.
    the observation columns are insert-only and the state columns belong to a
    reconciler (for Email: headers, body and attachments are evidence;
    relevance, link and outcome columns belong to `emailState`).
+
+   The traced repository boundary refuses updates, including conflict updates,
+   to these observation columns, even inside a kernel apply:
+
+   - `ManualEntry`, `Decision`, `ConnectionCandidateEvidence`,
+     `PhotoInventoryEvidence` and `ImageEvidence`: every column.
+   - `Answer`: `inputHash`, `feature`, `producer`, `promptVersion`, `output`,
+     `model`, `tier`, `costMicros`, `raw`, `createdAt`. The Ask association,
+     claim token, executor and Run association are mutable acceptance state.
+   - `SourceTransactionRecord`: `factFingerprint`, `batchId`, `source`,
+     `rowPosition`, `providerTransactionId`, `providerAccountId`, `providerData`,
+     `accountDescriptor`, `statementDate`, `amount`, `providerAmount`, `merchant`,
+     `rawDescription`, `sourceCategory`, `providerStatus`, `providerNotes`, `createdAt`.
+   - `SourceOccurrence`: `source`, `identityKind`, `identityScope`,
+     `providerIdentity`, `physicalImportId`, `physicalPosition`, `createdAt`.
+   - `Email`: `provider`, `mailboxId`, `messageId`, `sender`, `subject`,
+     `receivedAt`, `threadId`, `checksum`, `createdAt`.
+
+   `SourceTransactionRecord.occurrenceId` is mutable identity attribution owned
+   by the occurrence merge path; `deletedAt` is lifecycle state.
+   `SourceOccurrence.currentObservationId`, `accountId`, `disposition`,
+   `dispositionReason`, `dispositionNote`, `supersededByOccurrenceId`,
+   `replacementObservationId`, `withdrawnAt`, `withdrawalImportId`,
+   `lastObservedAt`, `acceptedTransactionId`, `reviewState`, `version`,
+   `identityProof`, `updatedAt` and `deletedAt` are mutable acceptance and
+   lifecycle state owned by the acceptance, identity and reconciliation paths.
+   Email classification, status, ownership, history checkpoint and Run association
+   are mutable import state; raw retrieved bodies and attachments remain in
+   their retained source storage. Image metadata and processing state are mutable;
+   the immutable image observations are `ImageEvidence`. The boundary covers
+   application SQL on traced pools; migrations and direct database clients
+   remain outside that application boundary.
+
 2. **Answers** are what a producer computed from a declared input: a model, an
    embedding, an image job or a source fetch. `Answer` is keyed by `inputHash`,
    the hash of a canonical envelope: feature, producer, requested tier or model

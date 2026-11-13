@@ -849,8 +849,7 @@ _Avoid_: dismissal (a presentation preference, not a correctness verdict)
 
 **Sweep**:
 A bulk pass that computes Suggestions across a filtered set of records. A
-member's "Find suggestions" starts one Sweep across the field and statement
-Suggestion families in scope, with one part per family. A Sweep is a Run kind
+member's "Find suggestions" starts a field Sweep over the chosen records and fields. A Sweep is a Run kind
 whose families contribute Run steps; its evaluations are not child Runs.
 _Avoid_: backfill (when the work produces Suggestions rather than derived data)
 

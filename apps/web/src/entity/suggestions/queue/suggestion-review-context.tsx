@@ -24,7 +24,9 @@ import type { ReviewItem } from "./suggestion-review";
 /** `suggestion.reviewBatch` takes at most this many items per call. */
 const REVIEW_BATCH_MAX = 100;
 
-type RowOutcome = { state: "pending" } | { state: "failed"; error: string };
+type RowOutcome =
+  | { state: "pending" | "waiting" }
+  | { state: "failed"; error: string };
 
 /** A failed review, kept with the row as it was so the error has a home after a refetch drops it. */
 type ReviewFailure = { row: SuggestionListRow; error: string };
@@ -111,6 +113,7 @@ export function SuggestionReviewProvider({
         return { ...previous, outcomes };
       });
       const failures: ReviewFailure[] = [];
+      const waiting = new Set<string>();
       for (const batch of chunk(pairs, REVIEW_BATCH_MAX)) {
         try {
           const { result } = await executeCommand(
@@ -121,6 +124,8 @@ export function SuggestionReviewProvider({
           const results = suggestionReviewBatchOut.parse(result);
           for (const [index, result] of results.entries()) {
             const pair = batch[index];
+            if (pair && result.ok && result.status === "waiting")
+              waiting.add(pair.row.id);
             if (pair && !result.ok)
               failures.push({ row: pair.row, error: result.error });
             if (
@@ -145,6 +150,8 @@ export function SuggestionReviewProvider({
           const failure = failed.get(row.id);
           if (failure)
             outcomes.set(row.id, { state: "failed", error: failure.error });
+          else if (waiting.has(row.id))
+            outcomes.set(row.id, { state: "waiting" });
           else outcomes.delete(row.id);
         }
         return {

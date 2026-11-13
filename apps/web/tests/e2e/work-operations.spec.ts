@@ -56,6 +56,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     /stuck|Catching up/i,
   );
   await expect(page.getByRole("tab")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Queue and evaluations" }),
+  ).toBeVisible();
   const more = page.getByRole("navigation", { name: "More work" });
   await expect(more.getByRole("link", { name: "Suggestions" })).toBeVisible();
   await expect(more.getByRole("link", { name: "Missing facts" })).toBeVisible();

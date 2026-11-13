@@ -22,6 +22,7 @@ import { DateDisplay } from "~/ui/values/date-display";
 
 import { AUDIT_COLUMNS, AuditRecordRow, auditFacts } from "./audit-log-entry";
 import { foldAuditEntries } from "./audit-log-fold";
+import { CubbyFieldActions } from "./cubby-field-actions";
 
 export interface AuditLogListOperations {
   list: typeof auditLog.list;
@@ -37,6 +38,7 @@ const productionOperations: AuditLogListOperations = {
 };
 
 interface AuditLogListProps {
+  cubbyChanges?: boolean;
   entityKind?: AuditEntityKind;
   entityId?: string;
   /** Everything one Run wrote (a RUN- shortcode). */
@@ -52,6 +54,7 @@ interface AuditLogListProps {
 }
 
 export function AuditLogList({
+  cubbyChanges = false,
   entityKind,
   entityId,
   runId,
@@ -211,11 +214,14 @@ export function AuditLogList({
         <Fragment key={day.label}>
           <RecordHeading label={<DateDisplay start={day.label} />} />
           {day.groups.map((group) => (
-            <AuditRecordRow
-              key={group[0]?.entryKey}
-              group={group}
-              showEntityLink={showEntityLink}
-            />
+            <Fragment key={group[0]?.entryKey}>
+              <AuditRecordRow group={group} showEntityLink={showEntityLink} />
+              {cubbyChanges
+                ? group.map((entry) => (
+                    <CubbyFieldActions key={entry.entryKey} entry={entry} />
+                  ))
+                : null}
+            </Fragment>
           ))}
         </Fragment>
       ))}

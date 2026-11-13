@@ -683,9 +683,17 @@ Project attention uses one quiet shared completeness notice in its dashboard, Pr
 The Work page is one flat screen with no tabs, stat tiles or intro; its behavior
 is in [web UI contracts](docs/web-ui.md#work-page). The health line is one
 sentence in secondary ink. Stuck rows are flat with hairlines and a static
-`warning-ink` glyph. Record machinery discloses execution details beside the
-affected evidence. Needs you reads the kernel’s member gaps, grouped by stage, with a record link and the gap’s action inline only when exactly one is offered. Its counts are tabular figures and its paged read has loading, raw error with Retry, and empty states. An empty queue reads `Nothing needs you.` at the page's
+`warning-ink` glyph. Record machinery discloses attempts, next availability, duration, last reconciliation
+and raw errors beside the affected evidence. The queue and evaluations section
+counts due, claimed, waiting and stuck scopes, Asks and Passes by kind, shows the
+oldest waiting work, and offers Retry for each exhausted item. Needs you reads the kernel’s member gaps, grouped by stage, with a record link and the gap’s action inline only when exactly one is offered. Its counts are tabular figures and its paged read has loading, raw error with Retry, and empty states. An empty queue reads `Nothing needs you.` at the page's
 largest size. The footer nav carries one plain Changes by Cubby link, with no
 count or badge. Citron is never a warning: the sidebar Work row and collapsed rail
 use a static warning glyph or dot only for stuck or stale work, and healthy work
 shows nothing.
+
+Changes by Cubby reads audit provenance and offers entity-kind filtering alongside
+record scoping. A current automatic field value offers Keep and Wrong, clear it;
+these append independent Decisions and refuse a value changed since the displayed
+audit entry. Worker diagnostics on Run, Image and Location disclose the existing
+scope, Ask and Pass facts, with unknown durations stated explicitly.

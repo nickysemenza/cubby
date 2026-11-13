@@ -19,6 +19,7 @@ import { machinery as machineryApi } from "~/integrations/tanstack-query/generat
 import { formatInstant } from "~/lib/date-format";
 import { MachineryPanel } from "~/ui/derived/machinery-panel";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,
@@ -151,6 +152,7 @@ export function MachineryPanelFor({
         }
         pending={actions.pending}
       />
+      {scope === "record" ? <MachineryFacts read={read} /> : null}
       {/* Rendered before it changes so assistive tech announces it; the value
           changes only when the scope reruns. */}
       <output className="text-xs text-muted-foreground">
@@ -296,4 +298,110 @@ export function RecordMachineryHeader({
     );
   if (!read.data.machinery) return null;
   return <MachineryHeader target={target} read={read.data.machinery} />;
+}
+
+/** Existing scope and producer facts, without a second execution log. */
+function MachineryFacts({ read }: { read: Machinery }) {
+  return (
+    <Disclosure summary="Worker diagnostics">
+      <MachineryFactsBody read={read} />
+    </Disclosure>
+  );
+}
+
+function MachineryFactsBody({ read }: { read: Machinery }) {
+  return (
+    <div className="grid gap-2 text-xs">
+      {read.scopes.map((scope) => (
+        <div key={`${scope.kind}:${scope.key}`}>
+          <p>
+            {scope.kind} · {scope.attempts} attempts ·{" "}
+            {scope.durationMs == null
+              ? "Duration unknown"
+              : `${scope.durationMs} ms`}
+          </p>
+          <p>
+            Last reconciled: {scope.reconciledAt ?? "Not reconciled yet"} · Next
+            attempt: {scope.nextAt ?? "None"}
+          </p>
+          {scope.error ? (
+            <pre className="break-words whitespace-pre-wrap">
+              {scope.error.class}: {scope.error.raw}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+      {read.asks.map((ask) => (
+        <div key={ask.inputHash}>
+          <p>
+            {ask.feature} · {ask.attempts} attempts · Next attempt: {ask.nextAt}
+          </p>
+          <p>
+            Duration:{" "}
+            {ask.sentAt && ask.answeredAt
+              ? `${new Date(ask.answeredAt).getTime() - new Date(ask.sentAt).getTime()} ms`
+              : "Unknown"}
+          </p>
+          <p>
+            Sent: {ask.sentAt ?? "Not sent"} · Answered:{" "}
+            {ask.answeredAt ?? "Not answered"}
+          </p>
+          {ask.lastError ? (
+            <pre className="break-words whitespace-pre-wrap">
+              Ask: {ask.lastError}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+      {read.passes?.map((pass) => (
+        <div key={`${pass.name}:${pass.key}`}>
+          <p>
+            {pass.name} · {pass.attempts} attempts ·{" "}
+            {pass.durationMs == null
+              ? "Duration unknown"
+              : `${pass.durationMs} ms`}
+          </p>
+          <p>
+            Updated: {pass.updatedAt ?? "Unknown"} · Next attempt:{" "}
+            {pass.availableAt}
+          </p>
+          {pass.lastError ? (
+            <pre className="break-words whitespace-pre-wrap">
+              Pass: {pass.lastError}
+            </pre>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Diagnostic section on Image and Location beside their processing and analysis surfaces. */
+export function RecordWorkerFacts({
+  entity,
+  id,
+}: {
+  entity: Entity;
+  id: string;
+}) {
+  return (
+    <Disclosure summary="Worker diagnostics">
+      <RecordWorkerFactsRead entity={entity} id={id} />
+    </Disclosure>
+  );
+}
+
+function RecordWorkerFactsRead({ entity, id }: { entity: Entity; id: string }) {
+  const read = useMachinery({ entity, id });
+  if (read.isError)
+    return (
+      <ErrorDisplay
+        error={read.error}
+        title="worker diagnostics"
+        onRetry={() => void read.refetch()}
+      />
+    );
+  return read.data?.machinery ? (
+    <MachineryFactsBody read={read.data.machinery} />
+  ) : null;
 }
