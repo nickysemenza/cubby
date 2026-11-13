@@ -127,7 +127,7 @@ function FieldSuggestionActions({
   const proposedText = useRenderedText();
   const currentText = useRenderedText();
   const state = outcome(suggestion.id);
-  const busy = state?.state === "pending";
+  const busy = state?.state === "pending" || state?.state === "waiting";
   const run = (build: Parameters<typeof review>[1]) =>
     void review([suggestion], build);
   const { evidence } = suggestion;
@@ -191,6 +191,9 @@ function FieldSuggestionActions({
           Dismiss
         </Button>
       )}
+      <output className="text-xs text-muted-foreground">
+        {state?.state === "waiting" ? "Cubby is reworking this" : null}
+      </output>
       {never || (wrong && !keepsCurrent) ? (
         <DropdownMenu>
           <MoreMenuTrigger
@@ -231,7 +234,7 @@ function FamilySuggestionActions({
   );
   const { review, outcome } = useSuggestionReview();
   const state = outcome(suggestion.id);
-  const busy = state?.state === "pending";
+  const busy = state?.state === "pending" || state?.state === "waiting";
   const run = (build: Parameters<typeof review>[1]) =>
     void review([suggestion], build);
 

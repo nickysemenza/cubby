@@ -180,7 +180,7 @@ describe("fields scope", () => {
         intent: "history",
         expectedFingerprint: proposal.id,
       }),
-    ).resolves.toMatchObject({ status: "decided" });
+    ).resolves.toMatchObject({ status: "waiting" });
     expect((await stored(record.entityId)).emoji).toBeNull();
     const { decision } = await import("~/server/db/kernel-schema");
     const decisions = await getDb(ctx.db)
@@ -224,6 +224,10 @@ describe("fields scope", () => {
       correction: { present: true as const, value: "🛠️" },
     };
     const receipt = await reviewSuggestion(ctx.db, kernelCtx(ctx), command);
+    expect(receipt).toMatchObject({ status: "waiting" });
+    await createKernel([fieldsKernelModule]).reconcileNow(ctx.db, [
+      { kind: FIELDS_SCOPE, key: `project:${record.entityId}` },
+    ]);
     expect((await stored(record.entityId)).emoji).toBe("🛠️");
     expect(await reviewSuggestion(ctx.db, kernelCtx(ctx), command)).toEqual(
       receipt,

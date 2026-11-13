@@ -3571,7 +3571,7 @@ import. Reference resolution, touching-record queries and Work tokens have separ
 
 Stored money-family Suggestions publish through `suggestion-publication.ts`, with family-owned
 suppression, unchanged and replacement policies. Field and connection families read kernel gaps and
-Decisions. Photo-import review stays with its Run and uses Decisions for approved fields and rejected
+Decisions. Field review commits the Decision and any authored-field write, then returns `waiting` while the dirty scope reworks its gaps. The row says "Cubby is reworking this"; preparing model questions belongs to the background runner. Photo-import review stays with its Run and uses Decisions for approved fields and rejected
 candidates.
 
 The page's `family`, `record` (`<kind>:<CODE>`) and `runId` params scope the queue. Every
