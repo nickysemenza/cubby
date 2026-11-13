@@ -322,8 +322,8 @@ test("shows kernel diagnostics on Image and Location and follows a field Sweep R
   if (!record) throw new Error("Sweep Run missing");
   await gotoAuthenticatedPage(page, `/runs/${record.shortcode}`);
   await expect(
-    page.getByText("Fields: roster", { exact: true }).first(),
-  ).toBeVisible();
+    page.getByRole("region", { name: "Work", exact: true }),
+  ).toContainText("1 passes");
   await page.screenshot({
     path: testInfo.outputPath("field-sweep-run.png"),
     fullPage: true,
