@@ -64,6 +64,7 @@ import {
   releaseFundingWaits,
   renewScopeClaims,
   nextWakeSql,
+  stopUnregisteredWork,
   claimAsk,
   claimAsks,
   releaseClaim,
@@ -111,6 +112,56 @@ describe("evidence-facts kernel", () => {
     registerOwnedColumns(ownedColumns(kernel.registry));
     return { kernel, fixture };
   };
+  it("parks unregistered work as Stuck and excludes it from the next wake", async () => {
+    const { kernel } = kernelWith();
+    const q = repositoryQueries(ctx.db);
+    await q.execute(
+      sql`INSERT INTO "ScopeDirty" ("scopeKind", "scopeKey", lane, reason) VALUES ('synthetic.removed', 'scope', 'money', 'synthetic')`,
+    );
+    await q.execute(
+      sql`INSERT INTO "Ask" ("inputHash", feature, producer, "promptVersion", input) VALUES ('synthetic-removed', 'synthetic.removed', 'model', '1', '{}')`,
+    );
+    await q.execute(
+      sql`INSERT INTO "Pass" (name,key) VALUES ('synthetic.removed','default')`,
+    );
+    await stopUnregisteredWork(ctx.db, kernel.registry);
+    expect(
+      (
+        await q.execute<{ at: null }>(
+          sql`SELECT ${nextWakeSql(kernel.registry)} AS at`,
+        )
+      ).rows,
+    ).toEqual([{ at: null }]);
+    expect(
+      (
+        await q.execute<{ stage: string; error: string }>(
+          sql`SELECT stage,error FROM "ScopeState" WHERE "scopeKind"='synthetic.removed'`,
+        )
+      ).rows,
+    ).toEqual([
+      { stage: "stuck", error: "Unregistered reconciler: synthetic.removed" },
+    ]);
+    expect(
+      (
+        await q.execute<{ attempts: number; lastError: string }>(
+          sql`SELECT attempts,"lastError" FROM "Ask" WHERE feature='synthetic.removed'`,
+        )
+      ).rows[0],
+    ).toMatchObject({
+      attempts: 3,
+      lastError: "Unregistered Ask kind: synthetic.removed",
+    });
+    expect(
+      (
+        await q.execute<{ attempts: number; lastError: string }>(
+          sql`SELECT attempts,"lastError" FROM "Pass" WHERE name='synthetic.removed'`,
+        )
+      ).rows[0],
+    ).toMatchObject({
+      attempts: 3,
+      lastError: "Unregistered Pass: synthetic.removed",
+    });
+  });
   const charge = (
     orderRef: string,
     amountMinor: number,

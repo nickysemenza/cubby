@@ -46,7 +46,7 @@ export async function renewScopeClaims(
     UPDATE "ScopeDirty" d SET "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
     FROM jsonb_to_recordset(${JSON.stringify(scopes.map(({ kind, key, token }) => ({ kind, key, token })))}::jsonb)
       AS r(kind text, key text, token uuid)
-    WHERE d.kind = r.kind AND d.key = r.key AND d."claimToken" = r.token
+    WHERE d."scopeKind" = r.kind AND d."scopeKey" = r.key AND d."claimToken" = r.token
       AND d."claimDeadline" > now()`);
 }
 /** Non-transient failures before a dirty scope is Stuck. */
@@ -632,17 +632,47 @@ async function claimPassGroup(
  * work, or the deadline of a claim that would lapse into claimable work.
  * Scalar SQL, also the drain's `next`.
  */
-export const nextWakeSql = (): SQL => sql`(
+export const nextWakeSql = (registry?: KernelRegistry): SQL => sql`(
   SELECT least(
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "ScopeDirty" WHERE attempts < ${MAX_SCOPE_ATTEMPTS}),
+      FROM "ScopeDirty" WHERE attempts < ${MAX_SCOPE_ATTEMPTS}
+        ${registry ? sql`AND "scopeKind" = ANY(${textArrayParam([...registry.reconcilers.keys()])})` : sql``}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
       FROM "Ask" WHERE state = ${ASK.queued} AND "cancelledAt" IS NULL AND executor IS NULL AND NOT hosted AND attempts < "maxAttempts"
+        ${registry ? sql`AND feature = ANY(${textArrayParam([...registry.asks.values()].filter((kind) => kind.produce && !kind.hosted).map((kind) => kind.feature))})` : sql``}
         AND EXISTS (SELECT 1 FROM "AskScope" s WHERE s."askId" = "Ask".id AND s."cancelledAt" IS NULL)),
-    (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}),
+    (SELECT min("claimDeadline") FROM "Ask" WHERE state = ${ASK.sent}
+      ${registry ? sql`AND feature = ANY(${textArrayParam([...registry.asks.keys()])})` : sql``}),
     (SELECT min(CASE WHEN "claimToken" IS NULL THEN "availableAt" ELSE greatest("availableAt", "claimDeadline") END)
-      FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND attempts < "maxAttempts")
+      FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL AND attempts < "maxAttempts"
+        ${registry ? sql`AND name = ANY(${textArrayParam([...registry.passes.keys()])})` : sql``})
   )::timestamp)`;
+
+/** Retain orphaned work for inspection without spinning the queue on unclaimable rows. */
+export async function stopUnregisteredWork(
+  db: Database,
+  registry: KernelRegistry,
+): Promise<void> {
+  await repositoryQueries(db).execute(sql`
+    WITH scopes AS (
+      UPDATE "ScopeDirty" SET attempts = ${MAX_SCOPE_ATTEMPTS}, "claimToken" = NULL, "claimDeadline" = NULL,
+        "lastError" = 'Unregistered reconciler: ' || "scopeKind"
+      WHERE NOT ("scopeKind" = ANY(${textArrayParam([...registry.reconcilers.keys()])})) AND attempts < ${MAX_SCOPE_ATTEMPTS}
+        AND ("claimToken" IS NULL OR "claimDeadline" <= now()) RETURNING "scopeKind", "scopeKey", "lastError"
+    ), asks AS (
+      UPDATE "Ask" SET attempts = "maxAttempts", "lastError" = 'Unregistered Ask kind: ' || feature,
+        "claimToken" = NULL, "claimDeadline" = NULL
+      WHERE NOT (feature = ANY(${textArrayParam([...registry.asks.keys()])})) AND attempts < "maxAttempts"
+        AND state IN (${ASK.queued}, ${ASK.sent}) AND ("claimToken" IS NULL OR "claimDeadline" <= now())
+    ), passes AS (
+      UPDATE "Pass" SET attempts = "maxAttempts", "lastError" = 'Unregistered Pass: ' || name,
+        "claimToken" = NULL, "claimDeadline" = NULL
+      WHERE NOT (name = ANY(${textArrayParam([...registry.passes.keys()])})) AND attempts < "maxAttempts"
+        AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ("claimToken" IS NULL OR "claimDeadline" <= now())
+    ) INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "errorClass", error)
+      SELECT "scopeKind", "scopeKey", 0, 'unregistered', 'stuck', 'failed', "lastError" FROM scopes
+      ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET stage = 'stuck', "errorClass" = 'failed', error = excluded.error`);
+}
 
 /** Clear funding waits atomically; version live holders so an older refusal cannot put them back. */
 export async function releaseFundingWaits(

@@ -212,6 +212,7 @@ import {
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 /** Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. */
 const purchaseExpenses = () =>
@@ -660,6 +661,7 @@ export const reclassifyPurchaseDocument = async (
   const id = await resolveOrThrow(db, "purchase", input.purchaseId);
   const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const before = await tx.query.entityAttachment.findFirst({
       where: {
         RAW: (table: PgTable) =>
@@ -957,6 +959,7 @@ export const updatePurchase = defineMutationWriter({
     let detachedImageKeys: string[] = [];
 
     await withTransaction(db, async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const before = await tx.query.purchase.findFirst({
         where: {
           RAW: (table: PgTable) =>
@@ -1150,6 +1153,7 @@ export const linkExpensesToPurchase = async (
   });
 
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const target = await tx.query.purchase.findFirst({
       where: {
         RAW: (table: PgTable) =>
@@ -1279,6 +1283,7 @@ export const splitExpense = async (
   const { createdIds, priceAffectedProductIds } = await withTransaction(
     db,
     async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const original = await tx.query.expense.findFirst({
         where: {
           RAW: (table: PgTable) =>
@@ -2210,6 +2215,7 @@ export const mergePurchases = async (
   });
   let mergedCount = 0;
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     // Lock every row first so a concurrent merge can't interleave and leave the
     // unique index deciding the outcome.
     await lockAndValidateForDelete(
@@ -2343,6 +2349,7 @@ export const deletePurchases = (
   actor: ActorContext,
 ) =>
   withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const ids = await resolveAllOrThrow(tx, "purchase", shortcodes);
     const detaching = await tx
       .select({ id: expense.id })

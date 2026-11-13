@@ -962,6 +962,7 @@ export async function updateFinancialTransactions(
     updates.map((update) => update.shortcode),
   );
   await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     await lockFinancialEvidenceKeys(
       tx,
       "reviewed-booking",

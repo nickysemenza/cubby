@@ -5,7 +5,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 
 import type { BackgroundQueueBatch } from "../background-queue-types";
-import { wakeAt } from "./publish";
+import { coalesceBackgroundWakes, wakeAt } from "./publish";
 
 export interface BackgroundQueueConsumerPorts {
   readonly captureException: (error: UnparsedError) => void;
@@ -18,8 +18,19 @@ export async function handleBackgroundQueueBatch(
   batch: BackgroundQueueBatch,
   ports: BackgroundQueueConsumerPorts,
 ) {
+  return coalesceBackgroundWakes(() =>
+    consumeBackgroundQueueBatch(db, batch, ports),
+  );
+}
+
+async function consumeBackgroundQueueBatch(
+  db: Database,
+  batch: BackgroundQueueBatch,
+  ports: BackgroundQueueConsumerPorts,
+) {
   const { runProductionKernel } = await import("~/server/kernel/api");
   const { kernelNextSql } = await import("~/server/kernel/runner");
+  const { productionKernel } = await import("~/server/kernel/kernel");
   const { repositoryQueries } =
     await import("~/server/db/repository-access.boundary");
   try {
@@ -33,7 +44,7 @@ export async function handleBackgroundQueueBatch(
       ).ringDueDeviceWork(db);
     const ran = await runProductionKernel(db, { budgetMs: 20_000 });
     const result = await repositoryQueries(db).execute<{ at: string | null }>(
-      sql`SELECT to_char((${kernelNextSql()}), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`,
+      sql`SELECT to_char((${kernelNextSql((await productionKernel()).registry)}), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS at`,
     );
     const at = result.rows[0]?.at;
     if (at) await wakeAt(new Date(at), { source: "kernel.successor" });

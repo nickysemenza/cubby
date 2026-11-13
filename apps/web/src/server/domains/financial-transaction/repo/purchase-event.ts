@@ -47,6 +47,12 @@ import { spendingBlocker } from "~/server/domains/financial-transaction/policy/s
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
 import {
   merchantIdentityAsk,
+  merchantIdentityRequest,
+  merchantAnswer,
+  supportRequest,
+  supportAnswer,
+  escrowRequest,
+  escrowAnswer,
   merchantSupportAsk,
   escrowAsk,
 } from "~/server/domains/financial-transaction/repo/purchase-asks";
@@ -386,10 +392,12 @@ export const purchaseEvent = defineReconciler<Input>({
         inputHashOf(
           askEnvelope(
             merchantIdentityAsk,
-            statementMerchantIdentityInput({
-              ...row,
-              amount: minorToMoney(row.amount),
-            }),
+            merchantIdentityRequest(
+              statementMerchantIdentityInput({
+                ...row,
+                amount: minorToMoney(row.amount),
+              }) ?? { merchant: "" },
+            ),
           ),
         ),
       ),
@@ -399,14 +407,10 @@ export const purchaseEvent = defineReconciler<Input>({
       hashes.map(answerKey),
       sql`${answer.inputHash} = ANY(${textArrayParam(hashes)})`,
     );
-    const names = saved.flatMap((row) =>
-      row.output &&
-      typeof row.output === "object" &&
-      !Array.isArray(row.output) &&
-      typeof row.output.name === "string"
-        ? [row.output.name.trim().toLowerCase()]
-        : [],
-    );
+    const names = saved.flatMap((row) => {
+      const name = merchantAnswer(row.output)?.name;
+      return name ? [name.trim().toLowerCase()] : [];
+    });
     for (const row of choices)
       if (row.field === "vendorName" && typeof row.value === "string")
         names.push(row.value.trim().toLowerCase());
@@ -460,13 +464,7 @@ export const purchaseEvent = defineReconciler<Input>({
             row.inputHash ===
             hashes[transactions.findIndex((row) => row.id === key)],
         );
-        const answerName =
-          matchedAnswer?.output &&
-          typeof matchedAnswer.output === "object" &&
-          !Array.isArray(matchedAnswer.output) &&
-          typeof matchedAnswer.output.name === "string"
-            ? matchedAnswer.output.name
-            : null;
+        const answerName = merchantAnswer(matchedAnswer?.output)?.name ?? null;
         const names = new Set(
           [
             transaction?.merchant?.trim() ||
@@ -942,33 +940,35 @@ export const purchaseEvent = defineReconciler<Input>({
       ? null
       : statementMerchantIdentityInput(spendingSubject);
     const identityAnswer = identityInput
-      ? c.answer(merchantIdentityAsk, identityInput, { request: false })
+      ? c.answer(merchantIdentityAsk, merchantIdentityRequest(identityInput))
       : null;
     const identity =
-      identityAnswer?.status === "answered" ? identityAnswer.output : null;
+      identityAnswer?.status === "answered"
+        ? merchantAnswer(identityAnswer.output)
+        : null;
     const supportInput =
       identity && identityInput
         ? statementMerchantSupportInput(identityInput, identity)
         : null;
     const support = supportInput
-      ? c.answer(merchantSupportAsk, supportInput, { request: false })
+      ? c.answer(merchantSupportAsk, supportRequest(supportInput))
       : null;
     const escrowInput = statementEscrowInput(
       spendingSubject,
       account.identity.kind === "loan",
     );
     const escrow = escrowInput
-      ? c.answer(escrowAsk, escrowInput, { request: false })
+      ? c.answer(escrowAsk, escrowRequest(escrowInput))
       : null;
     const storedAdvice = {
       vendorName: identity?.name ?? null,
       vendorConfidence:
-        support?.status === "answered" && support.output
+        support?.status === "answered" && supportAnswer(support.output)
           ? identity?.confidence
           : "low",
       counterparty: identity?.counterparty ?? "unknown",
       ...(escrow?.status === "answered"
-        ? { escrowDisbursement: escrow.output }
+        ? { escrowDisbursement: escrowAnswer(escrow.output) }
         : {}),
     };
     const adviceResult = financialSpendingAdvice.safeParse(

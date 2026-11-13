@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
   backgroundTaskSchema,
   type BackgroundTaskInput,
@@ -15,6 +17,37 @@ import { repositoryTransactionDatabase } from "~/server/db/repository-access.bou
 import type { BackgroundQueueProducer } from "../background-queue-types";
 
 const logger = createLogger("jobs");
+type PendingWake = {
+  at: Date;
+  source: string;
+  ring?: boolean;
+  queue?: BackgroundQueueProducer;
+};
+const pendingWakes = new AsyncLocalStorage<{ wake: PendingWake | null }>();
+function enrollWake(state: { wake: PendingWake | null }, request: PendingWake) {
+  const first = state.wake;
+  state.wake =
+    !first || request.at < first.at
+      ? { ...request, ring: request.ring || first?.ring }
+      : { ...first, ring: first.ring || request.ring };
+}
+
+/** One delivered batch produces at most one successor, including recovery deadlines. */
+export async function coalesceBackgroundWakes<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  if (pendingWakes.getStore()) return work();
+  const pending: { wake: PendingWake | null } = { wake: null };
+  const result = await pendingWakes.run(pending, work);
+  const earliest = pending.wake;
+  if (earliest) {
+    const ring = earliest.ring;
+    if (earliest.at.getTime() <= Date.now() && !ring)
+      await wakeKernel({ source: earliest.source, queue: earliest.queue });
+    else await wakeAt(earliest.at, { source: earliest.source, ring });
+  }
+  return result;
+}
 export interface PublishOptions {
   readonly source: string;
 }
@@ -52,6 +85,11 @@ async function sendWake(
 export async function wakeKernel(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
+  const pending = pendingWakes.getStore();
+  if (pending) {
+    enrollWake(pending, { at: new Date(), ...options });
+    return;
+  }
   const queue = options.queue ?? getBackgroundQueue();
   if (!queue) return;
   // Only the wake is deferred: callers commit durable intent before getting here.
@@ -86,6 +124,11 @@ export async function wakeAt(
   at: Date,
   options: PublishOptions & { ring?: boolean },
 ) {
+  const pending = pendingWakes.getStore();
+  if (pending) {
+    enrollWake(pending, { at, ...options });
+    return;
+  }
   const delayFromNow = () =>
     Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
   if (delayFromNow() > MAX_WAKE_DELAY_SECONDS) return;

@@ -466,7 +466,19 @@ export const withSnapshotWrite = <T>(
   db: Database,
   fn: (tx: DrizzleTransaction) => Promise<T>,
   config: SnapshotWriteConfig,
-): Promise<T> => withTransactionAttempts(db, fn, config, 3);
+): Promise<T> =>
+  withTransactionAttempts(
+    db,
+    async (tx) => {
+      // Snapshot mutations can merge or remove references into money-owned rows.
+      // Take the household gate before the callback can acquire any row lock.
+      const { enterWriteTransaction } = await import("~/server/kernel/gate");
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
+      return fn(tx);
+    },
+    config,
+    3,
+  );
 
 /**
  * Composable transaction: **join** the caller's transaction when one is already

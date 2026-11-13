@@ -49,7 +49,11 @@ export const repositoryBeforeCommit = (
 export const repositoryAfterCommit = (
   db: RepositoryQueryInput,
   effect: (committedDb: Database) => Promise<void>,
-): Promise<void> => runAfterCommit(db, effect);
+  key?: string,
+): Promise<void> =>
+  key
+    ? runAfterCommit(db, { key, items: [], flush: effect })
+    : runAfterCommit(db, effect);
 
 export function repositoryParentDatabase(
   db: RepositoryQueryInput,

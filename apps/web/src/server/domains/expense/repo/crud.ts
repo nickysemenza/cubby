@@ -85,6 +85,7 @@ import {
   resolveAllOrThrow,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { enterWriteTransaction } from "~/server/kernel/gate";
 
 import {
   expenseInheritanceReadExtras,
@@ -743,6 +744,7 @@ export const updateExpense = defineMutationWriter({
     };
 
     return withTransaction(db, async (tx) => {
+      await enterWriteTransaction(tx, { lane: "money", mode: "member" });
       const state = await loadUpdateState(tx);
       const {
         explicitPurchaseId,
@@ -1061,6 +1063,7 @@ export async function createExpenses(
         : await requireLineRoleClassifier(classifyLineRole)(db, actor, data),
     );
   return withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     // Same transaction as the insert: a vendor or charge created here must not
     // outlive a failed expense write.
     // A caller-supplied `purchaseId` skips `resolveCharge` entirely, so this is
@@ -1178,6 +1181,7 @@ export const deleteExpensesWithPurchaseEffects = async (
   }
 
   return await withTransaction(db, async (tx) => {
+    await enterWriteTransaction(tx, { lane: "money", mode: "member" });
     const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
     const qualityTargets = await tx.query.expense.findMany({
       where: {

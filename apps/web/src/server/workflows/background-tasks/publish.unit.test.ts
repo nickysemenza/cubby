@@ -4,9 +4,30 @@ import { describe, expect, it, vi } from "vitest";
 import * as cfEnv from "~/server/cf-env";
 import { runWithExecutionCtx } from "~/server/cf-env";
 
-import { wakeAt, wakeKernel } from "./publish";
+import { coalesceBackgroundWakes, wakeAt, wakeKernel } from "./publish";
 
 describe("Job wake transport", () => {
+  it("collapses a page's dirty, recovery and successor wakes into one permit", async () => {
+    const sendBatch = vi.fn().mockResolvedValue(undefined);
+    const getQueue = vi
+      .spyOn(cfEnv, "getBackgroundQueue")
+      .mockReturnValue({ sendBatch });
+    try {
+      await coalesceBackgroundWakes(async () => {
+        for (let i = 0; i < 256; i++) {
+          await wakeKernel({ source: "synthetic.dirty" });
+          await wakeAt(new Date(Date.now() + 90_000), {
+            source: "synthetic.recovery",
+          });
+        }
+        await wakeAt(new Date(), { source: "synthetic.successor" });
+        expect(sendBatch).not.toHaveBeenCalled();
+      });
+      expect(sendBatch).toHaveBeenCalledTimes(1);
+    } finally {
+      getQueue.mockRestore();
+    }
+  });
   it("sends only a versioned permit, with no domain payload", async () => {
     const sendBatch = vi.fn().mockResolvedValue(undefined);
     await wakeKernel({ source: "synthetic-test", queue: { sendBatch } });

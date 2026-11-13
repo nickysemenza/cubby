@@ -17,7 +17,7 @@ import {
 
 import { runClaimedScopes } from "./apply";
 import { expireAsks, runQueuedAsks } from "./ask";
-import { claimScopes, type ClaimedScope } from "./claim";
+import { claimScopes, stopUnregisteredWork, type ClaimedScope } from "./claim";
 import { withWorkContext } from "./context";
 
 export { nextWakeSql as kernelNextSql } from "./claim";
@@ -75,6 +75,7 @@ export async function runKernel(
 ): Promise<number> {
   return withWorkContext(async () => {
     const deadline = Date.now() + options.budgetMs;
+    await stopUnregisteredWork(db, registry);
     await expireAsks(db, registry);
     await ensureVersionSweep(db, registry);
     let ran = 0;
