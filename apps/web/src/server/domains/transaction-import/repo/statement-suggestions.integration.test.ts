@@ -5,18 +5,11 @@ import {
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
 import {
-  STATEMENT_LABEL_REVISION,
   statementTransactionJudgment,
   type StatementSuggestionOut,
   type StatementTransactionApplication,
 } from "@cubby/schemas/statement-suggestion";
-import {
-  suggestionSubjects,
-  suggestionProducer,
-} from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
-import { DECISION_MODEL } from "@cubby/shared/ai/models";
-import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -30,7 +23,6 @@ import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
-import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -46,17 +38,11 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
-import {
-  labelStatementSuggestions as runStatementLabels,
-  STATEMENT_SPENDING_CONCURRENCY,
-} from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import {
   readWorkQueue,
   readRecordWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
-import { currentJobExecution } from "~/server/generic/jobs/context";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
 import { matchStatementRules } from "~/server/generic/suggestions/repo/automatic-policy";
@@ -65,17 +51,13 @@ import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/suggestions/repo/suggestion-list";
-import * as publicationRepo from "~/server/generic/suggestions/repo/suggestion-publication";
-import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,
   drainStoredDerived,
-  withJobFixtureExecution,
 } from "~/server/testing/background-queue";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
-import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import { sourceObservationFrom } from "./source-observation-state";
 import {
@@ -90,8 +72,6 @@ import {
   buildChargeProposals,
   generateStatementSuggestionPage,
   generateStatementHoldVoidPage,
-  labelledProposal,
-  publishChargeProposal,
   retryStatementGenerationRefs,
 } from "./statement-suggestions";
 
@@ -406,433 +386,93 @@ async function rejectStatementPublication(
   };
 }
 
-async function completeLabelPublications(ctx: Ctx) {
-  const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
-    ctx.db,
-    100,
-  );
-  const subjects = pending.map((row) =>
-    suggestionSubjects.statement_transaction.parse(row.subject),
-  );
-  const proposals = await buildChargeProposals(
-    ctx.db,
-    subjects.map(({ source, chargeKey }) => ({ source, chargeKey })),
-  );
-  return Promise.all(
-    pending.map(async (row, index) => {
-      const subject = subjects[index]!;
-      const proposal = proposals.find(
-        (entry) =>
-          entry.charge.source === subject.source &&
-          entry.charge.chargeKey === subject.chargeKey,
-      );
-      if (!proposal) throw new Error("Expected synthetic charge proposal");
-      const judgment = structuredClone(proposal.judgment);
-      if (judgment.create) {
-        judgment.create.votes.label = "purchase";
-        judgment.create.counterparty.label = "business";
-      }
-      for (const candidate of judgment.candidates)
-        candidate.label = {
-          same: "different",
-          confidence: "high",
-          model: DECISION_MODEL,
-        };
-      return {
-        proposal: await labelledProposal(proposal, judgment),
-        evidenceFingerprint: row.evidenceFingerprint,
-        checkpoint: {
-          revision: STATEMENT_LABEL_REVISION,
-          model: DECISION_MODEL,
-          models: [DECISION_MODEL],
-          judgment,
-          kind: true,
-          counterparty: true,
-          spending: true,
-        },
-        producer: {
-          kind: "model" as const,
-          model: DECISION_MODEL,
-          revision: STATEMENT_LABEL_REVISION,
-          runId: null,
-          evaluationId: null,
-        },
-      };
-    }),
-  );
-}
-
 describe("statement Transaction suggestions", () => {
   const ctx = withTestDb();
-
-  it.each([false, true])(
-    "keeps statement label scope through pending application=%s",
-    async (applicationPending) => {
-      const account = (await card(ctx)).output;
-      await createRepoIdentity(ctx, "financialAccount", {
-        name: "Synthetic excluded account",
-        identity: { kind: "credit_card", network: "visa" },
-        sourceAliases: [
-          {
-            source: "monarch",
-            alias: "Excluded Card",
-            externalAccountId: null,
-          },
-        ],
-      });
-      await record(ctx, [
-        rowInput({
-          accountDescriptor: "Excluded Card",
-          rawDescription: "EXCLUDED ACCOUNT",
-          providerAmount: -11,
-        }),
-        rowInput({
-          statementDate: "2026-04-01",
-          rawDescription: "EXCLUDED DATE",
-          providerAmount: -22,
-        }),
-        rowInput({
-          statementDate: "2026-05-05",
-          rawDescription: "INCLUDED CHARGE",
-          providerAmount: -33,
-        }),
-      ]);
-      await generate(ctx);
-      if (applicationPending)
-        await statementSuggestionsRepo.publishCompleteStatementLabels(
-          ctx.db,
-          await completeLabelPublications(ctx),
-        );
-      const accountId = await resolveOrThrow(
-        ctx.db,
-        "financialAccount",
-        account.id,
-      );
-      const scope = { accountIds: [accountId], since: "2026-05-01" };
-      const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-      );
-      const excluded = before.filter(
-        (entry) => entry.judgment.create?.rawDescription !== "INCLUDED CHARGE",
-      );
-      const seen: string[] = [];
-      const answer = answering({ kind: "other", counterparty: "business" });
-      const port: DecisionPort = async (request) => {
-        seen.push(request.state);
-        return answer(request);
-      };
-      const partial = applicationPending
-        ? null
-        : await labelStatementSuggestions(ctx.db, {
-            scope,
-            port,
-            decisionLimit: 1,
-          });
-      const expectedPartial = expect.objectContaining({
-        completed: 0,
-        failed: [],
-        next: expect.objectContaining({ inclusive: true }),
-      });
-      expect(partial).toEqual(applicationPending ? null : expectedPartial);
-      const outcome = await labelStatementSuggestions(ctx.db, {
-        scope,
-        port,
-        after: partial?.next,
-      });
-      expect(outcome).toMatchObject({
-        completed: 1,
-        failed: [],
-        stale: 0,
-        next: null,
-      });
-      expect(seen.join("\n")).not.toMatch(/EXCLUDED ACCOUNT|EXCLUDED DATE/);
-      const remaining = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-      );
-      expect(remaining.map((entry) => entry.id).sort()).toEqual(
-        excluded.map((entry) => entry.id).sort(),
-      );
-      expect(
-        await statementSuggestionsRepo.countSuggestionsNeedingLabels(
-          ctx.db,
-          scope,
-        ),
-      ).toBe(0);
-    },
-  );
-
-  it.each(["ordinary", "resumed shortcut"])(
-    "fences %s receipt completion under its original scope",
-    async (mode) => {
-      const account = (await card(ctx)).output;
-      const other = (
-        await createRepoIdentity(ctx, "financialAccount", {
-          name: "Synthetic receipt completion account",
-          identity: { kind: "credit_card", network: "visa" },
-        })
-      ).output;
-      const imported = await record(ctx, [
-        rowInput({
-          providerTransactionId: "synthetic-receipt-completion-scope",
-        }),
-      ]);
-      await generate(ctx);
-      if (mode.startsWith("resumed")) {
-        const publications = await Promise.all(
-          (await completeLabelPublications(ctx)).map(async (entry) => {
-            const judgment = structuredClone(entry.proposal.judgment);
-            if (judgment.create) judgment.create.counterparty.label = "person";
-            const proposal = await labelledProposal(entry.proposal, judgment);
-            return {
-              ...entry,
-              proposal,
-              checkpoint: { ...entry.checkpoint, judgment: proposal.judgment },
-            };
-          }),
-        );
-        await statementSuggestionsRepo.publishCompleteStatementLabels(
-          ctx.db,
-          publications,
-        );
-      }
-      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
-      if (!source)
-        throw new Error("Synthetic receipt completion source missing");
-      let before: typeof suggestionTable.$inferSelect | undefined;
-      const move = async (suggestionId: string) => {
-        if (before) return;
-        [before] = await getDb(ctx.db)
-          .select()
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, suggestionId));
-        await updateSourceTransactionRecords(
-          ctx.db,
-          {
-            selector: {
-              source: source.source,
-              externalIds: [source.externalId],
-            },
-            data: { accountId: other.id },
-          },
-          ctx.actor,
-        );
-      };
-      const shortcut = mode.endsWith("shortcut");
-      const select = automaticRuleRuntime.selectAutomaticRules;
-      const selectSpy = vi
-        .spyOn(automaticRuleRuntime, "selectAutomaticRules")
-        .mockImplementation(async (...args) => {
-          const [id] = args[1];
-          if (id) await move(id);
-          return select(...args);
-        });
-      try {
-        const scope = {
-          accountIds: [
-            await resolveOrThrow(ctx.db, "financialAccount", account.id),
-          ],
-          since: "2026-05-01",
-          // Import admission selects the ordinary zero-applicable-rule path.
-          ...(!shortcut && { importId: imported.batchId }),
-        };
-        const outcome = await labelStatementSuggestions(ctx.db, {
-          scope,
-          port: answering({ kind: "purchase", counterparty: "person" }),
-        });
-        if (!before)
-          throw new Error(
-            "Synthetic receipt completion boundary was not reached",
-          );
-        expect(outcome).toMatchObject({
-          completed: 0,
-          stale: 1,
-          failed: [],
-          next: null,
-        });
-        expect(z.record(z.string(), z.json()).parse(before.data)).toMatchObject(
-          { applicationPending: true, applicationOrder: expect.any(Object) },
-        );
-        const [after] = await getDb(ctx.db)
-          .select()
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, before.id));
-        expect(after?.data).toEqual(before.data);
-        expect(after?.createdAt).toEqual(before.createdAt);
-        expect(
-          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
-        ).toMatchObject([{ id: before.id, applicationPending: true }]);
-        expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
-          [],
-        );
-        expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
-      } finally {
-        selectSpy.mockRestore();
-      }
-    },
-  );
-
-  it.each(["checkpoint", "publication"])(
-    "fences statement scope inside %s write admission",
-    async (phase) => {
-      const account = (await card(ctx)).output;
-      const other = (
-        await createRepoIdentity(ctx, "financialAccount", {
-          name: "Synthetic label write race account",
-          identity: { kind: "credit_card", network: "visa" },
-        })
-      ).output;
-      const imported = await record(ctx, [
-        rowInput({ providerTransactionId: "synthetic-label-write-race" }),
-      ]);
-      await generate(ctx);
-      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
-      const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        1,
-      );
-      if (!source || !before)
-        throw new Error("Synthetic label write race missing");
-      let moved = false;
-      const move = async () => {
-        if (moved) return;
-        moved = true;
-        await updateSourceTransactionRecords(
-          ctx.db,
-          {
-            selector: {
-              source: source.source,
-              externalIds: [source.externalId],
-            },
-            data: { accountId: other.id },
-          },
-          ctx.actor,
-        );
-      };
-      const checkpoint =
-        statementSuggestionsRepo.recordStatementLabelCheckpoint;
-      const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
-      const publishSuggestions = publicationRepo.publishReplacements;
-      const checkpointSpy = vi
-        .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
-        .mockImplementation(async (...args) => {
-          if (phase === "checkpoint") await move();
-          return checkpoint(...args);
-        });
-      const publicationSpy = vi
-        .spyOn(statementSuggestionsRepo, "publishCompleteStatementLabels")
-        .mockImplementation(async (...args) => {
-          if (phase === "publication") await move();
-          return publish(...args);
-        });
-      const batchSpy = vi
-        .spyOn(publicationRepo, "publishReplacements")
-        .mockImplementation(async (...args) => {
-          if (phase === "publication fallback" && !moved) {
-            await move();
-            throw new Error("Synthetic batch failure before scoped fallback");
-          }
-          return publishSuggestions(...args);
-        });
-      try {
-        const result = await labelStatementSuggestions(ctx.db, {
-          scope: {
-            importId: imported.batchId,
-            accountIds: [
-              await resolveOrThrow(ctx.db, "financialAccount", account.id),
-            ],
-            since: "2026-05-01",
-          },
-          port: answering({ kind: "other", counterparty: "business" }),
-          ...(phase === "checkpoint" && { decisionLimit: 1 }),
-        });
-        expect(moved).toBe(true);
-        expect(result).toMatchObject({ labelled: 0, completed: 0, failed: [] });
-        const [retained] = await getDb(ctx.db)
-          .select()
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, before.id));
-        expect(
-          z.record(z.string(), z.json()).parse(retained?.data)
-            .labelCheckpoint ?? null,
-        ).toBeNull();
-        expect(
-          await getDb(ctx.db)
-            .select({ id: suggestionTable.id })
-            .from(suggestionTable)
-            .where(
-              sql`${suggestionTable.producer}->>${"kind"} = ${suggestionProducer.shape.kind.enum.model}`,
-            ),
-        ).toEqual([]);
-      } finally {
-        checkpointSpy.mockRestore();
-        publicationSpy.mockRestore();
-        batchSpy.mockRestore();
-      }
-    },
-  );
-
-  it("fences recovered statement labels under their original scope", async () => {
-    const account = (await card(ctx)).output;
-    const other = (
-      await createRepoIdentity(ctx, "financialAccount", {
-        name: "Synthetic recovery scope account",
-        identity: { kind: "credit_card", network: "visa" },
+  it("dismisses only the current financial recommendation and allows changed evidence", async () => {
+    await card(ctx);
+    const observed = rowInput({
+      providerTransactionId: "synthetic-revision-dismissal",
+    });
+    await record(ctx, [observed]);
+    const [legacyOwner] = await getDb(ctx.db)
+      .select({
+        id: sourceOccurrence.id,
+        version: sourceOccurrence.version,
+        reviewState: sourceOccurrence.reviewState,
+        currentObservationId: sourceOccurrence.currentObservationId,
+        acceptedTransactionId: sourceOccurrence.acceptedTransactionId,
       })
-    ).output;
-    const imported = await record(ctx, [
-      rowInput({ providerTransactionId: "synthetic-recovery-scope" }),
-    ]);
-    await generate(ctx);
-    const entries = await completeLabelPublications(ctx);
-    const [entry] = entries;
-    const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
-    if (!entry || !source)
-      throw new Error("Synthetic recovered scope fixture missing");
-    const published =
-      await statementSuggestionsRepo.publishCompleteStatementLabels(
-        ctx.db,
-        entries,
-      );
-    const receipt = published.get(
-      statementSuggestionsRepo.chargeId(entry.proposal.charge),
+      .from(sourceOccurrence);
+    const [legacyRecord] = (await listSourceTransactionRecords(ctx.db, {}))
+      .data;
+    if (!legacyOwner || !legacyRecord)
+      throw new Error("Synthetic predecessor evidence missing");
+    // Frozen predecessor hash: removing a presentation field must not revive unchanged dismissed advice.
+    const predecessorOwnerHash = await sha256Hex(
+      canonicalJson(jsonSnapshot.parse({ ...legacyOwner, suppressed: false })),
     );
-    if (receipt?.kind !== "ready")
-      throw new Error("Synthetic publication receipt missing");
-    const before = await getDb(ctx.db)
+    const [proposal] = await buildChargeProposals(ctx.db, [
+      { source: legacyRecord.source, chargeKey: legacyRecord.chargeKey },
+    ]);
+    expect(proposal?.providerScopeFingerprint).toBe(predecessorOwnerHash);
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "person" }));
+    const [current] = await readPendingStatements(ctx);
+    const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!current || !bankRecord)
+      throw new Error("Synthetic current financial recommendation missing");
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      operationId: "synthetic-current-dismissal",
+      suggestionId: current.suggestionId,
+      verdict: "dismissed",
+      intent: "history",
+      suppression: {
+        scope: "statement_transaction",
+        candidateKey: `${bankRecord.source}:${bankRecord.chargeKey}`,
+        fingerprint: null,
+      },
+      evidence: { note: "Dismiss this recommendation, not the bank event" },
+    });
+    const [dismissed] = await getDb(ctx.db)
       .select()
       .from(suggestionTable)
-      .where(eq(suggestionTable.id, receipt.receipt.suggestionId));
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: { source: source.source, externalIds: [source.externalId] },
-        data: { accountId: other.id },
-      },
-      ctx.actor,
-    );
-    const recovered =
-      await statementSuggestionsRepo.publishCompleteStatementLabels(
-        ctx.db,
-        entries,
+      .where(eq(suggestionTable.id, current.suggestionId));
+    expect(dismissed?.suppression?.fingerprint).toBe(dismissed?.fingerprint);
+    await generate(ctx);
+    expect(await readPendingStatements(ctx)).toEqual([]);
+    const [retainedDismissal] = await getDb(ctx.db)
+      .select()
+      .from(suggestionTable)
+      .where(eq(suggestionTable.id, current.suggestionId));
+    expect(retainedDismissal).toMatchObject({
+      active: true,
+      status: "resolved",
+      data: { evidenceFingerprint: proposal?.evidenceFingerprint },
+    });
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+    await record(
+      ctx,
+      [
         {
-          importId: imported.batchId,
-          accountIds: [
-            await resolveOrThrow(ctx.db, "financialAccount", account.id),
-          ],
-          since: "2026-05-01",
+          ...observed,
+          rowPosition: 10,
+          providerAmount: -45.5,
+          rawDescription: "SYNTHETIC REVISED CHARGE",
         },
-      );
+      ],
+      { fingerprint: "synthetic-dismissal-revision" },
+    );
+    await generate(ctx);
+    await label(ctx, answering({ kind: "purchase", counterparty: "person" }));
+    const pending = await readPendingStatements(ctx);
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.suggestionId).not.toBe(current.suggestionId);
     expect(
-      recovered.get(statementSuggestionsRepo.chargeId(entry.proposal.charge)),
-    ).toEqual({ kind: "resolved", reason: "out_of_scope" });
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, receipt.receipt.suggestionId)),
-    ).toEqual(before);
+      (await listSourceTransactionRecords(ctx.db, {})).data.every(
+        (row) => row.disposition === "open",
+      ),
+    ).toBe(true);
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
   });
 
   it.each(["page", "single"])(
@@ -1981,237 +1621,6 @@ describe("statement Transaction suggestions", () => {
     });
   });
 
-  it("retains partial answers when merchant preparation defers on the response cache", async () => {
-    await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const until = new Date(Date.now() + 15_000);
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
-    const first = await withJobFixtureExecution(
-      ctx.db,
-      {
-        key: "synthetic.cache-progress",
-        kind: "run.execute",
-        input: {},
-      },
-      async () => {
-        const result = await runStatementLabels(ctx.db, {
-          runId,
-          cooperative: true,
-          port: answering({ kind: "purchase", counterparty: "business" }),
-          spendingAdvice: async () => {
-            throw new Error("Synthetic merchant lookup", {
-              cause: new JobDeferredError(
-                "Synthetic cache contention",
-                until,
-                "provider_capacity",
-              ),
-            });
-          },
-        });
-        const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-          ctx.db,
-          1,
-        );
-        const checkpoint = saved!.checkpoint!;
-        const subject = suggestionSubjects.statement_transaction.parse(
-          saved!.subject,
-        );
-        const stale = structuredClone(checkpoint);
-        stale.kind = false;
-        stale.judgment.create!.votes.label = null;
-        await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
-          charge: subject,
-          evidenceFingerprint: saved!.evidenceFingerprint,
-          checkpoint: stale,
-        });
-        expect(
-          (
-            await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1)
-          )[0]!.checkpoint,
-        ).toMatchObject({ kind: true, counterparty: true });
-        await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
-          charge: subject,
-          evidenceFingerprint: saved!.evidenceFingerprint,
-          checkpoint,
-        });
-        return result;
-      },
-    );
-    expect(first).toMatchObject({
-      completed: 0,
-      failed: [],
-      labels: { generated: 2 },
-      waitingUntil: until.getTime(),
-      next: { inclusive: true },
-    });
-    const resumed = await label(ctx, async () => {
-      throw new Error("Durable answers must survive cache contention");
-    });
-    expect(resumed).toMatchObject({
-      completed: 1,
-      failed: [],
-      labels: { generated: 1, reused: 2 },
-    });
-  });
-
-  it("checkpoints unstarted spending after the cooperative page deadline", async () => {
-    const wave = STATEMENT_SPENDING_CONCURRENCY;
-    await card(ctx);
-    await record(
-      ctx,
-      Array.from({ length: wave + 1 }, (_, index) =>
-        rowInput({
-          rawDescription: `SYNTHETIC DEADLINE ${index}`,
-          merchant: `Example deadline ${index}`,
-          providerAmount: -100 - index,
-        }),
-      ),
-    );
-    await generate(ctx);
-    let spendingCalls = 0;
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      const first = await runStatementLabels(ctx.db, {
-        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-        cooperative: true,
-        limit: wave + 1,
-        port: answering({ kind: "purchase", counterparty: "business" }),
-        spendingAdvice: async () => {
-          if (++spendingCalls === wave)
-            vi.setSystemTime(
-              Date.now() + JOB_PAGE_LIMITS.cooperativePageBudgetMs + 1_000,
-            );
-          return financialSpendingAdvice.parse({});
-        },
-      });
-      expect(spendingCalls).toBe(wave);
-      expect(first).toMatchObject({
-        completed: wave,
-        failed: [],
-        next: { inclusive: true },
-      });
-      const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-        first.next,
-      );
-      expect(pending).toHaveLength(1);
-      expect(pending[0]!.checkpoint).toMatchObject({
-        kind: true,
-        counterparty: true,
-        spending: false,
-      });
-    } finally {
-      vi.useRealTimers();
-    }
-    const resumed = await label(ctx, async () => {
-      throw new Error(
-        "The next page must reuse its committed decision answers",
-      );
-    });
-    expect(resumed).toMatchObject({
-      completed: 1,
-      failed: [],
-      labels: { reused: 2, generated: 1 },
-    });
-  });
-
-  it("durably defers cooperative spending finish after one gateway admission refusal", async () => {
-    await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
-    let admissionAt = 0;
-    let attempts = 0;
-    const first = await runStatementLabels(ctx.db, {
-      runId,
-      cooperative: true,
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      spendingAdvice: async () => {
-        vi.useFakeTimers();
-        admissionAt = Date.now();
-        try {
-          const pending = coordinatedGatewayRequest(
-            {
-              fetch: async () =>
-                ++attempts === 1
-                  ? new Response("Synthetic capacity refusal", {
-                      status: 429,
-                      headers: {
-                        "x-cubby-admission-wait": "true",
-                        "retry-after": "1",
-                      },
-                    })
-                  : new Response("Synthetic admitted advice"),
-            },
-            "workers-ai",
-            {
-              endpoint: "responses",
-              input: "https://gateway.internal/responses",
-              init: { method: "POST", body: "{}" },
-              headers: new Headers(),
-              signal: undefined,
-              query: async () => ({}),
-            },
-            {
-              metadata: {
-                environment: "production",
-                feature: "synthetic-spending-admission",
-                operation: "synthetic-spending-admission",
-              },
-            },
-          ).then(
-            (response) => ({ kind: "admitted" as const, response }),
-            (error: unknown) => ({ kind: "rejected" as const, error }),
-          );
-          await vi.runAllTimersAsync();
-          const outcome = await pending;
-          if (outcome.kind === "rejected") throw outcome.error;
-          await outcome.response.text();
-          return financialSpendingAdvice.parse({});
-        } finally {
-          vi.useRealTimers();
-        }
-      },
-    });
-    expect(first).toMatchObject({
-      labelled: 0,
-      completed: 0,
-      failed: [],
-      labels: { generated: 2 },
-    });
-    expect(attempts).toBe(1);
-    expect(first.waitingUntil).toBe(admissionAt + 1_000);
-    expect(first.next).toMatchObject({ inclusive: true });
-    const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-      ctx.db,
-      1,
-    );
-    expect(saved!.checkpoint).toMatchObject({
-      kind: true,
-      counterparty: true,
-      spending: false,
-    });
-    expect(
-      (await readPendingStatements(ctx))[0]!.create!.votes.label,
-    ).toBeNull();
-    const resumed = await label(ctx, async () => {
-      throw new Error(
-        "Completed kind and counterparty answers must survive deferral",
-      );
-    });
-    expect(resumed).toMatchObject({
-      labelled: 1,
-      completed: 1,
-      failed: [],
-      waitingUntil: null,
-      labels: { generated: 1, reused: 2 },
-    });
-  });
-
-  // A page cap must preserve every candidate and every completed decision,
-  // including a partial charge whose remaining labels need another page.
   it.each([false, true])(
     "checkpoints high-fanout work across a changed candidate roster: %s",
     async (addCandidate) => {
@@ -2307,103 +1716,6 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
-  it("dismisses only the current financial recommendation and allows changed evidence", async () => {
-    await card(ctx);
-    const observed = rowInput({
-      providerTransactionId: "synthetic-revision-dismissal",
-    });
-    await record(ctx, [observed]);
-    const [legacyOwner] = await getDb(ctx.db)
-      .select({
-        id: sourceOccurrence.id,
-        version: sourceOccurrence.version,
-        reviewState: sourceOccurrence.reviewState,
-        currentObservationId: sourceOccurrence.currentObservationId,
-        acceptedTransactionId: sourceOccurrence.acceptedTransactionId,
-      })
-      .from(sourceOccurrence);
-    const [legacyRecord] = (await listSourceTransactionRecords(ctx.db, {}))
-      .data;
-    if (!legacyOwner || !legacyRecord)
-      throw new Error("Synthetic predecessor evidence missing");
-    // Frozen predecessor hash: removing a presentation field must not revive unchanged dismissed advice.
-    const predecessorOwnerHash = await sha256Hex(
-      canonicalJson(jsonSnapshot.parse({ ...legacyOwner, suppressed: false })),
-    );
-    const [proposal] = await buildChargeProposals(ctx.db, [
-      { source: legacyRecord.source, chargeKey: legacyRecord.chargeKey },
-    ]);
-    expect(proposal?.providerScopeFingerprint).toBe(predecessorOwnerHash);
-    await generate(ctx);
-    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const [current] = await readPendingStatements(ctx);
-    const [bankRecord] = (await listSourceTransactionRecords(ctx.db, {})).data;
-    if (!current || !bankRecord)
-      throw new Error("Synthetic current financial recommendation missing");
-    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-      operationId: "synthetic-current-dismissal",
-      suggestionId: current.suggestionId,
-      verdict: "dismissed",
-      intent: "history",
-      suppression: {
-        scope: "statement_transaction",
-        candidateKey: `${bankRecord.source}:${bankRecord.chargeKey}`,
-        fingerprint: null,
-      },
-      evidence: { note: "Dismiss this recommendation, not the bank event" },
-    });
-    const [dismissed] = await getDb(ctx.db)
-      .select()
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, current.suggestionId));
-    expect(dismissed?.suppression?.fingerprint).toBe(dismissed?.fingerprint);
-    await generate(ctx);
-    expect(await readPendingStatements(ctx)).toEqual([]);
-    const [retainedDismissal] = await getDb(ctx.db)
-      .select()
-      .from(suggestionTable)
-      .where(eq(suggestionTable.id, current.suggestionId));
-    expect(retainedDismissal).toMatchObject({
-      active: true,
-      status: "resolved",
-      data: { evidenceFingerprint: proposal?.evidenceFingerprint },
-    });
-    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
-    await getDb(ctx.db)
-      .update(suggestionTable)
-      .set({
-        producer: sql`jsonb_set(${suggestionTable.producer},'{revision}',to_jsonb(${"synthetic-old-label-revision"}::text))`,
-      })
-      .where(eq(suggestionTable.id, current.suggestionId));
-    await generate(ctx);
-    expect(await readPendingStatements(ctx)).toEqual([]);
-    await record(
-      ctx,
-      [
-        {
-          ...observed,
-          rowPosition: 10,
-          providerAmount: -45.5,
-          rawDescription: "SYNTHETIC REVISED CHARGE",
-        },
-      ],
-      { fingerprint: "synthetic-dismissal-revision" },
-    );
-    await generate(ctx);
-    await label(ctx, answering({ kind: "purchase", counterparty: "business" }));
-    const pending = await readPendingStatements(ctx);
-    expect(pending).toHaveLength(1);
-    expect(pending[0]?.suggestionId).not.toBe(current.suggestionId);
-    expect(
-      (await listSourceTransactionRecords(ctx.db, {})).data.every(
-        (row) => row.disposition === "open",
-      ),
-    ).toBe(true);
-    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
-  });
-
-  // Observation-only evidence churn must not discard paid labels or ask the
-  // model again; the rebuilt judgment still uses the current evidence fence.
   it("keeps labels across a re-Sweep with unchanged model inputs", async () => {
     await card(ctx);
     const observed = rowInput({
@@ -3070,194 +2382,6 @@ describe("statement Transaction suggestions", () => {
     applyAfterMemberReview,
   );
 
-  it.each(["cancelled", "expired"] as const)(
-    "fences no-action receipt completion under %s Job ownership",
-    async (failure) => {
-      await card(ctx);
-      await record(ctx, [rowInput()]);
-      await generate(ctx);
-      const entries = await completeLabelPublications(ctx);
-      const outcomes =
-        await statementSuggestionsRepo.publishCompleteStatementLabels(
-          ctx.db,
-          entries,
-        );
-      const entry = entries[0]!;
-      const outcome = outcomes.get(
-        statementSuggestionsRepo.chargeId(entry.proposal.charge),
-      );
-      if (outcome?.kind !== "ready")
-        throw new Error("Expected synthetic pending receipt");
-      const targets = [
-        {
-          suggestionId: outcome.receipt.suggestionId,
-          charge: entry.proposal.charge,
-          evidenceFingerprint: outcome.receipt.evidenceFingerprint,
-        },
-      ];
-      const before = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.id, targets[0]!.suggestionId));
-      const beforeEvents = await readSuggestionDecisions(ctx.db);
-      const transition = suggestionStateRepo.transitionSuggestionStates;
-      const writes = vi
-        .spyOn(suggestionStateRepo, "transitionSuggestionStates")
-        .mockImplementation(async (...args) => {
-          const changed = await transition(...args);
-          const owner = currentJobExecution();
-          if (owner && failure === "expired" && changed.length)
-            vi.setSystemTime(owner.claim.leaseExpiresAt.getTime() + 1);
-          return changed;
-        });
-      vi.useFakeTimers({ toFake: ["Date"] });
-      try {
-        await expect(
-          withJobFixtureExecution(
-            ctx.db,
-            {
-              key: "synthetic.no-action-fence",
-              kind: "synthetic.no-action",
-              input: {},
-            },
-            async (context) => {
-              const owner = currentJobExecution();
-              if (!owner) throw new Error("Expected real Job execution");
-              if (failure === "cancelled")
-                await cancelJob(ctx.db, owner.claim.id);
-              // Sweep steps run inside the Run's workflow, which carries the fence.
-              return withWorkflowExecution(
-                { runId: crypto.randomUUID(), attempt: 1, job: context },
-                () =>
-                  automaticRuleRuntime.applyAutomaticRulePage(ctx.db, [], {
-                    context: buildCrudServices,
-                    settle: {
-                      ids: [targets[0]!.suggestionId],
-                      run: (tx, rows, outside) =>
-                        statementSuggestionsRepo.completeStatementReceipts(
-                          tx,
-                          targets,
-                          rows,
-                          outside,
-                          () => true,
-                        ),
-                    },
-                  }),
-              );
-            },
-          ),
-        ).rejects.toThrow("Job generation or lease is obsolete");
-        expect(
-          await getDb(ctx.db)
-            .select()
-            .from(suggestionTable)
-            .where(eq(suggestionTable.id, targets[0]!.suggestionId)),
-        ).toEqual(before);
-        expect(await readSuggestionDecisions(ctx.db)).toEqual(beforeEvents);
-      } finally {
-        vi.useRealTimers();
-        writes.mockRestore();
-      }
-    },
-  );
-
-  it("recovers a committed label receipt before its obsolete input fence after retirement failure", async () => {
-    const account = (await card(ctx)).output;
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-      ctx.db,
-      10,
-    );
-    await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 42.5,
-      postedDate: "2026-05-05",
-      merchant: "Example Grocer",
-      rawDescription: "SYNTHETIC NEW LEDGER CANDIDATE",
-      sourceRefs: [],
-    });
-    const entries = await completeLabelPublications(ctx);
-    expect(entries).toHaveLength(1);
-    expect(entries[0]!.proposal.evidenceFingerprint).not.toBe(
-      entries[0]!.evidenceFingerprint,
-    );
-    const afterCommit = databaseHelpers.runAfterCommit;
-    let interrupted = false;
-    const effect = vi
-      .spyOn(databaseHelpers, "runAfterCommit")
-      .mockImplementation((db, work) =>
-        afterCommit(db, async (committed) => {
-          if (!interrupted) {
-            interrupted = true;
-            throw new Error(
-              "Synthetic retirement admission failure after commit",
-            );
-          }
-          return work(committed);
-        }),
-      );
-    const publication = vi.spyOn(publicationRepo, "publishReplacements");
-    try {
-      const first =
-        await statementSuggestionsRepo.publishCompleteStatementLabels(
-          ctx.db,
-          entries,
-        );
-      const key = statementSuggestionsRepo.chargeId(
-        entries[0]!.proposal.charge,
-      );
-      const receipt = first.get(key);
-      expect(receipt).toMatchObject({ kind: "ready", origin: "recovered" });
-      if (receipt?.kind !== "ready")
-        throw new Error("Expected recovered receipt");
-      expect(receipt.receipt.applicationOrder).toEqual({
-        createdAt: before!.createdAt,
-        id: before!.cursorId,
-      });
-      const [pending] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-      );
-      expect(pending!.id).toBe(receipt.receipt.suggestionId);
-      expect(pending!.checkpoint).toEqual(entries[0]!.checkpoint);
-      expect(pending!.applicationPending).toBe(true);
-      expect(
-        (
-          await statementSuggestionsRepo.publishCompleteStatementLabels(
-            ctx.db,
-            entries,
-          )
-        ).get(key),
-      ).toEqual(receipt);
-      expect(publication).toHaveBeenCalledTimes(1);
-      expect(
-        await label(ctx, async () => {
-          throw new Error("Recovered labels must not call the model");
-        }),
-      ).toMatchObject({
-        completed: 1,
-        labelled: 0,
-        failed: [],
-        labels: { generated: 0 },
-      });
-      expect(
-        (
-          await statementSuggestionsRepo.publishCompleteStatementLabels(
-            ctx.db,
-            entries,
-          )
-        ).get(key),
-      ).toEqual({ kind: "resolved", reason: "unchanged" });
-      expect(publication).toHaveBeenCalledTimes(1);
-    } finally {
-      publication.mockRestore();
-      effect.mockRestore();
-    }
-  });
-
   it("recovers a committed generation publication after its retirement check fails once", async () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
@@ -3299,215 +2423,6 @@ describe("statement Transaction suggestions", () => {
     } finally {
       effect.mockRestore();
     }
-  });
-
-  it("repairs committed application receipts on resume when retirement never succeeded", async () => {
-    await card(ctx);
-    await record(ctx, [
-      rowInput(),
-      rowInput({
-        rawDescription: "SYNTHETIC SECOND RECEIPT",
-        providerAmount: -12,
-      }),
-    ]);
-    await generate(ctx);
-    const entries = await completeLabelPublications(ctx);
-    const afterCommit = databaseHelpers.runAfterCommit;
-    const effect = vi
-      .spyOn(databaseHelpers, "runAfterCommit")
-      .mockImplementation((db) =>
-        afterCommit(db, async () => {
-          throw new Error("Synthetic unavailable retirement connection");
-        }),
-      );
-    const publication = vi.spyOn(publicationRepo, "publishReplacements");
-    try {
-      const first =
-        await statementSuggestionsRepo.publishCompleteStatementLabels(
-          ctx.db,
-          entries,
-        );
-      expect([...first.values()].map((result) => result.kind)).toEqual([
-        "failed",
-        "failed",
-      ]);
-      const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-      );
-      expect(pending).toHaveLength(2);
-      expect(pending.every((row) => row.applicationPending)).toBe(true);
-      expect(pending.map((row) => row.checkpoint)).toEqual(
-        entries.map((entry) => entry.checkpoint),
-      );
-      effect.mockRestore();
-      const repair = vi.spyOn(
-        statementSuggestionsRepo,
-        "repairStatementApplicationReceipts",
-      );
-      try {
-        expect(
-          await label(ctx, async () => {
-            throw new Error(
-              "Durable model answers must survive failed retirement",
-            );
-          }),
-        ).toMatchObject({
-          completed: 2,
-          labelled: 0,
-          failed: [],
-          labels: { generated: 0 },
-        });
-        expect(repair).toHaveBeenCalledWith(
-          ctx.db,
-          pending.map((row, index) => ({
-            suggestionId: row.id,
-            charge: entries[index]!.proposal.charge,
-          })),
-        );
-        expect(publication).toHaveBeenCalledTimes(1);
-        expect(
-          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
-        ).toEqual([]);
-      } finally {
-        repair.mockRestore();
-      }
-    } finally {
-      publication.mockRestore();
-      effect.mockRestore();
-    }
-  });
-
-  it.each(["cancelled", "expired"] as const)(
-    "rolls back complete label batches under %s Job ownership",
-    async (failure) => {
-      await card(ctx);
-      await record(ctx, [
-        rowInput(),
-        rowInput({
-          rawDescription: "SYNTHETIC FENCED PEER",
-          providerAmount: -12,
-        }),
-      ]);
-      await generate(ctx);
-      const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        10,
-      );
-      const entries = await completeLabelPublications(ctx);
-      const publish = publicationRepo.publishReplacements;
-      const publication = vi
-        .spyOn(publicationRepo, "publishReplacements")
-        .mockImplementation(async (...args) => {
-          const result = await publish(...args);
-          const owner = currentJobExecution();
-          if (!owner) throw new Error("Expected real Job execution");
-          vi.setSystemTime(owner.claim.leaseExpiresAt.getTime() + 1);
-          return result;
-        });
-      vi.useFakeTimers({ toFake: ["Date"] });
-      try {
-        await expect(
-          withJobFixtureExecution(
-            ctx.db,
-            {
-              key: "synthetic.label-batch-fence",
-              kind: "synthetic.label-batch",
-              input: {},
-            },
-            async (context) => {
-              const owner = currentJobExecution();
-              if (!owner) throw new Error("Expected real Job execution");
-              if (failure === "cancelled")
-                await cancelJob(ctx.db, owner.claim.id);
-              // Sweep steps run inside the Run's workflow, which carries the fence.
-              return withWorkflowExecution(
-                { runId: crypto.randomUUID(), attempt: 1, job: context },
-                () =>
-                  statementSuggestionsRepo.publishCompleteStatementLabels(
-                    ctx.db,
-                    entries,
-                  ),
-              );
-            },
-          ),
-        ).rejects.toThrow("Job generation or lease is obsolete");
-        expect(
-          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
-        ).toEqual(before);
-        expect(publication).toHaveBeenCalledTimes(1);
-      } finally {
-        vi.useRealTimers();
-        publication.mockRestore();
-      }
-    },
-  );
-
-  // Publication failure must not discard a completely paid judgment before retry.
-  it("resumes automatic application after a crash following model publication", async () => {
-    await card(ctx);
-    await record(ctx, [
-      rowInput(),
-      rowInput({
-        rawDescription: "EXAMPLE GROCER SECOND",
-        providerAmount: -12,
-      }),
-    ]);
-    await generate(ctx);
-    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
-      ctx.db,
-      10,
-    );
-    const charges = (await readPendingStatements(ctx)).map(
-      ({ source, chargeKey }) => ({
-        source,
-        chargeKey,
-      }),
-    );
-    const proposals = await buildChargeProposals(ctx.db, charges);
-    // Publication can settle in reverse order; recovery must retain the input order.
-    for (const row of [...before].reverse()) {
-      const proposal = proposals.find(
-        (entry) => entry.evidenceFingerprint === row.evidenceFingerprint,
-      )!;
-      const judgment = structuredClone(proposal!.judgment);
-      judgment.create!.votes.label = "purchase";
-      judgment.create!.counterparty.label = "business";
-      // Stop at the durable boundary that precedes automatic application.
-      await publishChargeProposal(
-        ctx.db,
-        await labelledProposal(proposal!, judgment),
-        {
-          kind: "model",
-          model: DECISION_MODEL,
-          revision: STATEMENT_LABEL_REVISION,
-          runId: null,
-          evaluationId: null,
-        },
-      );
-    }
-    const receipts = await statementSuggestionsRepo.suggestionsNeedingLabels(
-      ctx.db,
-      10,
-    );
-    expect(receipts.map((row) => row.subject)).toEqual(
-      before.map((row) => row.subject),
-    );
-    expect(
-      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
-    ).toBe(2);
-    const resumed = await label(ctx, async () => {
-      throw new Error(
-        "Published labels must not be recomputed during application recovery",
-      );
-    });
-    expect(resumed.failed).toEqual([]);
-    expect(resumed.completed).toBe(2);
-    expect(resumed.labelled).toBe(0);
-    expect(resumed.labels.generated).toBe(0);
-    expect(
-      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
-    ).toBe(0);
   });
 
   it.each(["generation", "label"] as const)(
@@ -3700,48 +2615,6 @@ describe("statement Transaction suggestions", () => {
     expect(await label(ctx, answer)).toMatchObject({ labelled: 1, failed: [] });
   });
 
-  it("retains completed decisions when model publication fails", async () => {
-    await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const answer = answering({ kind: "purchase", counterparty: "business" });
-    let calls = 0;
-    const port: DecisionPort = async (input) => {
-      calls++;
-      return answer(input);
-    };
-    const [pending] = await readPendingStatements(ctx);
-    let removeFailure: (() => Promise<void>) | undefined =
-      await rejectStatementPublication(ctx, pending!.chargeKey, "model");
-    try {
-      const first = await label(ctx, port);
-      expect(first.failed).toHaveLength(1);
-      expect(first.labels).toEqual({ reused: 0, generated: 3 });
-      const [retained] =
-        await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1);
-      expect(retained!.checkpoint).toMatchObject({
-        kind: true,
-        counterparty: true,
-        judgment: {
-          create: {
-            votes: { label: "purchase" },
-            counterparty: { label: "business" },
-          },
-        },
-      });
-      await removeFailure();
-      removeFailure = undefined;
-      const resumed = await label(ctx, port);
-      expect(resumed.labelled).toBe(1);
-      expect(resumed.labels).toEqual({ reused: 3, generated: 0 });
-      expect(calls).toBe(2);
-    } finally {
-      await removeFailure?.();
-    }
-  });
-
-  // A pause after generation must preserve earlier paid labels while new
-  // charges remain unlabelled; retrying asks only for those unfinished charges.
   it("keeps existing labels when a re-Sweep is interrupted mid-label", async () => {
     await card(ctx);
     const original = rowInput({

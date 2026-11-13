@@ -102,6 +102,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementEffectiveMovement,
+  statementLoanInput,
   type StatementMovementInput,
 } from "~/server/domains/transaction-import/repo/statement-effective-movement";
 import {
@@ -599,15 +600,46 @@ async function siblingsFor(
   const sources = new Map(
     proposals.map(({ charge }) => [chargeId(charge), charge.source]),
   );
+  const candidates = rows.flatMap((row) =>
+    row.siblings.map((chargeKey) => ({
+      source: sources.get(row.key)!,
+      chargeKey: String(chargeKey),
+    })),
+  );
+  const projected = candidates.length
+    ? await prepareChargePreviews(db, uniqueCharges(candidates))
+    : null;
+  const amounts = new Map(
+    (projected?.grouped ?? []).map(({ charge, canonical }) => [
+      chargeId(charge),
+      canonical.amount,
+    ]),
+  );
+  const ownAmounts = new Map(
+    proposals.map(({ charge, observations }) => [
+      chargeId(charge),
+      observations[0]!.amount,
+    ]),
+  );
   for (const row of rows) {
     const source = sources.get(row.key);
     if (source)
       result.set(
         row.key,
-        row.siblings.map((chargeKey) => ({
-          source,
-          chargeKey: String(chargeKey),
-        })),
+        row.siblings
+          .filter((chargeKey) => {
+            const amount = amounts.get(
+              chargeId({ source, chargeKey: String(chargeKey) }),
+            );
+            return (
+              amount !== undefined &&
+              cents(amount) === cents(ownAmounts.get(row.key)!)
+            );
+          })
+          .map((chargeKey) => ({
+            source,
+            chargeKey: String(chargeKey),
+          })),
       );
   }
   return result;
@@ -1222,15 +1254,15 @@ async function prepareChargePreviews(
         description: observation.rawDescription,
         merchant: observation.merchant,
         sourceCategory: observation.sourceCategory,
-        loan:
-          account?.identity.kind === "loan"
-            ? {
-                providerVendorNames: [
-                  account.vendorName,
-                  ...(account.vendorAliases ?? []),
-                ].filter((name): name is string => !!name),
-              }
-            : null,
+        loan: statementLoanInput(
+          {
+            source: observation.source,
+            account: observation.accountDescriptor,
+            providerAccountId: observation.providerAccountId,
+          },
+          account,
+          preparation.accounts,
+        ),
       }).effectiveAmount;
   }
   return {
@@ -1415,6 +1447,7 @@ async function loanEvidence(
     PreparedChargePreviews["preview"]["rows"][number]
   >,
   ids: ReadonlyMap<string, string>,
+  _preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ) {
   const loans = accounts.filter((account) => account.kind === "loan");
   const allLoanIds = loans.map((account) => account.id);
@@ -1492,6 +1525,7 @@ function loanStatementDecision(input: {
   loanPayments: readonly LoanPaymentEvidence[];
   accounts: readonly OwnAccount[];
   pair: StatementTransactionJudgment["transferPair"];
+  movement: ReturnType<typeof statementEffectiveMovement>;
 }) {
   const {
     account,
@@ -1504,14 +1538,7 @@ function loanStatementDecision(input: {
     pair,
   } = input;
   let reviewReason: string | null = null;
-  const movement = statementEffectiveMovement({
-    providerAmount: canonical.providerAmount,
-    description: canonical.rawDescription,
-    merchant: canonical.merchant,
-    sourceCategory: canonical.sourceCategory,
-    loan:
-      account?.kind === "loan" ? { providerVendorNames: account.names } : null,
-  });
+  const movement = input.movement;
   reviewReason = movement.reviewReason;
   const escrowKind =
     movement.movementClass === "escrow_interest"
@@ -1625,6 +1652,7 @@ export async function buildChargeProposals(
     grouped,
     previewByKey,
     ids,
+    preparation,
   );
   const [pendingTransactions, siblings, eligibility, history, copies] =
     await Promise.all([
@@ -1798,7 +1826,26 @@ export async function buildChargeProposals(
       candidates.some((c) => c.transactionId === pending.id),
     );
     const account = accountById.get(accountId);
+    const resolvedAccount = preparation.accounts.find(
+      (a) => a.id === accountId,
+    );
+    const movement = statementEffectiveMovement({
+      providerAmount: canonical.providerAmount,
+      description: canonical.rawDescription,
+      merchant: canonical.merchant,
+      sourceCategory: canonical.sourceCategory,
+      loan: statementLoanInput(
+        {
+          source: canonical.source,
+          account: canonical.accountDescriptor,
+          providerAccountId: canonical.providerAccountId,
+        },
+        resolvedAccount,
+        preparation.accounts,
+      ),
+    });
     const loanDecision = loanStatementDecision({
+      movement,
       account,
       accountId,
       canonical,
@@ -2734,18 +2781,32 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
   },
   onUnchanged: "none",
   async refreshUnchanged(tx, rows, candidate) {
-    const stamp = automaticRuleStamp(
-      candidate.proposal.judgment.reviewReason
-        ? []
-        : matchStatementRules(candidate.proposal.judgment),
-    );
+    const judgment = candidate.proposal.judgment;
+    const answers = candidate.answers ?? statementAnswers.parse({});
+    const needsLabel = needsStatementAnswers(judgment, answers);
+    const refresh = (row: ChargePublicationHistory) => ({
+      ...row.data,
+      answers: z.json().parse(answers),
+      needsLabel,
+      ...(row.needsLabel === "true" && !needsLabel
+        ? {
+            applicationPending: true,
+            applicationOrder: row.applicationOrder ?? {
+              createdAt: row.createdAt,
+              id: row.id,
+            },
+          }
+        : {}),
+      ...automaticRuleStamp(
+        judgment.reviewReason ? [] : matchStatementRules(judgment),
+      ),
+    });
     const changed = rows.filter(
       (row) =>
         row.status === "pending" &&
-        Object.entries(stamp).some(
-          ([key, value]) =>
-            canonicalJson(row.data[key] ?? null) !== canonicalJson(value),
-        ),
+        (canonicalJson(row.data) !== canonicalJson(refresh(row)) ||
+          canonicalJson(jsonSnapshot.parse(row.judgment)) !==
+            canonicalJson(judgment)),
     );
     if (changed.length)
       await transitionSuggestionStates(
@@ -2754,10 +2815,20 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
           suggestionTable.id,
           changed.map((row) => row.id),
         ),
-        (row) => ({ data: { ...stateData.parse(row.data), ...stamp } }),
+        (row) => {
+          const retained = changed.find((saved) => saved.id === row.id)!;
+          return { data: refresh(retained), judgment };
+        },
       );
     return rows.map((row) =>
-      changed.includes(row) ? { ...row, data: { ...row.data, ...stamp } } : row,
+      changed.includes(row)
+        ? {
+            ...row,
+            data: refresh(row),
+            judgment,
+            needsLabel: String(needsLabel),
+          }
+        : row,
     );
   },
   publication({ proposal, answers }, rows, producer) {
@@ -3810,7 +3881,6 @@ export async function recordStatementAnswers(
   db: Database,
   input: {
     charge: ChargeRef;
-    evidenceFingerprint: string;
     answers: StatementAnswers;
     scope?: StatementSuggestionScope;
   },
@@ -3829,7 +3899,6 @@ export async function recordStatementAnswers(
       SELECT s.id, s.judgment, s.data->'answers' AS answers FROM "Suggestion" s
       WHERE s.family=${suggestionFamily.enum.statement_transaction} AND s.active AND s.status=${suggestionStatus.enum.pending}
         AND s.data->>${financialTransactionSourceRef.keyof().enum.source}=${input.charge.source} AND s.data->>'chargeKey'=${input.charge.chargeKey}
-        AND s.data->>'evidenceFingerprint'=${input.evidenceFingerprint}
       ORDER BY s."createdAt" DESC, s.id DESC FOR UPDATE`,
       "objects",
     );

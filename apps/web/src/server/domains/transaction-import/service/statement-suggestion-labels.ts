@@ -1,7 +1,4 @@
-import type {
-  FinancialSpendingAdvice,
-  FinancialSpendingPlan,
-} from "@cubby/schemas/financial-booking";
+import type { FinancialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { financialTransactionKind } from "@cubby/schemas/financial-transaction";
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
@@ -38,10 +35,7 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import {
-  prepareAdvisedFinancialSpending,
-  type FinancialSpendingPage,
-} from "~/server/domains/financial-transaction/repo/financial-spending";
+import { type FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
   adviseSpending,
@@ -55,11 +49,7 @@ import {
   mergeStatementAnswers,
   statementAnswerVersions,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
-import {
-  prepareStatementSpendingFacts,
-  prepareStatementSpendings,
-} from "~/server/domains/transaction-import/repo/statement-spending";
-import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import { prepareStatementSpendingFacts } from "~/server/domains/transaction-import/repo/statement-spending";
 import {
   chargeId,
   type ChargeRef,
@@ -76,6 +66,7 @@ import { withJobPhase } from "~/server/generic/jobs/context";
 import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";
 import { buildCrudServices } from "~/server/http/request-context";
+import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
@@ -131,6 +122,8 @@ function prepareLabelledJudgment(
     Number(!!answers.escrow) +
     Number(!!answers.merchant);
   const reused = countLabels();
+  const before = canonicalJson(answers);
+  let spendingComplete = !needsSpendingAdvice(judgment);
   const errors: unknown[] = [];
   let waitingUntil: number | null = null;
   const retainError = (error: unknown) => {
@@ -155,11 +148,9 @@ function prepareLabelledJudgment(
       }),
     );
     if (!decisionChoiceFitsContext(prompt)) {
-      candidate.label = {
-        same: "insufficient",
-        confidence: "low",
-        model: null,
-      };
+      retainError(
+        new Error("Statement identity question exceeds the decision context"),
+      );
       continue;
     }
     const args: DecisionChoiceArgs = {
@@ -226,6 +217,9 @@ function prepareLabelledJudgment(
       });
     };
     if (!decisionChoiceFitsContext(prompt)) {
+      retainError(
+        new Error("Statement label question exceeds the decision context"),
+      );
       continue;
     }
     const args: DecisionChoiceArgs = {
@@ -277,7 +271,10 @@ function prepareLabelledJudgment(
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
-      if (!needsSpendingAdvice(judgment)) return { advice: null };
+      if (!needsSpendingAdvice(judgment)) {
+        spendingComplete = true;
+        return { advice: null };
+      }
       if (
         !errors.length &&
         waitingUntil === null &&
@@ -295,6 +292,7 @@ function prepareLabelledJudgment(
               usageFor,
             }),
           );
+          spendingComplete = true;
           if (spending.result) {
             Object.assign(answers, spending.result.answers);
             return { advice: spending.result.advice };
@@ -306,17 +304,21 @@ function prepareLabelledJudgment(
       }
       return undefined;
     },
-    complete(plan?: { spending: FinancialSpendingPlan | null }) {
-      if (plan) judgment.spending = plan.spending;
-      judgment.clean = isClean(judgment, current.amount);
-
+    complete() {
       return {
         answers,
-        labels: { reused, generated: Math.max(0, countLabels() - reused) },
+        labels: {
+          reused,
+          generated:
+            canonicalJson(answers) === before
+              ? 0
+              : Math.max(1, countLabels() - reused),
+        },
 
         errors,
         waitingUntil,
         complete:
+          spendingComplete &&
           judgment.candidates.every(
             (candidate) => !!answers.candidates[candidate.transactionId],
           ) &&
@@ -690,60 +692,13 @@ async function runStatementLabelBatch(
             },
             STATEMENT_SPENDING_CONCURRENCY,
           );
-          // The wave's spending plans resolve as one vector after its advice.
-          const planning = advised.flatMap((result) =>
-            result.status === "fulfilled" &&
-            result.value.status === "fulfilled" &&
-            result.value.value.advised
-              ? [result.value.value]
-              : [],
-          );
-          let plans: (FinancialSpendingPlan | null)[] = [];
-          let planFailure: unknown;
-          try {
-            if (spendingPage && planning.length > 1)
-              await prepareAdvisedFinancialSpending(
-                db,
-                spendingPage,
-                planning.flatMap(({ labels, advised }) =>
-                  labels.judgment.create
-                    ? [
-                        {
-                          advice: advised!.advice,
-                          source: labels.judgment.create,
-                        },
-                      ]
-                    : [],
-                ),
-              );
-            plans = await prepareStatementSpendings(
-              db,
-              planning.map(({ labels, advised }) => ({
-                judgment: labels.judgment,
-                advice: advised!.advice,
-              })),
-              spendingPage,
-            );
-          } catch (reason) {
-            if (isWorkflowInterrupted(reason)) throw reason;
-            planFailure = reason;
-          }
-          const planOf = new Map(
-            planning.map((entry, index) => [entry, plans[index] ?? null]),
-          );
           return advised.map((result) => {
             if (result.status !== "fulfilled") return result;
             const inner = result.value;
             if (inner.status !== "fulfilled") return inner;
-            if (inner.value.advised && planFailure)
-              return { status: "rejected" as const, reason: planFailure };
             return {
               status: "fulfilled" as const,
-              value: inner.value.labels.complete(
-                inner.value.advised
-                  ? { spending: planOf.get(inner.value) ?? null }
-                  : undefined,
-              ),
+              value: inner.value.labels.complete(),
             };
           });
         });
@@ -782,7 +737,6 @@ async function runStatementLabelBatch(
         if (result.value.labels.generated) {
           const saved = await recordStatementAnswers(db, {
             charge: entry.current.charge,
-            evidenceFingerprint: entry.target.expected,
             answers: result.value.answers,
             scope: input.scope,
           });
