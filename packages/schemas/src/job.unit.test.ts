@@ -155,11 +155,11 @@ describe("summarizeRunWait", () => {
       perMinute: 1.4,
       // 23 ÷ 1.4 per minute ≈ 16.4 minutes.
       etaAt: new Date(now.getTime() + (23 / 1.4) * 60_000).toISOString(),
-      label: "Queued for model capacity · 23rd of 36 · about 16 min",
+      label: "Waiting for model capacity · 23rd of 36 · about 16 min",
       jobs: "4 backing off",
     });
     expect(summarizeRunWait({ ...input, groups: [capacity] })?.label).toBe(
-      "Queued for model capacity · 23rd of 36 · pace unknown",
+      "Waiting for model capacity · 23rd of 36 · pace unknown",
     );
   });
 
@@ -189,9 +189,7 @@ describe("summarizeRunWait", () => {
           },
         ],
       })?.label,
-    ).toBe(
-      "Retrying after an error (GatewayBillingError) · next try in about 4 min",
-    );
+    ).toBe("Waiting to retry (GatewayBillingError) · next try in about 4 min");
   });
 
   it("writes English ordinals", () => {

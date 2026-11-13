@@ -1,4 +1,4 @@
-import { humanize } from "@cubby/shared";
+import { runTargetState } from "@cubby/schemas/purchase-import";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -18,9 +18,13 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
-import { Badge } from "~/ui/reui/badge";
+import { StateBadge } from "~/ui/records/state-badge";
 import { StatusText } from "~/ui/text/status-text";
 
+import {
+  RUN_TARGET_STATE_LABEL,
+  RUN_TARGET_STATE_STAGE,
+} from "./run-target-state";
 import {
   stableTargetRows,
   targetName,
@@ -46,20 +50,17 @@ const search = {
   placeholder: "Search records, outcomes, sources",
 };
 function TargetStatus({ target }: { target: RunTarget }) {
-  return (
-    <Badge
-      variant={
-        target.state === "completed"
-          ? "positive"
-          : ["unresolved", "needs_evidence", "unavailable"].includes(
-                target.state,
-              )
-            ? "warning"
-            : "secondary"
-      }
-    >
-      {humanize(target.state)}
-    </Badge>
+  const state = runTargetState.safeParse(target.state);
+  return state.success ? (
+    <StateBadge
+      option={{
+        label: RUN_TARGET_STATE_LABEL[state.data],
+        stage: RUN_TARGET_STATE_STAGE[state.data],
+      }}
+      phase="active"
+    />
+  ) : (
+    <span className="font-mono text-xs">{target.state}</span>
   );
 }
 function TargetLink({ target }: { target: RunTarget }) {
@@ -165,7 +166,12 @@ export function RunTargetsTable({ rows }: { rows: readonly RunTarget[] }) {
                 filterType: "select",
                 placeholder: "Filter status",
                 options: [...new Set(rows.map((row) => row.state))].map(
-                  (state) => ({ value: state, label: humanize(state) }),
+                  (state) => ({
+                    value: state,
+                    label: runTargetState.safeParse(state).success
+                      ? RUN_TARGET_STATE_LABEL[runTargetState.parse(state)]
+                      : state,
+                  }),
                 ),
                 facetCount: true,
               },

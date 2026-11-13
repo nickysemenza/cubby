@@ -1,7 +1,10 @@
+import { kernelStageLabel } from "@cubby/schemas/field-envelope-presentation";
 import type { JobState } from "@cubby/schemas/job";
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import { HourglassIcon } from "@phosphor-icons/react/dist/csr/Hourglass";
 
 import type { StepWait } from "~/features/run/run-view-model";
+import { StateBadge } from "~/ui/records/state-badge";
 import { EnumPill } from "~/ui/text/enum-pill";
 
 const TONE = {
@@ -30,15 +33,16 @@ export function StatusPill({
   );
 }
 
-const JOB_STATE_TONE = {
-  queued: "neutral",
-  running: "info",
-  retry_wait: "warning",
-  paused: "warning",
-  completed: "positive",
-  failed: "destructive",
-  cancelled: "neutral",
-} as const satisfies Record<JobState, StatusTone>;
+/** Each Job state as its stage; `StateBadge` draws it. */
+const JOB_STATE_STAGE = {
+  queued: "waiting",
+  running: "working",
+  retry_wait: "waiting",
+  paused: "waiting",
+  completed: "done",
+  failed: "stuck",
+  cancelled: "ended",
+} as const satisfies Record<JobState, KernelStage>;
 
 export const JOB_STATE_LABEL = {
   queued: "queued",
@@ -51,10 +55,13 @@ export const JOB_STATE_LABEL = {
 } as const satisfies Record<JobState, string>;
 
 export function JobStatePill({ state }: { state: JobState }) {
+  const stage = JOB_STATE_STAGE[state];
   return (
-    <StatusPill tone={JOB_STATE_TONE[state]}>
-      {JOB_STATE_LABEL[state]}
-    </StatusPill>
+    <StateBadge
+      option={{ label: kernelStageLabel(stage), stage }}
+      phase={stage === "done" || stage === "ended" ? "finished" : "active"}
+      reason={JOB_STATE_LABEL[state]}
+    />
   );
 }
 

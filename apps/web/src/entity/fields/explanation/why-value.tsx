@@ -427,7 +427,7 @@ function QualityCheckRow({
 }) {
   return (
     <LedgerRow
-      title={`${humanize(check.facet)} · ${check.check}`}
+      title={`${check.label} · ${check.check}`}
       data-quality-check={check.check}
     >
       <LedgerCell slot="primary" className="font-medium">

@@ -634,17 +634,18 @@ const COUNT_REASON: readonly [JobWaitingOnReason, RunWaitReason][] = [
   ["paused", "paused"],
 ];
 
+/** Each wait in the stage words (ADR 0029 section 10): Waiting, Working or Stuck, then the input. */
 const RUN_WAIT_TEXT = {
   funding: "Waiting for AI funding",
-  model_capacity: "Queued for model capacity",
-  rate_limit: "Waiting out a provider rate limit",
-  retry: "Retrying after an error",
+  model_capacity: "Waiting for model capacity",
+  rate_limit: "Waiting for a provider rate limit",
+  retry: "Waiting to retry",
   device: "Waiting for an Apple device",
-  queued: "Queued",
-  in_progress: "In progress",
-  reclaim: "Waiting to be picked up again",
-  blocked: "Blocked",
-  paused: "Paused",
+  queued: "Waiting for Cubby",
+  in_progress: "Working",
+  reclaim: "Waiting for Cubby to pick it up again",
+  blocked: "Stuck",
+  paused: "Waiting while paused",
 } as const satisfies Record<RunWaitReason, string>;
 
 /** Reasons whose ETA is the Run's place in line at the kind's pace. */
