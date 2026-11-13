@@ -60,7 +60,6 @@ export const suggestionsContract = defineContract(
         "cookbook",
         "sourceTransactionRecord",
         "financialTransaction",
-        "settledSuggestions",
       ],
     }),
   },

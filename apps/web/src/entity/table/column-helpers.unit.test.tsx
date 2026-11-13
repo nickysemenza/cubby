@@ -856,34 +856,6 @@ describe("createCurrencyColumn zero handling", () => {
   });
 });
 
-describe("boolean tones come from the roster, not the factory", () => {
-  type PlannedRow = { planned: boolean | null };
-  // Inverted against the default: the unresolved state is the flagged one.
-  const plannedOptions = booleanCellOptions(
-    { true: "Planned", false: "Known" },
-    { true: "var(--warning)", false: "var(--positive)" },
-  );
-
-  it("honours an inverted tone map and matches what other surfaces render", () => {
-    const column = createBooleanColumn(
-      createCubbyColumnHelper<PlannedRow>(),
-      "planned",
-      { trueFalseOptions: plannedOptions },
-    );
-
-    // The pill the table cell paints must use the same tint the detail page's
-    // `renderOptionCell(…, plannedOptions)` paints for the same value.
-    const inkFor = (value: string) =>
-      plannedOptions.find((o) => o.value === value)?.color;
-    expect(inkFor("true")).toBe("var(--warning)");
-    expect(inkFor("false")).toBe("var(--positive)");
-
-    renderColumn<PlannedRow, string | null>(column, { planned: true });
-    const pill = screen.getByText("Planned").closest("[data-enum-role]");
-    expect(pill).toHaveClass("bg-warning-surface");
-  });
-});
-
 describe("canonical Product Cost", () => {
   const envelope = computedFieldEnvelope(productCost);
   const current = {

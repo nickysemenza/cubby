@@ -81,6 +81,7 @@ export const ReconciliationStatus: FC<{
   const option = options.find((candidate) => candidate.value === status);
   return (
     <EnumPill
+      stage={option?.stage}
       optionRole={option?.role}
       glyph={option?.glyph}
       color={option?.color ?? "var(--slate)"}

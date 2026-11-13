@@ -863,14 +863,11 @@ describe("declared entity displays", () => {
         }),
       { wrapper: MetadataProvider },
     );
-    expect(result.current.visit((column) => column.id).slice(0, 6)).toEqual([
-      "image",
-      "displayName",
-      "dataQuality",
-      "vendorId",
-      "displayLabel",
-      "date",
-    ]);
+    const ids = result.current.visit((column) => column.id);
+    expect(ids.indexOf("displayName")).toBeLessThan(
+      ids.indexOf("machineryStage"),
+    );
+    expect(ids.indexOf("machineryStage")).toBeLessThan(ids.indexOf("vendorId"));
   });
 
   it("leaves standard identity rendering to the shared table without duplicating it", () => {

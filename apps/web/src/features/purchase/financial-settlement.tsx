@@ -41,6 +41,7 @@ export function FinancialSettlementStatus({
   ).find((candidate) => candidate.value === settlement.status);
   return (
     <EnumPill
+      stage={option?.stage}
       optionRole={option?.role}
       glyph={option?.glyph}
       color={option?.color ?? "var(--slate)"}

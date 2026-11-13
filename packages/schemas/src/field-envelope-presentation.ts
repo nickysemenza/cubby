@@ -202,7 +202,7 @@ const MACHINERY_ROW_STATUS_LABEL = {
   used: "Used",
   skipped: "Skipped",
   gap: "Gap",
-  blocked: "Blocked",
+  blocked: "Stuck",
   failed: "Failed",
 } as const satisfies Record<MachineryRowStatus, string>;
 
@@ -344,6 +344,31 @@ export const MACHINERY_UNKNOWN_CALL_NOTE =
 /** @public After a decision: the scope reruns before the value changes. */
 export const MACHINERY_DECIDED_NOTE =
   "Recorded. Cubby reworks this next; the stage shows its progress.";
+
+/** @public Approval reports what applied and what still requires another attempt. */
+export function machineryApprovalNote(result: {
+  applied: number;
+  stale: number;
+  busy: number;
+  missing: number;
+}): string {
+  return [
+    result.applied
+      ? `${plural(result.applied, "change applied", "changes applied")}.`
+      : null,
+    result.stale
+      ? `${plural(result.stale, "proposal changed", "proposals changed")}. Review the current difference and approve again.`
+      : null,
+    result.busy
+      ? `${plural(result.busy, "record is", "records are")} being worked on. Try approval again.`
+      : null,
+    result.missing
+      ? `${plural(result.missing, "record has", "records have")} no current proposal. Refresh the machinery.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
 
 /** @public The reset preview's caveat when it still needs answers. */
 export function machineryResetPendingNote(

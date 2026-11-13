@@ -1276,8 +1276,18 @@ export const { definition, readSchemas } = defineEntityModel(
             valueOptions: [
               { value: "none", label: "None", color: "neutral-status" },
               { value: "derived", label: "Derived", color: "neutral-status" },
-              { value: "ambiguous", label: "Ambiguous", color: "warning" },
-              { value: "confirmed", label: "Confirmed", color: "positive" },
+              {
+                value: "ambiguous",
+                label: "Ambiguous",
+                stage: "needs_you",
+                color: "warning",
+              },
+              {
+                value: "confirmed",
+                label: "Confirmed",
+                stage: "done",
+                color: "positive",
+              },
             ],
           },
           validation: readOnly(imageCaptureAttribution),

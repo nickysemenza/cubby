@@ -490,7 +490,15 @@ export async function machinery(
         const ask = gap.inputHash
           ? asks.rows.find((row) => row.inputHash === gap.inputHash)
           : undefined;
-        return (ask && askMemberGap(ask, gap.input, gap.since)) ?? gap;
+        return (
+          (ask &&
+            askMemberGap(
+              ask,
+              registry.asks.get(ask.feature)?.label ?? gap.input,
+              gap.since,
+            )) ??
+          gap
+        );
       };
       const recordAsks = asks.rows.filter(
         (row) => row.kind === recordWaiter.kind && row.key === recordWaiter.key,

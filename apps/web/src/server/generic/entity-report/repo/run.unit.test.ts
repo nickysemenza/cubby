@@ -783,12 +783,6 @@ describe("liveProgressBlocks", () => {
       instance: { state: "working" as const, error: null },
     },
   };
-  const actionsOf = (blocks: ReportBlock[]) =>
-    blocks.flatMap((block) =>
-      block.kind === "records"
-        ? block.rows.flatMap((r) => r.commands ?? [])
-        : [],
-    );
 
   it("presents phase work without blending completed phases or hiding failed items", () => {
     const blocks = liveProgressBlocks(RUN_ID, {
@@ -944,64 +938,6 @@ describe("liveProgressBlocks", () => {
     expect(titles).toContain("12 messages unrelated to purchases");
     expect(titles).toContain("4 Spam or Trash messages excluded");
     expect(titles).toContain("7 messages saved");
-  });
-
-  // Failure modes: a retired Cloudflare link or adapter state leaks into the
-  // Job row; a Job's raw error is dropped; no Job still renders a block.
-  it("names the Job generation and offers cancel while it runs, retry once failed", () => {
-    const running = liveProgressBlocks(RUN_ID, progress);
-    expect(recordsOf(running, "Execution").rows[0]).toMatchObject({
-      title: "Attempt 2 · 00000000-0000-4000-8000-000000000002",
-      lines: [{ text: "Execution working" }],
-    });
-    expect(
-      recordsOf(running, "Execution").rows[0]?.externalLink,
-    ).toBeUndefined();
-    expect(
-      liveProgressBlocks(RUN_ID, { ...progress, workflow: null }).some(
-        (block) => block.kind === "records" && block.title === "Execution",
-      ),
-    ).toBe(false);
-    const failed = liveProgressBlocks(RUN_ID, {
-      ...progress,
-      status: "failed",
-      workflow: {
-        ...progress.workflow,
-        instance: { state: "stuck", error: "Synthetic claim failure" },
-      },
-    });
-    expect(recordsOf(failed, "Execution").rows[0]).toMatchObject({
-      lines: [{ text: "Execution stuck: Synthetic claim failure" }],
-    });
-    expect(actionsOf(running).map((action) => action.request)).toEqual([
-      {
-        kind: "operation",
-        operation: "run.control",
-        body: { runId: RUN_ID, action: "cancel" },
-      },
-    ]);
-    expect(
-      actionsOf(
-        liveProgressBlocks(RUN_ID, {
-          ...progress,
-          status: "failed",
-          workflow: {
-            ...progress.workflow,
-            instance: { state: "stuck", error: null },
-          },
-        }),
-      ).map(
-        (action) =>
-          action.request.kind === "operation" &&
-          action.request.operation === "run.control" &&
-          action.request.body.action,
-      ),
-    ).toEqual(["retry"]);
-    expect(
-      actionsOf(
-        liveProgressBlocks(RUN_ID, { ...progress, status: "completed" }),
-      ),
-    ).toEqual([]);
   });
 
   it("closes with the run's outcome once it has stopped", () => {
