@@ -1587,6 +1587,20 @@ export function createPurchaseEvent({
         retained(c);
         return c.done();
       }
+      // The member's attach decision carries the whole move: what it points at
+      // the chosen Purchase and what it retires from the generated one apply
+      // together, also while a baseline holds other differences.
+      const attach = existingTarget
+        ? (explicitPurchase
+            ? chosen("purchaseId")
+            : c.decision(
+                "identity",
+                identitySubject,
+                recordSubject("purchase", existingTarget.id),
+              )
+          )?.id
+        : undefined;
+      const moves = attach && existingPurchaseId ? attach : undefined;
       const declared = new Set<string>();
       const book = (
         target: ColumnRef,
@@ -1594,7 +1608,13 @@ export function createPurchaseEvent({
         values: Parameters<Pure["record"]>[2],
       ) => {
         declared.add(`${target.name}:${naturalKey}`);
-        return record(c, target, naturalKey, values);
+        return record(
+          c,
+          target,
+          naturalKey,
+          values,
+          attach && "purchaseId" in values ? { purchaseId: attach } : {},
+        );
       };
       if (!resolvedVendor)
         book(bookingVendors, vendorNaturalKey, {
@@ -1656,6 +1676,7 @@ export function createPurchaseEvent({
               target,
               key,
               target === bookingVendors ? "keep" : "remove",
+              { decision: moves },
             );
       for (const occurrence of sources) {
         c.bind(

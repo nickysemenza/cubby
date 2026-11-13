@@ -24,11 +24,13 @@ export type Difference = {
     seen: ColumnValues;
     row: ColumnValues;
   }[];
+  /** `decision` is the current Decision that requires the removal, if any. */
   removals: {
     target: ColumnRef;
     naturalKey: string;
     id: string;
     row: ColumnValues | null;
+    decision?: string;
   }[];
   /** Records deleted outside the kernel: a delete is a rejection. */
   rejections: { target: ColumnRef; id: string }[];
@@ -154,7 +156,8 @@ export function difference(
   );
   for (const [id, record] of owned) {
     if (desiredSlots.has(id) || record.rejected) continue;
-    const disposition = retired.get(id)?.disposition;
+    const retirement = retired.get(id);
+    const disposition = retirement?.disposition;
     if (!disposition)
       throw new KernelContractError(
         `${computed.reconciler.scope} gives no disposition for ${record.target.name} ${record.naturalKey}, which it no longer declares`,
@@ -165,6 +168,7 @@ export function difference(
         naturalKey: record.naturalKey,
         id: record.entityId,
         row: record.stored,
+        ...(retirement?.decision ? { decision: retirement.decision } : {}),
       });
   }
   for (const merge of desired.merges) {

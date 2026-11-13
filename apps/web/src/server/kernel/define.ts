@@ -422,8 +422,17 @@ export interface Pure {
    * `fields` scope's `apply: "auto"` columns). Never creates or removes it.
    */
   patch(target: ColumnRef, id: string, values: ColumnValues): void;
-  /** The explicit disposition of a record that should no longer exist. */
-  retire(target: ColumnRef, naturalKey: string, disposition: Disposition): void;
+  /**
+   * The explicit disposition of a record that should no longer exist.
+   * `decision` names the current Decision that requires the removal, so a
+   * held baseline applies it with that decision's other changes.
+   */
+  retire(
+    target: ColumnRef,
+    naturalKey: string,
+    disposition: Disposition,
+    options?: { decision?: string },
+  ): void;
   bind(fact: FactRef, eventKey: string, basis?: "proven" | "decision"): void;
   /** Merge two owned records; `proof` merges only in the one automatic case. */
   merge(
@@ -463,6 +472,7 @@ export type Desired = {
     target: ColumnRef;
     naturalKey: string;
     disposition: Disposition;
+    decision?: string;
   }[];
   readonly bindings: readonly {
     fact: FactRef;

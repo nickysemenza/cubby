@@ -262,7 +262,9 @@ function holdsBaseline(
     (!options.releaseBaseline &&
       computed.storedBindings.some((binding) => binding.basis === "baseline") &&
       (proposed.inserts.some((insert) => !citesDecisions(computed, insert)) ||
-        proposed.removals.length > 0 ||
+        proposed.removals.some(
+          (removal) => !decisionIds.has(removal.decision ?? ""),
+        ) ||
         proposed.merges.length > 0 ||
         proposed.rejections.length > 0 ||
         computed.missing.length > 0 ||
@@ -292,8 +294,8 @@ function holdsBaseline(
 
 /**
  * A held scope still applies what current Decisions supply: field updates
- * citing them, new records whose values all cite them, and decision-basis
- * bindings with the decision binding each replaces.
+ * citing them, new records whose values all cite them, removals they require,
+ * and decision-basis bindings with the decision binding each replaces.
  */
 function decisionUpdates(computed: Computed, proposed: Difference): Difference {
   const decisionIds = new Set(
@@ -341,6 +343,9 @@ function decisionUpdates(computed: Computed, proposed: Difference): Difference {
     );
   }
   result.inserts = inserts;
+  result.removals = proposed.removals.filter((removal) =>
+    decisionIds.has(removal.decision ?? ""),
+  );
   const fact = (entry: { fact: { kind: string; id: string } }) =>
     `${entry.fact.kind}:${entry.fact.id}`;
   result.bindingsAdd = proposed.bindingsAdd.filter(
@@ -358,9 +363,12 @@ function withoutApplied(proposed: Difference, applied: Difference): Difference {
   const binding = (entry: Difference["bindingsRemove"][number]) =>
     `${entry.fact.kind}:${entry.fact.id}:${entry.basis}:${entry.eventKey}`;
   const added = new Set(applied.bindingsAdd.map(binding));
-  const removed = new Set(applied.bindingsRemove.map(binding));
+  const unbound = new Set(applied.bindingsRemove.map(binding));
   const inserted = new Set(
     applied.inserts.map((entry) => `${entry.target.name}:${entry.naturalKey}`),
+  );
+  const removed = new Set(
+    applied.removals.map((entry) => `${entry.target.name}:${entry.id}`),
   );
   return {
     ...proposed,
@@ -386,8 +394,11 @@ function withoutApplied(proposed: Difference, applied: Difference): Difference {
     bindingsAdd: proposed.bindingsAdd.filter(
       (entry) => !added.has(binding(entry)),
     ),
+    removals: proposed.removals.filter(
+      (entry) => !removed.has(`${entry.target.name}:${entry.id}`),
+    ),
     bindingsRemove: proposed.bindingsRemove.filter(
-      (entry) => !removed.has(binding(entry)),
+      (entry) => !unbound.has(binding(entry)),
     ),
   };
 }

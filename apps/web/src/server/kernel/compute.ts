@@ -954,8 +954,13 @@ function createPure(
       });
       return id;
     },
-    retire(target, naturalKey, disposition) {
-      retired.push({ target: requireTarget(target), naturalKey, disposition });
+    retire(target, naturalKey, disposition, options) {
+      retired.push({
+        target: requireTarget(target),
+        naturalKey,
+        disposition,
+        ...(options?.decision ? { decision: options.decision } : {}),
+      });
     },
     bind(fact, eventKey, basis = "proven") {
       if (!writesBindings)

@@ -1095,12 +1095,22 @@ describe("statement spending review and re-import", () => {
       allocated: 8500n,
     });
   });
-  it("moves a booked charge to the Purchase a member names and retires its own lump", async () => {
+  it("moves a booked charge to the Purchase a member names and retires its own lump, also under a held baseline", async () => {
     const setup = await fixture("kernel-move");
     await applyKernelCharge(setup);
     const [transaction] = await getDb(ctx.db)
       .select()
       .from(financialTransaction);
+    const [booked] = (await ledgerRows()).purchases;
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await getDb(ctx.db).insert(evidenceBinding).values({
+      factKind: "statementObservation",
+      factId: occurrence!.currentObservationId!,
+      eventKey: booked!.id,
+      basis: "baseline",
+      scopeKind: "purchaseEvent",
+      scopeKey: transaction!.id,
+    });
     const [seller] = await getDb(ctx.db)
       .select()
       .from(vendorTable)
@@ -1134,17 +1144,24 @@ describe("statement spending review and re-import", () => {
     ]);
     const outcome = await reconcileNow(ctx.db, [scope]);
     expect(outcome[0]?.error).toBeUndefined();
-    expect(outcome[0]?.gaps).toEqual([]);
     expect(await liveMoney()).toEqual({
       transactions: 1,
       purchases: 1,
       cost: 4250n,
       allocated: 4250n,
     });
+    expect(outcome[0]?.gaps).toEqual([]);
     const [allocation] = (await ledgerRows()).allocations.filter(
       (row) => !row.deletedAt,
     );
     expect(allocation?.purchaseId).toBe(purchaseRow!.id);
+    // The decision applied without releasing the accepted baseline.
+    expect(
+      await getDb(ctx.db)
+        .select({ basis: evidenceBinding.basis })
+        .from(evidenceBinding)
+        .where(eq(evidenceBinding.scopeKey, transaction!.id)),
+    ).toContainEqual({ basis: "baseline" });
   });
   it("removes a superseded charge and its booking when the source re-posts it", async () => {
     const setup = await fixture("pending-charge", "member", 40);
