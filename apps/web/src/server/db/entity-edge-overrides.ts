@@ -767,32 +767,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: { kind: "must-target-live" },
     },
   }),
-  productCategory: edges({
-    "PhotoGroupProposal.productCreateCategoryId": {
-      column: photoGroupProposal.productCreateCategoryId,
-      role: "metadata",
-      label: "photo group proposals",
-      description:
-        "The category a proposed photo group's new Product will be filed under.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ProductCategory.parentId": {
-      column: productCategory.parentId,
-      role: "hierarchy",
-      label: "child categories",
-      description:
-        "A child category is classified beneath this parent in the bounded product taxonomy.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Product.categoryId": {
-      column: product.categoryId,
-      role: "reference",
-      label: "products",
-      description:
-        "A product retains its chosen most-specific category until it is explicitly reassigned.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
 
   vendor: edges({
     "Shipment.carrierId": {
