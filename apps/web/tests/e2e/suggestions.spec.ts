@@ -142,7 +142,7 @@ test("reviews a field suggestion for a named record", async ({
 test("Cubby's values read as plain values, edits persist, and the picker offers Cubby's guess", async ({
   page,
 }, testInfo) => {
-  const { db, actor } = await createEvidenceHarnessContext(page);
+  const { db } = await createEvidenceHarnessContext(page);
   const prefix = uniqueName(testInfo, "Plain value");
   const guessedName = `${prefix} Corner Hardware`;
   const otherName = `${prefix} Garden Supply`;
@@ -165,34 +165,12 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
     resolveOrThrow(db, "vendor", guessed.id),
     resolveOrThrow(db, "vendor", other.id),
   ]);
-  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  await drainDerivedRefreshFrontier(db);
-  const seed = (
-    recordId: string,
-    confidence: number,
-    runnerUp: { value: string; confidence: number } | null,
-  ) =>
-    seedFieldSuggestion(db, {
-      runId,
-      entity: "product",
-      recordId,
-      field: "brandId",
-      currentValue: null,
-      suggestedValue: guessed.id,
-      confidence,
-      runnerUpValue: runnerUp?.value ?? null,
-      runnerUpConfidence: runnerUp?.confidence ?? null,
-      model: "typesafe/jev",
-      kind: "addition",
-      status: "pending",
-    });
   await applyFieldAnswerFixture(db, {
     entity: "product",
     recordId: setId,
     field: "brandId",
     value: guessedId,
   });
-  await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
   const brandOf = (id: string) => async () =>
     (
       await getDb(db)
@@ -219,6 +197,14 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
     page.getByText(otherName, { exact: true }).first(),
   ).toBeVisible();
 
+  await applyFieldAnswerFixture(db, {
+    entity: "product",
+    recordId: openId,
+    field: "brandId",
+    value: guessedId,
+    confidence: 0.62,
+    runnerUp: { value: otherId, confidence: 0.21 },
+  });
   // The empty field's picker lists Cubby's guess first, never selected.
   await gotoAuthenticatedPage(page, `/products/${openProduct.id}`);
   await expect(page.getByText(guessedName, { exact: true })).toHaveCount(0);
@@ -242,26 +228,22 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
 });
 
 // Prune acceptance acknowledges the remaining saved tags, not the removed token.
-test("prunes real Product tags and records saved Feedback and its receipt", async ({
+test("prunes real Product tags and retains the assignment Decision", async ({
   page,
 }, testInfo) => {
-  const { db, actor } = await createEvidenceHarnessContext(page);
-  const name = uniqueName(testInfo, "Prune receipt");
+  const { db } = await createEvidenceHarnessContext(page);
+  const name = uniqueName(testInfo, "Prune decision");
   const product = await seedProductPrerequisite(page, {
     name,
     brandName: "Synthetic brand",
     tags: ["synthetic-brand", "ecosystem", "mount"],
   });
   const id = await resolveOrThrow(db, "product", product.id);
-  const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  await seedFieldSuggestion(db, {
-    runId,
+  await applyFieldAnswerFixture(db, {
     entity: "product",
     recordId: id,
     field: "tags",
-    currentValue: ["synthetic-brand", "ecosystem", "mount"],
-    suggestedValue: ["ecosystem", "mount"],
-    confidence: 0.99,
+    value: ["ecosystem", "mount"],
   });
   // The detail fact lists the stored proposal beneath the field.
   await gotoAuthenticatedPage(page, `/products/${product.id}`);

@@ -27,9 +27,10 @@ import {
 import { readPasses } from "~/server/kernel/pass.fixtures";
 import { fieldsReconcilePass } from "~/server/workflows/fields-reconcile-pass";
 
-import { fieldAnswer, fieldAskInput, type FieldAnswer } from "./ask";
+import { fieldAskInput } from "./ask";
 import { fieldsCapabilities, fieldsReconciler } from "./reconciler";
 import { applyFieldAuthorityAction } from "./repo/field-actions";
+import { fieldAnswer, type FieldAnswer } from "./repo/field-answer";
 
 const RUN = { budgetMs: 20_000 };
 

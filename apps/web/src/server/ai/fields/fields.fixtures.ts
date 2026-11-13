@@ -114,8 +114,9 @@ export async function applyFieldAnswerFixture(
     entity: string;
     recordId: string;
     field: string;
-    value: string;
+    value: string | string[];
     confidence?: number;
+    runnerUp?: { value: string; confidence: number };
   },
 ) {
   const { fieldAsk } = await import("./ask");
@@ -132,7 +133,9 @@ export async function applyFieldAnswerFixture(
                 value: input.value,
                 label: null,
                 confidence: input.confidence ?? 0.99,
-                runnerUp: null,
+                runnerUp: input.runnerUp
+                  ? { ...input.runnerUp, label: null }
+                  : null,
               }
             : null,
         outcome: "synthetic",
@@ -143,7 +146,7 @@ export async function applyFieldAnswerFixture(
     defineModule({
       name: "fields",
       asks: [ask],
-      reconcilers: [fieldsReconciler(ask)],
+      reconcilers: [fieldsReconciler()],
       machinery: fieldsCapabilities(),
     }),
   ]);
