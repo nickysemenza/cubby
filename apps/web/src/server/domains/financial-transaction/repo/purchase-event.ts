@@ -77,7 +77,6 @@ import { askEnvelope, inputHashOf } from "~/server/kernel/envelope";
 import { decisionKey, answerKey } from "~/server/kernel/keys";
 
 import {
-  acceptedOccurrences,
   transactionAllocations,
   purchaseAllocations,
   purchaseExpenses,
@@ -182,11 +181,11 @@ const tableReads = [
     ["purchaseId", "amountMinor", "chargedAt"],
     [amountPayments, purchasePayments],
   ),
-  source.table(
-    sourceOccurrence,
-    ["acceptedTransactionId", "currentObservationId", "deletedAt"],
-    [acceptedOccurrences],
-  ),
+  source.table(sourceOccurrence, [
+    "acceptedTransactionId",
+    "currentObservationId",
+    "deletedAt",
+  ]),
   source.table(recordKey, ["scopeKind", "scopeKey", "entity", "entityId"]),
   source.table(entityIdentity, [
     "kind",
@@ -454,21 +453,21 @@ export const purchaseEvent = defineReconciler<Input>({
             ...referenceIds("purchase"),
           ]),
           scoped.bindings({ events: [key, ...ownSeeds.map((row) => row.id)] }),
-          scoped.lookup(sourceOccurrence, acceptedOccurrences, [key]),
+          scoped.rows(
+            sourceOccurrence,
+            bankOwners
+              .filter(
+                (owner) =>
+                  owner.entityId === key &&
+                  !owner.scopeKey.startsWith("manual:"),
+              )
+              .map((owner) => owner.scopeKey),
+          ),
           scoped.rows(
             financialAccount,
             transaction ? [transaction.accountId] : [],
           ),
         ]);
-        const bankOccurrences = await scoped.rows(
-          sourceOccurrence,
-          bankOwners
-            .filter(
-              (owner) =>
-                owner.entityId === key && !owner.scopeKey.startsWith("manual:"),
-            )
-            .map((owner) => owner.scopeKey),
-        );
         const purchaseIds = [
           ...new Set([
             ...candidatePurchases.map((row) => row.id),
@@ -561,7 +560,7 @@ export const purchaseEvent = defineReconciler<Input>({
             vendors: allVendors,
             categories: [...categories.values()],
             payments,
-            occurrences: unique([...occurrences, ...bankOccurrences.values()]),
+            occurrences: [...occurrences.values()],
             bindings: bindings.filter(
               (binding) =>
                 binding.scope.kind === "purchaseEvent" &&
