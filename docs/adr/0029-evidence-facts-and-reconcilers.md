@@ -300,9 +300,10 @@ then the `ScopeDirty` row, which is the order a mutation takes them in. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
 count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
-transaction: it takes the gate when the lane is money, locks the dirty row,
-then loads, computes and applies in that one bounded transaction. Producer
-calls stay outside it.
+transaction: it discovers the read set, takes the gate when the lane is money,
+locks the union of input and planned output keys in sorted order, then reloads,
+computes and fences the dirty row in that bounded transaction. A newly needed
+key retries without spending an attempt. Producer calls stay outside it.
 
 Catalog scopes use the same fence without the gate. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the

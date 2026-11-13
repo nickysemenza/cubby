@@ -48,6 +48,10 @@ BEGIN
       WHEN 'location-ai.description.refresh' THEN 'fields.reconcile'
       WHEN 'run-ai.summary.write' THEN 'fields.reconcile' END,
     CASE j.kind WHEN 'location-ai.inventory.refresh' THEN j.input->>'locationId' ELSE j.key END)
+    AND p."runId" IS NOT DISTINCT FROM j."runId"
+    AND p.cursor = CASE j.kind WHEN 'location-ai.inventory.refresh' THEN j.input || jsonb_build_object('generation',j.generation,'page',j.cursor)
+      ELSE jsonb_build_object('key', CASE j.kind WHEN 'location-ai.description.refresh' THEN 'location:' || (j.input->>'locationId') ELSE 'run:' || coalesce(j.input->>'runId',j."runId"::text) END,
+        'runId',j."runId",'request',j.input,'generation',j.generation,'page',j.cursor) END
   WHERE j.state NOT IN ('completed','succeeded');
   IF source_count <> carried_count THEN
     RAISE EXCEPTION 'Job work preservation mismatch: source %, carried %', source_count, carried_count;
