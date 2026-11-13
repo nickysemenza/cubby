@@ -379,23 +379,20 @@ export function maintenanceStepDrivers(
       return { done: 0, meta: detail({ refreshed: true }) };
     }),
     "mail-discovery": onceStep(async ({ db }) => {
-      // Each mailbox's pass is its own `mail_discovery` Run with its own
-      // history; this step only starts them, so it is never backlog.
-      const { discoverPurchases } = await import("~/server/workflows/catch-up");
-      try {
-        const { mail } = await discoverPurchases(db);
-        return {
-          done: 0,
-          meta: detail({
-            started: mail?.started ?? 0,
-            running: mail?.running ?? 0,
-            configured: mail !== null,
-          }),
-        };
-      } catch (error) {
-        if (!(error instanceof AggregateError)) throw error;
-        return { done: 0, errors: failuresOf(error) };
-      }
+      // The purchase Pass owns admission and its bounded sender cursor.
+      const { publishBackgroundTasks } =
+        await import("~/server/workflows/background-tasks/publish");
+      await publishBackgroundTasks(
+        db,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "maintenance.mail-discovery" },
+      );
+      return { done: 0, meta: detail({ queued: true }) };
     }),
     "image-backfill": imageBackfillStep(ports),
   };
