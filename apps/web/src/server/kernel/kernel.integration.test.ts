@@ -2042,7 +2042,14 @@ describe("evidence-facts kernel", () => {
       });
       const kind = {
         ...fixture.categorize,
-        output: z.literal("Synthetic expected response"),
+        output: z.object({
+          category: z
+            .string()
+            .refine(
+              (value) => value === "Synthetic expected response",
+              "Synthetic expected response",
+            ),
+        }),
       };
       const input = { merchant: "Synthetic malformed market" };
       await expect(kernel.withAsk(ctx.db, kind, input)).rejects.toThrow(

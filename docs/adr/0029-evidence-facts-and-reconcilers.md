@@ -317,7 +317,9 @@ member transaction returns waiting immediately for a claim held by another
 worker; it never sleeps while holding the gate. The transaction sets `lock_timeout`, `statement_timeout` and
 `idle_in_transaction_session_timeout` and `transaction_timeout` with `SET LOCAL`, so Postgres releases
 the gate when a Worker dies. Loading, matching, planning and producer calls
-happen before the transaction opens.
+happen before the transaction opens. The lock timeout stays below the transaction
+timeout, including for locked fallback runs, so contention is a retryable lock
+wait rather than a terminated session.
 
 The fence is `ScopeDirty.seq`. A run reads the scope's `seq` when it claims,
 loads and computes outside any transaction, then in the apply transaction
