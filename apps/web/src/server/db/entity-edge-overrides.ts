@@ -278,7 +278,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: {
         kind: "allow-target-deleted",
         reason:
-          "A retired package keeps its source observations; merges move them to the survivor.",
+          "A retired package keeps its source observations; package merging is unsupported.",
       },
     },
     "ShipmentSourcePackage.shipmentId": {
@@ -289,7 +289,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: {
         kind: "allow-target-deleted",
         reason:
-          "A retired package's binding stops replay recreating it; merges move it to the survivor.",
+          "A retired package's binding stops replay recreating it; package merging is unsupported.",
       },
     },
   }),
@@ -1039,7 +1039,11 @@ export const ENTITY_EDGE_OVERRIDES = {
         label: "source products",
         description:
           "A planting can retain the seed packet, seedling, or plant it came from.",
-        liveness: { kind: "must-target-live" },
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Planting provenance retains its recorded source Product through a merge tombstone.",
+        },
       },
       "Device.productId": {
         column: device.productId,
@@ -1901,7 +1905,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       liveness: {
         kind: "allow-target-deleted",
         reason:
-          "Append-only provenance: an audit entry keeps naming the install it came from.",
+          "Audit attribution can name a retired install; explicit device removal clears this pointer.",
       },
     },
     "ImageSighting.deviceId": {
