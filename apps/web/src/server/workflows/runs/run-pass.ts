@@ -181,6 +181,7 @@ async function advance(
         cursor,
         done: false,
         availableAt: new Date(Date.now() + AI_WORK_FALLBACK_MS),
+        waitCause: "in_flight",
       }
     : { cursor, done: true };
 }
