@@ -194,14 +194,17 @@ function Chart({ block }: { block: Extract<ReportBlock, { kind: "chart" }> }) {
   );
 }
 
-const TABLE_STATUS_TONE = {
-  done: "var(--positive)",
-  running: "var(--info)",
-  warning: "var(--warning)",
-  failed: "var(--destructive)",
-  skipped: "var(--neutral-status)",
-  not_reached: "var(--neutral-status)",
-} satisfies Record<ReportRowState, string>;
+const TABLE_STATUS_STAGE = {
+  done: "done",
+  running: "working",
+  warning: "needs_you",
+  failed: "stuck",
+  skipped: "ended",
+  not_reached: "waiting",
+} as const satisfies Record<
+  ReportRowState,
+  import("@cubby/schemas/kernel/stage").KernelStage
+>;
 
 type TableBlock = Extract<ReportBlock, { kind: "table" }>;
 function TableCellValue({
@@ -217,7 +220,7 @@ function TableCellValue({
     return (
       <EnumPill
         optionRole="status"
-        color={TABLE_STATUS_TONE[presentation.state]}
+        stage={TABLE_STATUS_STAGE[presentation.state]}
       >
         {text}
       </EnumPill>

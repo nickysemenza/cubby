@@ -1930,6 +1930,12 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       quickActions: ["retry", "resume", "restart", "pause"],
       sections: [
+        {
+          kind: "slot",
+          id: "diagnostics",
+          group: "timeline",
+          title: "Work",
+        },
         // What the run did, newest state first.
         {
           kind: "slot",
@@ -2040,13 +2046,6 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "import-stats",
           group: "results",
           title: "Import counts",
-        },
-        // What the run read and wrote, for checking it.
-        {
-          kind: "slot",
-          id: "diagnostics",
-          group: "evidence",
-          title: "Diagnostics",
         },
         {
           kind: "slot",

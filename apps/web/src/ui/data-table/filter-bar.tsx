@@ -749,6 +749,7 @@ function ChecklistEditor({
                   ) : option?.glyph ? (
                     <EnumPill
                       optionRole={option.role}
+                      stage={option.stage}
                       value={option.value}
                       glyph={option.glyph}
                       color={option.color}

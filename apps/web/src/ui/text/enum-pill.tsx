@@ -1,3 +1,4 @@
+import type { KernelStage } from "@cubby/schemas/kernel/stage";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { cn } from "cn";
@@ -24,20 +25,22 @@ import { DenseCellContext } from "~/ui/values/stacked-value";
  */
 const CHIP = "overflow-hidden border-transparent whitespace-nowrap";
 
-/** Tone surfaces are rendering styles; the supplied role decides when to use them. */
-const STATUS_TONES = new Map([
-  ["var(--positive)", "bg-positive-surface text-positive"],
-  ["var(--warning)", "bg-warning-surface text-warning-ink"],
-  ["var(--destructive)", "bg-destructive-surface text-destructive"],
-  ["var(--info)", "bg-info-surface text-info"],
-  ["var(--neutral-status)", "bg-muted text-muted-foreground"],
-]);
+/** Only the declared stage calls attention to a state. */
+const STAGE_TONES = {
+  ended: "text-muted-foreground",
+  stuck: "bg-destructive-surface text-destructive",
+  working: "text-foreground",
+  needs_you: "bg-warning-surface text-warning-ink",
+  waiting: "text-muted-foreground",
+  done: "text-foreground",
+} satisfies Record<KernelStage, string>;
 
 function optionTint(color: string) {
   return `color-mix(in srgb, ${color} 12%, var(--background))`;
 }
 
 type ValueProps = {
+  stage?: KernelStage;
   /** Option color: a condition tone for status, a category tint otherwise. */
   color?: string;
   /** The option's compiled glyph (Phosphor name). */
@@ -80,20 +83,10 @@ function Lead({
   );
 }
 
-/**
- * Tones the declared `status` role marks as an exception. Only these keep a
- * filled pill in a table; every other value paints as a dot and text
- * (`table.css`). The decision reads the declared role and tone, never the
- * value's spelling.
- */
-const EXCEPTION_TONES: ReadonlySet<string> = new Set([
-  "var(--warning)",
-  "var(--destructive)",
-]);
-
 /** Render supplied presentation; raw unrecognized values stay neutral and readable. */
 export function EnumPill({
   optionRole = "category",
+  stage,
   value: _value,
   color = "var(--neutral-status)",
   glyph,
@@ -102,8 +95,10 @@ export function EnumPill({
   children,
   className,
 }: ValueProps & { optionRole?: string | null; value?: string }) {
-  const tone = optionRole === "status" ? STATUS_TONES.get(color) : undefined;
-  const exception = optionRole === "status" && EXCEPTION_TONES.has(color);
+  const tone =
+    optionRole === "status" ? STAGE_TONES[stage ?? "waiting"] : undefined;
+  const exception =
+    optionRole === "status" && (stage === "stuck" || stage === "needs_you");
   return withDescription(
     <Pill
       data-enum-role={optionRole ?? "category"}
@@ -112,13 +107,17 @@ export function EnumPill({
       // SAFETY: CSSProperties has no index signature for the --enum-color custom property.
       style={
         {
-          "--enum-color": color,
+          "--enum-color": optionRole === "status" ? "currentColor" : color,
           ...(tone ? {} : { backgroundColor: optionTint(color) }),
         } as CSSProperties
       }
     >
       <span data-enum-lead="" className="contents">
-        <Lead glyph={glyph} icon={icon} color={color} />
+        <Lead
+          glyph={glyph}
+          icon={icon}
+          color={optionRole === "status" ? "currentColor" : color}
+        />
       </span>
       <span className="min-w-0 truncate">{children}</span>
     </Pill>,
