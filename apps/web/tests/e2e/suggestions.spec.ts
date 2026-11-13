@@ -12,6 +12,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { product as productTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { reconcileNow } from "~/server/kernel/api";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -22,6 +23,8 @@ import {
   waitForAppHydration,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
+import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
 
 import {
   createEntityFixture,
@@ -112,9 +115,21 @@ test("reviews a field suggestion for a named record", async ({
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId,
   ).toBe(await resolveOrThrow(db, "productCategory", currentCategory.id));
+  const reviewed = page.waitForResponse((response) =>
+    dispatchesOperation(response.request(), "suggestion.reviewBatch"),
+  );
   await field
     .getByRole("button", { name: new RegExp(`^Use ${categoryName}`) })
     .click();
+  expect(
+    await operationResult(
+      await reviewed,
+      "suggestion.reviewBatch",
+      suggestionReviewBatchOut,
+    ),
+  ).toMatchObject([{ ok: true, status: "waiting" }]);
+  // The offline profile drops queue wakes; drive the committed decision's scope.
+  await reconcileNow(db, [{ kind: "fields", key: `product:${itemId}` }]);
   await expect
     .poll(
       async () =>
