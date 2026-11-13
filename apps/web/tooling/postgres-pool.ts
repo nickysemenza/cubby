@@ -1,8 +1,19 @@
 import { Pool, type PoolConfig, type PoolClient } from "pg";
 import { z } from "zod";
 
-const clientClosures = new WeakMap<Pool, Map<PoolClient, Promise<void>>>();
-const openClients = new Map<PoolClient, Promise<void>>();
+// Integration runtimes survive vi.resetModules; their ownership records must
+// survive too, or a reloaded reset mistakes their live clients for outsiders.
+const POSTGRES_POOLS = Symbol.for("cubby.testing.postgres-pools");
+const poolGlobals: typeof globalThis & {
+  [POSTGRES_POOLS]?: {
+    clientClosures: WeakMap<Pool, Map<PoolClient, Promise<void>>>;
+    openClients: Map<PoolClient, Promise<void>>;
+  };
+} = globalThis;
+const { clientClosures, openClients } = (poolGlobals[POSTGRES_POOLS] ??= {
+  clientClosures: new WeakMap(),
+  openClients: new Map(),
+});
 
 // pg exposes BackendKeyData.processID at runtime but omits it from its types.
 const postgresBackendKey = z.object({ processID: z.number().int().positive() });
