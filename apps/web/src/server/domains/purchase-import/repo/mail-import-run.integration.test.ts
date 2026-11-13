@@ -351,11 +351,17 @@ describe("mail research admission", () => {
       );
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(successor);
-      // A transient failure of that revision's first attempt retries it.
-      await markRunFailed(ctx.db, {
-        runId: successor,
-        failureCode: "agent_transient",
-      });
+      // A transient failure of that revision's active first attempt retries it.
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "running", endedAt: null })
+        .where(eq(run.id, successor));
+      expect(
+        await markRunFailed(ctx.db, {
+          runId: successor,
+          failureCode: "agent_transient",
+        }),
+      ).toMatchObject({ failed: true });
       const retried = await owner();
       expect(retried).not.toBe(successor);
       expect((await attempts())?.count).toBe(2);
