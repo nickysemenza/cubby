@@ -3453,8 +3453,10 @@ judges its own entries, so it is an implicit self-basis: naming it in `basis` is
 and server fold its current value (JSON-encoded) into the basis. The `FieldSuggestion` carries
 `operation: "remove"` and `removals[]`; review surfaces render a removal proposal, never an auto-apply;
 a form-mode `FieldSuggestionProvider` skips prune targets by default (list and detail request them).
-Prune acceptance verifies the saved remaining array and records the same saved-field receipt as a set
-proposal.
+The fields scope retains a prune Answer as the proposed remaining array and exposes
+a decision gap. Acceptance verifies and writes that array through the authored
+field writer, recording the assignment Decision. A prune proposal never applies
+automatically.
 
 Suggestion inference selects only the union of its declared basis and target read paths through the
 canonical detail reader, keeping envelopes and reading effective values through those paths
