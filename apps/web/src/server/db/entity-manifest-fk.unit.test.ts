@@ -69,7 +69,6 @@ const NON_ENTITY_FK_TARGETS = {
     "stable source package identities for retained tracking evidence",
   Suggestion:
     "immutable typed judgment history shared by current projections and Feedback",
-  AiEvaluation: "retained model results awaiting migration into kernel Answers",
   Ask: "the kernel's owed producer call (ADR 0029), not a domain entity",
   // Durable identity (ADR 0006): every payload binds to its own row, and an
   // attachment names its subject here because a subject can be any entity.
@@ -170,23 +169,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
       "retains original transaction bindings without resolving the current accepted owner",
   },
 
-  "ShipmentSourcePackage.shipmentId": {
-    classification: "ownership",
-    reason: "source package identity owned by its accepted Shipment",
-  },
-  "AiEvaluationRequest.runId": {
-    classification: "metadata",
-    reason:
-      "retains requesting Run membership and receipts without exposing a navigable implementation row",
-  },
-  "AiEvaluation.runId": {
-    classification: "metadata",
-    reason: "records the Run that owns the durable target evaluation",
-  },
-  "RunStep.runId": {
-    classification: "ownership",
-    reason: "a step-ledger Run's own ordered steps",
-  },
   "SourceOrderObservation.purchaseId": {
     classification: "metadata",
     reason:

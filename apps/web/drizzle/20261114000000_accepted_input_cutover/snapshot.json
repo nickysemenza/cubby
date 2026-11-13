@@ -1,0 +1,444 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "20033396-419c-4889-b0f8-dfd2091facc0",
+  "prevIds": [
+    "af2e50a7-34c3-4be9-9c6e-4095b201d507"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "AiEvaluationRequest"
+      ],
+      "writes": [
+        "s|fk|public.AiEvaluationRequest.AiEvaluationRequest_evaluationId_AiEvaluation_id_fk",
+        "n|fk|public.AiEvaluationRequest.AiEvaluationRequest_evaluationId_AiEvaluation_id_fk",
+        "e|fk|public.AiEvaluationRequest.AiEvaluationRequest_evaluationId_AiEvaluation_id_fk",
+        "n|con|public.AiEvaluationRequest.AiEvaluationRequest_evaluationId_AiEvaluation_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.AiEvaluationRequest",
+        "n|sch|public",
+        "e|col|public.AiEvaluationRequest.evaluationId"
+      ]
+    },
+    {
+      "statementType": "drop_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "EmailClassificationObservation"
+      ],
+      "writes": [
+        "s|fk|public.EmailClassificationObservation.EmailClassificationObservation_evaluationId_AiEvaluation_id_fk",
+        "n|fk|public.EmailClassificationObservation.EmailClassificationObservation_evaluationId_AiEvaluation_id_fk",
+        "e|fk|public.EmailClassificationObservation.EmailClassificationObservation_evaluationId_AiEvaluation_id_fk",
+        "n|con|public.EmailClassificationObservation.EmailClassificationObservation_evaluationId_AiEvaluation_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.EmailClassificationObservation",
+        "n|sch|public",
+        "e|col|public.EmailClassificationObservation.evaluationId"
+      ]
+    },
+    {
+      "statementType": "drop_fk",
+      "statementTarget": [
+        "table",
+        "public",
+        "Suggestion"
+      ],
+      "writes": [
+        "s|fk|public.Suggestion.Suggestion_evaluationId_AiEvaluation_id_fk",
+        "n|fk|public.Suggestion.Suggestion_evaluationId_AiEvaluation_id_fk",
+        "e|fk|public.Suggestion.Suggestion_evaluationId_AiEvaluation_id_fk",
+        "n|con|public.Suggestion.Suggestion_evaluationId_AiEvaluation_id_fk"
+      ],
+      "reads": [
+        "n|tbl|public.Suggestion",
+        "n|sch|public",
+        "e|col|public.Suggestion.evaluationId"
+      ]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "AiEvaluation"
+      ],
+      "writes": [
+        "s|tbl|public.AiEvaluation",
+        "n|tbl|public.AiEvaluation",
+        "e|tbl|public.AiEvaluation",
+        "n|rel|public.AiEvaluation",
+        "n|type|public.AiEvaluation"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "AiEvaluationRequest"
+      ],
+      "writes": [
+        "s|tbl|public.AiEvaluationRequest",
+        "n|tbl|public.AiEvaluationRequest",
+        "e|tbl|public.AiEvaluationRequest",
+        "n|rel|public.AiEvaluationRequest",
+        "n|type|public.AiEvaluationRequest"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "AuditLog"
+      ],
+      "writes": [
+        "s|ck|public.AuditLog.AuditLog_authority_check",
+        "n|ck|public.AuditLog.AuditLog_authority_check",
+        "e|ck|public.AuditLog.AuditLog_authority_check",
+        "n|con|public.AuditLog.AuditLog_authority_check"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public",
+        "e|col|public.AuditLog.authority"
+      ]
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AuditLog",
+        "AuditLog_automationPending_idx"
+      ],
+      "writes": [
+        "s|idx|public.AuditLog_automationPending_idx",
+        "n|idx|public.AuditLog_automationPending_idx",
+        "e|idx|public.AuditLog_automationPending_idx",
+        "n|rel|public.AuditLog_automationPending_idx"
+      ],
+      "reads": [
+        "e|tbl|public.AuditLog",
+        "n|sch|public",
+        "e|col|public.AuditLog.createdAt",
+        "e|col|public.AuditLog.id"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "drop_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AuditLog",
+        "AuditLog_automatic_createdAt_idx"
+      ],
+      "writes": [
+        "s|idx|public.AuditLog_automatic_createdAt_idx",
+        "n|idx|public.AuditLog_automatic_createdAt_idx",
+        "e|idx|public.AuditLog_automatic_createdAt_idx",
+        "n|rel|public.AuditLog_automatic_createdAt_idx"
+      ],
+      "reads": [
+        "e|tbl|public.AuditLog",
+        "n|sch|public",
+        "e|col|public.AuditLog.createdAt"
+      ],
+      "sharedWrites": []
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AuditLog",
+        "authority"
+      ],
+      "writes": [
+        "s|col|public.AuditLog.authority",
+        "n|col|public.AuditLog.authority",
+        "e|col|public.AuditLog.authority"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AuditLog",
+        "automationPending"
+      ],
+      "writes": [
+        "s|col|public.AuditLog.automationPending",
+        "n|col|public.AuditLog.automationPending",
+        "e|col|public.AuditLog.automationPending"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"AiEvaluation\"]"
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"AiEvaluationRequest\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"runId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"slotKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"workKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"shareKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"executionKind\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"restarts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"feature\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"target\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"provenance\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"snapshot\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"state\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"result\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"receipt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"runAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"priority\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"attempts\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"leaseToken\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"leaseUntil\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"leaseStale\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"waitCause\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"updatedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"runId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"evaluationId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"sequence\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"cancelledAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"receipt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluationRequest\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AiEvaluation\",\"failingSince\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AuditLog\",\"authority\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AuditLog\",\"automationPending\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_open_slot_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_slot_history_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_work_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_admission_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_owed_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_updatedAt_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_run_state_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_feature_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluationRequest_run_item_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluationRequest_evaluation_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AuditLog_automationPending_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AuditLog_automatic_createdAt_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_live_lease_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_lease_token_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"AiEvaluation\",\"AiEvaluation_runId_Run_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"AiEvaluationRequest\",\"AiEvaluationRequest_runId_Run_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"AiEvaluationRequest\",\"AiEvaluationRequest_evaluationId_AiEvaluation_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"EmailClassificationObservation\",\"EmailClassificationObservation_evaluationId_AiEvaluation_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"Suggestion\",\"Suggestion_evaluationId_AiEvaluation_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"AiEvaluation\",\"AiEvaluation_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"AiEvaluationRequest\",\"AiEvaluationRequest_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"AiEvaluation\",\"AiEvaluation_execution_kind_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"AiEvaluation\",\"AiEvaluation_state_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"AuditLog\",\"AuditLog_authority_check\"]"
+    }
+  ]
+}

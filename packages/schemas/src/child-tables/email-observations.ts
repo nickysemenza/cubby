@@ -83,7 +83,6 @@ export const emailObservationChildren = [
       {
         key: "evaluationId",
         kind: "uuid",
-        reference: { table: "aiEvaluation", column: "id" },
       },
       { key: "conflict", kind: "jsonb", type: "EmailClassificationConflict" },
       /** Whether routing used this prediction, which automation history reports. */

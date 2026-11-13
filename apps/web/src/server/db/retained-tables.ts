@@ -802,10 +802,6 @@ export const mcpToolCall = pgTable(
   ],
 );
 
-/** Retained `AuditLog.authority` values, until the cutover migration drops the column. */
-const auditAuthoritySchema = z.enum(["automatic", "released"]);
-type AuditAuthority = z.infer<typeof auditAuthoritySchema>;
-
 export const auditLog = pgTable(
   "AuditLog",
   {
@@ -835,36 +831,15 @@ export const auditLog = pgTable(
         name: "AuditLog_runId_Run_id_fk",
         onDelete: "set null",
       }),
-    // Field authority before Decisions: nothing writes or reads these two
-    // columns. The cutover migration turns them into Decisions, then drops them.
-    authority: text("authority").$type<AuditAuthority>(),
-    automationPending: boolean("automationPending").notNull().default(false),
     /** A kernel apply's scope, reconciler version and inputs; null for any other write. */
     provenance: jsonb("provenance").$type<KernelAuditProvenance>(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
-    index("AuditLog_automationPending_idx")
-      .on(table.createdAt, table.id)
-      .where(sql`${table.automationPending}`),
     // Changes by Cubby: kernel applies, newest first.
     index("AuditLog_kernel_createdAt_idx")
       .on(table.createdAt.desc())
       .where(sql`${table.provenance} IS NOT NULL`),
-    index("AuditLog_automatic_createdAt_idx")
-      .on(table.createdAt.desc())
-      .where(
-        sql`${table.authority} = ${sqlEnumConstant(auditAuthoritySchema, "automatic")}`,
-      ),
-    check(
-      "AuditLog_authority_check",
-      sql`${table.authority} IN (${sql.join(
-        auditAuthoritySchema.options.map((authority) =>
-          sqlEnumConstant(auditAuthoritySchema, authority),
-        ),
-        sql`, `,
-      )})`,
-    ),
     // NULLS FIRST is Postgres's own `DESC` default: it matches the feed's
     // `ORDER BY "createdAt" DESC, id DESC` and the index production carries.
     // Drizzle's bare `.desc()` would declare NULLS LAST, which that ORDER BY
