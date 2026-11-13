@@ -495,7 +495,7 @@ export function AuditRecordRow({
         </span>
       }
       detail={
-        changes && changedCount > shownCount ? (
+        entry.provenance || (changes && changedCount > shownCount) ? (
           <RecordDetail
             summary={
               shownCount > 0
@@ -504,7 +504,12 @@ export function AuditRecordRow({
             }
           >
             <Panel tone="muted">
-              <ChangesList changes={changes} />
+              {changes ? <ChangesList changes={changes} /> : null}
+              {entry.provenance ? (
+                <pre className="min-w-0 text-xs break-all whitespace-pre-wrap">
+                  {JSON.stringify(entry.provenance, null, 2)}
+                </pre>
+              ) : null}
             </Panel>
           </RecordDetail>
         ) : null

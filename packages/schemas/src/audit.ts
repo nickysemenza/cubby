@@ -1,3 +1,4 @@
+import { kernelAuditProvenance } from "./kernel/machinery";
 import { z } from "zod";
 import { dateTime } from "./codec";
 import { auditChannelSchema } from "./context";
@@ -124,6 +125,7 @@ export const auditLogUserOut = z
 /** @public Names a generated native model. */
 export const auditLogEntryOut = z.object({
   entryKey: z.string(),
+  provenance: kernelAuditProvenance.nullable().optional(),
   entityKind: auditEntitySchema,
   entityId: auditableEntityIdSchema.nullable(),
   /**

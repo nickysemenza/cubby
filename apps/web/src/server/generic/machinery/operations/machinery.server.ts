@@ -140,30 +140,12 @@ async function approveForRecord(
     counts.missing = 1;
     return counts;
   }
-  // The read names no drift scope; one scope holds at most one proposal, so
-  // the record's scopes are tried in order and the others report missing.
-  for (const scope of read.scopes) {
-    if (input.scope === "class") {
-      const outcome = await approveDriftClass(db, viewer, scope.kind);
-      counts.applied += outcome.applied;
-      counts.stale += outcome.stale;
-      counts.busy += outcome.busy;
-      counts.missing += outcome.missing;
-      if (outcome.applied || outcome.stale || outcome.busy) return counts;
-      continue;
-    }
-    const outcome = await approveDrift(
-      db,
-      viewer,
-      { kind: scope.kind, key: scope.key },
-      input.proposalHash,
-    );
-    if (outcome !== "missing") {
-      counts[outcome] += 1;
-      return counts;
-    }
+  const scope = read.drift.scope;
+  if (input.scope === "class") {
+    return approveDriftClass(db, viewer, scope.kind);
   }
-  counts.missing = 1;
+  const outcome = await approveDrift(db, viewer, scope, input.proposalHash);
+  counts[outcome] += 1;
   return counts;
 }
 

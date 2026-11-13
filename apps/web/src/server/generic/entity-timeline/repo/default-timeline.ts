@@ -204,7 +204,9 @@ const auditEvents = (
           id: `audit:${entry.entryKey}`,
           kind: `audit:${entry.action}`,
           label: recordTitle(entity, record),
-          detail,
+          detail: entry.provenance
+            ? `${detail}\nCubby provenance: ${JSON.stringify(entry.provenance)}`
+            : detail,
           link: recordLink(entity, record),
         },
       },

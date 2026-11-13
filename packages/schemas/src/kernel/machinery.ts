@@ -16,7 +16,7 @@ export type KernelJson = z.infer<typeof kernelJson>;
  * What decided a kernel apply, stored on each audit row it writes: the scope,
  * its reconciler version and the inputs it used (ADR 0029 section 1).
  */
-const kernelAuditProvenance = z.object({
+export const kernelAuditProvenance = z.object({
   scope: z.object({ kind: z.string(), key: z.string() }),
   version: z.number().int().nonnegative(),
   inputs: z.array(z.json()),

@@ -11,6 +11,7 @@ import {
   machineryInputKindLabel,
   machineryInputRowStatus,
   machineryRowStatusLabel,
+  kernelStageLabel,
   type MachineryRowStatus,
 } from "@cubby/schemas/field-envelope-presentation";
 import type {
@@ -43,9 +44,8 @@ const SOURCE_STATUS = {
   failed: "failed",
 } as const satisfies Record<MachineryRowStatus, string>;
 
-/** A paid call only a member can settle: its actions decide `ask:<inputHash>` (ADR 0029 section 8). */
-const unknownCall = (gap: MachineryGap) =>
-  gap.actions.some((action) => action.subject.startsWith("ask:"));
+/** An unknown paid call requires a member decision before another send. */
+const unknownCall = (gap: MachineryGap) => gap.askState === "unknown";
 
 const gapStatus = (gap: MachineryGap): MachineryRowStatus =>
   unknownCall(gap)
@@ -297,7 +297,10 @@ export function MachineryPanel({
   pending?: boolean;
 }) {
   const empty =
-    read.gaps.total === 0 && read.inputs.total === 0 && read.drift === null;
+    read.gaps.total === 0 &&
+    read.inputs.total === 0 &&
+    read.drift === null &&
+    !read.passes?.length;
   return (
     <section
       aria-label={scope === "field" ? "How Cubby worked this out" : "Machinery"}
@@ -344,6 +347,31 @@ export function MachineryPanel({
             })}
           />
         </div>
+      ) : null}
+      {read.passes?.length ? (
+        <section aria-label="Passes" className="grid min-w-0 gap-2">
+          <h3 className="text-xs font-medium">Passes</h3>
+          {read.passes.map((pass) => (
+            <div
+              key={`${pass.name}:${pass.key}`}
+              className="grid min-w-0 gap-1 text-xs break-words"
+            >
+              <p>
+                {kernelStageLabel(pass.stage)} · {pass.name}
+              </p>
+              <p className="tabular-nums">
+                {machineryAttemptsLabel(
+                  { n: pass.attempts, max: pass.maxAttempts },
+                  null,
+                )}
+              </p>
+              <Raw label="Pass key" value={pass.key} />
+              {pass.lastError ? (
+                <Raw label="Error" value={pass.lastError} />
+              ) : null}
+            </div>
+          ))}
+        </section>
       ) : null}
       {read.drift ? (
         <Drift
