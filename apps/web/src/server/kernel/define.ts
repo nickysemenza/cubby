@@ -368,7 +368,7 @@ export interface Pure {
     target: ColumnRef,
     naturalKey: string,
     values: ColumnValues,
-    options?: { provenance?: Record<string, string> },
+    options?: { provenance?: Record<string, string>; authored?: boolean },
   ): string;
   /**
    * Set declared columns of an existing record another scope owns (a
@@ -435,6 +435,8 @@ export type DesiredRecord = {
   readonly naturalKey: string;
   readonly values: Readonly<ColumnValues>;
   readonly provenance: Readonly<Record<string, string>>;
+  /** A member-authored creation cannot be absorbed by an automatic proof. */
+  readonly authored?: boolean;
 };
 
 export type Reconciler<In = unknown> = {

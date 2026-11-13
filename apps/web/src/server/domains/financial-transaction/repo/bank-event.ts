@@ -405,7 +405,10 @@ export const bankEvent = defineReconciler<BankInput>({
       });
       provenance[field] = decision.id;
     }
-    c.record(bankTransactionWrites, naturalKey, values, { provenance });
+    c.record(bankTransactionWrites, naturalKey, values, {
+      provenance,
+      authored: !!manual,
+    });
     return c.done();
   },
 });

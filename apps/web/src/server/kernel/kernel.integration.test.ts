@@ -13,7 +13,12 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
-import { manualEntry, evidenceBinding, drift } from "~/server/db/kernel-schema";
+import {
+  manualEntry,
+  evidenceBinding,
+  drift,
+  recordKey,
+} from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
 import {
   repositoryQueries,
@@ -652,6 +657,7 @@ describe("evidence-facts kernel", () => {
         return new Map(keys.map((key) => [key, null]));
       },
       reconcile(_input, c) {
+        expect(c.reference("vendor", seller.shortcode)).toBe(seller.id);
         c.gap.decision("a reviewed identity");
         return c.done();
       },
@@ -1775,6 +1781,65 @@ describe("evidence-facts kernel", () => {
       eventKey: string;
     }>(sql`SELECT DISTINCT "eventKey" FROM "EvidenceBinding"`);
     expect(bindings.rows).toEqual([{ eventKey: "ORD-M1" }]);
+  });
+
+  it("keeps member-authored creations out of automatic merges", async () => {
+    const { kernel, fixture } = kernelWith({ authored: true });
+    await kernel.append(ctx.db, [charge("ORD-AUTHORED-1", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-AUTHORED-2", 100)]);
+    await settle(kernel);
+    const rows = await purchases(ctx.db);
+    expect(rows).toHaveLength(2);
+    expect(
+      await kernel.merge(ctx.db, {
+        target: fixture.purchaseWrites,
+        a: rows[0]!.id,
+        b: rows[1]!.id,
+        basis: "proof",
+      }),
+    ).toEqual({ merged: false, reason: "not-minted" });
+    expect(
+      (await purchases(ctx.db)).filter((row) => !row.deletedAt),
+    ).toHaveLength(2);
+  });
+
+  it("transfers linked records with a merged scope and retires children in foreign-key order", async () => {
+    const { kernel, fixture } = kernelWith({ linked: true });
+    await kernel.append(ctx.db, [charge("ORD-LINK-M1", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-LINK-M2", 100)]);
+    await settle(kernel);
+    const rows = await purchases(ctx.db);
+    const verdict = await kernel.merge(ctx.db, {
+      target: fixture.purchaseWrites,
+      a: rows[0]!.id,
+      b: rows[1]!.id,
+      basis: "proof",
+    });
+    expect(verdict.merged).toBe(true);
+    await settle(kernel);
+    const live = (await purchases(ctx.db)).filter((row) => !row.deletedAt);
+    const expenses = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureExpense);
+    const allocations = await repositoryQueries(ctx.db)
+      .select()
+      .from(fixtureAllocation);
+    expect(live).toHaveLength(1);
+    expect(expenses).toHaveLength(1);
+    expect(allocations).toHaveLength(1);
+    expect(expenses[0]?.purchaseId).toBe(live[0]?.id);
+    expect(allocations[0]?.expenseId).toBe(expenses[0]?.id);
+    const owned = await repositoryQueries(ctx.db)
+      .select()
+      .from(recordKey)
+      .where(eq(recordKey.scopeKind, PURCHASE_SCOPE));
+    expect(
+      owned
+        .filter((row) => row.entity !== PURCHASE_TABLE)
+        .every((row) => row.scopeKey === live[0]?.orderRef),
+    ).toBe(true);
   });
 
   it("keeps a veto in force after a later assignment is released", async () => {

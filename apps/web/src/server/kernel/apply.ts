@@ -467,7 +467,11 @@ async function applyBatch(
       entity: recordEntity(entry.target),
       naturalKey: entry.naturalKey,
       entityId: entry.id,
-      minted: true,
+      minted: !plan.computed.desired!.records.find(
+        (record) =>
+          record.target.name === entry.target.name &&
+          record.naturalKey === entry.naturalKey,
+      )?.authored,
     })),
   );
   const uniqueInserts = new Map<string, Difference["inserts"][number]>();
@@ -547,20 +551,32 @@ async function applyBatch(
         await updateRecords(q, combined.updates);
         for (const entry of combined.updates) touch(entry.target, entry.row);
         await auditApply(tx, combined);
-        const removals = new Map<string, Difference["removals"]>();
-        for (const entry of combined.removals)
-          removals.set(entry.target.name, [
-            ...(removals.get(entry.target.name) ?? []),
+        const removals = new Map(
+          combined.removals.map((entry) => [
+            `${entry.target.name}:${entry.id}`,
             entry,
-          ]);
-        for (const group of removals.values()) {
+          ]),
+        );
+        for (const group of orderedInserts(
+          combined.removals.map((entry) => ({
+            target: entry.target,
+            id: entry.id,
+            naturalKey: entry.id,
+            values: entry.row ?? { id: entry.id },
+          })),
+        ).reverse()) {
           await removeRecords(
             tx,
             group[0]!.target,
             group.map((entry) => entry.id),
           );
           for (const entry of group)
-            touch(entry.target, entry.row ?? { id: entry.id });
+            touch(
+              entry.target,
+              removals.get(`${entry.target.name}:${entry.id}`)?.row ?? {
+                id: entry.id,
+              },
+            );
         }
         if (combined.removals.length)
           await q.execute(sql`

@@ -192,7 +192,7 @@ the first new declaration reserves the shared id; every participating scope
 keeps a RecordKey to it. Existing RecordKeys always retain their ids. The
 coalescer supplies creation values only; member edits remain authored.
 
-`c.record` returns the record's UUID. For an existing `RecordKey` it returns
+`c.record` returns the record's UUID. Its `authored` option marks a member-created record as ineligible for a proof merge. For an existing `RecordKey` it returns
 the retained id; for a new natural key it derives a UUID v8 from the scope
 kind, scope key, table and natural key using SHA-256. Contents never enter
 that identity. Other records declared in the same reconcile use that UUID as
@@ -389,7 +389,7 @@ Cubby merges on its own, amending ADR 0028 item 1. Every other case is a gap.
 A merge runs the declared merge policy inside the apply transaction: foreign
 keys, `EntityLink`, `EntityExternalId`, attachments and collision rules, as
 `generic/merge` does today, and search artifacts are retired. The absorbed
-record's `RecordKey` rows repoint to the survivor, the older record survives,
+record's `RecordKey` rows repoint to the survivor, the older record survives, and the absorbed scope's remaining child RecordKeys transfer to the surviving scope,
 and the absorbed id and shortcode keep resolving to the survivor on reads.
 Writes addressed to an absorbed id are refused and name the survivor. Audit
 and evidence rows keep the identity they were written with. Web, native caches
@@ -401,7 +401,7 @@ record is not created again when its evidence returns. A record with decisions
 and no remaining evidence stays, with an `unsupported` gap.
 
 Reconcilers resolve retained decision and manual-entry references through
-`c.reference(entity, idOrShortcode)`. It follows redirects from the identity
+`c.reference(entity, idOrShortcode)`. Every batch loads the identity roster, including binding-only consumers. It follows redirects from the identity
 snapshot loaded for the batch, returns the live survivor only for the requested
 entity kind, and does not alter the retained input.
 

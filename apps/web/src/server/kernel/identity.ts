@@ -392,6 +392,36 @@ export async function mergeRecords(
           eq(recordKey.scopeKey, owner.key),
         ),
       );
+    const remaining = await q
+      .select({ id: recordKey.entityId })
+      .from(recordKey)
+      .where(
+        and(
+          eq(recordKey.scopeKind, owner.kind),
+          eq(recordKey.scopeKey, owner.key),
+          eq(recordKey.entity, entity),
+          isNull(recordKey.mergedAt),
+          isNull(recordKey.rejectedAt),
+        ),
+      );
+    // A grouped accepted scope can still own another primary record. Its
+    // surviving records keep their owner and the absorbed key stays rejected.
+    if (remaining.length) continue;
+    await q.execute(sql`
+      UPDATE "RecordKey" child SET "scopeKind" = ${survivor!.kind}, "scopeKey" = ${survivor!.key},
+        "naturalKey" = CASE WHEN EXISTS (
+          SELECT 1 FROM "RecordKey" existing WHERE existing."scopeKind" = ${survivor!.kind} AND existing."scopeKey" = ${survivor!.key}
+          AND existing.entity = child.entity AND existing."naturalKey" = child."naturalKey"
+        ) THEN 'merged:' || ${owner.key} || ':' || child."naturalKey" ELSE child."naturalKey" END
+      WHERE child."scopeKind" = ${owner.kind} AND child."scopeKey" = ${owner.key} AND child."mergedAt" IS NULL`);
+    const transferred = await q.execute<{
+      factKind: string;
+      factId: string;
+    }>(sql`
+      UPDATE "EvidenceBinding" SET "scopeKind" = ${survivor!.kind}, "scopeKey" = ${survivor!.key}
+      WHERE "scopeKind" = ${owner.kind} AND "scopeKey" = ${owner.key} RETURNING "factKind", "factId"`);
+    for (const fact of transferred.rows)
+      keys.push(bindingFactKey({ kind: fact.factKind, id: fact.factId }));
     const reconciler = registry.reconcilers.get(owner.kind);
     await q.execute(sql`
       INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage, "mergedIntoKey", "reconciledAt")

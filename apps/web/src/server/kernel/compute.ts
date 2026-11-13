@@ -183,18 +183,15 @@ async function computeBatchInPhase(
 
   const shortcodeOwners = new Map<string, string>();
   const entityReferences = new Map<string, EntityReference>();
-  if (
-    reconciler.writes.some(
-      (target) => target.entity && isShortcodeEntity(target.entity),
-    )
-  )
-    for (const row of await q.select().from(entityIdentity)) {
-      entityReferences.set(row.id, row);
-      if (row.shortcode) {
-        shortcodeOwners.set(row.shortcode, row.id);
-        entityReferences.set(row.shortcode, row);
-      }
+  // Binding-only reconcilers resolve the same identities as entity writers.
+  // One roster read covers every reference in the batch, including redirects.
+  for (const row of await q.select().from(entityIdentity)) {
+    entityReferences.set(row.id, row);
+    if (row.shortcode) {
+      shortcodeOwners.set(row.shortcode, row.id);
+      entityReferences.set(row.shortcode, row);
     }
+  }
 
   let results = new Map<string, { desired: Desired | null; error: unknown }>();
   for (let round = 0; ; round++) {
@@ -864,6 +861,7 @@ function createPure(
         naturalKey,
         values: proposed,
         provenance: { ...options?.provenance },
+        authored: options?.authored ?? false,
       });
       return id;
     },

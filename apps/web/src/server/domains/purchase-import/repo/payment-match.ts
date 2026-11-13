@@ -55,6 +55,7 @@ type Input = {
   manuals: (typeof manualEntry.$inferSelect)[];
   recordDecisions: (typeof decision.$inferSelect)[];
   bindings: Binding[];
+  totals: Map<string, bigint | null>;
 };
 
 /** One accepted head per original; later raw retrievals cannot change these facts. */
@@ -74,6 +75,8 @@ export function acceptedOrderHeads(orders: readonly Order[]) {
   return [...heads.values()];
 }
 
+const paymentSetKey = (order: Order) =>
+  `${orderEventKey(order)}:${order.extraction.candidate?.sourceEvent === "refunded" ? "refund" : "charge"}`;
 const paymentsFor = (input: Input, order: Order) =>
   input.payments.filter(
     (payment) =>
@@ -226,7 +229,7 @@ function choices(input: Input, order: Order, c: Pure): ChargeMatchRead[] {
 
 function planOrder(input: Input, order: Order, c: Pure) {
   const sameEvent = acceptedOrderHeads(input.orders).filter(
-    (row) => orderEventKey(row) === orderEventKey(order),
+    (row) => paymentSetKey(row) === paymentSetKey(order),
   );
   const rows = sameEvent.flatMap((row) => paymentsFor(input, row));
   const normalized = normalizePaymentSet(
@@ -241,7 +244,13 @@ function planOrder(input: Input, order: Order, c: Pure) {
     normalized,
     order.extraction.candidate?.orderedAt?.slice(0, 10) ?? null,
   );
-  const candidates = choices(input, order, c);
+  const total = input.totals.get(order.id);
+  const paid = payments.reduce((sum, row) => sum + row.amountMinor, 0n);
+  const abs = (value: bigint) => (value < 0n ? -value : value);
+  const candidates =
+    total !== null && total !== undefined && abs(paid) < abs(total)
+      ? []
+      : choices(input, order, c);
   const explicit = candidates.filter(
     (candidate) =>
       c.decision(
@@ -346,6 +355,14 @@ export const paymentMatch = defineReconciler<Input>({
         })),
       ],
     });
+    const totals = new Map(
+      orders.map((row) => [
+        row.id,
+        row.extraction.candidate?.printedGrandTotal == null
+          ? null
+          : moneyToMinor(row.extraction.candidate.printedGrandTotal),
+      ]),
+    );
     return new Map(
       keys.map((key) => [
         key,
@@ -359,13 +376,14 @@ export const paymentMatch = defineReconciler<Input>({
           manuals,
           recordDecisions,
           bindings,
+          totals,
         },
       ]),
     );
   },
   reconcile(input, c) {
     const heads = acceptedOrderHeads(input.orders);
-    const events = new Map(heads.map((row) => [orderEventKey(row), row]));
+    const events = new Map(heads.map((row) => [paymentSetKey(row), row]));
     for (const order of events.values()) {
       if (
         !heads.some(
@@ -428,7 +446,17 @@ export const paymentMatch = defineReconciler<Input>({
             )
           );
         });
-        if (contenders.length <= 1) continue;
+        if (contenders.length <= 1) {
+          const total = input.totals.get(order.id);
+          if (
+            plan.payments.length === 1 &&
+            total !== null &&
+            total !== undefined &&
+            total !== match.amountMinor
+          )
+            competing = true;
+          continue;
+        }
         const selected = contenders.filter(
           (other) =>
             c.decision(
@@ -450,10 +478,7 @@ export const paymentMatch = defineReconciler<Input>({
               "purchase",
             ),
           ),
-          statedTotalMinor:
-            other.extraction.candidate?.printedGrandTotal == null
-              ? null
-              : moneyToMinor(other.extraction.candidate.printedGrandTotal),
+          statedTotalMinor: input.totals.get(other.id) ?? null,
           namesThisCharge: other.extraction.candidate?.payments.length === 1,
         }));
         if (
@@ -487,7 +512,12 @@ export const paymentMatch = defineReconciler<Input>({
         });
         continue;
       }
-      const accepted = bindingFor(input, orderEvidence.kind, order.id);
+      const accepted =
+        bindingFor(input, orderEvidence.kind, order.id) ??
+        heads
+          .filter((row) => orderEventKey(row) === event)
+          .map((row) => bindingFor(input, orderEvidence.kind, row.id))
+          .find((row) => row !== undefined);
       const existingBankEvent = (plan.matches ?? []).find((match) =>
         c.reference(
           "purchase",
@@ -498,8 +528,24 @@ export const paymentMatch = defineReconciler<Input>({
           ),
         ),
       );
+      const firstOrderForBank =
+        existingBankEvent &&
+        [...events.values()]
+          .filter((other) => {
+            const p = planOrder(input, other, c);
+            return (
+              p.kind === "planned" &&
+              p.matches?.some(
+                (row) => row.transactionId === existingBankEvent.transactionId,
+              )
+            );
+          })
+          .map(orderEventKey)
+          .sort()[0] === event;
       const resolvedEvent =
-        accepted?.eventKey ?? existingBankEvent?.transactionId ?? event;
+        accepted?.eventKey ??
+        (firstOrderForBank ? existingBankEvent?.transactionId : null) ??
+        event;
       const resolvedScope =
         accepted?.basis === "baseline" &&
         accepted.scope.kind === "purchaseEvent"
@@ -538,7 +584,9 @@ export const paymentMatch = defineReconciler<Input>({
         plan.payments[0] &&
         paymentAmountKey(plan.payments[0].amountMinor) === input.key
       )
-        for (const head of heads.filter((row) => orderEventKey(row) === event))
+        for (const head of heads.filter(
+          (row) => paymentSetKey(row) === paymentSetKey(order),
+        ))
           c.bind(
             { kind: orderEvidence.kind, id: head.id },
             resolvedEvent,

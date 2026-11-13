@@ -23,6 +23,7 @@ import {
   purchase,
   purchasePaymentEvidence,
   sourceOccurrence,
+  sourceOrderObservation,
   spendingCategory,
   vendor,
 } from "~/server/db/schema";
@@ -38,6 +39,7 @@ import { decideSpendingCandidates } from "~/server/domains/financial-transaction
 import { spendingCategoryForDiscovery } from "~/server/domains/financial-transaction/policy/spending-category";
 import { spendingBlocker } from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import { reconcileOrderPurchase } from "~/server/domains/financial-transaction/repo/order-purchase-event";
 import {
   merchantIdentityAsk,
   merchantSupportAsk,
@@ -53,6 +55,18 @@ import {
   restorePurchaseValues,
 } from "~/server/domains/financial-transaction/repo/purchase-event-records";
 import {
+  loadExpenseAllocations,
+  type ExpenseAllocationRow,
+} from "~/server/domains/household-contribution/repo/allocation";
+import {
+  orderBookingInput,
+  type OrderBookingInput,
+} from "~/server/domains/purchase-import/policy/order-booking";
+import {
+  orderEvidence,
+  retainedPaymentEvidence,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import {
   bookingVendorCreations,
   bookingVendorSelection,
 } from "~/server/domains/vendor/policy/booking-vendor";
@@ -66,9 +80,12 @@ import {
   type Pure,
 } from "~/server/kernel/api";
 
-type Input = {
+export type Input = {
   key: string;
   bindings: Binding[];
+  orderBindings: Binding[];
+  orders: OrderBookingInput[];
+  lumpAttributions: ExpenseAllocationRow[];
   transactions: (typeof financialTransaction.$inferSelect)[];
   accounts: (typeof financialAccount.$inferSelect)[];
   parties: (typeof ledgerParty.$inferSelect)[];
@@ -106,6 +123,7 @@ const tableReads = [
   ]),
   source.table(financialAccount, [
     "identity",
+    "fundingPeriods",
     "ledgerPartyId",
     "primaryCardholderId",
     "primaryCardholderMode",
@@ -162,47 +180,7 @@ function retained(c: Pure) {
   for (const target of targets)
     for (const key of c.existing(target)) c.retire(target, key, "keep");
 }
-function record(
-  c: Pure,
-  target: ColumnRef,
-  naturalKey: string,
-  values: Parameters<Pure["record"]>[2],
-  provenance: Record<string, string> = {},
-) {
-  const identity = c.identity(target, naturalKey);
-  const desired = { ...values };
-  for (const [field, decision] of c.assignments(
-    recordSubject(target.entity ?? target.name, identity.id),
-  )) {
-    if (!target.columns.includes(field)) continue;
-    Object.assign(
-      desired,
-      restorePurchaseValues({
-        [field]: decision.kind === "none" ? null : decision.value,
-      }),
-    );
-    provenance[field] = decision.id;
-  }
-  const references = {
-    vendorId: "vendor",
-    vendorAccountId: "vendorAccount",
-    purchaserOverrideId: "ledgerParty",
-    defaultProjectId: "project",
-    projectId: "project",
-    spendingCategoryId: "spendingCategory",
-    productId: "product",
-    purchaseId: "purchase",
-    transactionId: "financialTransaction",
-    expenseId: "expense",
-    ledgerPartyId: "ledgerParty",
-  } as const;
-  for (const [field, entity] of Object.entries(references)) {
-    const reference = desired[field];
-    if (typeof reference === "string")
-      desired[field] = c.reference(entity, reference);
-  }
-  return c.record(target, naturalKey, desired, { provenance });
-}
+import { recordPurchaseValue as record } from "~/server/domains/financial-transaction/repo/purchase-record";
 function ownKey(c: Pure, target: ColumnRef, fallback: string) {
   return c.existing(target)[0] ?? fallback;
 }
@@ -248,6 +226,18 @@ export const purchaseEvent = defineReconciler<Input>({
   after: ["bankEvent", "paymentMatch"],
   reads: [
     ...tableReads,
+    source.evidence(orderEvidence),
+    source.evidence(retainedPaymentEvidence),
+    source.table(sourceOrderObservation, [
+      "extraction",
+      "productBindings",
+      "orderKey",
+      "vendorId",
+      "purchaseId",
+      "sourceKind",
+      "sourceExternalKey",
+      "createdAt",
+    ]),
     source.evidence(manualTransactionEvidence),
     source.bindings,
   ],
@@ -266,6 +256,7 @@ export const purchaseEvent = defineReconciler<Input>({
       categories,
       payments,
       occurrences,
+      observations,
     ] = await Promise.all([
       reads.select(financialTransaction, [], sql`true`),
       reads.select(financialAccount, [], sql`true`),
@@ -278,11 +269,47 @@ export const purchaseEvent = defineReconciler<Input>({
       reads.select(spendingCategory, [], sql`true`),
       reads.select(purchasePaymentEvidence, [], sql`true`),
       reads.select(sourceOccurrence, [], sql`true`),
+      reads.select(sourceOrderObservation, keys, sql`true`),
     ]);
     const manuals = await reads.facts(
       manualTransactionEvidence,
       keys.map((key) => `purchaseEvent:${key}`),
     );
+    const orderBindings = await reads.bindings({
+      facts: [
+        ...observations.map((row) => ({
+          kind: orderEvidence.kind,
+          id: row.id,
+        })),
+        ...payments.map((row) => ({
+          kind: retainedPaymentEvidence.kind,
+          id: row.id,
+        })),
+      ],
+    });
+    const orders = observations.map(orderBookingInput);
+    const lumpAttributions = orders.length
+      ? await reads.prepare(
+          [
+            expense,
+            expenseAttribution,
+            purchase,
+            ledgerParty,
+            financialAccount,
+            financialTransaction,
+            financialTransactionAllocation,
+          ],
+          (db) =>
+            loadExpenseAllocations(db, {
+              expenseIds: expenses
+                .filter(
+                  (row) => !row.deletedAt && row.lineBasis === "allocation",
+                )
+                .map((row) => row.id),
+              includeFuture: true,
+            }),
+        )
+      : [];
     const bindings = await reads.bindings({
       events: [
         ...transactions,
@@ -302,6 +329,9 @@ export const purchaseEvent = defineReconciler<Input>({
               binding.scope.kind === "purchaseEvent" &&
               binding.scope.key === key,
           ),
+          orderBindings,
+          orders,
+          lumpAttributions,
           transactions,
           accounts,
           parties,
@@ -325,6 +355,8 @@ export const purchaseEvent = defineReconciler<Input>({
       retained(c);
       return c.done();
     }
+    const order = reconcileOrderPurchase(input, c);
+    if (order) return order;
     // Manual entries and the later order-evidence writer's reviewed record decisions
     // use the same ownership and precedence as statement-derived records.
     let seeds: {
@@ -455,7 +487,7 @@ export const purchaseEvent = defineReconciler<Input>({
               Object.keys(seed.values).map((field) => [field, seed.decision!]),
             )
           : {};
-        record(c, seed.target, seed.naturalKey, seed.values, provenance);
+        record(c, seed.target, seed.naturalKey, seed.values, provenance, true);
       }
       for (const target of targets)
         for (const key of c.existing(target))

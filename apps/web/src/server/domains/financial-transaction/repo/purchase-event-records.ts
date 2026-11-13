@@ -26,7 +26,15 @@ export const purchaseRecords = writes(
     "statedTotal",
     "notes",
   ],
-  { entity: "purchase", createOnly: ["runId"] },
+  {
+    entity: "purchase",
+    createOnly: ["runId"],
+    merge: async (db, input) =>
+      (await import("~/server/kernel/api")).entityMerge("purchase", purchase)(
+        db,
+        input,
+      ),
+  },
 );
 
 export const expenseRecords = writes(

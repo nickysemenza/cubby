@@ -144,6 +144,7 @@ export const receiptEvidence = defineEvidence({
 export type FixtureHooks = {
   predicateReceipts?: boolean;
   linked?: boolean;
+  authored?: boolean;
   linkedDecision?: boolean;
   onRemove?: () => Promise<void>;
   disagreement?: () => string | null;
@@ -202,7 +203,15 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           }
         : {}),
       // The absorbed purchase is retired; the kernel settles who owns the survivor.
-      merge: async (tx, { loserIds }) => {
+      merge: async (tx, { keepId, loserIds }) => {
+        await repositoryQueries(tx)
+          .update(fixtureExpense)
+          .set({ purchaseId: keepId })
+          .where(inArray(fixtureExpense.purchaseId, [...loserIds]));
+        await repositoryQueries(tx)
+          .update(fixtureAllocation)
+          .set({ purchaseId: keepId })
+          .where(inArray(fixtureAllocation.purchaseId, [...loserIds]));
         await repositoryQueries(tx)
           .update(fixturePurchase)
           .set({ deletedAt: new Date() })
@@ -318,7 +327,10 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           merchant,
           receiptId: receipt?.id ?? null,
         },
-        { provenance: assigned ? { merchant: assigned.id } : {} },
+        {
+          provenance: assigned ? { merchant: assigned.id } : {},
+          authored: hooks.authored,
+        },
       );
       const linked = id
         ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
@@ -363,6 +375,10 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           },
         );
       }
+      if (hooks.linked || hooks.linkedDecision)
+        for (const target of [expenseWrites, allocationWrites])
+          for (const key of c.existing(target))
+            if (key.startsWith("merged:")) c.retire(target, key, "remove");
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));
       const desired = c.done();
