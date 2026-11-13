@@ -50,7 +50,7 @@ final class MachineryModel {
         }
     }
 
-    func act(_ app: AppModel, subject: EntityRef, field: String?, action: MachineryGapsItemsItemActionsItem)
+    func act(_ app: AppModel, subject: EntityRef, field: String?, action: some Encodable)
         async
     {
         do {
