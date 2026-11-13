@@ -357,7 +357,7 @@ describe("durable calendar dirty-mark fallback", () => {
       await Promise.all(tasks);
       expect(consoleError).toHaveBeenCalledWith(
         expect.objectContaining({
-          source: "calendar-feed.mark-dirty-fallback",
+          source: "kernel.dirty",
           error: expect.objectContaining({ message: "queue down" }),
         }),
       );
