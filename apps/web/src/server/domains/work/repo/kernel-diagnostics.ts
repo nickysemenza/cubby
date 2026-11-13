@@ -23,14 +23,18 @@ export async function readKernelDiagnostics(db: Database) {
     UNION ALL SELECT ${"pass"}, name, key, NULL::uuid, "availableAt", "createdAt", "updatedAt", "claimToken", "claimDeadline", attempts, "maxAttempts", "lastError", false
     FROM "Pass" WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL`;
   const [groups, failures] = await Promise.all([
-    q.execute(sql`WITH work AS (${rows}) SELECT type, kind,
+    q.execute<
+      z.infer<typeof workDiagnostics>["groups"][number]
+    >(sql`WITH work AS (${rows}) SELECT type, kind,
       count(*) FILTER (WHERE attempts<max AND NOT unknown AND "availableAt"<=now() AND NOT coalesce("claimDeadline">now(),false))::int AS due,
       count(*) FILTER (WHERE "claimToken" IS NOT NULL AND "claimDeadline">now())::int AS claimed,
       count(*) FILTER (WHERE attempts<max AND NOT unknown AND NOT coalesce("claimDeadline">now(),false))::int AS waiting,
       count(*) FILTER (WHERE attempts>=max OR unknown)::int AS stuck,
       ${isoText(sql`min("createdAt") FILTER (WHERE attempts<max AND NOT unknown AND NOT coalesce("claimDeadline">now(),false))`)} AS "oldestWaiting"
       FROM work GROUP BY type,kind ORDER BY type,kind`),
-    q.execute(sql`WITH work AS (${rows}) SELECT
+    q.execute<
+      z.infer<typeof workDiagnostics>["failures"][number]
+    >(sql`WITH work AS (${rows}) SELECT
       CASE WHEN type=${"ask"} THEN jsonb_build_object('type',type,'id',id)
         ELSE jsonb_build_object('type',type,${"kind"}::text,kind,'key',key) END AS target,
       coalesce("lastError", ${"Execution outcome is unknown"}) AS error, ${isoText(sql`"updatedAt"`)} AS at
@@ -53,14 +57,14 @@ export async function retryKernelWork(
   const free = sql`("claimToken" IS NULL OR "claimDeadline"<=now())`;
   const result =
     target.type === "scope"
-      ? await q.execute(
+      ? await q.execute<{ retried: number }>(
           sql`UPDATE "ScopeDirty" SET ${common} WHERE "scopeKind"=${target.kind} AND "scopeKey"=${target.key} AND attempts>=${MAX_SCOPE_ATTEMPTS} AND ${free} RETURNING 1`,
         )
       : target.type === "ask"
-        ? await q.execute(
+        ? await q.execute<{ retried: number }>(
             sql`UPDATE "Ask" SET ${common}, state=${ASK.queued} WHERE id=${target.id}::uuid AND "cancelledAt" IS NULL AND (attempts>="maxAttempts" OR state=${ASK.unknown}) AND state<>${ASK.answered} AND ${free} RETURNING 1`,
           )
-        : await q.execute(
+        : await q.execute<{ retried: number }>(
             sql`UPDATE "Pass" SET ${common} WHERE name=${target.kind} AND key=${target.key} AND attempts>="maxAttempts" AND "doneAt" IS NULL AND "cancelledAt" IS NULL AND ${free} RETURNING 1`,
           );
   return { retried: result.rows.length > 0 };

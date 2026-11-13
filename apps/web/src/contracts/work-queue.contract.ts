@@ -50,7 +50,7 @@ export const workQueueContract = defineContract(
         "Retry one Stuck scope, ask or pass, clearing its attempts and making it available.",
       input: workRetryTarget,
       output: z.object({ retried: z.boolean() }),
-      invalidates: ["workQueue"],
+      invalidates: ["runOnly"],
     }),
     queue: query({
       exposure: "internal",

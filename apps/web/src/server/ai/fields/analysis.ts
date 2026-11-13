@@ -1,4 +1,4 @@
-import { VISIBLE_RUN_PURPOSES } from "@cubby/schemas/activity-fields";
+import { VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { sql } from "drizzle-orm";
 
 import {
