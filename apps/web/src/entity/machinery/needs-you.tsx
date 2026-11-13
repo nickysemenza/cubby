@@ -61,7 +61,9 @@ function NeedsYouRow({ item }: { item: NeedsYouPage["items"][number] }) {
 
 export function NeedsYou() {
   const [offset, setOffset] = useState(0);
-  const read = useQuery(machinery.needsYou.queryOptions({ limit: 50, offset }));
+  const read = useQuery(
+    machinery.needsYou.queryOptions(offset === 0 ? {} : { limit: 50, offset }),
+  );
   return (
     <Section
       headingAs="h2"
