@@ -537,35 +537,17 @@ surfaces keep their own engines.
 
 ## Work page
 
-`/activity` is the Work page: a health line, a Stuck section only when something
-is stuck, a closed Queue details disclosure, the Needs you queue, then links to Suggestions, Changes by Cubby,
-Missing facts, All work and History (`/history`, Run history and recorded
-Changes). It answers whether
-background work is healthy and what needs a member. Outside Queue details it
-uses no scheduler or queue vocabulary (wakes, leases, tickets, deadlines, pace,
-refresh counts); other telemetry belongs to Run pages and MCP.
+`/activity` is the Work page: a kernel health line, stuck records when present,
+the Needs you list, then links to Agent backlog, Suggestions, Changes by Cubby,
+Missing facts, All work and History. Run and record machinery disclose execution
+details beside the affected evidence.
 
-- The health line states Healthy, Catching up, Stuck or Unknown, never a count of
-  internal work, percentage or ETA. A failed read says the page cannot tell, with
-  raw diagnostics and Try again, and never claims all clear.
+- The health line states whether kernel work is stuck or catching up and when
+  work last finished. A failed read says the page cannot tell, with raw
+  diagnostics and Try again, and never claims all clear.
 - Stuck rows show an outcome title, one sentence on consequence or remedy, at
-  most one action, and a closed Technical details disclosure with the raw
-  failure and Copy. Eight rows show first; Show more reveals the rest in place. A
-  retry rereads every 10 seconds for two minutes, then stops.
-- A stopped row's sentence leads with the cause when the server names one
-  ("115 Mail discovery Runs keep deferring on provider capacity."), and its
-  Technical details carry the queue as text.
-- Queue details reads `job.activity` only once opened. It lists each Job kind
-  and drain unit as a flat hairline row: member label and stored unit name,
-  then claimed, finished, deferred and failed counts for the last hour, the
-  oldest due work, leases held, a drain's last pass and each group of waiting
-  Jobs with its Run links, then when the unit's due work drains at the kind's
-  last-5-minute pace ("Drains in about 26 min at the last 5 minutes' pace.");
-  funding groups are left out of that count, and a kind with no recent
-  completion reads "Pace unknown". AI evaluations follow, one row per feature with its
-  queued, answered-not-saved and blocked counts, oldest age and most common
-  error. Rows put the name beside the facts from 768px and stack below it; no
-  row scrolls sideways. A failed read shows the raw error and Try again.
+  most one record link, and a closed Technical details disclosure with the raw
+  failure and Copy. Eight rows show first; Show more reveals the rest in place.
 - Needs you reads `machinery.needsYou`, the kernel’s gaps whose actor is a member, grouped by the six stage words. Each row links its record and offers an inline decision when the gap has exactly one action. Page controls retain the full count; empty reads say `Nothing needs you.` Loading uses skeletons and failures show raw diagnostics and Retry. Home and sidebar use the same member-gap population. The health verdict remains independent.
 - The sidebar Work row shows the needs-you count and, only when something is
   stuck or the count is behind, a static warning glyph; the collapsed rail shows

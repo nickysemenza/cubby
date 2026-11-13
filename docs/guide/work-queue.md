@@ -1,25 +1,12 @@
 # One view of the work
 
-Work is the household's operational entry point at `/activity`: one screen with
-a Background work list (the health verdict, then every stuck or failed kind,
-device wait and stopped Run, each with its retry) and one Needs you queue
-summarized by reason. Needs you is the queue's
-member-executed work (`executor: human`) that is mine or shared, and it holds
-only what a member decides: decisions, required proposals and concrete Problems
-whose declared decision names a member. Home's preview, the sidebar count and
-Work read that one `NEEDS_YOU_FILTERS` population from the household's published
-Work items, so the count is the queue's own total, never a copy. Waiting never
-implies failure.
-
-The household web reads the last publication instead of evaluating every source
-per request. A member's own write marks it stale; the next read returns the
-previous rows and republishes after the response, and the commit rings open
-pages, so a decided item leaves within seconds. Background-only changes (imports,
-Runs) appear within two minutes of a read. Agents (MCP) and a record's own Work
-strip evaluate the sources live. If republishing fails, or the rows are more
-than ten minutes old, Home, Work and the queue keep the rows and add a quiet
-"Needs you last updated …" line with the raw error under Technical details and
-Retry; the sidebar's Work row shows its warning glyph.
+Work is the household's operational entry point at `/activity`: the Kernel work
+health verdict and stuck records, followed by Needs you grouped by stage.
+Needs you reads public records with a member-supplied kernel gap. Home, Work,
+sidebar and MCP read that population directly; each item links its record and
+carries the offered actions. A failed read shows raw diagnostics and Retry.
+Waiting never implies failure. A Run's scopes, asks and passes appear on that
+Run; record machinery holds the complete execution and evidence details.
 
 Work's "More work" row opens the Agent backlog first (`Agent backlog · N`,
 the `executor: agent` view of `/work-queue`, newest first). It is a quiet link:
@@ -27,25 +14,19 @@ it never counts toward the sidebar badge or Home, and members keep every action
 on its items. Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and
 History (`/history`: Run outcomes and recorded changes). Maintenance lives at Settings
-→ Maintenance. Stuck and failed background work shows under Background work on
-Work, and a Run's Jobs show on that Run.
+→ Maintenance. Stuck kernel records appear on Work, and a Run's scopes, asks and passes appear
+on that Run.
 Old `/activity?tab=…` links redirect to those owners; a `refresh=` locator opens the
 value's record and a `runId=` filter opens that Run. Old `/jobs` links and `JOB-` codes
 open Work, or the Run when the link named one. List
 counts, detail and inspector suggestion review stay in place.
 These views do not persist lanes, assignments or another work ledger. A record
 can appear in more than one view when it has different actionable work.
-Home and Work disclose the same incomplete Project or diagnostic publications.
-Home leaves its total unavailable while those checks are incomplete and labels
-an empty known roster without claiming that nothing needs attention.
-Gap and Problem sources also report records whose inputs have not been
-published, named by their declared input label or Problem title.
-Those records contribute completeness metadata, never guessed gaps or actionable
-rows. The same candidate filters, routing, member fence and planned-Purchase
-deferral apply; negative reason filters cannot establish that unknown records
-are excluded. Search uses the source's possible reason labels until facts exist.
-Counts and view counts cover known work only while any admitted source is
-incomplete. Publication makes the ordinary read complete without a read repair.
+The filtered browser `/work-queue` list discloses incomplete Project, diagnostic
+and quality inputs. Those records contribute completeness metadata rather than
+guessed gaps or actionable rows. Candidate filters, routing and planned-Purchase
+deferral apply before counts and paging. Counts cover known work while any
+admitted source has incomplete inputs.
 
 Suggestion candidates read pending `Suggestion` rows and current authority gates
 directly. Work does not capture suggestion evidence, enroll refreshes or
@@ -59,7 +40,7 @@ counts and paging. Its All, Automatic, Agent, Review, Waiting and Problems views
 share that one server read with record work sections, including Runs. GitHub
 Issues owns delivery and remaining domain coverage.
 
-Summary is the default layout on both Work and the full queue. It ranks reasons
+Summary is the default layout on the filtered browser queue. It ranks reasons
 by work-item count and shows each reason's share of all matching known work.
 Pivot compares Reason × Type using the shared count/percentage matrix; Records
 keeps the existing grouped table and its actions. Selecting a summary count or
