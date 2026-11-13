@@ -5,7 +5,6 @@ import { seedProductPrerequisite } from "./fixtures/catalog";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
 
 import { parseEntityId } from "@cubby/schemas/identifiers";
@@ -30,8 +29,6 @@ import {
 } from "./fixtures/core";
 
 /** Keep a scenario's generation independent of earlier imports in its worker database. */
-
-/** Synthetic Monarch rows on one account alias. */
 
 const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
@@ -131,10 +128,6 @@ test("reviews a field suggestion for a named record", async ({
     .toBe(await resolveOrThrow(db, "productCategory", category.id));
   await expect(field).toHaveCount(0);
 });
-
-// Failure modes: an attach applies to the first candidate instead of the one
-// named; a create counts as clean without decision labels; the clean bulk
-// accept skips its confirm or accepts a row it did not list as clean.
 
 // Failure modes: a value Cubby set wears a mark a member's value does not; an
 // edit of Cubby's value is lost on reload; the empty field's picker hides
