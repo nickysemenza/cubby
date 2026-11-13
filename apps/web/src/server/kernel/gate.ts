@@ -51,21 +51,26 @@ export async function enterWriteTransaction(
   options: { lane: KernelLane | null; mode: WriteMode },
 ): Promise<void> {
   const limits = TIMEOUTS[options.mode];
-  const state = await q.execute<{ ordered: boolean }>(sql`SELECT
-    (${options.lane !== "money"} OR (
-      pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
-        SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
-      )
-    ) OR EXISTS (
+  const state = await q.execute<{
+    ordered: boolean;
+  }>(sql`WITH gate AS MATERIALIZED (
+    SELECT EXISTS (
       SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
         AND classid = ((hashtextextended('cubby:household-write', 0) >> 32) & 4294967295)::oid
         AND objid = (hashtextextended('cubby:household-write', 0) & 4294967295)::oid
         AND objsubid = 1 AND granted
-    )) AS ordered,
-    set_config('lock_timeout', ${String(limits.lock)}, true),
-    set_config('statement_timeout', ${String(limits.statement)}, true),
-    set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true),
-    set_config('transaction_timeout', ${String(limits.transaction)}, true)`);
+    ) AS held
+  ) SELECT
+    (${options.lane !== "money"} OR (
+      pg_current_xact_id_if_assigned() IS NULL AND NOT EXISTS (
+        SELECT 1 FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'advisory'
+      )
+    ) OR gate.held) AS ordered,
+    CASE WHEN gate.held THEN current_setting('lock_timeout') ELSE set_config('lock_timeout', ${String(limits.lock)}, true) END,
+    CASE WHEN gate.held THEN current_setting('statement_timeout') ELSE set_config('statement_timeout', ${String(limits.statement)}, true) END,
+    CASE WHEN gate.held THEN current_setting('idle_in_transaction_session_timeout') ELSE set_config('idle_in_transaction_session_timeout', ${String(limits.idle)}, true) END,
+    CASE WHEN gate.held THEN current_setting('transaction_timeout') ELSE set_config('transaction_timeout', ${String(limits.transaction)}, true) END
+    FROM gate`);
   if (!state.rows[0]?.ordered)
     throw new Error(
       "The household write gate must be the transaction's first lock; open householdWrite at the mutation boundary",

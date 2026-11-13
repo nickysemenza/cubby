@@ -2115,6 +2115,24 @@ describe("evidence-facts kernel", () => {
   it.each([0, 3])(
     "releases a gate wait with %i previous conflicts without spending attempts",
     async (conflicts) => {
+      await householdWrite(
+        ctx.db,
+        async (tx) => {
+          const limits = sql`SELECT current_setting('lock_timeout') AS lock, current_setting('transaction_timeout') AS transaction`;
+          const before = await repositoryQueries(tx).execute<{
+            lock: string;
+            transaction: string;
+          }>(limits);
+          await householdWrite(tx, async (nested) => {
+            const after = await repositoryQueries(nested).execute<{
+              lock: string;
+              transaction: string;
+            }>(limits);
+            expect(after.rows).toEqual(before.rows);
+          });
+        },
+        { mode: "background" },
+      );
       const { kernel } = kernelWith();
       const scope = { kind: PURCHASE_SCOPE, key: "ORD-GATE-WAIT" };
       await kernel.append(ctx.db, [charge(scope.key, 100)]);

@@ -319,7 +319,8 @@ worker; it never sleeps while holding the gate. The transaction sets `lock_timeo
 the gate when a Worker dies. Loading, matching, planning and producer calls
 happen before the transaction opens. The lock timeout stays below the transaction
 timeout, including for locked fallback runs, so contention is a retryable lock
-wait rather than a terminated session.
+wait rather than a terminated session. A nested writer that already holds the
+gate retains the outer transaction's timeouts and does not reset its budget.
 
 The fence is `ScopeDirty.seq`. A run reads the scope's `seq` when it claims,
 loads and computes outside any transaction, then in the apply transaction
