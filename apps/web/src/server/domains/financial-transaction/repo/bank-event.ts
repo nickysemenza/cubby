@@ -452,6 +452,23 @@ export const bankEvent = defineReconciler<BankInput>({
       c,
     });
     if (!values) return retained(c);
+    const provenance: Record<string, string> = {};
+    for (const field of bankTransactionWrites.columns) {
+      const decision = assigned(field);
+      if (!decision) continue;
+      let value = decision.kind === "none" ? null : decision.value;
+      if (typeof value === "string" && field === "accountId")
+        value = c.reference("financialAccount", value);
+      if (typeof value === "string" && field === "spendingCategoryId")
+        value = c.reference("spendingCategory", value);
+      Object.assign(values, {
+        [field]:
+          field === "amount" && typeof value === "string"
+            ? BigInt(value)
+            : value,
+      });
+      provenance[field] = decision.id;
+    }
     if (!existing && owner && !owner.acceptedTransactionId) {
       const date = values.transactionDate ?? values.postedDate;
       const candidates = input.candidates.filter(
@@ -511,23 +528,6 @@ export const bankEvent = defineReconciler<BankInput>({
         );
         return retained(c);
       }
-    }
-    const provenance: Record<string, string> = {};
-    for (const field of bankTransactionWrites.columns) {
-      const decision = assigned(field);
-      if (!decision) continue;
-      let value = decision.kind === "none" ? null : decision.value;
-      if (typeof value === "string" && field === "accountId")
-        value = c.reference("financialAccount", value);
-      if (typeof value === "string" && field === "spendingCategoryId")
-        value = c.reference("spendingCategory", value);
-      Object.assign(values, {
-        [field]:
-          field === "amount" && typeof value === "string"
-            ? BigInt(value)
-            : value,
-      });
-      provenance[field] = decision.id;
     }
     c.record(bankTransactionWrites, naturalKey, values, { provenance });
     return c.done();
