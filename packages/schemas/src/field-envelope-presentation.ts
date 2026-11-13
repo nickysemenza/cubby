@@ -33,7 +33,7 @@ export const FIELD_RESET_LABEL = "Let Cubby decide";
 export const FIELD_VETO_LABEL = "Wrong, clear it";
 
 /** Twin of Swift `FieldEnvelope.noneLabel(field:)`. */
-export function fieldNoneLabel(labels?: Labels | null): string {
+function fieldNoneLabel(labels?: Labels | null): string {
   return labels?.none ?? "None";
 }
 

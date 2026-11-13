@@ -24,6 +24,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
+import { DateDisplay } from "~/ui/values/date-display";
 
 type MachineryRef = { entity: Entity; id: string; field?: string };
 
@@ -40,7 +41,7 @@ export function useMachinery(ref: MachineryRef, enabled = true) {
 }
 
 /** Decisions and drift approval for one record, through `machinery.decide`. */
-export function useMachineryActions(ref: MachineryRef) {
+function useMachineryActions(ref: MachineryRef) {
   const decide = useMutation(machineryApi.decide.mutationOptions());
   const approve = useMutation(machineryApi.approveDrift.mutationOptions());
   return {
@@ -70,7 +71,7 @@ export function useMachineryActions(ref: MachineryRef) {
 }
 
 /** A source shortcode as a record link when its prefix names an entity. */
-export function MachinerySource({ code }: { code: string }) {
+function MachinerySource({ code }: { code: string }) {
   const parsed = parseShortcode(code);
   const entity = parsed ? entitySchema.safeParse(parsed.type) : null;
   return entity?.success && isBrowserRoutedEntity(entity.data) ? (
@@ -88,7 +89,7 @@ const etaText = (eta: string | null) =>
  * The stage line: `{Stage} · {waiting|working} for {input} from {actor}`, then
  * position and ETA only when the first gap's actor is a queue or time.
  */
-export function machineryStageText(read: Machinery): string {
+function machineryStageText(read: Machinery): string {
   const first = read.gaps.items[0];
   const queue =
     first?.queue && first.actor !== "you"
@@ -101,6 +102,12 @@ export function machineryStageText(read: Machinery): string {
     queue,
   });
 }
+
+/** Whether the stage line already carries the first gap's input and actor. */
+const stageNamesGap = (read: Machinery) =>
+  read.gaps.items[0] !== undefined &&
+  read.stage !== "ended" &&
+  read.stage !== "done";
 
 /** The panel with its decisions, for record or field scope. */
 export function MachineryPanelFor({
@@ -159,9 +166,21 @@ function MachineryHeader({
       <p className="font-medium text-foreground-strong">
         {machineryStageText(read)}
       </p>
-      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+      <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-muted-foreground">
+        {/* The stage line already names the first gap; this line adds only
+            when it started and its one action. */}
         <span>
-          {first ? machineryGapSentence(first) : MACHINERY_NO_GAP_LABEL}
+          {!first ? (
+            MACHINERY_NO_GAP_LABEL
+          ) : stageNamesGap(read) ? (
+            first.since ? (
+              <>
+                Since <DateDisplay timestamp={first.since} />
+              </>
+            ) : null
+          ) : (
+            machineryGapSentence(first)
+          )}
         </span>
         {action ? (
           <Button
