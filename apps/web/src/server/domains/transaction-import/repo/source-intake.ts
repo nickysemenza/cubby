@@ -3,8 +3,8 @@ import type { RecordSourceTransactionRecordsInput } from "@cubby/schemas/source-
 
 import type { Database } from "~/server/db";
 import { withSnapshotWrite } from "~/server/db/helpers";
+import { planSourceIntake } from "~/server/domains/transaction-import/policy/source-intake-plan";
 
-import { planSourceIntake } from "./source-intake-plan";
 import {
   prepareRows,
   lockAndLoadSourceIntake,

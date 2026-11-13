@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   financialBookingInput,
@@ -17,6 +15,7 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import {
   cents,
+  moneyToMinor,
   minorToMoney,
   nullableMinorToMoney,
   type ShortcodeFor,
@@ -65,8 +64,13 @@ import {
   liveHouseholdSpendingAccount,
   liveHouseholdLoan,
   financialAccountPurchaser,
-  loadAccountPurchaserProofs,
-} from "~/server/domains/financial-account/repo/purchaser";
+} from "~/server/domains/financial-account/policy/purchaser";
+import { loadAccountPurchaserProofs } from "~/server/domains/financial-account/repo/purchaser";
+import { bookingAction as decideBookingAction } from "~/server/domains/financial-transaction/policy/booking-action";
+import {
+  digestValue,
+  freshBookingLineages,
+} from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -91,34 +95,6 @@ import {
   allocateFinancialBookings,
   allocateFreshFinancialBookings,
 } from "./financial-transaction";
-
-/** Preserve persisted JSON fingerprint bytes without a separate encoding buffer. */
-export const digestValue = <T extends object>(value: T) => {
-  const serialized = JSON.stringify(value);
-  return Promise.resolve(
-    createHash("sha256")
-      .update(serialized ?? "")
-      .digest("hex"),
-  );
-};
-/** The caller emits validated canonical JSON without splitting surrogate pairs. */
-export const digestCanonicalEvidenceStream = (
-  writeEvidence: (write: (fragment: string) => void) => void,
-) => {
-  const hash = createHash("sha256");
-  let buffered = '{"evidence":"';
-  writeEvidence((fragment) => {
-    // Escaping is additive across fragments with complete Unicode characters.
-    const escaped = JSON.stringify(fragment).slice(1, -1);
-    if (buffered.length + escaped.length > 32_768) {
-      hash.update(buffered);
-      buffered = escaped;
-    } else buffered += escaped;
-  });
-  hash.update(buffered);
-  hash.update('"}');
-  return Promise.resolve(hash.digest("hex"));
-};
 
 type BookingProjection = Partial<
   Pick<FinancialTransactionDollars, "amount" | "status" | "postedDate">
@@ -318,36 +294,6 @@ async function bookingAction(
         ).map((line) => line.id)
       : [],
   );
-  const vendorLines = graph.lines.filter(
-    (line) =>
-      !line.future &&
-      line.economicRole === "vendor" &&
-      !carriedElsewhere.has(line.id),
-  );
-  if (
-    input.economicRole === "vendor" &&
-    vendorLines.some((line) => line.cost === null)
-  )
-    return constraintViolation(
-      "Finish pricing the existing Expense lines before linking settlement.",
-    );
-  if (
-    input.economicRole === "vendor" &&
-    vendorLines.some((line) => line.lineKind === "unclassified")
-  )
-    return constraintViolation(
-      "Classify the unresolved receipt roles before linking settlement; their amounts may already cover this transaction.",
-    );
-  const negative = row.amount < 0;
-  const matchingLines = vendorLines.filter((line) =>
-    negative
-      ? line.cost! < 0 && line.lineKind === "principal"
-      : line.cost! >= 0 || line.lineKind !== "principal",
-  );
-  const bookedCents = matchingLines.reduce(
-    (sum, line) => sum + cents(line.cost!),
-    0,
-  );
   const previous = graph.target
     ? await getDb(db)
         .select({
@@ -363,25 +309,22 @@ async function bookingAction(
           sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
         )
     : [];
-  const settledCents = cents(previous[0]?.amount ?? 0);
-  const remainingCents = negative
-    ? Math.min(0, bookedCents - settledCents)
-    : Math.max(0, bookedCents - settledCents);
-  const remaining = Math.abs(remainingCents);
-  const amount = Math.abs(cents(row.amount));
-  if (input.economicRole === "vendor" && remaining > 0 && remaining < amount)
-    return constraintViolation(
-      "Existing Expenses cover only part of this transaction. Review the remaining amount and individual lines before booking.",
-    );
-  const action =
-    input.economicRole === "vendor" && remaining >= amount
-      ? "link_existing"
-      : "create_aggregate";
+  const decision = decideBookingAction({
+    economicRole: input.economicRole,
+    transactionAmountMinor: moneyToMinor(row.amount),
+    expenses: graph.lines.map((line) => ({
+      ...line,
+      costMinor: line.cost === null ? null : moneyToMinor(line.cost),
+      carriedElsewhere: carriedElsewhere.has(line.id),
+    })),
+    previouslySettledMinor: moneyToMinor(previous[0]?.amount ?? 0),
+  });
+  if (decision.kind === "refused") return constraintViolation(decision.reason);
   return {
-    action,
-    existingBookedAmount: bookedCents / 100,
-    previouslySettledAmount: settledCents / 100,
-    remainingBookedAmount: remainingCents / 100,
+    action: decision.action,
+    existingBookedAmount: minorToMoney(decision.existingBookedMinor),
+    previouslySettledAmount: minorToMoney(decision.previouslySettledMinor),
+    remainingBookedAmount: minorToMoney(decision.remainingBookedMinor),
   };
 }
 /** Resolve an omitted Vendor and carry inference authority into the booking snapshot. */
@@ -1437,31 +1380,6 @@ export async function bookFreshFinancialTransactions(
     expenseId: expenseRows[index]!.shortcode,
     replayed: false,
   }));
-}
-
-/**
- * The lineage `loadFinancialBookingLineages` reads for bookings whose only
- * rows are the inserted aggregates: no attributions or source claims, and
- * each row as the insert returned it (every column, in table order).
- */
-function freshBookingLineages<
-  Row extends { id: string; bookingTransactionCode: string | null },
->(reviews: readonly FinancialBookingPreview[], rows: readonly Row[]) {
-  const ordered = [...rows].sort((left, right) =>
-    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
-  );
-  return new Map(
-    reviews.map((review) => [
-      review.transactionId,
-      {
-        lines: ordered.filter(
-          (row) => row.bookingTransactionCode === review.transactionId,
-        ),
-        attributions: [],
-        sourceClaims: [],
-      },
-    ]),
-  );
 }
 
 export async function loadFinancialBookingLineage(

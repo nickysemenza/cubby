@@ -5,7 +5,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import type { ChargeRef } from "~/server/domains/transaction-import/repo/statement-input";
+import type { ChargeRef } from "~/server/domains/transaction-import/policy/charge-identity";
 
 // Only the facts used by twin grouping and its ownership fence.
 const twinFacts = sql`(

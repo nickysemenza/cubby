@@ -6,7 +6,6 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sourceTransactionRecordProviderStatus } from "@cubby/schemas/source-transaction-record";
-import type { StatementSuggestionOut } from "@cubby/schemas/statement-suggestion";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql, type SQL } from "drizzle-orm";
@@ -20,6 +19,10 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
+import {
+  chargeId,
+  type ChargeRef,
+} from "~/server/domains/transaction-import/policy/charge-identity";
 import { sourceObservationFacts } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
   chargeKeyOf,
@@ -185,12 +188,6 @@ export const statementHoldAccounts = async (
       WHERE ${notDeleted("ft")} AND ft.status = ${financialTransactionStatus.enum.pending}
     `)
   ).rows.map((row) => String(row.id));
-
-export type ChargeRef = Pick<StatementSuggestionOut, "source" | "chargeKey">;
-
-/** Stable statement identity shared by individual and transfer-pair proposals. */
-export const chargeId = (charge: ChargeRef): string =>
-  `${charge.source}:${charge.chargeKey}`;
 
 /** Shared preview input for a charge's canonical observation. */
 export const previewRowFor = (

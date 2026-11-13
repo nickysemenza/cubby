@@ -41,16 +41,16 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
-import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
-
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import {
   previewFinancialBooking,
   commitFinancialBooking,
   loadFinancialBookingLineage,
-  digestValue,
-} from "./financial-booking";
+} from "~/server/domains/financial-transaction/repo/financial-booking";
+import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
+
 import {
   previewFinancialSpending,
   commitFinancialSpending,

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
-} from "./source-transaction-record-identity";
+} from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
 
 /**
  * Frozen input/output pairs. The values are synthetic on purpose — these

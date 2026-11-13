@@ -2,13 +2,13 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { SourceIdentityResolution } from "@cubby/schemas/source-occurrence-fields";
 import { z } from "zod";
 
-import {
+import type {
   financialAccount,
   financialEvidenceAlias,
   financialTransaction,
   sourceOccurrence,
   sourceTransactionRecord,
-} from "~/server/db/schema";
+} from "~/server/db/retained-tables";
 import { constraintViolation } from "~/server/errors/app-error";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 

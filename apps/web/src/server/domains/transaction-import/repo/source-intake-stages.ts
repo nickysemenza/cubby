@@ -19,11 +19,19 @@ import {
   financialEvidenceAlias,
 } from "~/server/db/schema";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import type {
+  Identity,
+  ObservationRef,
+  OwnerRef,
+  PreparedRow,
+  SourceIntakeLoaded,
+  SourceIntakePlan,
+} from "~/server/domains/transaction-import/policy/source-intake-plan";
+import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
 import {
   sourceObservationColumns,
   sourceObservationsForPage,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
@@ -38,14 +46,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
-import type {
-  Identity,
-  ObservationRef,
-  OwnerRef,
-  PreparedRow,
-  SourceIntakeLoaded,
-  SourceIntakePlan,
-} from "./source-intake-plan";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
 

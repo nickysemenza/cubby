@@ -6,13 +6,12 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionChoiceResult } from "~/server/ai/decision-model";
-
+import { buildPurchaseImportPlan } from "~/server/domains/purchase-import/policy/import-plan";
 import {
-  buildPurchaseImportPlan,
   explicitLineDecisions,
   lineExternalIdentity,
   purchaseDateFor,
-} from "./writer-decisions";
+} from "~/server/domains/purchase-import/repo/writer-decisions";
 
 const SYNTHETIC_PRODUCT_ID = parseEntityId(
   "product",

@@ -22,12 +22,12 @@ import {
   ledgerParty,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { sameLineTitle } from "~/server/domains/purchase-import/policy/import-lines";
 import {
   isLiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
-import { sameLineTitle } from "~/server/domains/purchase-import/repo/writer-policy";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

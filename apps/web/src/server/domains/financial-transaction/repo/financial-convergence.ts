@@ -42,7 +42,14 @@ import {
   paymentDateWindowSql,
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import {
+  commitFinancialBooking,
+  bookingGraph,
+  loadFinancialBookingLineage,
+  previewFinancialBooking,
+} from "~/server/domains/financial-transaction/repo/financial-booking";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { findSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
@@ -60,13 +67,6 @@ import {
   textArraySomeSql,
 } from "~/server/lib/name-alias-match";
 
-import {
-  commitFinancialBooking,
-  bookingGraph,
-  digestValue,
-  loadFinancialBookingLineage,
-  previewFinancialBooking,
-} from "./financial-booking";
 import {
   previewFinancialSpending,
   commitFinancialSpending,

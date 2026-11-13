@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { decideLineWrite, matchCompletePaymentSet } from "./writer-policy";
+import {
+  decideLineWrite,
+  matchCompletePaymentSet,
+} from "~/server/domains/purchase-import/policy/import-lines";
 
 describe("purchase import writer policy", () => {
   const lines = [

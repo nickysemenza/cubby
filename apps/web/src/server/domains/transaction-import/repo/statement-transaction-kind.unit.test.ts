@@ -7,7 +7,7 @@ import {
   kindAgreed,
   ownAccountNamed,
   statementTransactionKind,
-} from "./statement-transaction-kind";
+} from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 
 describe("statementTransactionKind", () => {
   it("recognizes earned bank interest filed under a generic income category", () => {

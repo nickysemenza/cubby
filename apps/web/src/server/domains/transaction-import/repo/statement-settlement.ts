@@ -13,13 +13,13 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
-import { suggestionField } from "~/server/domains/transaction-import/repo/statement-charge";
-import { statementAttachCandidate } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   type ChargeRef,
   chargeId,
-  type StatementSuggestionScope,
-} from "~/server/domains/transaction-import/repo/statement-input";
+} from "~/server/domains/transaction-import/policy/charge-identity";
+import { suggestionField } from "~/server/domains/transaction-import/repo/statement-charge";
+import { statementAttachCandidate } from "~/server/domains/transaction-import/repo/statement-charge";
+import { type StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import {
   footprintAffects,
   STATEMENT_PAGE_RUN_CREATES,

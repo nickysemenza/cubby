@@ -65,12 +65,29 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
-  liveHouseholdSpendingAccount,
   liveHouseholdLoan,
   financialAccountPurchaser,
-  loadAccountPurchaserProofs,
-} from "~/server/domains/financial-account/repo/purchaser";
+} from "~/server/domains/financial-account/policy/purchaser";
+import { loadAccountPurchaserProofs } from "~/server/domains/financial-account/repo/purchaser";
+import {
+  digestValue,
+  digestCanonicalEvidenceStream,
+} from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import {
+  spendingBlocker,
+  issuerCardFee,
+} from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
+import {
+  bookFreshFinancialTransactions,
+  bookLockedFinancialTransactions,
+  bookingGraph,
+  type KnownBookingFacts,
+  bookingGraphs,
+  loadFinancialBookingLineage,
+  loadFinancialBookingLineages,
+  previewFinancialBooking,
+} from "~/server/domains/financial-transaction/repo/financial-booking";
 import {
   financialSourceRefsFor,
   financialSourceRefsIncluding,
@@ -78,14 +95,13 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { retainedSettlementDiscoveryCouldMatch } from "~/server/domains/purchase-import/policy/retained-payments";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";
 import {
   planPurchaseRetainedSettlement,
   prepareRetainedSettlementDiscovery,
-  retainedSettlementDiscoveryCouldMatch,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
-import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-effective-movement";
 import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { mintNamesInLayer, resolveNames } from "~/server/entity-kernel/resolve";
 import { AppError, createAppError } from "~/server/errors/app-error";
@@ -96,19 +112,6 @@ import {
   jsonSnapshot,
   writeCanonicalJson,
 } from "~/server/lib/canonical-json";
-
-import {
-  bookFreshFinancialTransactions,
-  bookLockedFinancialTransactions,
-  bookingGraph,
-  type KnownBookingFacts,
-  bookingGraphs,
-  digestValue,
-  digestCanonicalEvidenceStream,
-  loadFinancialBookingLineage,
-  loadFinancialBookingLineages,
-  previewFinancialBooking,
-} from "./financial-booking";
 
 function refuse(message: string): never {
   throw createAppError("CONSTRAINT_VIOLATION", message);
@@ -136,84 +139,6 @@ const spendingRequestBoundary = z.union([
     source: financialSpendingSource,
   }),
 ]);
-
-function spendingBlocker(input: {
-  facts: Awaited<ReturnType<typeof spendingFacts>>;
-  advice: Request["advice"];
-  vendorResolved: boolean;
-  ambiguous: boolean;
-}) {
-  const { facts, advice } = input;
-  if (issuerCardFee(facts) && !input.vendorResolved)
-    return "The card account needs a live issuer Vendor before booking this fee.";
-  const escrow =
-    liveHouseholdLoan(facts.account) &&
-    facts.source.kind === "purchase" &&
-    facts.source.amount > 0 &&
-    statementEffectiveMovement({
-      providerAmount: facts.source.amount,
-      description: facts.source.rawDescription,
-      merchant: facts.source.merchant,
-      sourceCategory: null,
-      loan: { providerVendorNames: [], proven: true },
-    }).movementClass === "escrow_disbursement" &&
-    advice?.escrowDisbursement === true;
-  const escrowRefund =
-    liveHouseholdLoan(facts.account) &&
-    facts.source.kind === "refund" &&
-    facts.source.amount < 0 &&
-    statementEffectiveMovement({
-      providerAmount: facts.source.amount,
-      description: facts.source.rawDescription,
-      merchant: facts.source.merchant,
-      sourceCategory: null,
-      loan: { providerVendorNames: [], proven: true },
-    }).movementClass === "escrow_refund";
-  if (facts.account.identity.kind === "loan" && !escrow && !escrowRefund)
-    return "Only a supported household loan escrow disbursement can book spending.";
-  if (
-    !facts.purchaser &&
-    !liveHouseholdSpendingAccount(facts.account) &&
-    !escrow &&
-    !escrowRefund
-  )
-    return "A confirmed member-owned account or household card, bank or stored-value account is required before booking spending.";
-  if (
-    !(facts.source.transactionDate ?? facts.source.postedDate) ||
-    !facts.source.sourceRefs.length
-  )
-    return "A dated, stable source identity is required before booking spending.";
-  if (input.ambiguous)
-    return "The merchant matches competing Vendors; review its identity.";
-  if (
-    !input.vendorResolved &&
-    (!advice?.vendorName ||
-      advice.vendorConfidence !== "high" ||
-      advice.counterparty !== "business")
-  )
-    return "The merchant needs a supported business name before a Vendor can be created.";
-  if (
-    !issuerCardFee(facts) &&
-    (advice?.counterparty === "person" ||
-      advice?.counterparty === "payment_processor")
-  )
-    return "The counterparty does not identify a business Vendor.";
-  return null;
-}
-
-/** Standard card fee descriptions identify the issuer, not a merchant. */
-function issuerCardFee(facts: Awaited<ReturnType<typeof spendingFacts>>) {
-  if (
-    facts.account.identity.kind !== "credit_card" ||
-    facts.source.kind !== "fee"
-  )
-    return false;
-  return [facts.source.merchant, facts.source.rawDescription].some((value) =>
-    /^(foreign transaction fee|annual membership fee|renewal membership fee|membership fee|return payment fee|monthly service fee)$/i.test(
-      value?.trim() ?? "",
-    ),
-  );
-}
 
 const resolveSpendingVendors = (db: Database, names: readonly string[]) =>
   resolveNames(
