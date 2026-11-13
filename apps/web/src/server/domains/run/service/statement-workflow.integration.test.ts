@@ -99,15 +99,16 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   vi.setSystemTime(now);
   const advice = vi
     .spyOn(spendingAdvice, "adviseSpending")
-    .mockImplementation(async (_db, { judgment }) =>
-      financialSpendingAdvice.parse({
+    .mockImplementation(async (_db, { judgment }) => ({
+      advice: financialSpendingAdvice.parse({
         spendingCategoryId: category.id,
         categoryConfidence: "high",
         vendorName: judgment.create?.merchant,
         vendorConfidence: "high",
         counterparty: "business",
       }),
-    );
+      answers: {},
+    }));
   let refused = false;
   const admitted: string[] = [];
   let batched = false;

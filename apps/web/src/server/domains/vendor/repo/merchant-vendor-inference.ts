@@ -11,6 +11,7 @@ import {
   parseShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
+import { statementMerchantKey } from "@cubby/schemas/statement-answers";
 import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
@@ -20,9 +21,8 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { possibleVendorLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 
-/** Lowercase, trim and collapse whitespace. Punctuation and words stay intact. */
-export const normalizeMerchant = (merchant: string): string =>
-  merchant.trim().replace(/\s+/g, " ").toLowerCase();
+/** The statement merchant key; its SQL twin is `btrim(regexp_replace(lower(...)))` below. */
+export const normalizeMerchant = statementMerchantKey;
 
 const noInference = (): MerchantVendorInference => ({
   status: "none",
