@@ -570,3 +570,124 @@ it("inspects only aggregate projections under PostgreSQL read-only enforcement",
     ).toBe(0);
   });
 });
+
+it("lets current stored authority defeat a synthesized review in both directions", async () => {
+  await withMigrationDatabase(async (client, databaseUrl) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    const { generateShortcode } = await import("@cubby/shared");
+    for (const n of [82, 83]) {
+      const code = generateShortcode("productCategory");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'productCategory',$2)`,
+        [cutoverId(n), code],
+      );
+      await client.query(
+        `INSERT INTO "ProductCategory" (id,shortcode,name) VALUES ($1,$2,'Synthetic category')`,
+        [cutoverId(n), code],
+      );
+    }
+    for (const [n, suggestion, authority] of [
+      [80, 87, "automatic"],
+      [81, 85, null],
+    ]) {
+      const code = generateShortcode("product");
+      await client.query(
+        `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
+        [cutoverId(Number(n)), code],
+      );
+      await client.query(
+        `INSERT INTO "Product" (id,shortcode,name,"categoryId") VALUES ($1,$2,'Synthetic authority product',$3)`,
+        [cutoverId(Number(n)), code, cutoverId(83)],
+      );
+      await client.query(
+        `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update',jsonb_build_object('categoryId',jsonb_build_object('to',$2::text)),'synthetic-cutover',$3,'2026-02-01')`,
+        [cutoverId(Number(n)), cutoverId(83), authority],
+      );
+      await client.query(
+        `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue","confirmedValue",model,decisions,"acceptanceReceipt","createdAt","updatedAt") VALUES ($1,$2,'field','{}','{}','product',$3,'categoryId',to_jsonb($4::text),jsonb_build_object('present',true,'value',$4::text),'synthetic-model','[]','{"mode":"member"}','2026-01-01','2026-01-02')`,
+        [
+          cutoverId(Number(suggestion)),
+          `synthetic:authority:${n}`,
+          cutoverId(Number(n)),
+          cutoverId(82),
+        ],
+      );
+    }
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT kind,value FROM "Decision" WHERE subject=$1 AND field='categoryId' ORDER BY at DESC,id DESC LIMIT 1`,
+          [`product:${cutoverId(80)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "release", value: null }]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind,value FROM "Decision" WHERE subject=$1 AND field='categoryId' ORDER BY at DESC,id DESC LIMIT 1`,
+          [`product:${cutoverId(81)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "set", value: cutoverId(83) }]);
+    const { createDatabase } =
+      await import("../src/server/db/database-runtime");
+    const { relationalSchema } = await import("../src/server/db/schema");
+    const { tracePool } = await import("../src/server/db/db-pg-tracing");
+    const pool = tracePool(
+      new Pool({ connectionString: databaseUrl, max: 4 }),
+      "strong",
+    );
+    const q = drizzle({ client: pool, relations: relationalSchema });
+    const database = createDatabase(() => ({
+      client: q,
+      withConnection: async (fn) => {
+        const c = await pool.connect();
+        try {
+          return await fn(drizzle({ client: c, relations: relationalSchema }));
+        } finally {
+          c.release();
+        }
+      },
+    }));
+    try {
+      const { createKernel } = await import("../src/server/kernel/api");
+      const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
+      const kernel = createKernel(KERNEL_MODULES);
+      const result = await kernel.reconcileNow(database, [
+        { kind: "fields", key: `product:${cutoverId(80)}` },
+        { kind: "fields", key: `product:${cutoverId(81)}` },
+      ]);
+      expect(result.filter((r) => r.status === "failed")).toEqual([]);
+      expect(
+        (
+          await client.query(
+            `SELECT "categoryId" FROM "Product" WHERE id IN ($1,$2) ORDER BY id`,
+            [cutoverId(80), cutoverId(81)],
+          )
+        ).rows,
+      ).toEqual([{ categoryId: cutoverId(83) }, { categoryId: cutoverId(83) }]);
+    } finally {
+      await pool.end();
+    }
+  });
+});
+
+it("matches the registered model feature envelope catalog", async () => {
+  const { modelAsks } = await import("../src/server/ai/model-asks");
+  const { writeFile } = await import("node:fs/promises");
+  const list = modelAsks.map((a) => ({
+    feature: a.feature,
+    promptVersion: a.promptVersion,
+    policy: a.policy,
+  }));
+  await writeFile(
+    new URL("../../../artifacts/review-model-asks.json", import.meta.url),
+    JSON.stringify(list),
+  );
+  expect(list.length).toBe(37);
+});
