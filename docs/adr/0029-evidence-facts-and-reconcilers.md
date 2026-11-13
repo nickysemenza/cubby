@@ -85,7 +85,8 @@ stored in one short transaction.
 | `quality`       | catalog | one record of an entity that declares checks     | nothing; its output is gaps                                                                  |
 
 Each reconciler declares the tables and columns it reads and the tables and
-columns it writes. The generator rejects two reconcilers that write one column,
+columns it writes. The kernel's registry build, checked by a unit test in CI,
+rejects two reconcilers that write one column,
 a `fields` scope that claims a column another reconciler owns, and a cycle in
 the read-write graph between scope kinds. Only the kernel's apply step writes a
 column a reconciler owns; the repository boundary rejects any other write.
@@ -241,7 +242,10 @@ writes the output, the scope's `ScopeDep` rows and `ScopeState`, verifies the
 claim token, and deletes the `ScopeDirty` row only at that `seq`. A mutation
 that commits later raises `seq` again and the scope runs again.
 
-A conflict on `seq` or `rev` does not count as a failed attempt. After three
+Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
+then the `ScopeDirty` row, which is the order a mutation takes them in. A
+conflict on `seq` or `rev`, a deadlock or a serialization failure does not
+count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
 transaction: it takes the gate when the lane is money, locks the dirty row,
 then loads, computes and applies in that one bounded transaction. Producer
@@ -392,7 +396,7 @@ evidence is viewer-owned); credentials are scrubbed; a raw error is capped at
 16 KB and the response at 256 KB. Labels come from the twin presentation
 owners; no client derives a stage or humanizes a key.
 
-The capability is declared on the entity (ADR 0025 item 11) and supplies the
+The capability is declared in the entity's domain module and supplies the
 record-to-scope membership, the stage and actor SQL projections for filters
 and sorts, and a batched scaffold binding that adds stage, actor, first-gap
 label and ETA to a page of records with no per-row reads (ADR 0024).
