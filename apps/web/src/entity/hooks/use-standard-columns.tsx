@@ -364,7 +364,7 @@ export function useStandardColumns<TData extends BaseListRow>({
               mappingsFor,
               {
                 id: mappingsId,
-                enableSorting: true,
+                enableSorting: false,
               },
             )
           : null,
@@ -466,36 +466,44 @@ export function useStandardColumns<TData extends BaseListRow>({
         add(withManifestFilter(identityDefinition, titleField));
         add(
           withManifestFilter(
-            columnHelper.display({
-              id: "machineryStage",
-              header: "Stage",
-              enableSorting: false,
-              meta: {
-                className: "w-52",
-                mobile: { slot: "meta", priority: 10 },
-              },
-              cell: ({ row }) => {
+            columnHelper.accessor(
+              (row) => {
                 const read = machineryListFields.safeParse(
-                  readPathValue(row.original, "machinery"),
+                  readPathValue(row, "machinery"),
                 );
-                if (!read.success) return null;
-                const work = read.data;
-                return (
-                  <span
-                    className="break-words whitespace-normal"
-                    title={work.firstGap ?? undefined}
-                  >
-                    {kernelStageLabel(work.stage)}
-                    {work.nextActor
-                      ? ` · ${kernelActorLabel(work.nextActor)}`
-                      : ""}
-                    {work.firstGap
-                      ? ` · ${work.firstGap.split(/\s+/).slice(0, 6).join(" ")}`
-                      : ""}
-                  </span>
-                );
+                return read.success ? read.data.stage : null;
               },
-            }),
+              {
+                id: "machineryStage",
+                header: "Stage",
+                enableSorting: true,
+                meta: {
+                  className: "w-52",
+                  mobile: { slot: "meta", priority: 10 },
+                },
+                cell: ({ row }) => {
+                  const read = machineryListFields.safeParse(
+                    readPathValue(row.original, "machinery"),
+                  );
+                  if (!read.success) return null;
+                  const work = read.data;
+                  return (
+                    <span
+                      className="break-words whitespace-normal"
+                      title={work.firstGap ?? undefined}
+                    >
+                      {kernelStageLabel(work.stage)}
+                      {work.nextActor
+                        ? ` · ${kernelActorLabel(work.nextActor)}`
+                        : ""}
+                      {work.firstGap
+                        ? ` · ${work.firstGap.split(/\s+/).slice(0, 6).join(" ")}`
+                        : ""}
+                    </span>
+                  );
+                },
+              },
+            ),
             "machineryStage",
           ),
         );
@@ -513,40 +521,58 @@ export function useStandardColumns<TData extends BaseListRow>({
               : `machinery${key[0]?.toUpperCase()}${key.slice(1)}`;
           add(
             withManifestFilter(
-              columnHelper.display({
-                id,
-                header: machineryColumnLabel(key),
-                enableSorting: key === "actor",
-                meta: { className: "w-40" },
-                cell: ({ row }) => {
+              columnHelper.accessor(
+                (row) => {
                   const read = machineryListFields.safeParse(
-                    readPathValue(row.original, "machinery"),
+                    readPathValue(row, "machinery"),
                   );
                   if (!read.success) return null;
                   const work = read.data;
-                  const value =
-                    key === "gap"
+                  return key === "actor"
+                    ? work.nextActor
+                    : key === "gap"
                       ? work.firstGap
-                      : key === "actor"
-                        ? work.nextActor
-                          ? kernelActorLabel(work.nextActor)
-                          : null
-                        : key === "attempts"
-                          ? String(work.attempts)
-                          : key === "cost"
-                            ? machineryCostLabel(work.costMicros)
-                            : work.nextActor === "cubby" ||
-                                work.nextActor === "agent" ||
-                                work.nextActor === "time"
-                              ? (work.eta ?? "ETA unknown")
-                              : null;
-                  return (
-                    <span className="break-words whitespace-normal tabular-nums">
-                      {value ?? "—"}
-                    </span>
-                  );
+                      : key === "attempts"
+                        ? work.attempts
+                        : key === "cost"
+                          ? work.costMicros
+                          : work.eta;
                 },
-              }),
+                {
+                  id,
+                  header: machineryColumnLabel(key),
+                  enableSorting: key === "actor",
+                  meta: { className: "w-40" },
+                  cell: ({ row }) => {
+                    const read = machineryListFields.safeParse(
+                      readPathValue(row.original, "machinery"),
+                    );
+                    if (!read.success) return null;
+                    const work = read.data;
+                    const value =
+                      key === "gap"
+                        ? work.firstGap
+                        : key === "actor"
+                          ? work.nextActor
+                            ? kernelActorLabel(work.nextActor)
+                            : null
+                          : key === "attempts"
+                            ? String(work.attempts)
+                            : key === "cost"
+                              ? machineryCostLabel(work.costMicros)
+                              : work.nextActor === "cubby" ||
+                                  work.nextActor === "agent" ||
+                                  work.nextActor === "time"
+                                ? (work.eta ?? "ETA unknown")
+                                : null;
+                    return (
+                      <span className="break-words whitespace-normal tabular-nums">
+                        {value ?? "—"}
+                      </span>
+                    );
+                  },
+                },
+              ),
               id,
             ),
           );
