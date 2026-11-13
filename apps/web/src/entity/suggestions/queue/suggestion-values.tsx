@@ -11,7 +11,7 @@ import type {
 } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import type { TransferPairJudgment } from "@cubby/schemas/transfer-pair-suggestion";
-import { humanize, mapRecord } from "@cubby/shared";
+import { mapRecord } from "@cubby/shared";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { cn } from "cn";
 import { match } from "ts-pattern";
@@ -46,6 +46,12 @@ export const FAMILY_CHIPS = suggestionListFamily.options.map((family) => ({
   label: suggestionReviewFamilies[family].label,
 }));
 
+const STRENGTH_LABEL = {
+  strong: "Strong",
+  medium: "Medium",
+  weak: "Weak",
+} as const;
+
 const STRENGTH_BARS = { strong: 3, medium: 2, weak: 1 } as const;
 
 /** Strength as three bars with its word for assistive tech and hover. */
@@ -54,7 +60,7 @@ export function StrengthMark({ strength }: { strength: SuggestionStrength }) {
   return (
     <span
       className="inline-flex items-center gap-1.5"
-      title={`${humanize(strength)} evidence`}
+      title={`${STRENGTH_LABEL[strength]} evidence`}
     >
       <span aria-hidden className="inline-flex gap-0.5">
         {[1, 2, 3].map((bar) => (
@@ -68,7 +74,7 @@ export function StrengthMark({ strength }: { strength: SuggestionStrength }) {
         ))}
       </span>
       <span className="text-xs text-muted-foreground">
-        {humanize(strength)}
+        {STRENGTH_LABEL[strength]}
       </span>
     </span>
   );

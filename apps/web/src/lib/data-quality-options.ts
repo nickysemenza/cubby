@@ -3,11 +3,11 @@ import type { dataQualityStatus } from "@cubby/schemas/data-quality";
 type DataQualityStatus = (typeof dataQualityStatus.options)[number];
 
 const DATA_QUALITY_LABELS = {
-  complete: "Complete",
-  complete_with_exceptions: "Complete with exceptions",
-  needs_data: "Needs data",
-  defect: "Defect",
-  not_assessed: "Not assessed",
+  complete: "Done",
+  complete_with_exceptions: "Done",
+  needs_data: "Needs you",
+  defect: "Stuck",
+  not_assessed: "Waiting",
 } satisfies Record<DataQualityStatus, string>;
 
 /** The status label a quality value shows beside (or, when unscored, instead of) its score. */

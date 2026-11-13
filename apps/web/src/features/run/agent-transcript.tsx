@@ -4,7 +4,6 @@ import type {
   AgentConversationSettlement,
 } from "@cubby/schemas/agent-conversation";
 import { contextBreakdownSchema } from "@cubby/schemas/context-breakdown";
-import { humanize } from "@cubby/shared";
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowsInLineVerticalIcon } from "@phosphor-icons/react/dist/csr/ArrowsInLineVertical";
 import { BellIcon } from "@phosphor-icons/react/dist/csr/Bell";
@@ -407,7 +406,8 @@ function SettlementLine({
         Settled {settlement.operationId}
       </TraceTitle>
       <TraceDescription>
-        {settlement.reason ?? humanize(settlement.outcome)}
+        {settlement.reason ??
+          (settlement.outcome === "done" ? "Done" : "Unanswered")}
       </TraceDescription>
     </TraceLine>
   );

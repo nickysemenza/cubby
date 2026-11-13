@@ -7,7 +7,6 @@ import type {
   ReferentialLivenessViolation,
   RelationshipProvenance,
 } from "@cubby/schemas/entity-integrity";
-import { humanize } from "@cubby/shared";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
 import { HeartbeatIcon } from "@phosphor-icons/react/dist/csr/Heartbeat";
 import { PathIcon } from "@phosphor-icons/react/dist/csr/Path";
@@ -247,17 +246,7 @@ function PhysicalRelationshipGraph({ catalog }: { catalog: IntegrityCatalog }) {
   );
 }
 
-/**
- * Every `Entity` is browser-routed since ledger parties and transfers gained
- * routes, so the old de-camel-case fallback is unreachable and TypeScript
- * narrows it to `never`. The guard stays — a future route-less entity should
- * get a readable label rather than crash — but it reads the roster through a
- * widened lookup instead of a dead else branch.
- */
-const entityLabel = (entity: Entity) => {
-  if (isBrowserRoutedEntity(entity)) return entities[entity].label;
-  return humanize(String(entity));
-};
+const entityLabel = (entity: Entity) => entities[entity].label;
 
 /** One step of an FK path (column plus direction) — a dense inline token. */
 function PathStepChip({ children }: { children: ReactNode }) {

@@ -7,7 +7,7 @@ import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import { dateTime } from "../codec";
 import {
-  EMAIL_IMPORT_OUTCOME_LABEL,
+  EMAIL_IMPORT_OUTCOME_DETAIL_LABEL,
   EMAIL_LINK_STATE_LABEL,
   emailImportOutcome,
   emailImportOutcomeDetail,
@@ -126,7 +126,7 @@ const IMPORT_OUTCOME_PRESENTATION = {
 } satisfies Record<z.infer<typeof emailImportOutcome>, OptionPresentation>;
 const importOutcomeOptions = emailImportOutcome.options.map((value) => ({
   value,
-  label: EMAIL_IMPORT_OUTCOME_LABEL[value],
+  label: EMAIL_IMPORT_OUTCOME_DETAIL_LABEL[value],
   ...IMPORT_OUTCOME_PRESENTATION[value],
 }));
 

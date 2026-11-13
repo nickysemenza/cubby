@@ -4,7 +4,7 @@ import type {
   MailCoverageRow,
   MailCoverageView,
 } from "@cubby/schemas/mail-coverage";
-import { humanize } from "@cubby/shared";
+import { mailCoverageLabel } from "@cubby/schemas/mail-coverage";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
@@ -133,7 +133,7 @@ function SenderCoverageDetails({
           ["Sender", sender.sender],
           ["Mailbox", mailboxName(sender.mailboxId)],
           ["Historical search", sender.query],
-          ["Search status", humanize(sender.state)],
+          ["Search status", mailCoverageLabel(sender.state)],
           [
             "Completed",
             sender.completedAt ? (
@@ -290,7 +290,7 @@ function DiscoveryCoverage({
                 <EntityRefLink
                   entity="run"
                   id={id}
-                  name={humanize(row.original.runStatus ?? "running")}
+                  name={mailCoverageLabel(row.original.runStatus ?? "running")}
                 />
               ) : (
                 "—"
@@ -353,7 +353,9 @@ function DiscoveryCoverage({
                         key="run"
                         entity="run"
                         id={row.original.runId}
-                        name={humanize(row.original.runStatus ?? "running")}
+                        name={mailCoverageLabel(
+                          row.original.runStatus ?? "running",
+                        )}
                       />
                     ) : (
                       "—"
@@ -386,7 +388,7 @@ function DiscoveryCoverage({
               id: "attribution",
               header: "Attribution",
               cell: ({ getValue }) => (
-                <Badge variant="outline">{humanize(getValue())}</Badge>
+                <Badge variant="outline">{mailCoverageLabel(getValue())}</Badge>
               ),
             }),
           );
@@ -404,7 +406,7 @@ function DiscoveryCoverage({
                 MailCoverage["senderCoverage"][number]
               >({ mobile: { slot: "subtitle", priority: 0 } }),
               cell: ({ getValue }) => (
-                <Badge variant="outline">{humanize(getValue())}</Badge>
+                <Badge variant="outline">{mailCoverageLabel(getValue())}</Badge>
               ),
             }),
           );
@@ -988,7 +990,7 @@ function controlledStatus(row: MailCoverageRow): string {
   if (control.imports.paused > 0) return "Import paused";
   if (control.imports.failed > 0) return "Import failed";
   if (control.imports.needsReview > 0) return "Needs review";
-  return `Search ${humanize(control.status).toLowerCase()}`;
+  return `Search ${mailCoverageLabel(control.status).toLowerCase()}`;
 }
 
 function ControlledRunStatus({ row }: { row: MailCoverageRow }) {
@@ -1001,11 +1003,11 @@ function ControlledRunStatus({ row }: { row: MailCoverageRow }) {
       <span>
         {controlled.queued
           ? "Waiting for active work"
-          : `Search ${humanize(controlled.status).toLowerCase()}`}
+          : `Search ${mailCoverageLabel(controlled.status).toLowerCase()}`}
       </span>
       {controlled.phase ? (
         <span className="text-muted-foreground">
-          {humanize(controlled.phase)}
+          {mailCoverageLabel(controlled.phase)}
         </span>
       ) : null}
       <span>

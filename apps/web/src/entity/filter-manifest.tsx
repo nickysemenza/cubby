@@ -2,7 +2,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
 import { filterFieldLabel } from "@cubby/schemas/filter-sentinel-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import type { QueryClient } from "@tanstack/react-query";
 import { match } from "ts-pattern";
 
@@ -299,7 +299,7 @@ const subtreeControl = (
   if (!spec.subtree) return undefined;
   const toggle = specs.find((candidate) => candidate.columnId === spec.subtree);
   return {
-    label: toggle?.label ?? humanize(spec.subtree),
+    label: toggle?.label ?? "Include descendants",
     default: spec.subtreeDefault !== false,
   };
 };

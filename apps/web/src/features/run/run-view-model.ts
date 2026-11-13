@@ -418,9 +418,9 @@ export function runOverview(
 /* ——— Decisions ——— */
 
 export const DECISION_STATUS_LABEL = {
-  pending: "Needs review",
-  applied: "Applied",
-  rejected: "Rejected",
-  superseded: "Replaced",
-  resolved: "Review complete",
+  pending: "Needs you",
+  applied: "Done",
+  rejected: "Ended",
+  superseded: "Ended",
+  resolved: "Done",
 } as const satisfies Record<RunDecisionStatus, string>;

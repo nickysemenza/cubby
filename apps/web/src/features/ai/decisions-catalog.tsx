@@ -1,7 +1,6 @@
 import type { DecisionCatalogRow } from "@cubby/schemas/ai";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import type { ListGroupSummary } from "@cubby/schemas/pagination";
-import { humanize } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -293,7 +292,7 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
           <p className="text-muted-foreground">
             A live roster of up to {formatCount(row.roster.maxCandidates)}{" "}
             {row.roster.entity
-              ? `${humanize(row.roster.entity).toLowerCase()} records`
+              ? `${(Object.entries(entityRoster).find(([key]) => key === row.roster?.entity)?.[1].singular ?? "Candidate").toLowerCase()} records`
               : "candidates"}{" "}
             chosen per record; Try shows a real one.
           </p>
