@@ -233,7 +233,7 @@ it("carries held values, paid results, redirects and every accepted money row", 
           [cutoverId(41)],
         )
       ).rows,
-    ).toEqual([{ receipt: null, sequence: null }]);
+    ).toEqual([{ receipt: null, sequence: 0 }]);
     expect(
       (
         await client.query(
