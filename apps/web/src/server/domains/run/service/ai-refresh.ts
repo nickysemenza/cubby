@@ -13,11 +13,9 @@ import {
   fieldSuggestionContextKeys,
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
-import { undecidedFieldValue } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef, runEntityId } from "@cubby/schemas/identifiers";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -43,7 +41,6 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refresh-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
@@ -65,8 +62,6 @@ import {
   makeSweepSuggestion,
   publishSweepSuggestions,
 } from "./suggestion-sweep";
-
-const log = createLogger("ai-refresh");
 
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
@@ -266,111 +261,6 @@ async function currentAiRefreshActivation(db: Database) {
   )
     return null;
   return current;
-}
-
-/**
- * Field automation's one scheduler: canonical background evaluations of saved
- * records, prepared from the saved row. `populated` admits a field whose value
- * Cubby itself holds; the caller has already established that authority.
- */
-export function fieldEvaluationScheduler(
-  db: Database,
-  targets: readonly FieldTarget[],
-  ports: AiRefreshPorts = {},
-) {
-  let activation: ReturnType<typeof currentAiRefreshActivation> | undefined;
-  let records:
-    | Promise<Awaited<ReturnType<typeof loadRecords>> | null>
-    | undefined;
-  const requests = targets.flatMap((target) => {
-    const request = fieldReadRequest(target);
-    return request ? [request] : [];
-  });
-  async function loadRecords() {
-    const found = new Map<
-      string,
-      NonNullable<Awaited<ReturnType<typeof readFieldRecord>>>
-    >();
-    const codes = await lookupShortcodes(
-      db,
-      requests.map((request) =>
-        parseEntityRef(request.entity, request.recordId),
-      ),
-    );
-    for (const entity of new Set(requests.map((request) => request.entity))) {
-      const group = requests.filter((request) => request.entity === entity);
-      const ids = [
-        ...new Set(
-          group.flatMap((request) => {
-            const code = codes.get(entityRefKey(entity, request.recordId));
-            return code ? [code] : [];
-          }),
-        ),
-      ];
-      if (!ids.length) continue;
-      const rows = await readSelectedEntityRecords({
-        context: kernel(db, ports),
-        entity,
-        ids,
-        fields: [...new Set(group.flatMap((request) => request.keys))],
-      });
-      const byId = new Map(rows.map((row) => [row.id, row]));
-      for (const request of group) {
-        const key = entityRefKey(entity, request.recordId);
-        const publicId = codes.get(key);
-        const record = publicId ? byId.get(publicId) : undefined;
-        if (publicId && record) found.set(key, { publicId, record });
-      }
-    }
-    return found;
-  }
-  return async (
-    target: FieldTarget,
-    options: { populated?: boolean } = {},
-  ): Promise<"scheduled" | "unchanged" | "deferred"> => {
-    const current = await (activation ??= currentAiRefreshActivation(db));
-    // No executable activation (mid-deploy, or automatic AI off): the write
-    // stays owed until one exists, so nothing is consumed unscheduled.
-    if (!current) return "deferred";
-    const prepared = await prepareField(db, target, ports, {
-      manifest: current.manifest,
-      record: async (request) => {
-        // A failed union must retain the singleton's error and sibling isolation.
-        const shared = await (records ??= loadRecords().catch((error) => {
-          log.warn("Saved field input batch fell back to narrow reads", {
-            error: scrubErrorMessage(String(error)),
-          });
-          return null;
-        }));
-        return (
-          shared?.get(entityRefKey(request.entity, request.recordId)) ??
-          readFieldRecord(db, request, ports)
-        );
-      },
-    });
-    if (
-      !prepared ||
-      (!options.populated &&
-        !undecidedFieldValue(
-          target.entity,
-          target.field,
-          prepared.snapshot.currentValue,
-        ))
-    )
-      return "unchanged";
-    // Admission and field-specific fences remain independent, including capacity deferral.
-    const result = await scheduleAutomaticEvaluations(db, [
-      { target, provenance: prepared.provenance, snapshot: prepared.snapshot },
-    ]);
-    if (result.kind === "deferred")
-      log.info("Field evaluation scheduling deferred", {
-        reason: result.reason,
-        entity: target.entity,
-        recordId: target.recordId,
-        field: target.field,
-      });
-    return result.kind;
-  };
 }
 
 /** Field and Email refresh evaluate one claimed item; the drain owns retries and failures. */

@@ -39,6 +39,7 @@ import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
@@ -86,16 +87,39 @@ import type { CookbookImportContext } from "../domains/recipe/repo/import-recipe
 // redefining a TEST_ACTOR constant per file. The `.fixtures.ts` suffix keeps
 // this file out of the test glob.
 
-/** Fixed-code fixtures use the same transactional identity writer as production. */
+/** Fixed-code fixtures use the identity writer and record field assignments as decisions. */
 export async function insertEntityFixtures<T extends PgTable>(
   db: Database,
   table: T,
   kind: ShortcodeEntity,
   rows: readonly EntityPayloadValues<T>[],
 ) {
-  return getDb(db).transaction((tx) =>
-    insertPayloadsWithIdentities(tx, table, kind, rows),
-  );
+  return getDb(db).transaction(async (tx) => {
+    const prepared = rows.map((row) => {
+      const id = row.id ?? crypto.randomUUID();
+      return {
+        id,
+        input: row,
+        fields: holdFieldsValues(kind, { ...row, id }, "create"),
+      };
+    });
+    const created = await insertPayloadsWithIdentities(
+      tx,
+      table,
+      kind,
+      prepared.map((row) => row.fields.values),
+    );
+    for (const row of prepared)
+      await row.fields.settle(tx, systemActor(), row.id);
+    return created.map((row, index) => ({
+      ...row,
+      ...Object.fromEntries(
+        Object.entries(prepared[index]!.input).filter(([key]) =>
+          prepared[index]!.fields.held.includes(key),
+        ),
+      ),
+    }));
+  });
 }
 
 type Amount = { value: number; unit: string };

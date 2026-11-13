@@ -301,7 +301,7 @@ const categorySpec: ReferenceSuggestSpec<CategoryCandidate> = {
   subject: (basis) => `Product: ${basis.name ?? ""}`,
 };
 
-export const decisionAt =
+const decisionAt =
   (confidence: number): DecisionPort =>
   async (input) => {
     const keys = Object.keys(input.questions.selection.criteria);
