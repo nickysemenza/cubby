@@ -357,3 +357,36 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     );
   }
 }
+
+/** Real runner input, with only an unapplied cutover edited for fault injection. */
+export async function withCutoverMigration<T>(
+  sql: string,
+  work: (folder: string) => Promise<T>,
+): Promise<T> {
+  const { mkdtemp, readdir, mkdir, copyFile, writeFile, rm } =
+    await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { MIGRATIONS_FOLDER } = await import("./db-migrate");
+  const folder = await mkdtemp(join(tmpdir(), "cubby-cutover-fault-"));
+  try {
+    for (const entry of await readdir(MIGRATIONS_FOLDER, {
+      withFileTypes: true,
+    })) {
+      if (entry.isDirectory() && /^\d{14}_/.test(entry.name)) {
+        await mkdir(join(folder, entry.name));
+        await copyFile(
+          join(MIGRATIONS_FOLDER, entry.name, "migration.sql"),
+          join(folder, entry.name, "migration.sql"),
+        );
+      }
+    }
+    await writeFile(
+      join(folder, "20261114000000_accepted_input_cutover", "migration.sql"),
+      sql,
+    );
+    return await work(folder);
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}

@@ -855,3 +855,81 @@ it("preserves a malformed legacy decision container without aborting deployment"
     ).toEqual([{ preserved: {} }]);
   });
 });
+
+it("rolls back the Expense rename, Job drop and every pending receipt when the last migration fails", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, { through: "20261113012223_nappy_luke_cage" });
+    await client.query(
+      `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'expense','EXP-SYNAT')`,
+      [cutoverId(94)],
+    );
+    await client.query(
+      `INSERT INTO "Expense" (id,shortcode,name,cost,date,"costType") VALUES ($1,'EXP-SYNAT','Synthetic atomic line',19.99,'2026-01-02','materials')`,
+      [cutoverId(94)],
+    );
+    await client.query(
+      `INSERT INTO "Job" (key,kind,input) VALUES ('synthetic:atomic','maintenance.purchase-discovery','{}')`,
+    );
+    const before = (
+      await client.query(
+        `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) rows FROM drizzle.__drizzle_migrations t`,
+      )
+    ).rows[0].rows;
+    const { acceptedInputCutoverSql } =
+      await import("./accepted-input-cutover-select");
+    const { withCutoverMigration } =
+      await import("./accepted-input-cutover.fixtures");
+    const { findPgError } = await import("../src/server/errors/db-errors");
+    await withCutoverMigration(
+      acceptedInputCutoverSql() +
+        "\n--> statement-breakpoint\nDO $failure$ BEGIN RAISE EXCEPTION 'Synthetic final preservation failure'; END $failure$;",
+      async (folder) => {
+        let failure: unknown;
+        try {
+          await migrateDatabase(db, { migrationsFolder: folder });
+        } catch (error) {
+          failure = error;
+        }
+        expect(findPgError(failure)?.message).toBe(
+          "Synthetic final preservation failure",
+        );
+      },
+    );
+    expect(
+      (
+        await client.query(`SELECT cost FROM "Expense" WHERE id=$1`, [
+          cutoverId(94),
+        ])
+      ).rows,
+    ).toEqual([{ cost: 19.99 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "Job" WHERE key='synthetic:atomic'`,
+        )
+      ).rows[0].n,
+    ).toBe(1);
+    expect(
+      (
+        await client.query(
+          `SELECT to_regclass('public."Pass"') pass,to_regclass('archive."Expense_dollar_preimage"') preimage`,
+        )
+      ).rows,
+    ).toEqual([{ pass: null, preimage: null }]);
+    expect(
+      (
+        await client.query(
+          `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='Expense' AND column_name='costMinor'`,
+        )
+      ).rows,
+    ).toEqual([]);
+    expect(
+      (
+        await client.query(
+          `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) rows FROM drizzle.__drizzle_migrations t`,
+        )
+      ).rows[0].rows,
+    ).toEqual(before);
+  });
+});
