@@ -24,9 +24,6 @@ import {
   shipmentSourcePackage,
   aiUsage,
   mcpToolCall,
-  imageProcessingAttempt,
-  imageProcessingEvent,
-  imageProcessingSubmissionJob,
   aiEvaluation,
   job,
   aiEvaluationRequest,
@@ -445,43 +442,7 @@ export const ENTITY_EDGE_OVERRIDES = {
       },
     },
   }),
-  imageJob: edges({
-    "ImageProcessingAttempt.jobId": {
-      column: imageProcessingAttempt.jobId,
-      role: "history",
-      label: "attempts",
-      description:
-        "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
-      },
-    },
-    "ImageProcessingEvent.jobId": {
-      column: imageProcessingEvent.jobId,
-      role: "history",
-      label: "events",
-      description: "A step this job's processing recorded.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
-      },
-    },
-    "ImageProcessingSubmissionJob.jobId": {
-      column: imageProcessingSubmissionJob.jobId,
-      role: "history",
-      label: "submissions",
-      description:
-        "A schedule or retry request that included this job, with its disposition.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
-      },
-    },
-  }),
+
   email: edges({
     "ShipmentSourceCapture.emailId": {
       column: shipmentSourceCapture.emailId,

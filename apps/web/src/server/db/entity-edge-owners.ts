@@ -25,9 +25,6 @@ import {
   emailFinancialAssociation,
   expenseAttribution,
   financialTransactionAllocation,
-  imageProcessingAttempt,
-  imageProcessingEvent,
-  imageProcessingSubmissionJob,
   runStep,
   purchasePaymentEvidence,
   transactionImportRecord,
@@ -98,9 +95,7 @@ export const ENTITY_EDGE_OWNERS = {
   RunStep: { owner: runStep.runId },
 
   // An Image job's attempts, events and submission memberships belong to the job.
-  ImageProcessingAttempt: { owner: imageProcessingAttempt.jobId },
-  ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
-  ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
+
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
     excluded: "Per-Run work membership and publication receipts.",

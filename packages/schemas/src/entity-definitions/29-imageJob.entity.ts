@@ -1,3 +1,4 @@
+import { defineEdge } from "./edges";
 import { timestampField, readOnly } from "./field-policy";
 import { withQuiet } from "./select-control-options.js";
 import type { EnumIcon } from "@cubby/shared/enum-palette";
@@ -89,6 +90,194 @@ const stateOptions = [
  */
 export const { definition, readSchemas } = defineEntityModel({
   key: "imageJob",
+  edges: [
+    defineEdge({
+      key: "ImageProcessingAttempt.jobId",
+      from: "row:ImageProcessingAttempt",
+      to: "imageJob",
+      cardinality: "one",
+      inverse: {
+        key: "imageJob.incoming.ImageProcessingAttempt.jobId",
+        from: "imageJob",
+        to: "row:ImageProcessingAttempt",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImageProcessingAttempt.jobId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "ImageProcessingAttempt.jobId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "attempts",
+        description:
+          "One claim of this job by AI Gateway or an Apple device, with its retained diagnostics and result.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImageProcessingEvent.jobId",
+      from: "row:ImageProcessingEvent",
+      to: "imageJob",
+      cardinality: "one",
+      inverse: {
+        key: "imageJob.incoming.ImageProcessingEvent.jobId",
+        from: "imageJob",
+        to: "row:ImageProcessingEvent",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImageProcessingEvent.jobId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "ImageProcessingEvent.jobId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "events",
+        description: "A step this job's processing recorded.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+    defineEdge({
+      key: "ImageProcessingSubmissionJob.jobId",
+      from: "row:ImageProcessingSubmissionJob",
+      to: "imageJob",
+      cardinality: "one",
+      inverse: {
+        key: "imageJob.incoming.ImageProcessingSubmissionJob.jobId",
+        from: "imageJob",
+        to: "row:ImageProcessingSubmissionJob",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "ImageProcessingSubmissionJob.jobId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "column",
+        column: "ImageProcessingSubmissionJob.jobId",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "submissions",
+        description:
+          "A schedule or retry request that included this job, with its disposition.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Image jobs are never soft-deleted; their attempts, events and memberships are append-only history.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+      },
+    }),
+  ],
+
   names: { singular: "Image job", plural: "Image jobs" },
   route: { basePath: "image-jobs" },
   // The table keeps its storage name; the job's UUID is the queue and lease identity.
@@ -720,12 +909,20 @@ export const { definition, readSchemas } = defineEntityModel({
 
 export default defineEntity(
   definition,
-  (r) => [
-    r
-      .query("imageLeaseDevice", "one")
-      .named("lease-device", "Current lease device"),
-    r.field("imageId").named("image", "Image"),
-    r.field("runId").named("run", "Requesting Run"),
-  ],
+  (r) => ({
+    edges: [
+      r.declare(
+        r
+          .query("imageLeaseDevice", "one")
+          .named("lease-device", "Current lease device"),
+        "device.imageJob.lease-device",
+      ),
+      r.declare(r.field("imageId").named("image", "Image"), "image.image-jobs"),
+      r.declare(
+        r.field("runId").named("run", "Requesting Run"),
+        "run.image-jobs",
+      ),
+    ],
+  }),
   readSchemas,
 );
