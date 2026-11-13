@@ -1167,6 +1167,22 @@ update route or multi-select delete UI.
 
 ## Images and display sources
 
+Cloud image work, device work and metadata extraction are kernel Asks. Their
+Answers and insert-only `ImageEvidence` observations retain source revisions,
+results and cost independently of the mutable Image display fields. Completion
+appends the evidence and applies a still-current result in one transaction.
+Metadata input includes the original key, content type, Image row revision and
+parser revision; an explicit retry cannot reuse a missing-original observation
+from an earlier row revision.
+
+`ImageProcessingJob` remains a stable request receipt for its source, processor,
+submissions and displayed outcome. `ImageProcessingEvent` retains append-only
+execution receipts and diagnostics read by member reports, devices and rendition
+cleanup. The Ask owns the claim: the device wire's `jobId` names the Ask and
+`attemptId` names its token. Renewal, release, cancellation and replay share the
+kernel lifecycle. An unknown sent Ask waits for its existing executor or a
+member; it cannot be automatically dispatched again.
+
 `capabilities.images` is `false`, `"gallery"` (ordered `EntityAttachment` rows, bound by
 `galleryBinding(entity)` in `server/db/helpers/crud.ts`), `"cover"` (one `coverImageId`, Cookbook) or
 `"logo"` (one direct logo FK, Vendor). Bootstrap generation reads that literal into
@@ -2402,7 +2418,11 @@ shared background drain; an interrupted isolate's duplicate delivery waits out t
 record each claimed invocation's target and yield or completion, without record ids or values. Drain
 errors go to Sentry and schedule a retry without blocking purchase dispatch reconciliation. Search
 publication uses a sorted upsert, retires missing documents in the same transaction, and re-marks
-embeddings only for changed embeddable documents, keeping unchanged documents' failure backoff.
+a revision-keyed `vectorize.sync` Pass only for changed embeddable documents. Each revision
+uses an embedding Ask, so repeated admission reuses its Answer. `EntityEmbedding` keeps source
+text, vector identity and upload, visibility and deletion receipts; the kernel owns scheduling,
+claims and retry state. Selection checks the current source revision and visible payload before
+semantic search or Related records can use the vector.
 Recipe invalidation only marks totals stale; USDA release activation, selected image descriptions,
 explicit search repair and image-search backfill converge through the same pass (backfill reports
 zero publications until the pass writes output).
@@ -3971,7 +3991,8 @@ PostgreSQL reserves `OVERLAPS`.
 
 The semantic reader shares source readiness, current-vector validation and hit hydration with explicit
 similarity search. Unavailable, uncomputed and stale indexes stay visible rather than masquerading as
-empty; an explicit Index now action uses the embedding refresh operation and a bounded readiness poll.
+empty; an explicit Index now action starts the document revision's Vectorize sync Pass and uses a bounded
+readiness poll.
 Related records never publish suggestions, merge identities or mutate records. Scalar-only candidates
 stay visible with zero score; semantic weights decide ranking. Evidence merges once per public record,
 ranks deterministically, and batch-resolves images for visible rows. The rail is a shared indexed

@@ -70,15 +70,15 @@ table stays named `Job` because `Task` is the household entity's table.
 
 A Job is a unit of execution, not a unit of household work. Work that fans out
 over many records is a **drain** over **items** held on the rows that owe them:
-`AiEvaluation`, `SearchDocument`, `EntityEmbedding` and `ImageProcessingJob`
-own their scheduling. A drain unit's only `Job` row is its `background.drain`
-record (rotation and latest execution); it never holds or schedules items. The
-first three supply a `DrainStore` (`generic/jobs/drain-store.ts`). An item's
+`AiEvaluation` owns evaluation scheduling. A drain unit's only `Job` row is
+its `background.drain` record (rotation and latest execution); it never holds
+or schedules items. AI evaluation supplies a `DrainStore`
+(`generic/jobs/drain-store.ts`). An item's
 ticket says which intent a page may settle, so a re-mark during a page takes a
 new ticket, and the page clears only what it claimed.
 
 `rowDrain` (`generic/background/drains.ts`) is the single claim → prepare →
-publish helper for embeddings and AI evaluation. It claims a bounded page,
+publish helper for AI evaluation. It claims a bounded page,
 prepares outside transactions and publishes chunks of at most 25 weighted
 items. Domain locks precede item locks. An isolated publication error splits
 the chunk until only the failing item backs off or exhausts; committed siblings
@@ -92,8 +92,7 @@ a serializable transaction replays. Retained items stay owed. Each drain
 declares SQL for when it is due now and when it is next due; an empty page
 publishes nothing and schedules nothing.
 
-The production drain units (`workflows/jobs.ts`) are cloud images
-(`image.cloud`), embedding refresh, embedding cleanup, one unit per AI
+The production drain units (`workflows/jobs.ts`) include one unit per AI
 evaluation feature (`ai-evaluation:<feature>`), the resumable derived rebuild
 (`derived-rebuild`, one pass with its own row, not items), Email purchase
 discovery and Run summary publication. The kernel drain runs scopes, Asks and
@@ -110,11 +109,11 @@ Run execution attempt number. Outcomes live on domain owners; Jobs retain no
 result JSON. `availableAt` is the only stored wait deadline. Completed Jobs
 remain until retention prunes them.
 
-| Job kind                                  | Why a row                                      | Owner of the result           |
-| ----------------------------------------- | ---------------------------------------------- | ----------------------------- |
-| `purchase.dispatch`                       | Durable handoff to the agent, deduped by event | The Run and its agent session |
-| `run.funding-resume`                      | Waits for a funding window to end              | The paused Runs               |
-| `image-metadata.extract`, `location-ai.*` | One per record, replaced on re-admission       | The Image or Location         |
+| Job kind             | Why a row                                      | Owner of the result           |
+| -------------------- | ---------------------------------------------- | ----------------------------- |
+| `purchase.dispatch`  | Durable handoff to the agent, deduped by event | The Run and its agent session |
+| `run.funding-resume` | Waits for a funding window to end              | The paused Runs               |
+| `location-ai.*`      | One per record, replaced on re-admission       | The Location                  |
 
 Everything else is a drain over its owner's rows and has no row here. There is
 no stored queue health or alert engine: [Work status](#member-facing-work-explanations)
@@ -294,12 +293,10 @@ across Jobs, leases and drains (`nextDueAt`): now if anything is due, else
 delayed until it is due (at most twelve hours). A permit that claimed nothing,
 including an over-produced one, exits after its one selection query and sends
 nothing, and a failed drain page sends no successor; so wake chains end in
-one delayed permit at the hour. Each Job claim and each cloud image claim also sends
-one recovery permit due when that claim's own lease lapses, naming the claim
-(Job lease token, image attempt), so a killed invocation is recovered without
-waiting for cron. A Job recovery runs only if that lease lapsed unsettled; an
-image recovery atomically reclaims exactly that attempt, so of two overlapping
-recoveries one runs and the other exits without work or a successor.
+one delayed permit at the hour. Each Job claim sends a recovery permit due
+when its lease lapses, naming its token. A Job recovery runs only if that
+lease lapsed unsettled. Kernel claim recovery owns image Asks; a sent Ask
+without an Answer becomes unknown rather than authorizing another call.
 
 A permit acknowledges whatever its unit's outcome: the unit's rows own its
 retries. Only a failure before or around selection (the database unreachable)
@@ -342,7 +339,7 @@ everything else:
 - **Explicit fences.** A fence is passed, never looked up. Run workflow code
   receives the claim's `fence`/`check` through `withWorkflowExecution`
   (`assertWorkflowEffect`, `assertWorkflowCurrent`); a standalone provider Job
-  (`location-ai.*`) or the cloud image drain registers through `withJobFence`
+  (`location-ai.*`) registers through `withJobFence`
   so the Gateway checks its lease before every paid request. A single-record
   handler passes `ctx.fenced` to its publication, and member or maintenance
   callers of the same publication pass `outsideJob(db)`, an ordinary
@@ -363,8 +360,8 @@ state through `generic/jobs/jobs.fixtures.ts`. Whole-model consumers (the
 database client, migrations checks, test setup) import `db/drizzle-schema.ts`.
 
 A resumed Run's evaluation item is rechecked under Run locks before a prepared
-parked item can be cleared. Embedding publication takes source locks before
-item locks, matching source producers.
+parked item can be cleared. Vector publication locks the current search
+document and verifies its revision inside the Pass claim fence.
 
 ### Statement pages
 
@@ -460,23 +457,13 @@ failing `JOB_FAILING_LIMIT_MS` (24 hours) after its streak began fails visibly.
 Funding and provider waits stay `JobDeferredError` / `waiting_on` and never
 start a streak.
 
-Drain items are bounded too: AI evaluations settle `failed` after three
-non-transient failures; an embedding refresh stops owing after 100 failures
-(about a day at its 15-minute cap) and a vector deletion after 288 five-minute
-retries, each keeping its error for Work's failed list; image processing stops
-retrying after twelve failures (about a day and a half of doubling backoff) and
-waits for explicit retry. Drain items follow the Job rule for transient
-failures: they defer without spending an attempt, back off by the streak's age,
-and record the streak's start on the owning row (`AiEvaluation.failingSince`,
-`SearchDocument.embeddingFailingSince`, `EntityEmbedding.deletionFailingSince`);
-any item still failing 24 hours after its streak began is settled as failed. A
-page that fails whole (outside any one item) settles each item it still holds
-as failed, so persistent page failures reach the same bounds. Funding and
-provider waits spend no attempt: with a store that has `wait` (embedding
-refresh), each item refused for the wait holds until it ends with its failure
-streak cleared, the page's other items still publish, and the page records as
-deferred; a wait raised outside any item holds every claimed item. Any other
-store stops the page and leaves its items owed as they were.
+AI evaluation drain items settle failed at their declared bound. Kernel Asks
+and Passes use the kernel's claim, attempt, backoff and wait-cause policy.
+Embedding calls allow 100 known failures; an unknown call is never retried
+without settlement. Vector upload, visibility and deletion are Pass work and
+retain their receipts across publication failures. Funding and provider waits
+spend no attempt. Image execution retains known failures and explicit retries
+as separate Answer receipts while source and request identity remain stable.
 An embedding request refused for OpenAI credit waits until the funding window
 ends. A funding change (`ai_funding.reset_funding_refusal` or a budget change)
 makes those items, and AI evaluations waiting on `ai_funding_window`, due at
@@ -737,65 +724,66 @@ network or other processing errors as negative cutouts.
 
 ### Image execution ownership
 
-`ImageProcessingJob` is the sole owner of image execution: `lane`, `runAt`,
-`leaseUntil`, `failures`, `waitReason` and the current `attemptId` live on the
-row, and nothing else queues it. Cloud rows run through `cloudImageDrain`, a
-registered drain whose items have no Job row: it claims due rows under a
-16-minute lease that nothing renews, because no consumer outlives 15 minutes. A
-crashed page is reclaimed after that, and a reclaim counts as a failure. A cloud
-image page runs two rows at once. `imageProcessingLane` fixes each job's lane:
-subject lifts, Apple descriptions and AVIF cloud descriptions (which need
-device JPEG preparation) run on devices; other cloud calls on the server.
-Device pulls claim parked work directly and prefer work whose last attempt ran
-on another device. They skip busy source rows, so an empty pull can precede a
-later hand-off while work remains owed; consumers retry through their ordinary
-pull cycle.
+The kernel Ask owns execution. `image.cloud` and `image.device` declare the
+original Image, its content hash, processor revision, operation and request
+receipt. A known failed execution can owe a distinct retry Ask; an unknown
+execution cannot be sent again automatically. The `image.cloud` Pass performs
+server work. Device work waits for a capable companion to claim it and does
+not keep the server runner awake.
 
-A typed provider wait or an exhausted AI budget is never an attempt on any
-cloud call, including the description of a device-normalized AVIF
-(`deferCloudAttemptForTypedWait`): the claim is released until the wait ends.
-Companion completion loads cloud execution only when adopting a
-device-prepared input that needs a cloud description; ordinary Apple results
-use the lightweight description policy for their exact retained fingerprint.
+`ImageProcessingJob` is the member-facing request receipt: its shortcode,
+source and submission memberships, last result, executor timing, failure
+summary and rendition identity remain readable. Its dispatch fields mirror the
+kernel claim for existing lists and device diagnostics; they cannot authorize
+a call, renewal or result. `ImageProcessingEvent` retains append-only execution
+receipts, recorded inputs, diagnostics, releases and outcomes. Its receipt
+projection supplies the report and storage cleanup. The Answer retains the
+producer result and cost. Image results are appended to `ImageEvidence` in the
+same transaction that commits the Answer and applies a still-current result.
 
 Device wire contract:
 
-- `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300) and
-  accepts optional `maxCommands` (1–16, default 1). `commands` contains up to
-  that many commands in hand-off order; the `command` field is its first item
-  or null, so older clients keep receiving one command. A batch uses one
-  transaction and one advisory lock over a bounded candidate page; each
-  hand-off rechecks due times and leases within that page, preserving
-  per-command capabilities, device preference, attempts, leases and presigned
-  URLs. A prepared row cannot re-enter the batch even if its initial lease
-  expires during later preparation. Immediately before hand-off, still-owned
-  leases are re-armed together and every returned command receives the fresh
-  deadline. An empty array/null command means no hand-off: refused claims are
-  released first. A preparation failure releases and backs off that claim; an
-  already prepared prefix is returned, and if there is none the pull throws
-  after the release commits. Neither valid commands nor the failed candidate
-  can become invisible behind a batch error.
-- `imageProcessing.renew` `{jobId, attemptId, deviceId}` extends the lease by
-  60 s while the attempt still owns it, including an expired lease no newer
-  claim replaced. It returns `{ok: true, leaseExpiresAt}` (the new command
-  deadline) or `{ok: false, reason: "lease_lost" | "job_obsolete"}`; the device
-  stops either way. Devices renew every 15 s.
-- `imageProcessing.release` is never an attempt.
-- `imageProcessing.complete` after expiry is adopted while the attempt id is
-  unchanged; after a newer claim it returns `{adopted: false}` and a late
-  failure is kept in the old attempt's history.
+- `jobId` is the Ask id; `attemptId` is its claim token. The member-facing
+  request receipt keeps its own stable identity across explicit retries.
+- `imageProcessing.pull` accepts `leaseSeconds` (default 60, 20–300) and
+  `maxCommands` (default 1, 1–16). `commands` preserves hand-off order;
+  `command` is its first item or null. A bounded batch shares one transaction
+  and device-pull lock. Refused hand-offs release their claims without
+  counting an execution, and a failed suffix cannot discard a prepared prefix.
+  Still-owned claims are renewed before hand-off and their fresh deadlines
+  are returned on every command.
+- `imageProcessing.renew` accepts `{jobId, attemptId, deviceId}` and extends
+  the unchanged claim by 60 seconds, including a late heartbeat. It returns
+  `{ok: true, leaseExpiresAt}` or `{ok: false, reason: "lease_lost" |
+  "job_obsolete"}`. The device checks that response and renews every 15 seconds.
+- `imageProcessing.release` confirms that execution stopped. It spends no
+  attempt and permits another executor to claim the same unanswered Ask.
+- An expired sent claim becomes `unknown`. It remains available for its
+  original executor's late result or heartbeat; expiry alone never authorizes
+  another call. A release or the member's not-sent decision permits dispatch.
+- Completion validates the claim, assigned device/member and source revision.
+  The unchanged attempt may complete late. Replaying its completion reads the
+  stored Answer without applying again; a released, cancelled, replaced or
+  obsolete attempt cannot apply. Rejected deliveries retain diagnostic events.
 
-A photo-inventory Run's description gate accepts the Apple or the cloud
-description; `cloudDescriptionMissing` and `withoutCloudDescriptionCount` note
-photos grouped while their cloud description waits (for funding, say). A
-description that settled without one (`failed` or `skipped`) holds the Run for
-the member, who can continue without those photos; the coordinator never
-starts on a photo it has no description for.
+The processor policy chooses cloud or device work. Subject lifts, Apple
+image descriptions and AVIF descriptions requiring device JPEG normalization
+use capable devices; other cloud work runs on the server. Device pulls prefer
+an active Run and then an executor other than the previous device. Typed
+funding and provider waits defer the existing Ask without spending an attempt.
 
-Each image job reads `leaseDeviceId` (the `DEV-` code whose attempt holds the
-lease, live or expired) and `leaseExpiresAt`. Assigning an executor records it
-as the Job's `leaseHolder` in the same transaction. Its saved views are
-`waiting-for-apple` and `processing` (live leases).
+The `image.metadata` Ask reads the declared original key and content type at
+one Image row revision, under the parser revision. Its Pass appends the
+observation to `ImageEvidence`, then derives Image capture fields while the
+source and publishing claim still match. Explicit retry advances the Image
+revision, so an earlier missing-original Answer cannot prevent another read.
+The producer tries a failed storage read at most three times within one Ask;
+maintenance does not retry Ask admission in a loop.
+
+A photo-inventory Run accepts either an Apple or cloud description before
+grouping. Missing cloud descriptions stay explicit. A description that ended
+without usable text holds that photo for the member. Image-job lists retain
+the named device, lease deadline, request memberships and execution report.
 
 ## Producers
 
@@ -815,8 +803,8 @@ the Job key, the handler and provider fencing. Publishing and execution both
 read that declaration; a handler parses only its own kind. The key is the
 queued Job's identity, so changing one orphans queued rows.
 
-A producer must not enqueue faster than its drain can serve, and no producer
-fans out per household record.
+A drain producer must not enqueue faster than its drain can serve. Revision
+Asks coalesce unchanged inputs under the owning producer policy.
 
 Each AI evaluation slot identifies feature, entity, record and field. A
 generated text key uses UTF-8 length prefixes; input and option fingerprints
@@ -850,53 +838,33 @@ the queued slot in place. Run failure codes still fence member-cancelled work.
 
 ### Embedding execution
 
-Embeddings run on two registered drains whose items have no Job row. A
-`SearchDocument` owes a fresh embedding when `embeddingDueAt` is set; a failure
-backs off on the document, and Vectorize visibility polling reschedules it
-without spending an attempt. An `EntityEmbedding` that is retired or failed
-with no `deletionId` owes a vector deletion, so nothing marks it; a failed
-deletion waits on `deletionRetryAt`. The cleanup is safe to repeat because only
-the receipt settles it.
+Each search-document revision owes an `entity.embedding` Ask. Its canonical
+input contains the entity identity, source hash and semantic text; the envelope
+also fixes the producer, model, dimensions, prompt and output revision.
+Repeated admission of an unchanged document reuses the committed Answer and
+cannot buy another embedding. An ambiguous sent call becomes `unknown` and
+waits for a member instead of retrying the provider.
 
-A refresh keeps source dirtiness and execution apart. `embeddingGeneration` is
-the intent, and a mark advances it at any time. `embeddingLeaseToken` and
-`embeddingLeaseUntil` name the page allowed to pay the provider, and a mark
-never touches them, so the hourly cron or a page across a deploy skips a held
-document even after a re-mark. The lease outlasts the 15 minutes a consumer can
-run, so a crashed page's documents come free on their own. Settling needs both
-the lease and the claimed generation. After the provider has been paid, an
-upload needs the lease and either that generation or text that still hashes the
-same, and its receipt then needs only the lease: the next page adopts the
-receipt. Changed text uploads nothing.
+The `vectorize.sync` Pass is keyed by source identity and revision. It loads
+the declared document, obtains its Answer, stages an immutable vector artifact,
+uploads that artifact id and retains Vectorize's upload receipt. It polls
+visibility without spending an attempt and selects the artifact only after
+its float32 payload hash matches and its source revision is still current.
+The claim fences every receipt and selection transaction. A retained visible
+artifact can supply the Answer through result lookup without another model call.
 
-An artifact moves `prepared` → `submitting` → `submitted` → `selected` →
-`retired` (or `failed`). Each step that precedes a provider or Vectorize call
-commits first through `ctx.fenced`, so an interrupted page resumes from its
-receipt (`submissionId`, `vectorHash`, `observedAt`) without paying for the
-embedding again. One in-flight submission per source and configuration
-(`EntityEmbedding_one_submission_key`) sits beside at most one selected vector
-(`EntityEmbedding_entity_model_key`).
+`EntityEmbedding` keeps the semantic text and vector identity, `submissionId`,
+`vectorHash`, `observedAt`, `indexedAt` and `deletionId`. These are durable sync
+receipts, not a work queue. Retired artifacts retain their identity until the
+Pass records their remote deletion receipt. A replacement gets another artifact
+id, so deleting a retired vector cannot remove its successor. Removal schedules
+the same Pass to finish physical cleanup. Search documents and embedding rows
+carry no independent scheduling, lease, backoff or attempt columns.
 
-Fresh submissions with the same provider/model/dimensions share one embedding
-call and Vectorize upload. Requests contain at most 2,048 texts and 300,000
-UTF-8 bytes, a conservative bound on OpenAI's 300,000-token request limit;
-inputs over 8,192 bytes run alone, preserving provider validation of the
-8,192-token input limit without failing neighbors
-([OpenAI owns these limits](https://developers.openai.com/api/reference/resources/embeddings/methods/create)).
-A configuration mismatch settles obsolete and re-admits current work.
-Visibility polling postpones its item every 5 s without spending an attempt; an
-upload still invisible after two minutes fails that item, which backs off and
-keeps its receipt. Vectorize rate limits (including `VECTOR_DELETE_ERROR` 40041
-with `Too Many Requests`) back off the item.
-
-Visible uploads publish as chunks through the drain: sorted source locks, then
-identity locks, one search preparation, one retirement update, one multi-row
-selection insert and one reader notification. A vanished or changed source
-fails or settles alone. Cleanup deletes only an unselected, stopped artifact
-and records its delete receipt, so a delayed cleanup can never delete a
-replacement upload. A shared provider call has no single owner: `AiUsage`
-keeps one row per provider call and records the provider's total tokens once.
-Embeddings remain outside frontier funding caps.
+The selected-vector validation and hydration shared by semantic search and the
+Related records rail remain authoritative. Missing, unavailable and stale
+indexes stay distinct from an empty result. An explicit indexing request
+starts the revision Pass and follows its bounded readiness read.
 
 ## AI evaluation drains
 
@@ -915,11 +883,6 @@ Automatic refresh work has no Run: its `runId` is null and its activation is
 the authority. A member stops it from the Work page or `ai.stopAutomaticWork`:
 discovery admits nothing, owed rows are parked, and `leaseStale` fails any
 attempt in flight. It holds until a member resumes. Sweeps keep their Run.
-Admission (`scheduleAutomaticEvaluations`) runs in a short transaction under a
-nonblocking advisory lock (`domains/run/repo/ai-refresh-admission.ts`):
-contention defers the page rather than pinning another origin connection in a
-lock wait, and a full backlog (`AUTOMATIC_EVALUATION_BACKLOG`) defers it too. A
-member's stop takes the same lock blocking, so nothing lands after it.
 
 Nothing queues an evaluation: `AiEvaluation.runAt` is set while the drain owes
 it (`priority` 0 when the owner or an uncancelled requester is a running,
