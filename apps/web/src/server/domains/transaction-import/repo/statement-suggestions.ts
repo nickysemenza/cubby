@@ -93,17 +93,11 @@ import {
   type ChargeRef,
 } from "~/server/domains/transaction-import/policy/charge-identity";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
-import {
-  statementEffectiveMovement,
-  statementLoanInput,
-  type StatementMovementInput,
-} from "~/server/domains/transaction-import/policy/statement-effective-movement";
+import { statementLoanInput } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 import {
   kindAgreed,
-  decideStatementKind,
   type OwnAccount,
   ownAccountNamed,
-  statementTransactionKind,
 } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import {
   sourceObservationFacts,
@@ -125,6 +119,14 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { previewRowFor } from "~/server/domains/transaction-import/repo/statement-input";
 import { mergeStatementAnswers } from "~/server/domains/transaction-import/repo/statement-label-input";
+import {
+  statementEffectiveMovement,
+  type StatementMovementInput,
+} from "~/server/domains/transaction-import/repo/statement-policy-wire";
+import {
+  decideStatementKind,
+  statementTransactionKind,
+} from "~/server/domains/transaction-import/repo/statement-policy-wire";
 import {
   readStatementSuggestions,
   statementSuggestionFacts,

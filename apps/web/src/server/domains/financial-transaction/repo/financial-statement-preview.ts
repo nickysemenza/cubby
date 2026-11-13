@@ -33,14 +33,12 @@ import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
 } from "~/server/domains/transaction-import/policy/source-transaction-record-identity";
-import {
-  statementEffectiveMovement,
-  statementLoanInput,
-} from "~/server/domains/transaction-import/policy/statement-effective-movement";
+import { statementLoanInput } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 import {
   sourceObservationColumns,
   sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { statementEffectiveMovement } from "~/server/domains/transaction-import/repo/statement-policy-wire";
 import { merchantVendorInferences } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
 import {

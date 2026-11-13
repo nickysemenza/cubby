@@ -1,6 +1,8 @@
 import type { PurchaseId } from "@cubby/schemas/identifiers";
 import type { PaymentTender } from "@cubby/schemas/purchase-import";
 
+import { POSTING_WINDOW_DAYS } from "~/server/domains/financial-transaction/policy/settlement-window";
+
 /**
  * Reads: live Purchase id; every same-amount PurchasePaymentEvidence row's
  * purchaseId/amountMinor/chargedAt/tender/cardLastFour, and all payment and live
@@ -31,7 +33,8 @@ export function competingPaymentClaimants(
         .filter(
           (row) =>
             (row.chargedAt === null ||
-              Math.abs(row.chargedAt.getTime() - anchor) <= 3 * 86_400_000) &&
+              Math.abs(row.chargedAt.getTime() - anchor) <=
+                POSTING_WINDOW_DAYS * 86_400_000) &&
             (input.storedValue
               ? row.tender !== "card"
               : row.tender !== "stored_value") &&

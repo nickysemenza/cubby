@@ -29,7 +29,11 @@ export function statementBookingRows(input: {
   const createAggregate =
     input.economicRole !== "vendor" ||
     abs(input.remainingBookedMinor) < abs(input.charge.amountMinor);
+  const purchaseReference = input.purchaseId
+    ? { kind: "existing" as const, purchaseId: input.purchaseId }
+    : { kind: "new" as const, key: "purchase" as const };
   return {
+    purchaseReference,
     purchase: input.purchaseId
       ? null
       : {
@@ -60,6 +64,7 @@ export function statementBookingRows(input: {
         }
       : null,
     allocation: {
+      purchaseReference,
       amountMinor: input.charge.amountMinor,
       confirmsMerchant: input.confirmsMerchant,
     },

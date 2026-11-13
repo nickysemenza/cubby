@@ -34,6 +34,7 @@ type Pair = {
   carry: Partial<Record<CarriedField, string>>;
 };
 
+/** One duplicate line onto one survivor line, or why that pairing would lose a fact. */
 function pairOne(
   line: Line,
   to: Line,
@@ -80,6 +81,11 @@ function pairOne(
   return { from: line, to, carry };
 }
 
+/**
+ * Booking-fact matches outrank title matches, which outrank role matches,
+ * across a whole assignment: each tier's weight exceeds the most any lower
+ * tier can add for a group of at most PAIRING_GROUP_MAX lines.
+ */
 const pairScore = (pair: Pair) =>
   (JSON.stringify(pair.from.carried) === JSON.stringify(pair.to.carried)
     ? 100
@@ -87,14 +93,24 @@ const pairScore = (pair: Pair) =>
   (titleOf(pair.from) === titleOf(pair.to) ? 10 : 0) +
   (pair.from.lineKind === pair.to.lineKind ? 1 : 0);
 
+/** The best complete assignment found so far for one amount. */
 type PairingSearch = {
   best: { score: number; pairs: Pair[] } | null;
   tied: boolean;
   firstError: string | null;
 };
 
+/** Most lines of one amount the exhaustive assignment search accepts. */
 const PAIRING_GROUP_MAX = 8;
 
+/**
+ * Pair every duplicate line with one survivor line of the same amount: money
+ * pairs by cents, since two documents may title or classify a line
+ * differently. Within each amount, every valid one-to-one assignment is
+ * scored and the best wins; two different best assignments are ambiguous and
+ * refuse, so row order never decides which line a source binds to. The
+ * survivor keeps its own description.
+ */
 export function pairLines(duplicate: Line[], survivor: Line[]) {
   if (duplicate.length !== survivor.length)
     return { error: "The two Purchases hold different numbers of lines." };
@@ -235,4 +251,35 @@ export function duplicateSourceOrderRefusal(input: {
         "A duplicate line carries financial source claims; correct its booking instead.",
     };
   return null;
+}
+
+/** Reads: EntityIdentity id/mergedIntoId for the duplicate shortcode and this command's AuditLog convergence receipt on the survivor, including either missing row. */
+export function duplicateSourceOrderReplay(input: {
+  identity: { id: string; mergedIntoId: string | null } | null;
+  survivorId: string;
+  survivorCode: string;
+  duplicateCode: string;
+  hasReceipt: boolean;
+}) {
+  if (!input.identity)
+    return {
+      kind: "refused" as const,
+      code: "PURCHASE_NOT_FOUND" as const,
+      reason: `Purchase not found: ${input.duplicateCode}`,
+    };
+  if (input.identity.mergedIntoId === input.survivorId)
+    return input.hasReceipt
+      ? { kind: "already_applied" as const }
+      : {
+          kind: "refused" as const,
+          code: "PURCHASE_SOURCE_CONVERGENCE_REFUSED" as const,
+          reason: `${input.duplicateCode} was merged into ${input.survivorCode} without converging its lines; review the survivor's line sets.`,
+        };
+  if (input.identity.id === input.survivorId)
+    return {
+      kind: "refused" as const,
+      code: "PURCHASE_SOURCE_CONVERGENCE_REFUSED" as const,
+      reason: "Name two different Purchases.",
+    };
+  return { kind: "continue" as const, identity: input.identity };
 }

@@ -1,10 +1,9 @@
 import {
   financialTransactionSettlementViolation,
+  allocationSumViolation,
   type FinancialTransactionKind,
 } from "@cubby/schemas/financial-transaction";
 const sign = (value: bigint) => (value < 0n ? -1 : value > 0n ? 1 : 0);
-const dollars = (value: bigint) =>
-  `${value < 0n ? "-" : ""}${(value < 0n ? -value : value) / 100n}.${String((value < 0n ? -value : value) % 100n).padStart(2, "0")}`;
 /** Reads: FinancialTransaction amountMinor/kind and the entire proposed allocation purchaseId/amountMinor set, including an empty set. */
 export function allocationSetViolation(input: {
   transactionAmountMinor: bigint;
@@ -22,9 +21,11 @@ export function allocationSetViolation(input: {
       return "Every allocation must carry the same sign as its transaction. A charge and a credit are two settlement events; record them as two transactions.";
   }
   if (!input.next.length) return null;
-  const total = input.next.reduce((sum, row) => sum + row.amountMinor, 0n);
-  if (total !== input.transactionAmountMinor)
-    return `Allocations must sum to the transaction amount: got ${dollars(total)}, expected ${dollars(input.transactionAmountMinor)}.`;
+  const sumViolation = allocationSumViolation(
+    input.next.map((row) => row.amountMinor),
+    input.transactionAmountMinor,
+  );
+  if (sumViolation) return sumViolation;
   return (
     financialTransactionSettlementViolation({
       linked: true,

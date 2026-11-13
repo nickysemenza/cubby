@@ -15,7 +15,6 @@ import {
   type TransferPairMovementLabel,
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { cents } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { uniqBy } from "es-toolkit";
 
 import { plainDateDaysBetween } from "~/lib/household-date";
@@ -29,6 +28,7 @@ import {
   statementTransactionKind,
 } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import { canonicalJson } from "~/server/lib/canonical-json";
+import { sha256Text as sha256Hex } from "~/server/lib/sha256-text";
 
 /** Candidates: the opposite leg posted within this many days. */
 const CANDIDATE_WINDOW_DAYS = 5;
@@ -112,7 +112,10 @@ export const categorySignals = (
   sourceCategory: string | null,
   amount: number,
 ) => {
-  const rule = statementTransactionKind({ sourceCategory, amount });
+  const rule = statementTransactionKind({
+    sourceCategory,
+    amountMinor: BigInt(cents(amount)),
+  });
   return {
     ruleKind: rule.kindSource === "rule" ? rule.kind : null,
     cashWithdrawal:

@@ -45,7 +45,6 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
-import { decideStatementKind } from "~/server/domains/transaction-import/policy/statement-transaction-kind";
 import { statementRecommendation } from "~/server/domains/transaction-import/repo/statement-charge";
 import {
   statementLabelSubject,
@@ -53,6 +52,7 @@ import {
   mergeStatementAnswers,
   statementAnswerVersions,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
+import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-policy-wire";
 import { recoverSettlementObligations } from "~/server/domains/transaction-import/repo/statement-settlement";
 import {
   chargeId,

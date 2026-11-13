@@ -85,10 +85,6 @@ import {
   bookingSpendingCategory,
   reviewedCategoryRefusal,
 } from "~/server/domains/financial-transaction/policy/spending-category";
-import {
-  spendingBlocker,
-  issuerCardFee,
-} from "~/server/domains/financial-transaction/policy/spending-prerequisites";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import {
   bookFreshFinancialTransactions,
@@ -106,6 +102,10 @@ import {
   withFinancialSourceRef,
 } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import {
+  spendingBlocker,
+  issuerCardFee,
+} from "~/server/domains/financial-transaction/repo/spending-prerequisites-wire";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { retainedSettlementDiscoveryCouldMatch } from "~/server/domains/purchase-import/policy/retained-payments";
 import { paymentEvidenceDollars } from "~/server/domains/purchase-import/repo/payment-evidence";

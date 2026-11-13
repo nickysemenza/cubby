@@ -1,5 +1,3 @@
-import { cents } from "@cubby/shared";
-
 import { liveHouseholdLoan } from "~/server/domains/financial-account/policy/purchaser";
 
 type StatementMovementClass =
@@ -11,13 +9,13 @@ type StatementMovementClass =
   | "loan_unknown";
 
 export type StatementEffectiveMovement = {
-  effectiveAmount: number;
+  effectiveAmountMinor: bigint;
   movementClass: StatementMovementClass;
   reviewReason: string | null;
 };
 
 export type StatementMovementInput = {
-  providerAmount: number;
+  providerAmountMinor: bigint;
   description: string | null;
   merchant: string | null;
   sourceCategory: string | null;
@@ -109,13 +107,13 @@ export function statementEffectiveMovement(
 ): StatementEffectiveMovement {
   if (!input.loan)
     return {
-      effectiveAmount: -input.providerAmount,
+      effectiveAmountMinor: -input.providerAmountMinor,
       movementClass: "standard",
       reviewReason: null,
     };
   if (!input.loan.proven)
     return {
-      effectiveAmount: -input.providerAmount,
+      effectiveAmountMinor: -input.providerAmountMinor,
       movementClass: "loan_unknown",
       reviewReason: "Loan account binding requires review.",
     };
@@ -146,7 +144,7 @@ export function statementEffectiveMovement(
     disbursement,
   ];
   const contradictory =
-    signals.filter(Boolean).length > 1 || cents(input.providerAmount) === 0;
+    signals.filter(Boolean).length > 1 || input.providerAmountMinor === 0n;
   const movementClass: StatementMovementClass = contradictory
     ? "loan_unknown"
     : interest
@@ -158,11 +156,14 @@ export function statementEffectiveMovement(
           : disbursement
             ? "escrow_disbursement"
             : "loan_unknown";
-  const magnitude = Math.abs(cents(input.providerAmount)) / 100;
+  const magnitude =
+    input.providerAmountMinor < 0n
+      ? -input.providerAmountMinor
+      : input.providerAmountMinor;
   return {
-    effectiveAmount:
+    effectiveAmountMinor:
       movementClass === "loan_unknown"
-        ? -input.providerAmount
+        ? -input.providerAmountMinor
         : movementClass === "escrow_disbursement"
           ? magnitude
           : -magnitude,

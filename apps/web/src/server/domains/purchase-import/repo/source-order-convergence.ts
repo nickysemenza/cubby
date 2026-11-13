@@ -1,4 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
@@ -21,6 +22,7 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { deleteExpensesWithPurchaseEffects } from "~/server/domains/expense/repo/crud";
+import { duplicateSourceOrderReplay } from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import { duplicateSourceOrderRefusal } from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import {
   Line,
@@ -98,27 +100,6 @@ async function readLines(
   }));
 }
 
-/** One duplicate line onto one survivor line, or why that pairing would lose a fact. */
-
-/**
- * Booking-fact matches outrank title matches, which outrank role matches,
- * across a whole assignment: each tier's weight exceeds the most any lower
- * tier can add for a group of at most PAIRING_GROUP_MAX lines.
- */
-
-/** The best complete assignment found so far for one amount. */
-
-/** Most lines of one amount the exhaustive assignment search accepts. */
-
-/**
- * Pair every duplicate line with one survivor line of the same amount: money
- * pairs by cents, since two documents may title or classify a line
- * differently. Within each amount, every valid one-to-one assignment is
- * scored and the best wins; two different best assignments are ambiguous and
- * refuse, so row order never decides which line a source binds to. The
- * survivor keeps its own description.
- */
-
 /**
  * One order imported twice from two source documents (a pre-payment notice
  * and its receipt): move the duplicate Purchase's accepted source orders onto
@@ -146,29 +127,29 @@ export async function convergeDuplicateSourceOrder(
       .from(entityIdentity)
       .where(eq(entityIdentity.shortcode, input.duplicatePurchaseId))
       .limit(1);
-    if (!identity)
-      throw createAppError(
-        "PURCHASE_NOT_FOUND",
-        `Purchase not found: ${input.duplicatePurchaseId}`,
-      );
-    if (identity.mergedIntoId === survivorId) {
-      // Only this command's own record proves the duplicate lines were retired;
-      // a plain merge into the survivor keeps both line sets.
-      const [converged] = await tx
-        .select({ id: auditLog.id })
-        .from(auditLog)
-        .where(
-          and(
-            eq(auditLog.entityId, survivorId),
-            sql`${auditLog.changes} -> 'convergedSourceOrder' -> 'to' ->> 'duplicate' = ${identity.id}`,
-          ),
-        )
-        .limit(1);
-      if (!converged)
-        throw createAppError(
-          "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-          `${input.duplicatePurchaseId} was merged into ${input.survivorPurchaseId} without converging its lines; review the survivor's line sets.`,
-        );
+    const [converged] =
+      identity?.mergedIntoId === survivorId
+        ? await tx
+            .select({ id: auditLog.id })
+            .from(auditLog)
+            .where(
+              and(
+                eq(auditLog.entityId, survivorId),
+                sql`${auditLog.changes} -> 'convergedSourceOrder' -> 'to' ->> 'duplicate' = ${identity.id}`,
+              ),
+            )
+            .limit(1)
+        : [];
+    const replay = duplicateSourceOrderReplay({
+      identity: identity ?? null,
+      survivorId,
+      survivorCode: input.survivorPurchaseId,
+      duplicateCode: input.duplicatePurchaseId,
+      hasReceipt: Boolean(converged),
+    });
+    if (replay.kind === "refused")
+      throw createAppError(replay.code, replay.reason);
+    if (replay.kind === "already_applied")
       return {
         status: "already_applied" as const,
         survivorPurchaseId: parseShortcodeFor(
@@ -178,14 +159,7 @@ export async function convergeDuplicateSourceOrder(
         retiredExpenseIds: [],
         movedSourceOrders: 0,
       };
-    }
-    // SAFETY: the Entity row was looked up by a PUR- shortcode, so its id is a Purchase id.
-    const duplicateId = identity.id as PurchaseId;
-    if (duplicateId === survivorId)
-      throw createAppError(
-        "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-        "Name two different Purchases.",
-      );
+    const duplicateId = parseEntityId("purchase", replay.identity.id);
     const rows = await tx
       .select()
       .from(purchase)

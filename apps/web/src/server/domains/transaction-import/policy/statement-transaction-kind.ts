@@ -69,9 +69,9 @@ export function statementTransactionKind(input: {
   accountKind?: FinancialAccountIdentity["kind"];
   rawDescription?: string | null;
   /** Cubby convention: positive is money out of the account. */
-  amount: number;
+  amountMinor: bigint;
 }): StatementTransactionKind {
-  const direction = input.amount > 0 ? "outflow" : "inflow";
+  const direction = input.amountMinor > 0n ? "outflow" : "inflow";
   const signKind: FinancialTransactionKind =
     direction === "outflow" ? "purchase" : "refund";
   if (
@@ -90,7 +90,7 @@ export function statementTransactionKind(input: {
       !financialTransactionSettlementViolation({
         linked: false,
         kind,
-        amount: input.amount,
+        amount: input.amountMinor < 0n ? -1 : input.amountMinor > 0n ? 1 : 0,
       })
     )
       return { kind, kindSource: "rule" };
@@ -125,7 +125,7 @@ export function isLoanPayment(
   return (
     account.kind === "loan" &&
     statementEffectiveMovement({
-      providerAmount: 1,
+      providerAmountMinor: 100n,
       description: descriptor.rawDescription,
       merchant: descriptor.merchant,
       sourceCategory: null,
@@ -166,7 +166,7 @@ export function statementP2PRail(
  */
 export function decideStatementKind(input: {
   /** Cubby convention: positive is money out of the account. */
-  amount: number;
+  amountMinor: bigint;
   votes: StatementKindVotes;
   counterparty: StatementCounterparty;
   transfer: StatementTransactionJudgment["transfer"];
@@ -195,7 +195,7 @@ export function decideStatementKind(input: {
   ): KindDecision => ({ kind, kindSource, votes, counterparty });
   if (transfer) return decided("account_transfer", "rule");
   if (counterparty.label === "person")
-    return decided(input.amount > 0 ? "purchase" : "income", "model");
+    return decided(input.amountMinor > 0n ? "purchase" : "income", "model");
   // A kind the transaction schema refuses at this sign is never proposed.
   const cast = [votes.rule, votes.label, votes.history].filter(
     (vote): vote is FinancialTransactionKind =>
@@ -204,7 +204,7 @@ export function decideStatementKind(input: {
       !financialTransactionSettlementViolation({
         linked: false,
         kind: vote,
-        amount: input.amount,
+        amount: input.amountMinor < 0n ? -1 : input.amountMinor > 0n ? 1 : 0,
       }),
   );
   const majority = cast.find(
@@ -216,7 +216,7 @@ export function decideStatementKind(input: {
     return decided(votes.rule, "rule");
   if (votes.label && cast.includes(votes.label))
     return decided(votes.label, "model");
-  return decided(input.amount > 0 ? "purchase" : "refund", "sign");
+  return decided(input.amountMinor > 0n ? "purchase" : "refund", "sign");
 }
 
 /** Kinds that move money between accounts rather than spend it. */

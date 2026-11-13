@@ -1178,15 +1178,19 @@ async function commitFinancialBookings(
         "Spending changed after this review. Preview the booking again.",
       );
   const intents = fresh.map(bookingRowIntents);
-  const bare = pending.flatMap((review, index) =>
-    review.purchaseId ? [] : [index],
+  const bare = intents.flatMap((intent, index) =>
+    intent.purchaseReference.kind === "existing" ? [] : [index],
   );
   const purchases = await createPurchases(
     tx,
     bare.map((index) => purchaseCreateInput.parse(intents[index]!.purchase)),
     actor,
   );
-  const targets = pending.map((review) => review.purchaseId);
+  const targets = intents.map((intent) =>
+    intent.purchaseReference.kind === "existing"
+      ? intent.purchaseReference.purchaseId
+      : null,
+  );
   for (const [position, index] of bare.entries())
     targets[index] = purchases[position]!.shortcode;
   const aggregates = pending.flatMap((_, index) =>

@@ -14,6 +14,9 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/lib/sha256-text.ts",
+  "src/server/domains/transaction-import/repo/statement-policy-wire.ts",
+  "src/server/domains/financial-transaction/repo/spending-prerequisites-wire.ts",
   "src/server/domains/financial-transaction/policy/spending-category.ts",
   "src/server/domains/purchase-import/policy/replacement-lines.ts",
   "src/server/domains/purchase-import/policy/duplicate-source-order.ts",
@@ -220,7 +223,6 @@ export const repositoryOwners = [
   "src/server/domains/financial-transaction/repo/financial-allocation-integrity.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-preview.ts",
   "src/server/domains/financial-transaction/repo/financial-statement-projection.ts",
-  "src/server/domains/financial-transaction/repo/settlement-window.ts",
   "src/server/domains/image/repo/image-displayability.ts",
   "src/server/domains/image/repo/image-identification.ts",
   "src/server/domains/image/repo/image-integrity.ts",

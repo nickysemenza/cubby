@@ -10,7 +10,9 @@ import {
 } from "~/server/domains/financial-account/policy/purchaser";
 import { statementEffectiveMovement } from "~/server/domains/transaction-import/policy/statement-effective-movement";
 export type SpendingPrerequisiteFacts = {
-  source: z.infer<typeof financialSpendingSource>;
+  source: Omit<z.infer<typeof financialSpendingSource>, "amount"> & {
+    amountMinor: bigint;
+  };
   account: NonNullable<Parameters<typeof liveHouseholdLoan>[0]>;
   purchaser: { shortcode: string } | null;
 };
@@ -26,9 +28,9 @@ export function spendingBlocker(input: {
   const escrow =
     liveHouseholdLoan(facts.account) &&
     facts.source.kind === "purchase" &&
-    facts.source.amount > 0 &&
+    facts.source.amountMinor > 0n &&
     statementEffectiveMovement({
-      providerAmount: facts.source.amount,
+      providerAmountMinor: facts.source.amountMinor,
       description: facts.source.rawDescription,
       merchant: facts.source.merchant,
       sourceCategory: null,
@@ -38,9 +40,9 @@ export function spendingBlocker(input: {
   const escrowRefund =
     liveHouseholdLoan(facts.account) &&
     facts.source.kind === "refund" &&
-    facts.source.amount < 0 &&
+    facts.source.amountMinor < 0n &&
     statementEffectiveMovement({
-      providerAmount: facts.source.amount,
+      providerAmountMinor: facts.source.amountMinor,
       description: facts.source.rawDescription,
       merchant: facts.source.merchant,
       sourceCategory: null,
