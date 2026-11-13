@@ -48,6 +48,20 @@ it("carries held values, paid results, redirects and every accepted money row", 
       VALUES ($1,'synthetic:finished-without-request','synthetic-finished','{}','{}','{"retained":"snapshot"}','completed','{"retained":"result"}')`,
       [cutoverId(95)],
     );
+    await client.query(
+      `INSERT INTO "Suggestion" ("publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,data,"updatedAt")
+      VALUES ('synthetic:duplicate-captured-old','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','"old"','synthetic-model','{"answers":{"kind":{"input":{"synthetic":"duplicate"},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":"old"}}}','2026-01-01'),
+      ('synthetic:duplicate-captured-new','statement_transaction','{}','{}','sourceTransactionRecord',$1,'','"new"','synthetic-model','{"answers":{"kind":{"input":{"synthetic":"duplicate"},"versions":{"statement-transaction-kind":"2026-11-12.1"},"value":"new"}}}','2026-01-08')`,
+      [cutoverId(19)],
+    );
+    await client.query(
+      `INSERT INTO "AiEvaluation" (id,"workKey",feature,target,provenance,snapshot,state) VALUES ($1,'synthetic:terminal-history','synthetic-finished','{}','{}','{}','completed')`,
+      [cutoverId(96)],
+    );
+    await client.query(
+      `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId",receipt,sequence) VALUES ($1,$2,$3,'{"retained":"terminal-requester"}',8)`,
+      [cutoverId(97), cutoverId(96), cutoverId(14)],
+    );
     const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
       SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
       UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
@@ -75,9 +89,10 @@ it("carries held values, paid results, redirects and every accepted money row", 
     await migrateDatabase(db);
     expect(
       (
-        await client.query(`SELECT count(*)::int n FROM "Ask" WHERE id=$1`, [
-          cutoverId(95),
-        ])
+        await client.query(
+          `SELECT count(*)::int n FROM "Ask" WHERE id=ANY($1::uuid[])`,
+          [[cutoverId(95), cutoverId(96)]],
+        )
       ).rows,
     ).toEqual([{ n: 0 }]);
     expect(
@@ -96,6 +111,13 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ n: 1 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT output FROM "Answer" WHERE feature='statement-transaction-kind' AND output IN ('"old"'::jsonb,'"new"'::jsonb)`,
+        )
+      ).rows,
+    ).toEqual([{ output: "new" }]);
     expect(
       (
         await client.query(
@@ -315,7 +337,15 @@ it("carries held values, paid results, redirects and every accepted money row", 
           `SELECT count(*)::int n FROM archive."AiEvaluation_preimage"`,
         )
       ).rows[0].n,
-    ).toBe(5);
+    ).toBe(7);
+    expect(
+      (
+        await client.query(
+          `SELECT receipt FROM archive."AiEvaluationRequest_preimage" WHERE id=$1`,
+          [cutoverId(97)],
+        )
+      ).rows,
+    ).toEqual([{ receipt: { retained: "terminal-requester" } }]);
   });
 });
 
@@ -712,7 +742,7 @@ it("lets current stored authority defeat a synthesized review in both directions
         ],
       );
     }
-    for (const n of [84, 86]) {
+    for (const n of [84, 86, 87]) {
       const code = generateShortcode("product");
       await client.query(
         `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product',$2)`,
@@ -727,7 +757,19 @@ it("lets current stored authority defeat a synthesized review in both directions
       `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ('product',$1,'update','{"categoryId":{"from":null,"to":null}}','synthetic-cutover',NULL,'2026-02-01')`,
       [cutoverId(86)],
     );
+    await client.query(
+      `INSERT INTO "AuditLog" ("entityKind","entityId",action,changes,"userId",authority) VALUES ('product',$1,'create','{"categoryId":{"to":null}}','synthetic-cutover',NULL)`,
+      [cutoverId(87)],
+    );
     await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT kind FROM "Decision" WHERE subject=$1 AND field='categoryId'`,
+          [`product:${cutoverId(87)}`],
+        )
+      ).rows,
+    ).toEqual([]);
     expect(
       (
         await client.query(
