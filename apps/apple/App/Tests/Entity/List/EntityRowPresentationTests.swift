@@ -259,6 +259,10 @@ struct EntityRowPresentationTests {
             return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
                 .facts.first?.value
         }
+        for option in EntityCatalog[.product].field("dataQuality")?.valueOptions ?? [] {
+            #expect(option.label == FieldEnvelopePresentation.dataQualityLabel(option.value))
+        }
+        #expect(quality(["score": 100, "status": "complete"]) == "Done")
         #expect(quality(["score": .null, "status": "not_assessed"]) == "Waiting")
         #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Done with exceptions")
         #expect(quality(["score": 99, "status": "defect"]) == "Stuck")

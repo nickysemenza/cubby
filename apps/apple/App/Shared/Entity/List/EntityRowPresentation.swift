@@ -237,7 +237,7 @@ struct EntityRowPresentation: Sendable, Hashable {
             if field.readKey == nil {
                 text = "Not assessed"
             } else if let status = row.raw.recordValue(key)?["status"]?.stringValue {
-                text = field.valueOptions?.first { $0.value == status }?.label ?? "Unavailable"
+                text = FieldEnvelopePresentation.dataQualityLabel(status)
             } else {
                 text = FieldEnvelopePresentation.emptyLabel(
                     FieldEnvelope.of(row.raw, field: field), field: field)
