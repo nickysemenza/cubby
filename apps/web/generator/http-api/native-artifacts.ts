@@ -23,7 +23,7 @@ type EntityOutputs = ReadonlyMap<string, string | null>;
 
 // Device callers depend on these exact wire names, so the scan cannot drop them.
 const ALWAYS_TYPED_OPERATIONS = new Set([
-  "job.deviceBacklog",
+  "imageBacklog.deviceBacklog",
   "run.reportDeviceWork",
 ]);
 

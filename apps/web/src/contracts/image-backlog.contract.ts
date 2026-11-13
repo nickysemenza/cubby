@@ -11,9 +11,8 @@ const deviceBacklog = z.object({
   etaSeconds: z.number().int().nonnegative().nullable(),
 });
 export type DeviceBacklog = z.infer<typeof deviceBacklog>;
-// The native client's operation identifier is independent of the queue implementation.
 export const imageBacklogContract = defineContract(
-  "job",
+  "imageBacklog",
   {
     deviceBacklog: query({
       description:
