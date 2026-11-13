@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 
 import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
+import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +22,6 @@ import type {
 import { readMealById } from "~/server/domains/meal/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
-import { sql } from "drizzle-orm";
 
 import { scheduleCalendarFeedDirty } from "../repo/client";
 import {
@@ -362,7 +362,12 @@ describe("durable calendar dirty-mark fallback", () => {
         }),
       );
       expect(
-        (await getDb(ctx.db).execute(sql`SELECT name FROM "Pass" WHERE name = 'calendar.invalidate'`, "objects")).length > 0,
+        (
+          await getDb(ctx.db).execute(
+            sql`SELECT name FROM "Pass" WHERE name = 'calendar.invalidate'`,
+            "objects",
+          )
+        ).length > 0,
       ).toBe(true);
       consoleError.mockRestore();
     }));
