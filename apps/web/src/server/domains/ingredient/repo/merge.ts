@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 /**
  * Ingredient merge: near-duplicate candidate detection (trigram self-join) and
  * the merge operation that folds aliases + re-points usages/products onto a
@@ -17,7 +16,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
-import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
+import { DECLARED_EDGE_MERGE_POLICIES } from "~/server/db/generated/declared-edges.gen";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -37,32 +36,6 @@ import { applyMergePolicy } from "~/server/generic/removal/repo/dispositions";
 type IngredientSurvivorChanges = {
   mergedFrom: { from: null; to: string[] };
 };
-
-export const INGREDIENT_MERGE_EDGE_POLICY = {
-  "MealFoodEntry.ingredientId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description:
-      "Meal food entries retain their entered amounts while moving to the surviving ingredient.",
-  },
-  "RecipeSectionIngredient.ingredientId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description:
-      "A merged ingredient's recipe lines are re-pointed onto the surviving ingredient.",
-  },
-  "Product.ingredientId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description:
-      "A merged ingredient's linked products are re-pointed onto the surviving ingredient.",
-  },
-  "Plant.ingredientId": {
-    code: "repoint-to-survivor",
-    effect: "repoint",
-    description: "Plants linked to a merged ingredient move to the survivor.",
-  },
-} as const satisfies IncomingEdgePolicy<"ingredient", OperationDisposition>;
 
 /**
  * The serialized {@link MergeSummaryOut} (aliasesAdded / recipesMoved /
@@ -295,7 +268,7 @@ export const mergeIngredients = async (
     // would abort the HARD delete below, tombstones included.
     await applyMergePolicy(tx, {
       entity: "ingredient",
-      policy: INGREDIENT_MERGE_EDGE_POLICY,
+      policy: DECLARED_EDGE_MERGE_POLICIES.ingredient,
       keepId: target,
       loserIds: uniqueAliases,
       liveOnly: false,

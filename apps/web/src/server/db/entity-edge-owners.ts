@@ -33,8 +33,6 @@ import {
   photoRunImage,
   runStep,
   purchasePaymentEvidence,
-  recipeSection,
-  recipeSectionIngredient,
   transactionImportRecord,
   sourceObservationAnnotation,
 } from "./schema";
@@ -93,13 +91,6 @@ export const ENTITY_EDGE_OWNERS = {
   ShipmentSourcePackage: { excluded: WORKFLOW },
   ShipmentSourceCapture: { excluded: WORKFLOW },
 
-  RecipeSectionIngredient: {
-    via: {
-      column: recipeSectionIngredient.recipeSectionId,
-      table: recipeSection,
-      owner: recipeSection.recipeId,
-    },
-  },
   TransactionImportRecord: { owner: transactionImportRecord.importId },
   SourceObservationAnnotation: {
     owner: sourceObservationAnnotation.observationId,

@@ -82,8 +82,6 @@ import {
   purchase,
   purchasePaymentEvidence,
   recipe,
-  recipeSectionIngredient,
-  plant,
   planting,
   sourceTransactionRecord,
   sourceObservationAnnotation,
@@ -656,40 +654,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     },
   }),
 
-  ingredient: edges({
-    "MealFoodEntry.ingredientId": {
-      column: mealFoodEntry.ingredientId,
-      role: "usage",
-      label: "meal food entries",
-      description:
-        "A recorded ingredient quantity assigned to an eater at a meal, retaining the ingredient as its authored source.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RecipeSectionIngredient.ingredientId": {
-      column: recipeSectionIngredient.ingredientId,
-      role: "usage",
-      label: "recipe ingredient lines",
-      description:
-        "A line in a recipe section that calls for this ingredient with its own amount, unit, and note — a recipe reference, never an inventory decrement (nothing consumes stock as a side effect).",
-      liveness: { kind: "must-target-live" },
-    },
-    "Product.ingredientId": {
-      column: product.ingredientId,
-      role: "reference",
-      label: "products",
-      description:
-        "A purchasable product mapped to this ingredient — the one hop nutrition and costing resolve through (ingredient → product → fdc_id), never a direct link.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Plant.ingredientId": {
-      column: plant.ingredientId,
-      role: "reference",
-      label: "plants",
-      description:
-        "A plant can name the cooking ingredient its harvest usually becomes; informational only.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   meal: edges({
     "MealFoodEntry.mealId": {
       column: mealFoodEntry.mealId,
