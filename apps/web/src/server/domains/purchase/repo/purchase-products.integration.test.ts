@@ -23,6 +23,8 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -58,7 +60,7 @@ describe("purchase ↔ product links", () => {
 
   const mkPurchase = async (label: string, vendorName = "Link Test Vendor") => {
     const vendorId = await findOrCreateVendor(ctx.db, vendorName);
-    return insertWithShortcode(ctx.db, "purchase", {
+    return createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-02-01",
       displayLabel: label,
@@ -113,10 +115,12 @@ describe("purchase ↔ product links", () => {
       const planned = await mkPurchase("Planned evidence");
       const retired = await mkPurchase("Retired evidence");
       // Undated orders sort after dated orders in both paged and full reads.
-      await getDb(ctx.db)
-        .update(purchase)
-        .set({ date: null })
-        .where(eq(purchase.id, linked.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { date: null },
+        eq(purchase.id, linked.id),
+      );
       for (const line of [
         { cost: 20, productQuantity: 1 },
         { cost: -5, productQuantity: 0 },

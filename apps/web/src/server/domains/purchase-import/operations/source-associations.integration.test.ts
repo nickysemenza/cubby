@@ -25,6 +25,7 @@ import {
   purchase,
   user,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -74,12 +75,12 @@ describe("retained mail source associations", () => {
       },
     });
     const purchases = [
-      await insertWithShortcode(ctx.db, "purchase", {
+      await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "EXAMPLE-201",
         date: "2026-09-01",
       }),
-      await insertWithShortcode(ctx.db, "purchase", {
+      await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "EXAMPLE-202",
         date: "2026-09-02",

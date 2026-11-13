@@ -1,5 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import type { EmailPurchaseDecisionValue } from "@cubby/schemas/email-fields";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   LedgerPartyId,
   PurchaseId,
@@ -12,7 +13,7 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
 import { purchase, vendorAccount } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import { lockPartySettlement } from "./retained-settlement";
@@ -87,7 +88,7 @@ export async function createNoticePurchase(
       ),
     )
     .limit(2);
-  const created = await insertWithShortcode(tx, "purchase", {
+  const created = await createPurchaseEventRecord(tx, "purchase", {
     vendorId: input.vendorId,
     // One account names the member; several leave it to the confirmation.
     vendorAccountId: accounts.length === 1 ? accounts[0]!.id : null,
@@ -103,7 +104,7 @@ export async function createNoticePurchase(
       fields: ["vendorId", "vendorAccountId", "orderId", "date"],
     },
   ]);
-  return created.shortcode;
+  return parseShortcodeFor("purchase", created.shortcode);
 }
 
 /** Whether this Purchase still waits for its order details (`awaitingOrderDetailsSql`). */

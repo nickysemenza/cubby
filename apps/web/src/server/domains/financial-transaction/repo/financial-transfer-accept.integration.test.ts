@@ -14,10 +14,11 @@ import {
   auditLog,
   financialAccount,
   financialTransaction,
-  financialTransactionAllocation,
   ledgerTransfer,
 } from "~/server/db/schema";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 
@@ -158,7 +159,7 @@ describe("acceptFinancialTransferPair", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic evidence vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-05-03",
     });
@@ -166,14 +167,12 @@ describe("acceptFinancialTransferPair", () => {
       .select({ id: financialTransaction.id })
       .from(financialTransaction)
       .where(eq(financialTransaction.shortcode, allocatedIn));
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: allocatedRow!.id,
-        purchaseId: purchase.id,
-        amountMinor: moneyToMinor(-60),
-      });
-    await insertWithShortcode(ctx.db, "expense", {
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: allocatedRow!.id,
+      purchaseId: purchase.id,
+      amountMinor: moneyToMinor(-60),
+    });
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic booked refund",
       cost: -6000n,
       date: "2026-05-03",

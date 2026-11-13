@@ -22,6 +22,7 @@ import {
   vendor as vendorTable,
   vendorAccount,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { actorSnapshot } from "~/server/domains/run/repo/ensure-run";
 import {
   createImageFixture,
@@ -179,7 +180,7 @@ export async function importedPurchaseFixture(
       name: "Example offline seller",
       website: null,
     }));
-  const order = await insertWithShortcode(db, "purchase", {
+  const order = await createPurchaseEventRecord(db, "purchase", {
     vendorId: vendor.id,
     orderId: options.orderId ?? "SYNTHETIC-ORDER",
     date: "2026-09-01",
@@ -193,7 +194,7 @@ export async function importedPurchaseFixture(
     }),
     actor,
   );
-  await insertWithShortcode(db, "expense", {
+  await createPurchaseEventRecord(db, "expense", {
     lineKind: "principal",
     name: "Small Q-17 device",
     purchaseId: order.id,

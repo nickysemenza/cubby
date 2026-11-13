@@ -53,6 +53,7 @@ import {
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, product } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { describeDiscard } from "~/server/domains/product/repo/discard-preview";
 import { loadProductInventoryEntries } from "~/server/domains/product/repo/lookup";
 import {
@@ -64,7 +65,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 export type DiscardProductInput = {
   trade: Trade;
@@ -133,7 +133,7 @@ const writeDiscardLine = async (
   }
 
   const storedQuantity = -Math.abs(input.quantity);
-  const created = await insertWithShortcode(tx, "expense", {
+  const created = await createPurchaseEventRecord(tx, "expense", {
     name: `Discarded — ${prod.name}`,
     cost: 0n,
     date: input.date,

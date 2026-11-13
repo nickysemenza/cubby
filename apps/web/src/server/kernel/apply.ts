@@ -345,34 +345,47 @@ async function applyScope(
     computed.decisions.map((decision) => decision.id),
   );
   const heldBaseline =
-    !options.releaseBaseline &&
-    computed.storedBindings.some((binding) => binding.basis === "baseline") &&
-    (proposed.inserts.length > 0 ||
-      proposed.removals.length > 0 ||
-      proposed.merges.length > 0 ||
-      proposed.rejections.length > 0 ||
-      computed.missing.length > 0 ||
-      proposed.updates.some((update) =>
-        Object.keys(update.set).some((field) => {
-          const desiredRecord = desired.records.find(
-            (record) =>
-              record.target.name === update.target.name &&
-              record.naturalKey === update.naturalKey,
-          );
-          return !decisionIds.has(desiredRecord?.provenance[field] ?? "");
-        }),
-      ) ||
-      proposed.bindingsAdd.some(
-        (binding) =>
-          binding.basis !== "decision" &&
-          !computed.storedBindings.some(
-            (stored) =>
-              stored.basis === "baseline" &&
-              stored.fact.kind === binding.fact.kind &&
-              stored.fact.id === binding.fact.id &&
-              stored.eventKey === binding.eventKey,
-          ),
-      ));
+    desired.disagreements.length > 0 ||
+    (!options.releaseBaseline &&
+      computed.storedBindings.some((binding) => binding.basis === "baseline") &&
+      (proposed.inserts.some((insert) => {
+        const record = desired.records.find(
+          (record) =>
+            record.target.name === insert.target.name &&
+            record.naturalKey === insert.naturalKey,
+        );
+        return (
+          !record ||
+          Object.keys(record.values).some(
+            (field) => !decisionIds.has(record.provenance[field] ?? ""),
+          )
+        );
+      }) ||
+        proposed.removals.length > 0 ||
+        proposed.merges.length > 0 ||
+        proposed.rejections.length > 0 ||
+        computed.missing.length > 0 ||
+        proposed.updates.some((update) =>
+          Object.keys(update.set).some((field) => {
+            const desiredRecord = desired.records.find(
+              (record) =>
+                record.target.name === update.target.name &&
+                record.naturalKey === update.naturalKey,
+            );
+            return !decisionIds.has(desiredRecord?.provenance[field] ?? "");
+          }),
+        ) ||
+        proposed.bindingsAdd.some(
+          (binding) =>
+            binding.basis !== "decision" &&
+            !computed.storedBindings.some(
+              (stored) =>
+                stored.basis === "baseline" &&
+                stored.fact.kind === binding.fact.kind &&
+                stored.fact.id === binding.fact.id &&
+                stored.eventKey === binding.eventKey,
+            ),
+        )));
   if (heldBaseline) await recordDrift(q, computed, proposed);
   const diff: Difference = heldBaseline
     ? {

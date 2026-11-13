@@ -266,6 +266,21 @@ export async function repointOwnedReference(
 }
 export type { OwnedReferenceRepoint } from "./repoint";
 
+/** The registered owner of a column property, or null for an authored column. */
+export async function columnOwner(
+  table: PgTable,
+  column: string,
+): Promise<string | null> {
+  const kernel = await productionKernel();
+  return (
+    [...kernel.registry.reconcilers.values()].find((reconciler) =>
+      reconciler.writes.some(
+        (target) => target.table === table && target.columns.includes(column),
+      ),
+    )?.scope ?? null
+  );
+}
+
 /** A registered entity's machinery capability, or null when it has none. */
 export async function machineryCapability(
   entity: string,

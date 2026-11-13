@@ -9,6 +9,7 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { getDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   readRecordWorkQueue,
   readWorkQueue,
@@ -32,13 +33,13 @@ describe("financial Work sources", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Work facts vendor",
     });
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       displayLabel: "Synthetic Work facts order",
     });
     const line = async (cost: number) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         purchaseId: order.id,
         name: "Synthetic Work facts line",
         costType: "materials",
@@ -55,19 +56,19 @@ describe("financial Work sources", () => {
       .update(expense)
       .set({ deletedAt: new Date() })
       .where(eq(expense.id, deleted.id));
-    const empty = await insertWithShortcode(ctx.db, "purchase", {
+    const empty = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    const planned = await insertWithShortcode(ctx.db, "purchase", {
+    const planned = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2999-01-01",
     });
-    const plannedLines = await insertWithShortcode(ctx.db, "purchase", {
+    const plannedLines = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: plannedLines.id,
       name: "Synthetic planned Work line",
       costType: "materials",

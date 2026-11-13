@@ -19,6 +19,8 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -53,7 +55,7 @@ describe("reviewed booking category and refund capacity", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Booking fixture vendor",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       defaultTrade: "other",
@@ -87,7 +89,7 @@ describe("reviewed booking category and refund capacity", () => {
       cost: number,
       lineKind: "principal" | "discount" | "unclassified" = "principal",
     ) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         purchaseId: purchase.id,
         name: "Booking fixture line",
         cost: nullableWholeCentToMinor(cost),
@@ -184,10 +186,12 @@ describe("reviewed booking category and refund capacity", () => {
       }),
     );
     await commitFinancialBooking(ctx.db, review, ctx.actor);
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ cost: 100n })
-      .where(eq(expense.id, receipt.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 100n },
+      eq(expense.id, receipt.id),
+    );
     await expect(
       commitFinancialBooking(ctx.db, review, ctx.actor),
     ).rejects.toThrow(/cover|capacity|spending/i);
@@ -317,10 +321,12 @@ describe("reviewed booking category and refund capacity", () => {
       "spendingCategory",
       { name: "Reviewed item classification" },
     );
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ spendingCategoryId: otherCategory.id })
-      .where(eq(expense.id, receiptLine.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { spendingCategoryId: otherCategory.id },
+      eq(expense.id, receiptLine.id),
+    );
     await getDb(ctx.db)
       .update(purchaseTable)
       .set({ spendingCategoryId: otherCategory.id })
@@ -552,12 +558,12 @@ describe("finance.book_transaction", () => {
       name: "Synthetic shared lodge",
       aliases: ["SYNTHETIC LODGE CO"],
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       defaultTrade: "other",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Synthetic lodge stay",
       cost: 10000n,

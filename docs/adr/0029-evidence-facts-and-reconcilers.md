@@ -475,6 +475,16 @@ An input-triggered reconcile also protects accepted baselines. An automatic
 difference records a Drift proposal and applies no record changes or new asks.
 A field assignment with the current Decision as its provenance may update that
 field above the baseline; it does not authorize other automatic differences.
+A new record whose supplied values all cite current Decisions may be added to
+an accepted scope. Creation authority applies to those immutable decision
+values; it does not authorize later changes derived from new observations.
+Reference merge and removal policies use `columnOwner` and
+`repointOwnedReference` for owned foreign keys. Repointing raises table and row
+keys, including for scopes whose earlier predicate found no matching row.
+`c.disagree(input)` records unresolved drift when accepted inputs contradict
+one another and no automatic replacement is justified. It applies no records
+or asks, and approval cannot bypass the unresolved disagreement; evidence or
+a decision must first resolve it.
 
 ### 12. Cutover migration
 

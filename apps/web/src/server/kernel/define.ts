@@ -365,6 +365,8 @@ export interface Pure {
     basis: "proof" | "decision",
   ): void;
   emit(scope: ScopeRef): void;
+  /** Accepted inputs disagree without a safe automatic replacement. Applies no records. */
+  disagree(input: string): void;
   gap: {
     evidence(input: string, actor: KernelActor, options?: GapOptions): void;
     answer(input: string, actor: KernelActor, options?: GapOptions): void;
@@ -377,6 +379,7 @@ export interface Pure {
 
 /** What a reconcile returns: built only through {@link Pure}. */
 export type Desired = {
+  readonly disagreements: readonly string[];
   readonly records: readonly DesiredRecord[];
   readonly patches: readonly {
     target: ColumnRef;

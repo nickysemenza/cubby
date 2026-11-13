@@ -45,6 +45,7 @@ import {
   purchase,
   task,
 } from "~/server/db/schema";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { applyInventoryOwnershipInTransaction } from "~/server/domains/inventory/repo/ownership-mutations";
 import {
   type MutationReceipt,
@@ -455,6 +456,7 @@ export async function mergeLedgerParties(
       keepId,
       loserIds,
       liveOnly: true,
+
       overrides: (
         await DECLARED_EDGE_MERGE_HOOKS.ledgerParty({
           tx,
@@ -576,7 +578,7 @@ export const ledgerPartyMergeEdgeHandlers = (context: {
         );
       for (const [_key, group] of sharesByExpenseRole) {
         const first = group[0]!;
-        await tx.insert(expenseAttribution).values({
+        await insertPurchaseEventRows(tx, "ExpenseAttribution", {
           expenseId: first.expenseId,
           role: first.role,
           ledgerPartyId: keepId,

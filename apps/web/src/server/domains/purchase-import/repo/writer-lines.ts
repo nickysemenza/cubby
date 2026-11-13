@@ -16,6 +16,8 @@ import { eq } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { expense, importSourceProduct } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { type planLineMatch } from "~/server/domains/purchase-import/policy/accepted-source";
 import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
 import {
@@ -28,7 +30,6 @@ import {
   type LineFinding,
   type planLineMode,
 } from "~/server/domains/purchase-import/repo/writer-plan";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { LineProducts } from "./writer";
 import type { LineIdentityDecision } from "./writer-decisions";
@@ -104,7 +105,7 @@ export async function writePurchaseLines(
         existing,
       );
       if (plan) {
-        const inserted = await insertWithShortcode(tx, "expense", {
+        const inserted = await createPurchaseEventRecord(tx, "expense", {
           ...plan,
           cost: wholeCentToMinor(plan.cost),
         });
@@ -200,10 +201,12 @@ export async function writePurchaseLines(
           lineMatch,
         );
         if (binding) {
-          await tx
-            .update(expense)
-            .set(binding.values)
-            .where(eq(expense.id, binding.id));
+          await updatePurchaseEventWhere(
+            tx,
+            "expense",
+            binding.values,
+            eq(expense.id, binding.id),
+          );
           rowMutations.push({
             targetKind: "expense",
             targetId: row.id,
@@ -225,7 +228,7 @@ export async function writePurchaseLines(
           orderDate,
           unpriced,
         );
-        const inserted = await insertWithShortcode(tx, "expense", {
+        const inserted = await createPurchaseEventRecord(tx, "expense", {
           ...plan.values,
           cost: nullableWholeCentToMinor(plan.values.cost),
         });

@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { expenseAttribution, ledgerParty } from "~/server/db/schema";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -68,7 +69,9 @@ export async function replaceExpenseAttributionRole(
       ),
     );
   if (resolved.length)
-    await tx
-      .insert(expenseAttribution)
-      .values(resolved.map((row) => ({ expenseId, role, ...row })));
+    await insertPurchaseEventRows(
+      tx,
+      "ExpenseAttribution",
+      resolved.map((row) => ({ expenseId, role, ...row })),
+    );
 }

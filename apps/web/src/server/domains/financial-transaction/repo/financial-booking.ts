@@ -48,11 +48,7 @@ import {
   purchase,
   spendingCategory,
 } from "~/server/db/schema";
-import {
-  createExpenses,
-  insertStagedExpenses,
-  stageExpenses,
-} from "~/server/domains/expense/repo/crud";
+import { createExpenses } from "~/server/domains/expense/repo/crud";
 import { readExpenseAttributionParties } from "~/server/domains/expense/repo/expense-attribution";
 import {
   expenseSpendingCategoryResolutionSql,
@@ -67,21 +63,16 @@ import {
 } from "~/server/domains/financial-account/policy/purchaser";
 import { loadAccountPurchaserProofs } from "~/server/domains/financial-account/repo/purchaser";
 import { bookingAction as decideBookingAction } from "~/server/domains/financial-transaction/policy/booking-action";
-import {
-  digestValue,
-  freshBookingLineages,
-} from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { statementBookingRows } from "~/server/domains/financial-transaction/policy/booking-rows";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { lockFinancialTransactionSources } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
-import {
-  createPurchases,
-  stagePurchases,
-} from "~/server/domains/purchase/repo/purchase";
+import { createPurchases } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -92,10 +83,7 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import {
-  allocateFinancialBookings,
-  allocateFreshFinancialBookings,
-} from "./financial-transaction";
+import { allocateFinancialBookings } from "./financial-transaction";
 
 type BookingProjection = Partial<
   Pick<FinancialTransactionDollars, "amount" | "status" | "postedDate">
@@ -1192,7 +1180,10 @@ async function commitFinancialBookings(
       : null,
   );
   for (const [position, index] of bare.entries())
-    targets[index] = purchases[position]!.shortcode;
+    targets[index] = parseShortcodeFor(
+      "purchase",
+      purchases[position]!.shortcode,
+    );
   const aggregates = pending.flatMap((_, index) =>
     intents[index]!.expense ? [index] : [],
   );
@@ -1204,9 +1195,10 @@ async function commitFinancialBookings(
     actor,
   );
   if (expenses.length)
-    await getDb(txDb)
-      .update(expense)
-      .set({
+    await updatePurchaseEventWhere(
+      txDb,
+      "expense",
+      {
         bookingTransactionCode: sql`CASE ${expense.id} ${sql.join(
           expenses.map(
             (row, position) =>
@@ -1214,15 +1206,18 @@ async function commitFinancialBookings(
           ),
           sql` `,
         )} END`,
-      })
-      .where(
-        inArray(
-          expense.id,
-          expenses.map((row) => row.id),
-        ),
-      );
+      },
+      inArray(
+        expense.id,
+        expenses.map((row) => row.id),
+      ),
+      actor,
+    );
   const expenseIds = new Map(
-    aggregates.map((index, position) => [index, expenses[position]!.shortcode]),
+    aggregates.map((index, position) => [
+      index,
+      parseShortcodeFor("expense", expenses[position]!.shortcode),
+    ]),
   );
   const ids = await allocateFinancialBookings(
     tx,
@@ -1303,97 +1298,14 @@ export async function bookFreshFinancialTransactions(
   loanEscrowIds: ReadonlySet<string> = new Set(),
 ) {
   if (!raws.length) return [];
-  const db = databaseForTransaction(layer.tx);
   const { previews, rows } = await prepareBookingPreviews(
-    db,
+    databaseForTransaction(layer.tx),
     raws,
     [],
     known,
     loanEscrowIds,
   );
-  if (
-    previews.some(
-      (review) => review.action !== "create_aggregate" || review.purchaseId,
-    )
-  )
-    return commitFinancialBookings(layer.tx, previews, actor, true, rows);
-  // A purchaser can be a card's cardholder rather than its owner, so its id
-  // comes from this lock, not from the page's account parties.
-  const referenced = previews.flatMap((review) => [
-    ...(review.purchaserId ? [review.purchaserId] : []),
-    ...(review.beneficiaries?.flatMap((share) =>
-      share.partyId ? [share.partyId] : [],
-    ) ?? []),
-  ]);
-  const locked = await lockLedgerPartiesForReference(layer.tx, referenced);
-  const partyIds = new Map(
-    referenced.map((code, index) => [code, locked[index]!.id]),
-  );
-  const intents = previews.map(bookingRowIntents);
-  const purchases = stagePurchases(
-    layer,
-    previews.map((review, index) => {
-      const data = purchaseCreateInput.parse(intents[index]!.purchase);
-      return {
-        data,
-        references: {
-          vendorId: known.vendorIds.get(review.vendorId!)!,
-          vendorAccountId: null,
-          defaultProjectId: null,
-          spendingCategoryId: null,
-          purchaserOverrideId: data.purchaserOverrideId
-            ? partyIds.get(data.purchaserOverrideId)!
-            : null,
-        },
-      };
-    }),
-    actor,
-  );
-  const expenseInputs = intents.map((intent, index) =>
-    bookingExpenseWire(intent.expense!, purchases[index]!.shortcode),
-  );
-  const expenses = stageExpenses(
-    layer,
-    expenseInputs.map((data, index) => ({
-      data,
-      projectId: null,
-      purchaseId: purchases[index]!.id,
-      spendingCategoryId: previews[index]!.categoryOverride
-        ? known.categories.get(previews[index]!.categoryOverride!)!.id
-        : null,
-      bookingTransactionCode: previews[index]!.transactionId,
-    })),
-  );
-  const purchaseRows = await layer.insert("purchase", purchases);
-  const expenseRows = await insertStagedExpenses(
-    layer,
-    expenses,
-    expenseInputs,
-    actor,
-  );
-  await allocateFreshFinancialBookings(
-    layer,
-    previews.map((_, index) => ({
-      row: rows[index]!,
-      purchase: purchaseRows[index]!,
-      amount: minorToMoney(intents[index]!.allocation.amountMinor),
-      confirmsMerchant: intents[index]!.allocation.confirmsMerchant,
-    })),
-    actor,
-  );
-  const ids = rows.map((row) => row.id);
-  const lineages = previews.some((review) => review.beneficiaries?.length)
-    ? await loadFinancialBookingLineages(
-        db,
-        previews.map((review) => review.transactionId),
-      )
-    : freshBookingLineages(previews, expenseRows.map(dollarExpense));
-  await writeBookingFingerprints(db, previews, ids, lineages);
-  return previews.map((_, index) => ({
-    purchaseId: purchaseRows[index]!.shortcode,
-    expenseId: expenseRows[index]!.shortcode,
-    replayed: false,
-  }));
+  return commitFinancialBookings(layer.tx, previews, actor, true, rows);
 }
 
 export async function loadFinancialBookingLineage(

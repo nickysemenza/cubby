@@ -29,10 +29,15 @@ import {
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import {
   previewFinancialSpending,
   commitFinancialSpending,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
+import {
+  insertPurchaseEventRows,
+  updatePurchaseEventWhere,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
@@ -179,7 +184,7 @@ describe("settlement from retained order evidence", () => {
       merchant?: string;
     },
   ) {
-    return insertWithShortcode(ctx.db, "financialTransaction", {
+    return seedBankTransaction(ctx.db, {
       accountId,
       kind: input.amount < 0 ? "refund" : "purchase",
       status: input.status ?? "posted",
@@ -418,10 +423,12 @@ describe("settlement from retained order evidence", () => {
       postedDate: "2026-09-02",
     });
     await charge(card.id, { amount: 30, postedDate: "2026-09-03" });
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-07-01" })
-      .where(eq(purchase.id, purchaseId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-07-01" },
+      eq(purchase.id, purchaseId),
+    );
     await getDb(ctx.db)
       .update(purchasePaymentEvidence)
       .set({ chargedAt: null })
@@ -458,10 +465,12 @@ describe("settlement from retained order evidence", () => {
       commitFinancialSpending(ctx.db, held, ctx.actor),
     ).rejects.toThrow(/review/i);
     expect(await allocationsFor([purchaseId])).toEqual([]);
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-09-02" })
-      .where(eq(purchase.id, purchaseId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-09-02" },
+      eq(purchase.id, purchaseId),
+    );
     await getDb(ctx.db)
       .update(purchasePaymentEvidence)
       .set({ chargedAt: new Date("2026-09-02T12:00:00Z") })
@@ -598,10 +607,12 @@ describe("settlement from retained order evidence", () => {
     });
     await charge(card.id, { amount: 80, postedDate: "2026-02-02" });
     await settleRetained();
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-02-01" })
-      .where(eq(purchase.id, purchaseId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-02-01" },
+      eq(purchase.id, purchaseId),
+    );
     const [retained] = await getDb(ctx.db)
       .select()
       .from(purchasePaymentEvidence)
@@ -1205,7 +1216,7 @@ describe("settlement from retained order evidence", () => {
 
   it("ignores a same-amount card payment or transfer instead of failing the pass", async () => {
     const { card, run } = await world();
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await seedBankTransaction(ctx.db, {
       accountId: card.id,
       kind: "credit_card_payment",
       status: "posted",
@@ -1307,13 +1318,11 @@ describe("settlement from retained order evidence", () => {
     });
     // The second leg never arrived, so the order stays unsettled; record the
     // first leg by hand, as a reviewer would.
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: settledLeg.id,
-        purchaseId: partly,
-        amountMinor: moneyToMinor(30),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: settledLeg.id,
+      purchaseId: partly,
+      amountMinor: moneyToMinor(30),
+    });
     await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
     const other = await importOrder(run, {
       orderId: "FW-7002",

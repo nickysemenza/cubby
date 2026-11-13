@@ -15,6 +15,8 @@ import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, touchUpdatedAt } from "~/server/db/helpers";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { allocationSetViolation } from "~/server/domains/financial-transaction/policy/allocation-set";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -266,7 +268,11 @@ export async function writeAllocationSets(
       )),
     );
   if (inserts.length)
-    await tx.insert(financialTransactionAllocation).values(inserts);
+    await insertPurchaseEventRows(
+      tx,
+      "FinancialTransactionAllocation",
+      inserts,
+    );
 }
 
 /** Applies removals and changed slices; returns the new slices to insert. */
@@ -316,20 +322,21 @@ async function writeChangedAllocations(
       moneyToMinor(prior.amount) !== moneyToMinor(row.amount) ||
       prior.confirmsMerchant !== confirmsMerchant
     )
-      await tx
-        .update(financialTransactionAllocation)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "FinancialTransactionAllocation",
+        {
           amountMinor: moneyToMinor(row.amount),
           confirmsMerchant,
           updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(financialTransactionAllocation.transactionId, transactionId),
-            eq(financialTransactionAllocation.purchaseId, row.purchaseId),
-            notDeleted(financialTransactionAllocation),
-          ),
-        );
+        },
+        and(
+          eq(financialTransactionAllocation.transactionId, transactionId),
+          eq(financialTransactionAllocation.purchaseId, row.purchaseId),
+          notDeleted(financialTransactionAllocation),
+        ),
+        actor,
+      );
   }
   return inserts;
 }

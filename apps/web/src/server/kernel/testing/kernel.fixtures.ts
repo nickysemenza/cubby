@@ -144,6 +144,8 @@ export const receiptEvidence = defineEvidence({
 export type FixtureHooks = {
   predicateReceipts?: boolean;
   linked?: boolean;
+  linkedDecision?: boolean;
+  disagreement?: () => string | null;
   /** Runs inside each `load`, before it reads; tests mutate inputs here. */
   onLoad?: (scope: string, keys: readonly string[]) => Promise<void>;
   /** Runs inside each `load`, after its reads and before the apply. */
@@ -232,7 +234,9 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
     writes: [
       purchaseWrites,
       bindingWrites,
-      ...(hooks.linked ? [expenseWrites, allocationWrites] : []),
+      ...(hooks.linked || hooks.linkedDecision
+        ? [expenseWrites, allocationWrites]
+        : []),
     ],
     async load(reads, keys) {
       await hooks.onLoad?.(PURCHASE_SCOPE, keys);
@@ -278,6 +282,8 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
           c.retire(purchaseWrites, key, "remove");
         return c.done();
       }
+      const disagreement = hooks.disagreement?.();
+      if (disagreement) c.disagree(disagreement);
       const id = c.recordId(purchaseWrites, "event");
       const assigned = id
         ? (c.assignments(recordSubject(PURCHASE_TABLE, id)).get("merchant") ??
@@ -302,16 +308,48 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
         },
         { provenance: assigned ? { merchant: assigned.id } : {} },
       );
-      if (hooks.linked) {
-        const expenseId = c.record(expenseWrites, "expense", {
-          purchaseId,
-          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-        });
-        c.record(allocationWrites, "allocation", {
-          purchaseId,
-          expenseId,
-          amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
-        });
+      const linked = id
+        ? c.decision("assignment", recordSubject(PURCHASE_TABLE, id), "linked")
+        : null;
+      if (hooks.linked || (hooks.linkedDecision && linked?.value === true)) {
+        const provenance = (target: typeof expenseWrites, fields: string[]) =>
+          linked &&
+          !c.recordId(
+            target,
+            target === expenseWrites ? "expense" : "allocation",
+          )
+            ? Object.fromEntries(fields.map((field) => [field, linked.id]))
+            : {};
+        const expenseId = c.record(
+          expenseWrites,
+          "expense",
+          {
+            purchaseId,
+            amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          },
+          {
+            provenance: provenance(expenseWrites, [
+              "purchaseId",
+              "amountMinor",
+            ]),
+          },
+        );
+        c.record(
+          allocationWrites,
+          "allocation",
+          {
+            purchaseId,
+            expenseId,
+            amountMinor: charge?.amountMinor ?? receipt!.amountMinor,
+          },
+          {
+            provenance: provenance(allocationWrites, [
+              "purchaseId",
+              "expenseId",
+              "amountMinor",
+            ]),
+          },
+        );
       }
       if (!receipt)
         c.gap.evidence("the order receipt", sourceActor("Synthetic mailbox"));

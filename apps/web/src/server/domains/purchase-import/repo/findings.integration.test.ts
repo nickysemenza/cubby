@@ -11,6 +11,7 @@ import {
   orderMailEvent,
   user,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createInventoryFixture,
@@ -82,7 +83,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       userId: ctx.actor.userId,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Findings Test Vendor");
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-01-01",
       displayLabel: "Two-line delivered order",
@@ -100,7 +101,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ),
     ]);
     await Promise.all([
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line A",
         cost: 1000n,
@@ -109,7 +110,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
         productId: productA.entityId,
         purchaseId: purchase.id,
       }),
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name: "Line B",
         cost: 2000n,
@@ -222,7 +223,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       userId: ctx.actor.userId,
     });
     const vendorId = await findOrCreateVendor(ctx.db, "Findings Mixed Vendor");
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-01-01",
       displayLabel: "Mixed delivered order",
@@ -250,7 +251,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ["Tracked line", tracked],
       ["Untracked line", untracked],
     ] as const)
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         name,
         cost: 1000n,
@@ -303,7 +304,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
     const [decided, empty] = await Promise.all(
       ["Later decided order", "Order with no product line"].map(
         (displayLabel) =>
-          insertWithShortcode(ctx.db, "purchase", {
+          createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId,
             date: "2026-01-01",
             displayLabel,
@@ -315,7 +316,7 @@ describe("resolveArrivedFindingsForPurchase", () => {
       makeProductInput({ name: "Arrived later untracked snack" }),
       ctx.actor,
     );
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Snack line",
       cost: 1000n,

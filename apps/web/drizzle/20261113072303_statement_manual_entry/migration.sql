@@ -78,3 +78,69 @@ ON CONFLICT ("inputHash") DO NOTHING;
 INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage)
 SELECT 'bankEvent', id::text, 0, '', 'done' FROM "SourceOccurrence"
 ON CONFLICT ("scopeKind", "scopeKey") DO NOTHING;
+
+--> statement-breakpoint
+CREATE TEMP TABLE cubby_purchase_event_seed AS
+SELECT 'purchase'::text AS entity, 'Purchase'::text AS table_name, p.id,
+  coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId" = p.id AND a."deletedAt" IS NULL), p.id::text) AS scope_key,
+  (to_jsonb(p) - ARRAY['id','shortcode','createdAt','updatedAt','deletedAt','statedTotalMinor']) || jsonb_build_object('statedTotal', p."statedTotalMinor"::text) AS payload,
+  p."deletedAt" AS rejected_at
+FROM "Purchase" p
+UNION ALL
+SELECT 'expense', 'Expense', e.id,
+  coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId" = p.id AND a."deletedAt" IS NULL), p.id::text) FROM "Purchase" p WHERE p.id = e."purchaseId"), e.id::text),
+  (to_jsonb(e) - ARRAY['id','shortcode','createdAt','updatedAt','deletedAt','costMinor']) || jsonb_build_object('cost', e."costMinor"::text), e."deletedAt"
+FROM "Expense" e
+UNION ALL
+SELECT 'FinancialTransactionAllocation', 'FinancialTransactionAllocation', a.id, a."transactionId"::text,
+  (to_jsonb(a) - ARRAY['id','createdAt','updatedAt','deletedAt']) || jsonb_build_object('amountMinor', a."amountMinor"::text), a."deletedAt"
+FROM "FinancialTransactionAllocation" a
+UNION ALL
+SELECT 'ExpenseAttribution', 'ExpenseAttribution', a.id,
+  coalesce((SELECT coalesce((SELECT min(s."transactionId"::text) FROM "FinancialTransactionAllocation" s WHERE s."purchaseId" = e."purchaseId" AND s."deletedAt" IS NULL), e."purchaseId"::text, e.id::text) FROM "Expense" e WHERE e.id = a."expenseId"), a.id::text),
+  to_jsonb(a) - ARRAY['id','createdAt','updatedAt','deletedAt'], a."deletedAt"
+FROM "ExpenseAttribution" a;
+--> statement-breakpoint
+INSERT INTO "ManualEntry" (id, entity, "userId", payload)
+SELECT md5('manualEntry:' || table_name || ':' || id)::uuid, entity, 'legacy:household',
+  jsonb_build_object('purchaseEvent', scope_key, 'table', table_name, 'naturalKey', 'legacy:' || id, 'values', payload)
+FROM cubby_purchase_event_seed
+ON CONFLICT (id) DO NOTHING;
+--> statement-breakpoint
+INSERT INTO "RecordKey" ("scopeKind", "scopeKey", entity, "naturalKey", "entityId", "rejectedAt")
+SELECT 'purchaseEvent', scope_key, entity, 'legacy:' || id, id, rejected_at
+FROM cubby_purchase_event_seed;
+--> statement-breakpoint
+INSERT INTO "EvidenceBinding" ("factKind", "factId", "eventKey", basis, "scopeKind", "scopeKey")
+SELECT 'manualEntry', md5('manualEntry:' || table_name || ':' || id)::uuid, id::text, 'baseline', 'purchaseEvent', scope_key
+FROM cubby_purchase_event_seed;
+--> statement-breakpoint
+INSERT INTO "FactKey" ("factKind", "factId", key)
+SELECT 'manualEntry', md5('manualEntry:' || table_name || ':' || id)::uuid, 'purchaseEvent:' || scope_key FROM cubby_purchase_event_seed
+UNION ALL
+SELECT 'manualEntry', md5('manualEntry:' || table_name || ':' || id)::uuid, 'manual:' || md5('manualEntry:' || table_name || ':' || id)::uuid FROM cubby_purchase_event_seed;
+--> statement-breakpoint
+INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage)
+SELECT DISTINCT 'purchaseEvent', scope_key, 0, '', 'done' FROM cubby_purchase_event_seed
+ON CONFLICT ("scopeKind", "scopeKey") DO NOTHING;
+--> statement-breakpoint
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cubby_purchase_event_seed s LEFT JOIN "RecordKey" k ON k.entity = s.entity AND k."entityId" = s.id AND k."scopeKind" = 'purchaseEvent' AND k."scopeKey" = s.scope_key AND k."naturalKey" = 'legacy:' || s.id WHERE k."entityId" IS NULL) THEN
+    RAISE EXCEPTION 'Purchase event identity preservation failed';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM cubby_purchase_event_seed s JOIN "Expense" e ON s.entity = 'expense' AND s.id = e.id
+    WHERE (s.payload->>'cost')::bigint IS DISTINCT FROM e."costMinor"
+  ) OR EXISTS (
+    SELECT 1 FROM cubby_purchase_event_seed s JOIN "Purchase" p ON s.entity = 'purchase' AND s.id = p.id
+    WHERE (s.payload->>'statedTotal')::bigint IS DISTINCT FROM p."statedTotalMinor"
+  ) OR EXISTS (
+    SELECT 1 FROM cubby_purchase_event_seed s JOIN "FinancialTransactionAllocation" a ON s.entity = 'FinancialTransactionAllocation' AND s.id = a.id
+    WHERE (s.payload->>'amountMinor')::bigint IS DISTINCT FROM a."amountMinor"
+  ) THEN RAISE EXCEPTION 'Purchase event exact money preservation failed'; END IF;
+
+END $$;
+
+--> statement-breakpoint
+DROP TABLE cubby_purchase_event_seed;

@@ -40,6 +40,7 @@ import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automa
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { listSuggestionPage } from "~/server/generic/suggestions/repo/suggestion-list";
 import { buildCrudServices } from "~/server/http/request-context";
+import { decide, reconcileNow } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import {
@@ -137,6 +138,65 @@ describe("statement spending review and re-import", () => {
     );
     return { input, recorded, account, advice };
   }
+  it("books a statement charge with stable linked records through the kernel", async () => {
+    const setup = await fixture("kernel-charge-one");
+    const [occurrence] = await getDb(ctx.db).select().from(sourceOccurrence);
+    await decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "kind",
+        value: "purchase",
+        scopes: [{ kind: "bankEvent", key: occurrence!.id }],
+      },
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: `bank:${occurrence!.id}`,
+        field: "accountId",
+        value: setup.account.output.id,
+        scopes: [{ kind: "bankEvent", key: occurrence!.id }],
+      },
+    ]);
+    const bank = await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: occurrence!.id },
+    ]);
+    expect(bank[0]?.status).toBe("applied");
+    const transactions = await getDb(
+      ctx.db,
+    ).query.financialTransaction.findMany();
+    expect(transactions).toHaveLength(1);
+    const scope = { kind: "purchaseEvent", key: transactions[0]!.id };
+    const outcomes = await reconcileNow(ctx.db, [scope]);
+    expect(outcomes[0]?.error).toBeUndefined();
+    expect(outcomes[0]?.gaps).toEqual([]);
+    const before = await getDb(ctx.db).execute<{
+      id: string;
+      expense: string;
+      allocation: string;
+      costMinor: string;
+      amountMinor: string;
+    }>(
+      sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
+    );
+    expect(before.rows).toHaveLength(1);
+    expect(before.rows[0]).toMatchObject({
+      costMinor: "4250",
+      amountMinor: "4250",
+    });
+    await reconcileNow(ctx.db, [scope]);
+    const after = await getDb(ctx.db).execute<{
+      id: string;
+      expense: string;
+      allocation: string;
+      costMinor: string;
+      amountMinor: string;
+    }>(
+      sql`SELECT p.id, e.id AS expense, a.id AS allocation, e."costMinor", a."amountMinor" FROM "Purchase" p JOIN "Expense" e ON e."purchaseId"=p.id JOIN "FinancialTransactionAllocation" a ON a."purchaseId"=p.id`,
+    );
+    expect(after.rows).toEqual(before.rows);
+  });
   const total = async () =>
     Number(
       (

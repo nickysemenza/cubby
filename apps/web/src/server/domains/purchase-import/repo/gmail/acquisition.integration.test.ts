@@ -19,6 +19,7 @@ import {
   importSourceOrder,
   emailClassificationObservation,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
@@ -740,7 +741,7 @@ describe("Gmail acquisition retention and replay", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic merchant",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
     });
     const mail = await syntheticRetainedMail(ctx.db, {

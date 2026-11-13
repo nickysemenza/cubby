@@ -7,6 +7,7 @@ import { expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 
 import {
   expenseDerivedReadSql,
@@ -32,7 +33,7 @@ it("keeps zero-cent Project shares in Expense membership", async () => {
   const vendor = await insertWithShortcode(ctx.db, "vendor", {
     name: "Synthetic cent-share vendor",
   });
-  const order = await insertWithShortcode(ctx.db, "purchase", {
+  const order = await createPurchaseEventRecord(ctx.db, "purchase", {
     vendorId: vendor.id,
     date: "2026-09-20",
   });
@@ -40,7 +41,7 @@ it("keeps zero-cent Project shares in Expense membership", async () => {
     [small.id, 1],
     [large.id, 2],
   ] as const) {
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Synthetic cent-share principal",
       purchaseId: order.id,
       projectId,
@@ -52,7 +53,7 @@ it("keeps zero-cent Project shares in Expense membership", async () => {
       future: false,
     });
   }
-  const tax = await insertWithShortcode(ctx.db, "expense", {
+  const tax = await createPurchaseEventRecord(ctx.db, "expense", {
     name: "Synthetic cent-share tax",
     purchaseId: order.id,
     date: "2026-09-20",
@@ -91,14 +92,14 @@ it("keeps broad prepared scopes set-based and sparse scopes on full sibling weig
   let firstPurchase;
   let firstTax: ExpenseId | undefined;
   for (let index = 0; index < 200; index++) {
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       defaultProjectId: project.id,
       date: "2026-09-20",
     });
     firstPurchase ??= purchase;
     for (const lineKind of ["principal", "principal", "tax"] as const) {
-      const line = await insertWithShortcode(ctx.db, "expense", {
+      const line = await createPurchaseEventRecord(ctx.db, "expense", {
         name: "Synthetic scope line",
         purchaseId: purchase.id,
         date: "2026-09-20",

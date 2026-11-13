@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadProductMatchSides } from "~/server/domains/product/repo/match/product-match";
 import {
   getProductMovementTimeline,
@@ -52,7 +53,7 @@ describe("undated Purchase readers", () => {
       ctx.db,
       "Synthetic undated vendor",
     );
-    const undated = await insertWithShortcode(ctx.db, "purchase", {
+    const undated = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: null,
       orderId: "UNDATED",
@@ -89,7 +90,7 @@ describe("undated Purchase readers", () => {
       ).groups,
     ).toEqual([]);
 
-    const dated = await insertWithShortcode(ctx.db, "purchase", {
+    const dated = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: "2026-03-04",
       orderId: "DATED",
@@ -118,7 +119,7 @@ describe("undated Purchase readers", () => {
       ctx.db,
       "Synthetic calendar vendor",
     );
-    const parent = await insertWithShortcode(ctx.db, "purchase", {
+    const parent = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date: null,
       orderId: "CALENDAR",

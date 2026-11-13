@@ -60,6 +60,9 @@ import {
   shipmentObservation,
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { controlRun } from "~/server/domains/run/repo/run-control";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -145,7 +148,7 @@ describe("caller-driven purchase import", () => {
         receivedAt: new Date("2026-09-20T01:00:00Z"),
       });
       const target = existing
-        ? await insertWithShortcode(ctx.db, "purchase", {
+        ? await createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId: vendor.id,
             date: existing,
           })
@@ -489,7 +492,7 @@ describe("caller-driven purchase import", () => {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: "Synthetic seed shop", website: "https://seed.example" },
     });
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: parseEntityId("vendor", vendor.id),
       date: "2026-09-20",
       statedTotal: moneyToMinor(18.5),
@@ -738,10 +741,12 @@ describe("caller-driven purchase import writes", () => {
         defaultTrade: "other",
       });
       const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
-      await getDb(ctx.db)
-        .update(purchase)
-        .set({ orderId: null })
-        .where(eq(purchase.id, saved.id));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { orderId: null },
+        eq(purchase.id, saved.id),
+      );
       const gaps = (await loadDataQualities(ctx.db, "purchase", [saved.id]))
         .get(saved.id)
         ?.gaps.map((gap) => gap.check)
@@ -885,7 +890,7 @@ describe("caller-driven purchase import writes", () => {
 
   it("imports a supported receipt without inventing purpose or replacing member attribution", async () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "EXAMPLE-UNKNOWN-PURPOSE",
       defaultTrade: "other",
@@ -938,14 +943,14 @@ describe("caller-driven purchase import writes", () => {
         },
         { title: "Synthetic sales tax", amount: 3, lineKind: "tax" },
       ];
-      const target = await insertWithShortcode(ctx.db, "purchase", {
+      const target = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "SYNTHETIC-ITEMIZED-CHOICES",
         date: "2026-09-01",
         defaultTrade: "other",
       });
       for (const line of lines)
-        await insertWithShortcode(ctx.db, "expense", {
+        await createPurchaseEventRecord(ctx.db, "expense", {
           purchaseId: target.id,
           name: line.title,
           cost: nullableWholeCentToMinor(line.amount),
@@ -1102,7 +1107,7 @@ describe("caller-driven purchase import writes", () => {
       const existing =
         selection === "new_purchase"
           ? undefined
-          : await insertWithShortcode(ctx.db, "purchase", {
+          : await createPurchaseEventRecord(ctx.db, "purchase", {
               vendorId: vendor.id,
               orderId: "EXAMPLE-MEMBER-PURPOSE",
               date: "2026-09-01",
@@ -1115,7 +1120,7 @@ describe("caller-driven purchase import writes", () => {
         existing &&
         (selection === "line_project" || selection === "line_trade")
       )
-        await insertWithShortcode(ctx.db, "expense", {
+        await createPurchaseEventRecord(ctx.db, "expense", {
           purchaseId: existing.id,
           name: "Synthetic service",
           date: "2026-09-01",
@@ -1263,11 +1268,11 @@ describe("caller-driven purchase import writes", () => {
   }
 
   async function existingServiceOrder(vendorId: VendorId) {
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       orderId: "ORDER-ONE",
     });
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: existing.id,
       name: "Synthetic annual service",
       trade: "other",
@@ -1382,7 +1387,7 @@ describe("caller-driven purchase import writes", () => {
 
   it("preserves historical dismissal when the writer would find a known order without an explicit purchaseRef", async () => {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "ORDER-ONE",
     });
@@ -1971,18 +1976,14 @@ describe("shared purchase-import prepare and commit", () => {
         ledgerPartyId: party.id,
       },
     );
-    const postedCharge = await insertWithShortcode(
-      ctx.db,
-      "financialTransaction",
-      {
-        accountId: financialAccount.id,
-        kind: "purchase",
-        status: "posted",
-        amount: moneyToMinor(12.34),
-        transactionDate: null,
-        postedDate: "2026-09-21",
-      },
-    );
+    const postedCharge = await seedBankTransaction(ctx.db, {
+      accountId: financialAccount.id,
+      kind: "purchase",
+      status: "posted",
+      amount: moneyToMinor(12.34),
+      transactionDate: null,
+      postedDate: "2026-09-21",
+    });
     const prepareInput = {
       _runExecution: {
         runId: run.id,
@@ -2551,7 +2552,7 @@ describe("shared purchase-import prepare and commit", () => {
     });
     // A household member recorded this order by hand before any import ran:
     // one aggregate Expense, no Product, no source claim.
-    const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
+    const manualPurchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: targetOrderless ? null : "MANUAL-ORDER-1",
       date: "2026-09-18",
@@ -2562,7 +2563,7 @@ describe("shared purchase-import prepare and commit", () => {
           name: "Replacement category",
         })
       : null;
-    const manualExpense = await insertWithShortcode(ctx.db, "expense", {
+    const manualExpense = await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: manualPurchase.id,
       name: "Recorded from a paper receipt",
       cost: 4500n,
@@ -2876,10 +2877,12 @@ describe("shared purchase-import prepare and commit", () => {
         await getDb(ctx.db).select(dollarExpenseColumns()).from(expense),
       ).toEqual(before);
       if (editAfterPreview)
-        await getDb(ctx.db)
-          .update(expense)
-          .set({ notes: "Changed after preview" })
-          .where(eq(expense.id, manualExpense.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "expense",
+          { notes: "Changed after preview" },
+          eq(expense.id, manualExpense.id),
+        );
       if (editProposal) {
         const [stored] = await getDb(ctx.db)
           .select()
@@ -3001,12 +3004,14 @@ describe("shared purchase-import prepare and commit", () => {
         ctx.actor,
       );
       if (change === "accepted_identity") {
-        await getDb(ctx.db)
-          .update(purchase)
-          .set({ orderId: "DISTINCT-ACCEPTED-ORDER" })
-          .where(eq(purchase.id, manualPurchase.id));
+        await updatePurchaseEventWhere(
+          ctx.db,
+          "purchase",
+          { orderId: "DISTINCT-ACCEPTED-ORDER" },
+          eq(purchase.id, manualPurchase.id),
+        );
       } else {
-        await insertWithShortcode(ctx.db, "purchase", {
+        await createPurchaseEventRecord(ctx.db, "purchase", {
           vendorId: manualPurchase.vendorId,
           orderId: "MANUAL-ORDER-1",
           date: "2026-09-18",
@@ -3144,13 +3149,13 @@ describe("shared purchase-import prepare and commit", () => {
     );
     // This member already fully recorded the order by hand: a Purchase, an
     // Expense, AND its Product — nothing here is a replaceable aggregate.
-    const manualPurchase = await insertWithShortcode(ctx.db, "purchase", {
+    const manualPurchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "MANUAL-ORDER-2",
       date: "2026-09-19",
       statedTotal: moneyToMinor(18),
     });
-    const manualExpense = await insertWithShortcode(ctx.db, "expense", {
+    const manualExpense = await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: manualPurchase.id,
       name: "Already-identified manual product",
       cost: 1800n,

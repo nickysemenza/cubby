@@ -11,6 +11,8 @@ import { z } from "zod";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { updatePurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 
 import { expenseSpendingCategoryResolutionSql } from "./expense-category-resolution";
@@ -58,12 +60,12 @@ describe("Expense category resolution", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Fixture mixed shop",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       date: "2026-09-01",
       vendorId: vendor.id,
       spendingCategoryId: electronics.id,
     });
-    const expense = await insertWithShortcode(ctx.db, "expense", {
+    const expense = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Fixture shoes",
       date: "2026-09-01",
       cost: 6000n,
@@ -139,7 +141,7 @@ describe("Expense category resolution", () => {
     const f = await fixture();
     const ids = [f.expense.id];
     for (let index = 0; index < 12; index++) {
-      const line = await insertWithShortcode(ctx.db, "expense", {
+      const line = await createPurchaseEventRecord(ctx.db, "expense", {
         name: `Shared taxonomy fixture ${index}`,
         cost: 100n,
         date: "2026-09-01",
@@ -160,7 +162,7 @@ describe("Expense category resolution", () => {
       brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: otherRoot.id,
     });
-    const otherLine = await insertWithShortcode(ctx.db, "expense", {
+    const otherLine = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Shared taxonomy unrelated root",
       cost: 300n,
       date: "2026-09-01",
@@ -235,10 +237,13 @@ describe("Expense category resolution", () => {
 
   it("does not inherit Purchase category or trade for an unresolved receipt role", async () => {
     const f = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "defaultTrade"=${tradeSchema.enum.other} WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { defaultTrade: tradeSchema.enum.other } }],
+      ctx.actor,
     );
-    const unresolved = await insertWithShortcode(ctx.db, "expense", {
+    const unresolved = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Unresolved adjustment evidence",
       date: "2026-09-01",
       cost: 125n,
@@ -265,8 +270,11 @@ describe("Expense category resolution", () => {
       sql`UPDATE "ProductCategory" SET "spendingCategoryId"=${f.electronics.id} WHERE id=${f.root.id}`,
     );
     expect(await effective(f.expense.id)).toBe(f.electronics.id);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "spendingCategoryId"=${f.gifts.id} WHERE id=${f.expense.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "expense",
+      [{ id: f.expense.id, values: { spendingCategoryId: f.gifts.id } }],
+      ctx.actor,
     );
     expect(await effective(f.expense.id)).toBe(f.gifts.id);
     await unwrapDb(ctx.db).execute(
@@ -279,12 +287,18 @@ describe("Expense category resolution", () => {
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "ProductCategory" SET "spendingCategoryMode"='blocked' WHERE id=${f.child.id}`,
     );
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { spendingCategoryId: null } }],
+      ctx.actor,
     );
     expect(await effective(f.expense.id)).toBeNull();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=${f.gifts.id} WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { spendingCategoryId: f.gifts.id } }],
+      ctx.actor,
     );
     expect(await effective(f.expense.id)).toBe(f.gifts.id);
   });
@@ -293,8 +307,11 @@ describe("Expense category resolution", () => {
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Vendor" SET "defaultSpendingCategoryId"=${f.gifts.id} WHERE id=${f.vendor.id}`,
     );
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { spendingCategoryId: null } }],
+      ctx.actor,
     );
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.inherit},"spendingCategoryId"=NULL WHERE id=${f.root.id}`,
@@ -319,12 +336,18 @@ describe("Expense category resolution", () => {
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.inherit},"spendingCategoryId"=NULL WHERE id=${f.root.id}`,
     );
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=${f.electronics.id} WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { spendingCategoryId: f.electronics.id } }],
+      ctx.actor,
     );
     expect(await effective(f.expense.id)).toBe(f.electronics.id);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "spendingCategoryId"=NULL WHERE id=${f.purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: f.purchase.id, values: { spendingCategoryId: null } }],
+      ctx.actor,
     );
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "ProductCategory" SET "spendingCategoryMode"=${spendingCategoryMappingMode.enum.blocked} WHERE id=${f.child.id}`,

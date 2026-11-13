@@ -12,6 +12,7 @@ import {
   createExpense,
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
@@ -36,7 +37,7 @@ describe("vendor attribution defaults", () => {
     attribution: { beneficiaries?: Shares; funders?: Shares },
   ) => {
     const vendorId = await findOrCreateVendor(ctx.db, vendorName);
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId,
       date,
     });

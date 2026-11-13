@@ -19,6 +19,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
 import { loadFinancialBookingLineage } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
@@ -83,10 +84,12 @@ describe("generated booking evidence corrections", () => {
       funders: [{ partyId: owner.output.id, weight: 2 }],
     });
     // Booking provenance is storage-only; all entity defaults come from writers.
-    await getDb(ctx.db)
-      .update(expense)
-      .set({ bookingTransactionCode: transaction.output.id })
-      .where(eq(expense.id, line.entityId));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { bookingTransactionCode: transaction.output.id },
+      eq(expense.id, line.entityId),
+    );
     await getDb(ctx.db)
       .update(financialTransaction)
       .set({

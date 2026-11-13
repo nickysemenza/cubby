@@ -16,8 +16,8 @@ separate live-only unique index still enforces active observation identity.
 ## Money rules
 
 Pure policy lives under `apps/web/src/server/domains/<domain>/policy/`.
-Repositories load evidence, apply decisions and retain transaction and lock
-ownership. Empty searches are evidence too: loaders must supply empty arrays
+Repositories load evidence and submit observations and decisions. The kernel
+owns applying the money reconcilers under its household write gate. Empty searches are evidence too: loaders must supply empty arrays
 and explicit missing rows rather than omit competing candidates.
 
 | Domain / module                                         | Decision and read inputs                                                                                                                                                                                                                                                                                                                                                                                      |

@@ -96,7 +96,11 @@ async function proposeOrAdvance(
   const diff = difference(computed, {
     releaseBaseline: true,
   });
-  if (semanticallyEmpty(diff) && !computed.missing.length) {
+  if (
+    semanticallyEmpty(diff) &&
+    !computed.missing.length &&
+    !computed.desired.disagreements.length
+  ) {
     await q.execute(sql`
       UPDATE "ScopeState" SET version = ${reconciler.version}, rules = ${reconciler.rules}
       WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`);
@@ -114,7 +118,9 @@ export async function recordDrift(
 ): Promise<void> {
   const { scope, reconciler } = computed;
   const proposal = {
-    difference: describeDifference(diff),
+    difference: Object.assign({}, describeDifference(diff), {
+      disagreements: computed.desired?.disagreements ?? [],
+    }),
     askCount: computed.missing.length,
     estimatedCostMicros: computed.missing.reduce(
       (sum, missing) =>
@@ -283,6 +289,7 @@ export async function approveDrift(
   });
   if (
     computed!.inputsHash !== proposal.inputsHash ||
+    !!computed!.desired?.disagreements.length ||
     computed!.error !== null
   ) {
     await releaseClaim(

@@ -18,6 +18,7 @@ import {
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
@@ -111,7 +112,7 @@ describe("imported shipment source identity", () => {
     "records verified retained mail with a Run=%s",
     async (withRun) => {
       const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
-      const target = await insertWithShortcode(ctx.db, "purchase", {
+      const target = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         orderId: "SYN-SOURCE-101",
       });

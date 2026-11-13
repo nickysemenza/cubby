@@ -43,6 +43,7 @@ import {
   purchase,
   vendor,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   cubbyToolResult,
@@ -666,10 +667,12 @@ describe("Mail import claim", () => {
     const version = z
       .object({ evidenceVersion: z.string() })
       .parse(claimed).evidenceVersion;
-    await getDb(ctx.db)
-      .update(purchase)
-      .set({ date: "2026-09-02" })
-      .where(eq(purchase.id, target.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "purchase",
+      { date: "2026-09-02" },
+      eq(purchase.id, target.id),
+    );
     await getDb(ctx.db)
       .update(vendor)
       .set({ name: "Synthetic renamed shop" })

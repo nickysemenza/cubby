@@ -9,14 +9,13 @@ import { describe, expect, it } from "vitest";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
-import {
-  entityLink,
-  expense,
-  financialTransactionAllocation,
-} from "~/server/db/schema";
+import { entityLink, expense } from "~/server/db/schema";
 import { updateSeedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import { updatePurchaseEventRecords } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import {
   findOrCreateVendor,
   readVendorById,
@@ -59,7 +58,7 @@ describe("purchase evidence policy", () => {
       name: "Fixture shop",
       itemizationExpectation: "not_expected",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
+    const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       spendingCategoryId: category.id,
       date: "2026-09-01",
@@ -80,21 +79,25 @@ describe("purchase evidence policy", () => {
       return result[0]?.policy;
     };
     expect(await policy()).toBe("not_expected");
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Purchase" SET "itemizationExpectation" = 'required'
-      WHERE id = ${purchase.id}
-    `);
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+      ctx.actor,
+    );
     expect(await policy()).toBe("required");
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Purchase" SET "itemizationExpectation" = 'unknown'
-      WHERE id = ${purchase.id}
-    `);
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "unknown" } }],
+      ctx.actor,
+    );
     expect(await policy()).toBe("unknown");
   });
 
   it("keeps an orderless optional-receipt booking out of paperwork gaps", async () => {
     const { purchase } = await fixture();
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       name: "Reviewed statement booking",
       purchaseId: purchase.id,
@@ -117,15 +120,18 @@ describe("purchase evidence policy", () => {
   // no allocation slice, and no document required.
   it("derives itemization from the order's lines", async () => {
     const { purchase } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+      ctx.actor,
     );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture hardware cloth",
       brandId: await findOrCreateVendor(ctx.db, "Fixture maker"),
     });
     const line = (values: Partial<typeof expense.$inferInsert>) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name: "Fixture line",
         purchaseId: purchase.id,
         cost: 1000n,
@@ -156,7 +162,7 @@ describe("purchase evidence policy", () => {
     await line({ productId: product.id, productQuantity: 1 });
     await line({ name: "Fixture tax", lineKind: "tax" });
     await line({ name: "Fixture install labor", costType: "services" });
-    const other = await insertWithShortcode(ctx.db, "purchase", {
+    const other = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: purchase.vendorId,
       date: "2026-09-02",
     });
@@ -184,8 +190,11 @@ describe("purchase evidence policy", () => {
     });
     expect((await state()).gaps).toContain("purchase_itemization");
 
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Expense" SET "lineBasis" = 'allocation' WHERE id = ${lump.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "expense",
+      [{ id: lump.id, values: { lineBasis: "allocation" } }],
+      ctx.actor,
     );
     expect(await state()).toMatchObject({
       coverage: { itemization: "missing" },
@@ -199,12 +208,22 @@ describe("purchase evidence policy", () => {
   // line still blocks, and the charge verdict reads the same shape.
   it("counts instalment-paid goods itemized through their linked Products", async () => {
     const { purchase } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [
+        {
+          id: purchase.id,
+          values: {
+            itemizationExpectation: itemizationExpectation.enum.required,
+          },
+        },
+      ],
+      ctx.actor,
     );
     // The reimbursed slice is $0 so the charge still matches the vendor lines.
     const slice = (name: string, economicRole: "vendor" | "reimbursement") =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         name,
         purchaseId: purchase.id,
         cost: nullableWholeCentToMinor(economicRole === "vendor" ? 500 : 0),
@@ -226,13 +245,11 @@ describe("purchase evidence policy", () => {
       postedDate: "2026-09-01",
       merchant: "Fixture instalment merchant",
     });
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: charge.id,
-        purchaseId: purchase.id,
-        amountMinor: moneyToMinor(1000),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: charge.id,
+      purchaseId: purchase.id,
+      amountMinor: moneyToMinor(1000),
+    });
     const itemization = async () => {
       await publishQualityFixtures(ctx.db, "purchase");
       const result = await unwrapDb(ctx.db).execute(
@@ -274,7 +291,7 @@ describe("purchase evidence policy", () => {
       gap: false,
     });
 
-    const unlinked = await insertWithShortcode(ctx.db, "expense", {
+    const unlinked = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Fixture unlinked goods",
       purchaseId: purchase.id,
       cost: 0n,
@@ -300,8 +317,18 @@ describe("purchase evidence policy", () => {
   // New linked goods do not revoke a retained member waiver.
   it("retains an itemization waiver when a Product is linked", async () => {
     const { purchase } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [
+        {
+          id: purchase.id,
+          values: {
+            itemizationExpectation: itemizationExpectation.enum.required,
+          },
+        },
+      ],
+      ctx.actor,
     );
     await setDataException(
       ctx.db,
@@ -336,10 +363,13 @@ describe("purchase evidence policy", () => {
 
   it("carries itemization policy and refuses silently discarding conflicting Purchase policy", async () => {
     const { purchase: donor, vendor, category } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${donor.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: donor.id, values: { itemizationExpectation: "required" } }],
+      ctx.actor,
     );
-    const keeper = await insertWithShortcode(ctx.db, "purchase", {
+    const keeper = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-01",
       itemizationExpectation: "not_expected",
@@ -351,8 +381,11 @@ describe("purchase evidence policy", () => {
         ctx.actor,
       ),
     ).rejects.toThrow(/expectation/i);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = NULL WHERE id = ${keeper.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: keeper.id, values: { itemizationExpectation: null } }],
+      ctx.actor,
     );
     await mergePurchases(
       ctx.db,
@@ -409,10 +442,13 @@ describe("purchase evidence policy", () => {
 
   it("scores required transaction evidence and goods identity while excluding optional evidence", async () => {
     const { purchase, category } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+      ctx.actor,
     );
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       purchaseId: purchase.id,
       name: "Required goods line",
       cost: 2500n,
@@ -448,8 +484,11 @@ describe("purchase evidence policy", () => {
       "financial_transaction_products",
       "financialtransaction_display_image",
     ]);
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'not_expected' WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "not_expected" } }],
+      ctx.actor,
     );
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "SpendingCategory" SET "productExpectation" = 'not_expected' WHERE id = ${category.id}`,
@@ -472,10 +511,13 @@ describe("purchase evidence policy", () => {
     "keeps %s credit coverage tied to its explicit economic role",
     async (role) => {
       const { purchase } = await fixture();
-      await unwrapDb(ctx.db).execute(
-        sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
+      await updatePurchaseEventRecords(
+        ctx.db,
+        "purchase",
+        [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+        ctx.actor,
       );
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         purchaseId: purchase.id,
         name: "Required merchandise",
         cost: 2500n,
@@ -498,7 +540,7 @@ describe("purchase evidence policy", () => {
         merchant: "Reviewed credit",
         purchaseId: purchase.shortcode,
       });
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Reviewed credit booking",
@@ -511,7 +553,7 @@ describe("purchase evidence policy", () => {
         bookingTransactionCode: transaction.output.id,
       });
       if (role === "mixed")
-        await insertWithShortcode(ctx.db, "expense", {
+        await createPurchaseEventRecord(ctx.db, "expense", {
           lineKind: "principal",
           purchaseId: purchase.id,
           name: "Mixed vendor booking",
@@ -574,10 +616,13 @@ describe("purchase evidence policy", () => {
   // Changes to line policy metadata preserve a retained itemization waiver.
   it("keeps an accepted itemization gap accepted when Expense gains productNotExpected", async () => {
     const { purchase } = await fixture();
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
+    await updatePurchaseEventRecords(
+      ctx.db,
+      "purchase",
+      [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+      ctx.actor,
     );
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       lineKind: "principal",
       purchaseId: purchase.id,
       name: "Historical reviewed aggregate",
@@ -619,10 +664,13 @@ describe("purchase evidence policy", () => {
     "retains %s itemization history when new receipt evidence arrives",
     async (reason) => {
       const { purchase } = await fixture();
-      await unwrapDb(ctx.db).execute(
-        sql`UPDATE "Purchase" SET "itemizationExpectation" = 'required' WHERE id = ${purchase.id}`,
+      await updatePurchaseEventRecords(
+        ctx.db,
+        "purchase",
+        [{ id: purchase.id, values: { itemizationExpectation: "required" } }],
+        ctx.actor,
       );
-      await insertWithShortcode(ctx.db, "expense", {
+      await createPurchaseEventRecord(ctx.db, "expense", {
         lineKind: "principal",
         purchaseId: purchase.id,
         name: "Historical reviewed aggregate",
@@ -740,7 +788,7 @@ describe("vendor itemization default from order evidence", () => {
       identity: { kind: "cash" },
     });
     const downstream = async (vendorId: VendorId) => {
-      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId,
         spendingCategoryId: category.id,
         date: "2026-09-01",
@@ -753,13 +801,11 @@ describe("vendor itemization default from order evidence", () => {
         postedDate: "2026-09-01",
         merchant: `Fixture merchant ${purchase.shortcode}`,
       });
-      await unwrapDb(ctx.db)
-        .insert(financialTransactionAllocation)
-        .values({
-          transactionId: charge.id,
-          purchaseId: purchase.id,
-          amountMinor: moneyToMinor(25),
-        });
+      await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+        transactionId: charge.id,
+        purchaseId: purchase.id,
+        amountMinor: moneyToMinor(25),
+      });
       return async () => {
         const result = await unwrapDb(ctx.db).execute(
           sql`
@@ -820,7 +866,7 @@ describe("vendor itemization default from order evidence", () => {
     const online = await vendorWith("online_account");
     const receiptOnly = await vendorWith("receipt_only");
     const purchaseFor = (vendorId: typeof online.id) =>
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId,
         spendingCategoryId: category.id,
         date: "2026-09-01",
@@ -857,13 +903,11 @@ describe("vendor itemization default from order evidence", () => {
       postedDate: "2026-09-01",
       merchant: "Fixture online merchant",
     });
-    await unwrapDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: charge.id,
-        purchaseId: onlinePurchase.id,
-        amountMinor: moneyToMinor(25),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: charge.id,
+      purchaseId: onlinePurchase.id,
+      amountMinor: moneyToMinor(25),
+    });
     const coverage = await unwrapDb(ctx.db).execute(
       sql`
       SELECT ${financialTransactionCoverageSql("t")}->>'expectation' AS expectation

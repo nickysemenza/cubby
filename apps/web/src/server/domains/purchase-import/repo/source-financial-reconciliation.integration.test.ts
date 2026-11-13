@@ -16,7 +16,6 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
-  expenseAttribution,
   financialAccount,
   financialTransactionAllocation,
   importSourceClaim,
@@ -27,6 +26,12 @@ import {
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import {
+  insertPurchaseEventRows,
+  updatePurchaseEventWhere,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 import {
@@ -159,7 +164,7 @@ describe("accepted source financial reconciliation", () => {
       identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: party.id,
     });
-    await insertWithShortcode(ctx.db, "financialTransaction", {
+    await seedBankTransaction(ctx.db, {
       accountId: card.id,
       kind: "purchase",
       status: "posted",
@@ -491,15 +496,17 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    const other = await insertWithShortcode(ctx.db, "purchase", {
+    const other = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: accepted.vendorId,
       date: "2026-09-03",
       orderId: null,
     });
-    await database
-      .update(expense)
-      .set({ purchaseId: other.id })
-      .where(eq(expense.id, initial.expenses[0]!.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { purchaseId: other.id },
+      eq(expense.id, initial.expenses[0]!.id),
+    );
     const snapshot = async () => ({
       state: await state(),
       expenses: await database
@@ -740,10 +747,12 @@ describe("accepted source financial reconciliation", () => {
       },
       ctx.actor,
     );
-    await database
-      .update(expense)
-      .set({ cost: 4200n })
-      .where(eq(expense.id, initial.expenses[0]!.id));
+    await updatePurchaseEventWhere(
+      ctx.db,
+      "expense",
+      { cost: 4200n },
+      eq(expense.id, initial.expenses[0]!.id),
+    );
     const changed = await state();
     await expect(
       resolveRunFinding(
@@ -926,7 +935,7 @@ describe("accepted source financial reconciliation", () => {
       ),
     );
     const original = initial.expenses[0]!;
-    await database.insert(expenseAttribution).values([
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
         expenseId: original.id,
         role: "beneficiary",
@@ -1201,7 +1210,7 @@ describe("accepted source financial reconciliation", () => {
   it("refuses a same-total replacement that moves existing party cents", async () => {
     const { submit, state, initial, accepted, database } = await world();
     const owner = initial.source[0]!.ledgerPartyId;
-    await database.insert(expenseAttribution).values([
+    await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", [
       {
         expenseId: initial.expenses[0]!.id,
         role: "beneficiary",
@@ -1336,7 +1345,7 @@ describe("accepted source financial reconciliation", () => {
       makeProductInput({ name: "Synthetic admission pass" }),
       ctx.actor,
     );
-    const unlinked = await insertWithShortcode(ctx.db, "expense", {
+    const unlinked = await createPurchaseEventRecord(ctx.db, "expense", {
       name: "Workshop admission",
       cost: 4000n,
       costType: "materials",

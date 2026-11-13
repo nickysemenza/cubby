@@ -557,6 +557,7 @@ function createPure(
   },
 ): Pure {
   const records: DesiredRecord[] = [];
+  const disagreements: string[] = [];
   const patches: Desired["patches"][number][] = [];
   const retired: Desired["retired"][number][] = [];
   const bindings: Desired["bindings"][number][] = [];
@@ -681,6 +682,10 @@ function createPure(
 
   return {
     identity: identityOf,
+    disagree(input) {
+      disagreements.push(input);
+      gap("decision", input, "you");
+    },
     reference(entity, ref) {
       let row =
         state.entityReferences.get(ref) ??
@@ -842,6 +847,7 @@ function createPure(
         gap("unsupported", input, "you", options),
     },
     done: () => ({
+      disagreements,
       records,
       patches,
       retired,

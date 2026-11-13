@@ -20,7 +20,7 @@
   "apps/web/src/server/domains/product-category/repo/product-category-feature-query.integration.test.ts": 3,
   "apps/web/src/server/domains/product/repo/conversion-coverage.ts": 4,
   "apps/web/src/server/domains/project/repo/tools.ts": 3,
-  "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts": 11,
+  "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts": 1,
   "apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts": 86,
   "apps/web/src/server/domains/purchase/repo/purchase-financial-aggregates.ts": 3,
   "apps/web/src/server/domains/purchase/repo/purchase-settlement-candidates.ts": 3,

@@ -9,8 +9,10 @@ import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/f
 import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/policy/features";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
-import { expense, expenseAttribution } from "~/server/db/schema";
+import { expense } from "~/server/db/schema";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -42,21 +44,21 @@ describe("split and attach checks against the ledger", () => {
       insertWithShortcode(ctx.db, "vendor", { name: "Synthetic Other Shop" }),
     ]);
     const [target, sameVendor, elsewhere] = await Promise.all([
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-01",
       }),
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-08-01",
       }),
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: otherVendor.id,
         date: "2026-08-02",
       }),
     ]);
     const make = (name: string, cost: number | null, purchaseId?: PurchaseId) =>
-      insertWithShortcode(ctx.db, "expense", {
+      createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name,
         cost: nullableWholeCentToMinor(cost),
@@ -152,7 +154,7 @@ describe("split and attach checks against the ledger", () => {
         brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
       }),
     ]);
-    await insertWithShortcode(ctx.db, "expense", {
+    await createPurchaseEventRecord(ctx.db, "expense", {
       ...line,
       name: "Itemized line",
       cost: 300n,
@@ -221,11 +223,11 @@ describe("split and attach checks against the ledger", () => {
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
         name: "Synthetic split vendor",
       });
-      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+      const purchase = await createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-01",
       });
-      return insertWithShortcode(ctx.db, "expense", {
+      return createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Sample kit",
         cost: nullableWholeCentToMinor(cost),
@@ -393,7 +395,7 @@ describe("split and attach checks against the ledger", () => {
     });
 
     it("refuses splitting without a Purchase before asking for a role", async () => {
-      const source = await insertWithShortcode(ctx.db, "expense", {
+      const source = await createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Unattached expense",
         cost: 1000n,
@@ -431,12 +433,12 @@ describe("split and attach checks against the ledger", () => {
       const category = await insertWithShortcode(ctx.db, "spendingCategory", {
         name: "Split category",
       });
-      const source = await insertWithShortcode(ctx.db, "expense", {
+      const source = await createPurchaseEventRecord(ctx.db, "expense", {
         ...line,
         name: "Categorized goods",
         cost: 1000n,
         purchaseId: (
-          await insertWithShortcode(ctx.db, "purchase", {
+          await createPurchaseEventRecord(ctx.db, "purchase", {
             vendorId: (
               await insertWithShortcode(ctx.db, "vendor", {
                 name: "Synthetic categorized split vendor",
@@ -473,7 +475,7 @@ describe("split and attach checks against the ledger", () => {
         ctx.actor,
       );
       if (!person.entityId) throw new Error("expected party");
-      await unwrapDb(ctx.db).insert(expenseAttribution).values({
+      await insertPurchaseEventRows(ctx.db, "ExpenseAttribution", {
         expenseId: source.id,
         role: "funder",
         ledgerPartyId: person.entityId,

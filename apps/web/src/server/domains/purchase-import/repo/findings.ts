@@ -44,7 +44,6 @@ import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   expense,
   auditLog,
-  expenseAttribution,
   inventoryEntry,
   ledgerParty,
   orderMail,
@@ -54,6 +53,9 @@ import {
   runFinding,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import { decideLineWrite } from "~/server/domains/purchase-import/policy/import-lines";
 import { replacementLineFields } from "~/server/domains/purchase-import/policy/replacement-lines";
@@ -70,7 +72,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   aggregateReplacementApprovalFingerprint,
@@ -256,17 +257,17 @@ async function applyFix(
       .limit(1);
     if (!targetProduct)
       throw new Error("The proposed Product no longer exists.");
-    const [updated] = await tx
-      .update(expense)
-      .set({ productId, updatedAt: new Date() })
-      .where(
-        and(
-          eq(expense.id, expenseId),
-          isNull(expense.productId),
-          notDeleted(expense),
-        ),
-      )
-      .returning({ id: expense.id });
+    const [updated] = await updatePurchaseEventWhere(
+      tx,
+      "expense",
+      { productId, updatedAt: new Date() },
+      and(
+        eq(expense.id, expenseId),
+        isNull(expense.productId),
+        notDeleted(expense),
+      ),
+      actor,
+    );
     if (!updated) throw new Error("The proposed Expense no longer exists.");
     await validateProductPolicy(tx, { expenseIds: [expenseId] });
     await logAuditEntries(tx, actor, [
@@ -304,7 +305,7 @@ async function applyFix(
       }))
     )
       return;
-    const row = await insertWithShortcode(tx, "expense", {
+    const row = await createPurchaseEventRecord(tx, "expense", {
       purchaseId,
       name: fix.title,
       cost: wholeCentToMinor(fix.amount),
@@ -404,7 +405,7 @@ async function applyAggregateReplacement(
       lineKind: identity.lineKind,
     });
     assertClassificationPolicies("expense", { ...fields, productId });
-    const row = await insertWithShortcode(tx, "expense", {
+    const row = await createPurchaseEventRecord(tx, "expense", {
       ...fields,
       cost: costMinor,
       purchaseId,
@@ -415,7 +416,9 @@ async function applyAggregateReplacement(
       (allocation) => allocation.lineIndex === lineIndex,
     );
     if (lineAllocations.length)
-      await tx.insert(expenseAttribution).values(
+      await insertPurchaseEventRows(
+        tx,
+        "ExpenseAttribution",
         lineAllocations.map((allocation) => ({
           expenseId: row.id,
           role: allocation.role,
@@ -458,10 +461,13 @@ async function applyAggregateReplacement(
     audit: { into: audit },
   });
   await logAuditEntries(tx, actor, audit);
-  await tx
-    .update(purchase)
-    .set({ displayLabel: targetPurchase.displayLabel ?? aggregate.name })
-    .where(and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)));
+  await updatePurchaseEventWhere(
+    tx,
+    "purchase",
+    { displayLabel: targetPurchase.displayLabel ?? aggregate.name },
+    and(eq(purchase.id, purchaseId), isNull(purchase.deletedAt)),
+    actor,
+  );
 }
 
 /** Owner eligibility stays stable without blocking another Product writer's Finding FK. */

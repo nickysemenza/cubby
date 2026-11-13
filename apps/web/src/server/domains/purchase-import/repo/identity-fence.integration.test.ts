@@ -20,6 +20,7 @@ import {
   purchase,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import {
@@ -78,7 +79,7 @@ describe("member prepare and commit identity fences", () => {
 
   it("converges a fresh no-ID original on the existing Purchase without erasing its order identity", async () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "ORDER-ONE",
     });
@@ -228,7 +229,7 @@ describe("member prepare and commit identity fences", () => {
       name: "Synthetic Hardware",
       orderEmailSenders: ["orders@hardware.example"],
     });
-    const existing = await insertWithShortcode(ctx.db, "purchase", {
+    const existing = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "ORDER-ONE",
     });

@@ -78,7 +78,6 @@ import {
   notDeleted,
   touchUpdatedAt,
   unwrapDb,
-  updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -128,6 +127,12 @@ import {
   readAllocations,
   transactionIdsAllocatedTo,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import {
+  createPurchaseEventRecord,
+  createPurchaseEventRecords,
+} from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import {
   resolveMemberAssignee,
@@ -167,7 +172,6 @@ import {
   createEntityReader,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import type { WriteLayer } from "~/server/entity-kernel/repo/write-layer";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -208,11 +212,6 @@ import {
   resolveOrThrow,
   resolveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  findOrCreateWithShortcode,
-  insertManyWithShortcode,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /** Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. */
 const purchaseExpenses = () =>
@@ -729,7 +728,7 @@ export const findOrCreatePurchase = async (
   const orderId = input.orderId?.trim() || null;
 
   if (orderId === null) {
-    const created = await insertWithShortcode(db, "purchase", {
+    const created = await createPurchaseEventRecord(db, "purchase", {
       vendorId: input.vendorId,
       orderId: null,
       date: input.date,
@@ -747,19 +746,22 @@ export const findOrCreatePurchase = async (
       "CONSTRAINT_VIOLATION",
       `Several purchases for this vendor carry order id ${orderId} (${owner.purchases.map((row) => row.shortcode).join(", ")}). Merge them before adding another charge.`,
     );
-  const { row } = await findOrCreateWithShortcode(db, "purchase", {
-    where: and(
-      eq(purchase.vendorId, input.vendorId),
-      eq(purchase.orderId, orderId),
-      notDeleted(purchase),
-    ),
-    values: () => ({
+  try {
+    return (
+      await createPurchaseEventRecord(db, "purchase", {
+        vendorId: input.vendorId,
+        orderId,
+        date: input.date,
+      })
+    ).id;
+  } catch (error) {
+    const winner = await findVendorOrderOwner(db, {
       vendorId: input.vendorId,
       orderId,
-      date: input.date,
-    }),
-  });
-  return row.id;
+    });
+    if (winner.kind === "one") return winner.purchase.id;
+    throw error;
+  }
 };
 
 export const createPurchase = defineMutationWriter({
@@ -838,45 +840,6 @@ const purchaseInsertValues = (
   notes: data.notes,
 });
 
-/**
- * Bare Purchases in a write layer on references the caller resolved and
- * locked (a live Vendor, a live member purchaser): `createPurchases`' values
- * and create audit. Order identities and uploaded documents need the
- * standalone writer.
- */
-export function stagePurchases(
-  layer: WriteLayer,
-  items: readonly {
-    data: PurchaseCreateInput;
-    references: PurchaseReferences;
-  }[],
-  actor: ActorContext,
-) {
-  if (
-    items.some(
-      ({ data }) => data.orderId?.trim() || data.pendingImageIds !== undefined,
-    )
-  )
-    throw new Error("Staged Purchases carry no order identity or documents");
-  const staged = layer.stage(
-    "purchase",
-    items.map(({ data, references }) => ({
-      ...purchaseInsertValues(data, references),
-      // Created and settled in this transaction: no later touch is owed.
-      updatedAt: new Date(),
-    })),
-  );
-  layer.audit(
-    actor,
-    staged.map((row) => ({
-      entityKind: "purchase" as const,
-      entityId: row.id,
-      action: "create" as const,
-    })),
-  );
-  return staged;
-}
-
 export async function createPurchases(
   tx: DrizzleTransaction,
   inputs: readonly PurchaseCreateInput[],
@@ -907,7 +870,7 @@ export async function createPurchases(
     tx,
     inputs.map((data) => data.purchaserOverrideId),
   );
-  const created = await insertManyWithShortcode(
+  const created = await createPurchaseEventRecords(
     tx,
     "purchase",
     inputs.map((data, index) =>
@@ -1056,9 +1019,9 @@ export const updatePurchase = defineMutationWriter({
         data.imageOrder,
       );
 
-      const after = await updateLiveAndReturn(
+      const [after] = await updatePurchaseEventWhere(
         tx,
-        purchase,
+        "purchase",
         buildPartialUpdateValues({
           vendorId: resolvedVendorId,
           vendorAccountId: resolvedVendorAccountId,
@@ -1095,8 +1058,14 @@ export const updatePurchase = defineMutationWriter({
               : moneyToMinor(data.statedTotal),
           notes: data.notes,
         }),
-        id,
+        eq(purchase.id, id),
+        actor,
       );
+      if (!after)
+        throw createAppError(
+          "PURCHASE_NOT_FOUND",
+          "The Purchase no longer exists.",
+        );
 
       if (
         [
@@ -1209,10 +1178,13 @@ export const linkExpensesToPurchase = async (
     });
     if (before.length === 0) return;
 
-    await tx
-      .update(expense)
-      .set({ purchaseId })
-      .where(and(inArray(expense.id, expenseIds), notDeleted(expense)));
+    await updatePurchaseEventWhere(
+      tx,
+      "expense",
+      { purchaseId },
+      and(inArray(expense.id, expenseIds), notDeleted(expense)),
+      actor,
+    );
 
     await validatePurchaseItemInheritance(tx, [purchaseId]);
     await validateProductPolicy(tx, {
@@ -1551,7 +1523,7 @@ export const splitExpense = async (
           purchaseId: chargeId,
           trade: part.trade,
         });
-        const row = await insertWithShortcode(tx, "expense", {
+        const row = await createPurchaseEventRecord(tx, "expense", {
           name: part.name,
           cost: nullableWholeCentToMinor(part.cost),
           date: original.date,
@@ -1575,7 +1547,9 @@ export const splitExpense = async (
       await validateProductPolicy(tx, { expenseIds: inserted });
 
       if (attributionPolicy === "inherit" && originalAttributions.length > 0) {
-        await tx.insert(expenseAttribution).values(
+        await insertPurchaseEventRows(
+          tx,
+          "ExpenseAttribution",
           inserted.flatMap((createdExpenseId) =>
             originalAttributions.map((attribution) => ({
               expenseId: createdExpenseId,
@@ -1657,7 +1631,13 @@ export const renameChargeOrderId = async (
     if (clash) return false;
   }
 
-  await tx.update(purchase).set({ orderId }).where(eq(purchase.id, id));
+  await updatePurchaseEventWhere(
+    tx,
+    "purchase",
+    { orderId },
+    eq(purchase.id, id),
+    actor,
+  );
 
   // Audited, because this is the COMMON path: the only shape both Order # inline
   // editors send is `{ orderId }`, which lands here and returns `undefined` to
@@ -1787,10 +1767,12 @@ const preservePurchaseItemAttribution = async (
       );
     }
     if (projectId !== row.projectId || trade !== row.trade) {
-      await tx
-        .update(expense)
-        .set({ projectId, trade })
-        .where(eq(expense.id, row.id));
+      await updatePurchaseEventWhere(
+        tx,
+        "expense",
+        { projectId, trade },
+        eq(expense.id, row.id),
+      );
     }
   }
 };
@@ -1891,16 +1873,18 @@ const carryChargeMetadata = async (
     date: carryMissing(survivor.date, dead.date),
   });
   if (Object.keys(carried).length > 0) {
-    await tx
-      .update(purchase)
-      .set({
+    await updatePurchaseEventWhere(
+      tx,
+      "purchase",
+      {
         ...carried,
         statedTotal:
           carried.statedTotal == null
             ? carried.statedTotal
             : moneyToMinor(carried.statedTotal),
-      })
-      .where(eq(purchase.id, survivorId));
+      },
+      eq(purchase.id, survivorId),
+    );
   }
   return {
     carried,
@@ -1966,24 +1950,30 @@ const moveChargeAllocations = async (
   for (const moving of movingAllocations) {
     const collision = survivorByTransaction.get(moving.transactionId);
     if (collision) {
-      await tx
-        .update(financialTransactionAllocation)
-        .set({
+      await updatePurchaseEventWhere(
+        tx,
+        "FinancialTransactionAllocation",
+        {
           amountMinor: collision.amountMinor + moving.amountMinor,
           confirmsMerchant:
             collision.confirmsMerchant || moving.confirmsMerchant,
           updatedAt: new Date(),
-        })
-        .where(eq(financialTransactionAllocation.id, collision.id));
+        },
+        eq(financialTransactionAllocation.id, collision.id),
+        actor,
+      );
       await tx
         .update(financialTransactionAllocation)
         .set({ deletedAt: new Date() })
         .where(eq(financialTransactionAllocation.id, moving.id));
     } else {
-      await tx
-        .update(financialTransactionAllocation)
-        .set({ purchaseId: survivorId, updatedAt: new Date() })
-        .where(eq(financialTransactionAllocation.id, moving.id));
+      await updatePurchaseEventWhere(
+        tx,
+        "FinancialTransactionAllocation",
+        { purchaseId: survivorId, updatedAt: new Date() },
+        eq(financialTransactionAllocation.id, moving.id),
+        actor,
+      );
     }
   }
   await applyAllocationChanges(tx, { transactionIds, before, actor });
@@ -2301,10 +2291,13 @@ export const mergePurchases = async (
     mergedCount = losers.length;
 
     if (survivingOrderId !== keeper.orderId) {
-      await tx
-        .update(purchase)
-        .set({ orderId: survivingOrderId })
-        .where(eq(purchase.id, keepId));
+      await updatePurchaseEventWhere(
+        tx,
+        "purchase",
+        { orderId: survivingOrderId },
+        eq(purchase.id, keepId),
+        actor,
+      );
     }
     await logAuditEntries(tx, actor, [
       {

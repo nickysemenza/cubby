@@ -19,8 +19,15 @@ import {
   repositoryQueries,
   repositoryTransactionDatabase,
 } from "~/server/db/repository-access.boundary";
-import { ledgerParty, transactionImport, vendor } from "~/server/db/schema";
+import {
+  ledgerParty,
+  transactionImport,
+  vendor,
+  financialTransaction,
+  expense,
+} from "~/server/db/schema";
 import { manualTransactionEvidence } from "~/server/domains/financial-transaction/repo/manual-evidence";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findPgError } from "~/server/errors/db-errors";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -30,6 +37,8 @@ import {
   cancelRunAsks,
   retryRunAsks,
   createKernel,
+  columnOwner,
+  repointOwnedReference,
   defineModule,
   defineAsk,
   defineReconciler,
@@ -60,6 +69,7 @@ import { ownedColumns } from "./registry";
 import {
   CATEGORY_SCOPE,
   chargeEvidence,
+  fixtureCharge,
   fixtureModule,
   fixturePurchase,
   fixtureExpense,
@@ -185,6 +195,10 @@ describe("evidence-facts kernel", () => {
   });
 
   it("reserves public codes during reconcile and retries a collision without leaking an identity", async () => {
+    expect(await columnOwner(financialTransaction, "amount")).toBe("bankEvent");
+    expect(
+      await columnOwner(financialTransaction, "ledgerTransferId"),
+    ).toBeNull();
     const target = writes(vendor, [], {
       entity: "vendor",
       createOnly: ["name"],
@@ -236,14 +250,12 @@ describe("evidence-facts kernel", () => {
     );
     const desired = computed[0]!.desired!.records[0]!;
     expect(desired.shortcode).toMatch(/^VEN-/);
-    await q
-      .insert(entityIdentity)
-      .values({
-        id: crypto.randomUUID(),
-        kind: "vendor",
-        shortcode: desired.shortcode,
-        deletedAt: new Date(),
-      });
+    await q.insert(entityIdentity).values({
+      id: crypto.randomUUID(),
+      kind: "vendor",
+      shortcode: desired.shortcode,
+      deletedAt: new Date(),
+    });
     expect(
       (
         await applyComputed(
@@ -335,21 +347,30 @@ describe("evidence-facts kernel", () => {
   });
 
   it("keeps accepted baseline records and reports drift while applying a member's field decision", async () => {
-    const { kernel } = kernelWith();
+    let disagreement: string | null = null;
+    const { kernel } = kernelWith({
+      linkedDecision: true,
+      disagreement: () => disagreement,
+    });
     const [fact] = await kernel.append(ctx.db, [charge("ORD-BASELINE", 1250)]);
     await settle(kernel);
     const [booked] = await purchases(ctx.db);
-    await repositoryQueries(ctx.db)
-      .insert(evidenceBinding)
-      .values({
-        factKind: fact!.kind,
-        factId: fact!.id,
-        eventKey: "ORD-BASELINE",
-        basis: "baseline",
-        scopeKind: PURCHASE_SCOPE,
-        scopeKey: "ORD-BASELINE",
-      });
+    await repositoryQueries(ctx.db).insert(evidenceBinding).values({
+      factKind: fact!.kind,
+      factId: fact!.id,
+      eventKey: "ORD-BASELINE",
+      basis: "baseline",
+      scopeKind: PURCHASE_SCOPE,
+      scopeKey: "ORD-BASELINE",
+    });
     await kernel.decide(ctx.db, ctx.actor, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject(PURCHASE_TABLE, booked!.id),
+        field: "linked",
+        value: true,
+      },
       {
         channel: "assignment",
         kind: "set",
@@ -360,6 +381,33 @@ describe("evidence-facts kernel", () => {
     ]);
     await settle(kernel);
     expect((await purchases(ctx.db))[0]?.merchant).toBe("Member seller");
+    expect(
+      await repositoryQueries(ctx.db).select().from(fixtureExpense),
+    ).toHaveLength(1);
+    expect(
+      await repositoryQueries(ctx.db).select().from(fixtureAllocation),
+    ).toHaveLength(1);
+    disagreement = "accepted allocation slices do not conserve the movement";
+    await kernel.emitWrites(ctx.db, {
+      table: fixtureCharge,
+      ids: [fact!.id],
+      columns: ["amountMinor"],
+    });
+    await settle(kernel);
+    const [unresolved] = await repositoryQueries(ctx.db).select().from(drift);
+    expect(unresolved?.difference).toMatchObject({
+      disagreements: [disagreement],
+    });
+    expect(
+      await kernel.approveDrift(
+        ctx.db,
+        ctx.actor,
+        { kind: PURCHASE_SCOPE, key: "ORD-BASELINE" },
+        unresolved!.proposalHash,
+      ),
+    ).toBe("stale");
+    expect((await purchases(ctx.db))[0]?.amountMinor).toBe(1250);
+    disagreement = null;
     await kernel.append(ctx.db, [charge("ORD-BASELINE", 1400)]);
     await settle(kernel);
     expect((await purchases(ctx.db))[0]).toMatchObject({
@@ -387,14 +435,12 @@ describe("evidence-facts kernel", () => {
     await kernel.append(ctx.db, [charge("ORD-PREDICATE", 1250)]);
     await settle(kernel);
     expect((await purchases(ctx.db))[0]?.merchant).toBeNull();
-    await repositoryQueries(ctx.db)
-      .insert(fixtureReceipt)
-      .values({
-        sourceRef: "synthetic-authored",
-        orderRef: "ORD-PREDICATE",
-        amountMinor: 1250,
-        merchant: "Synthetic Seller",
-      });
+    await repositoryQueries(ctx.db).insert(fixtureReceipt).values({
+      sourceRef: "synthetic-authored",
+      orderRef: "ORD-PREDICATE",
+      amountMinor: 1250,
+      merchant: "Synthetic Seller",
+    });
     await kernel.emitWrites(ctx.db, {
       table: fixtureReceipt,
       ids: [],
@@ -1317,6 +1363,35 @@ describe("evidence-facts kernel", () => {
         toId: originalReceipt!.id,
       }),
     );
+    const seller = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic repoint seller",
+    });
+    const parent = await createPurchaseEventRecord(ctx.db, "purchase", {
+      vendorId: seller.id,
+    });
+    const child = await createPurchaseEventRecord(ctx.db, "expense", {
+      name: "Synthetic repoint line",
+      costType: "materials",
+      purchaseId: parent.id,
+    });
+    const detached = await repositoryTransactionDatabase(ctx.db, (tx) =>
+      repointOwnedReference(tx, {
+        table: expense,
+        column: "purchaseId",
+        fromIds: [parent.id],
+        toId: null,
+        liveOnly: true,
+      }),
+    );
+    expect(detached).toBe(1);
+    expect(
+      (
+        await repositoryQueries(ctx.db)
+          .select()
+          .from(expense)
+          .where(eq(expense.id, child.id))
+      )[0]?.purchaseId,
+    ).toBeNull();
     expect(changed).toBe(1);
     expect(await rosterRev()).toBe(beforeRepoint + 1);
     expect(

@@ -9,13 +9,14 @@ import { describe, expect, it } from "vitest";
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import {
-  financialTransactionAllocation,
   importSourceClaim,
   orderMailEvent,
   purchasePaymentEvidence,
   vendorAccount,
 } from "~/server/db/schema";
 import { seedBankTransaction } from "~/server/domains/financial-transaction/repo/bank.fixtures";
+import { insertPurchaseEventRows } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { readPurchase as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
@@ -79,7 +80,7 @@ describe("settlement conflicts", () => {
       providerVendorId: vendor.id,
       ledgerPartyId: buyer.id,
     });
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       vendorAccountId: vendorAccount.id,
       date: "2026-09-14",
@@ -217,7 +218,7 @@ describe("settlement conflicts", () => {
   it("names the order's member by purchaser override, else by one member's Email", async () => {
     const { buyer, other, vendor, otherCard, charge } = await world();
     const accountless = (fields: { purchaserOverrideId?: typeof buyer.id }) =>
-      insertWithShortcode(ctx.db, "purchase", {
+      createPurchaseEventRecord(ctx.db, "purchase", {
         vendorId: vendor.id,
         date: "2026-09-14",
         statedTotal: moneyToMinor(13.59),
@@ -310,7 +311,7 @@ describe("settlement conflicts", () => {
 
   it("derives an accountless order's gift-card account from its Email member", async () => {
     const { buyer, vendor, buyerCard, giftCard, charge } = await world();
-    const order = await insertWithShortcode(ctx.db, "purchase", {
+    const order = await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-14",
       statedTotal: moneyToMinor(13.59),
@@ -409,13 +410,11 @@ describe("settlement conflicts", () => {
       ledgerPartyId: otherMember.id,
     });
     const wrong = await charge(otherBank.id, 13.58);
-    await getDb(ctx.db)
-      .insert(financialTransactionAllocation)
-      .values({
-        transactionId: wrong.id,
-        purchaseId: order.id,
-        amountMinor: moneyToMinor(13.58),
-      });
+    await insertPurchaseEventRows(ctx.db, "FinancialTransactionAllocation", {
+      transactionId: wrong.id,
+      purchaseId: order.id,
+      amountMinor: moneyToMinor(13.58),
+    });
     expect(await gaps(order.shortcode)).toContain("settlement_party_conflict");
     // The settling card's sole user is not the order's member: purchaser stays unknown.
     expect(

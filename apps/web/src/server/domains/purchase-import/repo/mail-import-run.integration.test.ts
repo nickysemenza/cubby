@@ -35,6 +35,8 @@ import {
   vendorAccount,
   purchase,
 } from "~/server/db/schema";
+import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
+import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { paidRunPreflight } from "~/server/domains/purchase-import/service/execution-transport";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -341,10 +343,12 @@ describe("mail research admission", () => {
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(successor);
       // A Purchase edit is not new source evidence and cannot reset reasoning.
-      await getDb(ctx.db)
-        .update(purchase)
-        .set({ statedTotal: 1300n })
-        .where(eq(purchase.orderId, "SYN-RECOVERY-42"));
+      await updatePurchaseEventWhere(
+        ctx.db,
+        "purchase",
+        { statedTotal: 1300n },
+        eq(purchase.orderId, "SYN-RECOVERY-42"),
+      );
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(successor);
       const refreshedChecksum = "d".repeat(64);
@@ -478,7 +482,7 @@ describe("mail research admission", () => {
       )[0]?.runId;
     expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
     expect(await owner()).toBe(holder.row.id);
-    await insertWithShortcode(ctx.db, "purchase", {
+    await createPurchaseEventRecord(ctx.db, "purchase", {
       vendorId: sellerRow.id,
       orderId: "#syn-wait-7",
     });
