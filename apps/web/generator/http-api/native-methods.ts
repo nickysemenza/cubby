@@ -1,5 +1,8 @@
 /** Native convenience names for operations that need no handwritten mapping. */
 export const CLIENT_PASSTHROUGH_METHODS = {
+  "machinery.read": { method: "readMachinery", doc: null },
+  "machinery.decide": { method: "decideMachinery", doc: null },
+  "machinery.approveDrift": { method: "approveMachineryDrift", doc: null },
   "fieldExplanation.imageChain": {
     method: "displayImageChain",
     doc: "View a record's display-image sources in precedence order without editing them.",

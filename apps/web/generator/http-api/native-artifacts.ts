@@ -98,6 +98,7 @@ export async function renderDirectNativeArtifacts(
   const typedOperations = contract.operations.filter(
     ({ id }) =>
       ALWAYS_TYPED_OPERATIONS.has(id) ||
+      id.startsWith("machinery.") ||
       callers.operationIds.has(id) ||
       callers.tokens.has(`native_${swiftId(id)}`) ||
       (passthrough[id] !== undefined &&
