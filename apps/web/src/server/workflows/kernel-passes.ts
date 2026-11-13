@@ -1,8 +1,6 @@
 /**
- * The platform passes the kernel runs (ADR 0029 section 7): Run execution,
- * Run status reconciliation, retention, the derived snapshot, purchase
- * discovery and the calendar invalidation fallback. The Run domain module
- * registers them until the kernel's module list names a module of its own.
+ * The workflow module's passes: Run execution, stopped-execution
+ * reconciliation, retention, purchase admission and calendar invalidation.
  */
 import { defineModule, type Pass } from "~/server/kernel/api";
 

@@ -145,7 +145,8 @@ export const runPassWorking = (
   runId: SQL,
 ): SQL<boolean> => sql<boolean>`EXISTS (
   SELECT 1 FROM "Pass" p WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = (${runId})::text
-    AND p."claimToken" IS NOT NULL AND p."claimDeadline" > now())`;
+    AND p."claimToken" IS NOT NULL AND p."claimDeadline" > now()
+    AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL)`;
 
 /** SQL true while `runId`'s Pass is due and unclaimed for longer than `stallMs`. */
 export const runPassStalled = (

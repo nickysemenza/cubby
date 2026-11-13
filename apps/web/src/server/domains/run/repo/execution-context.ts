@@ -79,7 +79,7 @@ export async function pauseExecutionRun(
   generation?: string | null,
 ): Promise<boolean> {
   // Recovery resumes these purposes in a later window: AI work through
-  // Job execution, agent imports and Mail discovery through
+  // Pass execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns`.
   const recoverable = inArray(run.purpose, FUNDING_RECOVERABLE_PURPOSES);
   const paused = await unwrapDb(db)
