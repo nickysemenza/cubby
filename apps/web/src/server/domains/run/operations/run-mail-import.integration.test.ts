@@ -12,8 +12,8 @@ import { getDb } from "~/server/db/helpers";
 import { appSettings, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { deleteJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
@@ -22,7 +22,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 // Failures: an unauthenticated or foreign toggle; discovery running while the
 // switch is off; a launch fanning out to another mailbox or duplicating an
-// active Job; Vendor names widening targeted search beyond verified
+// active Pass; Vendor names widening targeted search beyond verified
 // senders and website domains. Real PostgreSQL backs every step.
 describe("automatic Mail import switch", () => {
   const ctx = withTestDb();
@@ -230,14 +230,11 @@ describe("automatic Mail import switch", () => {
       .select()
       .from(run)
       .where(eq(run.purpose, "mail_discovery"));
-    expect(await readJobs(ctx.db, { kind: "run.execute" })).toMatchObject([
-      {
-        key: `run:${discovery!.id}`,
-        state: "queued",
-        runId: discovery!.id,
-        input: { runId: discovery!.id, purpose: "mail_discovery" },
-      },
-    ]);
+    expect(await readRunPass(ctx.db, discovery!.id)).toMatchObject({
+      runId: discovery!.id,
+      state: "due",
+      generation: 1,
+    });
     const input = mailboxDiscoveryInput.parse(discovery?.input);
     expect(input).toMatchObject({ mailboxId, executionPolicy: "import" });
     expect(input.scopedQueries.map((query) => query.query).sort()).toEqual([
