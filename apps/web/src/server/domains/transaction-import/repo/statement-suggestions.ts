@@ -81,6 +81,7 @@ import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { liveHouseholdLoan } from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
 import {
   previewFinancialTransactionImport,
   prepareFinancialStatementPreview,
@@ -1966,12 +1967,6 @@ export async function buildChargeProposals(
   );
   const proposals: ChargeProposal[] = [];
   for (const { charge, canonical, rows, judgment } of pending) {
-    if (
-      !judgment.reviewReason &&
-      judgment.recommended === "book" &&
-      judgment.spending?.status === "deferred"
-    )
-      continue;
     judgment.clean = isClean(
       judgment,
       judgment.create?.amount ?? canonical.amount,
@@ -2414,6 +2409,7 @@ function chargePublication(
   applicationOrder: z.infer<typeof statementApplicationOrder> | null = null,
   answers: StatementAnswers = statementAnswers.parse({}),
   isLoan = false,
+  vendorResolved = false,
 ) {
   const { charge, judgment } = proposal;
   return {
@@ -2452,7 +2448,12 @@ function chargePublication(
         evidenceFingerprint: proposal.evidenceFingerprint,
         // Rule output awaits the decision model's labels: candidate
         // identity, and the kind and counterparty of every create.
-        needsLabel: needsStatementAnswers(judgment, answers, isLoan),
+        needsLabel: needsStatementAnswers(
+          judgment,
+          answers,
+          isLoan,
+          vendorResolved,
+        ),
         applicationPending: producer.kind === "model",
         ...(applicationOrder && { applicationOrder }),
         answers,
@@ -2604,6 +2605,7 @@ type StatementCandidate = {
   proposal: ChargeProposal;
   answers?: StatementAnswers;
   isLoan?: boolean;
+  vendorResolved?: boolean;
 };
 type StatementPublicationFacts = {
   states: Map<string, ChargeState>;
@@ -2624,12 +2626,18 @@ export function needsStatementAnswers(
   judgment: StatementTransactionJudgment,
   answers: StatementAnswers,
   isLoan = false,
+  vendorResolved = false,
 ) {
   if (!judgment.create || judgment.reviewReason) return false;
   return (
     judgment.candidates.some((c) => !answers.candidates[c.transactionId]) ||
     (!judgment.transfer && (!answers.kind || !answers.counterparty)) ||
-    !statementSpendingAnswersComplete(judgment.create, isLoan, answers)
+    !statementSpendingAnswersComplete(
+      judgment.create,
+      isLoan,
+      answers,
+      vendorResolved,
+    )
   );
 }
 
@@ -2759,12 +2767,19 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       history.map((row) => row.answers),
       isLoan,
     );
+    const merchant =
+      judgment.create?.merchant?.trim() ||
+      judgment.create?.rawDescription?.trim();
+    const [named] = merchant
+      ? await resolveFinancialSpendingVendors(tx, [merchant])
+      : [];
+    const vendorResolved = Boolean(named?.row && !named.candidates.length);
     const advice = financialSpendingAdvice.parse(
       statementAdviceFromAnswers(answers),
     );
     judgment.spending = await prepareStatementSpending(tx, judgment, advice);
     judgment.clean =
-      !needsStatementAnswers(judgment, answers, isLoan) &&
+      !needsStatementAnswers(judgment, answers, isLoan, vendorResolved) &&
       isClean(
         judgment,
         judgment.create?.amount ?? candidate.proposal.canonical.amount,
@@ -2786,8 +2801,9 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         proposal: await labelledProposal(candidate.proposal, judgment),
         answers,
         isLoan,
+        vendorResolved,
       },
-      producer: needsStatementAnswers(judgment, answers, isLoan)
+      producer: needsStatementAnswers(judgment, answers, isLoan, vendorResolved)
         ? producer
         : {
             ...producer,
@@ -2827,7 +2843,13 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         (account) => account.id === judgment.accountId,
       ),
     );
-    const needsLabel = needsStatementAnswers(judgment, answers, isLoan);
+    const vendorResolved = candidate.vendorResolved ?? false;
+    const needsLabel = needsStatementAnswers(
+      judgment,
+      answers,
+      isLoan,
+      vendorResolved,
+    );
     const refresh = (row: ChargePublicationHistory) => ({
       ...row.data,
       answers: z.json().parse(jsonSnapshot.parse(answers)),
@@ -2877,7 +2899,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         : row,
     );
   },
-  publication({ proposal, answers, isLoan }, rows, producer) {
+  publication({ proposal, answers, isLoan, vendorResolved }, rows, producer) {
     const position = rows.find((row) => row.active && row.status === "pending");
     const order = position
       ? (statementApplicationOrder
@@ -2894,6 +2916,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       order,
       answers,
       isLoan,
+      vendorResolved,
     );
   },
   async afterPublish(tx, published) {

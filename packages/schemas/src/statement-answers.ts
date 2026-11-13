@@ -154,7 +154,9 @@ export function statementAnswerMatches(
 /** Advice fields carried by spending answers; Vendor resolution still wins. */
 export function statementAdviceFromAnswers(answers: StatementSpendingAnswers) {
   const identity = answers.merchant?.identity.value ?? null;
-  const supported = answers.merchant?.support?.value ?? true;
+  const supported = answers.merchant?.support
+    ? answers.merchant.support.value === true
+    : true;
   return {
     ...(answers.escrow?.value === true ? { escrowDisbursement: true } : {}),
     vendorName: identity?.name ?? null,
@@ -210,10 +212,12 @@ export function statementSpendingAnswersComplete(
   create: SpendingSubject,
   isLoan: boolean,
   answers: StatementSpendingAnswers,
+  vendorResolved: boolean,
 ): boolean {
   if (!["purchase", "refund", "fee"].includes(create.kind)) return true;
   const reusable = reusableStatementSpendingAnswers(create, isLoan, answers);
   if (statementEscrowInput(create, isLoan) && !reusable.escrow) return false;
+  if (vendorResolved) return true;
   const identityInput = statementMerchantIdentityInput(create);
   if (!identityInput) return true;
   const merchant = reusable.merchant;

@@ -12,6 +12,7 @@ import { suggestionSubjects } from "@cubby/schemas/suggestion";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { findFundingWait } from "~/server/ai/budget";
 import {
   AiWorkDeferredError,
   aiWorkDeferral,
@@ -36,6 +37,7 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import { resolveFinancialSpendingVendors } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { type FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { prepareFinancialStatementPreview } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import {
@@ -247,11 +249,6 @@ function prepareLabelledJudgment(
   }
   // Reserve spending before preparing the next charge, preserving the original
   // identity/kind/counterparty/spending order. Context defaults reserve nothing.
-  const spendingReserved =
-    needsSpendingAdvice(judgment) &&
-    !!judgment.create &&
-    !statementSpendingAnswersComplete(judgment.create, input.isLoan, answers);
-  const spendingAdmitted = spendingReserved && input.admission.reserve();
   return {
     decisions,
     retainError,
@@ -280,6 +277,13 @@ function prepareLabelledJudgment(
       // Plan spending for the action that publishes, so apply replans the
       // same target it compares against.
       judgment.recommended = statementRecommendation(judgment);
+      const merchant =
+        judgment.create?.merchant?.trim() ||
+        judgment.create?.rawDescription?.trim();
+      const [named] = merchant
+        ? await resolveFinancialSpendingVendors(db, [merchant], page)
+        : [];
+      const vendorResolved = Boolean(named?.row && !named.candidates.length);
       if (
         !needsSpendingAdvice(judgment) ||
         (judgment.create &&
@@ -287,6 +291,7 @@ function prepareLabelledJudgment(
             judgment.create,
             input.isLoan,
             answers,
+            vendorResolved,
           ))
       ) {
         spendingComplete = true;
@@ -295,7 +300,7 @@ function prepareLabelledJudgment(
       if (
         !errors.length &&
         waitingUntil === null &&
-        (spendingReserved ? spendingAdmitted : input.admission.reserve())
+        input.admission.reserve()
       ) {
         try {
           const spending = await withAiInputs(false, () =>
@@ -467,10 +472,16 @@ async function runStatementLabelBatch(
     runId: runId ?? undefined,
     operation: "statement-suggestion-label",
   };
+  const pauses: JobDeferredError[] = [];
   const failed: RunStepError[] = [];
   const failedCharges = new Set<string>();
   const fail = (charge: ChargeRef | null, error: unknown) => {
     if (isWorkflowInterrupted(error)) throw error;
+    const pause = findFundingWait(error);
+    if (pause) {
+      pauses.push(pause);
+      return;
+    }
     if (charge) failedCharges.add(chargeId(charge));
     failed.push({
       at: new Date().toISOString(),
@@ -496,7 +507,7 @@ async function runStatementLabelBatch(
     unfinished.add(row.cursorId);
   };
   let waitingUntil: number | null = null;
-  let targets = page.flatMap((row) => {
+  const targets = page.flatMap((row) => {
     const subject = suggestionSubjects.statement_transaction.safeParse(
       row.subject,
     );
@@ -530,7 +541,6 @@ async function runStatementLabelBatch(
   const labelled = new Set<string>();
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
-  const pauses: JobDeferredError[] = [];
   // Admission resolves account-wide evidence, so each call is one preparation.
   // A round admits twice: before model work, so nothing out of scope is paid
   // for, and after it, because provider waits let account mappings move. The
@@ -564,10 +574,9 @@ async function runStatementLabelBatch(
   };
   type ReadyLabels = {
     target: (typeof targets)[number];
-    moved: boolean;
     current: LabelPreparation;
   };
-  for (let round = 0; round < 1 && targets.length; round++) {
+  if (targets.length) {
     const preparation = await prepareFinancialStatementPreview(db);
     await admitTargets(preparation);
     const ready: ReadyLabels[] = targets
@@ -578,7 +587,6 @@ async function runStatementLabelBatch(
       )
       .map((target) => ({
         target,
-        moved: false,
         current: {
           charge: target.charge,
           judgment: target.row.judgment,
@@ -587,7 +595,7 @@ async function runStatementLabelBatch(
         },
       }));
     log.info("Statement label round", {
-      round: round + 1,
+      round: 1,
       charges: ready.length,
       // Logical decisions, before context-fit checks and provider retries;
       // this is workload evidence, not a measurement of Worker subrequests.
@@ -769,12 +777,20 @@ async function runStatementLabelBatch(
           }
         }
         if (result.value.errors.length) {
-          fail(entry.current.charge, new AggregateError(result.value.errors));
+          fail(
+            entry.current.charge,
+            result.value.errors.map(findFundingWait).find(Boolean) ??
+              new AggregateError(result.value.errors),
+          );
           continue;
         }
         if (!result.value.complete || result.value.waitingUntil !== null) {
           retainUnfinished(entry.target.row);
-          waitingUntil = result.value.waitingUntil;
+          if (result.value.waitingUntil !== null)
+            waitingUntil = Math.min(
+              waitingUntil ?? Infinity,
+              result.value.waitingUntil,
+            );
           continue;
         }
         readyCharges.push(entry.current.charge);
@@ -810,13 +826,11 @@ async function runStatementLabelBatch(
         const target = targets.find((t) => chargeId(t.charge) === key)!;
         const outcome = result.settlement.get(key);
         if (outcome?.kind === "failed") fail(charge, outcome.error);
-        else if (
-          !outcome ||
-          outcome.kind === "unfinished" ||
-          outcome.kind === "moved"
-        )
+        else if (outcome?.kind === "unfinished" || outcome?.kind === "moved")
           retainUnfinished(target.row);
-        else {
+        else if (
+          !result.failed.some((error) => error.ref === `charge:${key}`)
+        ) {
           completed.add(key);
           unfinished.delete(target.row.cursorId);
         }
