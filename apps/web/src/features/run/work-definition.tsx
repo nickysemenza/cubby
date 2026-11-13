@@ -1,11 +1,8 @@
-import { jobKindDeclaration, JOB_LANE_LABEL } from "@cubby/schemas/job";
 import {
   type RunKindDeclaration,
   type RunStepDeclaration,
 } from "@cubby/schemas/run-fields";
 
-import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout";
 import { Facts } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";
@@ -87,45 +84,5 @@ function StepScope({ step }: { step: RunStepDeclaration }) {
             ? `Eligible ${step.unit} are discovered during execution. The set can grow; there is no fixed total.`
             : `One bounded operation reports its observed ${step.unit}. No complete target count is known in advance.`}
     </p>
-  );
-}
-
-export function JobDefinition({
-  kind,
-  defaultOpen = false,
-}: {
-  kind: string;
-  defaultOpen?: boolean;
-}) {
-  const declaration = jobKindDeclaration(kind);
-  if (!declaration)
-    return (
-      <Description size="xs">
-        No current definition for this retained Job kind. Inspect its subject,
-        owning Run and recorded diagnostics.
-      </Description>
-    );
-  return (
-    <Disclosure
-      defaultOpen={defaultOpen}
-      summary={`What ${declaration.label} does`}
-    >
-      <Stack gap="sm">
-        <p className="max-w-prose text-sm">{declaration.purpose}</p>
-        <WorkEffects
-          explanation={{
-            ...declaration,
-            recovery:
-              declaration.maxAttempts === null
-                ? "Retries with backoff without exhausting its failure budget. Repeated failures can still need intervention; inspect this Job’s actual state and waiting reason."
-                : `Stops after ${declaration.maxAttempts} consecutive failures under the kind’s default policy. Inspect this Job’s actual attempt limit and use supported recovery.`,
-          }}
-        />
-        <p className="text-xs text-muted-foreground">
-          Started by: {declaration.trigger} · Executor:{" "}
-          {JOB_LANE_LABEL[declaration.lane]}
-        </p>
-      </Stack>
-    </Disclosure>
   );
 }
