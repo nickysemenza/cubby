@@ -10,7 +10,8 @@
  * Asked: open or Cubby-held `auto` fields with a usable basis, and `offer`
  * fields, whose confident answer stays the picker's guess. A person-held
  * field, a `fillOnly` field Cubby already filled and a `review` field are not
- * asked here; a `review` field's answer comes from an in-line question.
+ * asked here; declared prune reviews may propose removals from a person-held
+ * array and always wait for a decision.
  */
 import { auditLogActionSchema } from "@cubby/schemas/audit";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -451,9 +452,10 @@ export function fieldsReconciler(
         );
         const ruledOut =
           !currentUndecided && vetoed.includes(valueKey(current));
+        const prune = field.mode === "prune";
         const asked =
-          assignment === null &&
-          (currentUndecided || ruledOut || !field.fillOnly) &&
+          (assignment === null || prune) &&
+          (prune || currentUndecided || ruledOut || !field.fillOnly) &&
           field.basis.some((key) => !blank(row[key]));
         let proposal = null;
         if (asked) {
@@ -489,7 +491,7 @@ export function fieldsReconciler(
           fillOnly: field.fillOnly,
           current,
           currentUndecided,
-          personHolds: assignment !== null,
+          personHolds: !prune && assignment !== null,
           vetoed,
           replaced: (input.replaced.get(field.key) ?? []).filter(
             (value) => value !== valueKey(current),
@@ -500,7 +502,8 @@ export function fieldsReconciler(
           c.patch(target, input.id, { [field.key]: verdict.value });
         else if (
           proposal &&
-          !assignment &&
+          (!assignment || prune) &&
+          !vetoed.includes(valueKey(proposal.value)) &&
           valueKey(proposal.value) !== valueKey(current)
         )
           c.gap.decision(`Review ${field.key}`, {

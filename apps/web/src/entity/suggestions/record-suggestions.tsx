@@ -76,11 +76,10 @@ export function RecordFieldSuggestion({
   const row = rows.data?.find(
     (candidate) => candidate.evidence.field === field,
   );
-  if (!row || !id) return children;
   return (
     <span className="grid min-w-0 gap-1">
       <span className="min-w-0">{children}</span>
-      <FieldProposal entity={entity} id={id} row={row} />
+      {row && id ? <FieldProposal entity={entity} id={id} row={row} /> : null}
     </span>
   );
 }

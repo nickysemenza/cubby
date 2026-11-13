@@ -3454,7 +3454,7 @@ and server fold its current value (JSON-encoded) into the basis. The `FieldSugge
 `operation: "remove"` and `removals[]`; review surfaces render a removal proposal, never an auto-apply;
 a form-mode `FieldSuggestionProvider` skips prune targets by default (list and detail request them).
 The fields scope retains a prune Answer as the proposed remaining array and exposes
-a decision gap. Acceptance verifies and writes that array through the authored
+a decision gap, including for a person-held array. Acceptance verifies and writes that array through the authored
 field writer, recording the assignment Decision. A prune proposal never applies
 automatically.
 

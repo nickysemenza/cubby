@@ -122,6 +122,9 @@ export async function applyFieldAnswerFixture(
   const { fieldAsk } = await import("./ask");
   const { fieldsReconciler, fieldsCapabilities } = await import("./reconciler");
   const { createKernel, defineModule } = await import("~/server/kernel/api");
+  const { computeBatch } = await import("~/server/kernel/compute");
+  const { repositoryQueries } =
+    await import("~/server/db/repository-access.boundary");
   const ask = {
     ...fieldAsk,
     admit: async () => {},
@@ -142,16 +145,31 @@ export async function applyFieldAnswerFixture(
       },
     }),
   };
+  const reconciler = fieldsReconciler();
   const kernel = createKernel([
     defineModule({
       name: "fields",
       asks: [ask],
-      reconcilers: [fieldsReconciler()],
+      reconcilers: [reconciler],
       machinery: fieldsCapabilities(),
     }),
   ]);
-  await kernel.reconcileNow(db, [
-    { kind: "fields", key: `${input.entity}:${input.recordId}` },
-  ]);
-  await kernel.run(db, { budgetMs: 5000 });
+  const scope = { kind: "fields", key: `${input.entity}:${input.recordId}` };
+  const [computed] = await computeBatch(
+    repositoryQueries(db),
+    kernel.registry,
+    reconciler,
+    [scope],
+    { db, locked: false },
+  );
+  if (!computed || computed.error)
+    throw new Error(
+      `Synthetic field preparation failed: ${JSON.stringify(computed?.error)}`,
+    );
+  for (const missing of computed.missing) {
+    if (missing.kind.feature !== ask.feature)
+      throw new Error("Synthetic field fixture refuses another producer");
+    await kernel.withAsk(db, ask, missing.envelope.input, { scopes: [scope] });
+  }
+  await kernel.reconcileNow(db, [scope]);
 }

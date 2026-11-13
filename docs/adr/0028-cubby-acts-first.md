@@ -57,7 +57,9 @@ asked where they do not apply (a grocery asked which plant it grows).
    `AutomaticRule` table is dropped with no archive by the owner's instruction.
 6. **Field work follows input mutations.** Authored writes, decisions and
    answers dirty the record's `fields` scope transactionally. The reconciler
-   asks about open or Cubby-held fields and applies its owned columns. A model,
+   asks about open or Cubby-held fields and applies its owned columns. Declared
+   prune reviews may propose removals from a person-held array and wait for
+   that person's decision. A model,
    prompt or policy revision alone places no asks: the version sweep proposes
    drift for approval from retained answers. Page views schedule nothing.
    Edit forms ask live on their unsaved basis.
