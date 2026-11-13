@@ -626,16 +626,18 @@ export async function releaseFundingWaits(
   db: Database,
   now = new Date(),
 ): Promise<number> {
+  // Reset is immediate in database time, even when the caller’s clock is ahead.
+  const available = sql`least(${now.toISOString()}::timestamp, now())`;
   const result = await repositoryQueries(db).execute<{ n: number }>(sql`
     WITH asks AS (
-      UPDATE "Ask" SET "availableAt" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN ${now.toISOString()}::timestamp ELSE "availableAt" END,
+      UPDATE "Ask" SET "availableAt" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN ${available} ELSE "availableAt" END,
         "waitCause" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN NULL ELSE "waitCause" END,
         "wakeVersion" = "wakeVersion" + 1, "updatedAt" = ${now.toISOString()}::timestamp
       WHERE state IN (${ASK.queued}, ${ASK.sent}) AND "cancelledAt" IS NULL
         AND ("waitCause" = ${kernelWaitCause.enum.funding} OR "claimToken" IS NOT NULL)
       RETURNING id
     ), passes AS (
-      UPDATE "Pass" SET "availableAt" = ${now.toISOString()}::timestamp,
+      UPDATE "Pass" SET "availableAt" = ${available},
         "waitCause" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN NULL ELSE "waitCause" END,
         "wakeVersion" = "wakeVersion" + 1, "updatedAt" = ${now.toISOString()}::timestamp
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL

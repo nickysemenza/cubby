@@ -1,5 +1,5 @@
 import { ledgerPartyId } from "@cubby/schemas/identifiers";
-import { askProducer } from "@cubby/schemas/kernel/machinery";
+import { askProducer, kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -1429,6 +1429,17 @@ describe("evidence-facts kernel", () => {
     ).rows;
     expect(wake?.later).toBe(true);
     expect(await runQueuedAsks(ctx.db, kernel.registry, 10)).toBe(0);
+    await q.execute(
+      sql`UPDATE "Pass" SET "waitCause" = ${kernelWaitCause.enum.funding} WHERE name = ${pass.name}`,
+    );
+    await releaseFundingWaits(ctx.db, new Date(Date.now() + 60_000));
+    expect(
+      (
+        await q.execute<{ due: boolean }>(
+          sql`SELECT "availableAt" <= now() AS due FROM "Pass" WHERE name = ${pass.name}`,
+        )
+      ).rows[0]?.due,
+    ).toBe(true);
     expect(
       await kernel.withAsk(
         ctx.db,
@@ -1442,7 +1453,7 @@ describe("evidence-facts kernel", () => {
         sql`SELECT "availableAt" <= now() AS due, "wakeVersion" AS version FROM "Pass" WHERE name = ${pass.name}`,
       )
     ).rows;
-    expect(owner).toEqual({ due: true, version: 1 });
+    expect(owner).toEqual({ due: true, version: 2 });
   });
 
   it("shares a household claim partition across inline Asks, queued Asks and Passes", async () => {

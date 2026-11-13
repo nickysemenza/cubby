@@ -44,7 +44,7 @@ The kernel also registers its version sweep. Model, embedding and image calls ar
 
 ## Waits and limits
 
-Funding waits are `funding` waits on Asks and Passes. Resetting funding clears due funding waits and increments their wake versions in one statement, so a holder cannot publish an older wait over the reset. Provider capacity, rate limits, in-flight producers and device waits keep their causes and deadlines. A member pause or cancellation revokes the execution claim; retaining paid Answers does not authorize another model call.
+Funding waits are `funding` waits on Asks and Passes. Resetting funding makes waits due in database time and increments their wake versions in one statement, so a holder cannot publish an older wait over the reset. Provider capacity, rate limits, in-flight producers and device waits keep their causes and deadlines. A member pause or cancellation revokes the execution claim; retaining paid Answers does not authorize another model call.
 
 `purchase.dispatch` uses the `household.agent-turns` ClaimLimit partition with six slots. Its live Pass holds one slot across a coordinator turn, its tools and its hosted model Asks. A hosted Ask borrows that live Pass's slot; independent Asks acquire their own slot in the same partition. At most six live turns run household-wide. The mail agent's Durable Object retains its alarms.
 
