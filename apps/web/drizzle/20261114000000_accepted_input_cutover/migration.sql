@@ -329,6 +329,9 @@ INSERT INTO "FactKey" (key,"factKind","factId")
 SELECT row->'payload'->'acceptedScope'->>'kind'||':'||(row->'payload'->'acceptedScope'->>'key'),'manualEntry',row->>'id'
 FROM cutover_expected WHERE mapping='manualEntry' ON CONFLICT DO NOTHING;
 --> statement-breakpoint
+UPDATE "RecordKey" k SET "mergedAt"=coalesce(e."deletedAt",now() AT TIME ZONE 'UTC')
+FROM "Entity" e WHERE k."naturalKey"='legacy:'||e.id AND e."mergedIntoId" IS NOT NULL;
+--> statement-breakpoint
 DO $verify$ BEGIN
 
  IF EXISTS (
@@ -354,11 +357,9 @@ DO $verify$ BEGIN
  LEFT JOIN cutover_expected e ON e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId"
  LEFT JOIN "RecordKey" k ON k."scopeKind"='bankEvent' AND k."scopeKey"=o.id::text AND k.entity='financialTransaction' AND k."naturalKey"='legacy:'||o."acceptedTransactionId" AND k."entityId"::text=e.row->>'entityId'
  WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL AND (e.source_id IS NULL OR k."entityId" IS NULL)) THEN RAISE EXCEPTION 'Accepted-input cutover: accepted occurrence preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM "Entity" e JOIN "RecordKey" k ON k."naturalKey"='legacy:'||e.id WHERE e."mergedIntoId" IS NOT NULL AND k."mergedAt" IS NULL) THEN RAISE EXCEPTION 'Accepted-input cutover: absorbed scope preservation mismatch'; END IF;
 END $verify$;
 
---> statement-breakpoint
-UPDATE "RecordKey" k SET "mergedAt"=e."deletedAt"
-FROM "Entity" e WHERE k."naturalKey"='legacy:'||e.id AND e."mergedIntoId" IS NOT NULL;
 --> statement-breakpoint
 -- Preserve authority preimages as evidence before contraction. AuditLog itself stays.
 CREATE SCHEMA IF NOT EXISTS archive;

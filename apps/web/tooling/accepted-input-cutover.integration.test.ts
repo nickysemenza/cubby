@@ -293,6 +293,7 @@ it("aborts atomically for every preservation verification", async () => {
       ask: 'DELETE FROM "Ask"',
       answer: 'DELETE FROM "Answer"',
       askScope: 'DELETE FROM "AskScope"',
+      "absorbed scope": 'UPDATE "RecordKey" SET "mergedAt"=NULL',
       "accepted occurrence":
         'DELETE FROM "RecordKey" WHERE "scopeKey"=\'' + cutoverId(63) + "'",
       "audit count": 'DELETE FROM archive."AuditLog_authority_preimage"',
@@ -333,7 +334,7 @@ it("aborts atomically for every preservation verification", async () => {
         checked++;
       }
     }
-    expect(checked).toBe(17);
+    expect(checked).toBe(18);
   });
 });
 
@@ -738,4 +739,29 @@ it("matches the registered model feature envelope catalog", async () => {
       policy: a.policy,
     })),
   );
+});
+
+it("retires a historical merge even when its deletion timestamp is absent", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261113113834_model_evaluation_asks",
+    });
+    await seedCutoverPredecessor(client);
+    await client.query(
+      `ALTER TABLE "Entity" DROP CONSTRAINT "Entity_merged_is_deleted_check"`,
+    );
+    await client.query(`UPDATE "Entity" SET "deletedAt"=NULL WHERE id=$1`, [
+      cutoverId(6),
+    ]);
+    await migrateDatabase(db);
+    expect(
+      (
+        await client.query(
+          `SELECT "entityId","mergedAt" IS NOT NULL retired FROM "RecordKey" WHERE "naturalKey"=$1`,
+          [`legacy:${cutoverId(6)}`],
+        )
+      ).rows,
+    ).toEqual([{ entityId: cutoverId(4), retired: true }]);
+  });
 });
