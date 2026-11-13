@@ -73,7 +73,7 @@ export type AutomaticRuleOutcome = {
  */
 export function selectAutomaticRule(
   row: Candidate,
-  options: { importClean?: boolean },
+  options: { settlement?: boolean },
 ) {
   if (!row.active || row.status !== "pending") return null;
   const family = suggestionFamily.safeParse(row.family);
@@ -88,13 +88,13 @@ export function selectAutomaticRule(
     .filter(
       (match) =>
         (!policy.requiresStamp || stamp?.matchedRules.includes(match.stamp)) &&
-        (AUTOMATIC_RULES[match.key].execution !== "import_clean" ||
-          options.importClean === true),
+        (AUTOMATIC_RULES[match.key].execution !== "statement_settlement" ||
+          options.settlement === true),
     )
     .sort(
       (a, b) =>
-        Number(AUTOMATIC_RULES[b.key].execution === "import_clean") -
-        Number(AUTOMATIC_RULES[a.key].execution === "import_clean"),
+        Number(AUTOMATIC_RULES[b.key].execution === "statement_settlement") -
+        Number(AUTOMATIC_RULES[a.key].execution === "statement_settlement"),
     );
   if (!match) return null;
   return {
@@ -123,7 +123,7 @@ export type AutomaticSelection = NonNullable<
 export async function selectAutomaticRules(
   db: Database,
   suggestionIds: readonly string[],
-  options: { importClean?: boolean },
+  options: { settlement?: boolean },
 ) {
   const selections = new Map<string, AutomaticSelection>();
   if (!suggestionIds.length) return selections;
@@ -193,8 +193,8 @@ export async function applyAutomaticRules(
      */
     context: AutomaticContext;
     onFailure?: (suggestionId: string, message: string) => void;
-    /** An import authorizes automatic clean spending plans. */
-    importClean?: boolean;
+    /** Statement settlement authorizes clean statement plans. */
+    settlement?: boolean;
     /** Selection constraints survive regeneration and are rechecked by write admission. */
     statementScope?: StatementSuggestionScope;
   },
