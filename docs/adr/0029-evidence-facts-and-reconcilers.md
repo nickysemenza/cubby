@@ -332,7 +332,10 @@ claim token, and deletes the `ScopeDirty` row only at that `seq`. A mutation
 that commits later raises `seq` again and the scope runs again.
 
 Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
-then the `ScopeDirty` row, which is the order a mutation takes them in. A
+then the `ScopeDirty` row, then the record rows, which is the order a mutation
+takes them in. A gated transaction that dirties scopes first locks the
+revisions those scopes last read, and an authored writer locks the revisions
+its write will raise before it updates the row. A
 conflict on `seq` or `rev`, a deadlock or a serialization failure does not
 count as a failed attempt. After three
 conflicts in a row the runner makes an exception to loading outside the
@@ -348,7 +351,8 @@ same record wins and the scope reruns.
 Background money applies commit after each bounded batch of at most 64 scopes,
 before the next batch can take the gate. A batch's set-based writes publish
 atomically; session timeouts bound in-flight statements. A member's write
-uses a 2 second `lock_timeout` and reports a timeout as a retryable wait.
+uses a 2 second `lock_timeout` and reports a timeout or a deadlock as a
+retryable wait.
 
 A command that records inputs and applies money in one transaction takes the gate before inserting those inputs or raising their revisions. This gives concurrent commands one lock order; an input-only transaction remains ungated.
 
@@ -542,9 +546,10 @@ median of the most recent priced Answers for its feature and requested tier,
 else its ask kind's declared estimate; a source ask is free. The estimate is
 unknown, stored as NULL, when any ask has neither, and it stays outside the
 proposal hash. Approval is a decision
-bound to the proposal hash, by item or by class; approval applies the
-difference and files the asks. A proposal whose inputs hash no longer matches
-is recomputed before it can be approved.
+bound to the proposal hash, by item or by class. Approval recomputes the scope
+with the baseline released and applies the difference and files the asks only
+when that computation re-derives the approved hash under the proposal's rules;
+otherwise it stores the recomputed proposal, which must be approved again.
 
 The sweep loads and computes a page outside any transaction, then publishes it
 with its cursor in the pass's fenced transaction: it locks the page's input
@@ -563,21 +568,25 @@ that drift releases the baseline for that scope. A scope with no stored
 records gets version 0 and an empty baseline.
 
 An input-triggered reconcile also protects accepted baselines. An automatic
-difference records a Drift proposal and applies no record changes or new asks.
-A field assignment with the current Decision as its provenance may update that
-field above the baseline; it does not authorize other automatic differences.
-A new record whose supplied values all cite current Decisions may be added to
-an accepted scope. Creation authority applies to those immutable decision
-values; it does not authorize later changes derived from new observations.
+difference records a Drift proposal, computed as approval computes it, and
+applies no record changes or new asks. Decision changes still apply above the
+baseline and are not part of the proposal: a field assignment with the current
+Decision as its provenance, a new record whose supplied values all cite current
+Decisions, and a decision-basis binding with the decision binding it replaces.
+They do not authorize other automatic differences. Creation authority applies
+to those immutable decision values; it does not authorize later changes
+derived from new observations.
 Reference merge and removal policies use `columnOwner` and
 `repointOwnedReference` for owned foreign keys. The kernel takes the money
 gate for a money-owned reference. Callers take it before acquiring other
-record locks. Repointing raises table and row
-keys, including for scopes whose earlier predicate found no matching row.
+record locks. Repointing raises table, row and declared index keys for the
+rows before and after it, including for scopes whose earlier predicate found
+no matching row.
 `c.disagree(input)` records unresolved drift when accepted inputs contradict
-one another and no automatic replacement is justified. It applies only field
-updates citing current Decisions, and files no asks. Approval cannot bypass the unresolved disagreement; evidence or
-a decision must first resolve it.
+one another and no automatic replacement is justified. It applies only the decision changes
+above, and files no asks. Its proposal is computed with the baseline in force,
+and approval cannot bypass the unresolved disagreement; evidence or a decision
+must first resolve it.
 
 ### 12. Cutover migration
 
