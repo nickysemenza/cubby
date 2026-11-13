@@ -2,14 +2,13 @@
 -- verification and contraction are atomic. Acquire every lock before the first read.
 SET LOCAL lock_timeout='2s';
 --> statement-breakpoint
-LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "EmailPurchaseDecision", "EmailReview", "EmailFinancialAssociation", "SourceObservationAnnotation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "LedgerTransfer", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "Shipment", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN ACCESS EXCLUSIVE MODE;
+LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_money ON COMMIT DROP AS
 SELECT 'Expense'::text source, id, "purchaseId" owner, date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
 UNION ALL SELECT 'Purchase',id,id,date_trunc('month',date)::date,"statedTotalMinor" FROM "Purchase"
 UNION ALL SELECT 'FinancialTransaction',id,NULL,date_trunc('month',"transactionDate")::date,"amountMinor" FROM "FinancialTransaction"
-UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation"
-UNION ALL SELECT 'LedgerTransfer',id,NULL,date_trunc('month',date)::date,"amountMinor" FROM "LedgerTransfer";
+UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation";
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_expected ON COMMIT DROP AS
 -- cutover:select:start
@@ -45,7 +44,7 @@ SELECT 'device'::text entity, 'Device'::text table_name, 'fields'::text scope_ki
 UNION ALL
 SELECT 'spendingCategory'::text entity, 'SpendingCategory'::text table_name, 'fields'::text scope_kind, 'spendingCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji','itemizationExpectation','productExpectation']::text[] fields FROM "SpendingCategory" r
 UNION ALL
-SELECT 'financialTransaction', 'FinancialTransaction', 'bankEvent', coalesce((SELECT min(o.id::text) FROM "SourceOccurrence" o WHERE o."acceptedTransactionId"=r.id),'manual:'||r.id), r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amount',coalesce(to_jsonb(r)->>'amountMinor',((to_jsonb(r)->>'amount')::numeric*100)::text)), ARRAY['accountId','kind','status','amount','transactionDate','postedDate','merchant','rawDescription','sourceCategory','notes','spendingCategoryId','itemizationExpectation']::text[] FROM "FinancialTransaction" r
+SELECT 'financialTransaction', 'FinancialTransaction', 'bankEvent', coalesce(o.id::text,'manual:'||r.id), r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amount',coalesce(to_jsonb(r)->>'amountMinor',((to_jsonb(r)->>'amount')::numeric*100)::text)), ARRAY['accountId','kind','status','amount','transactionDate','postedDate','merchant','rawDescription','sourceCategory','notes','spendingCategoryId','itemizationExpectation']::text[] FROM "FinancialTransaction" r LEFT JOIN "SourceOccurrence" o ON o."acceptedTransactionId"=r.id AND o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored'
 UNION ALL
 SELECT 'purchase', 'Purchase', 'purchaseEvent', coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=r.id AND a."deletedAt" IS NULL),r.id::text), r.id, (to_jsonb(r)-'statedTotalMinor')||jsonb_build_object('statedTotal',coalesce(to_jsonb(r)->>'statedTotalMinor',((to_jsonb(r)->>'statedTotal')::numeric*100)::text)), ARRAY['vendorId','vendorAccountId','purchaserOverrideId','defaultProjectId','defaultTrade','spendingCategoryId','spendingCategoryOrigin','itemizationExpectation','orderId','displayLabel','date','statedTotal','notes']::text[] FROM "Purchase" r
 UNION ALL
@@ -54,18 +53,18 @@ UNION ALL
 SELECT 'FinancialTransactionAllocation', 'FinancialTransactionAllocation', 'purchaseEvent', r."transactionId"::text, r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amountMinor',r."amountMinor"::text), ARRAY['transactionId','purchaseId','amountMinor','confirmsMerchant']::text[] FROM "FinancialTransactionAllocation" r
 UNION ALL
 SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=e."purchaseId" AND a."deletedAt" IS NULL),e."purchaseId"::text,e.id::text) FROM "Expense" e WHERE e.id=r."expenseId"),r.id::text), r.id, to_jsonb(r), ARRAY['expenseId','role','ledgerPartyId','weight']::text[] FROM "ExpenseAttribution" r
-UNION ALL
-SELECT 'ledgerTransfer', 'LedgerTransfer', 'transfer', r.id::text, r.id, to_jsonb(r), ARRAY[]::text[] FROM "LedgerTransfer" r
-UNION ALL
-SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[]::text[] FROM "Shipment" r
 ), field_values AS (
- SELECT r.*, f.field, r.payload->f.field value, a.id audit_id, a.authority,
- a."userId", a."oauthClientId", a."createdAt" audit_at, a.changes,
+ SELECT DISTINCT ON (r.entity,r.id,f.field) r.*, f.field, r.payload->f.field value, a.id audit_id, a.authority,
+ a."userId", a."oauthClientId", a.channel, a."createdAt" audit_at, a.changes, a.audit_value,
  -- Only an exact, affirmative automatic trail establishes Cubby ownership.
- a.authority IN ('automatic','released') AND a.changes->f.field->'to'=r.payload->f.field cubby_holds
+ a.authority IN ('automatic','released') AND a.audit_value=r.payload->f.field cubby_holds
  FROM records r CROSS JOIN LATERAL unnest(r.fields) f(field)
- LEFT JOIN LATERAL (SELECT a.* FROM "AuditLog" a WHERE a."entityKind"=r.entity AND a."entityId"=r.id
-   AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true
+ LEFT JOIN LATERAL (SELECT a.*, CASE WHEN jsonb_typeof(a.changes->f.field->'to')='number' THEN CASE
+ WHEN ((r.entity='financialTransaction' AND f.field='amount') OR (r.entity='purchase' AND f.field='statedTotal') OR (r.entity='expense' AND f.field='cost'))
+  AND abs((a.changes->f.field->'to' #>> '{}')::numeric*100-round((a.changes->f.field->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((a.changes->f.field->'to' #>> '{}')::numeric*100)::text)
+ WHEN r.entity='FinancialTransactionAllocation' AND f.field='amountMinor' AND (a.changes->f.field->'to' #>> '{}')::numeric=trunc((a.changes->f.field->'to' #>> '{}')::numeric) THEN to_jsonb(trunc((a.changes->f.field->'to' #>> '{}')::numeric)::text)
+ ELSE a.changes->f.field->'to' END ELSE a.changes->f.field->'to' END audit_value FROM "AuditLog" a WHERE a."entityKind"=r.entity AND a."entityId"=r.id
+   AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true ORDER BY r.entity,r.id,f.field,r.scope_key
 ), source_answers AS (
  SELECT 'AiEvaluation'::text source_table, e.id, to_jsonb(e) legacy, e.feature, e.provenance->>'model' model,
  coalesce(e.provenance->>'promptVersion',(SELECT d->>'promptVersion' FROM jsonb_array_elements(coalesce(e.provenance->'dependencies','[]'::jsonb)) d WHERE d->>'feature'=e.feature LIMIT 1),'legacy:unknown') prompt_version, e."createdAt" created_at, e."runId" run_id,
@@ -78,18 +77,18 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  jsonb_build_object('entity',a."entityKind",'recordId',a."entityId") FROM "AiAnalysis" a
  UNION ALL
  SELECT 'Suggestion',s.id,to_jsonb(s),'legacy:suggestion:'||s.family,s.model,'legacy:unknown',s."createdAt",s."runId",s."suggestedValue",'answered',false,s."createdAt",0,NULL,
- jsonb_build_object('entity',s.entity,'recordId',s."recordId") FROM "Suggestion" s
+ jsonb_build_object('entity',s.entity,'recordId',s."recordId") FROM "Suggestion" s WHERE s.family IN ('field','statement_transaction')
  -- Preserve complete proposals, including negative/undecided paid results and review receipts.
 ), imports AS (
  SELECT *, 'legacy:'||source_table||':'||id::text hash, CASE WHEN source_table='Suggestion' AND (legacy->'producer'->>'kind'='rule' OR legacy->>'model'='rule') THEN 'source' ELSE 'model' END producer FROM source_answers
 ), review_events AS (
- SELECT s.id, d.event, d.ord FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END) WITH ORDINALITY d(event,ord)
+ SELECT s.id, d.event, d.ord FROM "Suggestion" s CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END) WITH ORDINALITY d(event,ord) WHERE s.family IN ('field','statement_transaction')
  UNION ALL
  SELECT s.id,jsonb_build_object('verdict',CASE WHEN s.suppression IS NOT NULL THEN 'wrong' ELSE 'correct' END,
  'intent','apply','correction',CASE WHEN s."confirmedValue"->>'present'='true' THEN s."confirmedValue" ELSE jsonb_build_object('present',s."correctValue" IS NOT NULL,'value',s."correctValue") END,
  'authority',CASE WHEN s."acceptanceReceipt"->>'mode'='automatic' THEN 'automatic' ELSE 'unknown' END,
  'createdAt',coalesce(s."acceptanceReceipt"->>'acceptedAt',(now() AT TIME ZONE 'UTC')::text)),
- 0::bigint FROM "Suggestion" s WHERE jsonb_array_length(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END)=0
+ 0::bigint FROM "Suggestion" s WHERE s.family IN ('field','statement_transaction') AND jsonb_array_length(CASE WHEN jsonb_typeof(s.decisions)='array' THEN s.decisions ELSE '[]'::jsonb END)=0
  AND (s.suppression IS NOT NULL OR s."confirmedValue"->>'present'='true' OR s."acceptanceReceipt"->>'mode'='member')
 ), reviews AS (
  SELECT s.*, d.event, d.ord,
@@ -107,11 +106,11 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  FROM records
  UNION ALL
  SELECT 'manualEntry',entity||':'||id,
- jsonb_build_object('id',md5('cutover:'||entity||':'||id)::uuid,'entity',entity,'userId','legacy:unknown',
+ jsonb_build_object('id',md5('cutover:'||entity||':'||id||CASE WHEN scope_kind='bankEvent' THEN ':'||scope_key ELSE '' END)::uuid,'entity',entity,'userId','legacy:unknown',
  'payload',jsonb_build_object('table',table_name,'naturalKey','legacy:'||id,'values',CASE WHEN cardinality(fields)>0 THEN (SELECT jsonb_object_agg(f,payload->f) FROM unnest(fields) f) ELSE payload END,'legacy',payload,'acceptedScope',jsonb_build_object('kind',scope_kind,'key',scope_key)))
  FROM records
  UNION ALL
- SELECT 'binding',entity||':'||id,jsonb_build_object('factKind','manualEntry','factId',md5('cutover:'||entity||':'||id)::uuid,'basis','baseline','eventKey',CASE WHEN scope_kind='fields' THEN 'baseline:snapshot:'||entity||':'||id ELSE id::text END,'scopeKind',scope_kind,'scopeKey',scope_key) FROM records
+ SELECT 'binding',entity||':'||id,jsonb_build_object('factKind','manualEntry','factId',md5('cutover:'||entity||':'||id||CASE WHEN scope_kind='bankEvent' THEN ':'||scope_key ELSE '' END)::uuid,'basis','baseline','eventKey',CASE WHEN scope_kind='fields' THEN 'baseline:snapshot:'||entity||':'||id ELSE id::text END,'scopeKind',scope_kind,'scopeKey',scope_key) FROM records
  UNION ALL
  SELECT 'scope',scope_kind||':'||scope_key,jsonb_build_object('scopeKind',scope_kind,'scopeKey',scope_key,'version',0,'rules','','stage','done') FROM records GROUP BY scope_kind,scope_key
  UNION ALL
@@ -123,8 +122,8 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  UNION ALL
  SELECT 'decision',entity||':'||id||':'||field,jsonb_build_object('id',('ffffffff'||substr(md5('cutover-held:'||entity||':'||id||':'||field),9))::uuid,
  'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind',CASE WHEN value='null'::jsonb THEN 'none' ELSE 'set' END,'value',value,
- 'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR changes->field->'to' IS DISTINCT FROM value THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
- 'actorId',CASE WHEN authority IS NULL AND changes->field->'to'=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
+ 'actorKind',CASE WHEN audit_id IS NULL OR authority IS NOT NULL OR audit_value IS DISTINCT FROM value OR channel='system' OR "userId"='cubby-system' THEN 'system' WHEN "oauthClientId" IS NOT NULL THEN 'agent' ELSE 'member' END,
+ 'actorId',CASE WHEN authority IS NULL AND audit_value=value THEN "userId" END,'at',now() AT TIME ZONE 'UTC')
  FROM field_values WHERE cubby_holds IS NOT TRUE
  UNION ALL
  SELECT 'answer',entity||':'||id||':'||field,jsonb_build_object('inputHash','legacy:field:'||entity||':'||id||':'||field,'feature','legacy:field','producer','model','promptVersion','legacy:unknown',
@@ -149,20 +148,16 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  'value',CASE WHEN event->>'verdict' IN ('wrong','dismissed') THEN "suggestedValue" ELSE accepted END,'actorKind',CASE WHEN event->>'authority'='member' THEN 'member' ELSE 'system' END,'actorId',event->>'actorUserId','at',(event->>'createdAt')::timestamp)
  FROM reviews WHERE field<>'' AND "recordId" IS NOT NULL AND event->>'verdict' IN ('correct','wrong','dismissed') AND (event->>'verdict'<>'correct' OR event->>'intent'='apply')
 UNION ALL
-SELECT 'decision','EmailPurchaseDecision:'||r.id,jsonb_build_object('id',md5('cutover:EmailPurchaseDecision:'||r.id)::uuid,'channel','assignment','subject',CASE WHEN r."emailId" IS NOT NULL THEN 'email:'||r."emailId" ELSE 'emailEvent:'||r."eventId" END,'slot','purchaseId','field','purchaseId','kind','set','value',CASE WHEN r.decision='linked' THEN to_jsonb(r."purchaseId") ELSE to_jsonb(false) END,'actorKind',CASE WHEN r.authority='member' THEN 'member' ELSE 'system' END,'actorId',r."decidedByUserId",'at',r."createdAt") FROM "EmailPurchaseDecision" r WHERE r.authority<>'automatic'
+SELECT 'decision','Suggestion:'||r.id,jsonb_build_object('id',md5('cutover:Suggestion:'||r.id)::uuid,'channel','assignment','subject','legacy:suggestion:'||r.id,'slot','review','field','review','kind','set','value',to_jsonb(r),'actorKind','system','actorId',NULL,'at',r."updatedAt") FROM "Suggestion" r WHERE r.family IN ('field','statement_transaction') AND r.field='' AND (jsonb_array_length(r.decisions)>0 OR r.suppression IS NOT NULL OR r."confirmedValue" IS NOT NULL)
 UNION ALL
-SELECT 'decision','EmailReview:'||r.id,jsonb_build_object('id',md5('cutover:EmailReview:'||r.id)::uuid,'channel','assignment','subject','email:'||coalesce(r."emailId",r."originalId",r."subjectId"),'slot','review:'||r."subjectId",'field','review:'||r."subjectId",'kind','set','value',to_jsonb(r),'actorKind',CASE WHEN r.authority='member' THEN 'member' ELSE 'system' END,'actorId',r."actorUserId",'at',r."createdAt") FROM "EmailReview" r WHERE r.authority<>'automatic'
-UNION ALL
-SELECT 'decision','EmailFinancialAssociation:'||r.id,jsonb_build_object('id',md5('cutover:EmailFinancialAssociation:'||r.id)::uuid,'channel','assignment','subject','email:'||r."emailId",'slot','financialAssociation:'||r."transactionId",'field','financialAssociation:'||r."transactionId",'kind','set','value',to_jsonb(r),'actorKind','member','actorId',r."decidedByUserId",'at',r."createdAt") FROM "EmailFinancialAssociation" r WHERE true
-UNION ALL
-SELECT 'decision','SourceObservationAnnotation:'||r."observationId",jsonb_build_object('id',md5('cutover:SourceObservationAnnotation:'||r."observationId")::uuid,'channel','assignment','subject','sourceTransactionRecord:'||r."observationId",'slot','annotation','field','annotation','kind','set','value',to_jsonb(r),'actorKind','system','actorId',NULL,'at',r."updatedAt") FROM "SourceObservationAnnotation" r WHERE true
-UNION ALL
-SELECT 'decision','Suggestion:'||r.id,jsonb_build_object('id',md5('cutover:Suggestion:'||r.id)::uuid,'channel','assignment','subject','legacy:suggestion:'||r.id,'slot','review','field','review','kind','set','value',to_jsonb(r),'actorKind','system','actorId',NULL,'at',r."updatedAt") FROM "Suggestion" r WHERE r.field='' AND (jsonb_array_length(r.decisions)>0 OR r.suppression IS NOT NULL OR r."confirmedValue" IS NOT NULL)
-UNION ALL
-SELECT 'decision','AuditLog:release:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:release:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind','release','value',NULL,'actorKind',CASE WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority='released' AND EXISTS(SELECT 1 FROM records r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND f.key=ANY(r.fields))
+SELECT 'decision','AuditLog:release:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:release:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind','release','value',NULL,'actorKind',CASE WHEN a.channel='system' OR a."userId"='cubby-system' THEN 'system' WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority='released' AND EXISTS(SELECT 1 FROM records r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND f.key=ANY(r.fields))
 
 UNION ALL
-SELECT 'decision','AuditLog:held:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:audit-held:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind',CASE WHEN f.value->'to'='null'::jsonb THEN 'none' ELSE 'set' END,'value',f.value->'to','actorKind',CASE WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority IS NULL AND f.value ? 'to' AND EXISTS(SELECT 1 FROM records r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND f.key=ANY(r.fields))
+SELECT 'decision','AuditLog:held:'||a.id||':'||f.key,jsonb_build_object('id',md5('cutover:audit-held:'||a.id||':'||f.key)::uuid,'channel','assignment','subject',a."entityKind"||':'||a."entityId",'slot',f.key,'field',f.key,'kind',CASE WHEN f.value->'to'='null'::jsonb THEN 'none' ELSE 'set' END,'value',CASE WHEN jsonb_typeof(f.value->'to')='number' THEN CASE
+ WHEN ((a."entityKind"='financialTransaction' AND f.key='amount') OR (a."entityKind"='purchase' AND f.key='statedTotal') OR (a."entityKind"='expense' AND f.key='cost'))
+  AND abs((f.value->'to' #>> '{}')::numeric*100-round((f.value->'to' #>> '{}')::numeric*100))<0.0000001 THEN to_jsonb(round((f.value->'to' #>> '{}')::numeric*100)::text)
+ WHEN a."entityKind"='FinancialTransactionAllocation' AND f.key='amountMinor' AND (f.value->'to' #>> '{}')::numeric=trunc((f.value->'to' #>> '{}')::numeric) THEN to_jsonb(trunc((f.value->'to' #>> '{}')::numeric)::text)
+ ELSE f.value->'to' END ELSE f.value->'to' END,'actorKind',CASE WHEN a.channel='system' OR a."userId"='cubby-system' THEN 'system' WHEN a."oauthClientId" IS NULL THEN 'member' ELSE 'agent' END,'actorId',a."userId",'at',a."createdAt") FROM "AuditLog" a CROSS JOIN LATERAL jsonb_each(CASE WHEN jsonb_typeof(a.changes)='object' THEN a.changes ELSE '{}'::jsonb END) f WHERE a.authority IS NULL AND f.value ? 'to' AND EXISTS(SELECT 1 FROM records r WHERE r.entity=a."entityKind" AND r.id=a."entityId" AND f.key=ANY(r.fields))
 
 UNION ALL
 SELECT 'decision','Suggestion:correction-veto:'||id||':'||ord,jsonb_build_object('id',md5('cutover:correction-veto:'||id||':'||ord)::uuid,
@@ -198,13 +193,16 @@ FROM statement_applications a CROSS JOIN LATERAL jsonb_array_elements_text(CASE 
 JOIN "Entity" candidate ON candidate.kind='financialTransaction' AND (candidate.shortcode=rejected.code OR candidate.id::text=rejected.code)
 WHERE a.event->>'intent'='apply' AND a.transaction_id IS NOT NULL AND candidate.id<>a.transaction_id
 UNION ALL
-SELECT 'decision','SourceAccount:'||n."observationId",jsonb_build_object('id',md5('cutover:source-account:'||n."observationId")::uuid,
- 'channel','assignment','subject','bank:'||o."occurrenceId",'slot','accountId','field','accountId','kind','set','value',n."accountId",'actorKind','system','actorId',NULL,'at',n."updatedAt")
-FROM "SourceObservationAnnotation" n JOIN "SourceTransactionRecord" o ON o.id=n."observationId" WHERE n."accountId" IS NOT NULL
-UNION ALL
 SELECT 'decision','Rejected:'||entity||':'||id,jsonb_build_object('id',md5('cutover:rejected:'||entity||':'||id)::uuid,
  'channel','rejection','subject',entity||':'||id,'slot','','kind','reject','value',NULL,'actorKind','system','actorId',NULL,'at',payload->'deletedAt')
 FROM records WHERE payload->>'deletedAt' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM survivors WHERE survivors.id=records.id)
+
+UNION ALL
+-- A current automatic/released trail supersedes old held assignments. This is
+-- an observation of authority at cutover, not a fabricated member release.
+SELECT 'decision','CubbyRelease:'||entity||':'||id||':'||field,jsonb_build_object('id',md5('cutover:cubby-release:'||entity||':'||id||':'||field)::uuid,
+ 'channel','assignment','subject',entity||':'||id,'slot',field,'field',field,'kind','release','value',NULL,'actorKind','system','actorId',NULL,'at',now() AT TIME ZONE 'UTC')
+FROM field_values WHERE cubby_holds
 ), empty_scopes AS (
  SELECT DISTINCT e.row->>'scopeKind' kind,e.row->>'scopeKey' key FROM expected e WHERE e.mapping='scope'
  AND NOT EXISTS (SELECT 1 FROM expected k WHERE k.mapping='recordKey' AND k.row->>'scopeKind'=e.row->>'scopeKind' AND k.row->>'scopeKey'=e.row->>'scopeKey')
@@ -291,6 +289,7 @@ DO $verify$ BEGIN
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='ask' AND NOT EXISTS (SELECT 1 FROM "Ask" t WHERE t."id"::text=e.row->>'id' AND coalesce(to_jsonb(t)->'id','null'::jsonb)=coalesce(e.row->'id','null'::jsonb) AND coalesce(to_jsonb(t)->'inputHash','null'::jsonb)=coalesce(e.row->'inputHash','null'::jsonb) AND coalesce(to_jsonb(t)->'feature','null'::jsonb)=coalesce(e.row->'feature','null'::jsonb) AND coalesce(to_jsonb(t)->'producer','null'::jsonb)=coalesce(e.row->'producer','null'::jsonb) AND coalesce(to_jsonb(t)->'promptVersion','null'::jsonb)=coalesce(e.row->'promptVersion','null'::jsonb) AND coalesce(to_jsonb(t)->'input','null'::jsonb)=coalesce(e.row->'input','null'::jsonb) AND coalesce(to_jsonb(t)->'state','null'::jsonb)=coalesce(e.row->'state','null'::jsonb) AND coalesce(to_jsonb(t)->'cancelledAt','null'::jsonb)=coalesce(e.row->'cancelledAt','null'::jsonb) AND coalesce(to_jsonb(t)->'availableAt','null'::jsonb)=coalesce(e.row->'availableAt','null'::jsonb) AND coalesce(to_jsonb(t)->'attempts','null'::jsonb)=coalesce(e.row->'attempts','null'::jsonb) AND coalesce(to_jsonb(t)->'maxAttempts','null'::jsonb)=coalesce(e.row->'maxAttempts','null'::jsonb) AND coalesce(to_jsonb(t)->'lastError','null'::jsonb)=coalesce(e.row->'lastError','null'::jsonb) AND coalesce(to_jsonb(t)->'createdAt','null'::jsonb)=coalesce(e.row->'createdAt','null'::jsonb) AND coalesce(to_jsonb(t)->'executor','null'::jsonb)=coalesce(e.row->'executor','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: ask preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='answer' AND NOT EXISTS (SELECT 1 FROM "Answer" t WHERE t."inputHash"::text=e.row->>'inputHash' AND coalesce(to_jsonb(t)->'inputHash','null'::jsonb)=coalesce(e.row->'inputHash','null'::jsonb) AND coalesce(to_jsonb(t)->'feature','null'::jsonb)=coalesce(e.row->'feature','null'::jsonb) AND coalesce(to_jsonb(t)->'producer','null'::jsonb)=coalesce(e.row->'producer','null'::jsonb) AND coalesce(to_jsonb(t)->'promptVersion','null'::jsonb)=coalesce(e.row->'promptVersion','null'::jsonb) AND coalesce(to_jsonb(t)->'output','null'::jsonb)=coalesce(e.row->'output','null'::jsonb) AND coalesce(to_jsonb(t)->'model','null'::jsonb)=coalesce(e.row->'model','null'::jsonb) AND coalesce(to_jsonb(t)->'askId','null'::jsonb)=coalesce(e.row->'askId','null'::jsonb) AND coalesce(to_jsonb(t)->'runId','null'::jsonb)=coalesce(e.row->'runId','null'::jsonb) AND coalesce(to_jsonb(t)->'createdAt','null'::jsonb)=coalesce(e.row->'createdAt','null'::jsonb))) THEN RAISE EXCEPTION 'Accepted-input cutover: answer preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM cutover_expected e WHERE mapping='askScope' AND NOT EXISTS (SELECT 1 FROM "AskScope" t WHERE t."askId"::text=e.row->>'askId' AND t."scopeKind"::text=e.row->>'scopeKind' AND t."scopeKey"::text=e.row->>'scopeKey' AND (e.source_id NOT LIKE 'AiEvaluationRequest:%' OR (t.receipt IS NOT DISTINCT FROM e.row->'receipt' AND t.sequence=(e.row->>'sequence')::int AND to_jsonb(t."cancelledAt") IS NOT DISTINCT FROM nullif(e.row->'cancelledAt','null'::jsonb))))) THEN RAISE EXCEPTION 'Accepted-input cutover: askScope preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 FROM "SourceOccurrence" o WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL AND NOT EXISTS (SELECT 1 FROM "RecordKey" k WHERE k."scopeKind"='bankEvent' AND k."scopeKey"=o.id::text AND k.entity='financialTransaction' AND k."naturalKey"='legacy:'||o."acceptedTransactionId" AND k."entityId"::text=(SELECT e.row->>'entityId' FROM cutover_expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId"))) THEN RAISE EXCEPTION 'Accepted-input cutover: accepted occurrence preservation mismatch'; END IF;
 END $verify$;
 
 --> statement-breakpoint
@@ -302,6 +301,7 @@ CREATE SCHEMA IF NOT EXISTS archive;
 CREATE TABLE archive."AuditLog_authority_preimage" AS SELECT id,authority,"automationPending" FROM "AuditLog";
 --> statement-breakpoint
 DO $verify$ BEGIN
+ IF EXISTS(SELECT 1 WHERE (SELECT count(*) FROM "AuditLog")<>(SELECT count(*) FROM archive."AuditLog_authority_preimage")) THEN RAISE EXCEPTION 'Accepted-input cutover: audit count preservation mismatch'; END IF;
  IF EXISTS(SELECT 1 FROM "AuditLog" a FULL JOIN archive."AuditLog_authority_preimage" b USING(id) WHERE a.id IS NULL OR b.id IS NULL OR a.authority IS DISTINCT FROM b.authority OR a."automationPending" IS DISTINCT FROM b."automationPending") THEN RAISE EXCEPTION 'Accepted-input cutover: audit preimage preservation mismatch'; END IF;
 END $verify$;
 --> statement-breakpoint
@@ -314,6 +314,8 @@ CREATE TABLE archive."AiEvaluation_preimage" AS TABLE "AiEvaluation";
 CREATE TABLE archive."AiEvaluationRequest_preimage" AS TABLE "AiEvaluationRequest";
 --> statement-breakpoint
 DO $verify$ BEGIN
+ IF EXISTS (SELECT 1 WHERE (SELECT count(*) FROM "AiEvaluation")<>(SELECT count(*) FROM archive."AiEvaluation_preimage")) THEN RAISE EXCEPTION 'Accepted-input cutover: evaluation count preservation mismatch'; END IF;
+ IF EXISTS (SELECT 1 WHERE (SELECT count(*) FROM "AiEvaluationRequest")<>(SELECT count(*) FROM archive."AiEvaluationRequest_preimage")) THEN RAISE EXCEPTION 'Accepted-input cutover: requester count preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM "AiEvaluation" a FULL JOIN archive."AiEvaluation_preimage" b USING(id) WHERE to_jsonb(a) IS DISTINCT FROM to_jsonb(b)) THEN RAISE EXCEPTION 'Accepted-input cutover: evaluation preimage preservation mismatch'; END IF;
  IF EXISTS (SELECT 1 FROM "AiEvaluationRequest" a FULL JOIN archive."AiEvaluationRequest_preimage" b USING(id) WHERE to_jsonb(a) IS DISTINCT FROM to_jsonb(b)) THEN RAISE EXCEPTION 'Accepted-input cutover: requester preimage preservation mismatch'; END IF;
 END $verify$;

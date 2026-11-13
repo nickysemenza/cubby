@@ -9,7 +9,7 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     `INSERT INTO "user" (id,name,email) VALUES ('synthetic-cutover','Synthetic member','cutover@example.invalid')`,
   );
   await client.query(
-    `INSERT INTO "ExternalSource" (slug,label) VALUES ('synthetic','Synthetic source')`,
+    `INSERT INTO "ExternalSource" (slug,label) VALUES ('synthetic','Synthetic source'),('synthetic-other','Synthetic other source')`,
   );
   const identities = [
     [1, "vendor", "VND-CUTOVER"],
@@ -33,6 +33,9 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     [19, "sourceTransactionRecord", "STR-CUTOVER"],
     [23, "transactionImport", "IMP-CUTOVER"],
     [56, "financialTransaction", "FTX-OTHER"],
+    [62, "purchase", "PUR-LEGACYEMAIL"],
+    [63, "sourceOccurrence", "SOC-OTHERSOURCE"],
+    [66, "sourceTransactionRecord", "STR-OTHERSOURCE"],
   ];
   // Prefixes come from the declared registry; raw predecessor fixtures bypass writers.
   const { SHORTCODE_PREFIX } = await import("@cubby/shared");
@@ -68,6 +71,10 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
   await client.query(
     `INSERT INTO "Purchase" (id,shortcode,"vendorId",date,"statedTotalMinor") SELECT id,shortcode,$1,'2026-01-02',CASE WHEN id=$2 THEN 6000 ELSE 4000 END FROM "Entity" WHERE id IN ($2,$3,$4)`,
     [cutoverId(1), cutoverId(4), cutoverId(5), cutoverId(6)],
+  );
+  await client.query(
+    `INSERT INTO "Purchase" (id,shortcode,"vendorId",date,"statedTotalMinor") SELECT id,shortcode,$2,'2026-01-02',0 FROM "Entity" WHERE id=$1`,
+    [cutoverId(62), cutoverId(1)],
   );
   await client.query(
     `UPDATE "Entity" SET "deletedAt"='2026-01-04',"mergedIntoId"=$1 WHERE id=$2`,
@@ -117,6 +124,22 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
    ($3,'product',$4,'update','{"ingredientId":{"from":null,"to":"10000000-0000-4000-8000-000000000099"}}','synthetic-cutover','automatic','2026-01-03')`,
     [cutoverId(30), cutoverId(31), cutoverId(32), cutoverId(13)],
   );
+  await client.query(
+    `INSERT INTO "AuditLog" (id,"entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES ($1,'product',$2,'update','{"categoryId":{"from":null,"to":"10000000-0000-4000-8000-000000000099"}}','synthetic-cutover',null,'2026-01-01')`,
+    [cutoverId(33), cutoverId(13)],
+  );
+  await client.query(
+    `INSERT INTO "AuditLog" (id,"entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES
+    ($1,'financialTransaction',$3,'update','{"notes":{"from":null,"to":"Synthetic old member note"}}','synthetic-cutover',null,'2026-01-01'),
+    ($2,'financialTransaction',$3,'update','{"notes":{"from":"Synthetic old member note","to":null}}','synthetic-cutover','automatic','2026-01-02')`,
+    [cutoverId(34), cutoverId(35), cutoverId(56)],
+  );
+  await client.query(
+    `INSERT INTO "AuditLog" (id,"entityKind","entityId",action,changes,"userId",authority,"createdAt") VALUES
+    ($1,'financialTransaction',$3,'update','{"amount":{"from":null,"to":19}}','synthetic-cutover',null,'2026-01-01'),
+    ($2,'financialTransaction',$3,'update','{"amount":{"from":19,"to":20}}','synthetic-cutover','automatic','2026-01-02')`,
+    [cutoverId(36), cutoverId(37), cutoverId(56)],
+  );
   for (const [n, result, attempts] of [
     [40, { paid: "retained" }, 1],
     [41, null, 1],
@@ -139,6 +162,10 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
       ],
     );
   }
+  await client.query(
+    `UPDATE "AiEvaluation" SET "leaseToken"=$1,"leaseUntil"=now()+interval '1 hour' WHERE id=$2`,
+    [cutoverId(61), cutoverId(41)],
+  );
   await client.query(
     `INSERT INTO "AiEvaluationRequest" (id,"evaluationId","runId",receipt,sequence) VALUES ($1,$2,$3,'{"retained":"requester"}',7)`,
     [cutoverId(43), cutoverId(40), cutoverId(14)],
@@ -216,6 +243,14 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     [cutoverId(17), cutoverId(18), cutoverId(3), cutoverId(2)],
   );
   await client.query(
+    `INSERT INTO "SourceOccurrence" (id,shortcode,source,"identityKind","identityScope","identityProof","acceptedTransactionId","accountId") SELECT id,shortcode,'synthetic-other','legacy','synthetic-other','{}',$2,$3 FROM "Entity" WHERE id=$1`,
+    [cutoverId(63), cutoverId(3), cutoverId(2)],
+  );
+  await client.query(
+    `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,decisions) VALUES ($1,'synthetic:kept-transfer','transfer_pair','{}','{}','financialTransaction',$3,'','{}','synthetic-model','[]'),($2,'synthetic:kept-product','product_pair','{}','{}','product',$4,'','{}','synthetic-model','[]')`,
+    [cutoverId(64), cutoverId(65), cutoverId(3), cutoverId(13)],
+  );
+  await client.query(
     `INSERT INTO "TransactionImport" (id,shortcode,source,label,fingerprint) SELECT id,shortcode,'synthetic','Synthetic statement','synthetic-fingerprint' FROM "Entity" WHERE id=$1`,
     [cutoverId(23)],
   );
@@ -226,6 +261,14 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
   await client.query(
     `UPDATE "SourceOccurrence" SET "currentObservationId"=$1 WHERE id=$2`,
     [cutoverId(19), cutoverId(17)],
+  );
+  await client.query(
+    `INSERT INTO "SourceTransactionRecord" (id,shortcode,"occurrenceId","factFingerprint","batchId",source,"accountDescriptor","statementDate","amountMinor","providerAmountMinor","rawDescription") SELECT id,shortcode,$2,'synthetic-other-fact',$3,'synthetic-other','Synthetic account','2026-01-02',10000,10000,'Synthetic same transaction from another source' FROM "Entity" WHERE id=$1`,
+    [cutoverId(66), cutoverId(63), cutoverId(23)],
+  );
+  await client.query(
+    `UPDATE "SourceOccurrence" SET "currentObservationId"=$1 WHERE id=$2`,
+    [cutoverId(66), cutoverId(63)],
   );
   await client.query(
     `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,decisions,active,status,data) VALUES ($1,'synthetic:statement-application','statement_transaction','{}','{}','sourceTransactionRecord',$2,'',$3,'synthetic-model',$4,false,'applied',$5)`,

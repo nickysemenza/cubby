@@ -32,6 +32,15 @@ it("carries held values, paid results, redirects and every accepted money row", 
       through: "20261113113834_model_evaluation_asks",
     });
     await seedCutoverPredecessor(client);
+    const retained = `SELECT jsonb_agg(payload ORDER BY name,payload::text) value FROM (
+      SELECT 'EmailPurchaseDecision' name,to_jsonb(t) payload FROM "EmailPurchaseDecision" t
+      UNION ALL SELECT 'EmailReview',to_jsonb(t) FROM "EmailReview" t
+      UNION ALL SELECT 'EmailFinancialAssociation',to_jsonb(t) FROM "EmailFinancialAssociation" t
+      UNION ALL SELECT 'SourceObservationAnnotation',to_jsonb(t) FROM "SourceObservationAnnotation" t
+      UNION ALL SELECT 'Shipment',to_jsonb(t) FROM "Shipment" t
+      UNION ALL SELECT 'LedgerTransfer',to_jsonb(t) FROM "LedgerTransfer" t
+      UNION ALL SELECT 'Suggestion',to_jsonb(t) FROM "Suggestion" t WHERE family IN ('transfer_pair','product_pair')) retained`;
+    const retainedBefore = (await client.query(retained)).rows[0].value;
     const before = (
       await client.query(
         `SELECT jsonb_agg(to_jsonb(t) ORDER BY id) value FROM "FinancialTransaction" t`,
@@ -45,6 +54,27 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows[0].value,
     ).toEqual(before);
+    expect((await client.query(retained)).rows[0].value).toEqual(
+      retainedBefore,
+    );
+    expect(
+      (
+        await client.query(
+          `SELECT count(*)::int n FROM "RecordKey" WHERE entity IN ('ledgerTransfer','shipment')`,
+        )
+      ).rows[0].n,
+    ).toBe(0);
+    expect(
+      (
+        await client.query(
+          `SELECT "scopeKey","entityId" FROM "RecordKey" WHERE "scopeKind"='bankEvent' AND "scopeKey" IN ($1,$2) ORDER BY "scopeKey"`,
+          [cutoverId(17), cutoverId(63)],
+        )
+      ).rows,
+    ).toEqual([
+      { scopeKey: cutoverId(17), entityId: cutoverId(3) },
+      { scopeKey: cutoverId(63), entityId: cutoverId(3) },
+    ]);
     expect(
       (
         await client.query(
@@ -90,6 +120,30 @@ it("carries held values, paid results, redirects and every accepted money row", 
         kind: "distinct",
       },
     ]);
+    expect(
+      (
+        await client.query(
+          `SELECT kind,"actorKind" FROM "Decision" WHERE subject=$1 AND field='categoryId' ORDER BY at DESC,id DESC LIMIT 1`,
+          [`product:${cutoverId(13)}`],
+        )
+      ).rows,
+    ).toEqual([{ kind: "release", actorKind: "system" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT output->>'value' value FROM "Answer" WHERE "inputHash"=$1`,
+          [`legacy:field:financialTransaction:${cutoverId(56)}:amount`],
+        )
+      ).rows,
+    ).toEqual([{ value: "2000" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT value FROM "Decision" WHERE subject=$1 AND field='amount' AND kind='set'`,
+          [`financialTransaction:${cutoverId(56)}`],
+        )
+      ).rows,
+    ).toEqual([{ value: "1900" }]);
     const held = (
       await client.query(
         `SELECT field,kind,"actorKind","actorId" FROM "Decision" WHERE subject=$1 AND id::text LIKE 'ffffffff%' ORDER BY field`,
@@ -191,6 +245,11 @@ it("aborts atomically for every preservation verification", async () => {
       ask: 'DELETE FROM "Ask"',
       answer: 'DELETE FROM "Answer"',
       askScope: 'DELETE FROM "AskScope"',
+      "accepted occurrence":
+        'DELETE FROM "RecordKey" WHERE "scopeKey"=\'' + cutoverId(63) + "'",
+      "audit count": 'DELETE FROM archive."AuditLog_authority_preimage"',
+      "evaluation count": 'DELETE FROM archive."AiEvaluation_preimage"',
+      "requester count": 'DELETE FROM archive."AiEvaluationRequest_preimage"',
       "audit preimage": 'DELETE FROM archive."AuditLog_authority_preimage"',
       "evaluation preimage": 'DELETE FROM archive."AiEvaluation_preimage"',
       "requester preimage":
@@ -226,7 +285,7 @@ it("aborts atomically for every preservation verification", async () => {
         checked++;
       }
     }
-    expect(checked).toBe(13);
+    expect(checked).toBe(17);
   });
 });
 
@@ -244,7 +303,11 @@ it("runs the registered scopes without changing accepted money and proposes the 
     const { createKernel, resolveForRead } =
       await import("../src/server/kernel/api");
     const { KERNEL_MODULES } = await import("../src/server/kernel/modules");
-    const pool = new Pool({ connectionString: databaseUrl, max: 4 });
+    const { tracePool } = await import("../src/server/db/db-pg-tracing");
+    const pool = tracePool(
+      new Pool({ connectionString: databaseUrl, max: 4 }),
+      "strong",
+    );
     const query = drizzle({
       client: pool,
       relations: relationalSchema,
@@ -307,6 +370,14 @@ it("runs the registered scopes without changing accepted money and proposes the 
           )
         ).rows[0].version,
       ).toBe(1);
+      expect(
+        (
+          await client.query(
+            `SELECT version FROM "ScopeState" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1`,
+            [`manual:${cutoverId(56)}`],
+          )
+        ).rows[0].version,
+      ).toBe(1);
       const outcomes = await kernel.reconcileNow(database, scopes);
       expect(outcomes).toHaveLength(scopes.length);
       expect(outcomes.filter((o) => o.status === "failed")).toEqual([]);
@@ -337,6 +408,75 @@ it("runs the registered scopes without changing accepted money and proposes the 
         entity: "purchase",
         absorbed: oldCode,
       });
+      const { createPurchaseEventRecord, updatePurchaseEventRecords } =
+        await import("../src/server/domains/financial-transaction/repo/purchase-event-mutations");
+      const { systemActor } = await import("@cubby/schemas/context");
+      const { vendorId, purchaseId } =
+        await import("@cubby/schemas/identifiers");
+      const newPurchase = await createPurchaseEventRecord(
+        database,
+        "purchase",
+        {
+          vendorId: vendorId.parse(cutoverId(1)),
+          date: "2026-03-01",
+          statedTotal: 2500n,
+        },
+        systemActor(),
+      );
+      const newLine = await createPurchaseEventRecord(
+        database,
+        "expense",
+        {
+          name: "Synthetic later Email line",
+          purchaseId: newPurchase.id,
+          cost: 2500n,
+          costType: "materials",
+          date: "2026-03-01",
+        },
+        systemActor(),
+      );
+      await updatePurchaseEventRecords(
+        database,
+        "expense",
+        [{ id: newLine.id, values: { cost: 2600n } }],
+        systemActor(),
+      );
+      const oldScopeLine = await createPurchaseEventRecord(
+        database,
+        "expense",
+        {
+          name: "Synthetic later Email line in legacy order",
+          purchaseId: purchaseId.parse(cutoverId(62)),
+          cost: 700n,
+          costType: "materials",
+          date: "2026-03-01",
+        },
+        systemActor(),
+      );
+      expect(
+        (
+          await client.query(
+            `SELECT "costMinor"::text cost FROM "Expense" WHERE id=$1`,
+            [newLine.id],
+          )
+        ).rows,
+      ).toEqual([{ cost: "2600" }]);
+      expect(
+        (
+          await client.query(
+            `SELECT "costMinor"::text cost FROM "Expense" WHERE id=$1`,
+            [oldScopeLine.id],
+          )
+        ).rows,
+      ).toEqual([{ cost: "700" }]);
+      expect(
+        (
+          await client.query(
+            `SELECT count(*)::int n FROM "Drift" WHERE "scopeKind"='purchaseEvent' AND "scopeKey" IN ($1,$2)`,
+            [cutoverId(62), newPurchase.id],
+          )
+        ).rows[0].n,
+      ).toBe(0);
     } finally {
       await pool.end();
     }
@@ -388,7 +528,15 @@ it("inspects only aggregate projections under PostgreSQL read-only enforcement",
       aggregates.find(
         (r) => r.category === "authority" && r.mapping === "Cubby-held",
       )?.rows,
+    ).toBe(3);
+    expect(
+      aggregates.find(
+        (r) => r.mapping === "transactions with multiple accepting occurrences",
+      )?.rows,
     ).toBe(1);
+    expect(
+      aggregates.find((r) => r.mapping === "occurrences left unbound")?.rows,
+    ).toBe(0);
     expect(result.stdout).not.toContain(cutoverId(13));
     expect(result.stdout).not.toContain("cutover@example.invalid");
     const { writeFile } = await import("node:fs/promises");

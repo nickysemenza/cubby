@@ -50,7 +50,8 @@ pnpm --dir apps/web exec tsx tooling/inspect-accepted-input-cutover.ts '<read-on
 
 Supply the URL explicitly. Inspection starts a repeatable-read, read-only
 transaction and emits aggregate mapping counts, prospective verification
-failures and held-value counts. It neither runs migrations nor prints source
+failures, held-value counts, transactions accepted by multiple live occurrences
+and occurrences that would remain unbound. It neither runs migrations nor prints source
 values or identifiers. Run it against a copy with the predecessor schema;
 inspection of a database that already contracted the source tables refuses.
 The migration's row-by-row checks remain authoritative for the actual copy.
@@ -62,7 +63,10 @@ accepted records enter as baseline bindings at version zero. The first sweep
 proposes disagreements as drift. Missing or ambiguous field authority remains
 person-held with unknown actor metadata when attribution is unproven. Current
 held-value assignments observe the accepted state at cutover; historical audit
-and review decisions retain their original event times.
+and review decisions retain their original event times. Proven current Cubby
+authority releases older assignments without attributing a release to a member.
+Monetary audit values retain their original JSON; assignment comparisons and
+imported money decisions use the owning field's exact minor-unit representation.
 
 Allow approximately three to ten minutes for the copy and indexed inserts at
 tens of thousands of bank events and Expenses. This is an estimate, not a
@@ -75,7 +79,13 @@ asks and exact money totals after release. The `archive` schema retains
 `AiEvaluation_preimage`, `AiEvaluationRequest_preimage` and
 `AuditLog_authority_preimage`; these have no live foreign keys, triggers or
 indexes. Retained Suggestion, AiAnalysis and mail evidence tables stay while
-their domain readers use them.
+their domain readers use them. Order and Email purchase decisions, reviews,
+financial associations, source annotations, import preparations and claims,
+source order observations, payment evidence, transfer-pair and product-pair
+publications remain in their current storage. Transfer and shipment scopes are
+outside this migration. Purchase, Expense, allocation and attribution baselines
+include records originally created by Email import. Its current kernel writers
+use explicit creation decisions in accepted scopes and in new scopes.
 
 ## Staged destructive migration (rare)
 

@@ -29,7 +29,15 @@ try {
       );
   const result =
     await client.query(`WITH expected AS MATERIALIZED (${projection}),
-    failures AS (
+    money AS (
+      SELECT 'Expense'::text source,id,"purchaseId" owner,date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
+      UNION ALL SELECT 'Purchase',id,id,date_trunc('month',date)::date,"statedTotalMinor" FROM "Purchase"
+      UNION ALL SELECT 'FinancialTransaction',id,NULL,date_trunc('month',"transactionDate")::date,"amountMinor" FROM "FinancialTransaction"
+      UNION ALL SELECT 'FinancialTransactionAllocation',id,"purchaseId",NULL,"amountMinor" FROM "FinancialTransactionAllocation"
+    ), money_copy AS (
+      SELECT m.*, (CASE m.source WHEN 'Expense' THEN e.row->'payload'->'values'->>'cost' WHEN 'Purchase' THEN e.row->'payload'->'values'->>'statedTotal' ELSE coalesce(e.row->'payload'->'values'->>'amountMinor',e.row->'payload'->'values'->>'amount') END)::numeric copied
+      FROM money m LEFT JOIN expected e ON e.mapping='manualEntry' AND e.row->'payload'->>'table'=m.source AND e.row->'payload'->>'naturalKey'='legacy:'||m.id
+    ), failures AS (
       SELECT mapping,count(*) FILTER(WHERE
         CASE mapping
           WHEN 'recordKey' THEN row->>'entityId' IS NULL OR row->>'scopeKey' IS NULL
@@ -55,8 +63,21 @@ try {
     UNION ALL SELECT 'verification','audit preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AuditLog"
     UNION ALL SELECT 'verification','evaluation preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluation"
     UNION ALL SELECT 'verification','requester preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"
-    UNION ALL SELECT 'verification','money row',count(*)::int FROM expected WHERE mapping='manualEntry' AND row->'payload'->>'table' IN ('Expense','Purchase','FinancialTransaction','LedgerTransfer','FinancialTransactionAllocation') AND NOT (row->'payload' ? 'values')
-    UNION ALL SELECT 'verification','money totals',count(*)::int FROM expected WHERE mapping='manualEntry' AND row->'payload'->>'table' IN ('Expense','Purchase','FinancialTransaction','LedgerTransfer','FinancialTransactionAllocation') AND row->'payload'->>'naturalKey' IS NULL
+    UNION ALL SELECT 'verification','money row',count(*)::int FROM money_copy WHERE amount::numeric IS DISTINCT FROM copied
+    UNION ALL SELECT 'verification','money totals',count(*)::int FROM (
+      SELECT 1 FROM money_copy GROUP BY GROUPING SETS ((source),(source,owner),(source,month_key)) HAVING sum(amount) IS DISTINCT FROM sum(copied)
+    ) totals
+    UNION ALL SELECT 'verification','audit count',count(*) FILTER(WHERE id IS NULL)::int FROM "AuditLog"
+    UNION ALL SELECT 'verification','evaluation count',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluation"
+    UNION ALL SELECT 'verification','requester count',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"
+    UNION ALL SELECT 'verification','accepted occurrence',count(*)::int FROM "SourceOccurrence" o
+      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
+    UNION ALL SELECT 'identity','transactions with multiple accepting occurrences',count(*)::int FROM
+      (SELECT "acceptedTransactionId" FROM "SourceOccurrence" WHERE "deletedAt" IS NULL AND "withdrawnAt" IS NULL AND "supersededByOccurrenceId" IS NULL AND disposition<>'ignored' AND "acceptedTransactionId" IS NOT NULL GROUP BY "acceptedTransactionId" HAVING count(*)>1) multiple
+    UNION ALL SELECT 'identity','occurrences left unbound',count(*)::int FROM "SourceOccurrence" o
+      WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition<>'ignored' AND o."acceptedTransactionId" IS NOT NULL
+      AND NOT EXISTS(SELECT 1 FROM expected e WHERE e.mapping='recordKey' AND e.row->>'scopeKind'='bankEvent' AND e.row->>'scopeKey'=o.id::text AND e.row->>'entity'='financialTransaction' AND e.row->>'naturalKey'='legacy:'||o."acceptedTransactionId")
     UNION ALL SELECT 'authority','member-held',count(*)::int FROM expected WHERE mapping='decision' AND row->>'id' LIKE 'ffffffff%'
     UNION ALL SELECT 'authority','Cubby-held',count(*)::int FROM expected WHERE mapping='answer' AND row->>'feature'='legacy:field'
     ORDER BY category,mapping`);
