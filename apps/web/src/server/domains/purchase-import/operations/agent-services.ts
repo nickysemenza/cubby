@@ -26,18 +26,16 @@ import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
-import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import {
+  JobDeferredError,
+  JobSupersededError,
+} from "~/server/generic/jobs/errors";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
-import { startPass, withAsk } from "~/server/kernel/api";
-import { ClaimLapsedError, fenceClaim } from "~/server/kernel/claim";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
-
-import { agentTurnAsk } from "./agent-turn-ask";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -103,7 +101,7 @@ export async function admissionRead<T>(
   } catch (error: unknown) {
     // A lost coordinator turn is a transport fault pi retries, never a
     // final admission refusal.
-    if (error instanceof ClaimLapsedError)
+    if (error instanceof JobSupersededError)
       throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}`, {
         cause: error,
       });
@@ -134,6 +132,7 @@ export function wakeWaitingDispatch(
   rawRunId: string,
 ): Promise<void> {
   return withHostDatabase(env, ctx, async (db) => {
+    const { startPass } = await import("~/server/kernel/api");
     const { purchaseDispatchPass } =
       await import("~/server/workflows/purchase-dispatch-pass");
     await startPass(db, purchaseDispatchPass, {
@@ -151,13 +150,17 @@ export function fenceDispatch(
   runId: string,
   token: string,
 ): Promise<void> {
-  return withHostDatabase(env, ctx, (db) =>
-    fenceClaim(
+  return withHostDatabase(env, ctx, async (db) => {
+    const [{ fenceClaim }, { repositoryQueries }] = await Promise.all([
+      import("~/server/kernel/claim"),
+      import("~/server/db/repository-access.boundary"),
+    ]);
+    await fenceClaim(
       repositoryQueries(db),
       { table: "Pass", name: "purchase.dispatch", key: runId },
       token,
-    ),
-  );
+    );
+  });
 }
 
 /** The committed Answer precedes replaying a complete model response to Pi. */
@@ -170,10 +173,14 @@ export function agentModelTurn(
   fence: () => Promise<void>,
 ): Promise<Response> {
   return withHostDatabase(env, ctx, async (db, service) => {
+    const [{ withAsk }, { agentTurnAsk }] = await Promise.all([
+      import("~/server/kernel/api"),
+      import("./agent-turn-ask"),
+    ]);
     const scope = await service.loadRunScope(db, runEntityId.parse(rawRunId));
     const { generation, request } = input;
     if (scope.public.dispatchEventId !== generation)
-      throw new ClaimLapsedError();
+      throw new JobSupersededError();
     const kind = {
       ...agentTurnAsk,
       produce: async () => {
