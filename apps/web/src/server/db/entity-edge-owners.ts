@@ -24,7 +24,6 @@ import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   emailFinancialAssociation,
   financialTransactionAllocation,
-  runStep,
   purchasePaymentEvidence,
   transactionImportRecord,
   sourceObservationAnnotation,
@@ -90,31 +89,15 @@ export const ENTITY_EDGE_OWNERS = {
   },
   // A run's target list is how a run relates to what it imported.
 
-  RunStep: { owner: runStep.runId },
-
   // An Image job's attempts, events and submission memberships belong to the job.
 
-  AiEvaluation: { excluded: "Durable inference and publication history." },
-  AiEvaluationRequest: {
-    excluded: "Per-Run work membership and publication receipts.",
-  },
-  AiUsage: { excluded: "Telemetry attribution." },
-  McpToolCall: { excluded: "Telemetry attribution." },
   ExternalSource: {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },
 
-  EmailCandidateObservation: { excluded: "Immutable Email candidate history." },
-  EmailClassificationObservation: {
-    excluded: "Immutable Email classification history.",
-  },
-  EmailRetrievalFailure: { excluded: "Immutable Email retrieval history." },
   // A reviewed association names the Email whose evidence it settles.
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
-  RunControlEvent: { excluded: WORKFLOW },
-  RunOperation: { excluded: WORKFLOW },
 
-  Job: { excluded: WORKFLOW },
   ImportSourceOrder: { excluded: WORKFLOW },
 
   LedgerSourceClaim: { excluded: WORKFLOW },

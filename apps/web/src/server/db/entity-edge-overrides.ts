@@ -22,12 +22,6 @@ import {
   shipmentObservation,
   shipmentSourceCapture,
   shipmentSourcePackage,
-  aiUsage,
-  mcpToolCall,
-  aiEvaluation,
-  job,
-  aiEvaluationRequest,
-  auditLog,
   entityAttachment,
   entityExternalId,
   entityLink,
@@ -37,7 +31,6 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
-  imageProcessingJob,
   importPreparedOrder,
   sourceOrderObservation,
   emailCandidateObservation,
@@ -45,19 +38,11 @@ import {
   emailFinancialAssociation,
   emailRetrievalFailure,
   run as runTable,
-  runControlEvent,
-  runFinding,
-  runOperation,
-  importSourceClaim,
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
-  email as emailTable,
   orderMail,
   photoGroupProposal,
-  photoRunImage,
-  runPushRegistration,
-  runStep,
   product,
   purchase,
   purchasePaymentEvidence,
@@ -66,7 +51,6 @@ import {
   sourceOccurrence,
   financialEvidenceAlias,
   transactionImportRecord,
-  suggestionTable,
   vendorAccount,
 } from "./schema";
 
@@ -817,258 +801,6 @@ export const ENTITY_EDGE_OVERRIDES = {
   // of one run, so they're `owned-child`; rows other entities keep about a
   // run (purchases it touched, claims it advanced, findings it produced) are
   // `history`, mirroring vendorAccount's own edges above.
-  run: edges({
-    "Job.runId": {
-      column: job.runId,
-      role: "history",
-      label: "Execution jobs",
-      description: "Execution diagnostics attributed to this Run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Job diagnostics retain their Run attribution through archival and deletion.",
-      },
-    },
-    "AiEvaluationRequest.runId": {
-      column: aiEvaluationRequest.runId,
-      role: "history",
-      label: "AI work requests",
-      description:
-        "Frozen work membership and independent receipts requested by this Run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Request receipts retain their Run identity through archival and deletion.",
-      },
-    },
-    "AiEvaluation.runId": {
-      column: aiEvaluation.runId,
-      role: "history",
-      label: "AI evaluations",
-      description:
-        "Durable target evaluation and publication history owned by this Run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Evaluation receipts retain their generating Run through archival and deletion.",
-      },
-    },
-    "SourceOrderObservation.runId": {
-      column: sourceOrderObservation.runId,
-      role: "history",
-      label: "source order observations",
-      description:
-        "The Run that captured an immutable source order extraction.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-    "EmailCandidateObservation.runId": {
-      column: emailCandidateObservation.runId,
-      role: "history",
-      label: "Email candidate observations",
-      description:
-        "The original Run that produced this immutable Email evidence.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-    "EmailClassificationObservation.runId": {
-      column: emailClassificationObservation.runId,
-      role: "history",
-      label: "Email classification observations",
-      description:
-        "The original Run that produced this immutable Email evidence.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
-    "EmailRetrievalFailure.runId": {
-      column: emailRetrievalFailure.runId,
-      role: "history",
-      label: "Email retrieval failures",
-      description:
-        "The original Run that produced this immutable Email evidence.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Immutable observation history retains its original subject UUID through deletion and merge.",
-      },
-    },
 
-    "PhotoRunImage.runId": {
-      column: photoRunImage.runId,
-      role: "owned-child",
-      label: "photo work",
-      description: "The picker and processing membership owned by this Run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Email.runId": {
-      column: emailTable.runId,
-      role: "association",
-      label: "mail research assignments",
-      description:
-        "The durable researcher currently processing a retained mailbox message.",
-      liveness: { kind: "must-target-live" },
-    },
-    "AuditLog.runId": {
-      column: auditLog.runId,
-      role: "history",
-      label: "audit entries",
-      description: "An audit entry written as part of this run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Append-only provenance: an audit entry keeps naming the run it belonged to.",
-      },
-    },
-    "AiUsage.runId": {
-      column: aiUsage.runId,
-      role: "history",
-      label: "AI usage",
-      description: "One model call made as part of this run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Append-only provenance: a usage row keeps naming the run it was billed to.",
-      },
-    },
-    "McpToolCall.runId": {
-      column: mcpToolCall.runId,
-      role: "history",
-      label: "agent MCP calls",
-      description:
-        "One Cubby MCP tool call the in-app agent made for this run.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Append-only telemetry: a call keeps naming its run until a hard delete nulls it.",
-      },
-    },
-    "ImageProcessingJob.runId": {
-      column: imageProcessingJob.runId,
-      role: "history",
-      label: "image processing jobs",
-      description:
-        "An Image job requested by this run. The FK is NO ACTION; the one Run hard delete (routine-run pruning) skips runs with jobs.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Append-only provenance: a job keeps naming the run that scheduled it.",
-      },
-    },
-    "RunPushRegistration.runId": {
-      column: runPushRegistration.runId,
-      role: "owned-child",
-      label: "push registrations",
-      description:
-        "A device's Live Activity or notification push registration for this Run; deleting the Run removes it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Suggestion.runId": {
-      column: suggestionTable.runId,
-      role: "history",
-      label: "Suggestions",
-      description:
-        "Nullable execution provenance; deleting the Run preserves Suggestions and their decisions.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Field reviews retain execution provenance after archival or deletion.",
-      },
-    },
-    "RunFinding.runId": {
-      column: runFinding.runId,
-      role: "history",
-      label: "Findings",
-      description:
-        "Nullable execution provenance; deleting the Run preserves the finding and its resolutions.",
-      liveness: {
-        kind: "allow-target-deleted",
-        reason:
-          "Import findings retain execution provenance after archival or deletion.",
-      },
-    },
-    "Purchase.runId": {
-      column: purchase.runId,
-      role: "history",
-      label: "purchases",
-      description: "A purchase this run imported or validated.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Run.predecessorRunId": {
-      column: runTable.predecessorRunId,
-      role: "history",
-      label: "successor runs",
-      description: "A later run that continued from this one.",
-      liveness: { kind: "must-target-live" },
-    },
-    "Run.parentRunId": {
-      column: runTable.parentRunId,
-      role: "history",
-      label: "child runs",
-      description: "Work caused by this Run, distinct from its retry attempts.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunStep.runId": {
-      column: runStep.runId,
-      role: "owned-child",
-      label: "steps",
-      description:
-        "One ordered step of this step-ledger Run (a backlog or a Suggestion family); deleting the Run removes it.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunOperation.runId": {
-      column: runOperation.runId,
-      role: "owned-child",
-      label: "operations",
-      description: "One idempotent operation this run executed.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunControlEvent.runId": {
-      column: runControlEvent.runId,
-      role: "owned-child",
-      label: "control events",
-      description:
-        "A prompt, pause, resume, or other control-plane event for this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportPreparedOrder.runId": {
-      column: importPreparedOrder.runId,
-      role: "owned-child",
-      label: "prepared orders",
-      description: "Immutable prepared order evidence captured by this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "PhotoGroupProposal.runId": {
-      column: photoGroupProposal.runId,
-      role: "owned-child",
-      label: "photo group proposals",
-      description:
-        "A proposed item grouping of this photo-inventory run's images.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportSourceClaim.firstRunId": {
-      column: importSourceClaim.firstRunId,
-      role: "history",
-      label: "source claims (first seen)",
-      description: "An idempotent source claim first captured by this run.",
-      liveness: { kind: "must-target-live" },
-    },
-    "ImportSourceClaim.lastRunId": {
-      column: importSourceClaim.lastRunId,
-      role: "history",
-      label: "source claims (last seen)",
-      description:
-        "An idempotent source claim most recently confirmed by this run.",
-      liveness: { kind: "must-target-live" },
-    },
-  }),
   ...DECLARED_EDGE_OVERRIDES,
 } as const satisfies Record<Entity, Record<string, EntityEdge>>;

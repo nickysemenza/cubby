@@ -38,7 +38,9 @@ export const renderDeclaredEdges = (
   const imports = new Set<string>();
   const column = (key: string) => {
     const [table, field] = key.split(".");
-    const name = table ? tables.get(table) : undefined;
+    const name = table
+      ? (tables.get(table) ?? table.charAt(0).toLowerCase() + table.slice(1))
+      : undefined;
     if (!name || !field)
       throw new EntityDeclarationError(`Unknown edge column ${key}.`);
     imports.add(name);
