@@ -161,7 +161,7 @@ struct EntityRowPresentationTests {
             ])
         let unassessed = EntityRowPresentation.resolve(
             descriptor: EntityCatalog[.spendingCategory], row: category)
-        #expect(unassessed.facts.first?.value == "Not assessed")
+        #expect(unassessed.facts.first?.value == "Waiting")
         #expect(!EntityRowPresentation.needsData(in: category))
     }
 
