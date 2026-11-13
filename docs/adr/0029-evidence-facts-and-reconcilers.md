@@ -535,14 +535,15 @@ computes the desired output from existing answers only and issues no asks.
 With no record difference and no missing answer it advances the scope's
 version and refreshes its gaps, input provenance and dependencies under the
 input revision fence. This metadata refresh creates no dirty work or asks.
-The sweep locks each page's input revisions once and writes its scope states,
-dependencies and proposals as sets. A scope whose revisions moved retains its
-previous version and dependencies.
 Otherwise it writes a `Drift` proposal: the exact difference, the number of
 asks the change would issue and their estimated cost. Approval is a decision
 bound to the proposal hash, by item or by class; approval applies the
 difference and files the asks. A proposal whose inputs hash no longer matches
 is recomputed before it can be approved.
+
+The sweep locks each page's input revisions once and writes its scope states,
+dependencies and proposals as sets. A scope whose revisions moved retains its
+previous version and dependencies.
 
 At cutover every scope gets `ScopeState` at version 0 and its stored records
 enter as inputs: `EvidenceBinding` rows with basis `baseline`, and for each
