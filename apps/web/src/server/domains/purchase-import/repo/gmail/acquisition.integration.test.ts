@@ -301,7 +301,7 @@ describe("Gmail acquisition retention and replay", () => {
     });
     expect(await getDb(ctx.db).select().from(orderMail)).toEqual(originals);
   });
-  it("advances only the canonical checksum when a related original refreshes before research", async () => {
+  it("keeps the first Email observation and fences refreshed original candidates before research", async () => {
     const f = await importedPurchaseFixture(ctx.db, ctx.actor);
     if (!f.association) throw new Error("Synthetic accepted order missing");
     const input = {
@@ -346,23 +346,25 @@ describe("Gmail acquisition retention and replay", () => {
       .where(eq(importSourceOrder.id, f.association.id));
     const gmail = provider();
     const message = await gmail.getMessage(original.messageId);
-    await ingestGmailMessages(
-      ctx.db,
-      provider({
-        getMessage: async () => ({
-          ...message,
-          payload: {
-            ...message.payload,
-            body: {
-              data: Buffer.from(
-                "Refreshed synthetic related original bytes",
-              ).toString("base64url"),
+    await expect(
+      ingestGmailMessages(
+        ctx.db,
+        provider({
+          getMessage: async () => ({
+            ...message,
+            payload: {
+              ...message.payload,
+              body: {
+                data: Buffer.from(
+                  "Refreshed synthetic related original bytes",
+                ).toString("base64url"),
+              },
             },
-          },
+          }),
         }),
-      }),
-      input,
-    );
+        input,
+      ),
+    ).rejects.toThrow("Email candidate original source changed");
     const [refreshed] = await getDb(ctx.db).select().from(orderMail);
     expect(refreshed?.rawChecksum).not.toBe(original.rawChecksum);
     const [observed] = await getDb(ctx.db)
