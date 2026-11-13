@@ -104,8 +104,9 @@ inform a new purchase while committed purchases inform that default. The registr
 rejects history reads in a money lane or of Catalog-owned columns. Current-value
 sources retain the acyclic read-write rule.
 
-A reconciled record belongs to exactly one owning scope, recorded in
-`RecordKey`. Its desired output carries each record's provenance, its
+A reconciled record has its identity recorded in `RecordKey`. Multiple bank
+occurrences may attach to one accepted transaction without minting or rewriting
+it; an unresolved accepted identity remains a gap and retains its stored link. Its desired output carries each record's provenance, its
 relationship effects, and an explicit disposition for a record that should no
 longer exist (section 9).
 

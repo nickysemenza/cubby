@@ -252,6 +252,33 @@ describe("statement spending review and re-import", () => {
     );
     expect(live).toHaveLength(1);
     expect(live[0]?.shortcode).toBe(target.output.id);
+    const [first] = await getDb(ctx.db).select().from(sourceOccurrence);
+    const second = crypto.randomUUID();
+    await insertManyWithShortcode(
+      ctx.db,
+      sourceOccurrence,
+      "sourceOccurrence",
+      [
+        {
+          ...first!,
+          id: second,
+          source: "synthetic-other-source",
+          identityKey: "synthetic-other-identity",
+          acceptedTransactionId: live[0]!.id,
+        },
+      ],
+    );
+    await reconcileNow(ctx.db, [{ kind: "bankEvent", key: second }]);
+    await recordSourceTransactionRecords(ctx.db, setup.input, ctx.actor);
+    await reconcileNow(ctx.db, [
+      { kind: "bankEvent", key: first!.id },
+      { kind: "bankEvent", key: second },
+    ]);
+    const after = await ledgerRows();
+    expect(after.transactions.filter((row) => !row.deletedAt)).toHaveLength(1);
+    expect(after.purchases.filter((row) => !row.deletedAt)).toHaveLength(1);
+    expect(after.expenses.filter((row) => !row.deletedAt)).toHaveLength(1);
+
     expect(
       (await getDb(ctx.db).select().from(sourceOccurrence))[0]
         ?.acceptedTransactionId,

@@ -299,6 +299,21 @@ export const bankEvent = defineReconciler<BankInput>({
       c.gap.decision("the source occurrence identity and current observation");
       return retained(c);
     }
+    if (owner?.acceptedTransactionId && !existing) {
+      const accepted = c.reference(
+        "financialTransaction",
+        owner.acceptedTransactionId,
+      );
+      if (!accepted) {
+        c.gap.decision(
+          "the accepted transaction identity cannot be resolved; retain the stored acceptance",
+        );
+        return retained(c);
+      }
+      c.attach(bankTransactionWrites, naturalKey, accepted);
+      c.emit({ kind: "purchaseEvent", key: accepted });
+      return c.done();
+    }
     const observation = input.observations.find(
       (row) => row.id === owner?.currentObservationId,
     );

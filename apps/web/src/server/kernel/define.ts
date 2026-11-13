@@ -367,6 +367,7 @@ export interface Pure {
   existing(target: ColumnRef): readonly string[];
   /** The id of a record this scope owns, for decisions about it; null before it exists. */
   recordId(target: ColumnRef, naturalKey: string): string | null;
+  attach(target: ColumnRef, naturalKey: string, id: string): void;
   record(
     target: ColumnRef,
     naturalKey: string,
@@ -403,6 +404,11 @@ export interface Pure {
 
 /** What a reconcile returns: built only through {@link Pure}. */
 export type Desired = {
+  readonly attachments?: readonly {
+    target: ColumnRef;
+    naturalKey: string;
+    id: string;
+  }[];
   readonly disagreements: readonly string[];
   readonly records: readonly DesiredRecord[];
   readonly patches: readonly {

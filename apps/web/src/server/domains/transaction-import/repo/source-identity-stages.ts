@@ -399,6 +399,16 @@ export async function applySourceIdentity(
           })
           .where(eq(sourceOccurrence.id, write.id))
           .returning();
+        await emitWrites(databaseForTransaction(tx), {
+          table: sourceOccurrence,
+          ids: [write.id],
+          columns: [
+            "acceptedTransactionId",
+            "reviewState",
+            "currentObservationId",
+            "accountId",
+          ],
+        });
         break;
       }
       case "audit_resolution": {

@@ -43,6 +43,7 @@ export async function decideStatement(
   } = await import("~/server/kernel/api");
   const { updateBankTransactions } =
     await import("~/server/domains/financial-transaction/repo/bank-mutations");
+  // oxlint-disable-next-line complexity -- rejection, reviewed attachment and booking share one atomic money command.
   return householdWrite(db, async (tx) => {
     const q = repositoryQueries(tx);
     const [observation] = await q
@@ -154,6 +155,45 @@ export async function decideStatement(
         scopes: [scope],
       });
     await decide(tx, actor, assignments);
+    if (
+      input.application.action === "attach" ||
+      input.application.action === "supersede"
+    ) {
+      const target = input.application.transactionId
+        ? await resolveForRead(tx, input.application.transactionId)
+        : null;
+      if (!target || target.entity !== "financialTransaction")
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "The reviewed financial transaction is not live.",
+        );
+      const [existing] = await q
+        .select()
+        .from(recordKey)
+        .where(
+          and(
+            eq(recordKey.scopeKind, scope.kind),
+            eq(recordKey.scopeKey, scope.key),
+            eq(recordKey.entity, "financialTransaction"),
+          ),
+        );
+      if (!existing) {
+        await q
+          .update(sourceOccurrence)
+          .set({
+            acceptedTransactionId: parseEntityId(
+              "financialTransaction",
+              target.id,
+            ),
+          })
+          .where(eq(sourceOccurrence.id, occurrence.id));
+        await emitWrites(tx, {
+          table: sourceOccurrence,
+          ids: [occurrence.id],
+          columns: ["acceptedTransactionId"],
+        });
+      }
+    }
     const bank = await reconcileNow(tx, [scope]);
     const [owned] = await q
       .select()

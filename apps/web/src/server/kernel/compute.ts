@@ -593,6 +593,8 @@ function createPure(
   },
 ): Pure {
   const records: DesiredRecord[] = [];
+  const attachments: { target: ColumnRef; naturalKey: string; id: string }[] =
+    [];
   const disagreements: string[] = [];
   const patches: Desired["patches"][number][] = [];
   const retired: Desired["retired"][number][] = [];
@@ -829,6 +831,14 @@ function createPure(
         )?.entityId ?? null
       );
     },
+    attach(target, naturalKey, id) {
+      const declared = requireTarget(target);
+      if (!declared.entity || !state.entityReferences.has(id))
+        throw new KernelContractError(
+          "Attach requires a loaded entity identity",
+        );
+      attachments.push({ target: declared, naturalKey, id });
+    },
     patch(target, id, values) {
       const declared = requireTarget(target);
       for (const column of Object.keys(values))
@@ -920,6 +930,7 @@ function createPure(
         gap("unsupported", input, "you", options),
     },
     done: () => ({
+      attachments,
       disagreements,
       records,
       patches,

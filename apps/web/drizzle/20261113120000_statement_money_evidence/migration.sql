@@ -23,13 +23,14 @@ LEFT JOIN "LedgerParty" p ON p.id = a."ledgerPartyId"
 ON CONFLICT (id) DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "RecordKey" ("scopeKind", "scopeKey", entity, "naturalKey", "entityId", "rejectedAt")
-SELECT 'bankEvent', coalesce((SELECT min(o.id::text) FROM "SourceOccurrence" o WHERE o."acceptedTransactionId" = t.id), 'manual:' || t.id::text),
+SELECT 'bankEvent', coalesce(o.id::text, 'manual:' || t.id::text),
   'financialTransaction', 'legacy:' || t.id::text, t.id, t."deletedAt"
-FROM "FinancialTransaction" t;
+FROM "FinancialTransaction" t LEFT JOIN "SourceOccurrence" o ON o."acceptedTransactionId" = t.id;
 --> statement-breakpoint
 INSERT INTO "EvidenceBinding" ("factKind", "factId", "eventKey", basis, "scopeKind", "scopeKey")
 SELECT 'manualEntry', k."entityId"::text, k."entityId"::text, 'baseline', k."scopeKind", k."scopeKey"
-FROM "RecordKey" k WHERE k."scopeKind" = 'bankEvent' AND k.entity = 'financialTransaction';
+FROM "RecordKey" k WHERE k."scopeKind" = 'bankEvent' AND k.entity = 'financialTransaction'
+ORDER BY k."scopeKey" ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 INSERT INTO "ScopeState" ("scopeKind", "scopeKey", version, rules, stage)
 SELECT DISTINCT "scopeKind", "scopeKey", 0, '', 'done' FROM "RecordKey" WHERE "scopeKind" = 'bankEvent';
@@ -43,6 +44,11 @@ UNION ALL SELECT 'row:SourceTransactionRecord:' || id::text, 'statementObservati
 ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM "SourceOccurrence" o LEFT JOIN "FinancialTransaction" t ON t.id = o."acceptedTransactionId" AND t."deletedAt" IS NULL
+    WHERE o."deletedAt" IS NULL AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL AND o.disposition <> 'ignored'
+      AND o."acceptedTransactionId" IS NOT NULL AND t.id IS NULL) THEN
+    RAISE EXCEPTION 'A live occurrence has an unresolved accepted transaction';
+  END IF;
   IF EXISTS (SELECT 1 FROM "FinancialTransaction" t LEFT JOIN "RecordKey" k ON k.entity = 'financialTransaction' AND k."entityId" = t.id AND k."naturalKey" = 'legacy:' || t.id::text LEFT JOIN "ManualEntry" m ON m.id = t.id
     WHERE k."entityId" IS NULL OR (m.payload->>'amount')::numeric * 100 IS DISTINCT FROM t."amountMinor"::numeric) THEN
     RAISE EXCEPTION 'Bank-event baseline did not preserve every transaction identity and exact amount';

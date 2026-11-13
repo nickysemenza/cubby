@@ -515,13 +515,19 @@ async function applyBatch(
     combined.merges.push(...plan.diff.merges);
   }
   const recordKeys = plans.flatMap((plan) =>
-    plan.diff.inserts.map((entry) => ({
+    [
+      ...plan.diff.inserts.map((entry) => ({ ...entry, minted: true })),
+      ...(plan.computed.desired!.attachments ?? []).map((entry) => ({
+        ...entry,
+        minted: false,
+      })),
+    ].map((entry) => ({
       scopeKind: plan.computed.scope.kind,
       scopeKey: plan.computed.scope.key,
       entity: recordEntity(entry.target),
       naturalKey: entry.naturalKey,
       entityId: entry.id,
-      minted: true,
+      minted: entry.minted,
     })),
   );
   const uniqueInserts = new Map<string, Difference["inserts"][number]>();
