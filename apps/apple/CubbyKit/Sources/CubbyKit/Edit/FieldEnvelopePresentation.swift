@@ -295,6 +295,17 @@ extension FieldEnvelopePresentation {
     public static let noGapLabel = "Nothing is waiting on this."
     public static let emptyMachineryLabel = "Cubby has recorded no work on this yet."
 
+    public static func dataQualityLabel(_ status: String) -> String {
+        switch status {
+        case "complete": "Done"
+        case "complete_with_exceptions": "Done with exceptions"
+        case "needs_data": "Needs you"
+        case "defect": "Stuck"
+        case "not_assessed": "Waiting"
+        default: "Unsupported quality: \(status)"
+        }
+    }
+
     public static func stageLabel(_ stage: String) -> String {
         switch stage {
         case "ended": "Ended"

@@ -1,3 +1,4 @@
+import { dataQualityLabel } from "@cubby/schemas/field-envelope-presentation";
 import { displayImageQualityCheck } from "@cubby/schemas/compiler/entity-definitions/data-quality-image";
 import { dataQuality } from "@cubby/schemas/data-quality-shape";
 import { defaultFieldDisplay } from "@cubby/schemas/entity-definitions/definition";
@@ -28,28 +29,33 @@ const DATA_QUALITY_SORT = "dataQuality";
 const DATA_QUALITY_LIST_RENDERER = "data-quality";
 
 const STATUS_OPTIONS = [
-  { value: "complete", label: "Done", stage: "done", color: "var(--slate)" },
+  {
+    value: "complete",
+    label: dataQualityLabel("complete"),
+    stage: "done",
+    color: "var(--slate)",
+  },
   {
     value: "complete_with_exceptions",
-    label: "Done",
+    label: dataQualityLabel("complete_with_exceptions"),
     stage: "done",
     color: "var(--plum)",
   },
   {
     value: "needs_data",
-    label: "Needs you",
+    label: dataQualityLabel("needs_data"),
     stage: "needs_you",
     color: "var(--warning)",
   },
   {
     value: "defect",
-    label: "Stuck",
+    label: dataQualityLabel("defect"),
     stage: "stuck",
     color: "var(--destructive)",
   },
   {
     value: "not_assessed",
-    label: "Waiting",
+    label: dataQualityLabel("not_assessed"),
     stage: "waiting",
     color: "var(--slate)",
   },

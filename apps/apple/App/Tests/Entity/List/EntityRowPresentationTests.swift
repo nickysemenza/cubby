@@ -147,7 +147,7 @@ struct EntityRowPresentationTests {
             ])
         let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
         #expect(presentation.facts.first?.id == "dataQuality")
-        #expect(presentation.facts.first?.value == "Needs data")
+        #expect(presentation.facts.first?.value == "Needs you")
         #expect(EntityRowPresentation.needsData(in: row))
         let category = EntityRow(
             id: "SPC-1001", title: "Synthetic tools", subtitle: nil, imageURL: nil,
@@ -255,9 +255,9 @@ struct EntityRowPresentationTests {
             return EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
                 .facts.first?.value
         }
-        #expect(quality(["score": .null, "status": "not_assessed"]) == "Not assessed")
-        #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Complete with exceptions")
-        #expect(quality(["score": 99, "status": "defect"]) == "Defect")
+        #expect(quality(["score": .null, "status": "not_assessed"]) == "Waiting")
+        #expect(quality(["score": 100, "status": "complete_with_exceptions"]) == "Done with exceptions")
+        #expect(quality(["score": 99, "status": "defect"]) == "Stuck")
     }
 
     @Test func resolvesOnlyDeclaredFactsInMetadataOrder() throws {

@@ -457,3 +457,21 @@ export function explanationFactLabel(key: string): string | null {
   };
   return Object.entries(labels).find(([value]) => value === key)?.[1] ?? null;
 }
+
+/** Member-facing quality outcomes; exceptions remain distinct in filters. */
+export function dataQualityLabel(status: string): string {
+  switch (status) {
+    case "complete":
+      return "Done";
+    case "complete_with_exceptions":
+      return "Done with exceptions";
+    case "needs_data":
+      return "Needs you";
+    case "defect":
+      return "Stuck";
+    case "not_assessed":
+      return "Waiting";
+    default:
+      return `Unsupported quality: ${status}`;
+  }
+}
