@@ -28,17 +28,16 @@ FROM "Run" r WHERE r.purpose = 'mail_discovery' AND r.status IN ('running', 'pau
 ON CONFLICT (name, key) DO NOTHING;
 --> statement-breakpoint
 WITH pending AS (
-  SELECT r.id, jsonb_agg(j.input ORDER BY j."createdAt", j.id) AS events,
+  SELECT r.id, coalesce(jsonb_agg(j.input ORDER BY j."createdAt", j.id) FILTER (WHERE j.input->>'generation'=r."dispatchEventId"::text OR j.input->>'type'<>'start_or_resume'),'[]'::jsonb) AS events,
     max(j.attempts) AS attempts, max(coalesce(j."maxAttempts", 3)) AS max_attempts,
     min(greatest(j."availableAt", CASE WHEN j.state = 'running' THEN j."leaseExpiresAt" END)) AS available_at,
     min(j."createdAt") AS created_at, max(j."updatedAt") AS updated_at,
     (array_agg(j.error ORDER BY j."updatedAt" DESC) FILTER (WHERE j.error IS NOT NULL))[1] AS error,
-    bool_and(j.state IN ('paused', 'cancelled')) AS cancelled,
+    bool_and(j.state IN ('paused', 'cancelled')) OR r.status IN ('completed','failed','dispatch_failed','needs_review') AS cancelled,
     bool_and(j.state = 'failed') AS failed
   FROM "Job" j JOIN "Run" r ON r.id = j."runId"
   WHERE j.kind = 'purchase.dispatch' AND j.state <> 'completed'
     AND r.purpose IN ('mail_import', 'photo_inventory')
-    AND (j.input->>'generation' = r."dispatchEventId"::text OR j.input->>'type' <> 'start_or_resume')
   GROUP BY r.id
 )
 INSERT INTO "Pass" (name, key, "runId", cursor, attempts, "maxAttempts", "availableAt", "lastError", "cancelledAt", "createdAt", "updatedAt")

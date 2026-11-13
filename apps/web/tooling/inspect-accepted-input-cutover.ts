@@ -35,7 +35,7 @@ try {
   ).rows[0].present;
   if (!hasMinor) {
     const invalid = await client.query(
-      `SELECT count(*)::int n FROM "Expense" WHERE cost IS NOT NULL AND (abs(cost*100-round(cost*100))>=0.0000001 OR round(cost*100)/100<>cost)`,
+      `SELECT count(*)::int n FROM "Expense" WHERE cost IS NOT NULL AND (abs(cost*100-round(cost*100))>=0.0000001 OR round(cost::numeric*100)/100<>cost::numeric)`,
     );
     if (invalid.rows[0].n)
       throw new Error("Expense is not exactly representable in cents");

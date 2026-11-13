@@ -2,7 +2,7 @@
 -- verification and contraction are atomic. Acquire every lock before the first read.
 SET LOCAL lock_timeout='2s';
 --> statement-breakpoint
-LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Cookbook", "Decision", "Device", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "Location", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "Run", "ScopeState", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN SHARE ROW EXCLUSIVE MODE;
+LOCK TABLE "SourceTransactionRecord", "ConnectionCandidateEvidence", "EmailClassificationObservation", "AiAnalysis", "AiEvaluation", "AiEvaluationRequest", "Answer", "Ask", "AskScope", "AuditLog", "Decision", "Entity", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "GardenEntry", "ManualEntry", "Meal", "Planting", "Product", "ProductCategory", "Project", "Purchase", "RecordKey", "ScopeState", "SourceOccurrence", "SpendingCategory", "Suggestion", "Task", "Vendor" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE TEMP TABLE cutover_money ON COMMIT DROP AS
 SELECT 'Expense'::text source, id, "purchaseId" owner, date_trunc('month',date)::date month_key,"costMinor" amount FROM "Expense"
