@@ -99,6 +99,7 @@ export async function seedFieldSuggestion(
     currentValue?: unknown;
     confidence?: number;
     model?: string;
+    costMicros?: number;
     runId?: string | null;
     createdAt?: Date;
     kind?: string;
@@ -152,6 +153,7 @@ export async function seedFieldSuggestion(
       produce: async () => ({
         output: { proposal, outcome: proposal ? "pick" : "none" },
         model: projection.model ?? "synthetic",
+        costMicros: projection.costMicros,
       }),
     },
     input,

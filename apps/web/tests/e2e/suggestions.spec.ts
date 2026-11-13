@@ -12,7 +12,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { product as productTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { reconcileNow } from "~/server/kernel/api";
+import { machinery, reconcileNow, runWork } from "~/server/kernel/api";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -70,6 +70,7 @@ test("reviews a field suggestion for a named record", async ({
         runnerUpValue: null,
         runnerUpConfidence: null,
         model: "typesafe/jev",
+        costMicros: 1_250_000,
         kind: "correction",
         status: "pending",
         data: {
@@ -84,6 +85,13 @@ test("reviews a field suggestion for a named record", async ({
       true,
     );
   await seedCategoryAdvice();
+  expect(
+    await machinery(db, actor, { entity: "product", id: itemId }),
+  ).toMatchObject({ totalCostMicros: 1_250_000 });
+  expect(await runWork(db, runId)).toMatchObject({
+    totalCostMicros: 1_250_000,
+    asks: [expect.objectContaining({ costMicros: 1_250_000 })],
+  });
   await gotoAuthenticatedPage(page, "/products");
   const productRow = page.getByRole("row").filter({ hasText: productName });
   const badge = productRow.getByRole("button", {
