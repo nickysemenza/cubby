@@ -62,7 +62,7 @@ extension FieldEnvelope {
         }
     }
 
-    /// The ready reset preview's result: what the field would read after Use inherited.
+    /// The ready reset preview's result: what the field would read after Let Cubby decide.
     public var resetPreview: Result? {
         if case .editable(_, _, .available(.ready(let preview))) = controls { return preview }
         return nil
@@ -73,7 +73,7 @@ extension FieldEnvelope {
         return false
     }
 
-    /// Actions the current controls permit, in web order (Use inherited, Keep this value, Set to
+    /// Actions the current controls permit, in web order (Let Cubby decide, Keep this value, Set to
     /// none). A usable cached value can be kept explicitly while its refresh is pending.
     public func actions(field: FieldDescriptor) -> [FieldAssignmentAction] {
         guard let policy = field.resolution, currentIsUnderstood,
@@ -81,7 +81,7 @@ extension FieldEnvelope {
         else { return [] }
         var actions: [FieldAssignmentAction] = []
         if case .available = reset, !policy.reset.isEmpty {
-            actions.append(.init(kind: .useInherited, label: "Use inherited", payload: policy.reset))
+            actions.append(.init(kind: .useInherited, label: FieldEnvelopePresentation.resetLabel, payload: policy.reset))
         }
         if canConfirm, var payload = policy.confirm, let value = effectiveValue {
             payload[field.key] = value
@@ -122,7 +122,7 @@ extension FieldEnvelope {
                 tone: .unsupported, label: "Unsupported: \(kind)", systemImage: "exclamationmark.triangle")
         }
         if isMissing {
-            return .init(tone: .missing, label: "Updating", systemImage: "clock")
+            return .init(tone: .missing, label: Self.missingLabel, systemImage: "clock")
         }
         if case .empty(.explicitNone) = decision?.outcome {
             return .init(tone: .none, label: Self.noneLabel(field: field), systemImage: "nosign")
@@ -163,7 +163,7 @@ extension FieldEnvelope {
         Self.label(for: result, field: field)
     }
 
-    public static let missingLabel = "Updating…"
+    public static let missingLabel = "Waiting for Cubby"
 
     public static func noneLabel(field: FieldDescriptor) -> String {
         field.resolution?.labels?.none ?? "None"
@@ -278,5 +278,165 @@ public enum FieldEnvelopePresentation {
         }
         if incomplete { labels.append(labels.isEmpty ? "Unclassified" : "Partly unclassified") }
         return labels.joined(separator: ", ")
+    }
+}
+
+
+extension FieldEnvelopePresentation {
+    public static let waitingLabel = "Waiting for Cubby"
+    public static let staleLabel = "out of date"
+    public static let resetLabel = "Let Cubby decide"
+    public static let vetoLabel = "Wrong, clear it"
+    public static let releasedLabel = "Cubby decides this"
+    public static let unknownCallNote = "Cubby won't send this paid call again on its own. If you say it was not sent, Cubby may send it again and you may be charged again."
+    public static let decidedNote = "Recorded. Cubby reworks this next; the stage shows its progress."
+    public static let noGapLabel = "Nothing is waiting on this."
+    public static let emptyMachineryLabel = "Cubby has recorded no work on this yet."
+
+    public static func stageLabel(_ stage: String) -> String {
+        switch stage {
+        case "ended": "Ended"
+        case "stuck": "Stuck"
+        case "working": "Working"
+        case "needs_you": "Needs you"
+        case "waiting": "Waiting"
+        case "done": "Done"
+        default: "Unsupported stage: \(stage)"
+        }
+    }
+
+    public static func actorLabel(_ actor: String) -> String {
+        switch actor {
+        case "you": "you"
+        case "cubby": "Cubby"
+        case "agent": "an agent"
+        case "time": "time"
+        default: actor.hasPrefix("source:") ? String(actor.dropFirst(7)) : "Unsupported actor: \(actor)"
+        }
+    }
+
+    public static func stageLine(_ read: Machinery) -> String {
+        let stage = stageLabel(read.stage.rawValue)
+        guard let gap = read.gaps.items.first, let actor = read.nextActor else { return stage }
+        let mode = read.stage == .working ? "working" : "waiting"
+        let base = "\(stage) · \(mode) for \(gap.input) from \(actorLabel(actor))"
+        guard let queue = gap.queue else { return base }
+        let position = "\(queue.position) of \(queue.of) in line"
+        return queue.eta.map { "\(base) · \(position) · \(etaLabel(instant($0)))" } ?? "\(base) · \(position)"
+    }
+
+    public static func rowStatusLabel(_ status: String) -> String {
+        switch status {
+        case "used": "Used"
+        case "skipped": "Skipped"
+        case "gap": "Gap"
+        case "blocked": "Blocked"
+        case "failed": "Failed"
+        default: "Unsupported status: \(status)"
+        }
+    }
+
+    public static func inputRowStatus(_ input: MachineryInputsItemsItem) -> String {
+        if input.status == .decided { return "used" }
+        if let error = input.answer?.rawError, !error.isEmpty, input.answer?.model == nil { return "failed" }
+        return input.status.rawValue
+    }
+
+    public static func inputKindLabel(_ kind: String) -> String {
+        switch kind {
+        case "evidence": "Evidence"
+        case "answer": "Answer"
+        case "decision": "Decision"
+        case "default": "Default"
+        default: "Unsupported input: \(kind)"
+        }
+    }
+
+    public static func decisionKindLabel(_ kind: String) -> String {
+        switch kind {
+        case "set": "Set"
+        case "none": "Set to none"
+        case "release": "Released"
+        case "veto": "Vetoed"
+        case "same": "Same record"
+        case "distinct": "Different records"
+        case "reject": "Rejected"
+        default: "Unsupported decision: \(kind)"
+        }
+    }
+
+    public static func decisionChannelLabel(_ channel: String) -> String {
+        switch channel {
+        case "assignment": "Assignment"
+        case "veto": "Veto"
+        case "identity": "Identity"
+        case "rejection": "Rejection"
+        default: "Unsupported channel: \(channel)"
+        }
+    }
+
+    public static func costLabel(_ micros: Int) -> String {
+        if micros == 0 { return "$0" }
+        let dollars = Double(micros) / 1_000_000
+        if dollars >= 1 { return String(format: "$%.2f", locale: Locale(identifier: "en_US_POSIX"), dollars) }
+        let rounded = Double(String(format: "%.2g", locale: Locale(identifier: "en_US_POSIX"), dollars)) ?? dollars
+        return "$\(rounded)"
+    }
+
+    public static func countLine(_ read: Machinery) -> String {
+        let inputs = read.inputs.items.filter { $0.kind == .evidence || $0.kind == .default }.count
+        let asks = read.inputs.items.filter { $0.kind == .answer }.count
+        let decisions = read.inputs.items.filter { $0.kind == .decision }.count
+        let more = read.inputs.total > read.inputs.shown ? "+" : ""
+        return "\(plural(inputs, "input", "inputs"))\(more) · \(plural(asks, "ask", "asks")) · \(plural(decisions, "decision", "decisions")) · \(costLabel(read.totalCostMicros))"
+    }
+
+    public static func gapSentence(_ gap: MachineryGapsItemsItem) -> String {
+        "Waiting for \(gap.input) from \(actorLabel(gap.actor))."
+    }
+    public static func etaLabel(_ formatted: String?) -> String {
+        formatted.map { "expected by \($0)" } ?? "ETA unknown"
+    }
+    public static func attemptsLabel(n: Int, max: Int, nextAt: String?) -> String {
+        let base = "Attempt \(n) of \(max)"
+        return nextAt.map { "\(base) · next try \($0)" } ?? base
+    }
+    public static func coverageLabel(shown: Int, total: Int) -> String? {
+        total > shown ? "Showing \(shown) of \(total)" : nil
+    }
+    public static func resetPendingNote(_ n: Int) -> String? {
+        n == 0 ? nil : "after \(plural(n, "more answer", "more answers"))"
+    }
+    public static func absorbedRecordNotice(_ code: String) -> String {
+        "\(code) was merged into this record."
+    }
+    public enum DecidingLevel {
+        case source(String), set(String), none(String), cubby, waiting(input: String, actor: String)
+    }
+    public static func fieldDecidingLine(_ level: DecidingLevel) -> String {
+        switch level {
+        case .source(let source): "From \(source)"
+        case .set(let by): "Set by \(by)"
+        case .none(let by): "Set to none by \(by)"
+        case .cubby: "Worked out by Cubby"
+        case .waiting(let input, let actor): "Waiting for \(input) from \(actorLabel(actor))"
+        }
+    }
+    public static func columnLabel(_ column: String) -> String {
+        switch column {
+        case "stage": "Stage"
+        case "actor": "Actor"
+        case "gap": "Gap"
+        case "attempts": "Attempts"
+        case "cost": "Cost"
+        case "eta": "ETA"
+        default: "Unsupported column: \(column)"
+        }
+    }
+    public static func instant(_ date: Date) -> String {
+        date.formatted(.dateTime.month(.abbreviated).day().hour().minute())
+    }
+    private static func plural(_ n: Int, _ one: String, _ many: String) -> String {
+        "\(n) \(n == 1 ? one : many)"
     }
 }
