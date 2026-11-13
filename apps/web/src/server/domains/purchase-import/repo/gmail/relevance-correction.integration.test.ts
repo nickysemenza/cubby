@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as choices from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { withConnection } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -32,7 +33,6 @@ import {
 import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import { withEmailEvidenceWrite } from "../email-evidence-write-scope";

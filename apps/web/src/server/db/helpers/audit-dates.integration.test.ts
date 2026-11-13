@@ -2,9 +2,9 @@ import { and, eq, inArray } from "drizzle-orm";
 import { TEST_HOME_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { auditDateWhereConditions, getDb } from "~/server/db/helpers";
 import { location } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 describe("audit date filters", () => {
   const ctx = withTestDb();

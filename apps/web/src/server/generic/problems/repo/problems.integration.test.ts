@@ -41,6 +41,7 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -58,7 +59,6 @@ import {
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import {
   createIngredientFixture,

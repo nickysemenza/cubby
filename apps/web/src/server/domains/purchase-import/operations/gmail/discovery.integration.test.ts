@@ -14,6 +14,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
@@ -30,7 +31,6 @@ import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { withRunPassFixture } from "~/server/workflows/runs/pass.fixtures";

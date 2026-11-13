@@ -3,7 +3,7 @@ import { workQueueInput } from "@cubby/schemas/work-queue";
 import { expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { sql } from "drizzle-orm";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";

@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -24,7 +25,6 @@ import {
   purchase,
   user,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 

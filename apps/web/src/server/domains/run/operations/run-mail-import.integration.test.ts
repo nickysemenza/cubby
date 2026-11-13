@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { JSONType } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -14,7 +15,6 @@ import { startMailDiscovery } from "~/server/domains/purchase-import/operations/
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { readRunPass } from "~/server/domains/run/repo/run-execution";
 import { deleteJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createOperationDispatch } from "~/server/operation-runtime/operation-dispatch.server";

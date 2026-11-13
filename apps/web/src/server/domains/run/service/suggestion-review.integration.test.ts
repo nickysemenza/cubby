@@ -16,6 +16,7 @@ import { z } from "zod";
 
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   suggestionTable,
@@ -26,7 +27,6 @@ import { loadFinanceSuggestionContext } from "~/server/domains/financial-transac
 import { inferFieldSuggestions } from "~/server/domains/run/operations/ai.server";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { executeEntity } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   reviewSuggestion,
   reviewSuggestionBatch,

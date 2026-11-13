@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable, runOperation } from "~/server/db/schema";
 import {
@@ -12,7 +13,6 @@ import {
 } from "~/server/domains/purchase-import/operations/import-orders";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertDebugEventOperations } from "~/server/domains/run/repo/run-operation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { executePurchaseAgentMutation } from "~/server/mcp/purchase-agent-protocol";
 import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";

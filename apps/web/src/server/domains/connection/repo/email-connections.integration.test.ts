@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
@@ -20,7 +21,6 @@ import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum

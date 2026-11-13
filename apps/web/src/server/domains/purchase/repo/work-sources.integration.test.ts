@@ -5,6 +5,7 @@ import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import {
@@ -12,7 +13,6 @@ import {
   readWorkQueue,
 } from "~/server/domains/work/service/work-queue-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 

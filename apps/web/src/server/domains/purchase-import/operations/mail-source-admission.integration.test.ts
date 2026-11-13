@@ -35,6 +35,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -47,7 +48,6 @@ import {
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { admitSupportingMailSource } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { readMail, resolveMail } from "./mail-tool";

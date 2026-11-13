@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -25,7 +26,6 @@ import { memberImport } from "~/server/domains/purchase-import/operations/order-
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { prepareMailFinancialEvent } from "~/server/domains/purchase-import/service/mail-financial-event";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { entityExternalId, externalSource } from "~/server/db/schema";
 import {
@@ -10,7 +11,6 @@ import {
 } from "~/server/domains/product/repo/product-identifier-source";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findProductIdentifiersOutsideIssuer } from "~/server/generic/problems/repo/detectors-product";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Registry ownership is a DB boundary: name-only registrations cannot authorize
 // a host, and competing or incompatible bindings must leave historical rows alone.

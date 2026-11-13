@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.purchase.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -39,7 +40,6 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import {
   makeExpenseInput,

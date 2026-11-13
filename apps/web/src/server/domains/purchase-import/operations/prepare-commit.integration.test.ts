@@ -25,6 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { insertFieldsFixture } from "~/server/ai/fields/fields.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import {
   getDb,
@@ -65,7 +66,6 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 import {
   createProductFixture,

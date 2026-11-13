@@ -5,6 +5,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -26,7 +27,6 @@ import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { mailDiscoveryBackpressure } from "~/server/workflows/runs/lifecycle";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";

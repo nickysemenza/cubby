@@ -16,6 +16,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
@@ -33,7 +34,6 @@ import {
   commitFinancialSpending,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { dollarExpenseColumns } from "~/server/testing/repo.fixtures";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 

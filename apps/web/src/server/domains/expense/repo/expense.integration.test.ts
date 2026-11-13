@@ -23,6 +23,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { expense, purchase, vendor } from "~/server/db/schema";
@@ -57,7 +58,6 @@ import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";

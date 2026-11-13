@@ -4,6 +4,7 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -12,7 +13,6 @@ import {
 } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";

@@ -5,6 +5,7 @@ import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -22,7 +23,6 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { buildCrudServices } from "~/server/http/request-context";
 import {
   createImageFixture,

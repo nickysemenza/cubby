@@ -7,11 +7,11 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, product, productCategory } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

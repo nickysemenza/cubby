@@ -1,5 +1,5 @@
 /** Reference policies may repoint owned foreign keys without replacing their reconciler. */
-import { getTableColumns, inArray } from "drizzle-orm";
+import { and, getTableColumns, inArray, type SQL } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db/database";
@@ -18,6 +18,8 @@ export type OwnedReferenceRepoint = {
   column: string;
   fromIds: readonly string[];
   toId: string | null;
+  /** The merge/removal policy's live-row or edge filter. */
+  where?: SQL;
 };
 
 /** Runs inside the merge/removal transaction, which owns its write gate and policy checks. */
@@ -39,7 +41,9 @@ export async function repointOwnedReference(
   if (
     !reference ||
     !owner ||
-    !config.foreignKeys.some((fk) => fk.reference().columns.includes(reference))
+    !config.foreignKeys.some((fk) =>
+      fk.reference().columns.some((column) => column.name === reference.name),
+    )
   )
     throw new KernelContractError(
       `${config.name}.${column} is not a reconciler-owned foreign key`,
@@ -53,14 +57,14 @@ export async function repointOwnedReference(
   const before = await q
     .select()
     .from(table)
-    .where(inArray(reference, [...fromIds]));
+    .where(and(inArray(reference, [...fromIds]), request.where));
   const rows = await withKernelApply(
     null,
     async () =>
       await repositoryQueries(tx)
         .update(table)
         .set({ [column]: toId })
-        .where(inArray(reference, [...fromIds]))
+        .where(and(inArray(reference, [...fromIds]), request.where))
         .returning(),
   );
   const changed = await markDirty(repositoryQueries(tx), registry, {

@@ -25,6 +25,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import {
@@ -50,7 +51,6 @@ import {
 import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-outcome/outcome";
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {

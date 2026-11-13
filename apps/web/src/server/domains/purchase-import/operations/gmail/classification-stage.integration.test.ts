@@ -3,11 +3,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { GmailProvider } from "../../repo/gmail/types";
 import { ingestGmailMessages } from "../../service/gmail/ingest";

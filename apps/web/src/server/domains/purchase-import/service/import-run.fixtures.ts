@@ -8,6 +8,8 @@ import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import { and, eq } from "drizzle-orm";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -17,12 +19,10 @@ import {
   importSourceClaim,
   importSourceOrder,
   ledgerParty,
-  product,
   vendor as vendorTable,
   vendorAccount,
 } from "~/server/db/schema";
 import { actorSnapshot } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   createProductFixture,
@@ -252,10 +252,11 @@ export async function importedPurchaseFixture(
     const category = await insertWithShortcode(db, "productCategory", {
       name: "Example devices",
     });
-    await getDb(db)
-      .update(product)
-      .set({ categoryId: category.id })
-      .where(eq(product.id, item.entityId));
+    await holdFieldsValues("product", { categoryId: category.id }).settle(
+      db,
+      actor,
+      item.entityId,
+    );
     await getDb(db)
       .insert(externalSource)
       .values({ slug: "example-seller", label: "Example seller" });

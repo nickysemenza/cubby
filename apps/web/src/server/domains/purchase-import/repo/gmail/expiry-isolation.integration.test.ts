@@ -5,13 +5,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email as emailTable,
   orderMail,
   orderMailAttachment,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticRetainedMail } from "../../service/gmail/retained-mail.fixtures";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";

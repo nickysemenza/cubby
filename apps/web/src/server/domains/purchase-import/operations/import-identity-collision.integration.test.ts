@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { advisoryLockKey } from "~/server/db/advisory-lock";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
@@ -22,7 +23,6 @@ import {
 import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import { syncProductExternalIds } from "~/server/domains/product/repo/update-helpers";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   createProductIdentityFixture,

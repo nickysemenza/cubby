@@ -4,6 +4,7 @@ import { expectStatementBudget } from "tooling/statement-budget";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable, auditLog, image } from "~/server/db/schema";
 import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
@@ -15,7 +16,6 @@ import {
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";

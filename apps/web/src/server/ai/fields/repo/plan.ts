@@ -13,9 +13,7 @@
  * person's choice to inherit. A NOT NULL column without a default (Location
  * type, Purchase vendor, Expense cost type) stays authored: its creator
  * always supplies it, and only the kernel may write a column it owns. A
- * reference column (Product brand, category, ingredient, plant) is offered,
- * not written: merging or removing the record it points at repoints it, and
- * only the kernel may write a column it owns.
+ * reference column is repointed only through the kernel during merge/removal.
  */
 import type { AuditFieldChange } from "@cubby/schemas/audit";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
@@ -112,7 +110,7 @@ function planFor(entity: ShortcodeEntity): EntityFieldsPlan | null {
     return [
       {
         key: field.key,
-        apply: apply === "auto" && reference(field.key) ? "offer" : apply,
+        apply,
         fillOnly: "fillOnly" in suggest && suggest.fillOnly === true,
         undecided:
           "undecided" in suggest && typeof suggest.undecided === "string"

@@ -9,6 +9,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { readEvaluationOutcomes } from "~/server/ai/evaluation/repo/evaluation-tally";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -21,7 +22,6 @@ import {
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 

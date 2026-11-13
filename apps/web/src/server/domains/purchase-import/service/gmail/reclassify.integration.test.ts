@@ -24,6 +24,7 @@ import {
   requestedAiEvaluations,
 } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { resumeFundingPausedRuns } from "~/server/ai/funding-wait";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import { account } from "~/server/db/auth.schema";
@@ -41,7 +42,6 @@ import { emailScaffold } from "~/server/domains/email/repo/email";
 import { pauseExecutionRun } from "~/server/domains/run/repo/execution-context";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 

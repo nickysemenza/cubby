@@ -13,6 +13,7 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   expenseAttribution,
@@ -23,10 +24,7 @@ import {
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
-import {
-  type ShortcodeInsertValues,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { type ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 

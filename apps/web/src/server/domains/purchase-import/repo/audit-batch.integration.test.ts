@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   auditLog,
@@ -13,7 +14,6 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { importedPurchaseFixture } from "../service/import-run.fixtures";

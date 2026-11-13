@@ -5,6 +5,7 @@ import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { decideProductVariantComparisons } from "~/server/ai/semantic-decisions";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -22,7 +23,6 @@ import {
   mergeVendors,
 } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,

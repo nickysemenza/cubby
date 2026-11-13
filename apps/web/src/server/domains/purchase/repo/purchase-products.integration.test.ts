@@ -13,6 +13,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   entityLink,
@@ -34,7 +35,6 @@ import {
   relatedWhereConditions,
 } from "~/server/generic/entity-links/repo/related-view";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import {
   createProductFixture as createProduct,

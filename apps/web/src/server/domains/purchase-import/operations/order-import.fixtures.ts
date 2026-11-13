@@ -11,6 +11,7 @@ import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq } from "drizzle-orm";
 import type { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
@@ -25,7 +26,6 @@ import {
   readRetainedMail,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,

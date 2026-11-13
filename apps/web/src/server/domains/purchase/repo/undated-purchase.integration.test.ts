@@ -2,6 +2,7 @@ import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getCalendarRange } from "~/server/domains/calendar/repo/calendar";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { loadProductMatchSides } from "~/server/domains/product/repo/match/product-match";
@@ -14,7 +15,6 @@ import {
   listKitMembership,
 } from "~/server/domains/product/repo/product-components";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeExpenseInput,

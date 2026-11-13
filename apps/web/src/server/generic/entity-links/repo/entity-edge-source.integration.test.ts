@@ -4,6 +4,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   imageSighting,
@@ -17,7 +18,6 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
 import { previewEntityMerge } from "~/server/generic/merge/repo/merge-preview";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   createInventoryFixture,

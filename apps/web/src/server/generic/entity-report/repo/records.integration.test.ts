@@ -6,13 +6,13 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   updateProduct,
   deleteProducts,
 } from "~/server/domains/product/repo/crud";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   createProductFixture as createProduct,

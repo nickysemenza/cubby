@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -16,7 +17,6 @@ import { memberImport } from "~/server/domains/purchase-import/operations/order-
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { commitAcceptedSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation-accepted";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,

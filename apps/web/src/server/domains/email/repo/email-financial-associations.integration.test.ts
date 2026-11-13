@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   emailFinancialAssociation,
@@ -21,7 +22,6 @@ import { emailReviewReport } from "~/server/domains/email/repo/report-email";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { clearUnrelatedOriginal } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Persisted-read failures: target deletion erases reviewed history/protection;
 // an account move rewrites the reviewed account or hides current-account drift.

@@ -8,6 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
@@ -15,7 +16,6 @@ import { startMailDiscovery } from "~/server/domains/purchase-import/operations/
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";

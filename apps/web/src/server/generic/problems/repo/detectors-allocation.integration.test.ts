@@ -8,15 +8,13 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import { financialTransactionAllocation } from "~/server/db/schema";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  type ShortcodeInsertValues,
-  insertWithShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { type ShortcodeInsertValues } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   findFinancialTransactionAllocationDefects,

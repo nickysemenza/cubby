@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { markPreparationIncomplete } from "~/server/ai/evaluation-inputs";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { NONE_KEY } from "~/server/ai/policy/decision-choice";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
@@ -20,7 +21,6 @@ import {
   productFixture,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 
 import {

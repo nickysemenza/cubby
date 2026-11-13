@@ -28,6 +28,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
 import * as s3 from "~/server/clients/s3";
 import { account } from "~/server/db/auth.schema";
@@ -59,7 +60,6 @@ import {
 } from "~/server/domains/mail/repo/retained-mail";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { activeEmailPurchaseDecision as orderMailCandidateDecision } from "~/server/testing/email-link.fixtures";
 
 import { loadMailAttachmentOriginal } from "../repo/gmail/attachment-original";

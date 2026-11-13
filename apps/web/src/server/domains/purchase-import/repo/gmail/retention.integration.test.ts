@@ -8,6 +8,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import * as s3 from "~/server/clients/s3";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -21,7 +22,6 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readMail } from "../../operations/mail-tool";
 import { ingestGmailMessages } from "../../service/gmail/ingest";

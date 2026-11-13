@@ -9,11 +9,11 @@ import {
 import { type TestDbContext, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { projectCreateFromTasksWorkflow } from "~/server/domains/project/operations.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 

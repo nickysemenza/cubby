@@ -3,11 +3,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { mergePhotoRunImages } from "~/server/domains/run/repo/run-target-merge";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // Colliding membership must carry terminal replay data onto the surviving

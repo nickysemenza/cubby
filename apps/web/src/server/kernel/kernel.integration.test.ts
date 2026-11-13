@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it } from "vitest";
  */
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db/database";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
@@ -19,7 +20,6 @@ import {
 import { ledgerParty, transactionImport } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   createKernel,
@@ -722,6 +722,17 @@ describe("evidence-facts kernel", () => {
       }),
     );
     expect(changed).toBe(1);
+    expect(
+      await repositoryTransactionDatabase(ctx.db, (tx) =>
+        kernel.repointOwnedReference(tx, {
+          table: fixturePurchase,
+          column: "receiptId",
+          fromIds: [originalReceipt!.id],
+          toId: stored!.receiptId!,
+          where: eq(fixturePurchase.id, crypto.randomUUID()),
+        }),
+      ),
+    ).toBe(0);
     const [repointed] = await purchases(ctx.db);
     expect(repointed?.receiptId).toBe(originalReceipt!.id);
     await expect(

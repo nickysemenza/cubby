@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, imageProcessingJob, answer } from "~/server/db/schema";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
@@ -17,7 +18,6 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
   insertEntityFixtures,

@@ -5,9 +5,9 @@ import { moneyToMinor, nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { purchaseScaffold } from "./purchase";

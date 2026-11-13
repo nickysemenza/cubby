@@ -3,6 +3,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { setCfEnv } from "~/server/cf-env";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import {
@@ -10,7 +11,6 @@ import {
   ledgerPartyScaffold,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { spendingCategoryScaffold } from "~/server/domains/spending-category/repo/spending-category";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

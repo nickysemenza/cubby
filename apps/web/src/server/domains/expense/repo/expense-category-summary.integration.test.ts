@@ -5,13 +5,13 @@ import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import {
   financialTransactionScaffold,
   updateFinancialTransaction,
 } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Public reads must retain line classification and never turn settlement amounts into item spend.
 describe("live Expense category summaries", () => {

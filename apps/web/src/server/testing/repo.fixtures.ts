@@ -39,6 +39,7 @@ import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
 import { wasm } from "~/lib/wasm";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -60,7 +61,6 @@ import {
   type EntityPayloadValues,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getDb, notDeleted } from "../db/helpers";
 import {

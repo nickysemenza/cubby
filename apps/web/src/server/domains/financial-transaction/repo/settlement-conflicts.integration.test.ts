@@ -6,6 +6,7 @@ import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
 import {
   financialTransactionAllocation,
@@ -19,7 +20,6 @@ import { startImportRunFixture } from "~/server/domains/purchase-import/service/
 import { readPurchase as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { applyFinancialSettlementAllocation } from "./financial-settlement-allocation";

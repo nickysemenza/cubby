@@ -22,6 +22,7 @@ import type { TestDbContext } from "tooling/test-setup";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { ReferenceSuggestSpec } from "~/server/ai/field-suggest/registry";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -35,7 +36,6 @@ import {
   resolveLiveShortcode,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   createProductFixture,

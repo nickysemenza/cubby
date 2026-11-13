@@ -10,6 +10,7 @@ import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-ord
 import { withTestDb } from "tooling/test-setup";
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -41,7 +42,6 @@ import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
   createLocationFixture,

@@ -9,6 +9,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
@@ -18,7 +19,6 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { decide, recordSubject } from "~/server/kernel/api";
 import { drainStoredDerived } from "~/server/testing/background-queue";

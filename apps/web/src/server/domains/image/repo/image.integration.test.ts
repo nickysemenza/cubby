@@ -88,7 +88,7 @@ const ONE_PIXEL_PNG = Uint8Array.from(
   ),
   (character) => character.charCodeAt(0),
 );
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 
 let runFixtureSeq = 0;
 const uniqRunLabel = (label: string) =>

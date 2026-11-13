@@ -10,6 +10,7 @@ import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { financialTransactionAllocation } from "~/server/db/schema";
@@ -17,7 +18,6 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
   databaseForTransaction,
   getDb,
@@ -11,7 +12,6 @@ import { auditLog, expense } from "~/server/db/schema";
 import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

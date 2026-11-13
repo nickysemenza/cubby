@@ -4,6 +4,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   ledgerParty,
@@ -15,7 +16,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { runScaffold } from "~/server/domains/run/repo/run";
 import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 

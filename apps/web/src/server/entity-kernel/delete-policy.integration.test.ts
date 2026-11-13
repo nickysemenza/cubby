@@ -72,6 +72,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db";
 import {
   INCOMING_EDGES,
@@ -138,10 +139,7 @@ import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import {
-  insertWithShortcode,
-  SHORTCODE_TABLE,
-} from "~/server/generic/shortcode/repo/shortcode-utils";
+import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 

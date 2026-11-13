@@ -13,6 +13,7 @@ import {
   withPlanBudget,
 } from "~/server/ai/budget";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { resumeFundingPausedRuns } from "~/server/ai/funding-wait";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
@@ -23,7 +24,6 @@ import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { planRunPreflight, paidRunPreflight } from "./execution-transport";

@@ -5,6 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/policy/features";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
@@ -13,7 +14,6 @@ import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expe
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   checkLinkExpensesFor,

@@ -3,6 +3,7 @@ import { nullableWholeCentToMinor } from "@cubby/shared";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   type expense,
@@ -11,7 +12,6 @@ import {
 } from "~/server/db/schema";
 import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseFlowSankey } from "./flow-sankey";

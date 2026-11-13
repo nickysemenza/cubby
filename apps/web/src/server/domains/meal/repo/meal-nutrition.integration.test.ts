@@ -16,6 +16,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -529,10 +530,11 @@ describe("meal nutrition service", () => {
       insertWithShortcode(ctx.db, "ingredient", { name: "Example grain" }),
       seedProduct("Example grain package", { kcal: 100 }),
     ]);
-    await getDb(ctx.db)
-      .update(product)
-      .set({ ingredientId: ing.id })
-      .where(eq(product.id, food.id));
+    await holdFieldsValues("product", { ingredientId: ing.id }).settle(
+      ctx.db,
+      ctx.actor,
+      food.id,
+    );
     const mapping = await insertAndReturn(ctx.db, productUnitMappings, {
       productId: food.id,
       aValue: 1,

@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
@@ -22,7 +23,6 @@ import { admitMailImport } from "~/server/domains/purchase-import/repo/mail-impo
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { createTestRequestContext } from "~/server/testing/request-context";

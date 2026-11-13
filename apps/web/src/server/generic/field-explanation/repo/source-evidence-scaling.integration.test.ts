@@ -4,6 +4,7 @@ import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   email,
@@ -15,7 +16,6 @@ import {
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   insertEntityFixtures,

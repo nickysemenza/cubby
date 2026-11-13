@@ -3,13 +3,13 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import { ask } from "~/server/db/kernel-schema";
 import { aiEvaluation, aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { seedJobs, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import { readAiBudget, setAiBudget } from "./budget";

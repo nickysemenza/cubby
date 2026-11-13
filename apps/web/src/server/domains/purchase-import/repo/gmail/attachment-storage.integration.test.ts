@@ -21,6 +21,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   email as emailTable,
@@ -32,7 +33,6 @@ import {
   orderMailAttachment,
   orderMailEvent,
 } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "../../service/gmail/ingest";

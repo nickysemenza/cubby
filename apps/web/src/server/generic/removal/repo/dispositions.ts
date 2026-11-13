@@ -43,6 +43,7 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { upperFirst } from "es-toolkit";
 
+import { fieldsPlans } from "~/server/ai/fields/repo/plan";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import {
@@ -51,7 +52,11 @@ import {
   INCOMING_EDGES,
   type IncomingEdge,
 } from "~/server/db/entity-incoming-edges";
-import { notDeleted, withTransactionOn } from "~/server/db/helpers";
+import {
+  notDeleted,
+  withTransactionOn,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import { entityAttachment, photoRunImage } from "~/server/db/schema";
 import { mergePhotoRunImages } from "~/server/domains/run/repo/run-target-merge";
 import { countByTarget, impact } from "~/server/entity-kernel/repo/impact";
@@ -96,6 +101,11 @@ export interface DeleteHooks<E extends RemovableEntity> {
   /** The root's own removal; child effects are always per edge. */
   removal?: "soft" | "hard";
 }
+
+const ownsReference = (edge: EdgePhysical) =>
+  [...fieldsPlans().values()].some(
+    (plan) => plan.table === edge.table && plan.writes.includes(edge.property),
+  );
 
 type EdgePhysical = {
   key: string;
@@ -251,10 +261,22 @@ const detach = async (
           .from(edge.table)
           .where(where)
       : [];
-  await tx
-    .update(edge.table)
-    .set({ [edge.property]: null })
-    .where(where);
+  if (ownsReference(edge)) {
+    const { repointOwnedReference } = await import("~/server/kernel/api");
+    await repointOwnedReference(databaseForTransaction(tx), {
+      // SAFETY: fields plans register only keyed entity tables.
+      table: edge.table as PgTable & { id: PgColumn },
+      column: edge.property,
+      fromIds: ids,
+      toId: null,
+      where,
+    });
+  } else {
+    await tx
+      .update(edge.table)
+      .set({ [edge.property]: null })
+      .where(where);
+  }
   if (source && detached.length > 0)
     await logAuditEntries(
       tx,
@@ -513,17 +535,31 @@ export const applyMergePolicy = async <E extends RemovableEntity>(
       );
       continue;
     }
-    const rows = await tx
-      .update(edge.table)
-      .set({ [edge.property]: args.keepId })
-      .where(
-        and(
-          inArray(edge.column, [...args.loserIds]),
-          args.liveOnly ? liveWhere(edge) : undefined,
-        ),
-      )
-      .returning();
-    repointed[edge.key] = rows.length;
+    const where = and(
+      inArray(edge.column, [...args.loserIds]),
+      args.liveOnly ? liveWhere(edge) : undefined,
+    );
+    if (ownsReference(edge)) {
+      const { repointOwnedReference } = await import("~/server/kernel/api");
+      // SAFETY: fields plans register only keyed entity tables.
+      repointed[edge.key] = await repointOwnedReference(
+        databaseForTransaction(tx),
+        {
+          table: edge.table as PgTable & { id: PgColumn },
+          column: edge.property,
+          fromIds: args.loserIds,
+          toId: args.keepId,
+          where,
+        },
+      );
+    } else {
+      const rows = await tx
+        .update(edge.table)
+        .set({ [edge.property]: args.keepId })
+        .where(where)
+        .returning();
+      repointed[edge.key] = rows.length;
+    }
   }
   return repointed;
 };

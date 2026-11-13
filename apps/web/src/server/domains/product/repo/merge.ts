@@ -32,6 +32,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { sumBy, uniq } from "es-toolkit";
 
 import { wasm } from "~/lib/wasm";
+import { holdFieldsValues } from "~/server/ai/fields/repo/field-decisions";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   productBrandNameSql,
@@ -1428,14 +1429,13 @@ export const mergeProducts = async (
     const carried = plan.carried;
     summary.carriedFields = plan.carriedFields;
 
-    await tx
-      .update(product)
-      .set({
-        aliases: folded,
-        tags,
-        ...buildPartialUpdateValues(carried),
-      })
-      .where(eq(product.id, keepId));
+    const held = holdFieldsValues("product", {
+      aliases: folded,
+      tags,
+      ...buildPartialUpdateValues(carried),
+    });
+    await tx.update(product).set(held.values).where(eq(product.id, keepId));
+    await held.settle(tx, actor, keepId, plan.keeper);
 
     const survivorChanges = productMergeSurvivorChanges(
       plan,

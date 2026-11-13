@@ -6,13 +6,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { taskRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.task.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { email, task } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { loadSuggestionRowCounts } from "~/server/generic/suggestions/repo/suggestion-row-counts";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 

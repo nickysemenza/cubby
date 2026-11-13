@@ -6,6 +6,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import {
@@ -13,7 +14,6 @@ import {
   loadExpenseFacetCounts,
 } from "~/server/domains/expense/repo/analyze";
 import { expenseDerivedValueSql } from "~/server/domains/expense/repo/expense-derived-read";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

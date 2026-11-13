@@ -11,6 +11,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -27,7 +28,6 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   createProductIdentityFixture,

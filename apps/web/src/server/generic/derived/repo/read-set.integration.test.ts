@@ -14,6 +14,7 @@ import { seedEntity, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { USDAClient } from "~/server/clients/usda";
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
 import { storedSourceSql } from "~/server/db/derived-source-sql";
@@ -38,7 +39,6 @@ import {
 import { rebuildDerived } from "~/server/generic/derived/service/rebuild";
 import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { prepareProductConversionCoverage } from "~/server/generic/problems/service/problems.service";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,

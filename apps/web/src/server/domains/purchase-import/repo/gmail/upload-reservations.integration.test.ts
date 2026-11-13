@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { withConnection } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
@@ -27,7 +28,6 @@ import {
   cleanupAbandonedMailAttachmentUploads,
   MAIL_ATTACHMENT_UPLOAD_REASON,
 } from "~/server/domains/mail/repo/mail-attachment-uploads";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticRetainedMail } from "../../service/gmail/retained-mail.fixtures";
 import { loadMailAttachmentOriginal } from "./attachment-original";

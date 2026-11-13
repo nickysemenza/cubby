@@ -26,6 +26,7 @@ import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -63,7 +64,6 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";

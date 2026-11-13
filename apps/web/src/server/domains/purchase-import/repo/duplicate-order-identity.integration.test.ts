@@ -4,13 +4,13 @@ import { eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { expense, importSourceOrder, purchase } from "~/server/db/schema";
 import {
   findOrCreatePurchase,
   renameChargeOrderId,
 } from "~/server/domains/purchase/repo/purchase";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   mailSource,

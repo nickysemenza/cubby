@@ -8,6 +8,7 @@ import { eq, isNotNull, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
@@ -18,7 +19,6 @@ import {
 } from "~/server/db/schema";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { acceptFinancialTransferPair } from "./financial-transfer-accept";
 

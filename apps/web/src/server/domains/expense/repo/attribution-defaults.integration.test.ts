@@ -6,6 +6,7 @@ import { buildEntity } from "tooling/factories/build";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { loadVendorAttributionDefaults } from "~/server/domains/expense/repo/attribution-defaults";
 import {
   createExpense,
@@ -13,7 +14,6 @@ import {
 } from "~/server/domains/expense/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
 type Shares = Array<{ partyId: LedgerPartyShortcode | null; weight: number }>;

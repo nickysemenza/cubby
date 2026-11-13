@@ -7,6 +7,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
@@ -22,7 +23,6 @@ import { prepareReclassification } from "~/server/domains/purchase-import/repo/g
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Reused verdicts need membership in every handling Run; later Email writes cannot rewrite those outcomes.
 // Audit reads must page stored evidence, expose historical gaps, and refuse a foreign member.

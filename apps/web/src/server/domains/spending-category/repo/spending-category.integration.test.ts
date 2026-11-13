@@ -10,6 +10,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   auditLog,
@@ -26,7 +27,6 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { findReferentialLivenessViolations } from "~/server/generic/problems/repo/detectors-integrity";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
   makeProductInput,

@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as choices from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
   MAILBOX_TRIAGE_FEATURE,
   MAILBOX_RELEVANCE_FEATURE,
@@ -17,7 +18,6 @@ import {
   email as emailTable,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";

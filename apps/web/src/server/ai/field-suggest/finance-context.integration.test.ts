@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
@@ -26,7 +27,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,

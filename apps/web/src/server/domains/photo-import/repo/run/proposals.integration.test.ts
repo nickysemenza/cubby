@@ -8,6 +8,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import {
   getDb,
   notDeleted,
@@ -30,7 +31,6 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntityAs } from "~/server/entity-kernel";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { buildCrudServices } from "~/server/http/request-context";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {

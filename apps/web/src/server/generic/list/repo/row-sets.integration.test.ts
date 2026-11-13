@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import type { ListEntity } from "~/entity/model/list-contracts";
 import { wasm } from "~/lib/wasm";
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb } from "~/server/db/helpers";
 import { columnArrayParam, uuidArrayParam } from "~/server/db/helpers/query";
@@ -40,7 +41,6 @@ import {
 } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
 import type { ListFilterValues } from "~/server/generic/list/repo/field-compiler";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 

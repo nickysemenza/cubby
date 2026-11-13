@@ -4,10 +4,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
 import { ledgerParty, run as runTable, runOperation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { Principal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";
