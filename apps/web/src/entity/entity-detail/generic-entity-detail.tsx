@@ -48,6 +48,10 @@ import {
   type ImageChainQueryOptions,
 } from "~/entity/fields/explanation/image-chain";
 import { WhyValue } from "~/entity/fields/explanation/why-value";
+import {
+  MachineryStateFallback,
+  RecordMachineryHeader,
+} from "~/entity/machinery/record-machinery";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { HeaderLines } from "~/entity/page/header-lines";
@@ -154,14 +158,16 @@ const sectionIcon = (kind: DeclaredSection["kind"]) => {
 };
 
 /**
- * Beside the title: the kind tag, then the state once. The declared
- * `presentation.state` draws as `StateBadge`; an entity without one keeps its
+ * Beside the title: the kind tag, then the state once. An entity with a
+ * machinery capability states it in the machinery header's stage line; any
+ * other draws its declared `presentation.state` as `StateBadge`, or keeps its
  * declared hero chip.
  */
 function headerStatus<E extends GenericDetailEntity>(
   queryClient: QueryClient,
   entity: E,
   record: DetailRecordOf<E>,
+  id: string,
 ) {
   const kind = recordKindOf(queryClient, entity, record);
   const state = recordStateOf(queryClient, entity, record);
@@ -179,27 +185,29 @@ function headerStatus<E extends GenericDetailEntity>(
   return (
     <>
       {kind ? <KindTag option={kind} /> : null}
-      {state ? (
-        <StateBadge
-          size="header"
-          option={state.option}
-          phase={state.phase}
-          reason={
-            // The side column's Needs you already says it.
-            declaredNeedsOf(queryClient, entity, record).some(
-              (item) =>
-                item.title === state.reason || item.subtitle === state.reason,
-            )
-              ? null
-              : state.reason
-          }
-          wait={state.wait}
-          stalled={state.stalled}
-          failed={state.failed}
-        />
-      ) : chip !== null ? (
-        <Badge variant="secondary">{chip}</Badge>
-      ) : null}
+      <MachineryStateFallback entity={entity} id={id}>
+        {state ? (
+          <StateBadge
+            size="header"
+            option={state.option}
+            phase={state.phase}
+            reason={
+              // The side column's Needs you already says it.
+              declaredNeedsOf(queryClient, entity, record).some(
+                (item) =>
+                  item.title === state.reason || item.subtitle === state.reason,
+              )
+                ? null
+                : state.reason
+            }
+            wait={state.wait}
+            stalled={state.stalled}
+            failed={state.failed}
+          />
+        ) : chip !== null ? (
+          <Badge variant="secondary">{chip}</Badge>
+        ) : null}
+      </MachineryStateFallback>
     </>
   );
 }
@@ -613,7 +621,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const status = headerStatus(queryClient, entity, record);
+  const status = headerStatus(queryClient, entity, record, bag.id);
   const summary = aiSummaryOf(queryClient, entity, record);
   // A hosted native workspace confines navigation to this record; list links
   // in the trail would be dead there.
@@ -912,15 +920,18 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         heroNo={bag.id}
         status={status}
         summary={
-          <HeaderLines
-            lines={headerLinesOf(queryClient, entity, record)}
-            aiSummary={
-              summary && {
-                text: summary.text,
-                attribution: `AI-written summary · ${summary.model}, after the ${singular.toLocaleLowerCase()} ended`,
+          <>
+            <RecordMachineryHeader entity={entity} id={bag.id} />
+            <HeaderLines
+              lines={headerLinesOf(queryClient, entity, record)}
+              aiSummary={
+                summary && {
+                  text: summary.text,
+                  attribution: `AI-written summary · ${summary.model}, after the ${singular.toLocaleLowerCase()} ended`,
+                }
               }
-            }
-          />
+            />
+          </>
         }
         heroActions={plateActions}
       >

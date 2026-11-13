@@ -82,6 +82,35 @@ function withoutLabel(text: string, label: string): string {
     : text;
 }
 
+/**
+ * The needs and failed marks, shared by the badge and the detail side's
+ * Needs you rows: needs is a square, failed an X, so the two never differ by
+ * colour alone.
+ */
+export function StateMark({
+  kind,
+  className,
+}: {
+  kind: "needs" | "failed";
+  className?: string;
+}) {
+  return kind === "failed" ? (
+    <XIcon
+      aria-hidden
+      weight="bold"
+      className={cn("size-3 shrink-0 text-destructive", className)}
+    />
+  ) : (
+    <span
+      aria-hidden
+      className={cn(
+        "size-1.75 shrink-0 rounded-[1.5px] bg-needs-foreground",
+        className,
+      )}
+    />
+  );
+}
+
 const pillBase =
   "inline-flex shrink-0 items-center gap-1.25 rounded-(--brand-web-radius-chip) font-semibold whitespace-nowrap";
 
@@ -131,10 +160,7 @@ export function StateBadge({
   const main =
     role === "needs" ? (
       <span className={cn(pill, "bg-needs text-needs-foreground")}>
-        <span
-          aria-hidden
-          className="size-1.75 shrink-0 rounded-[1.5px] bg-needs-foreground"
-        />
+        <StateMark kind="needs" />
         {label}
       </span>
     ) : role === "stalled" ? (
@@ -144,7 +170,7 @@ export function StateBadge({
       </span>
     ) : role === "failed" ? (
       <span className={cn(pill, "bg-destructive-surface text-destructive")}>
-        <XIcon aria-hidden weight="bold" className="size-3" />
+        <StateMark kind="failed" />
         {label}
       </span>
     ) : (
