@@ -203,11 +203,12 @@ export async function machinery(
           stage: string;
           errorClass: string | null;
           error: string | null;
+          durationMs: number | null;
           reconciledAt: string | null;
           inputsChangedAt: string | null;
         }>(sql`
           SELECT s."scopeKind" AS kind, s."scopeKey" AS key, s.version, s.gaps, s.inputs, s.stage,
-            s."errorClass", s.error, ${isoText(sql`s."reconciledAt"`)} AS "reconciledAt",
+            s."errorClass", s.error, s."durationMs", ${isoText(sql`s."reconciledAt"`)} AS "reconciledAt",
             ${isoText(sql`s."inputsChangedAt"`)} AS "inputsChangedAt"
           FROM "ScopeState" s JOIN ${wanted} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"`),
         q.execute<{
@@ -228,6 +229,8 @@ export async function machinery(
           kind: string;
           key: string;
           inputHash: string;
+          sentAt: string | null;
+          answeredAt: string | null;
           feature: string;
           state: string;
           attempts: number;
@@ -249,7 +252,7 @@ export async function machinery(
             a.attempts, a."maxAttempts", (a."claimToken" IS NOT NULL AND a."claimDeadline" > now()) AS live,
             a."cancelledAt" IS NOT NULL AS cancelled,
             ${isoText(sql`a."availableAt"`)} AS "availableAt", ${isoText(sql`a."createdAt"`)} AS "createdAt",
-            a."lastError", queue.position, queue.of
+            a."lastError", ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", queue.position, queue.of
           FROM "AskScope" s JOIN ${waiting} w ON w.kind = s."scopeKind" AND w.key = s."scopeKey"
           JOIN "Ask" a ON a.id = s."askId" LEFT JOIN queue ON queue.id = a.id`),
         q.execute<{
@@ -640,11 +643,23 @@ export async function machinery(
           ...states.rows.map((row) => row.inputsChangedAt),
           ...dirty.rows.map((row) => row.updatedAt),
         ]),
+        asks: asks.rows.map((ask) => ({
+          feature: ask.feature,
+          inputHash: ask.inputHash,
+          attempts: ask.attempts,
+          nextAt: ask.availableAt,
+          sentAt: ask.sentAt,
+          answeredAt: ask.answeredAt,
+          lastError: hidden ? null : rawText(ask.lastError),
+        })),
         scopes: scopes.map((scope) => {
           const state = stateOf(scope);
           return {
             kind: scope.kind,
             key: scope.key,
+            attempts: dirtyOf(scope)?.attempts ?? 0,
+            nextAt: dirtyOf(scope)?.availableAt ?? null,
+            durationMs: state?.durationMs ?? null,
             reconciledAt: state?.reconciledAt ?? null,
             version: state?.version ?? null,
             error: state?.error

@@ -41,7 +41,7 @@ export async function loadRunPasses(q: Q, runId: string): Promise<PassWork[]> {
     doneAt: string | null;
     cancelledAt: string | null;
   }>(sql`
-    SELECT name, key,
+    SELECT name, key, ("durationHistory"->-1->>'ms')::float8 AS "durationMs", ${isoText(sql`"updatedAt"`)} AS "updatedAt",
       CASE WHEN "cancelledAt" IS NOT NULL THEN ${STAGE.ended}
         WHEN "doneAt" IS NOT NULL THEN ${STAGE.done}
         WHEN attempts >= "maxAttempts" THEN ${STAGE.stuck}
@@ -137,6 +137,11 @@ export async function readRunWork(
         q.execute<{
           kind: string;
           key: string;
+          attempts: number;
+          nextAt: string | null;
+          durationMs: number | null;
+          reconciledAt: string | null;
+          lastError: string | null;
           stage: string;
           firstGap: string | null;
           costMicros: number;
@@ -149,7 +154,8 @@ export async function readRunWork(
           UNION SELECT 'fields', 'run:' || ${runId}::text
           UNION SELECT 'quality', 'run:' || ${runId}::text
         )
-        SELECT w.kind, w.key,
+        SELECT w.kind, w.key, coalesce(d.attempts,0) AS attempts, ${isoText(sql`d."availableAt"`)} AS "nextAt",
+          s."durationMs", ${isoText(sql`s."reconciledAt"`)} AS "reconciledAt", coalesce(d."lastError", s.error) AS "lastError",
           CASE WHEN d."claimToken" IS NOT NULL AND d."claimDeadline" > now() THEN ${STAGE.working}
             ELSE coalesce(s.stage, ${STAGE.waiting}) END AS stage,
           s."firstGap", coalesce(cost.total, 0)::float8 AS "costMicros"
@@ -162,6 +168,10 @@ export async function readRunWork(
         WHERE s."scopeKind" IS NOT NULL OR d."scopeKind" IS NOT NULL ORDER BY w.kind, w.key`),
         q.execute<{
           inputHash: string;
+          attempts: number;
+          sentAt: string | null;
+          answeredAt: string | null;
+          lastError: string | null;
           feature: string;
           state: string;
           stage: string;
@@ -173,7 +183,7 @@ export async function readRunWork(
           SELECT "askId" AS id FROM "AskScope" WHERE "runId" = ${runId}::uuid
           UNION SELECT "askId" FROM "Answer" WHERE "runId" = ${runId}::uuid AND "askId" IS NOT NULL
         )
-        SELECT a."inputHash", a.feature, CASE WHEN a."cancelledAt" IS NOT NULL THEN ${askOutcomes[2]} ELSE a.state END AS state,
+        SELECT a."inputHash", a.feature, a.attempts, ${isoText(sql`a."sentAt"`)} AS "sentAt", ${isoText(sql`a."answeredAt"`)} AS "answeredAt", a."lastError", CASE WHEN a."cancelledAt" IS NOT NULL THEN ${askOutcomes[2]} ELSE a.state END AS state,
           CASE WHEN a."cancelledAt" IS NOT NULL THEN ${STAGE.ended}
             WHEN a.state = ${ASK.answered} THEN ${STAGE.done}
             WHEN a.state = ${ASK.unknown} OR a.attempts >= a."maxAttempts" THEN ${STAGE.stuck}

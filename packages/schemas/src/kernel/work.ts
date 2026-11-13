@@ -23,6 +23,11 @@ export const runWork = z.object({
     z.object({
       kind: z.string(),
       key: z.string(),
+      attempts: z.number().default(0),
+      nextAt: z.iso.datetime().nullable().default(null),
+      durationMs: z.number().nullable().default(null),
+      reconciledAt: z.iso.datetime().nullable().default(null),
+      lastError: z.string().nullable().default(null),
       stage: kernelStage,
       firstGap: z.string().nullable(),
       costMicros: z.number().int().nonnegative(),
@@ -31,6 +36,10 @@ export const runWork = z.object({
   asks: z.array(
     z.object({
       inputHash: z.string(),
+      attempts: z.number().default(0),
+      sentAt: z.iso.datetime().nullable().default(null),
+      answeredAt: z.iso.datetime().nullable().default(null),
+      lastError: z.string().nullable().default(null),
       feature: z.string(),
       state: z.enum(["queued", "sent", "answered", "unknown", "abandoned"]),
       stage: kernelStage,

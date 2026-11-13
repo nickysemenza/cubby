@@ -138,6 +138,9 @@ const machineryDrift = z.object({
 
 /** One scope's part of a record's machinery, in owning, fields, quality order. */
 const machineryScope = z.object({
+  attempts: z.number().int().nonnegative().default(0),
+  nextAt: z.iso.datetime().nullable().default(null),
+  durationMs: z.number().nonnegative().nullable().default(null),
   kind: z.string(),
   key: z.string(),
   reconciledAt: z.iso.datetime().nullable(),
@@ -146,6 +149,8 @@ const machineryScope = z.object({
 });
 
 export const passWork = z.object({
+  durationMs: z.number().nonnegative().nullable().default(null),
+  updatedAt: z.iso.datetime().nullable().default(null),
   /** Pass pages do no paid work; their Asks carry producer cost. */
   costMicros: z.literal(0),
   name: z.string(),
@@ -173,6 +178,19 @@ export const machinery = z.object({
   computedAt: z.iso.datetime().nullable(),
   inputsChangedAt: z.iso.datetime().nullable(),
   scopes: z.array(machineryScope),
+  asks: z
+    .array(
+      z.object({
+        feature: z.string(),
+        inputHash: z.string(),
+        attempts: z.number(),
+        nextAt: z.iso.datetime(),
+        sentAt: z.iso.datetime().nullable(),
+        answeredAt: z.iso.datetime().nullable(),
+        lastError: z.string().nullable(),
+      }),
+    )
+    .default([]),
   gaps: capped(machineryGap),
   inputs: capped(machineryInput),
   drift: machineryDrift.nullable(),
