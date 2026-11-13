@@ -61,6 +61,35 @@ it("carries held values, paid results, redirects and every accepted money row", 
         )
       ).rows,
     ).toEqual([{ receipt: { retained: "requester" }, sequence: 7 }]);
+    expect(
+      (
+        await client.query(
+          `SELECT value,"actorKind" FROM "Decision" WHERE subject=$1 AND field='book'`,
+          [`purchaseEvent:${cutoverId(3)}`],
+        )
+      ).rows,
+    ).toEqual([{ value: true, actorKind: "member" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT value FROM "Decision" WHERE subject=$1 AND kind='veto' ORDER BY value`,
+          [`product:${cutoverId(13)}`],
+        )
+      ).rows.map((r) => r.value),
+    ).toEqual(["synthetic-dismissed", "synthetic-proposal"]);
+    expect(
+      (
+        await client.query(
+          `SELECT subject,other,kind FROM "Decision" WHERE channel='identity'`,
+        )
+      ).rows,
+    ).toEqual([
+      {
+        subject: `financialTransaction:${cutoverId(3)}`,
+        other: `financialTransaction:${cutoverId(56)}`,
+        kind: "distinct",
+      },
+    ]);
     const held = (
       await client.query(
         `SELECT field,kind,"actorKind","actorId" FROM "Decision" WHERE subject=$1 AND id::text LIKE 'ffffffff%' ORDER BY field`,
@@ -252,6 +281,31 @@ it("runs the registered scopes without changing accepted money and proposes the 
           `SELECT "scopeKind" kind,"scopeKey" key FROM "ScopeState" ORDER BY 1,2`,
         )
       ).rows.filter((s) => kernel.registry.reconcilers.has(s.kind));
+      const { startPass, runOnePass } =
+        await import("../src/server/kernel/pass");
+      const { versionSweepPass } = await import("../src/server/kernel/drift");
+      const bankScopes = {
+        ...kernel.registry,
+        reconcilers: new Map([
+          ["bankEvent", kernel.registry.reconcilers.get("bankEvent")!],
+        ]),
+      };
+      const sweep = versionSweepPass(() => bankScopes);
+      await startPass(database, sweep);
+      const sweepOnly = {
+        ...kernel.registry,
+        passes: new Map([[sweep.name, sweep]]),
+      };
+      for (let page = 0; page < scopes.length + 2; page++)
+        if (!(await runOnePass(database, sweepOnly))) break;
+      expect(
+        (
+          await client.query(
+            `SELECT version FROM "ScopeState" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1`,
+            [cutoverId(18)],
+          )
+        ).rows[0].version,
+      ).toBe(1);
       const outcomes = await kernel.reconcileNow(database, scopes);
       expect(outcomes).toHaveLength(scopes.length);
       expect(outcomes.filter((o) => o.status === "failed")).toEqual([]);
@@ -261,6 +315,14 @@ it("runs the registered scopes without changing accepted money and proposes the 
           await client.query(
             `SELECT count(*)::int n FROM "Drift" WHERE "scopeKind"='purchaseEvent' AND "scopeKey"=$1`,
             [cutoverId(3)],
+          )
+        ).rows[0].n,
+      ).toBe(1);
+      expect(
+        (
+          await client.query(
+            `SELECT count(*)::int n FROM "EvidenceBinding" WHERE "scopeKind"='bankEvent' AND "scopeKey"=$1 AND basis='baseline' AND "eventKey" LIKE 'baseline:empty:%'`,
+            [cutoverId(18)],
           )
         ).rows[0].n,
       ).toBe(1);
@@ -287,6 +349,7 @@ it("inspects only aggregate projections under PostgreSQL read-only enforcement",
       through: "20261113113834_model_evaluation_asks",
     });
     await seedCutoverPredecessor(client);
+    await client.query(`DROP TABLE "ConnectionCandidateEvidence"`);
     const { execFile } = await import("node:child_process");
     const { promisify } = await import("node:util");
     const { fileURLToPath } = await import("node:url");

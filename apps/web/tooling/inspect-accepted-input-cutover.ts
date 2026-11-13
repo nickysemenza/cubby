@@ -15,8 +15,20 @@ try {
   await client.connect();
   await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
   await client.query("SET LOCAL statement_timeout='120s'");
+  // The earlier pending migration creates this source empty on a predecessor.
+  const hasConnections = (
+    await client.query(
+      `SELECT to_regclass('public."ConnectionCandidateEvidence"') IS NOT NULL present`,
+    )
+  ).rows[0].present;
+  const projection = hasConnections
+    ? acceptedInputCutoverSelect()
+    : acceptedInputCutoverSelect().replace(
+        'FROM "ConnectionCandidateEvidence"',
+        'FROM (SELECT NULL::text AS "scopeKey" WHERE false) "ConnectionCandidateEvidence"',
+      );
   const result =
-    await client.query(`WITH expected AS MATERIALIZED (${acceptedInputCutoverSelect()}),
+    await client.query(`WITH expected AS MATERIALIZED (${projection}),
     failures AS (
       SELECT mapping,count(*) FILTER(WHERE
         CASE mapping
@@ -31,7 +43,15 @@ try {
         END)::int n FROM expected GROUP BY mapping
     )
     SELECT 'destination' category,mapping||'/'||split_part(source_id,':',1) mapping,count(*)::int rows FROM expected GROUP BY 2
-    UNION ALL SELECT 'verification',mapping,n FROM failures
+    UNION ALL SELECT 'destination','total/'||k.mapping,count(DISTINCT CASE k.mapping
+      WHEN 'scope' THEN jsonb_build_array(e.row->'scopeKind',e.row->'scopeKey')::text
+      WHEN 'askScope' THEN jsonb_build_array(e.row->'askId',e.row->'scopeKind',e.row->'scopeKey')::text
+      WHEN 'recordKey' THEN jsonb_build_array(e.row->'scopeKind',e.row->'scopeKey',e.row->'entity',e.row->'naturalKey')::text
+      WHEN 'binding' THEN jsonb_build_array(e.row->'factKind',e.row->'factId',e.row->'basis')::text
+      WHEN 'answer' THEN e.row->>'inputHash' ELSE e.row->>'id' END)::int
+      FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping)
+      LEFT JOIN expected e ON e.mapping=k.mapping GROUP BY k.mapping
+    UNION ALL SELECT 'verification',k.mapping,coalesce(f.n,0) FROM (VALUES ('recordKey'),('manualEntry'),('binding'),('scope'),('decision'),('ask'),('answer'),('askScope')) k(mapping) LEFT JOIN failures f ON f.mapping=k.mapping
     UNION ALL SELECT 'verification','audit preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AuditLog"
     UNION ALL SELECT 'verification','evaluation preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluation"
     UNION ALL SELECT 'verification','requester preimage',count(*) FILTER(WHERE id IS NULL)::int FROM "AiEvaluationRequest"

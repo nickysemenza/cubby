@@ -76,6 +76,12 @@ function semanticallyEmpty(diff: Difference): boolean {
     ),
     bindingsRemove: diff.bindingsRemove.filter(
       (entry) =>
+        // Cutover absence and catalog snapshots are baseline metadata, not record differences.
+        !(
+          entry.basis === "baseline" &&
+          (entry.eventKey.startsWith("baseline:empty:") ||
+            entry.eventKey.startsWith("baseline:snapshot:"))
+        ) &&
         !agreeing.has(`${entry.fact.kind}:${entry.fact.id}:${entry.eventKey}`),
     ),
   });

@@ -60,7 +60,9 @@ tables before reading, including the identity, audit, money, catalog and kernel
 tables. It preserves exact minor units, rejected identities and merge redirects;
 accepted records enter as baseline bindings at version zero. The first sweep
 proposes disagreements as drift. Missing or ambiguous field authority remains
-person-held with unknown actor metadata when attribution is unproven.
+person-held with unknown actor metadata when attribution is unproven. Current
+held-value assignments observe the accepted state at cutover; historical audit
+and review decisions retain their original event times.
 
 Allow approximately three to ten minutes for the copy and indexed inserts at
 tens of thousands of bank events and Expenses. This is an estimate, not a

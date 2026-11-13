@@ -32,6 +32,7 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     [18, "sourceOccurrence", "SOC-CUTEMPTY"],
     [19, "sourceTransactionRecord", "STR-CUTOVER"],
     [23, "transactionImport", "IMP-CUTOVER"],
+    [56, "financialTransaction", "FTX-OTHER"],
   ];
   // Prefixes come from the declared registry; raw predecessor fixtures bypass writers.
   const { SHORTCODE_PREFIX } = await import("@cubby/shared");
@@ -61,6 +62,10 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
     [cutoverId(3), cutoverId(2)],
   );
   await client.query(
+    `INSERT INTO "FinancialTransaction" (id,shortcode,"accountId",kind,status,"amountMinor","transactionDate","postedDate") SELECT id,shortcode,$2,'purchase','posted',2000,'2026-02-02','2026-02-03' FROM "Entity" WHERE id=$1`,
+    [cutoverId(56), cutoverId(2)],
+  );
+  await client.query(
     `INSERT INTO "Purchase" (id,shortcode,"vendorId",date,"statedTotalMinor") SELECT id,shortcode,$1,'2026-01-02',CASE WHEN id=$2 THEN 6000 ELSE 4000 END FROM "Entity" WHERE id IN ($2,$3,$4)`,
     [cutoverId(1), cutoverId(4), cutoverId(5), cutoverId(6)],
   );
@@ -87,6 +92,10 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
   await client.query(
     `INSERT INTO "ExpenseAttribution" (id,"expenseId",role,"ledgerPartyId",weight) VALUES ($1,$2,'beneficiary',$3,1)`,
     [cutoverId(22), cutoverId(7), cutoverId(10)],
+  );
+  await client.query(
+    `UPDATE "Purchase" SET "purchaserOverrideId"=$1 WHERE id=$2`,
+    [cutoverId(10), cutoverId(4)],
   );
   await client.query(
     `INSERT INTO "LedgerTransfer" (id,shortcode,"fromPartyId","toPartyId","amountMinor",date) SELECT id,shortcode,$2,$3,1000,'2026-01-02' FROM "Entity" WHERE id=$1`,
@@ -157,6 +166,31 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
       ]),
     ],
   );
+  // A corrected proposal vetoes its old candidate independently. A dismissal
+  // retains its suppression even when no embedded event survives.
+  await client.query(
+    `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,decisions,active,status) VALUES ($1,'synthetic:correction','field','{}','{}','product',$2,'brandId','"synthetic-proposal"','synthetic-model',$3,false,'applied')`,
+    [
+      cutoverId(47),
+      cutoverId(13),
+      JSON.stringify([
+        {
+          id: cutoverId(49),
+          operationId: "synthetic-correction",
+          verdict: "correct",
+          correction: { present: true, value: "synthetic-correction" },
+          intent: "apply",
+          authority: "member",
+          actorUserId: "synthetic-cutover",
+          createdAt: "2026-01-02T00:00:00.000Z",
+        },
+      ]),
+    ],
+  );
+  await client.query(
+    `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,suppression,active,status) VALUES ($1,'synthetic:suppression','field','{}','{}','product',$2,'brandId','"synthetic-dismissed"','synthetic-model','{"scope":"field","candidateKey":"synthetic-dismissed"}',false,'rejected')`,
+    [cutoverId(48), cutoverId(13)],
+  );
   await client.query(
     `INSERT INTO "Shipment" (id,shortcode,name,"purchaseId") SELECT id,shortcode,'Synthetic package',$2 FROM "Entity" WHERE id=$1`,
     [cutoverId(15), cutoverId(4)],
@@ -192,6 +226,36 @@ export async function seedCutoverPredecessor(client: Client): Promise<void> {
   await client.query(
     `UPDATE "SourceOccurrence" SET "currentObservationId"=$1 WHERE id=$2`,
     [cutoverId(19), cutoverId(17)],
+  );
+  await client.query(
+    `INSERT INTO "Suggestion" (id,"publicationKey",family,subject,judgment,entity,"recordId",field,"suggestedValue",model,decisions,active,status,data) VALUES ($1,'synthetic:statement-application','statement_transaction','{}','{}','sourceTransactionRecord',$2,'',$3,'synthetic-model',$4,false,'applied',$5)`,
+    [
+      cutoverId(54),
+      cutoverId(19),
+      JSON.stringify({
+        kind: "statement_transaction",
+        action: "book",
+        kindOverride: "purchase",
+        booking: {
+          reviewedVendorName: "Synthetic shop",
+          costType: "materials",
+        },
+        rejectedCandidateIds: [cutoverId(56)],
+      }),
+      JSON.stringify([
+        {
+          id: cutoverId(55),
+          operationId: "synthetic-book",
+          verdict: "correct",
+          correction: { present: false },
+          intent: "apply",
+          authority: "member",
+          actorUserId: "synthetic-cutover",
+          createdAt: "2026-01-05T00:00:00.000Z",
+        },
+      ]),
+      { accountId: cutoverId(2) },
+    ],
   );
   await client.query(
     `INSERT INTO "SourceObservationAnnotation" ("observationId","accountId",notes) VALUES ($1,$2,'Synthetic member note')`,

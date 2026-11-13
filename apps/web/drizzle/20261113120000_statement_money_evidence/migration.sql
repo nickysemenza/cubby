@@ -1,3 +1,8 @@
+-- Lock every accepted-input source and existing destination before copying.
+SET LOCAL lock_timeout='2s';
+--> statement-breakpoint
+LOCK TABLE "Answer", "AuditLog", "EvidenceBinding", "Expense", "ExpenseAttribution", "FactKey", "FinancialAccount", "FinancialTransaction", "FinancialTransactionAllocation", "LedgerParty", "Purchase", "RecordKey", "ScopeState", "SourceOccurrence", "SourceTransactionRecord", "Suggestion" IN ACCESS EXCLUSIVE MODE;
+--> statement-breakpoint
 -- Baseline bindings preserve stored ledger identities and exact minor-unit values.
 CREATE TABLE "ManualEntry" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
