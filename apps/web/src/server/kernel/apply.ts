@@ -81,7 +81,7 @@ import {
   rowKey,
   tableKey,
 } from "./keys";
-import { KernelContractError } from "./reads";
+import { KernelContractError, LockedReadChangedError } from "./reads";
 import type { KernelRegistry } from "./registry";
 import { wakeAfterCommit } from "./wake";
 import { WorkTargetError } from "./work-errors";
@@ -103,6 +103,7 @@ export type ApplyOptions = {
 
 const isConflict = (error: UnparsedError) =>
   error instanceof KernelConflict ||
+  error instanceof LockedReadChangedError ||
   isEntityShortcodeCollision(error, "Entity") ||
   ["40001", "40P01"].includes(findPgError(error)?.code ?? "");
 
@@ -986,6 +987,13 @@ async function runLocked(
   options: ApplyOptions & { mode: WriteMode; hideBaseline?: boolean },
 ): Promise<Outcome> {
   const scope = { kind: claimed.kind, key: claimed.key };
+  const [prepared] = await computeBatch(
+    repositoryQueries(db),
+    registry,
+    reconciler,
+    [scope],
+    { db, locked: false, hideBaseline: options.hideBaseline ?? false },
+  );
   try {
     return await repositoryTransactionDatabase(db, async (tx) => {
       const q = repositoryQueries(tx);
@@ -993,11 +1001,18 @@ async function runLocked(
         lane: reconciler.lane,
         mode: options.mode,
       });
+      const lockedRevisions = await lockKeyRevs(
+        q,
+        [...prepared!.keys.keys()].sort(),
+      );
       const [computed] = await computeBatch(q, registry, reconciler, [scope], {
         db: tx,
         locked: true,
+        lockedRevisions,
         hideBaseline: options.hideBaseline ?? false,
       });
+      if (computed!.error instanceof LockedReadChangedError)
+        throw computed!.error;
       const fence = await q.execute<{
         seq: string | number;
         live: boolean;
@@ -1016,6 +1031,10 @@ async function runLocked(
       );
     });
   } catch (error) {
+    if (isConflict(error)) {
+      await releaseConflicts(repositoryQueries(db), [claimed]);
+      return outcome(scope, "conflict");
+    }
     const [failed] = await settleBatchFailure(
       db,
       reconciler,

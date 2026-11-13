@@ -35,8 +35,10 @@ import type {
   KeyedTable,
   Reconciler,
 } from "./define";
-import { lockKeyRevs, readKeyRevs } from "./dirty";
+import { readKeyRevs } from "./dirty";
 import { bindingEventKey, bindingFactKey, rowKey, tableKey } from "./keys";
+
+export class LockedReadChangedError extends Error {}
 
 export class KernelContractError extends Error {
   override name = "KernelContractError";
@@ -132,6 +134,7 @@ export type ReadMode = {
   db?: Database;
   /** Locked runs hold each key's revision row from its read to commit. */
   locked: boolean;
+  lockedRevisions?: ReadonlyMap<Key, number>;
   /** The version sweep derives without baseline bindings. */
   hideBaseline: boolean;
 };
@@ -159,8 +162,12 @@ export function createReads(
       );
     return name;
   };
-  const revisions = async (keys: readonly Key[]) =>
-    mode.locked ? lockKeyRevs(q, keys) : readKeyRevs(q, keys);
+  const revisions = async (keys: readonly Key[]) => {
+    if (!mode.lockedRevisions) return readKeyRevs(q, keys);
+    if (keys.some((key) => !mode.lockedRevisions!.has(key)))
+      throw new LockedReadChangedError();
+    return new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]));
+  };
   const recordAll = (
     scopes: readonly string[],
     revs: ReadonlyMap<Key, number>,

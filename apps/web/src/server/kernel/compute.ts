@@ -34,7 +34,7 @@ import type {
   Reconciler,
   ScopeRef,
 } from "./define";
-import { lockKeyRevs, readKeyRevs } from "./dirty";
+import { readKeyRevs } from "./dirty";
 import {
   askEnvelope,
   envelopeText,
@@ -53,6 +53,7 @@ import {
   createReads,
   idColumn,
   KernelContractError,
+  LockedReadChangedError,
   KeyLedger,
   type ReadMode,
 } from "./reads";
@@ -148,9 +149,14 @@ async function computeBatchInPhase(
   const scopeKeys = scopes.map((scope) => scope.key);
   const loadedRevisions = new Map<Key, number>();
   const revisions = async (keys: readonly Key[]) => {
-    const revs = await (mode.locked
-      ? lockKeyRevs(q, keys)
-      : readKeyRevs(q, keys));
+    if (
+      mode.lockedRevisions &&
+      keys.some((key) => !mode.lockedRevisions!.has(key))
+    )
+      throw new LockedReadChangedError();
+    const revs = mode.lockedRevisions
+      ? new Map(keys.map((key) => [key, mode.lockedRevisions!.get(key)!]))
+      : await readKeyRevs(q, keys);
     for (const [key, rev] of revs)
       if (!loadedRevisions.has(key)) loadedRevisions.set(key, rev);
     return revs;
