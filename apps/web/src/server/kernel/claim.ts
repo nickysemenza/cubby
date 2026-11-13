@@ -35,6 +35,20 @@ import { wakeClaimRecovery } from "./wake";
 type Q = Pick<RepositoryQueryClient, "execute">;
 
 export const CLAIM_LEASE_MS = 90_000;
+
+/** Renew a complete compute batch in one statement; an expired token is never revived. */
+export async function renewScopeClaims(
+  q: Pick<RepositoryQueryClient, "execute">,
+  scopes: readonly ClaimedScope[],
+): Promise<void> {
+  if (!scopes.length) return;
+  await q.execute(sql`
+    UPDATE "ScopeDirty" d SET "claimDeadline" = now() + ${leaseInterval(CLAIM_LEASE_MS)}
+    FROM jsonb_to_recordset(${JSON.stringify(scopes.map(({ kind, key, token }) => ({ kind, key, token })))}::jsonb)
+      AS r(kind text, key text, token uuid)
+    WHERE d.kind = r.kind AND d.key = r.key AND d."claimToken" = r.token
+      AND d."claimDeadline" > now()`);
+}
 /** Non-transient failures before a dirty scope is Stuck. */
 export const MAX_SCOPE_ATTEMPTS = 5;
 /** Consecutive `seq`/`rev` conflicts before a scope runs locked. */
@@ -650,7 +664,8 @@ export async function releaseFundingWaits(
         "waitCause" = CASE WHEN "waitCause" = ${kernelWaitCause.enum.funding} THEN NULL ELSE "waitCause" END,
         "wakeVersion" = "wakeVersion" + 1, "updatedAt" = ${now.toISOString()}::timestamp
       WHERE "doneAt" IS NULL AND "cancelledAt" IS NULL
-        AND ("waitCause" = ${kernelWaitCause.enum.funding} OR "claimToken" IS NOT NULL)
+        AND "waitCause" = ${kernelWaitCause.enum.funding}
+        AND ("claimToken" IS NULL OR "claimDeadline" <= now())
       RETURNING name
     ) SELECT ((SELECT count(*) FROM asks) + (SELECT count(*) FROM passes))::int AS n`);
   return result.rows[0]?.n ?? 0;

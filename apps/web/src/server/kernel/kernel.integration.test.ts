@@ -1232,6 +1232,25 @@ describe("evidence-facts kernel", () => {
     expect(await dirtyCount(ctx.db)).toBe(1);
   });
 
+  it("funding release preserves the cursor of a running pass", async () => {
+    const pass = definePass({
+      name: "fixture.running-funding",
+      async run(db) {
+        await releaseFundingWaits(db);
+        return { cursor: { page: 1 }, done: false };
+      },
+    });
+    const kernel = createKernel([
+      defineModule({ name: "passes", passes: [pass] }),
+    ]);
+    await kernel.startPass(ctx.db, pass, { cursor: { page: 0 } });
+    await runOnePass(ctx.db, kernel.registry);
+    const result = await repositoryQueries(ctx.db).execute<{ cursor: unknown }>(
+      sql`SELECT cursor FROM "Pass" WHERE name = ${pass.name}`,
+    );
+    expect(result.rows).toEqual([{ cursor: { page: 1 } }]);
+  });
+
   it("cannot publish a cancelled pass holder's cursor after the pass is restarted", async () => {
     const pass = definePass({
       name: "fixture.restart",
