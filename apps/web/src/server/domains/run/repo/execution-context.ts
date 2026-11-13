@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState, jobWaitReason } from "@cubby/schemas/job";
+import { kernelWaitCause } from "@cubby/schemas/kernel/machinery";
 import {
   runPurpose,
   FUNDING_RECOVERABLE_PURPOSES,
@@ -30,6 +31,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
+import { RUN_EXECUTE_PASS } from "~/server/domains/run/repo/run-execution";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
@@ -165,7 +167,7 @@ export async function countFundingPausedDiscovery(db: Database, now: Date) {
 }
 
 export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
-  const resumed = await unwrapDb(db)
+  const released = unwrapDb(db)
     .update(run)
     .set({
       progress: sql`coalesce(${run.progress}, '{}'::jsonb) || jsonb_build_object('fundingReleasedAt', ${now.toISOString()}::text)`,
@@ -173,7 +175,17 @@ export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
     })
     .where(fundingPausedDiscovery(db, now))
     .returning({ id: run.id });
-  return resumed.length;
+  // The release marker and wake commit together. A page already holding the
+  // claim cannot replace this wake with its older funding deadline.
+  const result = await unwrapDb(db).execute<{ n: number }>(sql`
+    WITH released AS (${released.getSQL()}), woken AS (
+      UPDATE "Pass" p SET "availableAt" = now(), "waitCause" = NULL,
+        "wakeVersion" = p."wakeVersion" + 1, "updatedAt" = now()
+      FROM released r WHERE p.name = ${RUN_EXECUTE_PASS} AND p.key = r.id::text
+        AND p."doneAt" IS NULL AND p."cancelledAt" IS NULL
+        AND (p."waitCause" = ${kernelWaitCause.enum.funding} OR p."claimToken" IS NOT NULL)
+    ) SELECT count(*)::int AS n FROM released`);
+  return result.rows[0]?.n ?? 0;
 }
 
 /**

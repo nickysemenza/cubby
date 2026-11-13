@@ -675,7 +675,7 @@ describe("scheduled Gmail discovery", () => {
     const { advanceRunPass } =
       await import("~/server/workflows/runs/pass.fixtures");
     const { AiBudgetExhaustedError } = await import("~/server/ai/budget");
-    const { pauseForFunding } =
+    const { pauseForFunding, releaseFundingPausedDiscovery } =
       await import("~/server/domains/run/repo/execution-context");
     const discovery = await import("./discovery");
     const windowEnd = new Date(Date.now() + 3_600_000).toISOString();
@@ -690,14 +690,16 @@ describe("scheduled Gmail discovery", () => {
       },
       "Synthetic funding refusal",
     );
-    const relevance = vi.fn(async () => {
-      await pauseForFunding(
-        ctx.db,
-        runEntityId.parse(state.params.runId),
-        budget,
-      );
-      throw budget;
-    });
+    const relevance = vi.fn<NonNullable<DiscoveryPorts["relevance"]>>(
+      async () => {
+        await pauseForFunding(
+          ctx.db,
+          runEntityId.parse(state.params.runId),
+          budget,
+        );
+        throw budget;
+      },
+    );
     const seam: DiscoveryPorts = {
       ...ports(gmail()),
       triage: async () => "uncertain",
@@ -736,6 +738,20 @@ describe("scheduled Gmail discovery", () => {
         availableAt: budget.until,
         attempts: 0,
       });
+      expect(
+        await releaseFundingPausedDiscovery(ctx.db, new Date(Date.now() + 1)),
+      ).toBe(1);
+      expect(await readRunPass(ctx.db, state.params.runId)).toMatchObject({
+        state: "due",
+        waitCause: null,
+        attempts: 0,
+      });
+      relevance.mockResolvedValue({ classification: "related" });
+      await advanceRunPass(ctx.db);
+      expect(relevance).toHaveBeenCalledTimes(calls + 1);
+      expect((await readRun(state.params.runId)).status).not.toBe(
+        "paused_auth",
+      );
     } finally {
       page.mockRestore();
     }

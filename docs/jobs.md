@@ -624,6 +624,8 @@ retains the frozen provider page across claims and the execution generation
 fences writes. Admission waits use `provider_capacity`; funding waits use
 `funding`, retain their deadline and spend no attempt. Pause cancels the claim;
 resume re-admits the same Run and retained page under its next generation.
+A mailbox funding reset commits the release marker and Pass wake together,
+so a holder cannot replace that wake with an older funding wait.
 Its Mail-specific admission rules (targeted-search capacity, exclusive scans,
 page yielding, coverage advancement and Gmail cooldowns) are owned by the
 [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mailbox-admission-and-coverage).
