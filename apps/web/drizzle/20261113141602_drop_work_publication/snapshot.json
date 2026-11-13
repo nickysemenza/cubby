@@ -1,0 +1,161 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "4a525ba0-abd6-4539-80bf-c440d3f4069c",
+  "prevIds": [
+    "72ccc498-6d2c-42b0-8a00-475d0765e1f7"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "WorkItem"
+      ],
+      "writes": [
+        "s|tbl|public.WorkItem",
+        "n|tbl|public.WorkItem",
+        "e|tbl|public.WorkItem",
+        "n|rel|public.WorkItem",
+        "n|type|public.WorkItem"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "WorkPublication"
+      ],
+      "writes": [
+        "s|tbl|public.WorkPublication",
+        "n|tbl|public.WorkPublication",
+        "e|tbl|public.WorkPublication",
+        "n|rel|public.WorkPublication",
+        "n|type|public.WorkPublication"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"WorkItem\"]"
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"WorkPublication\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"inputIncomplete\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"source\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"entity\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"name\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"family\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"executor\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"reason\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"reasonKeys\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"owners\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"exclusiveOwner\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"shared\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"amount\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"date\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"ownerCodes\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"ownerKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkItem\",\"ownerLabel\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"publishedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"dirtyAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"attemptedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"error\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"WorkPublication\",\"meta\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"WorkItem\",\"WorkItem_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"WorkPublication\",\"WorkPublication_pkey\"]"
+    }
+  ]
+}

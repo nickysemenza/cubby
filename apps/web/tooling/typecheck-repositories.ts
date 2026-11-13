@@ -116,7 +116,6 @@ export const repositoryOwners = [
   "src/server/db/kernel-schema.ts",
   "src/server/generic/suggestions/repo/suggestion-decisions.ts",
   "src/server/db/quality-snapshot-schema.ts",
-  "src/server/db/work-item-schema.ts",
   "src/server/db/read-snapshot-schema.ts",
   "src/server/db/derived-declarations.ts",
   "src/server/db/derived-source-sql.ts",

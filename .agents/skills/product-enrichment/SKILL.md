@@ -19,14 +19,13 @@ For a resumed backlog or delegated sweep, load
 [resumption and worker handoffs](references/resumption.md) before assigning work
 or mutating queue members.
 
-For unified backlog triage, `activity_read.queue` offers the connected member's
-eligible work plus shared Product research (`family: research`). The Work queue
-page shows the household's owners. Public Product facts are shared work; private original/order/account work follows current source ownership.
-Queue membership grants no new source access or execution authorization.
-Pull agent work newest first with `activity_read.queue` `view: "agent"`, settle
-what you can, and when you cannot decide call `activity.resolve_run_finding`
-with `action: "ask_member"` and one specific `question` instead of leaving the
-item open.
+For member-input triage, `machinery_read.needs_you` pages the kernel's record
+gaps with `pageSize` and `cursor`; `machinery_read.read` shows a record's complete
+evidence and actions. Research backlog uses the entity's `research-queue` saved
+view. Public Product facts are shared work; private original/order/account work
+follows current source ownership. Settle what the evidence allows; when you
+cannot decide, call `activity.resolve_run_finding` with `action: "ask_member"`
+and one specific `question`.
 
 Use supplied `PRD-` identifiers regardless of inventory. Enrichment never
 decides whether an import line becomes a Product and never receives inventory.

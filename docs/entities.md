@@ -2815,10 +2815,10 @@ The Research queue ([terminology](guide/terminology.md#purchase-research)) is no
 checks research can close, sorted by `dataQuality` ascending. A `DataException` closes a gap until
 cleared.
 
-Needs you holds only member decisions (`memberDecision` in `work-queue.ts`: merge, delete, money,
-stock, contradiction, personal); every work reason declares its decision (`PROBLEM_DECISION`,
-`RUN_FINDING_ROUTING`, `MAIL_IMPORT_GAP_EXECUTOR`) and `decisionExecutor(null)` is `agent`. The
-Agent saved view is the agent backlog.
+Needs you reads member-supplied kernel gaps. The broader browser work list routes
+merge, delete, money, stock, contradiction and personal decisions to a member; every
+work reason declares its decision. Reasons without a member decision are agent work.
+The Agent saved view is the agent backlog.
 
 The `/work-queue` page composes those predicates with Problems, Email attention, findings,
 Suggestions and account work as Work sources ([work queue](guide/work-queue.md)). Each domain exports
@@ -2827,28 +2827,20 @@ explicitly (ADR 0019 forbids a registry), and `server/generic/work-queue` import
 source's candidate select projects the shared row shape through `selectWorkCandidates` (`source`,
 `entity`, `id`, `name`, `key`, `family`, `executor`, `reason`, `reason_keys`, `owners`, `shared`,
 `amount`, `date`), deduplicating shared CTEs by name. This is a read projection, not an entity or
-assignment ledger. An MCP read fences to shared work and work owned only by the connected member
-before counts and paging; the household UI's Owner filter grants no private access.
+assignment ledger. The browser Owner filter grants no private-source access; source
+operations still enforce current ownership.
 
-Household web reads (`workQueue.queue`) read the published `WorkItem` rows: the full source union
-with deferrals applied and owners routed (member codes, section key and label). `publishWorkItems`
-reconciles the complete population in one transaction: remove absent keys, insert new keys and update
-changed values; equal rows keep their stored versions. Filters, search, sorts, Group by, view counts, summaries and
-hydration run over that relation. `WorkPublication` records the snapshot instant, the last unread
-member write (`dirtyAt`, set after commit by `recordChange` in a request or member-awaited background
-write), and the last failed attempt with its raw error, which holds off the next attempt for a
-minute. Publishers take a transaction try-lock, so one runs at a time; readers never wait and keep
-the previous rows until a publication commits. The insert runs in a savepoint so the lock holder
-records its own failure. A published read returns `meta.publication` (`publishedAt`, and the latest
-failed attempt's raw error); the last good rows keep serving. A missing publication is written before
-the first read; a first read that cannot publish fails with the raw publication error (SQLSTATE and
-Postgres message first) rather than serving unpublished zero work. A stale publication (dirty, or
-older than two minutes) is replaced after the response, and its commit rings `workQueue` readers.
-MCP reads and `workQueue.forRecord` stay live. Publication captures coverage messages and incomplete
-Project/diagnostic inputs with the rows. A source declared `admittedReasonsOnly` (pending suggestion
-families) stores each record's full membership; the read keeps only admitted reasons and drops a
-record with none, so a Product with a field suggestion and a product-pair review stays in Needs you
-as the pair.
+The Work page, Home, navigation and MCP read the kernel's `needsYou`: public records
+with a member-supplied gap, oldest first, with stage, the first gap and its offered
+actions. `machinery.needsYou` pages this population with `limit` and `offset`; the MCP
+adapter exposes `pageSize` and an opaque continuation `cursor`.
+Record machinery holds the complete inputs and actions.
+
+The browser's separate `/work-queue` list evaluates the composed source union live.
+Filters, search, sorting, groups, counts, summaries and hydration operate over that
+read projection. `workQueue.forRecord` scopes the same sources to one record.
+No queue publication or stored Work rows carry member decisions; source evidence,
+quality snapshots, findings and kernel decisions remain their authorities.
 
 `workQueueList` is the queue's [relation list](#declared-lists-over-a-relation): Type, Owner,
 Family, Executor and Reason filter and group it; Date and Amount carry unsupported reasons. Group

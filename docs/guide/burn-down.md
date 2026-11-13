@@ -14,9 +14,10 @@ prepare a bounded batch when each record is independently settled.
 1. Connect the session to Cubby through a connector: Claude Code uses Cubby's
    claude.ai connector and Codex uses Cubby's ChatGPT connector, each signed in
    once with OAuth.
-2. Start with `activity_read.queue` (filter `executor: agent`) for the connected
-   member's eligible work plus shared research, or open the Work queue in Cubby. Entity Research queue
-   saved views narrow the same derived work; they are not separate task lists.
+2. Start with `machinery_read.needs_you` for records requiring member input,
+   or use an entity's `research-queue` saved view for research. Inspect a gap's
+   complete evidence and actions with `machinery_read.read`. The browser's
+   Work queue offers the broader source list and its filters.
 3. Choose one record or a small bounded batch, then load the skill that owns
    the work:
    - [Product enrichment](../../.agents/skills/product-enrichment/SKILL.md) for

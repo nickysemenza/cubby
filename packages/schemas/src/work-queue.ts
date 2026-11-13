@@ -1,5 +1,4 @@
 import { z } from "zod";
-import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 
 import { incompleteWorkDiagnosticSource } from "./work-diagnostic-facts";
 
@@ -309,20 +308,6 @@ export const workQueueInput = workQueueList.input.extend({
     ),
 });
 export const workQueueLayout = z.enum(["summary", "pivot", "table"]);
-/**
- * Work that needs a member, mine plus shared: the sidebar count, the Work page
- * and Home's preview all read this one population. Optional proposals are
- * improvements a member may take up whenever they like, so they stay out.
- */
-export const NEEDS_YOU_FILTERS = {
-  // A filter, not the Review view: executor filters prune the sources that
-  // cannot route to a member before any candidate SQL is planned.
-  executor: "human" as const,
-  owner: CURRENT_MEMBER_FILTER,
-  reasonExclude: ["suggestions:field", "suggestions:recommendation"],
-};
-/** Home's preview page; the sidebar count shares this one cached read. */
-
 /** The agent backlog's size for Work's quiet line; it never counts toward a badge. */
 export const AGENT_BACKLOG_INPUT = workQueueInput.parse({
   view: "agent",
@@ -390,14 +375,6 @@ export const workQueueOutSchema = z.object({
     groups: z.array(workQueueGroupSummarySchema).optional(),
     /** Every composed source's declared reasons, for the Reason filter. */
     reasons: z.array(reasonOption),
-    /**
-     * A published read's snapshot instant, and the raw error when the latest
-     * republish failed (its rows are still the last good publication). Live
-     * reads omit it.
-     */
-    publication: z
-      .object({ publishedAt: z.string(), error: z.string().nullable() })
-      .optional(),
   }),
 });
 

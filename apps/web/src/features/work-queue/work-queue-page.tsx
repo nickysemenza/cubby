@@ -121,7 +121,6 @@ type QueueTablePage = Omit<WorkQueueOut, "items" | "meta"> & {
       | "incompleteSources"
       | "incompleteProjectIds"
       | "incompleteDiagnosticSources"
-      | "publication"
     > & {
       totalCount: number;
       /** Each section's declared group actions, by its raw key. */

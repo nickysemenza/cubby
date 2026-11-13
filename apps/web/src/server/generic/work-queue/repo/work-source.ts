@@ -76,7 +76,7 @@ export interface WorkSource {
   /**
    * A row's reasons are only those the read admits, and a record with none
    * admitted is no row (pending suggestion families). Candidates prune them
-   * live; a publication stores full membership and the read prunes it.
+   * before counts and pagination.
    */
   readonly admittedReasonsOnly?: boolean;
   /** Names the published inputs when a source reports missingInputs. */

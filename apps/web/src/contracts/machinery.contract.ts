@@ -58,7 +58,7 @@ export const machineryContract = defineContract(
   "machinery",
   {
     needsYou: query({
-      exposure: "internal",
+      exposure: "capability",
       description: "Records with a gap supplied by a member, oldest first.",
       input: z.strictObject({
         limit: z.number().int().min(1).max(100).optional(),

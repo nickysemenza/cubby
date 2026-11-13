@@ -200,10 +200,11 @@ Only a member decides a merge, a delete, booking money on a judgment, moving
 stock, contradicting what a person recorded, and anything needing the member's
 own sign-in, a physical errand or a file only they hold. Every work reason
 declares which of these it needs, or none; work with none is agent work, and
-only work that names one is Needs you. Agent work is the Agent view
-(`activity_read.queue` with `view: "agent"`, newest first). A Claude or ChatGPT
-session over MCP acts as the member, so it pulls that backlog, settles what the
-evidence allows and never leaves an item open. When it cannot decide, it calls
+only work that names one is Needs you. The browser's Agent view shows agent work newest first. MCP exposes member
+gaps through `machinery_read.needs_you` and the complete record machinery through
+`machinery_read.read`; research comes from the entity's `research-queue` saved
+view. A Claude or ChatGPT session acts with the connected member's authority
+and settles what the evidence allows. When it cannot decide, it calls
 `resolve_run_finding` with `action: "ask_member"` and one specific `question`:
 that closes its finding and files a member question on the same record, routed
 to Needs you; the member answers by acting and then dismisses it. For a Mail
@@ -307,10 +308,10 @@ second completed-task ledger.
 
 ### Work entry point
 
-Work's Needs you queue embeds the existing decision, proposal and Problems
-sources with their canonical group actions and affected-record navigation.
-Automatic recovery and ordinary waits stay out of it; what stopped appears under
-Background work ([the rule](../jobs.md#member-facing-work-explanations)).
+Work's Needs you reads public records with a member-supplied kernel gap, grouped
+by stage, with affected-record navigation and the offered action. Automatic
+recovery and ordinary waits stay in each record's machinery; stopped work
+appears under Kernel work ([execution](../jobs.md#wakes-and-progress)).
 All Work queue executor views remain available at `/work-queue`.
 History opens retained Runs and audit changes; it is not a second completed-task
 ledger. Settings → Maintenance holds the nightly pass and one-off repairs.

@@ -19,10 +19,6 @@ import { Button } from "~/ui/primitives/button";
 
 /** Past this the list only counts the rest; a page of warnings stops being read. */
 const STUCK_ROW_CAP = 8;
-/** Retry shows its outcome without a reload, then the page goes quiet again. */
-const RETRY_READ_MS = 10_000;
-const RETRY_WATCH_MS = 2 * 60_000;
-
 const STATUS_INPUT = {};
 
 /** "2 background processes are stuck." and its peers: the page's always-on verdict. */
@@ -62,12 +58,7 @@ function TechnicalDetails({ text }: { text: string }) {
   );
 }
 
-function StuckAction({
-  action,
-}: {
-  action: WorkStuckItem["action"];
-  onRetried: () => void;
-}) {
+function StuckAction({ action }: { action: WorkStuckItem["action"] }) {
   if (action.type === "link") {
     const url = new URL(action.href, "https://cubby.invalid");
     return (
@@ -84,13 +75,7 @@ function StuckAction({
 }
 
 /** A warning glyph, what stopped in outcome words, and at most one action. */
-function StuckRow({
-  item,
-  onRetried,
-}: {
-  item: WorkStuckItem;
-  onRetried: () => void;
-}) {
+function StuckRow({ item }: { item: WorkStuckItem }) {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[auto_minmax(0,1fr)_auto]">
       <WarningIcon
@@ -99,7 +84,7 @@ function StuckRow({
       />
       <p className="font-medium text-foreground-strong">{item.title}</p>
       <div className="col-start-2 max-md:row-start-3 md:col-start-3 md:row-span-2 md:row-start-1">
-        <StuckAction action={item.action} onRetried={onRetried} />
+        <StuckAction action={item.action} />
       </div>
       <p className="col-start-2 max-w-prose text-muted-foreground">
         {item.body}
@@ -111,17 +96,15 @@ function StuckRow({
 
 /**
  * The one list of background work that stopped or keeps failing, each row with
- * its retry, under the page's health verdict. Every stuck or failed kind,
- * device wait and stopped Run reads from `workQueue.status`.
+ * record link, under the page's health verdict. Stuck kernel scopes and
+ * Runs read from `workQueue.status`.
  */
 function BackgroundWork({
   sentence,
   items,
-  onRetried,
 }: {
   sentence: string;
   items: readonly WorkStuckItem[];
-  onRetried: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -142,7 +125,7 @@ function BackgroundWork({
       {/* oxlint-enable jsx-a11y/prefer-tag-over-role */}
       <ul>
         {(expanded ? items : items.slice(0, STUCK_ROW_CAP)).map((item) => (
-          <StuckRow key={item.key} item={item} onRetried={onRetried} />
+          <StuckRow key={item.key} item={item} />
         ))}
       </ul>
       {items.length > STUCK_ROW_CAP ? (
@@ -262,15 +245,13 @@ function AutomaticWorkStopped({
   );
 }
 
-/** One verdict and one queue; queue telemetry stays behind a closed disclosure. */
+/** Kernel health and member gaps, with separate links to research and history. */
 export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
-  const [watchUntil, setWatchUntil] = useState(0);
   const status = useQuery({
     ...workQueue.status.queryOptions(STATUS_INPUT),
-    refetchInterval: () => (Date.now() < watchUntil ? RETRY_READ_MS : false),
+    refetchInterval: false,
   });
   const now = useDisplayNow() ?? Date.now();
-  const onRetried = () => setWatchUntil(Date.now() + RETRY_WATCH_MS);
   const data = status.data;
   const automatic = useAutomaticWork();
   return (
@@ -284,7 +265,6 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
               : "Checking…"
         }
         items={data?.stuck ?? []}
-        onRetried={onRetried}
       />
       {fromRetiredJobs ? (
         <p className="max-w-prose text-muted-foreground">

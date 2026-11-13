@@ -8,7 +8,7 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {
   status: async (context) => readWorkStatus(context.db, new Date()),
-  // Agents see shared work and work routed only to their own member.
+  // Browser-only source projection; MCP reads machinery.needsYou.
   queue: async (context, input) => {
     const read = {
       input,

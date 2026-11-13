@@ -28,16 +28,16 @@ export const workQueueContract = defineContract(
     status: query({
       exposure: "capability",
       description:
-        "Whether background work is healthy: stuck work with its raw failure, whether work is catching up, and when work last finished. A kind is stuck when work has been due for 30 minutes with no completion in that time, when it keeps failing, or when Apple-device work has no device. Use job.activity and job.queue to diagnose a stuck kind.",
+        "Kernel work that is stuck, catching up, or finished. Inspect a record with machinery.read for its scopes, asks, passes and raw failures.",
       input: z.strictObject({}),
       output: workStatus,
       // Not entity roots: a status mounted in the shell must not refetch on every write.
       cache: { tags: [["run"], ["workQueue"]] },
     }),
     queue: query({
-      exposure: "capability",
+      exposure: "internal",
       description:
-        'Actionable work (research, review, repair, Problems, waiting) across the household\'s work sources. Needs you is `executor: human` with `owner: @me` and holds only member decisions. The agent backlog is `view: "agent"` (`executor: agent`, newest first): pull from it, settle what you can, and hand off with `activity.resolve_run_finding` `ask_member` when you cannot decide. An agent sees shared work and work routed only to its own member; private work belonging to another member is excluded before counts and pagination. Filters: `entity` (record type), `owner` (member shortcodes or `@me`; `ownerPresence: none` is unresolved routing), `family`, `executor` (automatic, agent, human, external), and `reason` (stable keys: data checks, problem keys, or source keys); each also takes its `…Exclude` key. `view` selects a saved view (automatic, agent, human, external, problems).',
+        "Live source projection for the browser work list, with entity, owner, family, executor and reason filters.",
       input: workQueueInput,
       output: workQueueOutSchema,
       cache: { tags: WORK_QUEUE_TAGS },
