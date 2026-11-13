@@ -331,6 +331,9 @@ writes the output, the scope's `ScopeDep` rows and `ScopeState`, verifies the
 claim token, and deletes the `ScopeDirty` row only at that `seq`. A mutation
 that commits later raises `seq` again and the scope runs again.
 
+A member decision that invokes an authored field writer opens `householdWrite`
+before inserting its Decisions, so the writer enters with the gate held.
+
 Lock order inside an apply is the gate, then the `KeyRev` rows in key order,
 then the `ScopeDirty` row, then the record rows, which is the order a mutation
 takes them in. A gated transaction that dirties scopes first locks the

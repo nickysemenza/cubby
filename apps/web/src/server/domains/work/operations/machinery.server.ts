@@ -94,7 +94,7 @@ async function decideForRecord(
       "MACHINERY_DECISION_NOT_OFFERED",
       `${input.entity} records have no machinery to decide on`,
     );
-  const { decide, machinery, recordSubject } =
+  const { decide, machinery, recordSubject, householdWrite } =
     await import("~/server/kernel/api");
   const record = await recordOf(db, input.entity, input.id);
   const subject = recordSubject(input.entity, record.id);
@@ -108,23 +108,25 @@ async function decideForRecord(
         "MACHINERY_DECISION_NOT_OFFERED",
         `${decision.channel} ${decision.kind} is not offered for ${input.id}`,
       );
-  const decisions = await decide(
-    db,
-    viewer,
-    input.decisions.map((decision) => ({
-      channel: decision.channel,
-      kind: decision.kind,
-      subject: decision.subject ?? subject,
-      field: decision.field ?? null,
-      value: decision.value ?? null,
-    })),
-    {
-      field: authoredFieldWriter({
-        ...buildCrudServices(db),
-        db,
-        actorContext: viewer,
-      }),
-    },
+  const decisions = await householdWrite(db, (tx) =>
+    decide(
+      tx,
+      viewer,
+      input.decisions.map((decision) => ({
+        channel: decision.channel,
+        kind: decision.kind,
+        subject: decision.subject ?? subject,
+        field: decision.field ?? null,
+        value: decision.value ?? null,
+      })),
+      {
+        field: authoredFieldWriter({
+          ...buildCrudServices(tx),
+          db: tx,
+          actorContext: viewer,
+        }),
+      },
+    ),
   );
   return { decisions };
 }
