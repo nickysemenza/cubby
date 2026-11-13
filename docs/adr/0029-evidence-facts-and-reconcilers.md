@@ -179,6 +179,7 @@ downstream scope; `c.gap.evidence`, `c.gap.answer`, `c.gap.decision` and
 | `EvidenceBinding` | Which evidence belongs to which purchase event, and on what basis (`proven`, `decision`, `baseline`).               |
 | `Pass`            | One row per registered pass instance: cursor, claim, attempts, `availableAt`.                                       |
 | `Drift`           | One proposal per scope: proposal hash, inputs hash, exact difference, ask count, estimated cost.                    |
+| `KeyRev`          | One revision counter per key, the serialization point between mutation and dependency registration.                 |
 
 Answers, asks and decisions live in Neon. Durable Object SQLite holds only what
 can be rebuilt or fetched again (ADR 0025 item 1).
@@ -197,9 +198,16 @@ entity's writer). The statement inserts the row's `FactKey` rows and upserts
 - every scope whose `ScopeDep` holds one of the row's keys.
 
 A scope whose key is itself a fact key (`paymentMatch`) is discovered by that
-key. An apply that commits a scope's `ScopeDep` rows rechecks, in the same
-transaction, for `FactKey` rows newer than its load on the keys it just
-registered, and leaves the scope dirty if it finds one.
+key.
+
+Registration and mutation serialize per key through `KeyRev(key, rev)`. An
+input mutation raises `rev` for each of its keys with an upsert before it reads
+`ScopeDep`. A load records the `rev` it saw for every key it read, 0 for a key
+with no row. An apply takes the same rows with the same upsert form, which
+creates a row for an absent key, and compares each `rev` with the one its load
+saw. Because both sides lock the same row, either the apply sees the committed
+mutation and leaves the scope dirty, or the mutation sees the committed
+`ScopeDep` row and raises `ScopeDirty.seq`.
 
 `ScopeDirty` can never hold more rows than there are scopes. A reconciler's
 output never dirties its own scope.
@@ -229,6 +237,12 @@ dirty. An unchanged `seq` applies the difference and, in the same transaction,
 writes the output, the scope's `ScopeDep` rows and `ScopeState`, verifies the
 claim token, and deletes the `ScopeDirty` row only at that `seq`. A mutation
 that commits later raises `seq` again and the scope runs again.
+
+A conflict on `seq` or `rev` does not count as a failed attempt. After three
+conflicts in a row the runner makes an exception to loading outside the
+transaction: it takes the gate when the lane is money, locks the dirty row,
+then loads, computes and applies in that one bounded transaction. Producer
+calls stay outside it.
 
 Catalog scopes use the same fence without the gate. A catalog apply also
 compares the target record's revision, so a member's concurrent edit of the
@@ -270,12 +284,13 @@ they held has this owner:
 | Derived rebuild and the hourly snapshot pass                     | A `derived.snapshot` Pass with a resumable cursor.                                                                                                                        |
 | Email purchase discovery                                         | Dirtying: an Email evidence row discovers its `emailState` scope and its `paymentMatch` keys.                                                                             |
 | Mailbox discovery                                                | A source Ask per mailbox whose input carries `MailboxCursor`.                                                                                                             |
+| `maintenance.purchase-discovery`                                 | A `purchase.discovery` Pass that owns sender-attribution learning, retained-Email import admission and mailbox-discovery admission; `senderAfter` is in its cursor.       |
 | Field automation events                                          | `fields` scopes dirtied by keys.                                                                                                                                          |
 | Re-asking after a model, prompt or policy revision               | The version sweep (section 11).                                                                                                                                           |
 | Stopped-execution reconciliation                                 | Claim expiry in the claim module, and a `runs.reconcile` Pass for Run status.                                                                                             |
 | Retention and pruning                                            | A `retention` Pass.                                                                                                                                                       |
 | The Needs-you publication                                        | The list projection over `ScopeState` (section 10).                                                                                                                       |
-| Calendar invalidation                                            | Unchanged: a post-commit effect of the authored write that causes it.                                                                                                     |
+| Calendar invalidation                                            | The post-commit fast path stays; a failed mark persists a `calendar.invalidate` Pass keyed by origin that retries the idempotent `markDirty` call.                        |
 
 ### 8. Paid producer calls
 
