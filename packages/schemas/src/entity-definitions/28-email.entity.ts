@@ -140,6 +140,83 @@ export const { definition, readSchemas } = defineEntityModel({
   key: "email",
   edges: [
     defineEdge({
+      key: "SourceOrderObservation.emailId",
+      from: "row:SourceOrderObservation",
+      to: "email",
+      cardinality: "one",
+      inverse: {
+        key: "email.incoming.SourceOrderObservation.emailId",
+        from: "email",
+        to: "row:SourceOrderObservation",
+        cardinality: "many",
+      },
+      storage: {
+        kind: "foreign-key",
+        column: "SourceOrderObservation.emailId",
+        constrained: true,
+      },
+      ownership: {
+        kind: "excluded",
+        reason: "Immutable source extraction history.",
+      },
+      fromEnd: {
+        role: "reference",
+        label: "target",
+        description: "The referenced record.",
+        liveness: {
+          kind: "must-target-live",
+        },
+      },
+      toEnd: {
+        role: "history",
+        label: "source order observations",
+        description:
+          "The original source owner of an immutable source extraction.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "Immutable observation history retains its original subject UUID through deletion and merge.",
+        },
+      },
+      policies: {
+        from: {
+          delete: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+          merge: {
+            kind: "unsupported",
+            reason: "This operation is not exposed for this endpoint.",
+          },
+        },
+        to: {
+          delete: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+          merge: {
+            kind: "disposition",
+            disposition: {
+              code: "preserve-source-observation",
+              effect: "preserve",
+              description:
+                "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
+            },
+            handler: null,
+            order: 1,
+          },
+        },
+      },
+    }),
+
+    defineEdge({
       key: "MailHandlingReceipt.emailId",
       from: "row:MailHandlingReceipt",
       to: "email",

@@ -81,6 +81,7 @@ import {
 import { type ExistingExpenseSnapshot } from "~/server/domains/purchase-import/policy/import-lines";
 import { importLineWritePolicy } from "~/server/domains/purchase-import/policy/import-plan";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import { retainedPaymentEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
   type LiveSourceOrder,
   lockImportSourceClaimFamily,
@@ -125,6 +126,7 @@ import {
 } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { append, evidenceRow } from "~/server/kernel/api";
 
 import {
   learnPurchaseProductExternalId,
@@ -1514,7 +1516,10 @@ export async function importVendorOrder(
         sourceClaimId,
       );
       if (payments.length)
-        await tx.insert(purchasePaymentEvidence).values(payments);
+        await append(
+          databaseForTransaction(tx),
+          payments.map((row) => evidenceRow(retainedPaymentEvidence, row)),
+        );
       // Settle from the payment lines this order retained, against charges
       // already on the member's statements. Later charges settle through the
       // same function before any hunt opens (retained-settlement.ts).

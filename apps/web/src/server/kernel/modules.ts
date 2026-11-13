@@ -8,6 +8,7 @@ import { financialTransactionKernelModule } from "~/server/domains/financial-tra
  * entry point.
  */
 import { imageKernelModule } from "~/server/domains/image-processing/service/module";
+import { orderKernelModule } from "~/server/domains/purchase-import/service/order-kernel";
 import { runKernelModule } from "~/server/domains/run/service/run-summary";
 import { shipmentKernelModule } from "~/server/domains/shipment/service";
 import { statementKernelModule } from "~/server/domains/transaction-import/service/statement-kernel";
@@ -24,6 +25,7 @@ export const KERNEL_MODULES: readonly DomainModule[] = [
   shipmentKernelModule,
   financialTransactionKernelModule,
   statementKernelModule,
+  orderKernelModule,
   fieldsKernelModule,
   workflowKernelModule,
 ];

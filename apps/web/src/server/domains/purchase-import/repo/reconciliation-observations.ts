@@ -13,6 +13,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { databaseForTransaction } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers";
 import {
   entityIdentity,
@@ -24,12 +25,14 @@ import {
   purchase,
   sourceOrderObservation,
 } from "~/server/db/schema";
+import { orderEvidence } from "~/server/domains/purchase-import/repo/order-evidence";
 import {
   isLiveSourceOrder,
   type LiveSourceOrder,
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { append, evidenceRow } from "~/server/kernel/api";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 /** JSONB changes object-key order; review hashes must describe values, not serialization order. */
@@ -48,7 +51,7 @@ export function reconciliationFingerprint(value: unknown): Promise<string> {
 }
 
 export async function recordSourceOrderObservation(
-  tx: Pick<DrizzleTransaction, "insert" | "select">,
+  tx: DrizzleTransaction,
   identity: Pick<
     typeof sourceOrderObservation.$inferInsert,
     "sourceClaimId" | "orderKey" | "purchaseId"
@@ -75,6 +78,10 @@ export async function recordSourceOrderObservation(
     }),
   ),
 ) {
+  if (!identity.sourceClaimId || !identity.purchaseId)
+    throw new Error(
+      "A retained source association requires its original subject",
+    );
   const extraction = importExtractionOutcome.parse(input.extraction);
   const productBindings = sourceOrderObservationBindings.parse(bindings);
   const contentFingerprint = await reconciliationFingerprint({
@@ -84,8 +91,15 @@ export async function recordSourceOrderObservation(
     primaryDocumentImageId: input.primaryDocumentImageId,
     screenshotImageId: input.screenshotImageId,
   });
+  const [source] = await tx
+    .select({ ledgerPartyId: importSourceClaim.ledgerPartyId })
+    .from(importSourceClaim)
+    .where(eq(importSourceClaim.id, identity.sourceClaimId));
   const values = {
     ...identity,
+    ledgerPartyId: source?.ledgerPartyId ?? null,
+    sourceKind: input.source.kind,
+    sourceExternalKey: input.source.externalKey,
     vendorId: parseEntityId("vendor", input.vendorId),
     runId: input.runId,
     checksum: input.source.checksum,
@@ -136,11 +150,14 @@ export async function recordSourceOrderObservation(
     throw new Error(
       "Source observation identity changed; review its ownership.",
     );
+  const observationId = crypto.randomUUID();
+  await append(databaseForTransaction(tx), [
+    evidenceRow(orderEvidence, { ...values, id: observationId }),
+  ]);
   const [created] = await tx
-    .insert(sourceOrderObservation)
-    .values(values)
-    .onConflictDoNothing()
-    .returning();
+    .select()
+    .from(sourceOrderObservation)
+    .where(eq(sourceOrderObservation.id, observationId));
   if (!created)
     throw new Error(
       "Source observation identity changed; review its ownership.",
@@ -237,7 +254,7 @@ export async function mergedVendorSourceOrder(
 
 /** Promote stored evidence only; absent historical decisions and media remain unknown. */
 export async function promoteHistoricalAcceptedObservation(
-  tx: Pick<DrizzleTransaction, "select" | "insert" | "update">,
+  tx: DrizzleTransaction,
   sourceOrderId: string,
 ) {
   const [initial] = await tx
@@ -350,6 +367,7 @@ export async function acceptedSourceExtraction(
       .where(eq(sourceOrderObservation.id, order.acceptedObservationId));
     if (
       !observation ||
+      !observation.purchaseId ||
       observation.sourceClaimId !== order.sourceClaimId ||
       observation.orderKey !== order.orderKey ||
       !(await sourceObservationIdentityMatches(

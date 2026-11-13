@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
+import { importWriterInput } from "@cubby/schemas/purchase-import";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { moneyToMinor, nullableMinorToMoney } from "@cubby/shared";
 import { eq, inArray } from "drizzle-orm";
@@ -44,6 +45,11 @@ import { updatePurchaseEventWhere } from "~/server/domains/financial-transaction
 import { createPurchaseEventRecord } from "~/server/domains/financial-transaction/repo/purchase-event-mutations";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import {
+  appendOrderEvidence,
+  resolveMailOwners,
+} from "~/server/domains/purchase-import/repo/order-evidence";
+import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -80,6 +86,66 @@ const dollarExpense = (row: typeof expense.$inferSelect | undefined) =>
 // fabricated finding, a second spend line, or stock receiving.
 describe("reviewed accepted source Product association", () => {
   const ctx = withTestDb();
+  it("appends accepted order sources before a Purchase exists and replays without changing observations", async () => {
+    const world = await memberImportWorld(ctx.db, ctx.actor);
+    const account = await insertWithShortcode(ctx.db, "vendorAccount", {
+      vendorId: world.vendor.id,
+      ledgerPartyId: world.party.id,
+    });
+    const run = await startImportRunFixture(ctx.db, {
+      vendorAccountId: account.id,
+      ledgerPartyId: world.party.id,
+    });
+    const inputs = (
+      [
+        "mail_message",
+        "vendor_export",
+        "receipt_photo",
+        "browser_order",
+      ] as const
+    ).map((kind) => ({
+      orderKey: `${world.vendor.id}/SYNTHETIC-FIRST`,
+      input: importWriterInput.parse({
+        ledgerPartyId: world.party.id,
+        vendorId: world.vendor.id,
+        vendorAccountId: account.id,
+        runId: run.id,
+        source: {
+          kind,
+          externalKey: `synthetic:${kind}`,
+          checksum: "b".repeat(64),
+        },
+        extraction: {
+          status: "ready",
+          candidate: {
+            orderId: "SYNTHETIC-FIRST",
+            orderedAt: "2026-09-01T12:00:00Z",
+            merchant: "Synthetic service merchant",
+            currency: "USD",
+            printedGrandTotal: 12,
+            lines: [
+              { title: "Synthetic service", amount: 12, lineKind: "principal" },
+            ],
+            payments: [{ amount: 12, tender: "card" }],
+          },
+        },
+        primaryDocumentImageId: null,
+        screenshotImageId: null,
+      }),
+    }));
+    const before = await appendOrderEvidence(ctx.db, inputs);
+    expect(before).toHaveLength(4);
+    expect(
+      before.every(
+        (row) => row.purchaseId === null && row.sourceClaimId === null,
+      ),
+    ).toBe(true);
+    expect(await appendOrderEvidence(ctx.db, inputs)).toEqual(before);
+    expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);
+    expect(await resolveMailOwners(ctx.db, [world.party.id])).toEqual(
+      new Map([[world.party.id, ctx.actor.userId]]),
+    );
+  });
   // The imported order is the expensive part of every case, so each variant
   // is seeded once per run (in beforeAll, outside the tests' timeout) and every
   // case gets its own clone of it.

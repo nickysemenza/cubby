@@ -185,6 +185,8 @@ export async function applyReconciliationAssociation(
   acceptedObservation: typeof sourceOrderObservation.$inferSelect,
   outputFingerprint: string,
 ) {
+  if (!state.observation.sourceClaimId)
+    throw new Error("Retained association has no source claim");
   const [association] = await tx
     .insert(importSourceOrder)
     .values({
@@ -248,6 +250,8 @@ export async function applyReconciliationSource(
         ],
         set: { expenseId: binding.expenseId },
       });
+  if (!plan.sourceClaimId)
+    throw new Error("Retained payments have no source claim");
   for (const payment of plan.payments) {
     if (payment.kind === "update")
       await tx

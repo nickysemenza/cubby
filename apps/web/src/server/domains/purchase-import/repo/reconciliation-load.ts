@@ -96,6 +96,8 @@ export async function loadFirstReconciliationObservation(
   state: ReconciliationState,
   fix: ReconciliationFix,
 ) {
+  if (!state.observation.sourceClaimId)
+    throw new Error("Retained association has no source claim");
   const [firstObservation] = await tx
     .select()
     .from(sourceOrderObservation)

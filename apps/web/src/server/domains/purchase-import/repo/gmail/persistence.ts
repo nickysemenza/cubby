@@ -68,9 +68,13 @@ import {
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
   mailSourceIdentityBlocked,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import {
+  appendEmailIdentity,
+  mailOriginalEvidence,
+} from "~/server/domains/purchase-import/repo/order-evidence";
 import { readImportSourceClaimFamily } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { append, evidenceRow } from "~/server/kernel/api";
 
 import { deferClassificationRefresh } from "./admitted-source";
 import {
@@ -339,16 +343,19 @@ export async function saveEmail(
     orderMailId: input.orderMailId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
-      where: messageWhere(input),
-      values: () => ({
-        ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-        mailboxId: input.mailboxId,
-        provider: "gmail",
-        messageId: input.messageId,
-        ...fields,
-      }),
-    });
+    const { row, created } = await appendEmailIdentity(
+      databaseForTransaction(tx),
+      {
+        where: messageWhere(input),
+        values: () => ({
+          ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+          mailboxId: input.mailboxId,
+          provider: "gmail",
+          messageId: input.messageId,
+          ...fields,
+        }),
+      },
+    );
     await supersedeLegacyEmail(tx, input);
     await recordChange(tx, { kind: "source", categories: ["email"] });
     if (created) return;
@@ -403,7 +410,7 @@ export async function markEmailRemoved(
   },
 ) {
   await withTransaction(db, async (tx) => {
-    const { row } = await findOrCreateWithShortcode(tx, "email", {
+    const { row } = await appendEmailIdentity(databaseForTransaction(tx), {
       where: messageWhere(input),
       values: () => ({
         ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
@@ -441,18 +448,21 @@ export async function saveMailboxMetadata(
     messageId: input.mail.messageId,
   };
   await withTransaction(db, async (tx) => {
-    const { row, created } = await findOrCreateWithShortcode(tx, "email", {
-      where: messageWhere(identity),
-      values: () =>
-        ({
-          ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
-          provider: "gmail",
-          mailboxId: identity.mailboxId,
-          messageId: identity.messageId,
-          checksum: input.checksum,
-          status: "pending",
-        }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
-    });
+    const { row, created } = await appendEmailIdentity(
+      databaseForTransaction(tx),
+      {
+        where: messageWhere(identity),
+        values: () =>
+          ({
+            ledgerPartyId: parseEntityId("ledgerParty", input.ledgerPartyId),
+            provider: "gmail",
+            mailboxId: identity.mailboxId,
+            messageId: identity.messageId,
+            checksum: input.checksum,
+            status: "pending",
+          }) satisfies Omit<typeof emailTable.$inferInsert, "shortcode">,
+      },
+    );
     const superseded = await supersedeLegacyEmail(tx, identity);
     const fields = mailboxMetadataFields(input, row);
     const changed =
@@ -820,16 +830,19 @@ export const upsertOrderMail = async (
         "Gmail Email original pointer is outside its owner",
       );
     if (existing) await assertMailSourceIdentityReady(tx, existing);
-    const [row] = existing
-      ? await tx
-          .update(orderMail)
-          .set({ ...fields, updatedAt: new Date() })
-          .where(eq(orderMail.id, existing.id))
-          .returning()
-      : await tx
-          .insert(orderMail)
-          .values({ ledgerPartyId: ownerId, ...fields })
-          .returning();
+    const id =
+      existing?.rawChecksum === fields.rawChecksum
+        ? existing.id
+        : crypto.randomUUID();
+    if (id !== existing?.id)
+      await append(databaseForTransaction(tx), [
+        evidenceRow(mailOriginalEvidence, {
+          id,
+          ledgerPartyId: ownerId,
+          ...fields,
+        }),
+      ]);
+    const [row] = await tx.select().from(orderMail).where(eq(orderMail.id, id));
     if (!row)
       throw new GmailPersistenceError("Gmail mail upsert returned no id");
     await assertMailSourceIdentityReady(tx, {

@@ -15,14 +15,31 @@ export const importObservationChildren = [
       {
         key: "sourceClaimId",
         kind: "uuid",
-        notNull: true,
         reference: { table: "importSourceClaim", column: "id" },
       },
       { key: "orderKey", kind: "text", notNull: true },
       {
+        key: "ledgerPartyId",
+        kind: "uuid",
+        type: "LedgerPartyId",
+        reference: { table: "ledgerParty", column: "id" },
+      },
+      {
+        key: "emailId",
+        kind: "uuid",
+        reference: { table: "email", column: "id" },
+      },
+      {
+        key: "sourceKind",
+        kind: "text",
+        notNull: true,
+        default: "browser_order",
+      },
+      { key: "sourceExternalKey", kind: "text", notNull: true, default: "" },
+      { key: "answerHash", kind: "text" },
+      {
         key: "purchaseId",
         kind: "uuid",
-        notNull: true,
         type: "PurchaseId",
         reference: { table: "purchase", column: "id" },
       },
@@ -68,7 +85,7 @@ export const importObservationChildren = [
     types: [
       {
         module: "@cubby/schemas/identifiers",
-        exports: ["PurchaseId", "VendorId"],
+        exports: ["PurchaseId", "VendorId", "LedgerPartyId"],
       },
       {
         module: "@cubby/schemas/purchase-import",
@@ -90,6 +107,20 @@ export const importObservationChildren = [
         ],
       },
       { name: "SourceOrderObservation_purchase_idx", on: ["purchaseId"] },
+      {
+        name: "SourceOrderObservation_source_content_key",
+        unique: true,
+        on: [
+          "ledgerPartyId",
+          "sourceKind",
+          "sourceExternalKey",
+          "orderKey",
+          "checksum",
+          "contentFingerprint",
+        ],
+        where: "{purchaseId} IS NULL",
+      },
+      { name: "SourceOrderObservation_order_key_idx", on: ["orderKey"] },
     ],
     checks: [
       {
