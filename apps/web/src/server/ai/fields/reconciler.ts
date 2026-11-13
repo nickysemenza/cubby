@@ -430,11 +430,15 @@ export function fieldsReconciler(
     load: (reads, keys) => load(reads, keys, ask === fieldAsk),
     reconcile(input, c) {
       const plan = fieldsPlans().get(input.entity)!;
+      // Fields patch an authored identity; imported legacy keys remain accepted
+      // even when the field has no answer or the payload was soft-deleted.
+      const target = writeRefs.get(input.entity);
+      if (target)
+        for (const key of c.existing(target)) c.retire(target, key, "keep");
       const row = input.row;
       if (!row) return c.done();
       if (input.analysis) c.answer(analysisAsk(input.entity), input.analysis);
       const subject = recordSubject(input.entity, input.id);
-      const target = writeRefs.get(input.entity);
       for (const field of plan.fields) {
         if (field.mode === "prune" && blank(row[field.key])) continue;
         if (field.apply === "review" && field.mode !== "prune") continue;

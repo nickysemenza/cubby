@@ -45,13 +45,13 @@ SELECT 'device'::text entity, 'Device'::text table_name, 'fields'::text scope_ki
 UNION ALL
 SELECT 'spendingCategory'::text entity, 'SpendingCategory'::text table_name, 'fields'::text scope_kind, 'spendingCategory:' || r.id::text scope_key, r.id, to_jsonb(r) payload, ARRAY['emoji','itemizationExpectation','productExpectation']::text[] fields FROM "SpendingCategory" r
 UNION ALL
-SELECT 'financialTransaction', 'FinancialTransaction', 'bankEvent', coalesce((SELECT min(o.id::text) FROM "SourceOccurrence" o WHERE o."acceptedTransactionId"=r.id),'manual:'||r.id), r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amount',r."amountMinor"::text), ARRAY['accountId','kind','status','amount','transactionDate','postedDate','merchant','rawDescription','sourceCategory','notes','spendingCategoryId','itemizationExpectation']::text[] FROM "FinancialTransaction" r
+SELECT 'financialTransaction', 'FinancialTransaction', 'bankEvent', coalesce((SELECT min(o.id::text) FROM "SourceOccurrence" o WHERE o."acceptedTransactionId"=r.id),'manual:'||r.id), r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amount',coalesce(to_jsonb(r)->>'amountMinor',((to_jsonb(r)->>'amount')::numeric*100)::text)), ARRAY['accountId','kind','status','amount','transactionDate','postedDate','merchant','rawDescription','sourceCategory','notes','spendingCategoryId','itemizationExpectation']::text[] FROM "FinancialTransaction" r
 UNION ALL
-SELECT 'purchase', 'Purchase', 'purchaseEvent', coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=r.id AND a."deletedAt" IS NULL),r.id::text), r.id, (to_jsonb(r)-'statedTotalMinor')||jsonb_build_object('statedTotal',r."statedTotalMinor"::text), ARRAY['vendorId','vendorAccountId','purchaserOverrideId','defaultProjectId','defaultTrade','spendingCategoryId','spendingCategoryOrigin','itemizationExpectation','orderId','displayLabel','date','statedTotal','notes']::text[] FROM "Purchase" r
+SELECT 'purchase', 'Purchase', 'purchaseEvent', coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=r.id AND a."deletedAt" IS NULL),r.id::text), r.id, (to_jsonb(r)-'statedTotalMinor')||jsonb_build_object('statedTotal',coalesce(to_jsonb(r)->>'statedTotalMinor',((to_jsonb(r)->>'statedTotal')::numeric*100)::text)), ARRAY['vendorId','vendorAccountId','purchaserOverrideId','defaultProjectId','defaultTrade','spendingCategoryId','spendingCategoryOrigin','itemizationExpectation','orderId','displayLabel','date','statedTotal','notes']::text[] FROM "Purchase" r
 UNION ALL
-SELECT 'expense', 'Expense', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=p.id AND a."deletedAt" IS NULL),p.id::text) FROM "Purchase" p WHERE p.id=r."purchaseId"),r.id::text), r.id, (to_jsonb(r)-'costMinor')||jsonb_build_object('cost',r."costMinor"::text), ARRAY['name','cost','date','lineKind','lineBasis','costType','trade','url','notes','future','projectId','productId','productQuantity','purchaseId','spendingCategoryId','economicRole','bookingTransactionCode']::text[] FROM "Expense" r
+SELECT 'expense', 'Expense', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=p.id AND a."deletedAt" IS NULL),p.id::text) FROM "Purchase" p WHERE p.id=r."purchaseId"),r.id::text), r.id, (to_jsonb(r)-'costMinor')||jsonb_build_object('cost',coalesce(to_jsonb(r)->>'costMinor',((to_jsonb(r)->>'cost')::numeric*100)::text)), ARRAY['name','cost','date','lineKind','lineBasis','costType','trade','url','notes','future','projectId','productId','productQuantity','purchaseId','spendingCategoryId','economicRole','bookingTransactionCode']::text[] FROM "Expense" r
 UNION ALL
-SELECT 'FinancialTransactionAllocation', 'FinancialTransactionAllocation', 'purchaseEvent', r."transactionId"::text, r.id, to_jsonb(r), ARRAY['transactionId','purchaseId','amountMinor','confirmsMerchant']::text[] FROM "FinancialTransactionAllocation" r
+SELECT 'FinancialTransactionAllocation', 'FinancialTransactionAllocation', 'purchaseEvent', r."transactionId"::text, r.id, (to_jsonb(r)-'amountMinor')||jsonb_build_object('amountMinor',r."amountMinor"::text), ARRAY['transactionId','purchaseId','amountMinor','confirmsMerchant']::text[] FROM "FinancialTransactionAllocation" r
 UNION ALL
 SELECT 'ExpenseAttribution', 'ExpenseAttribution', 'purchaseEvent', coalesce((SELECT coalesce((SELECT min(a."transactionId"::text) FROM "FinancialTransactionAllocation" a WHERE a."purchaseId"=e."purchaseId" AND a."deletedAt" IS NULL),e."purchaseId"::text,e.id::text) FROM "Expense" e WHERE e.id=r."expenseId"),r.id::text), r.id, to_jsonb(r), ARRAY['expenseId','role','ledgerPartyId','weight']::text[] FROM "ExpenseAttribution" r
 UNION ALL
@@ -68,9 +68,9 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
    AND (a.changes ? f.field OR a.action='create') ORDER BY a."createdAt" DESC,a.id DESC LIMIT 1) a ON true
 ), source_answers AS (
  SELECT 'AiEvaluation'::text source_table, e.id, to_jsonb(e) legacy, e.feature, e.provenance->>'model' model,
- coalesce(e.provenance->>'promptVersion','legacy:unknown') prompt_version, e."createdAt" created_at, e."runId" run_id,
- e.result result, CASE WHEN e.result IS NOT NULL THEN 'answered' WHEN e."leaseToken" IS NOT NULL OR e.attempts>0 THEN 'unknown' ELSE 'queued' END state,
- e.state IN ('cancelled','obsolete','failed','completed','blocked') cancelled, coalesce(e."runAt",e."createdAt") available_at,
+ coalesce(e.provenance->>'promptVersion',(SELECT d->>'promptVersion' FROM jsonb_array_elements(coalesce(e.provenance->'dependencies','[]'::jsonb)) d WHERE d->>'feature'=e.feature LIMIT 1),'legacy:unknown') prompt_version, e."createdAt" created_at, e."runId" run_id,
+ e.result result, CASE WHEN e.result IS NOT NULL THEN 'answered' WHEN e."leaseToken" IS NOT NULL OR e.attempts>0 OR e.state IN ('result_ready','completed') THEN 'unknown' ELSE 'queued' END state,
+ e.state IN ('cancelled','obsolete','failed','completed') cancelled, coalesce(e."runAt",e."createdAt") available_at,
  e.attempts, e.error, e.target target
  FROM "AiEvaluation" e
  UNION ALL
@@ -94,7 +94,7 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  UNION ALL
  SELECT 'manualEntry',entity||':'||id,
  jsonb_build_object('id',md5('cutover:'||entity||':'||id)::uuid,'entity',entity,'userId','legacy:unknown',
- 'payload',jsonb_build_object('table',table_name,'naturalKey','legacy:'||id,'values',payload,'acceptedScope',jsonb_build_object('kind',scope_kind,'key',scope_key)))
+ 'payload',jsonb_build_object('table',table_name,'naturalKey','legacy:'||id,'values',CASE WHEN cardinality(fields)>0 THEN (SELECT jsonb_object_agg(f,payload->f) FROM unnest(fields) f) ELSE payload END,'legacy',payload,'acceptedScope',jsonb_build_object('kind',scope_kind,'key',scope_key)))
  FROM records
  UNION ALL
  SELECT 'binding',entity||':'||id,jsonb_build_object('factKind','manualEntry','factId',md5('cutover:'||entity||':'||id)::uuid,'basis','baseline','eventKey',id,'scopeKind',scope_kind,'scopeKey',scope_key) FROM records
@@ -116,7 +116,7 @@ SELECT 'shipment', 'Shipment', 'shipment', r.id::text, r.id, to_jsonb(r), ARRAY[
  UNION ALL
  SELECT 'ask',source_table||':'||id,jsonb_build_object('id',id,'inputHash',hash,'feature','legacy:'||feature,'producer','model','promptVersion',prompt_version,
  'input',jsonb_build_object('legacy',legacy,'sourceTable',source_table),'state',state,'cancelledAt',CASE WHEN cancelled THEN legacy->'updatedAt' END,
- 'availableAt',available_at,'attempts',attempts,'maxAttempts',greatest(3,attempts+1),'lastError',error,'createdAt',created_at,'executor','legacy') FROM imports
+ 'availableAt',available_at,'attempts',attempts,'maxAttempts',greatest(3,attempts+1),'lastError',error,'waitCause',CASE WHEN legacy->>'waitCause' IN ('funding','provider_capacity','in_flight','rate_limit','device') THEN legacy->>'waitCause' END,'createdAt',created_at,'executor','legacy') FROM imports
  UNION ALL
  SELECT 'answer',source_table||':'||id,jsonb_build_object('inputHash',hash,'feature','legacy:'||feature,'producer','model','promptVersion',prompt_version,
  'output',jsonb_build_object('result',result,'legacy',legacy,'sourceTable',source_table),'model',model,'askId',id,'runId',run_id,'createdAt',created_at) FROM imports WHERE result IS NOT NULL
@@ -182,8 +182,8 @@ CROSS JOIN LATERAL jsonb_populate_record(NULL::"Decision",e.row) r
 WHERE e.mapping='decision'
 ON CONFLICT DO NOTHING;
 --> statement-breakpoint
-INSERT INTO "Ask" ("id","inputHash","feature","producer","promptVersion","input","state","cancelledAt","availableAt","attempts","maxAttempts","lastError","createdAt","executor")
-SELECT r."id",r."inputHash",r."feature",r."producer",r."promptVersion",r."input",r."state",r."cancelledAt",r."availableAt",r."attempts",r."maxAttempts",r."lastError",r."createdAt",r."executor" FROM cutover_expected e
+INSERT INTO "Ask" ("id","inputHash","feature","producer","promptVersion","input","state","cancelledAt","availableAt","attempts","maxAttempts","lastError","waitCause","createdAt","executor")
+SELECT r."id",r."inputHash",r."feature",r."producer",r."promptVersion",r."input",r."state",r."cancelledAt",r."availableAt",r."attempts",r."maxAttempts",r."lastError",r."waitCause",r."createdAt",r."executor" FROM cutover_expected e
 CROSS JOIN LATERAL jsonb_populate_record(NULL::"Ask",e.row) r
 WHERE e.mapping='ask'
 ON CONFLICT DO NOTHING;
