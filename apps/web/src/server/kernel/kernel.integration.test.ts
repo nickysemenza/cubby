@@ -12,6 +12,7 @@ import { z } from "zod";
 
 import { insertFieldsFixture as insertWithShortcode } from "~/server/ai/fields/fields.fixtures";
 import type { Database } from "~/server/db/database";
+import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { manualEntry, evidenceBinding, drift } from "~/server/db/kernel-schema";
 import { registerOwnedColumns } from "~/server/db/owned-columns";
@@ -2246,9 +2247,14 @@ describe("evidence-facts kernel", () => {
   });
 
   it("refreshes gaps and dependencies when a version sweep leaves records unchanged", async () => {
-    const seller = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic rules-only input",
-    });
+    const sellers = [];
+    for (let index = 0; index < 20; index++)
+      sellers.push(
+        await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic rules-only input ${index}`,
+        }),
+      );
+    const seller = sellers[0]!;
     const scope = { kind: "fixture.ruleMetadata", key: seller.id };
     const module = (version: number) =>
       defineModule({
@@ -2274,13 +2280,21 @@ describe("evidence-facts kernel", () => {
     const first = createKernel([module(1)]);
     await first.emitWrites(ctx.db, {
       table: vendor,
-      ids: [seller.id],
+      ids: sellers.map((row) => row.id),
       columns: ["name"],
-      discovers: [scope],
+      discovers: sellers.map((row) => ({ kind: scope.kind, key: row.id })),
     });
     await settle(first);
     const next = createKernel([module(2)]);
-    await settle(next);
+    const statements = await withDatabaseOperationMetrics(async (metrics) => {
+      await settle(next);
+      return metrics.queryCountByPhase.apply;
+    });
+    console.log(
+      "version-sweep-clean-page",
+      JSON.stringify({ scopes: sellers.length, statements }),
+    );
+    expect(statements).toBeLessThanOrEqual(5);
     const state = await repositoryQueries(ctx.db).execute<{
       version: number;
       stage: string;
@@ -2305,14 +2319,29 @@ describe("evidence-facts kernel", () => {
 
   it("turns a version change alone into a Drift proposal, not a record change", async () => {
     const { kernel } = kernelWith();
-    await kernel.append(ctx.db, [
-      charge("ORD-F", 1250),
-      receipt("ORD-F", "Synthetic Grocer"),
-    ]);
+    const orders = [
+      "ORD-F",
+      ...Array.from({ length: 19 }, (_, index) => `ORD-F-${index}`),
+    ];
+    await kernel.append(
+      ctx.db,
+      orders.flatMap((order) => [
+        charge(order, 1250),
+        receipt(order, "Synthetic Grocer"),
+      ]),
+    );
     await settle(kernel);
 
     const { kernel: next } = kernelWith({ purchaseVersion: 2 });
-    await settle(next);
+    const statements = await withDatabaseOperationMetrics(async (metrics) => {
+      await settle(next);
+      return metrics.queryCountByPhase.apply;
+    });
+    console.log(
+      "version-sweep-proposal-page",
+      JSON.stringify({ scopes: orders.length, statements }),
+    );
+    expect(statements).toBeLessThanOrEqual(2);
 
     const [stored] = await purchases(ctx.db);
     expect(stored?.merchant).toBe("Synthetic Grocer");
@@ -2321,7 +2350,9 @@ describe("evidence-facts kernel", () => {
       await repositoryQueries(ctx.db).execute<{
         proposalHash: string;
         scopeKey: string;
-      }>(sql`SELECT "proposalHash", "scopeKey" FROM "Drift"`)
+      }>(
+        sql`SELECT "proposalHash", "scopeKey" FROM "Drift" ORDER BY "scopeKey"`,
+      )
     ).rows;
     expect(proposal?.scopeKey).toBe("ORD-F");
 

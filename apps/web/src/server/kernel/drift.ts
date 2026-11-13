@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
+import { withDatabaseOperationPhase } from "~/server/db/db-observability";
 import { drift } from "~/server/db/kernel-schema";
 import {
   repositoryQueries,
@@ -97,51 +98,92 @@ const stale = (reconciler: Reconciler) => sql`
     WHERE p."scopeKind" = s."scopeKind" AND p."scopeKey" = s."scopeKey"
       AND p.rules = ${reconciler.rules})`;
 
-/** Advance a scope's rules, or write its proposal. */
+/** Fence one page's input revisions, then publish metadata and proposals as sets. */
 async function proposeOrAdvance(
   q: Q,
-  computed: Computed,
-): Promise<"advanced" | "proposed" | "skipped"> {
-  const { scope, reconciler } = computed;
-  if (computed.error !== null || !computed.desired) return "skipped";
-  const diff = difference(computed, {
-    releaseBaseline: true,
+  computed: readonly Computed[],
+): Promise<void> {
+  const plans = computed.flatMap((entry) => {
+    if (entry.error !== null || !entry.desired) return [];
+    const diff = difference(entry, { releaseBaseline: true });
+    return [
+      {
+        computed: entry,
+        diff,
+        clean:
+          semanticallyEmpty(diff) &&
+          !entry.missing.length &&
+          !entry.desired.disagreements.length,
+      },
+    ];
   });
-  if (
-    semanticallyEmpty(diff) &&
-    !computed.missing.length &&
-    !computed.desired.disagreements.length
-  ) {
-    const keys = [...computed.keys.keys()].sort();
-    const revisions = await lockKeyRevs(q, keys);
-    if (keys.some((key) => revisions.get(key) !== computed.keys.get(key)))
-      return "skipped";
-    const gaps = computed.desired.gaps;
-    const advanced = await q.execute<{ key: string }>(sql`
-      UPDATE "ScopeState" SET version = ${reconciler.version}, rules = ${reconciler.rules},
-        gaps = ${JSON.stringify(gaps)}::jsonb, inputs = ${JSON.stringify(usedInputs(computed))}::jsonb,
-        stage = ${resolveStage({ ended: false, stuck: false, working: false, gaps })},
-        "nextActor" = ${nextActor(gaps)}, "firstGap" = ${gaps[0]?.input ?? null},
-        "inputsHash" = ${computed.inputsHash}, "durationMs" = ${Math.round(computed.durationMs)},
+  const keys = [
+    ...new Set(plans.flatMap((plan) => [...plan.computed.keys.keys()])),
+  ].sort();
+  const revisions = await lockKeyRevs(q, keys);
+  const fenced = plans.filter((plan) =>
+    [...plan.computed.keys].every(([key, rev]) => revisions.get(key) === rev),
+  );
+  const clean = fenced
+    .filter((plan) => plan.clean)
+    .map(({ computed: entry }) => {
+      const gaps = entry.desired!.gaps;
+      return {
+        kind: entry.scope.kind,
+        key: entry.scope.key,
+        version: entry.reconciler.version,
+        rules: entry.reconciler.rules,
+        gaps,
+        inputs: usedInputs(entry),
+        stage: resolveStage({
+          ended: false,
+          stuck: false,
+          working: false,
+          gaps,
+        }),
+        nextActor: nextActor(gaps),
+        firstGap: gaps[0]?.input ?? null,
+        inputsHash: entry.inputsHash,
+        durationMs: Math.round(entry.durationMs),
+        keys: [...entry.keys.keys()],
+      };
+    });
+  if (clean.length) {
+    const advanced = await q.execute<{ kind: string; key: string }>(sql`
+      UPDATE "ScopeState" s SET version = incoming.version, rules = incoming.rules,
+        gaps = incoming.gaps, inputs = incoming.inputs, stage = incoming.stage,
+        "nextActor" = incoming."nextActor", "firstGap" = incoming."firstGap",
+        "inputsHash" = incoming."inputsHash", "durationMs" = incoming."durationMs",
         "reconciledAt" = now(), "errorClass" = NULL, error = NULL
-      WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}
-        AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = ${scope.kind} AND d."scopeKey" = ${scope.key})
-      RETURNING "scopeKey" AS key`);
-    if (!advanced.rows.length) return "skipped";
-    await q.execute(
-      sql`DELETE FROM "ScopeDep" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`,
+      FROM jsonb_to_recordset(${JSON.stringify(clean)}::jsonb) AS incoming(
+        kind text, key text, version int, rules text, gaps jsonb, inputs jsonb, stage text,
+        "nextActor" text, "firstGap" text, "inputsHash" text, "durationMs" int)
+      WHERE s."scopeKind" = incoming.kind AND s."scopeKey" = incoming.key
+        AND NOT EXISTS (SELECT 1 FROM "ScopeDirty" d WHERE d."scopeKind" = s."scopeKind" AND d."scopeKey" = s."scopeKey")
+      RETURNING s."scopeKind" AS kind, s."scopeKey" AS key`);
+    const advancedIds = new Set(
+      advanced.rows.map((row) => JSON.stringify([row.kind, row.key])),
     );
-    if (keys.length)
-      await q.execute(sql`
-      INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
-      SELECT ${scope.kind}, ${scope.key}, value FROM jsonb_array_elements_text(${JSON.stringify(keys)}::jsonb)`);
-    await q.execute(
-      sql`DELETE FROM "Drift" WHERE "scopeKind" = ${scope.kind} AND "scopeKey" = ${scope.key}`,
+    const dependencies = clean.filter((row) =>
+      advancedIds.has(JSON.stringify([row.kind, row.key])),
     );
-    return "advanced";
+    if (dependencies.length) {
+      await q.execute(sql`DELETE FROM "ScopeDep" d
+        USING jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text)
+        WHERE d."scopeKind" = incoming.kind AND d."scopeKey" = incoming.key`);
+      await q.execute(sql`INSERT INTO "ScopeDep" ("scopeKind", "scopeKey", key)
+        SELECT incoming.kind, incoming.key, dependency.value
+        FROM jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text, keys jsonb)
+        CROSS JOIN LATERAL jsonb_array_elements_text(incoming.keys) dependency(value)`);
+      await q.execute(sql`DELETE FROM "Drift" d
+        USING jsonb_to_recordset(${JSON.stringify(dependencies)}::jsonb) AS incoming(kind text, key text)
+        WHERE d."scopeKind" = incoming.kind AND d."scopeKey" = incoming.key`);
+    }
   }
-  await recordDrift(q, computed, diff);
-  return "proposed";
+  await recordDrifts(
+    q,
+    fenced.filter((plan) => !plan.clean),
+  );
 }
 
 /** Store exact proposals in one table write; no producer calls are owed. */
@@ -184,14 +226,6 @@ export async function recordDrifts(
   );
 }
 
-async function recordDrift(
-  q: Q,
-  computed: Computed,
-  diff: Difference,
-): Promise<void> {
-  await recordDrifts(q, [{ computed, diff }]);
-}
-
 /** The kernel's own pass: visit every scope derived under older rules. */
 export function versionSweepPass(registry: () => KernelRegistry): Pass {
   return definePass({
@@ -224,8 +258,9 @@ export function versionSweepPass(registry: () => KernelRegistry): Pass {
           { db, locked: false, hideBaseline: true },
         );
         await claim.fenced(async (tx) => {
-          for (const scope of computed)
-            await proposeOrAdvance(repositoryQueries(tx), scope);
+          await withDatabaseOperationPhase("apply", async () => {
+            await proposeOrAdvance(repositoryQueries(tx), computed);
+          });
         });
         return {
           cursor: { kind: reconciler.scope, after: rows.rows.at(-1)!.key },
@@ -346,7 +381,7 @@ export async function approveDrift(
       claimed.token,
     );
     await repositoryTransactionDatabase(db, (tx) =>
-      proposeOrAdvance(repositoryQueries(tx), computed!),
+      proposeOrAdvance(repositoryQueries(tx), [computed!]),
     );
     return "stale";
   }
