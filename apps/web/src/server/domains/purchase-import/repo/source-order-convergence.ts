@@ -1,14 +1,8 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import {
-  parseShortcodeFor,
-  type ExpenseId,
-  type PurchaseId,
-} from "@cubby/schemas/identifiers";
-import { cents } from "@cubby/shared";
+import { parseShortcodeFor, type PurchaseId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { expenseCostDollarsSql } from "~/server/db/computed/expense-aggregate-sql";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import {
   databaseForTransaction,
@@ -27,38 +21,17 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { deleteExpensesWithPurchaseEffects } from "~/server/domains/expense/repo/crud";
+import { duplicateSourceOrderRefusal } from "~/server/domains/purchase-import/policy/duplicate-source-order";
+import {
+  Line,
+  pairLines,
+} from "~/server/domains/purchase-import/policy/duplicate-source-order";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { normalizeOrderKey } from "./order-identity";
-
-type Line = {
-  id: ExpenseId;
-  shortcode: string;
-  title: string;
-  amount: number | null;
-  lineKind: string;
-  productId: string | null;
-  projectId: string | null;
-  productQuantity: number | null;
-  attribution: string;
-  /** Booking facts a retired line hands to its survivor when the survivor has none. */
-  carried: Record<CarriedField, string | null>;
-};
-
-const CARRIED_FIELDS = [
-  "bookingTransactionCode",
-  "spendingCategoryId",
-  "trade",
-] as const;
-type CarriedField = (typeof CARRIED_FIELDS)[number];
-
-const titleOf = (line: Line) =>
-  line.title.trim().replace(/\s+/gu, " ").toLowerCase();
-const centsOf = (line: Line) =>
-  line.amount === null ? null : cents(line.amount);
 
 async function readLines(
   tx: DrizzleTransaction,
@@ -69,7 +42,7 @@ async function readLines(
       id: expense.id,
       shortcode: expense.shortcode,
       title: expense.name,
-      amount: expenseCostDollarsSql(),
+      amountMinor: expense.cost,
       lineKind: expense.lineKind,
       productId: expense.productId,
       projectId: expense.projectId,
@@ -82,11 +55,6 @@ async function readLines(
     .from(expense)
     .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
     .for("update");
-  if (rows.some((row) => row.economicRole !== "vendor"))
-    throw createAppError(
-      "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-      "Only vendor lines converge; reimbursement lines need their own review.",
-    );
   const attributions = rows.length
     ? await tx
         .select({
@@ -110,7 +78,8 @@ async function readLines(
     id: row.id,
     shortcode: row.shortcode,
     title: row.title,
-    amount: row.amount,
+    amountMinor: row.amountMinor,
+    economicRole: row.economicRole,
     lineKind: row.lineKind,
     productId: row.productId,
     projectId: row.projectId,
@@ -129,80 +98,17 @@ async function readLines(
   }));
 }
 
-type Pair = {
-  from: Line;
-  to: Line;
-  carry: Partial<Record<CarriedField, string>>;
-};
-
 /** One duplicate line onto one survivor line, or why that pairing would lose a fact. */
-function pairOne(
-  line: Line,
-  to: Line,
-  survivor: readonly Line[],
-): Pair | { error: string } {
-  const keeps = (from: unknown, into: unknown) =>
-    from === null || from === into;
-  if (
-    !keeps(line.productId, to.productId) ||
-    !keeps(line.projectId, to.projectId) ||
-    !keeps(line.productQuantity, to.productQuantity) ||
-    (line.attribution !== "[]" && line.attribution !== to.attribution)
-  )
-    return {
-      error: `The duplicate line "${line.title}" carries a Product, Project, quantity or attribution the survivor's line does not.`,
-    };
-  const carry: Partial<Record<CarriedField, string>> = {};
-  for (const field of CARRIED_FIELDS) {
-    const value = line.carried[field];
-    if (value === null || value === to.carried[field]) continue;
-    if (to.carried[field] !== null)
-      return {
-        error: `The duplicate line "${line.title}" and its survivor line disagree on ${field}.`,
-      };
-    carry[field] = value;
-  }
-  // A booking code another survivor line already holds would book one charge twice.
-  if (
-    carry.bookingTransactionCode &&
-    survivor.some(
-      (other) =>
-        other.id !== to.id &&
-        other.carried.bookingTransactionCode === carry.bookingTransactionCode,
-    )
-  )
-    return {
-      error: `The duplicate line "${line.title}" carries a booking another survivor line already holds.`,
-    };
-  // Only principal lines carry a spending category.
-  if (carry.spendingCategoryId && to.lineKind !== "principal")
-    return {
-      error: `The duplicate line "${line.title}" carries a spending category its survivor's ${to.lineKind} line cannot hold.`,
-    };
-  return { from: line, to, carry };
-}
 
 /**
  * Booking-fact matches outrank title matches, which outrank role matches,
  * across a whole assignment: each tier's weight exceeds the most any lower
  * tier can add for a group of at most PAIRING_GROUP_MAX lines.
  */
-const pairScore = (pair: Pair) =>
-  (JSON.stringify(pair.from.carried) === JSON.stringify(pair.to.carried)
-    ? 100
-    : 0) +
-  (titleOf(pair.from) === titleOf(pair.to) ? 10 : 0) +
-  (pair.from.lineKind === pair.to.lineKind ? 1 : 0);
 
 /** The best complete assignment found so far for one amount. */
-type PairingSearch = {
-  best: { score: number; pairs: Pair[] } | null;
-  tied: boolean;
-  firstError: string | null;
-};
 
 /** Most lines of one amount the exhaustive assignment search accepts. */
-const PAIRING_GROUP_MAX = 8;
 
 /**
  * Pair every duplicate line with one survivor line of the same amount: money
@@ -212,68 +118,6 @@ const PAIRING_GROUP_MAX = 8;
  * refuse, so row order never decides which line a source binds to. The
  * survivor keeps its own description.
  */
-function pairLines(duplicate: Line[], survivor: Line[]) {
-  if (duplicate.length !== survivor.length)
-    return { error: "The two Purchases hold different numbers of lines." };
-  const groups = new Map<string, { from: Line[]; to: Line[] }>();
-  const group = (line: Line) => {
-    const key = String(centsOf(line));
-    const found = groups.get(key) ?? { from: [], to: [] };
-    groups.set(key, found);
-    return found;
-  };
-  for (const line of duplicate) group(line).from.push(line);
-  for (const line of survivor) group(line).to.push(line);
-  const pairs: Pair[] = [];
-  for (const { from, to } of groups.values()) {
-    if (from.length !== to.length)
-      return {
-        error: `The duplicate line "${(from[0] ?? to[0])!.title}" has no survivor line of the same amount.`,
-      };
-    if (from.length > PAIRING_GROUP_MAX)
-      return {
-        error: `More than ${PAIRING_GROUP_MAX} lines share one amount; pair them by review.`,
-      };
-    const state: PairingSearch = { best: null, tied: false, firstError: null };
-    const used = new Set<number>();
-    const chosen: Pair[] = [];
-    const search = (index: number, score: number) => {
-      if (index === from.length) {
-        if (!state.best || score > state.best.score) {
-          state.best = { score, pairs: [...chosen] };
-          state.tied = false;
-        } else if (score === state.best.score) state.tied = true;
-        return;
-      }
-      for (const [position, candidate] of to.entries()) {
-        if (used.has(position)) continue;
-        const pair = pairOne(from[index]!, candidate, survivor);
-        if ("error" in pair) {
-          state.firstError ??= pair.error;
-          continue;
-        }
-        used.add(position);
-        chosen.push(pair);
-        search(index + 1, score + pairScore(pair));
-        chosen.pop();
-        used.delete(position);
-      }
-    };
-    search(0, 0);
-    const found = state.best;
-    if (!found)
-      return {
-        error:
-          state.firstError ?? "The duplicate lines do not match the survivor.",
-      };
-    if (state.tied)
-      return {
-        error: `Lines of one amount ("${from[0]!.title}") pair equally well more than one way; converge them by review.`,
-      };
-    pairs.push(...found.pairs);
-  }
-  return { pairs };
-}
 
 /**
  * One order imported twice from two source documents (a pre-payment notice
@@ -359,33 +203,7 @@ export async function convergeDuplicateSourceOrder(
         "PURCHASE_NOT_FOUND",
         "Both Purchases must be live.",
       );
-    if (survivor.vendorId !== duplicate.vendorId)
-      throw createAppError(
-        "PURCHASE_MERGE_VENDOR_MISMATCH",
-        "The two Purchases belong to different Vendors.",
-      );
-    if (
-      survivor.vendorAccountId !== null &&
-      duplicate.vendorAccountId !== null &&
-      survivor.vendorAccountId !== duplicate.vendorAccountId
-    )
-      throw createAppError(
-        "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-        "The two Purchases belong to different vendor accounts.",
-      );
-    if (
-      survivor.orderId !== null &&
-      duplicate.orderId !== null &&
-      normalizeOrderKey(survivor.orderId) !==
-        normalizeOrderKey(duplicate.orderId)
-    )
-      throw createAppError(
-        "PURCHASE_MERGE_ORDER_COLLISION",
-        `The Purchases carry different order ids (${survivor.orderId}, ${duplicate.orderId}).`,
-      );
-    // Unless both sides carry the same order id, only one shared Email thread
-    // and the same date tie the two documents to one order; two identical rides
-    // do not.
+    let sharesThread = false;
     if (survivor.orderId === null || duplicate.orderId === null) {
       const threads = await tx
         .selectDistinct({
@@ -415,27 +233,16 @@ export async function convergeDuplicateSourceOrder(
           .filter((row) => row.purchaseId === survivorId)
           .map((row) => row.thread),
       );
-      const sharesThread = threads.some(
+      sharesThread = threads.some(
         (row) =>
           row.purchaseId === duplicateId && survivorThreads.has(row.thread),
       );
-      if (!sharesThread || survivor.date !== duplicate.date)
-        throw createAppError(
-          "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-          "The Purchases share no order id, and their source Emails share no thread and date; they may be two orders.",
-        );
     }
     const sourceOrders = await tx
       .select({ id: importSourceOrder.id })
       .from(importSourceOrder)
       .where(eq(importSourceOrder.purchaseId, duplicateId))
       .for("update");
-    if (sourceOrders.length === 0)
-      throw createAppError(
-        "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-        "The duplicate Purchase has no accepted source order to move.",
-      );
-
     const duplicateLines = await readLines(tx, duplicateId);
     const survivorLines = await readLines(tx, survivorId);
     const claimed = duplicateLines.length
@@ -453,11 +260,22 @@ export async function convergeDuplicateSourceOrder(
             ),
           )
       : [];
-    if (claimed.length)
-      throw createAppError(
-        "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-        "A duplicate line carries financial source claims; correct its booking instead.",
-      );
+    const refusal = duplicateSourceOrderRefusal({
+      survivor,
+      duplicate,
+      survivorOrderKey:
+        survivor.orderId === null ? null : normalizeOrderKey(survivor.orderId),
+      duplicateOrderKey:
+        duplicate.orderId === null
+          ? null
+          : normalizeOrderKey(duplicate.orderId),
+      sharesThread,
+      hasSourceOrder: sourceOrders.length > 0,
+      hasClaimedLine: claimed.length > 0,
+      duplicateLines,
+      survivorLines,
+    });
+    if (refusal) throw createAppError(refusal.code, refusal.reason);
     const paired = pairLines(duplicateLines, survivorLines);
     if (!paired.pairs)
       throw createAppError(

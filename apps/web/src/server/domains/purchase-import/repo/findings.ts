@@ -1,6 +1,5 @@
 import { auditEntitySchema } from "@cubby/schemas/audit";
 import type { ActorContext } from "@cubby/schemas/context";
-import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
@@ -19,7 +18,6 @@ import {
   type ProposedImportFix,
   type RunFindingRoutingKind,
 } from "@cubby/schemas/purchase-import";
-import { tradeSchema } from "@cubby/schemas/task-fields";
 import {
   cents,
   wholeCentToMinor,
@@ -58,6 +56,7 @@ import {
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import { decideLineWrite } from "~/server/domains/purchase-import/policy/import-lines";
+import { replacementLineFields } from "~/server/domains/purchase-import/policy/replacement-lines";
 import { findingHasExpired } from "~/server/domains/run/repo/finding-expiry";
 import {
   publishRunFinding,
@@ -328,9 +327,6 @@ async function applyFix(
   });
 }
 
-const principalOnly = <T>(lineKind: string, value: T | null): T | null =>
-  lineKind === "principal" ? value : null;
-
 async function applyAggregateReplacement(
   tx: DrizzleTransaction,
   fix: Extract<ProposedImportFix, { kind: "replace_aggregate_line" }>,
@@ -400,37 +396,18 @@ async function applyAggregateReplacement(
     const identity = fix.reviewedLineIdentities[lineIndex]!;
     const productId = await products.resolve(line, identity);
     const quantity = receiptProductQuantity(productId, line, identity);
-    assertClassificationPolicies("expense", {
+    const { costMinor, ...fields } = replacementLineFields({
+      aggregate,
+      title: line.title,
+      seller: line.seller,
+      costMinor: nullableWholeCentToMinor(line.amount),
       lineKind: identity.lineKind,
-      lineBasis: "item_line",
-      productId,
-      projectId: principalOnly(identity.lineKind, aggregate.projectId),
-      spendingCategoryId: principalOnly(
-        identity.lineKind,
-        aggregate.spendingCategoryId,
-      ),
     });
+    assertClassificationPolicies("expense", { ...fields, productId });
     const row = await insertWithShortcode(tx, "expense", {
+      ...fields,
+      cost: costMinor,
       purchaseId,
-      name: line.title,
-      notes:
-        [aggregate.notes, line.seller ? `Seller: ${line.seller}` : null]
-          .filter(Boolean)
-          .join("\n") || null,
-      cost: nullableWholeCentToMinor(line.amount),
-      date: aggregate.date,
-      future: aggregate.future,
-      lineKind: identity.lineKind,
-      lineBasis: "item_line",
-      economicRole: "vendor",
-      costType: costTypeSchema.parse(aggregate.costType),
-      trade: tradeSchema.nullable().parse(aggregate.trade),
-      projectId: principalOnly(identity.lineKind, aggregate.projectId),
-      spendingCategoryId: principalOnly(
-        identity.lineKind,
-        aggregate.spendingCategoryId,
-      ),
-      bookingTransactionCode: aggregate.bookingTransactionCode,
       productId,
       productQuantity: quantity,
     });

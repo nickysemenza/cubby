@@ -43,6 +43,10 @@ import {
   paymentFundingPartySql,
 } from "~/server/domains/financial-account/repo/funding-sql";
 import { digestValue } from "~/server/domains/financial-transaction/policy/booking-fingerprint";
+import {
+  convergenceAccountAvailable,
+  financialConvergenceRefusal,
+} from "~/server/domains/financial-transaction/policy/financial-convergence";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import {
   commitFinancialBooking,
@@ -408,51 +412,52 @@ async function runFinancialConvergence(
         )
         .for("update")
         .then((rows) => rows.map(transactionDollars));
-      if (
-        !row ||
-        row.status === "void" ||
-        row.status === "expected" ||
-        row.kind !== "purchase" ||
-        row.amount <= 0 ||
-        row.ledgerTransferId
-      )
-        return review(
-          "Automatic booking requires observed purchase payment evidence. Transfers, repayments, refunds, reimbursements and incoming payments retain their meaning.",
-        );
+      const paymentRefusal = financialConvergenceRefusal({
+        kind: "payment",
+        transaction: row
+          ? { ...row, amountMinor: moneyToMinor(row.amount) }
+          : null,
+      });
+      if (paymentRefusal) return review(paymentRefusal);
+      if (!row) return review(paymentRefusal!);
       // The funder on the charge date (a lag-safe posting date when only that
       // is known) is the household or the member, and the member owns the
       // account or holds the card: a household-funded card owned by another
       // member's party is still its cardholder's to settle.
       const window = paymentDateWindowSql(sql`payment`);
-      const accountAuthority = await tx.execute<{ authorized: boolean }>(sql`
-      SELECT EXISTS (
-        SELECT 1 FROM "FinancialAccount" a
-        JOIN "FinancialTransaction" payment ON payment.id = ${row.id} AND ${notDeleted("payment")}
-        JOIN "LedgerParty" funder ON funder.id = ${paymentFundingPartySql(sql`a`, sql`payment`)} AND ${notDeleted("funder")}
-        LEFT JOIN "LedgerParty" owner ON owner.id = a."ledgerPartyId" AND ${notDeleted("owner")}
-        LEFT JOIN "LedgerParty" member ON member."userId" = ${actor.userId} AND member.kind = ${ledgerPartyKind.enum.member} AND ${notDeleted("member")}
-        WHERE a.id = ${row.accountId} AND ${notDeleted("a")}
-          AND (funder.kind = ${ledgerPartyKind.enum.household} OR funder.id = member.id)
-          AND (
-            owner.kind = ${ledgerPartyKind.enum.household}
-            OR owner.id = member.id
-            OR ${effectiveFieldSql("financialAccount", "primaryCardholderId", "a")} = member.id
-            OR EXISTS (
-              SELECT 1 FROM jsonb_array_elements(a."authorizedUsers") period
-              WHERE period->>'ledgerPartyId' = member.shortcode
-                AND (period->>'validFrom' IS NULL OR (period->>'validFrom')::date <= ${window.from})
-                AND (period->>'validTo' IS NULL OR ${window.to} <= (period->>'validTo')::date)
-            )
-          )
-      ) AS authorized`);
-      if (!accountAuthority.rows[0]?.authorized)
-        return review(
-          "The payment needs a dated funding account available to this member: the household or the member funds it on the charge date, and the member owns the account, is its primary cardholder, or is an authorized user then.",
-        );
+      const accountAuthority = await tx.execute<{
+        funderId: string | null;
+        funderKind: string | null;
+        ownerId: string | null;
+        ownerKind: string | null;
+        memberId: string | null;
+        memberCode: string | null;
+        primaryHolderId: string | null;
+        from: string | null;
+        to: string | null;
+        authorizedUsers: {
+          ledgerPartyId: string;
+          validFrom: string | null;
+          validTo: string | null;
+        }[];
+      }>(sql`SELECT funder.id AS "funderId",funder.kind AS "funderKind",owner.id AS "ownerId",owner.kind AS "ownerKind",member.id AS "memberId",member.shortcode AS "memberCode",${effectiveFieldSql("financialAccount", "primaryCardholderId", "a")} AS "primaryHolderId",${window.from}::text AS "from",${window.to}::text AS "to",a."authorizedUsers" AS "authorizedUsers"
+        FROM "FinancialAccount" a JOIN "FinancialTransaction" payment ON payment.id=${row.id} AND ${notDeleted("payment")}
+        JOIN "LedgerParty" funder ON funder.id=${paymentFundingPartySql(sql`a`, sql`payment`)} AND ${notDeleted("funder")}
+        LEFT JOIN "LedgerParty" owner ON owner.id=a."ledgerPartyId" AND ${notDeleted("owner")}
+        LEFT JOIN "LedgerParty" member ON member."userId"=${actor.userId} AND member.kind=${ledgerPartyKind.enum.member} AND ${notDeleted("member")}
+        WHERE a.id=${row.accountId} AND ${notDeleted("a")}`);
+      const authorityRefusal = financialConvergenceRefusal({
+        kind: "authority",
+        authorized: accountAuthority.rows.some(convergenceAccountAvailable),
+      });
+      if (authorityRefusal) return review(authorityRefusal);
       const refs =
         (await financialSourceRefsFor(tx, [row.id])).get(row.id) ?? [];
-      if (!refs.length)
-        return review("The payment has no stable source identity.");
+      const sourceRefusal = financialConvergenceRefusal({
+        kind: "source",
+        referenceCount: refs.length,
+      });
+      if (sourceRefusal) return review(sourceRefusal);
       const allocations = await tx
         .select()
         .from(financialTransactionAllocation)
@@ -465,13 +470,14 @@ async function runFinancialConvergence(
         .orderBy(financialTransactionAllocation.purchaseId)
         .for("update")
         .then((rows) => rows.map(allocationDollars));
-      if (
-        allocations.length > 1 ||
-        (allocations[0] && cents(allocations[0].amount) !== cents(row.amount))
-      )
-        return review(
-          "Split or incomplete accepted allocations require individual reconciliation.",
-        );
+      const allocationRefusal = financialConvergenceRefusal({
+        kind: "allocations",
+        amountMinor: moneyToMinor(row.amount),
+        allocations: allocations.map((allocation) => ({
+          amountMinor: moneyToMinor(allocation.amount),
+        })),
+      });
+      if (allocationRefusal) return review(allocationRefusal);
       let purchaseId = allocations[0]?.purchaseId ?? null;
       let vendorId: typeof vendor.$inferSelect | undefined;
       let eventRef: { source: string; externalId: string } | undefined;
@@ -488,10 +494,12 @@ async function runFinancialConvergence(
         eventRef = verified.eventRef;
         mailEvent = verified.mailEvent;
       }
-      if (!purchaseId && !vendorId)
-        return review(
-          "No accepted Purchase identity or verified genuine financial payment establishes a new order.",
-        );
+      const identityRefusal = financialConvergenceRefusal({
+        kind: "identity",
+        purchaseId,
+        vendorId: vendorId?.id ?? null,
+      });
+      if (identityRefusal) return review(identityRefusal);
       const target = purchaseId
         ? await tx.query.purchase.findFirst({
             where: {
@@ -503,13 +511,6 @@ async function runFinancialConvergence(
             },
           })
         : undefined;
-      if (
-        purchaseId &&
-        (!target || (vendorId && target.vendorId !== vendorId.id))
-      )
-        return review(
-          "The accepted Purchase is missing or conflicts with the verified Vendor.",
-        );
       const acceptedVendor = target?.vendorId
         ? await tx.query.vendor.findFirst({
             where: {
@@ -521,10 +522,15 @@ async function runFinancialConvergence(
             },
           })
         : undefined;
-      if (target && !acceptedVendor)
-        return review(
-          "Resolve the accepted Purchase's live Vendor before automatic booking.",
-        );
+      const targetRefusal = financialConvergenceRefusal({
+        kind: "target",
+        purchaseId,
+        targetVendorId: target?.vendorId ?? null,
+        verifiedVendorId: vendorId?.id ?? null,
+        hasTarget: Boolean(target),
+        hasAcceptedVendor: Boolean(acceptedVendor),
+      });
+      if (targetRefusal) return review(targetRefusal);
       if (target) {
         const conflicts = await findSettlementConflicts(tx, {
           accountId: row.accountId,
@@ -532,10 +538,11 @@ async function runFinancialConvergence(
           transactionDate: row.transactionDate,
           purchaseIds: [target.id],
         });
-        if (conflicts.has(target.id))
-          return review(
-            "This payment's account conflicts with the Purchase (another member's account, or not an account its payment evidence names); settle it by review.",
-          );
+        const conflictRefusal = financialConvergenceRefusal({
+          kind: "settlement",
+          conflicting: conflicts.has(target.id),
+        });
+        if (conflictRefusal) return review(conflictRefusal);
       }
       const verifiedTransactionId = row.id;
       const verifiedAccountId = row.accountId;
@@ -570,17 +577,22 @@ async function runFinancialConvergence(
           .onConflictDoNothing();
       }
       if (row.bookingDecisionFingerprint) {
-        if (
-          !target ||
-          !allocations.length ||
-          row.bookingDecisionFingerprint !==
-            `automatic:${await acceptedAutomaticFacts(txDb, input.transactionId)}` ||
-          !row.bookingExpenseFingerprint ||
-          row.bookingExpenseFingerprint !==
-            (await digestValue(
-              await loadFinancialBookingLineage(txDb, input.transactionId),
-            ))
-        )
+        const bookingRefusal = financialConvergenceRefusal({
+          kind: "booking",
+          hasTarget: Boolean(target),
+          allocationCount: allocations.length,
+          storedDecision: row.bookingDecisionFingerprint,
+          currentDecision: await acceptedAutomaticFacts(
+            txDb,
+            input.transactionId,
+          ),
+          storedLineage: row.bookingExpenseFingerprint,
+          currentLineage: await digestValue(
+            await loadFinancialBookingLineage(txDb, input.transactionId),
+          ),
+        });
+        if (bookingRefusal) return review(bookingRefusal);
+        if (!target)
           return review(
             "Accepted booking facts changed; reconcile the existing Expenses before another automatic write.",
           );
