@@ -150,6 +150,7 @@ export const receiptEvidence = defineEvidence({
 });
 
 export type FixtureHooks = {
+  merge?: (key: string) => { a: string; b: string; keepId?: string } | null;
   predicateReceipts?: boolean;
   linked?: boolean;
   authored?: boolean;
@@ -303,6 +304,15 @@ export function fixtureModule(hooks: FixtureHooks = {}) {
       return new Map(entries);
     },
     reconcile(input, c) {
+      const merge = hooks.merge?.(input.orderRef);
+      if (merge) {
+        for (const target of [purchaseWrites, expenseWrites, allocationWrites])
+          for (const key of c.existing(target)) c.retire(target, key, "keep");
+        c.merge(purchaseWrites, merge.a, merge.b, "decision", {
+          keepId: merge.keepId,
+        });
+        return c.done();
+      }
       for (const own of input.charges)
         c.bind({ kind: chargeEvidence.kind, id: own.id }, input.orderRef);
       const charge = newestFirst([...input.charges, ...input.bound])[0];

@@ -20,9 +20,9 @@ import { decision } from "~/server/db/kernel-schema";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   email,
-  emailReview,
   connectionCandidateEvidence,
 } from "~/server/db/retained-tables";
+import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import {
   assertEmailEvidenceScope,
   withEmailEvidenceWrite,
@@ -42,16 +42,16 @@ const relevantReview = (input: ReviewSubject) => {
 
 function emailIntentSubjectSql(id: SQL, originalId: SQL) {
   return and(
-    inArray(emailReview.family, [
+    inArray(emailReviewsRead.family, [
       suggestionFamily.enum.email_relevance,
       suggestionFamily.enum.email_link,
     ]),
     or(
-      eq(emailReview.emailId, id),
+      eq(emailReviewsRead.emailId, id),
       and(
-        eq(emailReview.family, suggestionFamily.enum.email_link),
-        isNull(emailReview.emailId),
-        eq(emailReview.originalId, originalId),
+        eq(emailReviewsRead.family, suggestionFamily.enum.email_link),
+        isNull(emailReviewsRead.emailId),
+        eq(emailReviewsRead.originalId, originalId),
       ),
     ),
   );
@@ -60,9 +60,9 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
 /** Same retained-subject boundary used by admission before bounded pagination. */
 export function emailHasProtectingIntentSql(id: SQL, originalId: SQL) {
   const subject = emailIntentSubjectSql(id, originalId);
-  const kind = sql`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`;
-  return sql`(EXISTS (SELECT 1 FROM ${emailReview}
-    WHERE ${subject} AND ((${emailReview.authority} = ${"member"}
+  const kind = sql`${emailReviewsRead.metadata}->>${suggestionProducer.keyof().enum.kind}`;
+  return sql`(EXISTS (SELECT 1 FROM ${emailReviewsRead}
+    WHERE ${subject} AND ((${emailReviewsRead.authority} = ${"member"}
       AND (${kind} IS NULL OR NOT (${kind} = ANY(${textArrayParam(correctionAuthorityReceiptKinds.options)}))))
       OR ${kind} IN (${"email_resolution"}, ${"email_link"}))) OR EXISTS (
       SELECT 1 FROM ${decision} d JOIN ${connectionCandidateEvidence} e ON d.subject='connection/' || e."scopeKey"
@@ -91,17 +91,17 @@ export async function readEmailProtectingIntent(
     };
   const rows = await getDb(db)
     .select({
-      id: emailReview.id,
-      authority: emailReview.authority,
+      id: emailReviewsRead.id,
+      authority: emailReviewsRead.authority,
       kind: sql<
         string | null
-      >`${emailReview.metadata}->>${suggestionProducer.keyof().enum.kind}`,
-      family: emailReview.family,
-      subject: emailReview.subject,
+      >`${emailReviewsRead.metadata}->>${suggestionProducer.keyof().enum.kind}`,
+      family: emailReviewsRead.family,
+      subject: emailReviewsRead.subject,
     })
-    .from(emailReview)
+    .from(emailReviewsRead)
     .where(emailIntentSubjectSql(sql`${id}`, sql`${mail.originalId}`))
-    .orderBy(asc(emailReview.id));
+    .orderBy(asc(emailReviewsRead.id));
   const feedbackIds: string[] = [];
   for (const row of rows) {
     const command =

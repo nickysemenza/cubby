@@ -334,8 +334,6 @@ export const purchaseEvent = defineReconciler<Input>({
       retained(c);
       return c.done();
     }
-    const order = reconcileOrderPurchase(input, c);
-    if (order) return order;
     // Manual entries and the later order-evidence writer's reviewed record decisions
     // use the same ownership and precedence as statement-derived records.
     let seeds: {
@@ -400,6 +398,8 @@ export const purchaseEvent = defineReconciler<Input>({
       combined.set(key, { ...combined.get(key), ...seed });
     }
     seeds = [...combined.values()];
+    const order = reconcileOrderPurchase(input, c, seeds);
+    if (order) return order;
     if (seeds.length) {
       const acceptedTransaction = input.transactions.find(
         (row) => row.id === input.key && !row.deletedAt,

@@ -89,20 +89,21 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
       const parentIds = inputs.flatMap((values) =>
         "purchaseId" in values && typeof values.purchaseId === "string"
           ? [values.purchaseId]
-          : [],
+          : "expenseId" in values && typeof values.expenseId === "string"
+            ? [values.expenseId]
+            : [],
       );
-      const parents =
-        entity === "expense" && parentIds.length
-          ? await repositoryQueries(database)
-              .select()
-              .from(recordKey)
-              .where(
-                and(
-                  eq(recordKey.entity, "purchase"),
-                  inArray(recordKey.entityId, parentIds),
-                ),
-              )
-          : [];
+      const parents = parentIds.length
+        ? await repositoryQueries(database)
+            .select()
+            .from(recordKey)
+            .where(
+              and(
+                inArray(recordKey.entity, ["purchase", "expense"]),
+                inArray(recordKey.entityId, parentIds),
+              ),
+            )
+        : [];
       const entries = inputs.map((values) => {
         const id = crypto.randomUUID();
         return {
@@ -111,7 +112,10 @@ export async function createPurchaseEventRecords<K extends PurchaseEventTable>(
             ("purchaseId" in values && typeof values.purchaseId === "string"
               ? parents.find((parent) => parent.entityId === values.purchaseId)
                   ?.scopeKey
-              : null) ?? id,
+              : "expenseId" in values && typeof values.expenseId === "string"
+                ? parents.find((parent) => parent.entityId === values.expenseId)
+                    ?.scopeKey
+                : null) ?? id,
           naturalKey: `manual:${id}`,
           values: jsonValues(values),
         };

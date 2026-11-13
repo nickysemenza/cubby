@@ -9,6 +9,7 @@ import { financialTransactionKernelModule } from "~/server/domains/financial-tra
  */
 import { imageKernelModule } from "~/server/domains/image-processing/service/module";
 import { ledgerTransferKernelModule } from "~/server/domains/ledger-transfer/repo/transfer-pair";
+import { productIdentityKernelModule } from "~/server/domains/product/repo/match/product-pair-evidence";
 import { orderKernelModule } from "~/server/domains/purchase-import/service/order-kernel";
 import { runKernelModule } from "~/server/domains/run/service/run-summary";
 import { shipmentKernelModule } from "~/server/domains/shipment/service";
@@ -28,6 +29,7 @@ export const KERNEL_MODULES: readonly DomainModule[] = [
   ledgerTransferKernelModule,
   statementKernelModule,
   orderKernelModule,
+  productIdentityKernelModule,
   fieldsKernelModule,
   workflowKernelModule,
 ];

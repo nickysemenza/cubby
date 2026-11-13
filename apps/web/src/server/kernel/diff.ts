@@ -43,6 +43,7 @@ export type Difference = {
     survivorId: string;
     absorbedId: string;
     basis: "proof" | "decision";
+    keepId?: string;
   }[];
 };
 
@@ -201,18 +202,30 @@ export function difference(
       });
   }
   for (const merge of desired.merges) {
-    const survivor = owned.get(slot(merge.target, merge.survivor));
-    const absorbed = owned.get(slot(merge.target, merge.absorbed));
+    const resolve = (ref: string) =>
+      owned.get(slot(merge.target, ref))?.entityId ??
+      [...owned.values()].find(
+        (record) =>
+          record.target.name === merge.target.name && record.entityId === ref,
+      )?.entityId ??
+      (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+        ref,
+      )
+        ? ref
+        : null);
+    const survivor = resolve(merge.survivor),
+      absorbed = resolve(merge.absorbed);
     if (!survivor || !absorbed)
       throw new KernelContractError(
-        `${computed.reconciler.scope} merges a record it does not own`,
+        `${computed.reconciler.scope} merges an unknown identity`,
       );
-    if (survivor.entityId !== absorbed.entityId)
+    if (survivor !== absorbed)
       result.merges.push({
         target: merge.target,
-        survivorId: survivor.entityId,
-        absorbedId: absorbed.entityId,
+        survivorId: survivor,
+        absorbedId: absorbed,
         basis: merge.basis,
+        keepId: merge.keepId,
       });
   }
 
@@ -297,6 +310,7 @@ export function describeDifference(diff: Difference): Json {
         table: entry.target.name,
         survivor: entry.survivorId,
         absorbed: entry.absorbedId,
+        keepId: entry.keepId,
         basis: entry.basis,
       })),
     }),

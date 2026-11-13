@@ -93,6 +93,11 @@ export async function readNeedsYou(
       FROM members m JOIN jsonb_to_recordset(${JSON.stringify(consumers)}::jsonb) consumer(entity text, kind text) ON consumer.kind = m."scopeKind"
       JOIN "Entity" e ON e.kind = consumer.entity AND e.id::text = m."scopeKey"
       WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
+      UNION
+      SELECT m."scopeKind",m."scopeKey",e.kind,e.shortcode,m.stage,m.gap->>${"input"},m.gap->'actions',m.gap->>'since'
+      FROM members m CROSS JOIN LATERAL jsonb_array_elements(coalesce(m.gap->'actions','[]'::jsonb)) action
+      JOIN "Entity" e ON (action->>'subject'=e.kind || ':' || e.id::text OR action->>${"field"}=e.kind || ':' || e.id::text)
+      WHERE ${notDeleted(publicEntity)} AND e."mergedIntoId" IS NULL
     ), ranked AS (
       SELECT *, row_number() OVER (PARTITION BY entity, shortcode ORDER BY ("firstGap" IS NULL), since NULLS LAST, "scopeKind", "scopeKey") AS rank,
         min(CASE stage WHEN ${STAGE.ended} THEN 0 WHEN ${STAGE.stuck} THEN 1

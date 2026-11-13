@@ -19,7 +19,6 @@ import { emailReadSnapshot } from "~/server/db/read-snapshot-schema";
 import {
   email,
   emailClassificationObservation,
-  emailPurchaseDecision,
   orderMailEvent,
   sourceOrderObservation,
   purchase,
@@ -28,11 +27,8 @@ import {
   runOperation,
   run,
   orderMail,
-  importSourceOrder,
-  importSourceClaim,
 } from "~/server/db/schema";
 import {
-  readEmailPurchaseEvidence,
   foldScopedEmailPurchaseFacts,
   strongestLinkState,
 } from "~/server/domains/email/repo/email-purchase-links";
@@ -105,13 +101,11 @@ type Input = {
   predictions: (typeof emailClassificationObservation.$inferSelect)[];
   observations: (typeof sourceOrderObservation.$inferSelect)[];
   events: (typeof orderMailEvent.$inferSelect)[];
-  legacyLinks: (typeof emailPurchaseDecision.$inferSelect)[];
   purchases: (typeof purchase.$inferSelect)[];
   accounts: (typeof vendorAccount.$inferSelect)[];
   owners: (typeof recordKey.$inferSelect)[];
   bindings: Binding[];
   snapshot: typeof emailReadSnapshot.$inferSelect | undefined;
-  legacyFacts: (z.output<typeof emailPurchaseFact> & { emailId: string })[];
   at: Date;
   operations: (typeof runOperation.$inferSelect)[];
   runs: (typeof run.$inferSelect)[];
@@ -249,14 +243,6 @@ export const emailState = defineReconciler<Input>({
       "extraction",
       "purchaseId",
     ]),
-    source.table(emailPurchaseDecision, [
-      "emailId",
-      "eventId",
-      "purchaseId",
-      "decision",
-      "active",
-      "evidenceChecksum",
-    ]),
     source.table(orderMailEvent, ["orderMailId", "orderId", "supersededAt"]),
     source.table(purchase, [
       "vendorId",
@@ -273,18 +259,6 @@ export const emailState = defineReconciler<Input>({
       "mergedAt",
     ]),
     source.table(orderMail, ["ledgerPartyId", "rawChecksum", "vendorId"]),
-    source.table(importSourceClaim, [
-      "ledgerPartyId",
-      "canonicalClaimId",
-      "kind",
-      "externalKey",
-    ]),
-    source.table(importSourceOrder, [
-      "sourceClaimId",
-      "purchaseId",
-      "acceptedObservationId",
-      "checksum",
-    ]),
     source.table(runOperation, ["kind", "result", "completedAt"]),
     source.table(run, ["status", "purpose", "deletedAt"]),
     source.table(emailReadSnapshot, [
@@ -303,10 +277,8 @@ export const emailState = defineReconciler<Input>({
       accounts,
       owners,
       snapshots,
-      legacyLinks,
       operations,
       runs,
-      legacyFacts,
     ] = await Promise.all([
       reads.rows(email, keys),
       reads.select(emailClassificationObservation, keys, sql`true`),
@@ -326,29 +298,8 @@ export const emailState = defineReconciler<Input>({
           .select()
           .from(emailReadSnapshot),
       ),
-      reads.select(emailPurchaseDecision, keys, sql`true`),
       reads.select(runOperation, [], sql`true`),
       reads.select(run, [], sql`true`),
-      reads.prepare(
-        [
-          email,
-          purchase,
-          vendorAccount,
-          orderMail,
-          orderMailEvent,
-          emailPurchaseDecision,
-          importSourceClaim,
-          importSourceOrder,
-          sourceOrderObservation,
-        ],
-        (db) =>
-          readEmailPurchaseEvidence(
-            db,
-            keys.map((key) => parseEntityId("email", key)),
-            null,
-            "ignore",
-          ),
-      ),
     ]);
     const bindings = await reads.bindings({
       facts: observations.map((row) => ({
@@ -366,7 +317,6 @@ export const emailState = defineReconciler<Input>({
           predictions: predictions.filter((row) => row.emailId === key),
           observations: observations.filter((row) => row.emailId === key),
           events,
-          legacyLinks,
           purchases,
           accounts,
           owners,
@@ -375,7 +325,6 @@ export const emailState = defineReconciler<Input>({
           at,
           operations,
           runs,
-          legacyFacts: legacyFacts.filter((fact) => fact.emailId === key),
         },
       ]),
     );
@@ -418,8 +367,7 @@ export const emailState = defineReconciler<Input>({
       provenance.classificationStage = member.id;
     }
     c.patch(emailStateRecords, row.id, projected, { provenance });
-    const facts: ReturnType<typeof emailPurchaseFact.parse>[] =
-      input.legacyFacts.map((fact) => emailPurchaseFact.parse(fact));
+    const facts: ReturnType<typeof emailPurchaseFact.parse>[] = [];
     const add = (
       purchaseId: string,
       kind: "accepted" | "linked" | "dismissed" | "suggested",
@@ -474,14 +422,29 @@ export const emailState = defineReconciler<Input>({
       const id = owner?.entityId ?? observation.purchaseId;
       if (id) add(id, "accepted", null, observation.checksum);
     }
-    for (const [field, held] of choices)
-      if (field.startsWith("link:") && typeof held.value === "string")
+    const linkedPurchase = choices.get("purchaseId");
+    const linkDecision = z.object({
+      decision: z.enum(["linked", "dismissed"]),
+      evidenceChecksum: z.string(),
+    });
+    const dismissed = new Set<string>();
+    for (const [field, held] of choices) {
+      if (!field.startsWith("link:") || held.kind !== "set") continue;
+      const decision = linkDecision.safeParse(held.value);
+      if (!decision.success) continue;
+      const target = field.slice(5);
+      if (decision.data.decision === "dismissed") dismissed.add(target);
+      if (
+        decision.data.decision === "dismissed" ||
+        linkedPurchase?.value === target
+      )
         add(
-          field.slice(5),
-          held.value === "dismissed" ? "dismissed" : "linked",
+          target,
+          decision.data.decision,
           null,
-          null,
+          decision.data.evidenceChecksum,
         );
+    }
     for (const event of input.events.filter(
       (value) => value.orderMailId === row.orderMailId && !value.supersededAt,
     )) {
@@ -490,7 +453,12 @@ export const emailState = defineReconciler<Input>({
         `emailEvent:${event.id}`,
         "purchaseId",
       );
-      if (held?.kind === "set" && typeof held.value === "string") {
+      if (
+        held?.kind === "set" &&
+        typeof held.value === "string" &&
+        !dismissed.has(held.value) &&
+        !linkedPurchase
+      ) {
         add(held.value, "linked", event.id, null);
         continue;
       }
@@ -498,7 +466,11 @@ export const emailState = defineReconciler<Input>({
         continue;
       const matches = input.purchases.filter(
         (value) =>
-          !value.deletedAt && value.orderId && value.orderId === event.orderId,
+          !value.deletedAt &&
+          value.orderId &&
+          value.orderId === event.orderId &&
+          !dismissed.has(value.id) &&
+          (!linkedPurchase || linkedPurchase.value === value.id),
       );
       for (const target of matches)
         add(

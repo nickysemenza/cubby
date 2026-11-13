@@ -20,6 +20,8 @@ import {
   financialTransactionAllocation,
   ledgerParty,
 } from "~/server/db/schema";
+import { emailFinancialAssociationsRead } from "~/server/domains/email/repo/email-decision-sql";
+import { decideEmailFinancialAssociation } from "~/server/domains/email/repo/email-financial-associations";
 import { allocationDollars } from "~/server/domains/financial-transaction/repo/allocation-money";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import type { FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -53,11 +55,11 @@ const reviewedRefundAssociations = (
 ) =>
   getDb(db)
     .select()
-    .from(emailFinancialAssociation)
+    .from(emailFinancialAssociationsRead)
     .where(
       and(
-        eq(emailFinancialAssociation.emailId, input.emailId),
-        eq(emailFinancialAssociation.evidenceChecksum, input.checksum),
+        eq(emailFinancialAssociationsRead.emailId, input.emailId),
+        eq(emailFinancialAssociationsRead.evidenceChecksum, input.checksum),
       ),
     );
 
@@ -269,14 +271,13 @@ async function recordMailFinancialReview(
         );
       continue;
     }
-    await tx.insert(emailFinancialAssociation).values({
+    await decideEmailFinancialAssociation(db, actor, {
       emailId: input.emailId,
       evidenceChecksum: input.checksum,
       transactionId: row.id,
       reviewedAccountId: row.accountId,
       sourceAccountLabel: row.sourceAccountLabel,
       reviewReason: row.reviewReason,
-      decidedByUserId: actor.userId,
     });
   }
 }
@@ -370,11 +371,11 @@ export async function recordMailFinancialEvidence(
   let reviewReason: string;
   const existing = await tx
     .select()
-    .from(emailFinancialAssociation)
+    .from(emailFinancialAssociationsRead)
     .where(
       and(
-        eq(emailFinancialAssociation.emailId, input.emailId),
-        eq(emailFinancialAssociation.evidenceChecksum, input.checksum),
+        eq(emailFinancialAssociationsRead.emailId, input.emailId),
+        eq(emailFinancialAssociationsRead.evidenceChecksum, input.checksum),
       ),
     );
   if (actor.runId) {
@@ -440,13 +441,12 @@ export async function recordMailFinancialEvidence(
       );
     return;
   }
-  await tx.insert(emailFinancialAssociation).values({
+  await decideEmailFinancialAssociation(db, actor, {
     emailId: input.emailId,
     evidenceChecksum: input.checksum,
     transactionId: transaction.id,
     reviewedAccountId: transaction.accountId,
     sourceAccountLabel,
     reviewReason,
-    decidedByUserId: actor.userId,
   });
 }

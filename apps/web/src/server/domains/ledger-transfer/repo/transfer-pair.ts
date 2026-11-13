@@ -53,7 +53,7 @@ const live = (row: { deletedAt: Date | null }) => !row.deletedAt;
 const keep = (c: Pure) => {
   for (const target of targets)
     for (const key of c.existing(target)) c.retire(target, key, "keep");
-  return keep(c);
+  return c.done();
 };
 
 /** Equal minor units and a bounded date window only retrieve a pair; identity is a decision. */

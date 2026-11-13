@@ -396,12 +396,13 @@ export interface Pure {
   /** The explicit disposition of a record that should no longer exist. */
   retire(target: ColumnRef, naturalKey: string, disposition: Disposition): void;
   bind(fact: FactRef, eventKey: string, basis?: "proven" | "decision"): void;
-  /** Merge two owned records; `proof` merges only in the one automatic case. */
+  /** Merge existing ids or local natural keys through the declared policy; a member may name the survivor. */
   merge(
     target: ColumnRef,
     survivor: string,
     absorbed: string,
     basis: "proof" | "decision",
+    options?: { keepId?: string },
   ): void;
   emit(scope: ScopeRef): void;
   /** Accepted inputs disagree without a safe automatic replacement. Applies no records. */
@@ -441,6 +442,7 @@ export type Desired = {
     survivor: string;
     absorbed: string;
     basis: "proof" | "decision";
+    keepId?: string;
   }[];
   readonly emits: readonly ScopeRef[];
   readonly gaps: readonly KernelGap[];

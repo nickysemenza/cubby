@@ -36,15 +36,15 @@ import { requestedRows } from "~/server/db/helpers/requested";
 import {
   expense,
   product,
-  emailReview,
   ledgerParty,
   email as emailTable,
-  emailFinancialAssociation,
   shipmentSourceCapture,
   vendorAccount,
   vendor,
   orderMail,
 } from "~/server/db/schema";
+import { emailFinancialAssociationsSql } from "~/server/domains/email/repo/email-decision-sql";
+import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import {
@@ -197,7 +197,7 @@ export async function hasAcceptedEmailAssociation(
   const [record] = await unwrapDb(db)
     .select({
       linked: sql<boolean>`(${emailLinkedSql()} OR EXISTS (
-      SELECT 1 FROM ${emailFinancialAssociation} reviewed_financial_evidence
+      SELECT 1 FROM ${emailFinancialAssociationsSql} reviewed_financial_evidence
       WHERE reviewed_financial_evidence."emailId" = "Email"."id"
     ) OR EXISTS (
       SELECT 1 FROM ${shipmentSourceCapture} shipment_evidence
@@ -323,8 +323,8 @@ const emailRead: ListReadOptions<EmailRow> = {
           : unwrapDb(db)
               .select({
                 emailId: emailTable.id,
-                classification: emailReview.classification,
-                reason: emailReview.reason,
+                classification: emailReviewsRead.classification,
+                reason: emailReviewsRead.reason,
               })
               .from(emailTable)
               .innerJoin(
@@ -332,13 +332,13 @@ const emailRead: ListReadOptions<EmailRow> = {
                 eq(ledgerParty.id, emailTable.ledgerPartyId),
               )
               .innerJoin(
-                emailReview,
+                emailReviewsRead,
                 and(
-                  eq(emailReview.emailId, emailTable.id),
-                  eq(emailReview.checksum, emailTable.checksum),
-                  eq(emailReview.authority, "member"),
-                  eq(emailReview.actorUserId, ledgerParty.userId),
-                  isNotNull(emailReview.classification),
+                  eq(emailReviewsRead.emailId, emailTable.id),
+                  eq(emailReviewsRead.checksum, emailTable.checksum),
+                  eq(emailReviewsRead.authority, "member"),
+                  eq(emailReviewsRead.actorUserId, ledgerParty.userId),
+                  isNotNull(emailReviewsRead.classification),
                 ),
               )
               .where(
@@ -351,7 +351,10 @@ const emailRead: ListReadOptions<EmailRow> = {
                   notDeleted(ledgerParty),
                 ),
               )
-              .orderBy(desc(emailReview.createdAt), desc(emailReview.id)),
+              .orderBy(
+                desc(emailReviewsRead.createdAt),
+                desc(emailReviewsRead.id),
+              ),
         readCachedEmailPurchaseLinks(db, rows, scope, idPage.stored),
         viewer === null || rows.length === 0
           ? []

@@ -1,3 +1,5 @@
+import { buildActorContext, systemActor } from "@cubby/schemas/context";
+import { userId } from "@cubby/schemas/identifiers";
 import type { MailboxClassification } from "@cubby/schemas/mailbox-research";
 import { suggestionCorrection } from "@cubby/schemas/suggestion";
 import { and, eq } from "drizzle-orm";
@@ -5,12 +7,12 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
-import {
-  repositoryQueries as getDb,
-  repositoryTransactionDatabase as withTransactionDatabase,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { emailReview } from "~/server/db/retained-tables";
-import { recordChange } from "~/server/generic/changes/repo/change";
+import { decide, householdWrite, recordSubject } from "~/server/kernel/api";
+import { jsonSnapshot } from "~/server/lib/canonical-json";
+
+import { emailReviewsRead } from "./email-decision-sql";
 
 type Row = typeof emailReview.$inferSelect;
 type Input = Pick<
@@ -61,11 +63,7 @@ const immutable = (row: {
   metadata: row.metadata,
 });
 
-/**
- * Append one retained review; the same operation on the same handle replays and
- * a retry that changes the event refuses. The EmailReview trigger marks the
- * Email's quality, whose member review check reads this row.
- */
+/** One decision slot per reviewed handle and operation makes exact retries idempotent. */
 export async function appendEmailReviewWithInsertion(
   db: Database,
   input: Input,
@@ -90,38 +88,55 @@ export async function appendEmailReviewWithInsertion(
       .nullable()
       .parse(input.metadata ?? null),
   };
-  return withTransactionDatabase(db, async (transactionDb) => {
+  return householdWrite(db, async (transactionDb) => {
     const client = getDb(transactionDb);
-    const [inserted] = await client
-      .insert(emailReview)
-      .values(values)
-      .onConflictDoNothing({
-        target: [emailReview.subjectId, emailReview.operationId],
-      })
-      .returning();
-    const event =
-      inserted ??
-      (
-        await client
-          .select()
-          .from(emailReview)
-          .where(
-            and(
-              eq(emailReview.subjectId, input.subjectId),
-              eq(emailReview.operationId, input.operationId),
-            ),
+    const [previous] = await client
+      .select()
+      .from(emailReviewsRead)
+      .where(
+        and(
+          eq(emailReviewsRead.subjectId, input.subjectId),
+          eq(emailReviewsRead.operationId, input.operationId),
+        ),
+      )
+      .limit(1);
+    if (previous) {
+      if (!isEqual(immutable(values), immutable(previous)))
+        throw new Error("Immutable Email review retry changed its event");
+      return { event: previous, inserted: false };
+    }
+    const subject = input.emailId
+      ? recordSubject("email", input.emailId)
+      : `mailOriginal:${input.originalId ?? input.subjectId}`;
+    const [ref] = await decide(
+      transactionDb,
+      input.actorUserId
+        ? buildActorContext(
+            userId.parse(input.actorUserId),
+            input.authority === "member" ? "web" : "system",
           )
-          .limit(1)
-      )[0];
-    if (!event) throw new Error("Email review publication returned no row");
-    if (!isEqual(immutable(values), immutable(event)))
-      throw new Error("Immutable Email review retry changed its event");
-    if (inserted)
-      await recordChange(transactionDb, {
-        kind: "source",
-        categories: ["email", "suggestions"],
-      });
-    return { event, inserted: inserted !== undefined };
+        : systemActor(),
+      [
+        {
+          channel: "assignment",
+          kind: "set",
+          subject,
+          field: `review:${input.subjectId}:${input.operationId}`,
+          value: jsonSnapshot.parse(values),
+          scopes: input.emailId
+            ? [{ kind: "emailState", key: input.emailId }]
+            : [],
+        },
+      ],
+    );
+    if (!ref) throw new Error("Email review decision returned no row");
+    const [event] = await client
+      .select()
+      .from(emailReviewsRead)
+      .where(eq(emailReviewsRead.id, ref.id))
+      .limit(1);
+    if (!event) throw new Error("Email review decision returned no row");
+    return { event, inserted: true };
   });
 }
 

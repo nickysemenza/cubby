@@ -3,6 +3,33 @@ import { defineChildTable } from "../entity-definitions/child-definition.js";
 /** Observations are append-only; accepting one never overwrites the first extraction. */
 export const importObservationChildren = [
   defineChildTable({
+    name: "ProductIdentityObservation",
+    exportName: "productIdentityObservation",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      { key: "scopeKey", kind: "text", notNull: true },
+      { key: "userId", kind: "text", notNull: true },
+      { key: "payload", kind: "jsonb", notNull: true, type: "KernelJson" },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [
+      { module: "@cubby/schemas/kernel/machinery", exports: ["KernelJson"] },
+    ],
+    indexes: [
+      { name: "ProductIdentityObservation_scope_idx", on: ["scopeKey"] },
+    ],
+  }),
+  defineChildTable({
     name: "SourceOrderObservation",
     exportName: "sourceOrderObservation",
     columns: [

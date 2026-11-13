@@ -7,7 +7,11 @@ import type { KernelAuditProvenance } from "@cubby/schemas/kernel/machinery";
  * moved since its load. A conflict spends no attempt; after three in a row
  * the scope runs locked: load, compute and apply in one bounded transaction.
  */
-import { resolveStage, nextActor } from "@cubby/schemas/kernel/stage";
+import {
+  resolveStage,
+  nextActor,
+  kernelStage,
+} from "@cubby/schemas/kernel/stage";
 import type { KernelGap } from "@cubby/schemas/kernel/stage";
 import { getTableColumns, getTableName, sql } from "drizzle-orm";
 import { getTableConfig } from "drizzle-orm/pg-core";
@@ -614,6 +618,7 @@ async function applyBatch(
               target: merge.target,
               a: merge.survivorId,
               b: merge.absorbedId,
+              keepId: merge.keepId,
               basis: merge.basis,
             });
             if (verdict.merged) {
@@ -746,8 +751,8 @@ async function applyBatch(
       scopeState,
       states,
       sql`ON CONFLICT ("scopeKind", "scopeKey") DO UPDATE SET
-      version = excluded.version, rules = excluded.rules, gaps = excluded.gaps, inputs = excluded.inputs, stage = excluded.stage,
-      "nextActor" = excluded."nextActor", "firstGap" = excluded."firstGap", "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
+      version = excluded.version, rules = excluded.rules, gaps = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN '[]'::jsonb ELSE excluded.gaps END, inputs = excluded.inputs, stage = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN ${kernelStage.enum.ended} ELSE excluded.stage END,
+      "nextActor" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."nextActor" END, "firstGap" = CASE WHEN "ScopeState"."mergedIntoKey" IS NOT NULL THEN NULL ELSE excluded."firstGap" END, "inputsHash" = excluded."inputsHash", "durationMs" = excluded."durationMs",
       "errorClass" = NULL, error = NULL, "reconciledAt" = excluded."reconciledAt", "inputsChangedAt" = excluded."inputsChangedAt"`,
     );
     const advanced = plans.filter((plan) => !plan.heldBaseline);

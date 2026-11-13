@@ -12,7 +12,6 @@ import { and, eq, like } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { advisoryXactLock } from "~/server/db/advisory-lock";
 import {
   getDb,
   notDeleted,
@@ -22,12 +21,13 @@ import {
   suggestionTable,
   email,
   emailClassificationObservation,
-  emailPurchaseDecision,
   emailReview,
   purchase,
   runFinding,
   runOperation,
 } from "~/server/db/schema";
+import { emailLinkDecisionsRead } from "~/server/domains/email/repo/email-decision-sql";
+import { emailReviewsRead } from "~/server/domains/email/repo/email-decision-sql";
 import { emailLinkSubject } from "~/server/domains/email/repo/email-link-decision";
 import {
   appendEmailReview,
@@ -92,8 +92,8 @@ export async function resolveMailDecisionHandle(
   const client = getDb(db);
   const [decision] = await client
     .select()
-    .from(emailPurchaseDecision)
-    .where(eq(emailPurchaseDecision.id, id))
+    .from(emailLinkDecisionsRead)
+    .where(eq(emailLinkDecisionsRead.id, id))
     .limit(1);
   if (decision)
     return {
@@ -252,11 +252,11 @@ async function applicationReceipt(
 ) {
   const [receipt] = await getDb(db)
     .select()
-    .from(emailReview)
+    .from(emailReviewsRead)
     .where(
       and(
-        eq(emailReview.subjectId, handle.id),
-        eq(emailReview.operationId, applicationOperation(operationId)),
+        eq(emailReviewsRead.subjectId, handle.id),
+        eq(emailReviewsRead.operationId, applicationOperation(operationId)),
       ),
     )
     .limit(1);
@@ -277,9 +277,6 @@ async function applyReview(
   prepared: PreparedEmailRelevanceCorrection | null,
   scope: EmailEvidenceWriteScope | null,
 ): Promise<Outcome> {
-  // Serialize commands without taking row locks ahead of the domain's parents.
-  // Same key as generic review, so both commands serialize on one Suggestion.
-  await advisoryXactLock(getDb(db), "suggestion-review", handle.id);
   const prior = await applicationReceipt(db, handle, input.operationId);
   if (prior) {
     const { event: command } = await writeReview(db);
@@ -293,8 +290,8 @@ async function applyReview(
   if (handle.family === "email_link") {
     const [current] = await getDb(db)
       .select()
-      .from(emailPurchaseDecision)
-      .where(eq(emailPurchaseDecision.id, handle.id))
+      .from(emailLinkDecisionsRead)
+      .where(eq(emailLinkDecisionsRead.id, handle.id))
       .limit(1);
     if (!current?.active || current.status === "superseded")
       throw new Error(
@@ -340,23 +337,25 @@ async function applyReview(
         expectedDecisionId: handle.id,
       },
     );
-    await getDb(db)
-      .update(emailPurchaseDecision)
-      .set({ status: "applied" })
-      .where(
-        and(
-          eq(emailPurchaseDecision.id, handle.id),
-          eq(emailPurchaseDecision.active, true),
-        ),
-      );
+    const { decide, recordSubject } = await import("~/server/kernel/api");
+    await decide(db, context.actorContext, [
+      {
+        channel: "assignment",
+        kind: "set",
+        subject: recordSubject("email", handle.emailId!),
+        field: `review-status:${handle.id}`,
+        value: "applied",
+        scopes: [{ kind: "emailState", key: handle.emailId! }],
+      },
+    ]);
   } else {
     const [resolved] = await getDb(db)
-      .select({ id: emailReview.id })
-      .from(emailReview)
+      .select({ id: emailReviewsRead.id })
+      .from(emailReviewsRead)
       .where(
         and(
-          eq(emailReview.subjectId, handle.id),
-          like(emailReview.operationId, "command-application:%"),
+          eq(emailReviewsRead.subjectId, handle.id),
+          like(emailReviewsRead.operationId, "command-application:%"),
         ),
       )
       .limit(1);
@@ -528,12 +527,11 @@ export async function settleMailDecisionReview(
         if (handle.family !== "email_link") return next ?? "pending";
         const [current] = await getDb(transactionDb)
           .select({
-            active: emailPurchaseDecision.active,
-            status: emailPurchaseDecision.status,
+            active: emailLinkDecisionsRead.active,
+            status: emailLinkDecisionsRead.status,
           })
-          .from(emailPurchaseDecision)
-          .where(eq(emailPurchaseDecision.id, handle.id))
-          .for("update")
+          .from(emailLinkDecisionsRead)
+          .where(eq(emailLinkDecisionsRead.id, handle.id))
           .limit(1);
         if (
           !next ||
@@ -541,10 +539,17 @@ export async function settleMailDecisionReview(
           ["applied", "superseded"].includes(current.status)
         )
           return current?.status ?? "historical";
-        await getDb(transactionDb)
-          .update(emailPurchaseDecision)
-          .set({ status: next })
-          .where(eq(emailPurchaseDecision.id, handle.id));
+        const { decide, recordSubject } = await import("~/server/kernel/api");
+        await decide(transactionDb, context.actorContext, [
+          {
+            channel: "assignment",
+            kind: "set",
+            subject: recordSubject("email", handle.emailId!),
+            field: `review-status:${handle.id}`,
+            value: next,
+            scopes: [{ kind: "emailState", key: handle.emailId! }],
+          },
+        ]);
         return next;
       }),
     emailScope,

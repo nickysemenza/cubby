@@ -656,7 +656,7 @@ describe("evidence-facts kernel", () => {
       reads: [source.table(vendor, ["name", "deletedAt"])],
       writes: [],
       async load(reads, keys) {
-        await reads.rows(vendor, keys);
+        await reads.select(vendor, [], sql`true`);
         return new Map(keys.map((key) => [key, null]));
       },
       reconcile(_input, c) {
@@ -664,7 +664,18 @@ describe("evidence-facts kernel", () => {
         expect(c.reference("vendor", seller.id, { format: "shortcode" })).toBe(
           seller.shortcode,
         );
-        c.gap.decision("a reviewed identity");
+        c.gap.decision("a reviewed identity", {
+          actions: [
+            {
+              channel: "assignment",
+              kind: "set",
+              subject: recordSubject("vendor", seller.id),
+              field: "name",
+              value: "Synthetic reviewed identity",
+              label: "Use reviewed name",
+            },
+          ],
+        });
         return c.done();
       },
     });
@@ -705,6 +716,19 @@ describe("evidence-facts kernel", () => {
         firstGap: "a reviewed identity",
       }),
     ]);
+    const pairScope = { kind: consumer.scope, key: "synthetic-payment-pair" };
+    await kernel.reconcileNow(ctx.db, [pairScope]);
+    const withPair = await kernel.machinery(ctx.db, ctx.actor, {
+      entity: "vendor",
+      id: seller.id,
+    });
+    expect(withPair.scopes.some((scope) => scope.key === pairScope.key)).toBe(
+      true,
+    );
+    expect(
+      (await kernel.listRows(ctx.db, capability, [seller.id])).get(seller.id),
+    ).toMatchObject({ stage: "needs_you" });
+    expect((await kernel.needsYou(ctx.db)).items).toHaveLength(1);
   });
 
   it("coalesces declared Catalog creation across scopes and keeps each record's audit provenance", async () => {
@@ -1823,6 +1847,51 @@ describe("evidence-facts kernel", () => {
         }),
       ),
     ).rejects.toThrow("not a reconciler-owned foreign key");
+  });
+
+  it("merges identities across scopes during apply and honors an explicit member survivor", async () => {
+    let selected: { a: string; b: string; keepId: string } | null = null;
+    const { kernel, fixture } = kernelWith({
+      linked: true,
+      merge: (key) => (key === "ORD-SURVIVOR-OLD" ? selected : null),
+    });
+    await kernel.append(ctx.db, [charge("ORD-SURVIVOR-OLD", 100)]);
+    await settle(kernel);
+    await kernel.append(ctx.db, [charge("ORD-SURVIVOR-NEW", 200)]);
+    await settle(kernel);
+    const stored = await purchases(ctx.db);
+    const older = stored.find((row) => row.orderRef === "ORD-SURVIVOR-OLD")!,
+      newer = stored.find((row) => row.orderRef === "ORD-SURVIVOR-NEW")!;
+    selected = { a: older.id, b: newer.id, keepId: newer.id };
+    const result = await kernel.reconcileNow(ctx.db, [
+      { kind: PURCHASE_SCOPE, key: "ORD-SURVIVOR-OLD" },
+    ]);
+    expect(result.filter((row) => row.error)).toEqual([]);
+    selected = null;
+    expect(
+      (await purchases(ctx.db))
+        .filter((row) => !row.deletedAt)
+        .map((row) => row.id),
+    ).toEqual([newer!.id]);
+    await expect(
+      kernel.merge(ctx.db, {
+        target: fixture.purchaseWrites,
+        a: older!.id,
+        b: newer!.id,
+        basis: "proof",
+        keepId: newer!.id,
+      }),
+    ).rejects.toThrow("Only a member identity decision");
+    const states = await repositoryQueries(ctx.db).execute<{
+      stage: string;
+      mergedIntoKey: string | null;
+    }>(
+      sql`SELECT stage,"mergedIntoKey" FROM "ScopeState" WHERE "scopeKind"=${PURCHASE_SCOPE} AND "scopeKey"='ORD-SURVIVOR-OLD'`,
+    );
+    expect(states.rows[0]).toMatchObject({
+      stage: "ended",
+      mergedIntoKey: "ORD-SURVIVOR-NEW",
+    });
   });
 
   it("hands a merged record to the survivor's scope and ends the absorbed scope", async () => {

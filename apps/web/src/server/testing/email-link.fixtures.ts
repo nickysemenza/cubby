@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
-import { emailPurchaseDecision } from "~/server/db/schema";
+import { emailLinkDecisionsRead as emailPurchaseDecision } from "~/server/domains/email/repo/email-decision-sql";
 
 /** An event's current decisions, the rows every reader treats as authority. */
 export const activeEmailPurchaseDecision = new QueryBuilder()

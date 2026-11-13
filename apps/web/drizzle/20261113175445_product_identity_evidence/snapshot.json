@@ -1,0 +1,178 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3843f4c0-5f27-46c4-92ca-e138bd6b8583",
+  "prevIds": [
+    "9654f710-198d-4aaa-80bb-430503f369a7"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ProductIdentityObservation"
+      ],
+      "writes": [
+        "s|tbl|public.ProductIdentityObservation",
+        "n|tbl|public.ProductIdentityObservation",
+        "e|tbl|public.ProductIdentityObservation",
+        "n|rel|public.ProductIdentityObservation",
+        "n|type|public.ProductIdentityObservation",
+        "n|rel|public.ProductIdentityObservation_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ProductIdentityObservation",
+        "ProductIdentityObservation_scope_idx"
+      ],
+      "writes": [
+        "s|idx|public.ProductIdentityObservation_scope_idx",
+        "n|idx|public.ProductIdentityObservation_scope_idx",
+        "e|idx|public.ProductIdentityObservation_scope_idx",
+        "n|rel|public.ProductIdentityObservation_scope_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ProductIdentityObservation",
+        "n|sch|public",
+        "n|col|public.ProductIdentityObservation.scopeKey"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ProductIdentityObservation",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "id",
+        "type": "uuid",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "gen_random_uuid()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "scopeKey",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "userId",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "payload",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "createdAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "now()",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "ProductIdentityObservation_scope_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "scopeKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ProductIdentityObservation",
+        "name": "ProductIdentityObservation_pkey",
+        "columns": [
+          "id"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

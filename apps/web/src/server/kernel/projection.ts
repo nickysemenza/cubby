@@ -32,6 +32,11 @@ function recordScopes(capability: MachineryCapability, id: SQL): SQL {
     sql`SELECT rk."scopeKind" AS kind, rk."scopeKey" AS key, 0 AS ord FROM "RecordKey" rk
       WHERE rk.entity = ${capability.entity} AND rk."entityId" = ${id} AND rk."mergedAt" IS NULL`,
   ];
+  parts.push(sql`SELECT DISTINCT s."scopeKind",s."scopeKey",1 AS ord FROM "ScopeState" s
+    CROSS JOIN LATERAL jsonb_array_elements(s.gaps) gap
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(gap->'actions','[]'::jsonb)) action
+    WHERE s."mergedIntoKey" IS NULL AND gap->>'actor'='you'
+      AND (action->>'subject'=${capability.entity} || ':' || ${id}::text OR action->>${"field"}=${capability.entity} || ':' || ${id}::text)`);
   for (const [index, kind] of (capability.scopes ?? []).entries())
     parts.push(sql`SELECT ${kind}::text, ${id}::text, ${index + 1}`);
   if (capability.fields)

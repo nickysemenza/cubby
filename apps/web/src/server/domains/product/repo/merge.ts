@@ -74,7 +74,6 @@ import {
   resolveProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
 import { markProductConversionCoverageInputStale } from "~/server/domains/product/repo/conversion-coverage";
-import { repointProductMatchCandidatesTx } from "~/server/domains/product/repo/match/product-match-candidate";
 import { historicalConflictInputsChanged } from "~/server/domains/product/repo/product-variant-evidence";
 import { unitMappingSides } from "~/server/domains/product/repo/unit-mappings";
 import {
@@ -1447,7 +1446,6 @@ export const mergeProducts = async (
       discardedUnitMappings,
     );
 
-    await repointProductMatchCandidatesTx(tx, keepId, plan.loserIds);
     const { removed } = await finalizeMerge(tx, {
       entity: "product",
       table: product,

@@ -7,31 +7,31 @@ import type {
   SourceTransactionRecordDisposition,
   SourceTransactionRecordDispositionReason,
 } from "@cubby/schemas/source-transaction-record-fields";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { isEqual } from "es-toolkit";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { databaseForTransaction, unwrapDb } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import {
   sourceOccurrence,
-  sourceObservationAnnotation,
   sourceTransactionRecord,
   financialTransaction,
   financialAccount,
 } from "~/server/db/schema";
-import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
+import { createAppError } from "~/server/errors/app-error";
+import {
+  decide,
+  householdWrite,
+  reconcileNow,
+  type DecisionInput,
+} from "~/server/kernel/api";
+
 import {
   sourceObservationColumns,
   sourceObservationFacts,
   sourceObservationsForPage,
-} from "~/server/domains/transaction-import/repo/source-observation-state";
-import { createAppError } from "~/server/errors/app-error";
-import { recordChange } from "~/server/generic/changes/repo/change";
-
-import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
-import { dirtySourceOccurrences } from "./source-event-dirty";
+} from "./source-observation-state";
 
 export type SourceJudgmentPatch = {
   accountId?: FinancialAccountId | null;
@@ -40,29 +40,6 @@ export type SourceJudgmentPatch = {
   dispositionNote?: string | null;
   supersededByRowId?: SourceTransactionRecordId | null;
   notes?: string | null;
-};
-
-type JudgmentValues = SourceJudgmentPatch &
-  Partial<
-    Pick<
-      typeof sourceOccurrence.$inferInsert,
-      | "currentObservationId"
-      | "reviewState"
-      | "supersededByOccurrenceId"
-      | "replacementObservationId"
-    >
-  > & { supersededByObservationId?: SourceTransactionRecordId | null };
-const hasChangedValues = (
-  values: JudgmentValues,
-  before:
-    | typeof sourceOccurrence.$inferSelect
-    | typeof sourceObservationAnnotation.$inferSelect
-    | undefined,
-): boolean => {
-  const stored = new Map(Object.entries(before ?? {}));
-  return Object.entries(values).some(
-    ([key, value]) => value !== undefined && value !== stored.get(key),
-  );
 };
 
 /** Explicit replacement decisions need cycle protection, never owner/state inheritance. */
@@ -89,7 +66,7 @@ async function replacementDecisionClosure(
   return rows;
 }
 
-/** Every bank record shares financial decisions through its owner; notes and reviewed version selections stay local. */
+/** Member annotations and occurrence judgments are independent decision slots. */
 export async function updateSourceObservationJudgments(
   tx: DrizzleTransaction,
   ids: readonly SourceTransactionRecordId[],
@@ -98,295 +75,207 @@ export async function updateSourceObservationJudgments(
 ): Promise<{ affected: number }> {
   if (!ids.length || Object.values(patch).every((value) => value === undefined))
     return { affected: 0 };
-  const db = unwrapDb(tx);
-  const sourceKeys = await db
-    .select({ source: sourceTransactionRecord.source })
-    .from(sourceTransactionRecord)
-    .where(inArray(sourceTransactionRecord.id, [...ids]));
-  await lockFinancialEvidenceKeys(
-    tx,
-    "source",
-    sourceKeys.map((row) => row.source),
-  );
-  const selected = await db
-    .select()
-    .from(sourceTransactionRecord)
-    .where(
-      and(
-        inArray(sourceTransactionRecord.id, [...ids]),
-        notDeleted(sourceTransactionRecord),
-      ),
-    );
-  if (selected.length !== new Set(ids).size)
-    throw createAppError(
-      "REFERENCED_RECORD_MISSING",
-      "A source observation is no longer live.",
-    );
-  const closure = await replacementDecisionClosure(tx, [
-    ...ids,
-    ...(patch.supersededByRowId ? [patch.supersededByRowId] : []),
-  ]);
-  const occurrenceIds = [
-    ...new Set(
-      closure.flatMap((row) => (row.occurrenceId ? [row.occurrenceId] : [])),
-    ),
-  ].sort();
-  const ownersBeforeLock = occurrenceIds.length
-    ? await db
-        .select()
-        .from(sourceOccurrence)
-        .where(
-          sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(occurrenceIds)})`,
-        )
-    : [];
-  await lockFinancialEvidenceKeys(
-    tx,
-    "reviewed-booking",
-    ownersBeforeLock.flatMap((owner) =>
-      owner.acceptedTransactionId
-        ? [`transaction:${owner.acceptedTransactionId}`]
-        : [],
-    ),
-  );
-  const owners = occurrenceIds.length
-    ? await db
-        .select()
-        .from(sourceOccurrence)
-        .where(
-          sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(occurrenceIds)})`,
-        )
-        .orderBy(sourceOccurrence.id)
-        .for("update")
-    : [];
-  if (
-    owners.some(
-      (owner) =>
-        ownersBeforeLock.find((before) => before.id === owner.id)
-          ?.acceptedTransactionId !== owner.acceptedTransactionId,
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Source ownership changed before its judgment lock; retry with current evidence.",
-    );
-  const freshClosure = await replacementDecisionClosure(tx, [
-    ...ids,
-    ...(patch.supersededByRowId ? [patch.supersededByRowId] : []),
-  ]);
-  if (
-    freshClosure.some(
-      (row) =>
-        !closure.some(
-          (before) =>
-            before.id === row.id && before.occurrenceId === row.occurrenceId,
+  return householdWrite(databaseForTransaction(tx), async (database) => {
+    const q = unwrapDb(database);
+    const selected = await q
+      .select()
+      .from(sourceTransactionRecord)
+      .where(
+        and(
+          inArray(sourceTransactionRecord.id, [...ids]),
+          isNull(sourceTransactionRecord.deletedAt),
         ),
-    )
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Replacement evidence expanded while locking; retry with current evidence.",
-    );
-  await db
-    .select({ id: sourceTransactionRecord.id })
-    .from(sourceTransactionRecord)
-    .where(
-      inArray(
-        sourceTransactionRecord.id,
-        closure.map((row) => row.id),
-      ),
-    )
-    .orderBy(sourceTransactionRecord.id)
-    .for("update");
-  const successor = patch.supersededByRowId
-    ? (
-        await db
+      );
+    if (selected.length !== new Set(ids).size)
+      throw createAppError(
+        "REFERENCED_RECORD_MISSING",
+        "A source observation is no longer live.",
+      );
+    const owners = await q
+      .select()
+      .from(sourceOccurrence)
+      .where(
+        inArray(sourceOccurrence.id, [
+          ...new Set(selected.map((row) => row.occurrenceId)),
+        ]),
+      );
+    const [successor] = patch.supersededByRowId
+      ? await q
           .select()
           .from(sourceTransactionRecord)
           .where(
             and(
               eq(sourceTransactionRecord.id, patch.supersededByRowId),
-              notDeleted(sourceTransactionRecord),
+              isNull(sourceTransactionRecord.deletedAt),
             ),
           )
-      )[0]
-    : undefined;
-  if (
-    patch.supersededByRowId &&
-    (!successor || selected.some((row) => row.source !== successor.source))
-  )
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "A replacement observation must be live and belong to the same source.",
-    );
-  if (patch.supersededByRowId) {
-    const chain = await replacementDecisionClosure(tx, [
-      patch.supersededByRowId,
-    ]);
-    if (selected.some((row) => chain.some((member) => member.id === row.id)))
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Source replacement cannot link to itself or form a cycle.",
-      );
-  }
-  if (patch.accountId !== undefined) {
-    if (patch.accountId !== null) {
-      const [account] = await db
-        .select({ id: financialAccount.id })
-        .from(financialAccount)
-        .where(
-          and(
-            eq(financialAccount.id, patch.accountId),
-            notDeleted(financialAccount),
-          ),
-        )
-        .for("key share");
-      if (!account)
-        throw createAppError(
-          "REFERENCED_RECORD_MISSING",
-          "The source account is no longer live.",
-        );
-    }
-    const acceptedIds = owners.flatMap((owner) =>
-      owner.acceptedTransactionId ? [owner.acceptedTransactionId] : [],
-    );
-    const accepted = acceptedIds.length
-      ? await db
-          .select()
-          .from(financialTransaction)
-          .where(inArray(financialTransaction.id, acceptedIds))
-          .then((rows) => rows.map(transactionDollars))
       : [];
     if (
-      owners.some(
-        (owner) =>
-          owner.acceptedTransactionId !== null &&
-          accepted.find((row) => row.id === owner.acceptedTransactionId)
-            ?.accountId !== patch.accountId,
-      )
+      patch.supersededByRowId &&
+      (!successor || selected.some((row) => row.source !== successor.source))
     )
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Detach accepted source evidence before changing its resolved account to a different account.",
+        "A replacement observation must be live and belong to the same source.",
       );
-  }
-  const before = await db
-    .select(sourceObservationColumns)
-    .from(
-      sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
-    );
-  const { notes: _notes, supersededByRowId: _successor, ...financial } = patch;
-  const changedOwners: typeof owners = [];
-  const judgedOwners = owners.filter((owner) =>
-    selected.some((row) => row.occurrenceId === owner.id),
-  );
-  if (patch.supersededByRowId === undefined) {
-    const changed = judgedOwners.filter((owner) =>
-      hasChangedValues(financial, owner),
-    );
-    if (changed.length)
-      changedOwners.push(
-        ...(await db
-          .update(sourceOccurrence)
-          .set({ ...financial, version: sql`${sourceOccurrence.version} + 1` })
-          .where(
-            sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(changed.map((owner) => owner.id))})`,
-          )
-          .returning()),
-      );
-  } else
-    for (const owner of judgedOwners) {
-      const sameOccurrence = successor?.occurrenceId === owner.id;
-      const history =
-        sameOccurrence && owner.reviewState === "revision_order_unknown"
-          ? await db.execute<{ held: boolean }>(
-              sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
-              "objects",
-            )
-          : [];
-      const values = {
-        ...financial,
-        ...(sameOccurrence
-          ? {
-              currentObservationId: successor.id,
-              ...(owner.reviewState === "revision_order_unknown"
-                ? {
-                    reviewState: history[0]?.held
-                      ? ("ownership_conflict" as const)
-                      : ("ready" as const),
-                  }
-                : {}),
-            }
-          : {
-              supersededByOccurrenceId: successor?.occurrenceId ?? null,
-              replacementObservationId: successor?.id ?? null,
-            }),
-      };
-      if (hasChangedValues(values, owner)) {
-        const updated = await db
-          .update(sourceOccurrence)
-          .set({ ...values, version: sql`${sourceOccurrence.version} + 1` })
-          .where(eq(sourceOccurrence.id, owner.id))
-          .returning();
-        changedOwners.push(...updated);
-      }
+    if (successor) {
+      const chain = await replacementDecisionClosure(tx, [successor.id]);
+      if (selected.some((row) => chain.some((member) => member.id === row.id)))
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Source replacement cannot link to itself or form a cycle.",
+        );
     }
-  for (const observation of selected) {
-    const values = {
-      // Retain the exact reviewed version selection as history without copying financial judgments.
-      ...(successor?.occurrenceId === observation.occurrenceId
-        ? { supersededByObservationId: successor.id }
-        : {}),
-      notes: patch.notes,
-    };
-    if (Object.values(values).every((value) => value === undefined)) continue;
-    const [annotation] = await db
-      .select()
-      .from(sourceObservationAnnotation)
-      .where(eq(sourceObservationAnnotation.observationId, observation.id))
-      .for("update");
-    if (!hasChangedValues(values, annotation)) continue;
-    if (annotation)
-      await db
-        .update(sourceObservationAnnotation)
-        .set(values)
-        .where(eq(sourceObservationAnnotation.observationId, observation.id));
-    else
-      await db
-        .insert(sourceObservationAnnotation)
-        .values({ observationId: observation.id, ...values });
-  }
-  await auditEvidenceRows(
-    tx,
-    actor,
-    "sourceOccurrence",
-    owners.filter((owner) =>
-      changedOwners.some((changed) => changed.id === owner.id),
-    ),
-    changedOwners,
-  );
-  const after = await db
-    .select(sourceObservationColumns)
-    .from(
-      sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
+    if (patch.accountId !== undefined) {
+      if (patch.accountId) {
+        const [account] = await q
+          .select({ id: financialAccount.id })
+          .from(financialAccount)
+          .where(
+            and(
+              eq(financialAccount.id, patch.accountId),
+              isNull(financialAccount.deletedAt),
+            ),
+          );
+        if (!account)
+          throw createAppError(
+            "REFERENCED_RECORD_MISSING",
+            "The source account is no longer live.",
+          );
+      }
+      const acceptedIds = owners.flatMap((owner) =>
+        owner.acceptedTransactionId ? [owner.acceptedTransactionId] : [],
+      );
+      const accepted = acceptedIds.length
+        ? await q
+            .select()
+            .from(financialTransaction)
+            .where(inArray(financialTransaction.id, acceptedIds))
+        : [];
+      if (accepted.some((row) => row.accountId !== patch.accountId))
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "Detach accepted source evidence before changing its resolved account.",
+        );
+    }
+    const before = await q
+      .select(sourceObservationColumns)
+      .from(
+        sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
+      );
+    const decisions: DecisionInput[] = [];
+    for (const owner of owners) {
+      const values = {
+        accountId: patch.accountId,
+        disposition: patch.disposition,
+        dispositionReason: patch.dispositionReason,
+        dispositionNote: patch.dispositionNote,
+        ...(patch.supersededByRowId !== undefined
+          ? successor?.occurrenceId === owner.id
+            ? {
+                currentObservationId: successor.id,
+                reviewState:
+                  owner.reviewState === "revision_order_unknown"
+                    ? "ready"
+                    : undefined,
+                supersededByRowId: null,
+              }
+            : { supersededByRowId: successor?.id ?? null }
+          : {}),
+      };
+      for (const [field, value] of Object.entries(values))
+        if (value !== undefined)
+          decisions.push({
+            channel: "assignment",
+            kind: "set",
+            subject: `bank:${owner.id}`,
+            field,
+            value,
+            scopes: [{ kind: "bankEvent", key: owner.id }],
+          });
+    }
+    for (const row of selected) {
+      if (patch.notes !== undefined)
+        decisions.push({
+          channel: "assignment",
+          kind: "set",
+          subject: `sourceObservation:${row.id}`,
+          field: "notes",
+          value: patch.notes,
+        });
+      if (successor?.occurrenceId === row.occurrenceId)
+        decisions.push({
+          channel: "assignment",
+          kind: "set",
+          subject: `sourceObservation:${row.id}`,
+          field: "supersededByObservationId",
+          value: successor.id,
+        });
+    }
+    await decide(database, actor, decisions);
+    const resolutions = owners
+      .map((owner) => {
+        const same = successor?.occurrenceId === owner.id;
+        const values = {
+          accountId: patch.accountId,
+          disposition: patch.disposition,
+          dispositionReason: patch.dispositionReason,
+          dispositionNote: patch.dispositionNote,
+          ...(patch.supersededByRowId !== undefined
+            ? same
+              ? {
+                  currentObservationId: successor.id,
+                  reviewState:
+                    owner.reviewState === "revision_order_unknown"
+                      ? "ready"
+                      : undefined,
+                }
+              : {
+                  supersededByOccurrenceId: successor?.occurrenceId ?? null,
+                  replacementObservationId: successor?.id ?? null,
+                }
+            : {}),
+        };
+        const set = Object.fromEntries(
+          Object.entries(values).filter(([, value]) => value !== undefined),
+        );
+        return { owner, set };
+      })
+      .filter(({ owner, set }) => {
+        const before = new Map(Object.entries(owner));
+        return Object.entries(set).some(
+          ([field, value]) => before.get(field) !== value,
+        );
+      });
+    for (const { owner, set } of resolutions)
+      await q
+        .update(sourceOccurrence)
+        .set({ ...set, version: owner.version + 1 })
+        .where(eq(sourceOccurrence.id, owner.id));
+    if (resolutions.length) {
+      const { emitWrites } = await import("~/server/kernel/api");
+      await emitWrites(database, {
+        table: sourceOccurrence,
+        ids: resolutions.map((row) => row.owner.id),
+        columns: [
+          ...new Set(resolutions.flatMap((row) => Object.keys(row.set))),
+        ],
+      });
+    }
+    await reconcileNow(
+      database,
+      owners.map((owner) => ({ kind: "bankEvent", key: owner.id })),
     );
-  const changed = after.filter((row) =>
-    evidenceChanges(
-      before.find((previous) => previous.id === row.id),
-      row,
-    ),
-  );
-  await auditEvidenceRows(
-    tx,
-    actor,
-    "sourceTransactionRecord",
-    before,
-    changed,
-  );
-  if (changed.length || changedOwners.length)
-    await recordChange(tx, { kind: "source", categories: [] });
-  await dirtySourceOccurrences(
-    tx,
-    changedOwners.map((owner) => owner.id),
-  );
-  return { affected: changed.length };
+    const after = await q
+      .select(sourceObservationColumns)
+      .from(
+        sql`${sourceObservationsForPage([...ids])} "SourceTransactionRecord"`,
+      );
+    return {
+      affected: after.filter((row) => {
+        const previous = before.find((value) => value.id === row.id);
+        return !isEqual(previous, row);
+      }).length,
+    };
+  });
 }

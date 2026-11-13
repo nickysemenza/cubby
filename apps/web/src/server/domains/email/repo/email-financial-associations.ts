@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 import { parseShortcodeFor, type EmailId } from "@cubby/schemas/identifiers";
 import type { mailFinancialAssociation } from "@cubby/schemas/mailbox-research";
 import { desc, eq } from "drizzle-orm";
@@ -12,6 +13,37 @@ import {
   financialAccount,
   financialTransaction,
 } from "~/server/db/retained-tables";
+import { decide, recordSubject } from "~/server/kernel/api";
+
+import {
+  emailFinancialAssociationsRead,
+  emailFinancialAssociationsReadFields,
+} from "./email-decision-sql";
+
+export async function decideEmailFinancialAssociation(
+  db: Database,
+  actor: ActorContext,
+  input: Pick<
+    typeof emailFinancialAssociation.$inferInsert,
+    | "emailId"
+    | "evidenceChecksum"
+    | "transactionId"
+    | "reviewedAccountId"
+    | "sourceAccountLabel"
+    | "reviewReason"
+  >,
+) {
+  await decide(db, actor, [
+    {
+      channel: "assignment",
+      kind: "set",
+      subject: recordSubject("email", input.emailId),
+      field: `financial:${input.evidenceChecksum}:${input.transactionId}`,
+      value: input,
+      scopes: [{ kind: "emailState", key: input.emailId }],
+    },
+  ]);
+}
 
 /** Reviewed evidence survives soft-deleted targets; it is not current settlement. */
 export async function readEmailFinancialAssociations(
@@ -25,28 +57,28 @@ export async function readEmailFinancialAssociations(
   // includes-deleted: immutable reviewed history retains both target identities.
   const rows = await unwrapDb(db)
     .select({
-      evidence: emailFinancialAssociation,
+      evidence: emailFinancialAssociationsReadFields,
       transaction: financialTransaction,
       reviewedAccount: financialAccount,
       currentAccount,
     })
-    .from(emailFinancialAssociation)
+    .from(emailFinancialAssociationsRead)
     .innerJoin(
       financialTransaction,
-      eq(financialTransaction.id, emailFinancialAssociation.transactionId),
+      eq(financialTransaction.id, emailFinancialAssociationsRead.transactionId),
     )
     .innerJoin(
       financialAccount,
-      eq(financialAccount.id, emailFinancialAssociation.reviewedAccountId),
+      eq(financialAccount.id, emailFinancialAssociationsRead.reviewedAccountId),
     )
     .innerJoin(
       currentAccount,
       eq(currentAccount.id, financialTransaction.accountId),
     )
-    .where(eq(emailFinancialAssociation.emailId, emailId))
+    .where(eq(emailFinancialAssociationsRead.emailId, emailId))
     .orderBy(
-      desc(emailFinancialAssociation.createdAt),
-      emailFinancialAssociation.id,
+      desc(emailFinancialAssociationsRead.createdAt),
+      emailFinancialAssociationsRead.id,
     );
   return rows.map(
     ({ evidence, transaction, reviewedAccount, currentAccount: current }) => ({

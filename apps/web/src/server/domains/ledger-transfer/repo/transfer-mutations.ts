@@ -1,12 +1,90 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { and, eq } from "drizzle-orm";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { recordKey } from "~/server/db/kernel-schema";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
-import { ledgerTransfer } from "~/server/db/schema";
+import {
+  ledgerTransfer,
+  financialTransaction,
+  financialTransactionAllocation,
+  expense,
+} from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
+
+async function admitTransferLegs(
+  db: Database,
+  ids: readonly string[],
+  actor: ActorContext,
+) {
+  if (!ids.length) return;
+  const q = repositoryQueries(db);
+  const rows = await q
+    .select()
+    .from(financialTransaction)
+    .where(
+      inArray(
+        financialTransaction.id,
+        ids.map((id) => parseEntityId("financialTransaction", id)),
+      ),
+    );
+  if (rows.length !== new Set(ids).size || rows.some((row) => row.deletedAt))
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Transfer evidence must name live bank events.",
+    );
+  const [slices, lines] = await Promise.all([
+    q
+      .select({ id: financialTransactionAllocation.id })
+      .from(financialTransactionAllocation)
+      .where(
+        and(
+          inArray(
+            financialTransactionAllocation.transactionId,
+            rows.map((row) => row.id),
+          ),
+          isNull(financialTransactionAllocation.deletedAt),
+        ),
+      ),
+    q
+      .select({ id: expense.id })
+      .from(expense)
+      .where(
+        and(
+          inArray(
+            expense.bookingTransactionCode,
+            rows.map((row) => row.shortcode),
+          ),
+          isNull(expense.deletedAt),
+        ),
+      ),
+  ]);
+  if (slices.length || lines.length)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Recorded spending must be reviewed before its bank event can evidence a transfer.",
+    );
+  const changed = rows.filter(
+    (row) =>
+      !["account_transfer", "credit_card_payment", "loan_payment"].includes(
+        row.kind,
+      ),
+  );
+  if (changed.length) {
+    const { updateBankTransactions } =
+      await import("~/server/domains/financial-transaction/repo/bank-mutations");
+    await updateBankTransactions(
+      db,
+      changed.map((row) => ({
+        id: row.id,
+        values: { kind: "account_transfer" },
+      })),
+      actor,
+    );
+  }
+}
 
 export async function createTransferEvent(
   db: Database,
@@ -22,6 +100,7 @@ export async function createTransferEvent(
   const { manualTransactionEvidence } =
     await import("~/server/domains/financial-transaction/repo/manual-evidence");
   return householdWrite(db, async (database) => {
+    await admitTransferLegs(database, transactionIds, actor);
     const id = crypto.randomUUID();
     const key = `manual:${id}`;
     await append(database, [
@@ -85,6 +164,7 @@ export async function updateTransferEvent(
         "CONSTRAINT_VIOLATION",
         "Transfer has no reconciliation scope.",
       );
+    if (transactions) await admitTransferLegs(database, transactions, actor);
     const scopes = [{ kind: owner.scopeKind, key: owner.scopeKey }];
     await decide(database, actor, [
       ...Object.entries(values)
@@ -114,9 +194,7 @@ export async function updateTransferEvent(
     ]);
     const outcomes = await reconcileNow(database, scopes);
     if (
-      outcomes.some((outcome) =>
-        ["drift", "failed", "conflict"].includes(outcome.status),
-      )
+      outcomes.some((outcome) => !["applied", "clean"].includes(outcome.status))
     )
       throw createAppError(
         "CONSTRAINT_VIOLATION",

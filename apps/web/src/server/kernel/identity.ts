@@ -281,9 +281,17 @@ export async function mergeRecords(
     a: string;
     b: string;
     basis: "proof" | "decision";
+    keepId?: string;
     actor?: ActorContext;
   },
 ): Promise<MergeVerdict> {
+  if (
+    merge.keepId &&
+    (merge.basis !== "decision" || ![merge.a, merge.b].includes(merge.keepId))
+  )
+    throw new KernelContractError(
+      "Only a member identity decision can name one of its records as survivor",
+    );
   const { target } = merge;
   const port =
     target.merge ??
@@ -303,9 +311,16 @@ export async function mergeRecords(
         : sql<string>`''`,
     })
     .from(target.table)
-    .where(inArray(idColumn(target.table), [merge.a, merge.b]));
+    .where(
+      and(
+        inArray(idColumn(target.table), [merge.a, merge.b]),
+        getTableColumns(target.table).deletedAt
+          ? isNull(getTableColumns(target.table).deletedAt!)
+          : undefined,
+      ),
+    );
   if (rows.length !== 2) return { merged: false, reason: "unknown-record" };
-  const [first, second] = [...rows].sort((x, y) =>
+  const [first] = [...rows].sort((x, y) =>
     x.created === y.created
       ? x.id < y.id
         ? -1
@@ -314,8 +329,8 @@ export async function mergeRecords(
         ? -1
         : 1,
   );
-  const keepId = first!.id;
-  const loserId = second!.id;
+  const keepId = merge.keepId ?? first!.id;
+  const loserId = rows.find((row) => row.id !== keepId)!.id;
   if (merge.basis === "proof") {
     const [minted] = await q
       .select({ minted: sql<boolean>`bool_or(${recordKey.minted})` })

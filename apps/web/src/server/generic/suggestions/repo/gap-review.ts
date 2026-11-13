@@ -27,7 +27,12 @@ export async function reviewGap(
   const commandHash = await hashCanonical(input);
   const proposalHash = `${operationKey}:${commandHash}`;
   const [replayed] = await getDb(db)
-    .select({ id: decision.id, proposalHash: decision.proposalHash })
+    .select({
+      id: decision.id,
+      proposalHash: decision.proposalHash,
+      channel: decision.channel,
+      kind: decision.kind,
+    })
     .from(decision)
     .where(
       sql`left(${decision.proposalHash}, 64)=${operationKey} AND ${decision.actorId}=${context.actorContext.userId}`,
@@ -40,8 +45,12 @@ export async function reviewGap(
       suggestionId: input.suggestionId,
       feedbackId: replayed.id,
       status: "decided",
-      applied: true,
+      applied: replayed.channel !== "identity" || replayed.kind === "same",
     };
+  const { reviewProductPair } =
+    await import("~/server/domains/product/repo/match/product-pair-review");
+  const pair = await reviewProductPair(db, context, input, proposalHash);
+  if (pair) return pair;
   const [stored] = await getDb(db)
     .select({
       id: ask.id,

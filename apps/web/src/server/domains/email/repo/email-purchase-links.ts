@@ -37,6 +37,8 @@ import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.bou
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
+import { emailLinkDecisionsSql } from "./email-decision-sql";
+
 /**
  * The record an Emails section or filter is scoped to. A Vendor scope also
  * keeps the Vendor's sender-proof mail with no Purchase match; an account
@@ -93,7 +95,7 @@ export const emailPurchaseEvidenceSql = (
     decision."evidenceChecksum" <> original."rawChecksum", decision."proposedBy"
   FROM "OrderMailEvent" event
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
-  INNER JOIN "EmailPurchaseDecision" decision ON decision."eventId" = event."id" AND decision.active
+  INNER JOIN ${emailLinkDecisionsSql} decision ON decision."eventId" = event."id" AND decision.active
   INNER JOIN "Purchase" p ON p."id" = decision."purchaseId" AND ${notDeleted(livePurchase)}
   LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
   WHERE original."id" = "Email"."orderMailId"
@@ -126,7 +128,7 @@ export const emailPurchaseEvidenceSql = (
     AND event."supersededAt" IS NULL
     AND ${accountOwnerScope === "respect" ? sql`(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")` : sql`true`}
     AND NOT EXISTS (
-      SELECT 1 FROM "EmailPurchaseDecision" decided
+      SELECT 1 FROM ${emailLinkDecisionsSql} decided
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id" AND decided.active
     )
 `;
@@ -181,7 +183,7 @@ export async function readExactOrderLinkCandidates(
     LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
     -- A member's dismissal of this Email for the Purchase, on any of its events, wins.
     LEFT JOIN LATERAL (
-      SELECT 1 AS "found" FROM "EmailPurchaseDecision" decided
+      SELECT 1 AS "found" FROM ${emailLinkDecisionsSql} decided
       INNER JOIN "OrderMailEvent" decided_event ON decided_event."id" = decided."eventId"
       WHERE decided_event."orderMailId" = original."id" AND decided."purchaseId" = p."id"
         AND decided."decision" = ${KIND.dismissed} AND decided.active
@@ -189,7 +191,7 @@ export async function readExactOrderLinkCandidates(
     ) dismissed ON true
     WHERE ${notDeleted("Email")} AND ${scoped}
       AND NOT EXISTS (
-        SELECT 1 FROM "EmailPurchaseDecision" decided
+        SELECT 1 FROM ${emailLinkDecisionsSql} decided
         WHERE decided."eventId" = event."id" AND decided.active
       )
       AND NOT EXISTS (${emailAcceptedEvidenceSql()})

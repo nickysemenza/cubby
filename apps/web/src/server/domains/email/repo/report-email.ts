@@ -48,6 +48,10 @@ import {
   run,
 } from "~/server/db/schema";
 import { readEmailAssociations } from "~/server/domains/email/repo/email";
+import {
+  emailReviewsRead,
+  emailReviewsReadFields,
+} from "~/server/domains/email/repo/email-decision-sql";
 import { readEmailPurchaseLinks } from "~/server/domains/email/repo/email-purchase-links";
 import { loadEmailImportOutcomes } from "~/server/domains/email/repo/import-outcome";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
@@ -941,23 +945,23 @@ export async function emailReviewReport(
       .limit(5),
     client
       .select({
-        label: emailReview,
+        label: emailReviewsReadFields,
         prediction: emailClassificationObservation,
       })
-      .from(emailReview)
+      .from(emailReviewsRead)
       .innerJoin(
         emailClassificationObservation,
-        eq(emailClassificationObservation.id, emailReview.subjectId),
+        eq(emailClassificationObservation.id, emailReviewsRead.subjectId),
       )
       .where(
         and(
           eq(emailClassificationObservation.emailId, id),
-          eq(emailReview.actorUserId, actor.userId),
-          eq(emailReview.authority, "member"),
-          isNotNull(emailReview.classification),
+          eq(emailReviewsRead.actorUserId, actor.userId),
+          eq(emailReviewsRead.authority, "member"),
+          isNotNull(emailReviewsRead.classification),
         ),
       )
-      .orderBy(desc(emailReview.createdAt), desc(emailReview.id))
+      .orderBy(desc(emailReviewsRead.createdAt), desc(emailReviewsRead.id))
       .limit(20),
   ]);
   const retained = await hasRetainedEmailImportContent(

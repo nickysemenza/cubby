@@ -391,7 +391,7 @@ Cubby merges on its own, amending ADR 0028 item 1. Every other case is a gap.
 A merge runs the declared merge policy inside the apply transaction: foreign
 keys, `EntityLink`, `EntityExternalId`, attachments and collision rules, as
 `generic/merge` does today, and search artifacts are retired. The absorbed
-record's `RecordKey` rows repoint to the survivor, the older record survives, and the absorbed scope's remaining child RecordKeys transfer to the surviving scope,
+record's `RecordKey` rows repoint to the survivor, the older record survives unless a member decision explicitly names the survivor, and the absorbed scope's remaining child RecordKeys transfer to the surviving scope,
 and the absorbed id and shortcode keep resolving to the survivor on reads.
 Writes addressed to an absorbed id are refused and name the survivor. Audit
 and evidence rows keep the identity they were written with. Web, native caches
@@ -406,6 +406,8 @@ Reconcilers resolve retained decision and manual-entry references through
 `c.reference(entity, idOrShortcode, { format })` resolves an id by default or a public shortcode when requested. Every batch loads the identity roster, including binding-only consumers. It follows redirects from the identity
 snapshot loaded for the batch, returns the live survivor only for the requested
 entity kind, and does not alter the retained input.
+
+Member gaps on scopes keyed by a payment or identity pair appear on the public records named by their actions. Needs you, record machinery and list machinery use the same action endpoints even before that scope creates an output.
 
 ### 10. Stage and the machinery read
 

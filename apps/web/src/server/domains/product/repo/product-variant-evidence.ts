@@ -2,12 +2,13 @@ import { confidence } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { productId } from "@cubby/schemas/identifiers";
 import { suggestionProducer } from "@cubby/schemas/suggestion";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { suggestionTable } from "~/server/db/schema";
+import { textArrayParam } from "~/server/db/helpers/query";
+import { productPairObservationsSql } from "~/server/domains/product/repo/match/product-pair-observation";
 
 const variantDimension = z.enum(["color", "size", "pack"]);
 export const productIdentitySide = z.object({
@@ -74,15 +75,13 @@ export async function historicalConflictInputsChanged(
   currentFingerprint: string,
 ) {
   if (conflictIds.length === 0) return true;
-  const prior = await getDb(db)
-    .select({ fingerprint: suggestionTable.fingerprint })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.family, "product_pair"),
-        inArray(suggestionTable.id, [...conflictIds]),
-      ),
-    );
+  const prior = z
+    .object({ rows: z.array(z.object({ fingerprint: z.string().nullable() })) })
+    .parse(
+      await getDb(db).execute(sql`
+    SELECT fingerprint FROM ${productPairObservationsSql} evidence WHERE evidence.id::text=ANY(${textArrayParam(conflictIds)})
+  `),
+    ).rows;
   return (
     prior.length === new Set(conflictIds).size &&
     prior.every((row) => row.fingerprint !== currentFingerprint)
@@ -113,43 +112,25 @@ export async function readVariantVerifications(
   const unique = new Map(pairs.map((sides) => [pairKey(sides), sides]));
   const result = new Map<string, ProductVariantVerification>();
   if (!unique.size) return result;
-  const keys = [...unique.keys()];
-  const subjectKey = sql<string>`least(${suggestionTable.subject}->>'recordId', ${suggestionTable.subject}->>'otherId') || '|' || greatest(${suggestionTable.subject}->>'recordId', ${suggestionTable.subject}->>'otherId')`;
-  const stateKey = sql<string>`least(${suggestionTable.recordId}::text, ${suggestionTable.data}->>'otherId') || '|' || greatest(${suggestionTable.recordId}::text, ${suggestionTable.data}->>'otherId')`;
-  const historyQuery = getDb(db)
-    .select({
-      id: suggestionTable.id,
-      evidence: suggestionTable.evidence,
-      subjectKey: subjectKey.as("subjectKey"),
-      stateKey: stateKey.as("stateKey"),
-    })
-    .from(suggestionTable)
-    .where(
-      and(
-        eq(suggestionTable.family, "product_pair"),
-
-        sql`(${inArray(subjectKey, keys)} OR ${inArray(stateKey, keys)})`,
-      ),
-    )
-    .orderBy(desc(suggestionTable.createdAt), desc(suggestionTable.id));
   const allRows = z
     .object({
       rows: z.array(
         z.object({
           id: z.string(),
           evidence: z.json(),
-          subjectKey: z.string().nullable(),
-          stateKey: z.string().nullable(),
+          subjectKey: z.string(),
+          stateKey: z.string(),
         }),
       ),
     })
     .parse(
       await getDb(db).execute(sql`
-    WITH history AS MATERIALIZED (${historyQuery}), ancestors AS (
-      SELECT DISTINCT jsonb_array_elements_text(CASE WHEN jsonb_typeof(evidence->'signals'->'conflictLineage') = 'array' THEN evidence->'signals'->'conflictLineage' ELSE '[]'::jsonb END) AS id FROM history
-    ) SELECT * FROM history
-    UNION ALL SELECT s.id, s.evidence, NULL::text AS "subjectKey", NULL::text AS "stateKey" FROM "Suggestion" s JOIN ancestors p ON s.id::text = p.id
-    WHERE s.family = ${"product_pair"} AND NOT EXISTS (SELECT 1 FROM history h WHERE h.id = s.id)
+    SELECT p.id::text, p.evidence, p."pairKey" AS "subjectKey",
+      least(coalesce(first."mergedIntoId",first.id)::text,coalesce(second."mergedIntoId",second.id)::text) || '|' ||
+      greatest(coalesce(first."mergedIntoId",first.id)::text,coalesce(second."mergedIntoId",second.id)::text) AS "stateKey"
+    FROM ${productPairObservationsSql} p
+    JOIN "Entity" first ON first.id=p."recordId"::uuid
+    JOIN "Entity" second ON second.id=(p.data->>'otherId')::uuid
   `),
     ).rows;
   const history = allRows.filter(

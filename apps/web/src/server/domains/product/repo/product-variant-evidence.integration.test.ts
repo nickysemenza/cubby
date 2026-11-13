@@ -5,7 +5,11 @@ import { z } from "zod";
 
 import { setFieldsFixture } from "~/server/ai/fields/fields.fixtures";
 import { getDb } from "~/server/db/helpers";
-import { suggestionTable, inventoryEntry, product } from "~/server/db/schema";
+import {
+  productIdentityObservation,
+  inventoryEntry,
+  product,
+} from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
   prepareProductIdentityPair,
@@ -23,10 +27,14 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
+import { append, evidenceRow } from "~/server/kernel/api";
 import {
   createLocationFixture,
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
+
+import { productIdentityEvidence } from "./match/product-pair-evidence";
+import { productPairObservation } from "./match/product-pair-observation";
 
 type PairIds = Parameters<typeof prepareProductIdentityPair>[1];
 
@@ -104,35 +112,31 @@ describe("retained Product identity conflict guards", () => {
       (await prepareProductIdentityPair(ctx.db, ids, { includeExcluded: true }))
         ?.fingerprint ?? null;
     const [first, second] = [...ids].sort();
-    const [row] = await getDb(ctx.db)
-      .insert(suggestionTable)
-      .values({
-        publicationKey: `synthetic:historical:${crypto.randomUUID()}`,
-        family: "product_pair",
-        entity: "product",
-        recordId: first!,
-        status: "superseded",
-        active: false,
-        data: {
-          otherId: second!,
-          source: "detector",
-          evidence: "Synthetic retained pair",
-          sourceUrls: [],
-          actionable: true,
-          conflict,
-        },
-        subject: {
-          kind: "product_pair",
-          entity: "product",
-          recordId: first!,
-          otherId: second!,
-        },
-        judgment: { actionable: true, conflict },
-        evidence: { conflict, signals },
-        fingerprint,
-      })
-      .returning();
-    return row!;
+    const id = crypto.randomUUID();
+    const payload = productPairObservation.parse({
+      productPair: [first, second].join("|"),
+      productIds: [first, second],
+      data: {
+        otherId: second,
+        source: "detector",
+        evidence: "Synthetic retained pair",
+        sourceUrls: [],
+        actionable: true,
+        conflict,
+        signals,
+      },
+      fingerprint,
+      producer: null,
+    });
+    await append(ctx.db, [
+      evidenceRow(productIdentityEvidence, {
+        id,
+        scopeKey: payload.productPair,
+        userId: ctx.actor.userId,
+        payload,
+      }),
+    ]);
+    return { id, evidence: payload.data, subject: payload.productIds };
   };
 
   it("allows an explicit merge after identity inputs change without clearing historical advice", async () => {
@@ -217,10 +221,10 @@ describe("retained Product identity conflict guards", () => {
         (
           await getDb(ctx.db)
             .select()
-            .from(suggestionTable)
-            .where(eq(suggestionTable.id, history.id))
-        )[0]?.evidence,
-      ).toEqual(history.evidence);
+            .from(productIdentityObservation)
+            .where(eq(productIdentityObservation.id, history.id))
+        )[0]?.payload,
+      ).toMatchObject({ data: history.evidence });
     },
   );
 
@@ -351,10 +355,10 @@ describe("retained Product identity conflict guards", () => {
       (
         await getDb(ctx.db)
           .select()
-          .from(suggestionTable)
-          .where(eq(suggestionTable.id, history.id))
-      )[0]?.subject,
-    ).toEqual(history.subject);
+          .from(productIdentityObservation)
+          .where(eq(productIdentityObservation.id, history.id))
+      )[0]?.payload,
+    ).toMatchObject({ productIds: history.subject });
   });
 
   it.each(
@@ -408,8 +412,8 @@ describe("retained Product identity conflict guards", () => {
             .orderBy(inventoryEntry.id),
           getDb(ctx.db)
             .select()
-            .from(suggestionTable)
-            .orderBy(suggestionTable.id),
+            .from(productIdentityObservation)
+            .orderBy(productIdentityObservation.id),
         ]);
       const before = await readPreserved();
       const input = {

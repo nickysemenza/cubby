@@ -674,7 +674,6 @@ async function linkOrderMail(
       },
       "automatic",
       undefined,
-      input.rule,
     );
   if (input.attributed !== false)
     await ensureMailVendorAccount(db, {

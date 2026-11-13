@@ -296,30 +296,6 @@ export const bankEvent = defineReconciler<BankInput>({
       c.decision("rejection", subject)?.kind === "reject"
     )
       return retained(c);
-    if (
-      owner &&
-      (owner.deletedAt ||
-        owner.withdrawnAt ||
-        owner.supersededByOccurrenceId ||
-        owner.disposition === "ignored")
-    ) {
-      if (existing)
-        c.gap.unsupported(
-          "accepted transaction evidence is withdrawn or out of scope",
-        );
-      return retained(c);
-    }
-    if (owner && owner.reviewState !== "ready") {
-      c.gap.decision("the source occurrence identity and current observation");
-      return retained(c);
-    }
-    const observation = input.observations.find(
-      (row) => row.id === owner?.currentObservationId,
-    );
-    const manual =
-      input.manual && !input.occurrence
-        ? financialTransactionCreateInput.parse(input.manual.payload)
-        : null;
     const assigned = (field: string) =>
       c.decision("assignment", record, field) ??
       c.decision("assignment", subject, field) ??
@@ -330,6 +306,37 @@ export const bankEvent = defineReconciler<BankInput>({
             field,
           )
         : null);
+    if (
+      owner &&
+      (owner.deletedAt ||
+        owner.withdrawnAt ||
+        owner.supersededByOccurrenceId ||
+        (assigned("disposition")?.value ?? owner.disposition) === "ignored" ||
+        assigned("supersededByRowId")?.value)
+    ) {
+      if (existing)
+        c.gap.unsupported(
+          "accepted transaction evidence is withdrawn or out of scope",
+        );
+      return retained(c);
+    }
+    if (
+      owner &&
+      (assigned("reviewState")?.value ?? owner.reviewState) !== "ready"
+    ) {
+      c.gap.decision("the source occurrence identity and current observation");
+      return retained(c);
+    }
+    const observation = input.observations.find(
+      (row) =>
+        row.id ===
+        (assigned("currentObservationId")?.value ??
+          owner?.currentObservationId),
+    );
+    const manual =
+      input.manual && !input.occurrence
+        ? financialTransactionCreateInput.parse(input.manual.payload)
+        : null;
     const accountDecision = assigned("accountId");
     if (accountDecision?.kind === "none") {
       c.gap.decision("the financial account");

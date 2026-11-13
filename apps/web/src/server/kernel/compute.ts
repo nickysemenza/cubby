@@ -893,13 +893,19 @@ function createPure(
         );
       bindings.push({ fact, eventKey, basis });
     },
-    merge(target, survivor, absorbed, basis) {
+    merge(target, survivor, absorbed, basis, options) {
       const declared = requireTarget(target);
       if (!declared.merge)
         throw new KernelContractError(
           `${declared.name} declares no merge policy for reconciler ${reconciler.scope}`,
         );
-      merges.push({ target: declared, survivor, absorbed, basis });
+      merges.push({
+        target: declared,
+        survivor,
+        absorbed,
+        basis,
+        keepId: options?.keepId,
+      });
     },
     emit(scope) {
       registry.laneOf(scope.kind);

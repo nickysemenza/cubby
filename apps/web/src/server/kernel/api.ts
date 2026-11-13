@@ -182,6 +182,7 @@ export async function merge(
     a: string;
     b: string;
     basis: "proof" | "decision";
+    keepId?: string;
     actor?: ActorContext;
   },
 ): Promise<MergeVerdict> {

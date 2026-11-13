@@ -17,7 +17,7 @@ import {
 import { replacementAttributions } from "~/server/domains/purchase-import/policy/replacement-attributions";
 import { replacementLineFields } from "~/server/domains/purchase-import/policy/replacement-lines";
 import { acceptedOrderHeads } from "~/server/domains/purchase-import/repo/payment-match";
-import type { Pure } from "~/server/kernel/api";
+import type { ColumnRef, Pure } from "~/server/kernel/api";
 import { recordIdentity, recordSubject } from "~/server/kernel/api";
 
 const targets = [
@@ -37,7 +37,46 @@ const ownKeyFor = (c: Pure, target: typeof purchaseRecords, id: string) =>
 
 /** Accepted order facts complete the same purchase event in either arrival order. */
 // oxlint-disable-next-line complexity -- source identity, recorded decisions and exact conservation are one atomic money plan.
-export function reconcileOrderPurchase(input: Input, c: Pure) {
+export function reconcileOrderPurchase(
+  input: Input,
+  c: Pure,
+  seeds: readonly {
+    target: ColumnRef;
+    naturalKey: string;
+    values: Parameters<Pure["record"]>[2];
+    fact?: string;
+    decision?: string;
+  }[] = [],
+) {
+  const write = (
+    target: ColumnRef,
+    naturalKey: string,
+    values: Parameters<Pure["record"]>[2],
+    provenance: Record<string, string> = {},
+  ) => {
+    const seed = seeds.find(
+      (seed) => seed.target === target && seed.naturalKey === naturalKey,
+    );
+    return recordPurchaseValue(
+      c,
+      target,
+      naturalKey,
+      { ...values, ...seed?.values },
+      {
+        ...provenance,
+        ...(seed?.decision
+          ? Object.fromEntries(
+              Object.keys(seed.values).map((field) => [field, seed.decision!]),
+            )
+          : {}),
+      },
+      !!seed,
+    );
+  };
+  const manualAllocations = seeds.filter(
+    (seed) => seed.target === allocationRecords,
+  );
+
   const heads = acceptedOrderHeads(input.orders.map((row) => row.observation));
   for (const row of heads)
     if (row.emailId) c.emit({ kind: "emailState", key: row.emailId });
@@ -260,8 +299,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
     const chosen = header.get(field);
     return chosen ? (chosen.kind === "none" ? null : chosen.value) : fallback;
   };
-  const purchaseId = recordPurchaseValue(
-    c,
+  const purchaseId = write(
     purchaseRecords,
     purchaseKey,
     {
@@ -342,8 +380,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
         const held = previousDecisions.get(field);
         if (held) provenance[field] = held.id;
       }
-      const expenseId = recordPurchaseValue(
-        c,
+      const expenseId = write(
         expenseRecords,
         key,
         {
@@ -383,7 +420,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
         (row) => !order.refund && row.lineIndex === line.lineIndex,
       )) {
         const attributionKey = `${key}:${share.role}:${share.partyCode}`;
-        recordPurchaseValue(c, attributionRecords, attributionKey, {
+        write(attributionRecords, attributionKey, {
           expenseId,
           role: share.role,
           ledgerPartyId: share.partyId,
@@ -400,7 +437,7 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
         !carriedAttributions.some((row) => row.role === "beneficiary")
       ) {
         const attributionKey = `${key}:beneficiary`;
-        recordPurchaseValue(c, attributionRecords, attributionKey, {
+        write(attributionRecords, attributionKey, {
           expenseId,
           role: "beneficiary",
           ledgerPartyId: owner,
@@ -466,7 +503,44 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
     }
     matched.set(transactionId, amount);
   }
+  for (const seed of manualAllocations) {
+    const id = seed.values.transactionId;
+    const transaction = input.transactions.find(
+      (row) => row.id === id && !row.deletedAt,
+    );
+    const other = input.allocations.filter(
+      (row) =>
+        !row.deletedAt &&
+        row.transactionId === id &&
+        row.purchaseId !== purchaseId,
+    );
+    const own = manualAllocations
+      .filter((row) => row.values.transactionId === id)
+      .map((row) => ({
+        purchaseId: String(row.values.purchaseId),
+        amountMinor: BigInt(String(row.values.amountMinor)),
+      }));
+    if (
+      !transaction ||
+      allocationSetViolation({
+        transactionAmountMinor: transaction.amount,
+        kind: transaction.kind,
+        next: [...other, ...own],
+      })
+    ) {
+      c.disagree(
+        "the recorded allocation split must conserve its bank movement",
+      );
+      return keep(c);
+    }
+  }
   for (const [transactionId, amountMinor] of matched) {
+    if (
+      manualAllocations.some(
+        (seed) => seed.values.transactionId === transactionId,
+      )
+    )
+      continue;
     const transaction = input.transactions.find(
       (row) => row.id === transactionId,
     )!;
@@ -509,13 +583,26 @@ export function reconcileOrderPurchase(input: Input, c: Pure) {
     const key =
       (saved ? ownKeyFor(c, allocationRecords, saved.id) : null) ??
       `allocation:${transactionId}`;
-    recordPurchaseValue(c, allocationRecords, key, {
+    write(allocationRecords, key, {
       transactionId,
       purchaseId,
       amountMinor,
       confirmsMerchant: true,
     });
     keptAllocations.add(key);
+  }
+  for (const seed of seeds) {
+    const kept =
+      seed.target === expenseRecords
+        ? keptExpenses
+        : seed.target === allocationRecords
+          ? keptAllocations
+          : seed.target === attributionRecords
+            ? keptAttributions
+            : null;
+    if (!kept || kept.has(seed.naturalKey)) continue;
+    write(seed.target, seed.naturalKey, seed.values);
+    kept.add(seed.naturalKey);
   }
   for (const [target, keys] of [
     [expenseRecords, keptExpenses],
